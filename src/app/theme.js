@@ -5,6 +5,12 @@ export function applyTheme(theme) {
   try { localStorage.setItem("project-theme", theme); } catch (_) {}
 }
 
+// Стиль тёмной темы: "glow" (золотое свечение) или "fire" (огонь).
+export function applyLook(look) {
+  document.documentElement.dataset.look = look;
+  try { localStorage.setItem("project-look", look); } catch (_) {}
+}
+
 (function initTheme() {
   let saved = null;
   try { saved = localStorage.getItem("project-theme"); } catch (_) {}
