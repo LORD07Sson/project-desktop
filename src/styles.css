@@ -28,7 +28,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
      поля в интерфейсе не было. Переопределяется ниже в
      :root[data-theme="light"] — тема переключаема (theme-toggle). */
   color-scheme: dark;
-  /* Цвета логотипа PROJECT: почти чёрный тёплый фон, огненное
+  /* Цвета логотипа Project: почти чёрный тёплый фон, огненное
      свечение снизу, акцент — перо от оранжевого к золотому. */
   --bg: #070403;
   --bg-2: #0d0806;
@@ -3945,7 +3945,7 @@ body.focus-mode .report-detail-overlay .sheet {
 @media (max-width: 860px) { .auth-split { grid-template-columns: 1fr; gap: 28px; width: min(420px, 92vw); } .auth-points, .auth-beam { display: none; } .auth-brand { align-items: center; } }
 @media (prefers-reduced-motion: reduce) { .auth-logo, .auth-beam, .auth-points li, .code-cell.filled { animation: none; } }
 
-/* ---------- Анимация надписи PROJECT на экране входа ----------
+/* ---------- Анимация надписи Project на экране входа ----------
    1) буквы влетают по одной снизу с размытием;
    2) по надписи раз в несколько секунд пробегает огненный блик;
    3) из-под «DUB» поднимаются искры. */

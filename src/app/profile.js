@@ -249,7 +249,7 @@ function loadStructureHtml(me) {
 function profileHeaderHtml(d, isSelf, asParts) {
   const tier = tenureTier(d.member_since_days);
   const rMeta = roleMeta(d.role);
-  const roleLabel = d.role ? esc(d.role) : "Участник PROJECT";
+  const roleLabel = d.role ? esc(d.role) : "Участник Project";
 
   let joinedLine = "";
   if (d.created_at) {
@@ -482,7 +482,7 @@ function myHeroHtml(d) {
             <span class="nm">${esc(d.display_name || d.name)}</span>
             ${d.is_developer || d.is_owner ? `<span class="dev-pill">DEV</span>` : ""}
             ${rankTagHtml(d.studio_rank)}
-            <span class="role-tag" style="--tag-c:${rMeta.c}">${rMeta.ic} ${d.role ? esc(d.role) : "Участник PROJECT"}</span>
+            <span class="role-tag" style="--tag-c:${rMeta.c}">${rMeta.ic} ${d.role ? esc(d.role) : "Участник Project"}</span>
           </div>
           <div class="pf-meta">${meta}</div>
           ${about}
@@ -654,7 +654,7 @@ function notifyGoalReachedIfNeeded(me, goalSet, goalOver, goalDone) {
     localStorage.setItem(flagKey, "1");
   } catch (_) { return; } // приватный режим/запрет хранилища — не критично, просто без уведомления
   sendNotification({
-    title: "PROJECT",
+    title: "Project",
     body: `Цель месяца выполнена — ${goalDone} из ${me.monthly_goal} отчётов закрыто. 🎯`,
   });
 }
@@ -791,7 +791,7 @@ export async function openTeamSheet() {
 }
 
 // Открыть личный чат в Telegram — во внешнем приложении/браузере
-// (plugin:shell|open), а не внутри окна PROJECT: это desktop-клиент
+// (plugin:shell|open), а не внутри окна Project: это desktop-клиент
 // студии, не браузер, встраивать чужой веб-клиент Telegram сюда незачем.
 async function openTelegramProfile(username) {
   try {

@@ -1221,7 +1221,7 @@ fn main() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::LogDir { file_name: Some("project".into()) },
+                    tauri_plugin_log::TargetKind::LogDir { file_name: Some("project-dub".into()) },
                 ))
                 .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout))
                 .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview))

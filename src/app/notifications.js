@@ -70,7 +70,7 @@ async function pollAssignments() {
       const fresh = [...ids].filter(id => !knownAssigned.has(id));
       if (fresh.length) {
         sendNotification({
-          title: "PROJECT",
+          title: "Project",
           body: fresh.length === 1
             ? `Вам назначен отчёт ${fresh[0]}`
             : `Вам назначено ${fresh.length} новых отчётов`,

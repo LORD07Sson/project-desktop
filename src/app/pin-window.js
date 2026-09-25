@@ -6,6 +6,7 @@
 // эффектов верхнего уровня почти в каждом модуле main.js), этому — одна
 // карточка. См. app/tauri.js::pinReportWindow — как это окно создаётся.
 
+import "./migrate-keys.js"; // первым: переносит старые ключи localStorage
 import { invoke, listen, getCurrentWindow, PIN_REPORT_EVENT } from "./tauri.js";
 import { state } from "./state.js";
 import { apiGet } from "./api.js";
@@ -117,7 +118,7 @@ async function boot() {
     state.token = await invoke("token_load");
   } catch (_) { state.token = null; }
   if (!state.token) {
-    renderError("Не выполнен вход — откройте основное окно PROJECT и войдите.");
+    renderError("Не выполнен вход — откройте основное окно Project и войдите.");
     return;
   }
   await load();
