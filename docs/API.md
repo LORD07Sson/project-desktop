@@ -1,4 +1,4 @@
-# API-контракт
+# API
 
 Десктоп-клиент не хранит своей копии бизнес-логики — вся она в
 `miniapp/server.py` (отдельный репозиторий бота Project). Этот файл —
@@ -9,7 +9,7 @@
 
 ## Базовый URL и авторизация
 
-- `API_BASE` в `src/app/api.js` — `https://minitg.shitstudent.com:8443/api`
+- `API_BASE` в `src/app/api.js`
 - Все запросы (кроме `/desktop/pair`) несут заголовок
   `X-Init-Data: dsk_<токен>` — desktop-токен, полученный при входе по коду
   (см. [README](../README.md#вход)). Сервер отличает его от
