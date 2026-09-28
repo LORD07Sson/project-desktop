@@ -19,7 +19,7 @@
     "solid-js": "^1.9.9"
   },
   "devDependencies": {
-    "eslint": "^10.10.0",
+    "eslint": "^10.11.0",
     "jsdom": "^30.0.1",
     "vite": "^8.3.0",
     "vite-plugin-solid": "^2.11.9"
