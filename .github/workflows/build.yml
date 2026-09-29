@@ -116,8 +116,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          url="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-14-13-17/ffmpeg-n9.0.1-29-gad500d59cb-win64-lgpl-9.0.zip"
-          checksums_url="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-14-13-17/checksums.sha256"
+          url="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-25-15-37/ffmpeg-N-126856-ged27b2c498-win64-lgpl.zip"
+          checksums_url="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-25-15-37/checksums.sha256"
           filename="$(basename "$url")"
           curl -fL --retry 5 --retry-all-errors --retry-delay 2 --max-time 300 -o ffmpeg.zip "$url"
           curl -fL --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -o ffmpeg-checksums.sha256 "$checksums_url"
