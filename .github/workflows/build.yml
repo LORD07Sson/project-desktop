@@ -117,7 +117,7 @@ jobs:
         run: |
           set -e
           url="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-14-13-17/ffmpeg-n9.0.1-29-gad500d59cb-win64-lgpl-9.0.zip"
-          expected_sha256="0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbf8bb49b5"
+          expected_sha256="0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
           curl -sL --max-time 180 -o ffmpeg.zip "$url"
           actual_sha256=$(sha256sum ffmpeg.zip | cut -d' ' -f1)
           if [ "$actual_sha256" != "$expected_sha256" ]; then
