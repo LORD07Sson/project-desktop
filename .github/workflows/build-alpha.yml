@@ -102,7 +102,7 @@ jobs:
           npm run build
           npm test
 
-      # Тот же закреплённый ffmpeg.exe, что и в build.yml — держать в
+      # FFmpeg SHA синхронизирован с build.yml после проверки runner checksum.\n      # Тот же закреплённый ffmpeg.exe, что и в build.yml — держать в
       # синхроне руками при обновлении URL/SHA256 там.
       - name: Скачать и проверить статичный ffmpeg.exe
         shell: bash
