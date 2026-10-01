@@ -58,6 +58,7 @@ async function openSettings() {
     dev: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
     density: '<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>',
     logs: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/>',
+    bot: '<path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5"/>',
   };
   const TILES = [
     ["s-open-admin", "Админ-панель", "Доступ, заявки, система", '<circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5"/>'],
@@ -83,7 +84,8 @@ async function openSettings() {
     </div>
     <div class="st-layout">
       <nav class="st-nav" aria-label="Разделы настроек">
-        ${[["st-look", "Внешний вид", ICONS.look], ["st-behave", "Поведение", ICONS.behave], ["st-update", "Обновления", ICONS.update], ["st-studio", "Студия", ICONS.studio], ["st-diag", "Диагностика", ICONS.diag]]
+        ${[["st-look", "Внешний вид", ICONS.look], ["st-behave", "Поведение", ICONS.behave], ["st-update", "Обновления", ICONS.update], ["st-studio", "Студия", ICONS.studio],
+           ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot]] : []), ["st-diag", "Диагностика", ICONS.diag]]
           .map(([id, label, i], n) => `<button type="button" class="st-nav-btn${n === 0 ? " on" : ""}" data-st-go="${id}">${ic(i)}<span>${label}</span></button>`).join("")}
       </nav>
       <div class="st-body" id="st-body">
@@ -154,6 +156,12 @@ async function openSettings() {
             ${TILES.map(([id, title, sub, path]) => `<button type="button" class="st-tile" id="${id}">${ic(path)}<b>${title}</b><span>${sub}</span></button>`).join("")}
           </div>
         </section>
+
+        ${state.isDeveloper ? `
+        <section class="st-sec" id="st-bot">
+          <h3>Чаты бота</h3>
+          <div id="st-bot-chats"></div>
+        </section>` : ""}
 
         <section class="st-sec" id="st-diag">
           <h3>Диагностика</h3>
@@ -267,6 +275,9 @@ async function openSettings() {
   tile("s-tile-log", () => import("./admin-log.js").then(m => m.openAdminLogSheet()));
   tile("s-tile-lockdown", () => { dismissSheet(overlay); import("./lockdown.js").then(m => m.openLockdownSheet()); });
   tile("s-tile-trash", () => { dismissSheet(overlay); import("./lockdown.js").then(m => m.openTrashSheet()); });
+
+  const botRoot = overlay.querySelector("#st-bot-chats");
+  if (botRoot) import("./bot-chats.js").then(m => m.mountBotChats(botRoot));
 
   // Навигация слева: клик — прокрутка к разделу, подсветка — по прокрутке.
   const body = overlay.querySelector("#st-body");
