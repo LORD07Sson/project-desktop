@@ -3,45 +3,11 @@
 // voteCardHtml/castVote/openTitleDetailPublic (miniapp/static/index.html).
 
 import { state } from "./state.js";
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
 import { $, esc } from "./utils.js";
 import { openSeasonsAdminSheet } from "./titles-admin.js";
 import { clearTitleHoverCache } from "./title-hover.js";
-
-// Сборка URL с токеном — одна на всё приложение (api.js): раньше в
-// четырёх файлах лежала своя копия, и все четыре подставляли в строку
-// "null", когда токена ещё нет.
-function imgProxy(url) {
-  return url ? mediaUrl("/img_proxy", { url }) : "";
-}
-
-const TD_ICONS = {
-  episodes: '<span class="td-ic square"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"></rect><path d="M10 9.3v5.4l4.6-2.7z" fill="currentColor" stroke="none"></path></svg></span>',
-  schedule: '<span class="td-ic square"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"></rect><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4M7.2 13.2h3.4M7.2 16.8h6.6"></path></svg></span>',
-  source: '<span class="td-ic round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="7.2"></circle><circle cx="12" cy="12" r="2.3" fill="currentColor" stroke="none"></circle></svg></span>',
-  crew: '<span class="td-ic round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.7" cy="9" r="2.5"></circle><path d="M3.8 17.8c0-2.7 2.1-4.4 4.9-4.4s4.9 1.7 4.9 4.4"></path><circle cx="16.2" cy="8.3" r="2"></circle><path d="M14.9 12.1c2 .2 3.6 1.6 3.6 3.8"></path></svg></span>',
-};
-
-function titleDetailMetaRowsHtml(det) {
-  if (!det) return "";
-  const rows = [];
-
-  const epParts = [];
-  if (det.episodes_aired != null && det.episodes_total) epParts.push(`${det.episodes_aired} из ${det.episodes_total} эп.`);
-  else if (det.episodes_total) epParts.push(`${det.episodes_total} эп.`);
-  if (det.duration_min) epParts.push(`по ~${det.duration_min} мин.`);
-  if (epParts.length) rows.push(`<div class="td-meta-row">${TD_ICONS.episodes}<span>${esc(epParts.join(" "))}</span></div>`);
-
-  const statusParts = [det.kind_label, det.status_label].filter(Boolean);
-  if (statusParts.length) rows.push(`<div class="td-meta-row">${TD_ICONS.schedule}<span>${esc(statusParts.join(", "))}</span></div>`);
-
-  if (det.source_label) rows.push(`<div class="td-meta-row">${TD_ICONS.source}<span>Первоисточник ${esc(det.source_label)}</span></div>`);
-
-  const crewParts = [det.studio, det.author, det.director].filter(Boolean);
-  if (crewParts.length) rows.push(`<div class="td-meta-row">${TD_ICONS.crew}<span>${esc(crewParts.join(" · "))}</span></div>`);
-
-  return rows.join("");
-}
+import { imgProxy, hdPosterAttrs, titlePageHtml, wireTitlePage } from "./title-page.js";
 
 function voteActivity(t) { return t.likes + t.dislikes; }
 
@@ -205,7 +171,7 @@ function heroBodyHtml(t, rank, seasonName) {
   const leader = rank === 1 && t.likes > t.dislikes;
   return `
     <div class="tl-hero-bg"${posterSrc ? ` style="background-image:url('${posterSrc}')"` : ""}></div>
-    ${posterSrc ? `<img class="tl-hero-poster" src="${posterSrc}" alt="" data-open-title-detail="${t.id}">` : ""}
+    ${posterSrc ? `<img class="tl-hero-poster" ${hdPosterAttrs(t.id, t.poster_url, 200)} alt="" data-open-title-detail="${t.id}">` : ""}
     <div class="tl-hero-body">
       <span class="tl-hero-eyebrow">${heroRankLabel(t, rank, leader)}</span>
       <h2 class="tl-hero-name">${esc(t.name)}</h2>
@@ -281,7 +247,7 @@ function wireHero(wrap, titles, seasonName) {
 function voteCardHtml(t) {
   const posterSrc = imgProxy(t.poster_url);
   const poster = posterSrc
-    ? `<img class="vote-poster" src="${posterSrc}" alt="" loading="lazy">`
+    ? `<img class="vote-poster" ${hdPosterAttrs(t.id, t.poster_url, 180)} alt="" loading="lazy">`
     : `<div class="vote-poster vote-poster-ph">🎬</div>`;
   const voteCls = t.my_vote === 1 ? " voted-like" : (t.my_vote === -1 ? " voted-dislike" : "");
 
@@ -341,6 +307,10 @@ async function castVote(titleId, choice, btn) {
     if (sheet) {
       setCount(sheet.querySelector(".td-stat-pill.like"), `👍 ${r.likes}`);
       setCount(sheet.querySelector(".td-stat-pill.dislike"), `👎 ${r.dislikes}`);
+      const bar = sheet.querySelector(".tpg-approval i");
+      const total = r.likes + r.dislikes;
+      if (bar) bar.style.width = `${total ? Math.round((r.likes / total) * 100) : 0}%`;
+      setCount(bar && bar.closest(".tpg-card").querySelector(".tpg-score-row b"), total ? `${Math.round((r.likes / total) * 100)}%` : "—");
     }
   } catch (e) {
     toast(e.message, "error");
@@ -367,46 +337,23 @@ function wireVoteButtons(root) {
 
 async function openTitleDetail(titleId) {
   const overlay = openSheet(dialogSkeletonHtml(4));
+  const sheet = overlay.querySelector(".sheet");
+  sheet.classList.add("tpg-sheet");
   let d;
   try {
     d = await apiGet(`/public/titles/${titleId}`);
   } catch (e) {
-    overlay.querySelector(".sheet").innerHTML = `<div style="color:var(--s-stop);">Не удалось загрузить тайтл: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
-    overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+    sheet.classList.remove("tpg-sheet");
+    sheet.innerHTML = `<div style="color:var(--s-stop);">Не удалось загрузить тайтл: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
+    sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
     return;
   }
-  const det = d.details && Array.isArray(d.details) ? null : d.details;
-  const poster = imgProxy(d.poster_url);
-  const posterHtml = poster ? `<img class="td-poster" src="${poster}" alt="">` : `<div class="td-poster">🎬</div>`;
-  const bgHtml = poster ? `<div class="td-bg" style="background-image:url(${poster})"></div>` : "";
-
-  overlay.querySelector(".sheet").innerHTML = `
-    <div class="td-hero">
-      ${bgHtml}
-      <div class="td-poster-wrap">${posterHtml}</div>
-    </div>
-    <div class="td-body">
-      <div class="td-name">${esc(d.name)}</div>
-      ${det && det.name_original ? `<div class="td-name-original">${esc(det.name_original)}</div>` : ""}
-      ${d.season_name ? `<div class="td-chip">${esc(d.season_name)}</div>` : ""}
-      <div class="td-stat-row">
-        <span class="td-stat-pill like">👍 ${d.likes}</span>
-        <span class="td-stat-pill dislike">👎 ${d.dislikes}</span>
-      </div>
-      <div class="td-vote-cta">
-        <button class="${d.my_vote === 1 ? "on-like" : ""}" data-vote-title="${d.id}" data-vote-choice="1">👍 Нравится</button>
-        <button class="${d.my_vote === -1 ? "on-dislike" : ""}" data-vote-title="${d.id}" data-vote-choice="-1">👎 Не то</button>
-      </div>
-      ${det ? `
-      <div class="td-meta">${titleDetailMetaRowsHtml(det)}</div>
-      ${det.genres && det.genres.length ? `<div class="td-genre-row">${det.genres.map(g => `<span class="td-genre-chip">${esc(g)}</span>`).join("")}</div>` : ""}
-      ${det.description ? `<div class="td-desc">${esc(det.description)}</div>` : ""}
-      ` : ""}
-    </div>
-    <div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>
-  `;
-  overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
-  wireVoteButtons(overlay);
+  sheet.innerHTML = titlePageHtml(d);
+  sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+  wireVoteButtons(sheet);
+  wireTitlePage(sheet, d, {
+    openProfile: id => import("./profile.js").then(m => m.openUserProfile(id)),
+  });
 }
 
 export async function loadTitlesTab() {
