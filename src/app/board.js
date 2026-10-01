@@ -607,6 +607,9 @@ function timelineSectionHtml(layout) {
 // без выбранного значения показывал непонятное «------- ----» без
 // подписи. Теперь список: «Все сроки» и месяцы от −3 до +6 от текущего.
 function monthOptionsHtml(selected) {
+  // Значение приходит из самого <select> — но в разметку пускаем только
+  // строгий формат YYYY-MM.
+  if (!/^\d{4}-\d{2}$/.test(selected || "")) selected = "";
   const now = new Date();
   const opts = [`<option value="">Все сроки</option>`];
   const values = [];
@@ -618,7 +621,7 @@ function monthOptionsHtml(selected) {
   for (const v of values) {
     const [y, m] = v.split("-").map(Number);
     const label = new Date(y, m - 1, 1).toLocaleDateString("ru-RU", { month: "long", year: "numeric" }).replace(" г.", "");
-    opts.push(`<option value="${v}"${v === selected ? " selected" : ""}>Срок: ${esc(label)}</option>`);
+    opts.push(`<option value="${esc(v)}"${v === selected ? " selected" : ""}>Срок: ${esc(label)}</option>`);
   }
   return opts.join("");
 }
@@ -697,7 +700,7 @@ function wireBoardToolbar(root) {
   // _board_filter_conditions), не декорация. Тоже требует нового
   // похода за данными, не client-side перекладки.
   if (month) month.addEventListener("change", async () => {
-    boardView.month = month.value || "";
+    boardView.month = /^\d{4}-\d{2}$/.test(month.value) ? month.value : "";
     await loadBoard();
   });
   if (sort) sort.addEventListener("change", () => {
