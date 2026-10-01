@@ -3,7 +3,7 @@
 // профиля коллеги.
 
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
-import { attachHtml, wireAttachments, downloadAttachment, pickFile, pastedFile, pendingHtml, tooBig, CLIP_ICON } from "./attachments.js";
+import { attachHtml, wireAttachments, downloadAttachment, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { state } from "./state.js";
 import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow } from "./tauri.js";
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange } from "./utils.js";
@@ -223,7 +223,7 @@ export async function openReportDetail(publicId) {
                 <button class="icon-btn note-attach" id="note-attach" title="Приложить картинку или файл к заметке" aria-label="Приложить файл к заметке">${CLIP_ICON}</button>
                 <button class="btn" id="note-add">Добавить</button>
               </div>
-              <div class="note-pending" id="note-pending">${pendingHtml(pendingNoteFile)}</div>
+              <div class="note-pending" id="note-pending"></div>
             </div>
 
             <div class="rd-sec">
@@ -444,11 +444,9 @@ export async function openReportDetail(publicId) {
     const setNoteFile = file => {
       if (file && tooBig(file)) return;
       pendingNoteFile = file;
-      const box = sheet.querySelector("#note-pending");
-      box.innerHTML = pendingHtml(file);
-      box.querySelector("[data-att-cancel]")?.addEventListener("click", () => setNoteFile(null));
+      renderPending(sheet.querySelector("#note-pending"), file, () => setNoteFile(null));
     };
-    sheet.querySelector("#note-pending [data-att-cancel]")?.addEventListener("click", () => setNoteFile(null));
+    renderPending(sheet.querySelector("#note-pending"), pendingNoteFile, () => setNoteFile(null));
     sheet.querySelector("#note-attach").addEventListener("click", async () => {
       const file = await pickFile();
       if (file) setNoteFile(file);

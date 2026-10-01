@@ -110,13 +110,40 @@ export function tooBig(file) {
   return false;
 }
 
-// Плашка «будет отправлено» над полем ввода.
-export function pendingHtml(file) {
-  if (!file) return "";
-  const isImg = /^image\//.test(file.type);
-  return `<div class="att-pending">
-    ${isImg ? `<img src="${URL.createObjectURL(file)}" alt="">` : `<span class="att-ic">${FILE_ICON}</span>`}
-    <span class="att-meta"><b>${esc(file.name)}</b><span>${esc(sizeText(file.size))}</span></span>
-    <button type="button" class="icon-btn" data-att-cancel title="Убрать вложение" aria-label="Убрать вложение">✕</button>
-  </div>`;
+// Плашка «будет отправлено» над полем ввода. Собирается через DOM, а не
+// строкой HTML: имя и превью приходят из выбранного человеком файла, и
+// так им негде превратиться в разметку (CodeQL: DOM text → HTML).
+export function renderPending(box, file, onCancel) {
+  if (!box) return;
+  box.replaceChildren();
+  if (!file) return;
+  const wrap = document.createElement("div");
+  wrap.className = "att-pending";
+  if (/^image\//.test(file.type)) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = URL.createObjectURL(file);
+    img.addEventListener("load", () => URL.revokeObjectURL(img.src), { once: true });
+    wrap.append(img);
+  } else {
+    const ic = document.createElement("span");
+    ic.className = "att-ic";
+    ic.innerHTML = FILE_ICON; // константа, не пользовательские данные
+    wrap.append(ic);
+  }
+  const meta = document.createElement("span");
+  meta.className = "att-meta";
+  const name = document.createElement("b");
+  name.textContent = file.name;
+  const size = document.createElement("span");
+  size.textContent = sizeText(file.size);
+  meta.append(name, size);
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "icon-btn";
+  cancel.title = cancel.ariaLabel = "Убрать вложение";
+  cancel.textContent = "✕";
+  cancel.addEventListener("click", () => onCancel && onCancel());
+  wrap.append(meta, cancel);
+  box.append(wrap);
 }

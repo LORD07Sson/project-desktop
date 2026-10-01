@@ -18,7 +18,7 @@
 
 import { state } from "./state.js";
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
-import { attachHtml, wireAttachments, pickFile, pastedFile, pendingHtml, tooBig, CLIP_ICON } from "./attachments.js";
+import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { $, esc, relTime } from "./utils.js";
 import { loadAvatars, openUserProfile } from "./profile.js";
 
@@ -270,7 +270,7 @@ function renderThread({ keepScroll } = {}) {
   el.innerHTML = `
     ${threadHeadHtml(c)}
     <div class="ms-msgs" id="ms-msgs">${messagesHtml(c)}</div>
-    <div class="ms-pending" id="ms-pending">${pendingHtml(pendingFile)}</div>
+    <div class="ms-pending" id="ms-pending"></div>
     <div class="ms-compose">
       <div class="ms-suggest" id="ms-suggest" hidden></div>
       <button type="button" class="icon-btn ms-attach" id="ms-attach" title="Прикрепить картинку или файл (или вставьте скриншот Ctrl+V)" aria-label="Прикрепить файл">${CLIP_ICON}</button>
@@ -348,11 +348,10 @@ function wireThread(el, c) {
   const setPending = file => {
     if (file && tooBig(file)) return;
     pendingFile = file;
-    pendingBox.innerHTML = pendingHtml(file);
-    pendingBox.querySelector("[data-att-cancel]")?.addEventListener("click", () => setPending(null));
+    renderPending(pendingBox, file, () => setPending(null));
     input.focus();
   };
-  pendingBox.querySelector("[data-att-cancel]")?.addEventListener("click", () => setPending(null));
+  renderPending(pendingBox, pendingFile, () => setPending(null));
   el.querySelector("#ms-attach").addEventListener("click", async () => {
     const file = await pickFile();
     if (file) setPending(file);

@@ -9,7 +9,7 @@
 // /api/tickets/{id}/close, /reopen.
 
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
-import { attachHtml, wireAttachments, pickFile, pastedFile, pendingHtml, tooBig, CLIP_ICON } from "./attachments.js";
+import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { esc, relTime } from "./utils.js";
 import { loadAvatars } from "./profile.js";
 
@@ -127,9 +127,7 @@ export async function openTicketsSheet(initialId) {
     const setPending = file => {
       if (file && tooBig(file)) return;
       pending = file;
-      const box = threadEl.querySelector("#tk-pending");
-      box.innerHTML = pendingHtml(file);
-      box.querySelector("[data-att-cancel]")?.addEventListener("click", () => setPending(null));
+      renderPending(threadEl.querySelector("#tk-pending"), file, () => setPending(null));
     };
     threadEl.querySelector("#tk-attach")?.addEventListener("click", async () => {
       const file = await pickFile();
