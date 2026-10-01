@@ -2604,6 +2604,53 @@ body.watch-open #app-screen { pointer-events: none; }
   .wm-dots button.on i { animation: none; width: 100%; }
 }
 
+/* ---------- Плеер серий (player-anime.js) ----------
+   Во всё окно под шапкой: слева видео и полоса качества/переходов,
+   справа серии и озвучки. Тёмный «кинотеатр» независимо от темы. */
+.ap-root {
+  position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 55; display: grid; grid-template-columns: minmax(0, 1fr) 320px;
+  background: #07070a; color: #f4f1ec; opacity: 0; transform: scale(.985); transition: opacity .25s ease, transform .3s cubic-bezier(.22, .9, .3, 1);
+}
+.ap-root.on { opacity: 1; transform: none; }
+.ap-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.ap-top { display: flex; align-items: center; gap: 16px; padding: 12px 18px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+.ap-back { padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .04); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.ap-back:hover { background: rgba(255, 255, 255, .1); }
+.ap-title { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.ap-title b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-title span { color: rgba(244, 241, 236, .55); font-size: 13px; white-space: nowrap; }
+.ap-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; background: #000; }
+.ap-video { width: 100%; height: 100%; background: #000; outline: none; }
+.ap-wait { display: flex; align-items: center; gap: 12px; color: rgba(244, 241, 236, .55); font-size: 14px; padding: 24px; text-align: center; }
+.ap-wait span { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .15); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; flex: none; }
+.ap-wait.err { color: #ff9d8f; }
+.ap-bar { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-top: 1px solid rgba(255, 255, 255, .06); }
+.ap-quality { display: flex; gap: 6px; }
+.ap-q { padding: 5px 11px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .14); background: none; color: rgba(244, 241, 236, .75); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.ap-q.on { background: #fff; color: #111; border-color: #fff; }
+.ap-sp { flex: 1; }
+.ap-btn { padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .18); background: none; color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.ap-btn.primary { background: var(--accent-grad); color: #1a0d00; border-color: transparent; }
+.ap-btn:disabled { opacity: .35; cursor: default; }
+.ap-side { border-left: 1px solid rgba(255, 255, 255, .06); padding: 14px 16px; overflow-y: auto; background: #0d0d10; }
+.ap-side h3 { margin: 6px 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: rgba(244, 241, 236, .5); }
+.ap-eps { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; margin-bottom: 18px; }
+.ap-ep { height: 36px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .04); color: #f4f1ec; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; }
+.ap-ep:hover { border-color: rgba(255, 180, 68, .5); }
+.ap-ep.seen { color: rgba(244, 241, 236, .45); }
+.ap-ep.on { background: var(--accent-grad); color: #1a0d00; border-color: transparent; }
+.ap-trs { display: flex; flex-direction: column; gap: 4px; }
+.ap-group { font-size: 11px; font-weight: 800; color: var(--gold); margin: 8px 0 2px; }
+.ap-tr { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; background: none; color: rgba(244, 241, 236, .85); font: inherit; font-size: 12.5px; cursor: pointer; }
+.ap-tr span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-tr small { flex: none; font-size: 10.5px; color: rgba(244, 241, 236, .45); font-weight: 700; }
+.ap-tr:hover { background: rgba(255, 255, 255, .05); }
+.ap-tr.on { border-color: rgba(255, 180, 68, .55); background: rgba(255, 180, 68, .08); color: #fff; }
+.ap-muted { color: rgba(244, 241, 236, .4); font-size: 12.5px; }
+.ap-note { margin-top: 18px; font-size: 11.5px; line-height: 1.5; color: rgba(244, 241, 236, .38); }
+@media (max-width: 900px) { .ap-root { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 220px; } .ap-side { border-left: none; border-top: 1px solid rgba(255, 255, 255, .06); } }
+@media (prefers-reduced-motion: reduce) { .ap-root { transition: none; } }
+
 /* ---------- Команда / чужой профиль / режим разработчика ----------
    Портировано из мини-аппа: список команды (тизер профиля кликабелен),
    развёрнутая карточка коллеги (тот же profileHtml, что у своей «Я»),
