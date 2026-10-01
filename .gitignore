@@ -10,9 +10,9 @@ legacy_python_client/__pycache__/
 legacy_python_client/*.pyc
 legacy_python_client/build/
 legacy_python_client/*.spec
-legacy_python_client/releases/*/phoenix-dub-desktop
-legacy_python_client/releases/*/phoenix-dub-desktop.exe
-legacy_python_client/releases/*/phoenix-dub-desktop.app
+legacy_python_client/releases/*/project-desktop
+legacy_python_client/releases/*/project-desktop.exe
+legacy_python_client/releases/*/project-desktop.app
 
 node_modules/
 *.log

@@ -303,7 +303,7 @@ mod tests {
             "/etc/shadow",
             "/root/.ssh/id_rsa",
             "C:\\Users\\studio\\.ssh\\id_rsa",
-            "C:\\Users\\studio\\AppData\\Roaming\\PhoenixDubDesktop\\settings.json",
+            "C:\\Users\\studio\\AppData\\Roaming\\ProjectDesktop\\settings.json",
         ] {
             assert!(scope.check_read(target).is_err(), "чтение {target} должно быть отклонено");
         }

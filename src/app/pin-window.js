@@ -6,7 +6,6 @@
 // эффектов верхнего уровня почти в каждом модуле main.js), этому — одна
 // карточка. См. app/tauri.js::pinReportWindow — как это окно создаётся.
 
-import "./migrate-keys.js"; // первым: переносит старые ключи localStorage
 import { invoke, listen, getCurrentWindow, PIN_REPORT_EVENT } from "./tauri.js";
 import { state } from "./state.js";
 import { apiGet } from "./api.js";

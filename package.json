@@ -1,5 +1,5 @@
 {
-  "name": "phoenix-dub-desktop",
+  "name": "project-desktop",
   "private": true,
   "type": "module",
   "scripts": {

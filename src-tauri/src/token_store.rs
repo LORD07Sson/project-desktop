@@ -5,7 +5,7 @@
 
 use keyring::Entry;
 
-const SERVICE: &str = "PhoenixDubDesktop";
+const SERVICE: &str = "ProjectDesktop";
 const USER: &str = "session";
 
 fn entry() -> Result<Entry, String> {

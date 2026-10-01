@@ -202,17 +202,17 @@ jobs:
           set -e
           dotnet tool update -g vpk
           mkdir -p pack_dir
-          cp src-tauri/target/release/phoenix-dub-desktop.exe pack_dir/
+          cp src-tauri/target/release/project-desktop.exe pack_dir/
           cp src-tauri/binaries/ffmpeg.exe pack_dir/
           cp src-tauri/binaries/ffprobe.exe pack_dir/
           cp src-tauri/binaries/mpv.exe pack_dir/
           cp src-tauri/binaries/d3dcompiler_43.dll pack_dir/
           echo "Автосборка из main (commit ${{ github.sha }})." > release_notes.md
           vpk pack \
-            --packId PhoenixDubDesktop \
+            --packId ProjectDesktop \
             --packVersion "${{ env.PKG_VERSION }}" \
             --packDir pack_dir \
-            --mainExe phoenix-dub-desktop.exe \
+            --mainExe project-desktop.exe \
             --packTitle "Project Desktop" \
             --icon src-tauri/icons/icon.ico \
             --releaseNotes release_notes.md \
