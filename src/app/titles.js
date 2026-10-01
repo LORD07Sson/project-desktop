@@ -425,7 +425,12 @@ export async function loadTitlesTab() {
   }
   d.seasons = d.seasons || [];
   if (!d.seasons.length) {
-    root.innerHTML = `<div class="empty-state"><div style="font-size:34px; margin-bottom:8px;">📅</div>Эфир-сезонов пока нет.</div>`;
+    // Раньше тут не было ни одной кнопки: удалили последний сезон — и
+    // создать новый из десктопа было негде («Управление» живёт в шапке
+    // renderTitlesForSeason, которая без сезонов не рисуется).
+    root.innerHTML = `<div class="empty-state"><div style="font-size:34px; margin-bottom:8px;">📅</div>Эфир-сезонов пока нет.
+      ${state.isAdmin ? `<div style="margin-top:14px;"><button class="btn primary" id="titles-admin-btn">+ Создать сезон</button></div>` : ""}</div>`;
+    root.querySelector("#titles-admin-btn")?.addEventListener("click", () => openSeasonsAdminSheet(() => loadTitlesTab()));
     return;
   }
   if (state.titleSeasonId == null || !d.seasons.some(s => s.id === state.titleSeasonId)) {
@@ -487,7 +492,7 @@ function renderTitlesForSeason(seasons) {
           <button type="button" class="seg-btn${getView() === "cards" ? " active" : ""}" data-titles-view="cards" aria-pressed="${getView() === "cards"}">Карточки</button>
           <button type="button" class="seg-btn${getView() === "table" ? " active" : ""}" data-titles-view="table" aria-pressed="${getView() === "table"}">Таблица</button>
         </div>
-        <button class="btn" id="titles-admin-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14 3h-4l-.6 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.3-1a7 7 0 0 0 2 1.2L10 21h4l.6-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg>Управление</button>
+        <button class="btn" id="titles-admin-btn"${state.isAdmin ? "" : " hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14 3h-4l-.6 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.3-1a7 7 0 0 0 2 1.2L10 21h4l.6-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg>Управление</button>
       </div>
     </div>
     <div class="chip-row" style="padding:0 0 14px;">
