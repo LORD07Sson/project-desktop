@@ -4565,7 +4565,7 @@ body.focus-mode .report-detail-overlay .sheet {
 .att-meta b { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .att-meta span { font-size: 11px; color: var(--ink-dim); }
 .att-pending { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 10px; border: 1px dashed color-mix(in srgb, var(--fire) 45%, var(--line)); background: var(--glass-hi); }
-.att-pending img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; flex: none; }
+.att-pending .att-thumb { width: 44px; height: 44px; border-radius: 6px; flex: none; background: var(--glass-hi); }
 .ms-pending { padding: 0 16px; }
 .ms-pending:empty, .note-pending:empty, .tk-pending:empty { display: none; }
 .ms-bubble.has-att { display: grid; gap: 6px; }

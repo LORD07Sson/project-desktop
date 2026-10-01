@@ -120,11 +120,18 @@ export function renderPending(box, file, onCancel) {
   const wrap = document.createElement("div");
   wrap.className = "att-pending";
   if (/^image\//.test(file.type)) {
-    const img = document.createElement("img");
-    img.alt = "";
-    img.src = URL.createObjectURL(file);
-    img.addEventListener("load", () => URL.revokeObjectURL(img.src), { once: true });
-    wrap.append(img);
+    // Миниатюра рисуется на canvas прямо из байтов, без адреса в src —
+    // данным из файла некуда попасть в разметку.
+    const SIDE = 44;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = SIDE;
+    canvas.className = "att-thumb";
+    window.createImageBitmap(file).then(bmp => {
+      const s = Math.min(bmp.width, bmp.height);
+      canvas.getContext("2d").drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, SIDE, SIDE);
+      bmp.close();
+    }).catch(() => { /* не картинка на самом деле — остаётся пустой квадрат */ });
+    wrap.append(canvas);
   } else {
     const ic = document.createElement("span");
     ic.className = "att-ic";
