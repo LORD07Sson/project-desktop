@@ -5,7 +5,7 @@
 // здесь только включаем/выключаем функции и выбираем рабочий чат для
 // упоминаний (раньше — число в config.py на сервере).
 
-import { apiGet, apiPost, openSheet, toast } from "./api.js";
+import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
 
 const TYPE_LABEL = { group: "группа", supergroup: "группа", channel: "канал" };
@@ -32,19 +32,17 @@ function chatHtml(c, features) {
     </div>`;
 }
 
-export async function openBotChatsSheet() {
-  const overlay = openSheet(`<h2>Чаты бота</h2><div class="no-assignee">Загружаю…</div>`, "wide");
-  const sheet = overlay.querySelector(".sheet");
+// Отдельный раздел Настроек («Чаты бота», только владелец) — список
+// рисуется прямо в нём, без окна поверх Настроек.
+export async function mountBotChats(root) {
+  if (!root) return;
 
   function paint(d) {
     const chats = d.chats || [];
-    sheet.innerHTML = `
-      <h2>Чаты бота</h2>
+    root.innerHTML = `
       <p class="bc-hint">Группы и каналы, где состоит бот. Добавьте бота в группу и напишите там любое сообщение — она появится здесь. В новой группе всё включено.</p>
-      ${chats.length ? chats.map(c => chatHtml(c, d.features || [])).join("") : `<div class="no-assignee">Бот пока ни в одной группе.</div>`}
       ${chats.some(c => c.active) && !chats.some(c => c.mention && c.active) ? `<div class="bc-warn">Рабочий чат для упоминаний не выбран — рассылка по расписанию сейчас никуда не уходит.</div>` : ""}
-      <div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
-    sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+      ${chats.length ? chats.map(c => chatHtml(c, d.features || [])).join("") : `<div class="no-assignee">Бот пока ни в одной группе.</div>`}`;
 
     const save = async (chatId, body) => {
       try {
@@ -52,7 +50,7 @@ export async function openBotChatsSheet() {
         toast("Сохранено.", "success");
       } catch (e) { toast(e.message, "error"); await load(); }
     };
-    sheet.querySelectorAll(".bc-chat").forEach(card => {
+    root.querySelectorAll(".bc-chat").forEach(card => {
       const chatId = card.dataset.chat;
       card.querySelectorAll("[data-feature]").forEach(cb => cb.addEventListener("change", () => {
         const features = {};
@@ -62,17 +60,17 @@ export async function openBotChatsSheet() {
       card.querySelector("[data-mention]")?.addEventListener("change", () => save(chatId, { mention: true }));
       card.querySelector("[data-thread]")?.addEventListener("change", e => save(chatId, { mention_thread_id: e.target.value.trim() || 0 }));
     });
-    sheet.querySelectorAll("[data-forget]").forEach(btn => btn.addEventListener("click", async () => {
+    root.querySelectorAll("[data-forget]").forEach(btn => btn.addEventListener("click", async () => {
       try { paint(await apiPost(`/bot-chats/${btn.dataset.forget}/forget`, {})); } catch (e) { toast(e.message, "error"); }
     }));
   }
 
   async function load() {
+    root.innerHTML = `<div class="no-assignee">Загружаю…</div>`;
     try {
       paint(await apiGet("/bot-chats"));
     } catch (e) {
-      sheet.innerHTML = `<h2>Чаты бота</h2><div class="no-assignee">Не удалось загрузить: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
-      sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+      root.innerHTML = `<div class="no-assignee">Не удалось загрузить: ${esc(e.message)}</div>`;
     }
   }
 
