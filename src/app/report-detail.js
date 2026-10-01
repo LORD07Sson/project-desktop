@@ -2,7 +2,8 @@
 // серверная AI-проверка звука. Открывается из Списка/Доски/Ленты/
 // профиля коллеги.
 
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { attachHtml, wireAttachments, downloadAttachment, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { state } from "./state.js";
 import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow } from "./tauri.js";
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange } from "./utils.js";
@@ -87,16 +88,21 @@ export async function openReportDetail(publicId) {
     }
   }).observe(document.body, { childList: true });
 
+  // Вложение к следующей заметке — переживает перерисовку карточки.
+  let pendingNoteFile = null;
+
   async function render() {
-    let detail, notes, checklist, files, roles, assignable;
+    let detail, notes, checklist, files, roles, assignable, raws;
     try {
-      [detail, notes, checklist, files, roles, assignable] = await Promise.all([
+      [detail, notes, checklist, files, roles, assignable, raws] = await Promise.all([
         apiGet(`/report/${publicId}`),
         apiGet(`/report/${publicId}/notes`),
         apiGet(`/report/${publicId}/checklist`),
         apiGet(`/report/${publicId}/files`),
         loadRoles(),
         loadAssignable(),
+        // Старый сервер без /raws — карточка открывается и без раздела.
+        apiGet(`/report/${publicId}/raws`).catch(() => ({ raws: [] })),
       ]);
     } catch (e) {
       overlay.querySelector(".sheet").innerHTML = `<div style="color:var(--s-stop);">Не удалось загрузить карточку: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
@@ -213,15 +219,28 @@ export async function openReportDetail(publicId) {
               <div id="notes-list">${orderedNotes.map(noteHtml).join("")}</div>
               <div class="add-row note-add-row">
                 <input id="note-time" class="note-time-input" placeholder="04:12" maxlength="8" inputmode="numeric" title="Время на дорожке — необязательно">
-                <textarea id="note-new" rows="2" placeholder="Правка или комментарий… (Ctrl+Enter — отправить)"></textarea>
+                <textarea id="note-new" rows="2" placeholder="Правка или комментарий… (Ctrl+Enter — отправить, Ctrl+V — вставить скриншот)"></textarea>
+                <button class="icon-btn note-attach" id="note-attach" title="Приложить картинку к заметке (или Ctrl+V скриншота)" aria-label="Приложить картинку к заметке">${CLIP_ICON}</button>
                 <button class="btn" id="note-add">Добавить</button>
               </div>
+              <div class="note-pending" id="note-pending"></div>
             </div>
 
-            ${files.files.length ? `
             <div class="rd-sec">
-              <h3>Файлы <span class="n">${files.files.length}</span></h3>
-              <div id="files-list">${files.files.map(fileHtml).join("")}</div>
+              <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}</h3>
+              ${files.files.length ? `<div id="files-list">${files.files.map(fileHtml).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — их присылают боту в карточке отчёта.</div>`}
+            </div>
+
+            ${(raws.raws || []).length ? `
+            <div class="rd-sec">
+              <h3>Равки и субтитры <span class="n">${raws.raws.filter(r => r.present).length} из ${raws.raws.length}</span></h3>
+              <div class="no-assignee" style="margin-bottom:6px;">Загружаются через бота: карточка отчёта → «📥 Равка озв.» / «📥 Равка свед.» / «📥 Субтитры».</div>
+              <div class="raw-list">${raws.raws.map(r => `
+                <div class="raw-row${r.present ? " on" : ""}">
+                  <span class="raw-label">${esc(r.label)}</span>
+                  <span class="raw-name">${r.present ? esc(r.name || "загружено") : "не загружено"}</span>
+                  ${r.present ? `<button class="icon-btn" data-raw-dl="${r.kind}" data-raw-name="${esc(r.name || r.kind)}" title="Скачать">⬇️</button>` : ""}
+                </div>`).join("")}</div>
             </div>` : ""}
           </div>
           <div class="rd-panel" data-rd-panel="history" hidden></div>
@@ -420,11 +439,29 @@ export async function openReportDetail(publicId) {
       notesByTime = !notesByTime;
       await render();
     });
+    wireAttachments(sheet);
+    const setNoteFile = file => {
+      if (file && tooBig(file)) return;
+      pendingNoteFile = file;
+      renderPending(sheet.querySelector("#note-pending"), file, () => setNoteFile(null));
+    };
+    renderPending(sheet.querySelector("#note-pending"), pendingNoteFile, () => setNoteFile(null));
+    sheet.querySelector("#note-attach").addEventListener("click", async () => {
+      const file = await pickFile("image/*");
+      if (file) setNoteFile(file);
+    });
+    sheet.querySelector("#note-new").addEventListener("paste", e => {
+      const file = pastedFile(e);
+      if (file) { e.preventDefault(); setNoteFile(file); }
+    });
+    sheet.querySelectorAll("[data-raw-dl]").forEach(btn => btn.addEventListener("click", () =>
+      downloadAttachment(`report/${publicId}/raws/${btn.dataset.rawDl}/file`, btn.dataset.rawName)));
     async function addNote() {
       const ta = sheet.querySelector("#note-new");
       const timeInput = sheet.querySelector("#note-time");
       const text = ta.value.trim();
-      if (!text) return;
+      const file = pendingNoteFile;
+      if (!text && !file) return;
       const seconds = secondsFromTimeInput(timeInput.value);
       if (seconds === null) {
         toast("Время — в формате 04:12 или 1:02:03.", "error");
@@ -435,7 +472,9 @@ export async function openReportDetail(publicId) {
       // API заметок нет, а так его увидят и бот, и мини-апп.
       const payload = timeInput.value.trim() ? noteTimePrefix(seconds) + text : text;
       try {
-        await apiPost(`/report/${publicId}/notes`, { text: payload });
+        if (file) await apiUpload(`/report/${publicId}/notes/attach`, file, { text: payload });
+        else await apiPost(`/report/${publicId}/notes`, { text: payload });
+        pendingNoteFile = null;
         await render();
       } catch (e) { toast(`Не удалось добавить заметку: ${e.message}`, "error"); }
     }
@@ -549,12 +588,17 @@ function checklistItemHtml(item) {
 
 function noteHtml(n) {
   const t = parseNoteTime(n.text);
+  // Подпись «📎 имя» сервер ставит сам, когда заметка — только файл
+  // (её видно в боте); здесь вместо неё показывается само вложение.
+  const autoCaption = n.attach && n.text === `📎 ${n.attach.name}`;
+  const body = autoCaption ? "" : (t ? t.rest : n.text);
   return `<div class="note-item${t ? " timed" : ""}">
     <div class="meta">${esc(n.author)} · ${esc(n.created_at || "")}</div>
     <div class="note-body">
       ${t ? `<span class="note-time" title="время на дорожке">${esc(t.label)}</span>` : ""}
-      <span>${esc(t ? t.rest : n.text)}</span>
+      ${body ? `<span>${esc(body)}</span>` : ""}
     </div>
+    ${n.attach ? `<div class="note-att">${attachHtml(n.attach)}</div>` : ""}
   </div>`;
 }
 
