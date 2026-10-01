@@ -150,6 +150,128 @@ export async function apiBlob(path, onProgress) {
   }
 }
 
+// Отправка файла (multipart) — вложения в сообщениях, заметках, тикетах,
+// файлы и равки отчёта, до 2 ГБ. Файл выбран через <input type=file> или
+// вставлен из буфера — браузер сам читает его с диска по ходу отправки.
+// XMLHttpRequest, а не fetch: у fetch нет прогресса отправки, а гигабайт
+// уходит минутами. Content-Type не ставим — границу multipart проставит
+// браузер.
+const PROGRESS_FROM_BYTES = 2 * 1024 * 1024;
+
+function uploadProgress(name, size) {
+  if (size < PROGRESS_FROM_BYTES) return { set() {}, done() {} };
+  const el = document.createElement("div");
+  el.className = "upload-progress";
+  const label = document.createElement("span");
+  const bar = document.createElement("i");
+  el.append(label, bar);
+  document.body.append(el);
+  const set = frac => {
+    const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
+    // Проценты первыми — длинное имя файла обрезается многоточием и
+    // раньше съедало их целиком.
+    label.textContent = pct < 100 ? `⬆ ${pct}% · ${name}` : `⬆ Сохраняю… · ${name}`;
+    bar.style.width = `${pct}%`;
+  };
+  set(0);
+  return { set, done() { el.remove(); } };
+}
+
+// Один XHR-запрос: тело — FormData или Blob (часть файла). Отдаёт
+// разобранный JSON; ошибка несёт status, чтобы решать, повторять ли.
+function xhrRequest(url, body, { contentType, onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    if (state.token) xhr.setRequestHeader("X-Init-Data", state.token);
+    if (contentType) xhr.setRequestHeader("Content-Type", contentType);
+    if (onProgress) xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded); };
+    xhr.onerror = () => {
+      const err = new Error("Нет связи с сервером — отправка оборвалась.");
+      err.status = 0;
+      reject(err);
+    };
+    xhr.onload = () => {
+      let data = null;
+      try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch (_) { /* не JSON — ниже */ }
+      if (xhr.status >= 200 && xhr.status < 300) { resolve(stripStatusEmoji(data || {})); return; }
+      const detail = (data && data.detail) || (xhr.status === 413 ? "Файл слишком большой для сервера." : `Ошибка ${xhr.status}`);
+      if (xhr.status === 401) notifySessionExpired(String(detail));
+      const err = new Error(String(detail));
+      err.status = xhr.status;
+      reject(err);
+    };
+    xhr.send(body);
+  });
+}
+
+// Файлы крупнее CHUNKED_FROM уходят частями в несколько соединений:
+// провайдеры режут скорость КАЖДОГО соединения до VPS (одно ~190 КБ/с,
+// четыре ~680 КБ/с), так параллельные части дают в разы быстрее. Сервер
+// пишет каждую часть сразу на её место в файле (/api/upload/*), потом
+// обычная ручка получает upload_id вместо самого файла.
+// Порог и размер части (сервер отдаёт chunk_size, сейчас 2 МБ) подобраны
+// так, чтобы даже файл в 20 МБ занимал все потоки.
+const CHUNKED_FROM = 2 * 1024 * 1024;
+const PARALLEL = 8;
+const CHUNK_RETRIES = 3;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function chunkedUpload(file, ui) {
+  const start = await api("POST", "/upload/start", { name: file.name || "file", size: file.size });
+  const { upload_id: id, chunk_size: chunk, parts } = start;
+  const sent = new Array(parts).fill(0);
+  const report = () => ui.set(sent.reduce((a, b) => a + b, 0) / file.size);
+  let next = 0;
+  let failed = null;
+  const worker = async () => {
+    while (next < parts && !failed) {
+      const i = next++;
+      const blob = file.slice(i * chunk, Math.min(file.size, (i + 1) * chunk));
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await xhrRequest(`${API_BASE}/upload/${id}/chunk/${i}`, blob, {
+            contentType: "application/octet-stream",
+            onProgress: loaded => { sent[i] = loaded; report(); },
+          });
+          sent[i] = blob.size;
+          report();
+          break;
+        } catch (e) {
+          sent[i] = 0;
+          // Обрыв сети или сбой сервера — повторяем эту часть; отказ в
+          // доступе или «загрузка устарела» — повторять бессмысленно.
+          const retryable = !e.status || e.status >= 500 || e.status === 400;
+          if (!retryable || attempt >= CHUNK_RETRIES) { failed = e; return; }
+          await sleep(1500 * attempt);
+        }
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, parts) }, worker));
+  if (failed) throw failed;
+  return id;
+}
+
+export async function apiUpload(path, file, fields) {
+  const ui = uploadProgress(file.name || "файл", file.size || 0);
+  netStart();
+  try {
+    const form = new FormData();
+    for (const [k, v] of Object.entries(fields || {})) form.append(k, v);
+    if (file.size > CHUNKED_FROM) {
+      form.append("upload_id", await chunkedUpload(file, ui));
+      ui.set(1);
+      return await xhrRequest(`${API_BASE}${path}`, form);
+    }
+    form.append("file", file, file.name || "image.png");
+    return await xhrRequest(`${API_BASE}${path}`, form, { onProgress: loaded => ui.set(loaded / (file.size || 1)) });
+  } finally {
+    ui.done();
+    netEnd();
+  }
+}
+
 export function apiGet(path, params) {
   const qs = params ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)) : "";
   return api("GET", path + qs);

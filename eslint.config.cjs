@@ -40,6 +40,10 @@ module.exports = [
         getComputedStyle: "readonly",
         Audio: "readonly",
         Blob: "readonly",
+        // attachments.js / api.js:apiUpload — вложения и скриншоты из буфера.
+        File: "readonly",
+        FormData: "readonly",
+        XMLHttpRequest: "readonly",
         URLSearchParams: "readonly",
         Promise: "readonly",
         Image: "readonly",

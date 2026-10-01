@@ -5,9 +5,11 @@
 // переданные ему (сервер проверяет сам).
 //
 // /api/tickets?status=open|closed, /api/tickets/{id},
-// /api/tickets/{id}/reply {text}, /api/tickets/{id}/close, /reopen.
+// /api/tickets/{id}/reply {text}, /reply-attach (файл + подпись),
+// /api/tickets/{id}/close, /reopen.
 
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { esc, relTime } from "./utils.js";
 import { loadAvatars } from "./profile.js";
 
@@ -32,7 +34,7 @@ function bubbleHtml(p) {
   return `
     <div class="tk-msg ${p.from_support ? "out" : "in"}">
       <div class="tk-msg-meta">${esc(p.from_support ? (p.author || "поддержка") : (p.author || "человек"))} · ${esc(relTime(p.created_at))}</div>
-      <div class="tk-bubble">${esc(p.text)}</div>
+      <div class="tk-bubble">${p.attach ? attachHtml(p.attach) : ""}${p.attach && p.text === `📎 ${p.attach.name}` ? "" : esc(p.text)}</div>
     </div>`;
 }
 
@@ -57,7 +59,9 @@ function threadHtml(d) {
     ${open ? `
     <div class="tk-compose">
       <div class="tk-quick">${(d.quick_replies || []).map((q, i) => `<button type="button" class="qchip" data-tk-quick="${i}" title="${esc(q.text)}">${esc(q.label)}</button>`).join("")}</div>
+      <div class="tk-pending" id="tk-pending"></div>
       <div class="tk-input-row">
+        <button type="button" class="icon-btn" id="tk-attach" title="Приложить картинку (или Ctrl+V скриншота)" aria-label="Приложить картинку">${CLIP_ICON}</button>
         <textarea id="tk-input" rows="2" maxlength="${MAX_REPLY}" placeholder="Ответ уйдёт человеку в Telegram от бота…"></textarea>
         <button type="button" class="btn primary tk-send" id="tk-send" title="Отправить (Ctrl+Enter)" aria-label="Отправить">${SEND_ICON}</button>
       </div>
@@ -116,14 +120,31 @@ export async function openTicketsSheet(initialId) {
     loadAvatars(threadEl);
     const msgs = threadEl.querySelector("#tk-messages");
     msgs.scrollTop = msgs.scrollHeight;
+    wireAttachments(threadEl);
     const input = threadEl.querySelector("#tk-input");
     const send = threadEl.querySelector("#tk-send");
+    let pending = null;
+    const setPending = file => {
+      if (file && tooBig(file)) return;
+      pending = file;
+      renderPending(threadEl.querySelector("#tk-pending"), file, () => setPending(null));
+    };
+    threadEl.querySelector("#tk-attach")?.addEventListener("click", async () => {
+      const file = await pickFile("image/*");
+      if (file) setPending(file);
+    });
+    input?.addEventListener("paste", e => {
+      const file = pastedFile(e);
+      if (file) { e.preventDefault(); setPending(file); }
+    });
     const doSend = async text => {
       text = (text || "").trim();
-      if (!text) return;
+      if (!text && !pending) return;
       send.disabled = true;
       try {
-        const r = await apiPost(`/tickets/${d.ticket.id}/reply`, { text });
+        const r = pending
+          ? await apiUpload(`/tickets/${d.ticket.id}/reply-attach`, pending, { text })
+          : await apiPost(`/tickets/${d.ticket.id}/reply`, { text });
         toast("Ответ доставлен.");
         showThread(r);
         loadList();
