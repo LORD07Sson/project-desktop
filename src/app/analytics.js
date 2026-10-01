@@ -35,10 +35,10 @@ function analyticsHtml(d) {
   const metrics = [
     {
       label: "Завершено за 30 дней",
-      value: d.completed_30d,
+      value: d.completed_30d ?? 0,
       trend: completedDelta !== null
         ? trendLine(`${completedDelta >= 0 ? "+" : ""}${completedDelta}% к прошлым 30 дням`, completedDelta >= 0)
-        : `<div class="an-trend">против ${d.completed_prior_30d} за прошлые 30 дней</div>`,
+        : `<div class="an-trend">против ${d.completed_prior_30d ?? 0} за прошлые 30 дней</div>`,
     },
     {
       label: "Среднее время выполнения",
@@ -47,7 +47,7 @@ function analyticsHtml(d) {
     },
     {
       label: "Просрочено сейчас",
-      value: d.overdue_now,
+      value: d.overdue_now ?? 0,
       trend: d.overdue_now > 0 ? trendLine("срок уже прошёл", false) : trendLine("всё в срок", true),
     },
     {
