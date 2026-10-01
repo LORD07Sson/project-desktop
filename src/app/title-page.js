@@ -6,7 +6,8 @@
 // масштабирует под ширину, которую просит экран (с учётом
 // devicePixelRatio), и кэширует до удаления тайтла.
 
-import { mediaUrl } from "./api.js";
+import { mediaUrl, forceMediaToken } from "./api.js";
+import { state } from "./state.js";
 import { esc } from "./utils.js";
 import { avatarHtml, loadAvatars } from "./profile.js";
 
@@ -30,9 +31,23 @@ export function hdPosterAttrs(titleId, posterUrl, cssWidth) {
   return `src="${hd}"${fallback ? ` data-fallback="${fallback}"` : ""}`;
 }
 
-document.addEventListener("error", e => {
+// Картинка со своего сервера не загрузилась — один раз берём свежий
+// токен и пробуем снова (после перезапуска сервера старый mtok
+// недействителен, хотя по часам ещё не истёк).
+document.addEventListener("error", async e => {
   const img = e.target;
-  if (!img || img.tagName !== "IMG" || !img.dataset.fallback) return;
+  if (!img || img.tagName !== "IMG") return;
+  const src = img.getAttribute("src") || "";
+  if (src.includes("mtok=") && !img.dataset.tokenRetried) {
+    img.dataset.tokenRetried = "1";
+    await forceMediaToken();
+    if (state.mediaToken) {
+      const url = new URL(src);
+      url.searchParams.set("mtok", state.mediaToken);
+      if (url.toString() !== src) { img.src = url.toString(); return; }
+    }
+  }
+  if (!img.dataset.fallback) return;
   const fallback = img.dataset.fallback;
   delete img.dataset.fallback;
   img.src = fallback;
