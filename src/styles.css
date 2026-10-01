@@ -4530,3 +4530,27 @@ body.focus-mode .report-detail-overlay .sheet {
 .assign-pick:hover { background: var(--glass-hi); }
 .assign-pick[hidden] { display: none; }
 .assign-pick input { accent-color: var(--fire); }
+
+/* Аварийный режим («Саботаж», lockdown.js) — полоса над вкладками и окно включения */
+.lockdown-banner {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  margin: 12px 24px 0; padding: 10px 10px 10px 14px; border-radius: 12px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--s-stop) 22%, var(--surface)), var(--surface) 75%);
+  border: 1px solid color-mix(in srgb, var(--s-stop) 55%, var(--line));
+  font-size: 13px; color: var(--ink);
+}
+.lockdown-banner[hidden] { display: none; }
+.ld-ic { font-size: 18px; flex: none; }
+.ld-body { flex: 1; min-width: 0; line-height: 1.4; }
+.ld-meta { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-dim); }
+.ld-off { flex: none; }
+.ld-hint { color: var(--ink-dim); font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
+.ld-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 13px; }
+.ld-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ld-table td:first-child { width: 28px; text-align: center; }
+.ld-table td:last-child { color: var(--ink-dim); white-space: nowrap; }
+.ld-reason { display: grid; gap: 6px; font-size: 12px; color: var(--ink-dim); margin-bottom: 10px; }
+.ld-ack { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.4; margin-bottom: 4px; }
+.ld-ack input { margin-top: 2px; accent-color: var(--s-stop); }
+.ld-sub { font-size: 12px; font-weight: 400; color: var(--ink-dim); margin-left: 8px; }
+.ld-item .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

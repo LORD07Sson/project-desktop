@@ -16,6 +16,7 @@ import { loadServices } from "./services.js";
 import { loadTeam } from "./team.js";
 import { clearDirectoryCache } from "./titles-admin.js";
 import { refreshTeamNotice, clearTeamNotice } from "./team-notice.js";
+import { refreshLockdown, clearLockdown } from "./lockdown.js";
 
 // Загрузчики возвращают false, если данные взять не удалось (сеть/сервер)
 // — см. loadActiveTab ниже.
@@ -93,6 +94,7 @@ export async function loadActiveTab(force) {
 // loadActiveTab()/refreshAll() ниже по цепочке вызовов в auth.js.
 export function restoreLastTab() {
   refreshTeamNotice();
+  refreshLockdown();
   let saved = null;
   try { saved = localStorage.getItem(LAST_TAB_KEY); } catch (_) { /* не критично */ }
   if (!state.isAdmin && (!saved || !MEMBER_TABS.has(saved))) saved = "messages";
@@ -104,6 +106,7 @@ export function restoreLastTab() {
 
 export function clearTabDom() {
   clearTeamNotice();
+  clearLockdown();
   for (const sel of TAB_BODIES) {
     const el = $(sel);
     if (el) el.innerHTML = "";
@@ -141,6 +144,7 @@ export async function refreshAll() {
   try {
     clearDirectoryCache();
     refreshTeamNotice();
+    refreshLockdown();
     if (state.isAdmin) await loadUsers();
     await loadActiveTab(true);
   } finally {
