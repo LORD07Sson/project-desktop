@@ -210,8 +210,10 @@ function xhrRequest(url, body, { contentType, onProgress } = {}) {
 // четыре ~680 КБ/с), так параллельные части дают в разы быстрее. Сервер
 // пишет каждую часть сразу на её место в файле (/api/upload/*), потом
 // обычная ручка получает upload_id вместо самого файла.
-const CHUNKED_FROM = 8 * 1024 * 1024;
-const PARALLEL = 5;
+// Порог и размер части (сервер отдаёт chunk_size, сейчас 2 МБ) подобраны
+// так, чтобы даже файл в 20 МБ занимал все потоки.
+const CHUNKED_FROM = 2 * 1024 * 1024;
+const PARALLEL = 8;
 const CHUNK_RETRIES = 3;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
