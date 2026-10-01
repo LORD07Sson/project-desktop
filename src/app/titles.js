@@ -335,7 +335,7 @@ function wireVoteButtons(root) {
   });
 }
 
-async function openTitleDetail(titleId) {
+export async function openTitleDetail(titleId) {
   const overlay = openSheet(dialogSkeletonHtml(4));
   const sheet = overlay.querySelector(".sheet");
   sheet.classList.add("tpg-sheet");

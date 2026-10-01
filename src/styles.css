@@ -2465,6 +2465,141 @@ kbd {
   .tpg-char:hover { transform: none; }
 }
 
+/* ---------- Режим «Смотреть» (watch.js) ----------
+   Витрина поверх приложения под шапкой окна: прозрачная навигация над
+   баннером (плотнеет при прокрутке), баннер со сменой слайдов, ряды
+   плиток-постеров. Свои тёмные цвета независимо от темы — это «кино». */
+.btn.watch-cta {
+  background: var(--accent-grad); color: var(--on-accent, #1a0d00); border-color: transparent; font-weight: 800;
+  box-shadow: 0 6px 18px -8px rgba(255, 120, 40, .85);
+}
+.btn.watch-cta:hover { filter: brightness(1.08); }
+.btn.watch-cta svg { width: 13px; height: 13px; }
+#watch-mode {
+  position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 40; overflow: hidden;
+  background: #0d0d10; color: #f4f1ec;
+  --wm-ink-soft: rgba(244, 241, 236, .72); --wm-ink-dim: rgba(244, 241, 236, .45); --wm-line: rgba(255, 255, 255, .1);
+}
+#watch-mode[hidden] { display: none; }
+.wm-scroll { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; }
+.wm-scroll::-webkit-scrollbar { width: 10px; }
+.wm-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .14); border-radius: 10px; border: 3px solid #0d0d10; }
+.wm-nav { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 26px; padding: 16px 44px; transition: background .3s, padding .3s, box-shadow .3s; }
+.wm-nav.solid { background: rgba(13, 13, 16, .84); backdrop-filter: blur(16px) saturate(1.3); padding: 10px 44px; box-shadow: 0 1px 0 var(--wm-line); }
+.wm-brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 16px; white-space: nowrap; }
+.wm-brand i { width: 24px; height: 24px; border-radius: 50%; border: 5px solid #fff; border-right-color: transparent; transform: rotate(-30deg); }
+.wm-brand span { color: var(--gold); font-weight: 700; }
+.wm-nav ul { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.wm-nav ul button { background: none; border: none; padding: 7px 10px; border-radius: 8px; font: inherit; font-size: 13.5px; color: var(--wm-ink-soft); cursor: pointer; white-space: nowrap; transition: color .15s, background .15s; }
+.wm-nav ul button:hover { color: #fff; background: rgba(255, 255, 255, .06); }
+.wm-nav ul button.on { color: #fff; font-weight: 800; }
+.wm-sp { flex: 1; }
+.wm-search { display: flex; align-items: center; gap: 8px; width: 260px; padding: 9px 14px; border-radius: 999px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .14); backdrop-filter: blur(12px); }
+.wm-search input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: #fff; font: inherit; font-size: 13px; }
+.wm-search input::placeholder { color: var(--wm-ink-dim); }
+.wm-search svg { width: 16px; height: 16px; fill: none; stroke: var(--wm-ink-soft); stroke-width: 2; flex: none; }
+.wm-back { padding: 8px 15px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(0, 0, 0, .3); backdrop-filter: blur(10px); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.wm-back:hover { background: rgba(255, 255, 255, .12); }
+.wm-loading { display: flex; align-items: center; justify-content: center; gap: 12px; height: 60vh; color: var(--wm-ink-dim); font-size: 14px; }
+.wm-loading span { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .15); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; }
+@keyframes wm-spin { to { transform: rotate(360deg); } }
+
+.wm-hero { position: relative; height: min(76vh, 660px); margin-top: -68px; overflow: hidden; }
+.wm-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1.1s cubic-bezier(.22, .9, .3, 1); }
+.wm-slide.on { opacity: 1; }
+.wm-bg { position: absolute; inset: -2%; background: center 25% / cover no-repeat; transform: scale(1.08); transition: transform 9s linear; }
+.wm-slide.on .wm-bg { transform: scale(1); }
+.wm-cover { position: absolute; right: 7%; bottom: 22%; width: 220px; aspect-ratio: 2 / 3; border-radius: 16px; background: center / cover no-repeat; box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .85), 0 0 0 1px rgba(255, 255, 255, .1); opacity: 0; transform: translateY(20px) rotate(2deg); transition: opacity 1s cubic-bezier(.22, .9, .3, 1) .2s, transform 1s cubic-bezier(.22, .9, .3, 1) .2s; }
+.wm-slide.on .wm-cover { opacity: 1; transform: none; }
+.wm-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, rgba(13, 13, 16, .93) 0%, rgba(13, 13, 16, .55) 42%, rgba(13, 13, 16, 0) 70%), linear-gradient(180deg, rgba(13, 13, 16, .6) 0%, rgba(13, 13, 16, 0) 22%, rgba(13, 13, 16, 0) 55%, #0d0d10 100%); }
+.wm-hero-text { position: absolute; left: 44px; bottom: 22%; z-index: 2; max-width: 620px; }
+.wm-eyebrow { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; font-size: 12.5px; font-weight: 700; color: var(--wm-ink-soft); }
+.wm-eyebrow i { width: 4px; height: 4px; border-radius: 50%; background: var(--wm-ink-dim); }
+.wm-gold { color: var(--gold); }
+.wm-hero-text h1 { font-size: clamp(32px, 4.2vw, 56px); line-height: 1.05; margin: 12px 0 14px; font-weight: 800; letter-spacing: -.02em; text-wrap: balance; text-shadow: 0 4px 30px rgba(0, 0, 0, .45); color: #fff; }
+.wm-hero-text p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--wm-ink-soft); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wm-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.wm-tags span { font-size: 12px; padding: 4px 11px; border-radius: 999px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .12); }
+.wm-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.wm-play { display: inline-flex; align-items: center; gap: 9px; padding: 11px 24px; border-radius: 999px; border: none; background: #fff; color: #111; font: inherit; font-weight: 800; font-size: 14.5px; cursor: pointer; transition: transform .2s cubic-bezier(.22, .9, .3, 1); }
+.wm-play:hover { transform: scale(1.04); }
+.wm-play svg { width: 15px; height: 15px; }
+.wm-ghost { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, .4); background: rgba(0, 0, 0, .28); backdrop-filter: blur(8px); color: #fff; font: inherit; font-weight: 700; font-size: 14.5px; cursor: pointer; transition: background .2s; }
+.wm-ghost:hover { background: rgba(255, 255, 255, .14); }
+.wm-ghost svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
+.wm-dots { position: absolute; right: 44px; bottom: 15%; z-index: 3; display: flex; gap: 8px; }
+.wm-dots button { position: relative; width: 34px; height: 4px; padding: 0; border: none; border-radius: 4px; background: rgba(255, 255, 255, .22); overflow: hidden; cursor: pointer; }
+.wm-dots button i { position: absolute; inset: 0; width: 0; background: #fff; }
+.wm-dots button.on i { animation: wm-fill 8s linear forwards; }
+.wm-hero:hover .wm-dots button.on i { animation-play-state: paused; }
+@keyframes wm-fill { to { width: 100%; } }
+
+.wm-rows { position: relative; z-index: 3; margin-top: -9vh; padding-bottom: 50px; }
+.wm-row { margin-bottom: 30px; }
+.wm-row h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 44px 12px; font-size: 19px; font-weight: 800; color: #fff; }
+.wm-row h2 small { font-size: 12.5px; color: var(--wm-ink-dim); font-weight: 600; }
+.wm-tag { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: var(--accent-grad); color: #1a0d00; }
+.wm-strip-wrap { position: relative; }
+.wm-strip { display: flex; gap: 16px; overflow-x: auto; padding: 6px 44px 12px; scrollbar-width: none; }
+.wm-strip::-webkit-scrollbar { display: none; }
+.wm-arrow { position: absolute; top: 0; bottom: 56px; width: 44px; z-index: 2; border: none; display: grid; place-items: center; opacity: 0; cursor: pointer; transition: opacity .2s; background: linear-gradient(90deg, #0d0d10, transparent); }
+.wm-arrow.l { left: 0; }
+.wm-arrow.r { right: 0; background: linear-gradient(270deg, #0d0d10, transparent); }
+.wm-arrow svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2.4; }
+.wm-strip-wrap:hover .wm-arrow { opacity: 1; }
+.wm-tile { flex: none; width: 176px; display: flex; flex-direction: column; text-align: left; padding: 0; border: none; background: none; color: #fff; font: inherit; cursor: pointer; }
+.wm-pic { position: relative; display: block; aspect-ratio: 2 / 3; border-radius: 14px; overflow: hidden; background: #1b1b21; box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .8); transition: transform .35s cubic-bezier(.22, .9, .3, 1), box-shadow .35s cubic-bezier(.22, .9, .3, 1); }
+.wm-pic img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s cubic-bezier(.22, .9, .3, 1); }
+.wm-ph { position: absolute; inset: 0; background: linear-gradient(135deg, #24242b, #15151a); }
+.wm-tile:hover .wm-pic, .wm-tile:focus-visible .wm-pic { transform: translateY(-6px); box-shadow: 0 22px 40px -16px rgba(0, 0, 0, .9), 0 0 0 2px rgba(255, 180, 68, .55); }
+.wm-tile:hover .wm-pic img { transform: scale(1.06); }
+.wm-tile:focus-visible { outline: none; }
+.wm-badge { position: absolute; top: 9px; right: 9px; font-size: 10.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: rgba(10, 10, 12, .62); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, .14); }
+.wm-badge.hot { background: var(--accent-grad); color: #1a0d00; border: none; }
+.wm-score { position: absolute; left: 9px; top: 9px; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 8px; background: rgba(10, 10, 12, .62); backdrop-filter: blur(8px); color: var(--gold); }
+.wm-shade { position: absolute; inset: auto 0 0 0; height: 45%; background: linear-gradient(transparent, rgba(0, 0, 0, .75)); opacity: 0; transition: opacity .3s; }
+.wm-tile.dub .wm-shade, .wm-tile:hover .wm-shade { opacity: 1; }
+.wm-prog { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .25); overflow: hidden; }
+.wm-prog i { display: block; height: 100%; border-radius: 4px; background: var(--fire); }
+.wm-name { margin-top: 10px; font-size: 13.5px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wm-meta { margin-top: 3px; font-size: 12px; color: var(--wm-ink-dim); }
+.wm-genres { display: flex; gap: 8px; padding: 0 44px 24px; overflow-x: auto; scrollbar-width: none; }
+.wm-genres::-webkit-scrollbar { display: none; }
+.wm-genres button { flex: none; padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .04); color: var(--wm-ink-soft); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; }
+.wm-genres button:hover { color: #fff; border-color: rgba(255, 255, 255, .3); }
+.wm-genres button.on { background: #fff; border-color: #fff; color: #111; }
+.wm-gridsec { padding-top: 16px; }
+.wm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 22px 16px; padding: 6px 44px 40px; }
+.wm-grid .wm-tile { width: auto; }
+.wm-empty { margin: 0 44px; padding: 40px; border-radius: 16px; border: 1px dashed var(--wm-line); color: var(--wm-ink-dim); text-align: center; font-size: 14px; }
+
+.wm-modal { position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 48; display: grid; place-items: center; background: rgba(0, 0, 0, .62); backdrop-filter: blur(6px); opacity: 0; transition: opacity .3s; color: #f4f1ec; }
+.wm-modal.on { opacity: 1; }
+.wm-sheet { width: min(860px, 92vw); max-height: 86vh; overflow: auto; border-radius: 20px; background: #15151a; border: 1px solid rgba(255, 255, 255, .08); transform: translateY(24px) scale(.97); transition: transform .4s cubic-bezier(.22, .9, .3, 1); }
+.wm-modal.on .wm-sheet { transform: none; }
+.wm-ban { position: relative; height: 250px; background: center 25% / cover no-repeat; }
+.wm-ban::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, #15151a); }
+.wm-x { position: absolute; top: 14px; right: 14px; z-index: 2; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .2); background: rgba(0, 0, 0, .45); color: #fff; cursor: pointer; }
+.wm-in { position: relative; display: grid; grid-template-columns: 170px 1fr; gap: 24px; padding: 0 30px 30px; margin-top: -110px; }
+.wm-in img { width: 170px; border-radius: 14px; box-shadow: 0 20px 40px -14px rgba(0, 0, 0, .8); }
+.wm-in h3 { margin: 70px 0 6px; font-size: 25px; line-height: 1.15; color: #fff; }
+.wm-en { color: var(--wm-ink-dim); font-size: 13px; margin-bottom: 10px; }
+.wm-in p { color: var(--wm-ink-soft); line-height: 1.65; font-size: 14px; }
+body.watch-open #app-screen { pointer-events: none; }
+@media (max-width: 1100px) {
+  .wm-nav { gap: 14px; padding-left: 24px; padding-right: 24px; }
+  .wm-search { width: 180px; }
+  .wm-hero-text { left: 24px; }
+  .wm-cover { display: none; }
+  .wm-row h2, .wm-empty { margin-left: 24px; margin-right: 24px; }
+  .wm-strip, .wm-grid, .wm-genres { padding-left: 24px; padding-right: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wm-slide, .wm-bg, .wm-cover, .wm-pic, .wm-pic img { transition: none !important; }
+  .wm-dots button.on i { animation: none; width: 100%; }
+}
+
 /* ---------- Команда / чужой профиль / режим разработчика ----------
    Портировано из мини-аппа: список команды (тизер профиля кликабелен),
    развёрнутая карточка коллеги (тот же profileHtml, что у своей «Я»),
