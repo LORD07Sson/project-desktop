@@ -135,7 +135,12 @@ function headerHtml(start) {
     ? `${start.getDate()}–${end.getDate()} ${MONTHS_SHORT[end.getMonth()]} ${end.getFullYear()}`
     : `${start.getDate()} ${MONTHS_SHORT[start.getMonth()]} – ${end.getDate()} ${MONTHS_SHORT[end.getMonth()]} ${end.getFullYear()}`;
   const f = getFilters();
-  const monthName = start.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  // Неделя на стыке месяцев (28 сен – 4 окт) — в заголовке оба месяца,
+  // иначе «Сентябрь» рядом с сегодняшним «ОКТ 2» сбивал с толку.
+  const monthOnly = d => d.toLocaleDateString("ru-RU", { month: "long" });
+  const monthName = start.getMonth() === end.getMonth()
+    ? start.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
+    : `${monthOnly(start)} – ${monthOnly(end)} ${end.getFullYear()}`;
   return `
     <div class="page-header">
       <div>

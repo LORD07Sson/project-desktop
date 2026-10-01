@@ -603,6 +603,26 @@ function timelineSectionHtml(layout) {
     </div>`;
 }
 
+// Фильтр по месяцу срока: раньше это был <input type="month">, который
+// без выбранного значения показывал непонятное «------- ----» без
+// подписи. Теперь список: «Все сроки» и месяцы от −3 до +6 от текущего.
+function monthOptionsHtml(selected) {
+  const now = new Date();
+  const opts = [`<option value="">Все сроки</option>`];
+  const values = [];
+  for (let i = -3; i <= 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    values.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  if (selected && !values.includes(selected)) values.push(selected);
+  for (const v of values) {
+    const [y, m] = v.split("-").map(Number);
+    const label = new Date(y, m - 1, 1).toLocaleDateString("ru-RU", { month: "long", year: "numeric" }).replace(" г.", "");
+    opts.push(`<option value="${v}"${v === selected ? " selected" : ""}>Срок: ${esc(label)}</option>`);
+  }
+  return opts.join("");
+}
+
 // Перерисовка доски из уже полученных данных — без похода на сервер.
 // Нужна поиску и переключателю сортировки: оба меняют только раскладку.
 async function renderBoard(root) {
@@ -631,7 +651,7 @@ async function renderBoard(root) {
         <div class="sub">Все активные серии студии, разложенные по статусам.</div>
       </div>
       <div class="page-header-actions">
-        <input type="month" id="board-month" class="board-sort" title="Показать серии со сроком в этом месяце" value="${esc(boardView.month)}">
+        <select id="board-month" class="board-sort" title="Показать серии со сроком в этом месяце">${monthOptionsHtml(boardView.month)}</select>
         <button class="btn" id="board-import-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v9M8 10l4 4 4-4M5 19h14"/></svg>Импорт</button>
         <button class="btn primary" id="board-add-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Добавить проект</button>
       </div>

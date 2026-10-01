@@ -14,6 +14,9 @@ import { loadAvatars } from "./profile.js";
 const POLL_INTERVAL_MS = 120_000;
 let current = null;
 let maxLength = 500;
+// Баннер — одна строка, чтобы не съедать высоту каждой вкладки; клик по
+// тексту разворачивает его целиком (и обратно).
+let expanded = false;
 
 function hiddenKey() { return `project_notice_hidden_${state.telegramId || "anon"}`; }
 function noticeSig(n) { return n ? `${n.created_at}|${n.text}` : ""; }
@@ -39,9 +42,10 @@ function render() {
   if (!el) return;
   if (!current || isHidden(current)) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
+  el.classList.toggle("expanded", expanded);
   el.innerHTML = `
     <span class="tn-ic">${PIN_ICON}</span>
-    <div class="tn-body">
+    <div class="tn-body" title="Нажмите, чтобы развернуть или свернуть">
       <div class="tn-text">${esc(current.text)}</div>
       <div class="tn-meta">
         ${current.author ? `<span class="avatar-bubble tn-av" data-avatar-for="${current.author_telegram_id || ""}">${esc(current.author.replace(/^@/, "").charAt(0).toUpperCase())}</span>${esc(current.author)} · ` : ""}${esc(whenText(current.created_at))}
@@ -50,6 +54,11 @@ function render() {
     <button type="button" class="icon-btn tn-btn" id="tn-edit" title="Изменить объявление" aria-label="Изменить объявление">${EDIT_ICON}</button>
     <button type="button" class="icon-btn tn-btn" id="tn-hide" title="Скрыть у себя (появится снова, если объявление сменят)" aria-label="Скрыть объявление">${CLOSE_ICON}</button>`;
   loadAvatars(el);
+  el.querySelector(".tn-body").addEventListener("click", () => {
+    if (window.getSelection && String(window.getSelection())) return; // выделяли текст, а не кликали
+    expanded = !expanded;
+    el.classList.toggle("expanded", expanded);
+  });
   el.querySelector("#tn-edit").addEventListener("click", openNoticeEditor);
   el.querySelector("#tn-hide").addEventListener("click", () => {
     try { localStorage.setItem(hiddenKey(), noticeSig(current)); } catch (_) { /* не критично */ }
