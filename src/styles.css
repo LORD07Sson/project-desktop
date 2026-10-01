@@ -4554,3 +4554,29 @@ body.focus-mode .report-detail-overlay .sheet {
 .ld-ack input { margin-top: 2px; accent-color: var(--s-stop); }
 .ld-sub { font-size: 12px; font-weight: 400; color: var(--ink-dim); margin-left: 8px; }
 .ld-item .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Вложения (attachments.js): картинки и файлы в сообщениях, заметках, тикетах */
+.att-img { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 10px; overflow: hidden; max-width: 320px; }
+.att-img img { display: block; max-width: 320px; max-height: 260px; width: auto; height: auto; object-fit: contain; background: var(--glass-hi); }
+.att-file { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; border-radius: 10px; background: var(--glass-hi); border: 1px solid var(--line); min-width: 220px; max-width: 340px; }
+.att-ic { width: 30px; height: 30px; flex: none; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--fire) 18%, transparent); color: var(--fire); }
+.att-ic svg, .att-dl svg, .ms-attach svg, #tk-attach svg, .note-attach svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.att-meta { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.att-meta b { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-meta span { font-size: 11px; color: var(--ink-dim); }
+.att-pending { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 10px; border: 1px dashed color-mix(in srgb, var(--fire) 45%, var(--line)); background: var(--glass-hi); }
+.att-pending img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; flex: none; }
+.ms-pending { padding: 0 16px; }
+.ms-pending:empty, .note-pending:empty, .tk-pending:empty { display: none; }
+.ms-bubble.has-att { display: grid; gap: 6px; }
+.ms-bubble.att-only { padding: 4px; background: transparent; border: 0; box-shadow: none; }
+.note-att { margin-top: 6px; }
+.note-pending { margin-top: 6px; }
+.att-view { display: flex; justify-content: center; max-height: 72vh; overflow: auto; }
+.att-view img { max-width: 100%; max-height: 72vh; object-fit: contain; border-radius: 8px; }
+.att-view-name { font-size: 12px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
+.raw-list { display: grid; gap: 6px; }
+.raw-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); }
+.raw-row.on { border-color: color-mix(in srgb, var(--s-done) 45%, var(--line)); }
+.raw-label { font-size: 13px; font-weight: 600; flex: none; min-width: 170px; }
+.raw-name { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

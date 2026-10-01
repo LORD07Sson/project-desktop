@@ -150,6 +150,35 @@ export async function apiBlob(path, onProgress) {
   }
 }
 
+// Отправка файла (multipart) — вложения в сообщениях, заметках, тикетах,
+// равки серии. Байты уже в памяти страницы (<input type=file>, вставка
+// скриншота), поэтому fetch отсюда, без Rust. Content-Type не ставим:
+// границу multipart браузер проставит сам.
+export async function apiUpload(path, file, fields) {
+  const form = new FormData();
+  form.append("file", file, file.name || "image.png");
+  for (const [k, v] of Object.entries(fields || {})) form.append(k, v);
+  const headers = {};
+  if (state.token) headers["X-Init-Data"] = state.token;
+  netStart();
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE}${path}`, { method: "POST", headers, body: form });
+  } catch (e) {
+    throw new Error(`Нет связи с сервером: ${e.message}`);
+  } finally {
+    netEnd();
+  }
+  if (!resp.ok) {
+    let detail = resp.status;
+    try { detail = (await resp.json()).detail ?? detail; } catch (_) {}
+    if (resp.status === 401) notifySessionExpired(String(detail));
+    throw new Error(typeof detail === "string" ? detail : `Ошибка ${detail}`);
+  }
+  const text = await resp.text();
+  return text ? stripStatusEmoji(JSON.parse(text)) : {};
+}
+
 export function apiGet(path, params) {
   const qs = params ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)) : "";
   return api("GET", path + qs);

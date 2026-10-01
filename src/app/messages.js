@@ -11,12 +11,14 @@
 // в общем чате и темах).
 //
 // API: /chats (общий, личные, channels), /chats/{id}/messages,
-// POST /chats/{id}/messages {text}, …/messages/{mid}/delete,
+// POST /chats/{id}/messages {text}, POST /chats/{id}/attach (файл + text),
+// …/messages/{mid}/file (вложение), …/messages/{mid}/delete,
 // POST /chats/{id}/read, POST /chats/{id}/clear {both}, POST /chats/dm, /channels*, /topics/{id}/delete.
 // Ключ беседы: "general", "dm:<a>:<b>", "t:<topic_id>". Обновление — опрос.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { attachHtml, wireAttachments, pickFile, pastedFile, pendingHtml, tooBig, CLIP_ICON } from "./attachments.js";
 import { $, esc, relTime } from "./utils.js";
 import { loadAvatars, openUserProfile } from "./profile.js";
 
@@ -38,6 +40,7 @@ let activeId = null;
 let messages = [];
 let filter = "all";
 let query = "";
+let pendingFile = null;       // вложение, которое уйдёт со следующим сообщением
 let pollTimer = null;
 
 // ---------- помощники ----------
@@ -96,7 +99,9 @@ function chatAvatarHtml(c, lg) {
 
 function lastLine(c) {
   const l = c.last;
-  return l ? `${l.mine ? "Вы" : esc(l.author)}: ${esc(l.text)}` : "пока тихо";
+  if (!l) return "пока тихо";
+  const body = l.text || (l.attach ? `📎 ${l.attach.kind === "image" ? "картинка" : l.attach.name}` : "");
+  return `${l.mine ? "Вы" : esc(l.author)}: ${esc(body)}`;
 }
 
 function badges(c) {
@@ -218,7 +223,7 @@ function messagesHtml(c) {
         <div class="ms-msg-col">
           ${grouped ? "" : `<div class="ms-meta">${m.mine ? "" : `<b>${esc(m.author)}</b>`}<time>${hhmm(d)}</time></div>`}
           <div class="ms-bubble-row">
-            <div class="ms-bubble">${richText(m.text)}</div>
+            <div class="ms-bubble${m.attach ? " has-att" : ""}${m.attach && !m.text ? " att-only" : ""}">${m.attach ? attachHtml(m.attach) : ""}${m.text ? `<div class="ms-text">${richText(m.text)}</div>` : ""}</div>
             ${canDelete ? `<button type="button" class="ms-del" data-del="${m.id}" title="${m.mine ? "Удалить сообщение" : "Удалить как владелец"}" aria-label="Удалить сообщение">${TRASH_ICON}</button>` : ""}
           </div>
         </div>
@@ -265,12 +270,15 @@ function renderThread({ keepScroll } = {}) {
   el.innerHTML = `
     ${threadHeadHtml(c)}
     <div class="ms-msgs" id="ms-msgs">${messagesHtml(c)}</div>
+    <div class="ms-pending" id="ms-pending">${pendingHtml(pendingFile)}</div>
     <div class="ms-compose">
       <div class="ms-suggest" id="ms-suggest" hidden></div>
+      <button type="button" class="icon-btn ms-attach" id="ms-attach" title="Прикрепить картинку или файл (или вставьте скриншот Ctrl+V)" aria-label="Прикрепить файл">${CLIP_ICON}</button>
       <textarea id="ms-input" rows="1" maxlength="2000" placeholder="${esc(placeholder)}"></textarea>
       <button type="button" class="btn primary ms-send" id="ms-send" aria-label="Отправить" title="Отправить (Enter)">${SEND_ICON}</button>
     </div>`;
   loadAvatars(el);
+  wireAttachments(el);
   const msgs = el.querySelector("#ms-msgs");
   if (!keepScroll || nearBottom) msgs.scrollTop = msgs.scrollHeight;
   const input = el.querySelector("#ms-input");
@@ -334,21 +342,47 @@ function wireThread(el, c) {
       renderThread({ keepScroll: true });
     } catch (e) { toast(e.message, "error"); b.disabled = false; }
   }));
+  // Вложение: скрепка, вставка скриншота (Ctrl+V) — уйдёт со
+  // следующим «Отправить» вместе с текстом (текст необязателен).
+  const pendingBox = el.querySelector("#ms-pending");
+  const setPending = file => {
+    if (file && tooBig(file)) return;
+    pendingFile = file;
+    pendingBox.innerHTML = pendingHtml(file);
+    pendingBox.querySelector("[data-att-cancel]")?.addEventListener("click", () => setPending(null));
+    input.focus();
+  };
+  pendingBox.querySelector("[data-att-cancel]")?.addEventListener("click", () => setPending(null));
+  el.querySelector("#ms-attach").addEventListener("click", async () => {
+    const file = await pickFile();
+    if (file) setPending(file);
+  });
+  input.addEventListener("paste", e => {
+    const file = pastedFile(e);
+    if (file) { e.preventDefault(); setPending(file); }
+  });
   const send = async () => {
     const text = input.value.trim();
-    if (!text) return;
+    const file = pendingFile;
+    if (!text && !file) return;
     input.value = "";
     autoGrow(input);
+    const sendBtn = el.querySelector("#ms-send");
+    sendBtn.disabled = true;
     try {
-      const r = await apiPost(`/chats/${encodeURIComponent(c.id)}/messages`, { text });
+      const r = file
+        ? await apiUpload(`/chats/${encodeURIComponent(c.id)}/attach`, file, { text })
+        : await apiPost(`/chats/${encodeURIComponent(c.id)}/messages`, { text });
+      pendingFile = null;
       messages = r.messages || messages;
       const target = c._topic || chats.find(x => x.id === c.id);
-      if (target) target.last = { author: state.name, text, created_at: new Date().toISOString(), mine: true };
+      if (target) target.last = messages[messages.length - 1] || { author: state.name, text, created_at: new Date().toISOString(), mine: true };
       renderList();
       renderThread();
       $("#ms-input")?.focus();
     } catch (e) {
       input.value = text;
+      sendBtn.disabled = false;
       toast(`Не отправилось: ${e.message}`, "error");
     }
   };
@@ -478,6 +512,7 @@ async function openNewChannelDialog() {
 
 async function openChat(id) {
   activeId = id;
+  pendingFile = null;
   renderList();
   const el = $("#ms-thread");
   el.innerHTML = dialogSkeletonHtml(5);

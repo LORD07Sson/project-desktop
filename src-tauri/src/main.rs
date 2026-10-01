@@ -1096,6 +1096,68 @@ async fn download_report_file(
     log_result("download_report_file", result)
 }
 
+/// Какие адреса API можно скачать через download_api_file: только ручки
+/// вложений (сообщения, заметки, тикеты, равки серии). Путь приходит из
+/// вебвью — без этой проверки им можно было бы вытянуть любой ответ API
+/// с токеном пользователя в заголовке.
+fn allowed_attachment_path(api_path: &str) -> bool {
+    let ok_chars = api_path
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | ':'));
+    let parts: Vec<&str> = api_path.split('/').collect();
+    let numeric = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
+    let shape = match parts.as_slice() {
+        ["chats", _key, "messages", id, "file"] => numeric(id),
+        ["report", _pid, "notes", id, "file"] => numeric(id),
+        ["tickets", t, "posts", id, "file"] => numeric(t) && numeric(id),
+        ["report", _pid, "raws", kind, "file"] => matches!(*kind, "voice" | "mix" | "subs"),
+        _ => false,
+    };
+    ok_chars && !api_path.contains("..") && shape
+}
+
+/// Скачивание вложения (сообщения, заметки, тикеты, равки) в выбранный
+/// пользователем файл — тот же приём, что download_report_file: токен
+/// заголовком, путь сохранения проверяет FileScope.
+#[tauri::command]
+async fn download_api_file(
+    app: tauri::AppHandle,
+    api_path: String,
+    init_data: String,
+    save_path: String,
+) -> Result<(), String> {
+    let result = async {
+        if !allowed_attachment_path(&api_path) {
+            return Err("Этот адрес скачивать нельзя.".to_string());
+        }
+        let save_path = app.state::<file_scope::FileScope>().check_write(&save_path)?;
+        let resp = http()
+            .get(format!("{API_BASE}/{api_path}"))
+            .header("X-Init-Data", init_data)
+            .send()
+            .await
+            .map_err(|e| format!("Не удалось скачать файл: {e}"))?;
+        if !resp.status().is_success() {
+            return Err(error_detail(resp, "сервер отказал в скачивании").await);
+        }
+        if let Some(len) = resp.content_length() {
+            if len > MAX_UPLOAD_BYTES {
+                return Err(format!("Файл слишком большой ({} МБ).", len / 1024 / 1024));
+            }
+        }
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| format!("Обрыв при скачивании: {e}"))?;
+        if bytes.len() as u64 > MAX_UPLOAD_BYTES {
+            return Err("Файл слишком большой.".into());
+        }
+        std::fs::write(&save_path, &bytes).map_err(|e| format!("Не удалось сохранить файл: {e}"))
+    }
+    .await;
+    log_result("download_api_file", result)
+}
+
 /// Текст ошибки из тела ответа сервера ({"detail": "..."}), если он там
 /// есть — иначе переданная заглушка.
 async fn error_detail(resp: reqwest::Response, fallback: &str) -> String {
@@ -1267,6 +1329,7 @@ fn main() {
             check_for_update,
             download_and_apply_update,
             upload_report_file,
+            download_api_file,
             download_report_file,
             get_update_channel,
             set_update_channel,
@@ -1429,5 +1492,21 @@ mod tests {
     fn friendly_update_error_passes_through_other_errors() {
         let msg = friendly_update_error("Нет связи с сервером: connection refused");
         assert_eq!(msg, "Нет связи с сервером: connection refused");
+    }
+
+    #[test]
+    fn attachment_paths_only_whitelisted() {
+        assert!(allowed_attachment_path("chats/general/messages/12/file"));
+        assert!(allowed_attachment_path("chats/dm:1:2/messages/3/file"));
+        assert!(allowed_attachment_path("report/R-000012/notes/4/file"));
+        assert!(allowed_attachment_path("tickets/5/posts/6/file"));
+        assert!(allowed_attachment_path("report/R-000012/raws/voice/file"));
+        // чужие ручки API, обход пути, мусор в id
+        assert!(!allowed_attachment_path("admin/access"));
+        assert!(!allowed_attachment_path("report/R-1/raws/other/file"));
+        assert!(!allowed_attachment_path("chats/general/messages/x/file"));
+        assert!(!allowed_attachment_path("chats/../admin/messages/1/file"));
+        assert!(!allowed_attachment_path("chats/general/messages/1/file?x=1"));
+        assert!(!allowed_attachment_path("/chats/general/messages/1/file"));
     }
 }
