@@ -307,10 +307,10 @@ async function castVote(titleId, choice, btn) {
     if (sheet) {
       setCount(sheet.querySelector(".td-stat-pill.like"), `👍 ${r.likes}`);
       setCount(sheet.querySelector(".td-stat-pill.dislike"), `👎 ${r.dislikes}`);
-      const bar = sheet.querySelector(".tp-approval i");
+      const bar = sheet.querySelector(".tpg-approval i");
       const total = r.likes + r.dislikes;
       if (bar) bar.style.width = `${total ? Math.round((r.likes / total) * 100) : 0}%`;
-      setCount(bar && bar.closest(".tp-card").querySelector(".tp-score-row b"), total ? `${Math.round((r.likes / total) * 100)}%` : "—");
+      setCount(bar && bar.closest(".tpg-card").querySelector(".tpg-score-row b"), total ? `${Math.round((r.likes / total) * 100)}%` : "—");
     }
   } catch (e) {
     toast(e.message, "error");
@@ -338,12 +338,12 @@ function wireVoteButtons(root) {
 async function openTitleDetail(titleId) {
   const overlay = openSheet(dialogSkeletonHtml(4));
   const sheet = overlay.querySelector(".sheet");
-  sheet.classList.add("tp-sheet");
+  sheet.classList.add("tpg-sheet");
   let d;
   try {
     d = await apiGet(`/public/titles/${titleId}`);
   } catch (e) {
-    sheet.classList.remove("tp-sheet");
+    sheet.classList.remove("tpg-sheet");
     sheet.innerHTML = `<div style="color:var(--s-stop);">Не удалось загрузить тайтл: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
     sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
     return;

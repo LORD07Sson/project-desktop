@@ -69,34 +69,52 @@ function infoRows(det) {
   return rows;
 }
 
-function scoreHtml(score) {
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+function scoreTile(score) {
   if (score == null) return "";
   const stars = Math.round(score) / 2; // 0–5 с шагом 0.5
-  const star = i => {
-    const fill = Math.max(0, Math.min(1, stars - i));
-    return `<i class="tp-star" style="--fill:${fill * 100}%"></i>`;
-  };
-  const verdict = score >= 9 ? "Шедевр" : score >= 8 ? "Отлично" : score >= 7 ? "Хорошо" : score >= 6 ? "Нормально" : "Так себе";
+  const star = i => `<i class="tpg-star" style="--fill:${Math.max(0, Math.min(1, stars - i)) * 100}%"></i>`;
   return `
-    <div class="tp-card tp-score">
-      <div class="tp-card-label">Оценка зрителей</div>
-      <div class="tp-score-row"><b>${score.toFixed(1)}</b><span class="tp-stars">${[0, 1, 2, 3, 4].map(star).join("")}</span></div>
-      <div class="tp-card-sub">${verdict} · Shikimori/AniList</div>
+    <div class="tpg-tile tpg-score">
+      <span class="tpg-tile-label">Оценка зрителей</span>
+      <span class="tpg-tile-value"><b>${score.toFixed(1)}</b><span class="tpg-stars">${[0, 1, 2, 3, 4].map(star).join("")}</span></span>
+      <span class="tpg-tile-sub">Shikimori / AniList</span>
     </div>`;
 }
 
-function approvalHtml(d) {
+function approvalTile(d) {
   const total = d.likes + d.dislikes;
   const pct = total ? Math.round((d.likes / total) * 100) : null;
   return `
-    <div class="tp-card">
-      <div class="tp-card-label">Одобрение команды</div>
-      <div class="tp-score-row"><b>${pct == null ? "—" : `${pct}%`}</b><span class="tp-card-sub">${total ? `${total} голос${total % 10 === 1 && total % 100 !== 11 ? "" : (total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 12 || total % 100 > 14) ? "а" : "ов")}` : "ещё никто не голосовал"}</span></div>
-      <div class="tp-approval"><i style="width:${pct ?? 0}%"></i></div>
-      <div class="tp-votes">
-        <span class="td-stat-pill like">👍 ${d.likes}</span>
-        <span class="td-stat-pill dislike">👎 ${d.dislikes}</span>
-      </div>
+    <div class="tpg-tile tpg-card">
+      <span class="tpg-tile-label">Одобрение команды</span>
+      <span class="tpg-tile-value tpg-score-row"><b>${pct == null ? "—" : `${pct}%`}</b></span>
+      <span class="tpg-approval"><i style="width:${pct ?? 0}%"></i></span>
+      <span class="tpg-tile-sub tpg-votes"><span class="td-stat-pill like">👍 ${d.likes}</span><span class="td-stat-pill dislike">👎 ${d.dislikes}</span><span>${total ? `${total} ${plural(total, "голос", "голоса", "голосов")}` : "голосов пока нет"}</span></span>
+    </div>`;
+}
+
+function episodesTile(det) {
+  if (!det || !(det.episodes_total || det.episodes_aired)) return "";
+  const aired = det.episodes_aired, total = det.episodes_total;
+  const value = aired != null && total ? `${aired}<small> / ${total}</small>` : String(total || aired);
+  let sub = det.status_label || "";
+  if (det.next_episode_at) {
+    const at = new Date(det.next_episode_at);
+    if (!Number.isNaN(at.getTime())) sub = `следующая ${at.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}`;
+  }
+  return `
+    <div class="tpg-tile">
+      <span class="tpg-tile-label">Серии</span>
+      <span class="tpg-tile-value"><b>${value}</b></span>
+      ${aired != null && total ? `<span class="tpg-approval tpg-eps-bar"><i style="width:${Math.round((aired / total) * 100)}%"></i></span>` : ""}
+      <span class="tpg-tile-sub">${esc(sub)}</span>
     </div>`;
 }
 
@@ -105,16 +123,16 @@ function progressHtml(d) {
   const crew = d.crew || [];
   const done = eps.filter(e => e.pct === 100).length;
   return `
-    <section class="tp-section">
-      <div class="tp-section-head"><h3>Ход озвучки</h3>${eps.length ? `<span>${done} из ${eps.length} серий готово</span>` : ""}</div>
-      ${eps.length ? `<div class="tp-eps">${eps.map(e => `
-        <div class="tp-ep${e.pct === 100 ? " done" : ""}" title="${esc(e.label)}: готово ${e.completed} из ${e.total}">
-          <span class="tp-ep-label">${esc(e.label)}</span>
-          <span class="tp-ep-bar"><i style="width:${e.pct}%"></i></span>
-          <span class="tp-ep-val">${e.completed}/${e.total}</span>
-        </div>`).join("")}</div>` : `<div class="tp-empty">Серии ещё не заведены.</div>`}
-      ${crew.length ? `<div class="tp-crew">${crew.map(c => `
-        <span class="tp-crew-chip"${c.telegram_id ? ` data-open-profile="${c.telegram_id}"` : ""}>
+    <section class="tpg-section">
+      <div class="tpg-section-head"><h3>Ход озвучки</h3>${eps.length ? `<span>${done} из ${eps.length} серий готово</span>` : ""}</div>
+      ${eps.length ? `<div class="tpg-eps">${eps.map(e => `
+        <div class="tpg-ep${e.pct === 100 ? " done" : ""}" title="${esc(e.label)}: готово ${e.completed} из ${e.total}">
+          <span class="tpg-ep-label">${esc(e.label)}</span>
+          <span class="tpg-ep-bar"><i style="width:${e.pct}%"></i></span>
+          <span class="tpg-ep-val">${e.completed}/${e.total}</span>
+        </div>`).join("")}</div>` : `<div class="tpg-empty">Серии ещё не заведены.</div>`}
+      ${crew.length ? `<div class="tpg-crew">${crew.map(c => `
+        <span class="tpg-crew-chip"${c.telegram_id ? ` data-open-profile="${c.telegram_id}"` : ""}>
           ${avatarHtml(c.telegram_id, c.name, "sm")}<span><b>${esc(c.name || "не назначен")}</b><small>${esc(c.role || "")}</small></span>
         </span>`).join("")}</div>` : ""}
     </section>`;
@@ -126,19 +144,19 @@ function charactersHtml(chars) {
   const list = chars.slice().sort((a, b) => (order[a.role] ?? 3) - (order[b.role] ?? 3));
   const voiced = list.filter(c => c.voiced_by).length;
   return `
-    <section class="tp-section">
-      <div class="tp-section-head"><h3>Персонажи и голоса</h3><span>озвучено ${voiced} из ${list.length}</span></div>
-      <div class="tp-chars">${list.map(c => {
+    <section class="tpg-section">
+      <div class="tpg-section-head"><h3>Персонажи и голоса</h3><span>озвучено ${voiced} из ${list.length}</span></div>
+      <div class="tpg-chars">${list.map(c => {
         const img = imgProxy(c.image_url);
         return `
-        <div class="tp-char${c.voiced_by ? " voiced" : ""}">
-          ${img ? `<img class="tp-char-img" src="${img}" alt="" loading="lazy">` : `<span class="tp-char-img ph"></span>`}
-          <div class="tp-char-body">
-            <b class="tp-char-name">${esc(c.name)}</b>
-            <span class="tp-char-role">${esc(ROLE_LABELS[c.role] || "")}${c.original_va_name ? `${ROLE_LABELS[c.role] ? " · " : ""}яп. ${esc(c.original_va_name)}` : ""}</span>
+        <div class="tpg-char${c.voiced_by ? " voiced" : ""}">
+          ${img ? `<img class="tpg-char-img" src="${img}" alt="" loading="lazy">` : `<span class="tpg-char-img ph"></span>`}
+          <div class="tpg-char-body">
+            <b class="tpg-char-name">${esc(c.name)}</b>
+            <span class="tpg-char-role">${esc(ROLE_LABELS[c.role] || "")}${c.original_va_name ? `${ROLE_LABELS[c.role] ? " · " : ""}яп. ${esc(c.original_va_name)}` : ""}</span>
             ${c.voiced_by
-              ? `<span class="tp-char-voice" data-open-profile="${c.voiced_by.telegram_id}">${avatarHtml(c.voiced_by.telegram_id, c.voiced_by.name, "sm")}${esc(c.voiced_by.name)}</span>`
-              : `<span class="tp-char-voice none">голос не назначен</span>`}
+              ? `<span class="tpg-char-voice" data-open-profile="${c.voiced_by.telegram_id}">${avatarHtml(c.voiced_by.telegram_id, c.voiced_by.name, "sm")}${esc(c.voiced_by.name)}</span>`
+              : `<span class="tpg-char-voice none">голос не назначен</span>`}
           </div>
         </div>`;
       }).join("")}</div>
@@ -152,44 +170,52 @@ export function titlePageHtml(d) {
   const rows = infoRows(det);
   return `
     <div class="tp">
-      <div class="tp-banner${d.has_banner ? "" : " from-poster"}" data-tp-banner></div>
-      <button class="tp-close" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-      <div class="tp-top">
-        <aside class="tp-left">
-          <img class="tp-poster" ${hdPosterAttrs(d.id, d.poster_url, 230)} alt="">
-          <div class="td-vote-cta tp-vote">
-            <button class="${d.my_vote === 1 ? "on-like" : ""}" data-vote-title="${d.id}" data-vote-choice="1">👍 Нравится</button>
-            <button class="${d.my_vote === -1 ? "on-dislike" : ""}" data-vote-title="${d.id}" data-vote-choice="-1">👎 Не то</button>
-          </div>
-        </aside>
-        <div class="tp-main">
-          ${eyebrow.length ? `<div class="tp-eyebrow">${eyebrow.map(esc).join("<i></i>")}</div>` : ""}
-          <h1 class="tp-name">${esc(d.name)}</h1>
-          ${det && det.name_original ? `<div class="tp-orig">${esc(det.name_original)}</div>` : ""}
-          <div class="tp-cols">
-            ${rows.length ? `<dl class="tp-info">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : `<div class="tp-empty">Подробностей с Shikimori/AniList нет — тайтл не привязан или сайт недоступен.</div>`}
-            <div class="tp-side">
-              ${scoreHtml(det && det.score)}
-              ${approvalHtml(d)}
+      <header class="tpg-hero">
+        <div class="tpg-hero-bg${d.has_banner ? "" : " from-poster"}" data-tpg-banner></div>
+        <button class="tpg-close" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <div class="tpg-hero-inner">
+          <img class="tpg-poster" ${hdPosterAttrs(d.id, d.poster_url, 220)} alt="">
+          <div class="tpg-head">
+            ${eyebrow.length ? `<div class="tpg-eyebrow">${eyebrow.map(esc).join("<i></i>")}</div>` : ""}
+            <h1 class="tpg-name">${esc(d.name)}</h1>
+            ${det && det.name_original ? `<div class="tpg-orig">${esc(det.name_original)}</div>` : ""}
+            ${det && det.genres && det.genres.length ? `<div class="tpg-genres">${det.genres.map(g => `<span>${esc(g)}</span>`).join("")}</div>` : ""}
+            <div class="tpg-tiles">
+              ${scoreTile(det && det.score)}
+              ${approvalTile(d)}
+              ${episodesTile(det)}
+            </div>
+            <div class="td-vote-cta tpg-actions">
+              <button class="${d.my_vote === 1 ? "on-like" : ""}" data-vote-title="${d.id}" data-vote-choice="1">👍 Нравится</button>
+              <button class="${d.my_vote === -1 ? "on-dislike" : ""}" data-vote-title="${d.id}" data-vote-choice="-1">👎 Не то</button>
             </div>
           </div>
-          ${det && det.genres && det.genres.length ? `<div class="tp-genres">${det.genres.map(g => `<span>${esc(g)}</span>`).join("")}</div>` : ""}
         </div>
+      </header>
+      <div class="tpg-body">
+        <div class="tpg-content">
+          ${det && det.description ? `
+          <section class="tpg-section">
+            <div class="tpg-section-head"><h3>Описание</h3></div>
+            <p class="tpg-desc clamped" data-tpg-desc>${esc(det.description)}</p>
+            <button class="tpg-more" data-tpg-more hidden>Показать полностью</button>
+          </section>` : ""}
+          ${progressHtml(d)}
+          ${charactersHtml(d.characters)}
+        </div>
+        <aside class="tpg-aside">
+          <div class="tpg-info-card">
+            <h3>Информация</h3>
+            ${rows.length ? `<dl class="tpg-info">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : `<div class="tpg-empty">Тайтл не привязан к Shikimori/AniList или сайт недоступен.</div>`}
+          </div>
+        </aside>
       </div>
-      ${det && det.description ? `
-      <section class="tp-section">
-        <div class="tp-section-head"><h3>Описание</h3></div>
-        <p class="tp-desc clamped" data-tp-desc>${esc(det.description)}</p>
-        <button class="tp-more" data-tp-more hidden>Показать полностью</button>
-      </section>` : ""}
-      ${progressHtml(d)}
-      ${charactersHtml(d.characters)}
     </div>`;
 }
 
 // После вставки в DOM: баннер, «показать полностью», аватарки, профили.
 export function wireTitlePage(root, d, { openProfile } = {}) {
-  const banner = root.querySelector("[data-tp-banner]");
+  const banner = root.querySelector("[data-tpg-banner]");
   if (banner) {
     const setBg = src => { banner.style.backgroundImage = `url("${src}")`; banner.classList.add("ready"); };
     const fallback = imgProxy(d.poster_url);
@@ -203,8 +229,8 @@ export function wireTitlePage(root, d, { openProfile } = {}) {
       setBg(fallback);
     }
   }
-  const desc = root.querySelector("[data-tp-desc]");
-  const more = root.querySelector("[data-tp-more]");
+  const desc = root.querySelector("[data-tpg-desc]");
+  const more = root.querySelector("[data-tpg-more]");
   if (desc && more) {
     // С line-clamp scrollHeight в Chromium равен видимой высоте — поэтому
     // сравниваем высоту с обрезкой и без неё.
