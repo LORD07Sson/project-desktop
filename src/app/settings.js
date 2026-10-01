@@ -68,6 +68,7 @@ async function openSettings() {
     ["s-tile-post", "Пост в канал", "Конструктор с превью", '<path d="M3 12l18-8-8 18-2-8-8-2Z"/>'],
     ["s-tile-mentions", "Упоминания", "Кого поднять в чате", '<circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1"/>'],
     ["s-tile-lockdown", "Аварийный режим", "«Саботаж»: заморозить удаление", '<path d="M12 3 2 20h20L12 3zM12 10v4M12 17h.01"/>'],
+    ...(state.isDeveloper ? [["s-tile-botchats", "Чаты бота", "Где бот и что там делает", '<path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5"/>']] : []),
     ...(state.isDeveloper ? [["s-tile-trash", "Корзина", "Вернуть удалённое за 7 дней", '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>']] : []),
     ...(state.isDeveloper ? [["s-tile-log", "Журнал действий", "Надзор за админами", '<path d="M6 3h9l4 4v14H6zM9 12h7M9 16h5"/>']] : []),
   ];
@@ -267,6 +268,7 @@ async function openSettings() {
   tile("s-tile-log", () => import("./admin-log.js").then(m => m.openAdminLogSheet()));
   tile("s-tile-lockdown", () => { dismissSheet(overlay); import("./lockdown.js").then(m => m.openLockdownSheet()); });
   tile("s-tile-trash", () => { dismissSheet(overlay); import("./lockdown.js").then(m => m.openTrashSheet()); });
+  tile("s-tile-botchats", () => { dismissSheet(overlay); import("./bot-chats.js").then(m => m.openBotChatsSheet()); });
 
   // Навигация слева: клик — прокрутка к разделу, подсветка — по прокрутке.
   const body = overlay.querySelector("#st-body");

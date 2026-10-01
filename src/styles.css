@@ -4587,3 +4587,22 @@ body.focus-mode .report-detail-overlay .sheet {
 .upload-progress span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px; }
 .upload-progress i { display: block; height: 4px; width: 0; border-radius: 4px; background: var(--fire); transition: width .2s; }
 .upload-progress + .upload-progress { bottom: 84px; }
+
+/* «Чаты бота» (bot-chats.js) */
+.bc-hint { color: var(--ink-dim); font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
+.bc-chat { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.bc-chat.target { border-color: color-mix(in srgb, var(--fire) 50%, var(--line)); }
+.bc-chat.off { opacity: .6; }
+.bc-head { display: flex; align-items: center; gap: 10px; }
+.bc-title { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.bc-title b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-title span { font-size: 12px; color: var(--ink-dim); }
+.bc-badge { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--s-done) 18%, transparent); color: var(--s-done); flex: none; }
+.bc-badge.gone { background: color-mix(in srgb, var(--s-stop) 18%, transparent); color: var(--s-stop); }
+.bc-features { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 14px; margin-top: 10px; }
+.bc-feature { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.bc-feature input { accent-color: var(--fire); }
+.bc-mention { display: flex; align-items: center; gap: 14px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); flex-wrap: wrap; }
+.bc-thread { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim); }
+.bc-thread input { width: 90px; }
+.bc-warn { padding: 10px 12px; border-radius: 10px; font-size: 13px; background: color-mix(in srgb, var(--gold) 14%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); margin-bottom: 10px; }
