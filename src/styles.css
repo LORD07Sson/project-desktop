@@ -2346,6 +2346,108 @@ kbd {
 .td-genre-chip { font-size: 12px; padding: 5px 12px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-soft); }
 .td-desc { margin-top: 14px; font-size: 13.5px; line-height: 1.6; color: var(--ink); text-align: left; white-space: pre-line; }
 
+/* ---------- Страница тайтла (title-page.js) ----------
+   Широкая шторка: баннер сверху, постер «наезжает» на него, справа
+   колонка информации и карточки оценки/одобрения, ниже — описание,
+   ход озвучки и персонажи с голосами команды. */
+.sheet.tp-sheet { width: min(1080px, 96vw); max-height: 92vh; padding: 0; overflow: auto; }
+.tp { position: relative; padding: 0 28px 28px; }
+.tp-banner {
+  position: relative; height: 210px; margin: 0 -28px; border-radius: 16px 16px 0 0;
+  background: var(--surface-2) center / cover no-repeat; overflow: hidden;
+  opacity: 0; transition: opacity .35s var(--ease);
+}
+.tp-banner.ready { opacity: 1; }
+.tp-banner.from-poster { filter: blur(18px) brightness(.55) saturate(1.2); transform: scale(1.1); border-radius: 0; }
+.tp-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5, 6, 10, 0) 30%, var(--surface) 100%); }
+.tp-close {
+  position: absolute; top: 14px; right: 14px; z-index: 2; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .18); background: rgba(5, 6, 10, .45); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px);
+}
+.tp-close svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; }
+.tp-close:hover { background: rgba(5, 6, 10, .7); }
+.tp-top { position: relative; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 28px; margin-top: -120px; }
+.tp-left { display: flex; flex-direction: column; gap: 12px; }
+.tp-poster {
+  width: 230px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 14px; background: var(--surface-2);
+  box-shadow: 0 22px 44px -12px rgba(0, 0, 0, .65), 0 0 0 1px rgba(255, 255, 255, .07);
+  animation: tp-rise .45s var(--ease) both;
+}
+@keyframes tp-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.tp-vote { margin-top: 0; }
+.tp-vote button { padding: 11px 6px; font-size: 13px; }
+.tp-main { padding-top: 132px; min-width: 0; }
+.tp-eyebrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--gold); }
+.tp-eyebrow i { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-dim); }
+.tp-name { font-size: 26px; font-weight: 800; line-height: 1.2; margin: 6px 0 0; }
+.tp-orig { font-size: 13.5px; color: var(--ink-soft); margin-top: 4px; }
+.tp-cols { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 22px; margin-top: 18px; }
+.tp-info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 18px; margin: 0; font-size: 13px; align-content: start; }
+.tp-info dt { color: var(--ink-dim); padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.tp-info dd { margin: 0; padding: 6px 0; border-bottom: 1px dashed var(--line); font-weight: 600; }
+.tp-side { display: flex; flex-direction: column; gap: 12px; }
+.tp-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.tp-card-label { font-size: 11px; font-weight: 700; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .04em; }
+.tp-card-sub { font-size: 11.5px; color: var(--ink-soft); }
+.tp-score-row { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 2px; }
+.tp-score-row b { font-size: 28px; font-weight: 800; line-height: 1; }
+.tp-score b { background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tp-stars { display: inline-flex; gap: 3px; }
+.tp-star { position: relative; width: 14px; height: 14px; display: inline-block; background: var(--line); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.tp-star::after { content: ""; position: absolute; inset: 0; width: var(--fill); background: var(--gold); }
+.tp-approval { height: 6px; border-radius: 6px; background: color-mix(in srgb, var(--s-stop) 35%, var(--line)); overflow: hidden; margin: 8px 0 10px; }
+.tp-approval i { display: block; height: 100%; background: var(--s-done); border-radius: 6px; transition: width .4s var(--ease); }
+.tp-votes { display: flex; gap: 8px; }
+.tp-votes .td-stat-pill { padding: 4px 11px; font-size: 12px; }
+.tp-genres { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+.tp-genres span { font-size: 12px; padding: 4px 11px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-soft); }
+.tp-section { margin-top: 26px; }
+.tp-section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.tp-section-head h3 { margin: 0; font-size: 15px; font-weight: 800; }
+.tp-section-head span { font-size: 12px; color: var(--ink-dim); }
+.tp-desc { margin: 0; font-size: 13.5px; line-height: 1.65; white-space: pre-line; }
+.tp-desc.clamped { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.tp-more { margin-top: 6px; background: none; border: none; padding: 0; color: var(--gold); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.tp-empty { font-size: 12.5px; color: var(--ink-dim); padding: 6px 0; }
+.tp-eps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.tp-ep { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; padding: 9px 11px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; }
+.tp-ep-label { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-ep-val { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.tp-ep-bar { grid-column: 1 / -1; grid-row: 2; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.tp-ep-bar i { display: block; height: 100%; background: var(--accent-grad); }
+.tp-ep.done { border-color: color-mix(in srgb, var(--s-done) 45%, var(--line)); }
+.tp-ep.done .tp-ep-bar i { background: var(--s-done); }
+.tp-crew { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tp-crew-chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+.tp-crew-chip[data-open-profile] { cursor: pointer; }
+.tp-crew-chip > span:last-child { display: flex; flex-direction: column; line-height: 1.2; font-size: 12px; }
+.tp-crew-chip small { color: var(--ink-dim); font-size: 10.5px; }
+.tp-chars { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.tp-char { display: flex; gap: 10px; padding: 8px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s ease, transform .15s ease; }
+.tp-char:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); }
+.tp-char-img { width: 52px; height: 72px; object-fit: cover; border-radius: 8px; flex: none; background: var(--line); }
+.tp-char-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tp-char-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-char-role { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-char-voice { margin-top: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 0; }
+.tp-char-voice.none { font-weight: 500; color: var(--ink-dim); font-style: italic; cursor: default; }
+.tp-char.voiced { border-color: color-mix(in srgb, var(--s-done) 30%, var(--line)); }
+@media (max-width: 820px) {
+  .tp { padding: 0 16px 20px; }
+  .tp-banner { margin: 0 -16px; height: 150px; }
+  .tp-top { grid-template-columns: 1fr; margin-top: -90px; gap: 14px; }
+  .tp-left { flex-direction: row; align-items: flex-end; }
+  .tp-poster { width: 130px; }
+  .tp-vote { flex: 1; }
+  .tp-main { padding-top: 0; }
+  .tp-cols { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tp-poster { animation: none; }
+  .tp-char:hover { transform: none; }
+}
+
 /* ---------- Команда / чужой профиль / режим разработчика ----------
    Портировано из мини-аппа: список команды (тизер профиля кликабелен),
    развёрнутая карточка коллеги (тот же profileHtml, что у своей «Я»),
