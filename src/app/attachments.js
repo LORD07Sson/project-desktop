@@ -9,7 +9,7 @@ import { mediaUrl, openSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
 import { invoke, pickOutputFile, revealInFolder } from "./tauri.js";
 
-export const ATTACH_MAX_MB = 50;
+export const ATTACH_MAX_MB = 2000; // потолок локального Bot API на сервере
 
 const FILE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>';
 const DL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';

@@ -949,7 +949,9 @@ const ALLOWED_UPLOAD_EXT: &[&str] = &[
 
 // Гигабайтный файл, целиком загруженный в память, уронил бы приложение
 // раньше, чем сервер успел бы его отклонить.
-const MAX_UPLOAD_BYTES: u64 = 200 * 1024 * 1024;
+// Потолок локального Bot API на сервере — 2000 МБ (сервер и nginx пропускают
+// файл потоком, см. _spooled в miniapp/server.py).
+const MAX_UPLOAD_BYTES: u64 = 2000 * 1024 * 1024;
 
 // Файл разрешён к загрузке, если пользователь сам его указал ЛЮБЫМ
 // из двух способов — перетащил в окно (DroppedFiles) или выбрал в
@@ -1073,24 +1075,7 @@ async fn download_report_file(
             return Err(error_detail(resp, "сервер отказал в скачивании").await);
         }
 
-        // Тот же предел, что и на загрузку (MAX_UPLOAD_BYTES): ответ
-        // целиком уезжает в память, и без крышки один большой файл
-        // (или сервер, отдающий бесконечный поток) роняет приложение по
-        // памяти. Content-Length может врать или отсутствовать, поэтому
-        // проверяем и заявленный размер, и фактически прочитанный.
-        if let Some(len) = resp.content_length() {
-            if len > MAX_UPLOAD_BYTES {
-                return Err(format!("Файл слишком большой ({} МБ).", len / 1024 / 1024));
-            }
-        }
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| format!("Обрыв при скачивании: {e}"))?;
-        if bytes.len() as u64 > MAX_UPLOAD_BYTES {
-            return Err("Файл слишком большой.".into());
-        }
-        std::fs::write(&save_path, &bytes).map_err(|e| format!("Не удалось сохранить файл: {e}"))
+        save_response_to_file(resp, &save_path).await
     }
     .await;
     log_result("download_report_file", result)
@@ -1140,22 +1125,48 @@ async fn download_api_file(
         if !resp.status().is_success() {
             return Err(error_detail(resp, "сервер отказал в скачивании").await);
         }
-        if let Some(len) = resp.content_length() {
-            if len > MAX_UPLOAD_BYTES {
-                return Err(format!("Файл слишком большой ({} МБ).", len / 1024 / 1024));
-            }
-        }
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| format!("Обрыв при скачивании: {e}"))?;
-        if bytes.len() as u64 > MAX_UPLOAD_BYTES {
-            return Err("Файл слишком большой.".into());
-        }
-        std::fs::write(&save_path, &bytes).map_err(|e| format!("Не удалось сохранить файл: {e}"))
+        save_response_to_file(resp, &save_path).await
     }
     .await;
     log_result("download_api_file", result)
+}
+
+/// Ответ сервера — в файл кусками, а не целиком в память: файлы бывают
+/// до 2 ГБ. Предел MAX_UPLOAD_BYTES проверяется и по заявленному размеру,
+/// и по фактически прочитанному (Content-Length может врать или его нет —
+/// иначе бесконечный поток забил бы диск). Недокачанный файл удаляется.
+async fn save_response_to_file(
+    mut resp: reqwest::Response,
+    save_path: &std::path::Path,
+) -> Result<(), String> {
+    use std::io::Write;
+    if let Some(len) = resp.content_length() {
+        if len > MAX_UPLOAD_BYTES {
+            return Err(format!("Файл слишком большой ({} МБ).", len / 1024 / 1024));
+        }
+    }
+    let mut out = std::fs::File::create(save_path).map_err(|e| format!("Не удалось сохранить файл: {e}"))?;
+    let mut total: u64 = 0;
+    let result: Result<(), String> = async {
+        while let Some(chunk) = resp
+            .chunk()
+            .await
+            .map_err(|e| format!("Обрыв при скачивании: {e}"))?
+        {
+            total += chunk.len() as u64;
+            if total > MAX_UPLOAD_BYTES {
+                return Err("Файл слишком большой.".into());
+            }
+            out.write_all(&chunk).map_err(|e| format!("Не удалось сохранить файл: {e}"))?;
+        }
+        out.flush().map_err(|e| format!("Не удалось сохранить файл: {e}"))
+    }
+    .await;
+    if result.is_err() {
+        drop(out);
+        let _ = std::fs::remove_file(save_path);
+    }
+    result
 }
 
 /// Текст ошибки из тела ответа сервера ({"detail": "..."}), если он там

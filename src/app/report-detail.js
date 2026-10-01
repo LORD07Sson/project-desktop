@@ -468,7 +468,7 @@ export async function openReportDetail(publicId) {
     sheet.querySelectorAll("[data-raw-up]").forEach(btn => btn.addEventListener("click", async () => {
       const file = await pickFile();
       if (!file) return;
-      if (file.size > 200 * 1024 * 1024) { toast("Больше 200 МБ из десктопа не загрузить — пришлите файл боту в карточке отчёта.", "error"); return; }
+      if (tooBig(file)) return;
       btn.disabled = true;
       btn.textContent = "Загружаю…";
       try {

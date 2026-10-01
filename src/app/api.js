@@ -151,32 +151,54 @@ export async function apiBlob(path, onProgress) {
 }
 
 // Отправка файла (multipart) — вложения в сообщениях, заметках, тикетах,
-// равки серии. Байты уже в памяти страницы (<input type=file>, вставка
-// скриншота), поэтому fetch отсюда, без Rust. Content-Type не ставим:
-// границу multipart браузер проставит сам.
-export async function apiUpload(path, file, fields) {
+// файлы и равки отчёта, до 2 ГБ. Файл выбран через <input type=file> или
+// вставлен из буфера — браузер сам читает его с диска по ходу отправки.
+// XMLHttpRequest, а не fetch: у fetch нет прогресса отправки, а гигабайт
+// уходит минутами. Content-Type не ставим — границу multipart проставит
+// браузер.
+const PROGRESS_FROM_BYTES = 2 * 1024 * 1024;
+
+function uploadProgress(name, size) {
+  if (size < PROGRESS_FROM_BYTES) return { set() {}, done() {} };
+  const el = document.createElement("div");
+  el.className = "upload-progress";
+  const label = document.createElement("span");
+  const bar = document.createElement("i");
+  el.append(label, bar);
+  document.body.append(el);
+  const set = frac => {
+    const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
+    label.textContent = pct < 100 ? `⬆ ${name} — ${pct}%` : `⬆ ${name} — сервер сохраняет…`;
+    bar.style.width = `${pct}%`;
+  };
+  set(0);
+  return { set, done() { el.remove(); } };
+}
+
+export function apiUpload(path, file, fields) {
   const form = new FormData();
   form.append("file", file, file.name || "image.png");
   for (const [k, v] of Object.entries(fields || {})) form.append(k, v);
-  const headers = {};
-  if (state.token) headers["X-Init-Data"] = state.token;
+  const ui = uploadProgress(file.name || "файл", file.size || 0);
   netStart();
-  let resp;
-  try {
-    resp = await fetch(`${API_BASE}${path}`, { method: "POST", headers, body: form });
-  } catch (e) {
-    throw new Error(`Нет связи с сервером: ${e.message}`);
-  } finally {
-    netEnd();
-  }
-  if (!resp.ok) {
-    let detail = resp.status;
-    try { detail = (await resp.json()).detail ?? detail; } catch (_) {}
-    if (resp.status === 401) notifySessionExpired(String(detail));
-    throw new Error(typeof detail === "string" ? detail : `Ошибка ${detail}`);
-  }
-  const text = await resp.text();
-  return text ? stripStatusEmoji(JSON.parse(text)) : {};
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}${path}`);
+    if (state.token) xhr.setRequestHeader("X-Init-Data", state.token);
+    xhr.upload.onprogress = e => { if (e.lengthComputable) ui.set(e.loaded / e.total); };
+    const finish = () => { ui.done(); netEnd(); };
+    xhr.onerror = () => { finish(); reject(new Error("Нет связи с сервером — отправка оборвалась.")); };
+    xhr.onload = () => {
+      finish();
+      let data = null;
+      try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch (_) { /* не JSON — ниже */ }
+      if (xhr.status >= 200 && xhr.status < 300) { resolve(stripStatusEmoji(data || {})); return; }
+      const detail = (data && data.detail) || (xhr.status === 413 ? "Файл слишком большой для сервера." : `Ошибка ${xhr.status}`);
+      if (xhr.status === 401) notifySessionExpired(String(detail));
+      reject(new Error(String(detail)));
+    };
+    xhr.send(form);
+  });
 }
 
 export function apiGet(path, params) {
