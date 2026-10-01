@@ -11,7 +11,7 @@
 // «Смотреть» на тайтле только говорит об этом.
 
 import { state } from "./state.js";
-import { apiGet, toast } from "./api.js";
+import { apiGet, toast, forceMediaToken } from "./api.js";
 import { $, esc } from "./utils.js";
 import { imgProxy, hdPosterAttrs } from "./title-page.js";
 
@@ -129,7 +129,7 @@ function heroTextHtml(t) {
   ].filter(Boolean);
   return `
     <div class="wm-eyebrow">${eyebrow.join("<i></i>")}</div>
-    <h1>${esc(t.name)}</h1>
+    <h1 title="${esc(t.name)}">${esc(t.name)}</h1>
     ${t.description ? `<p>${esc(t.description)}</p>` : ""}
     ${t.genres && t.genres.length ? `<div class="wm-tags">${t.genres.map(g => `<span>${esc(g)}</span>`).join("")}</div>` : ""}
     <div class="wm-acts">
@@ -146,7 +146,7 @@ function heroHtml() {
     <div class="wm-hero" id="wm-hero">
       ${list.map((t, i) => `
         <div class="wm-slide${i === heroIdx ? " on" : ""}" data-wm-slide="${i}">
-          <div class="wm-bg" style="background-image:url('${imgProxy(t.banner)}')"></div>
+          <div class="wm-bg${t.backdrop ? " frame" : ""}" style="background-image:url('${imgProxy(t.backdrop || t.banner)}')"></div>
           <div class="wm-cover" style="background-image:url('${imgProxy(t.cover)}')"></div>
         </div>`).join("")}
       <div class="wm-hero-text" id="wm-hero-text">${heroTextHtml(list[heroIdx])}</div>
@@ -347,7 +347,9 @@ export async function openWatchMode(fromEl) {
   }
   window.setTimeout(() => { opening = false; }, 850);
   try {
-    await load();
+    // Свежий токен картинок до отрисовки: фоны баннера — CSS, а не <img>,
+    // и сами повторить запрос после 401 не умеют.
+    await Promise.all([load(), forceMediaToken()]);
   } catch (e) {
     root.querySelector("#wm-body").innerHTML = `<div class="wm-empty">Не удалось загрузить каталог: ${esc(e.message)}</div>`;
     return;

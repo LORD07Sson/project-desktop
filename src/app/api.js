@@ -307,6 +307,13 @@ export function mediaUrl(path, params) {
 const MEDIA_TOKEN_REFRESH_SLACK_MS = 60_000;
 let mediaTokenPromise = null;
 
+// Новый токен немедленно, даже если старый по часам ещё «живой»: сервер
+// мог перезапуститься, и тогда старые ссылки на картинки отвечают 401.
+export function forceMediaToken() {
+  state.mediaTokenExpiresAt = 0;
+  return ensureMediaToken();
+}
+
 export async function ensureMediaToken() {
   if (!state.token) return;
   if (state.mediaToken && Date.now() < state.mediaTokenExpiresAt - MEDIA_TOKEN_REFRESH_SLACK_MS) return;
