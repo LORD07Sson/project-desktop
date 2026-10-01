@@ -146,7 +146,7 @@ function heroHtml() {
     <div class="wm-hero" id="wm-hero">
       ${list.map((t, i) => `
         <div class="wm-slide${i === heroIdx ? " on" : ""}" data-wm-slide="${i}">
-          <div class="wm-bg" style="background-image:url('${imgProxy(t.banner)}')"></div>
+          <div class="wm-bg${t.backdrop ? " frame" : ""}" style="background-image:url('${imgProxy(t.backdrop || t.banner)}')"></div>
           <div class="wm-cover" style="background-image:url('${imgProxy(t.cover)}')"></div>
         </div>`).join("")}
       <div class="wm-hero-text" id="wm-hero-text">${heroTextHtml(list[heroIdx])}</div>
