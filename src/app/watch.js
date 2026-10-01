@@ -11,7 +11,7 @@
 // «Смотреть» на тайтле только говорит об этом.
 
 import { state } from "./state.js";
-import { apiGet, toast } from "./api.js";
+import { apiGet, toast, forceMediaToken } from "./api.js";
 import { $, esc } from "./utils.js";
 import { imgProxy, hdPosterAttrs } from "./title-page.js";
 
@@ -347,7 +347,9 @@ export async function openWatchMode(fromEl) {
   }
   window.setTimeout(() => { opening = false; }, 850);
   try {
-    await load();
+    // Свежий токен картинок до отрисовки: фоны баннера — CSS, а не <img>,
+    // и сами повторить запрос после 401 не умеют.
+    await Promise.all([load(), forceMediaToken()]);
   } catch (e) {
     root.querySelector("#wm-body").innerHTML = `<div class="wm-empty">Не удалось загрузить каталог: ${esc(e.message)}</div>`;
     return;
