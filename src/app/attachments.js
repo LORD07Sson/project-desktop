@@ -9,7 +9,9 @@ import { mediaUrl, openSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
 import { invoke, pickOutputFile, revealInFolder } from "./tauri.js";
 
-export const ATTACH_MAX_MB = 2000; // потолок локального Bot API на сервере
+// Из десктопа отправляются только картинки: файлы тяжёлые, а канал до
+// VPS у провайдеров режется (~190 КБ/с на соединение) — их шлют боту.
+export const ATTACH_MAX_MB = 10;
 
 const FILE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>';
 const DL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
@@ -103,8 +105,12 @@ export function pastedFile(e) {
 }
 
 export function tooBig(file) {
+  if (file && !/^image\//.test(file.type)) {
+    toast("Из десктопа можно отправить только картинку. Файлы отправляйте боту в Telegram.", "error");
+    return true;
+  }
   if (file && file.size > ATTACH_MAX_MB * 1024 * 1024) {
-    toast(`Файл больше ${ATTACH_MAX_MB} МБ — так не отправить.`, "error");
+    toast(`Картинка больше ${ATTACH_MAX_MB} МБ — так не отправить.`, "error");
     return true;
   }
   return false;

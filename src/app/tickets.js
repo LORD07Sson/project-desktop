@@ -61,7 +61,7 @@ function threadHtml(d) {
       <div class="tk-quick">${(d.quick_replies || []).map((q, i) => `<button type="button" class="qchip" data-tk-quick="${i}" title="${esc(q.text)}">${esc(q.label)}</button>`).join("")}</div>
       <div class="tk-pending" id="tk-pending"></div>
       <div class="tk-input-row">
-        <button type="button" class="icon-btn" id="tk-attach" title="Приложить картинку или файл (или Ctrl+V скриншота)" aria-label="Приложить файл">${CLIP_ICON}</button>
+        <button type="button" class="icon-btn" id="tk-attach" title="Приложить картинку (или Ctrl+V скриншота)" aria-label="Приложить картинку">${CLIP_ICON}</button>
         <textarea id="tk-input" rows="2" maxlength="${MAX_REPLY}" placeholder="Ответ уйдёт человеку в Telegram от бота…"></textarea>
         <button type="button" class="btn primary tk-send" id="tk-send" title="Отправить (Ctrl+Enter)" aria-label="Отправить">${SEND_ICON}</button>
       </div>
@@ -130,7 +130,7 @@ export async function openTicketsSheet(initialId) {
       renderPending(threadEl.querySelector("#tk-pending"), file, () => setPending(null));
     };
     threadEl.querySelector("#tk-attach")?.addEventListener("click", async () => {
-      const file = await pickFile();
+      const file = await pickFile("image/*");
       if (file) setPending(file);
     });
     input?.addEventListener("paste", e => {

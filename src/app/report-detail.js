@@ -220,27 +220,26 @@ export async function openReportDetail(publicId) {
               <div class="add-row note-add-row">
                 <input id="note-time" class="note-time-input" placeholder="04:12" maxlength="8" inputmode="numeric" title="Время на дорожке — необязательно">
                 <textarea id="note-new" rows="2" placeholder="Правка или комментарий… (Ctrl+Enter — отправить, Ctrl+V — вставить скриншот)"></textarea>
-                <button class="icon-btn note-attach" id="note-attach" title="Приложить картинку или файл к заметке" aria-label="Приложить файл к заметке">${CLIP_ICON}</button>
+                <button class="icon-btn note-attach" id="note-attach" title="Приложить картинку к заметке (или Ctrl+V скриншота)" aria-label="Приложить картинку к заметке">${CLIP_ICON}</button>
                 <button class="btn" id="note-add">Добавить</button>
               </div>
               <div class="note-pending" id="note-pending"></div>
             </div>
 
             <div class="rd-sec">
-              <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}
-                <button class="pf-link rd-h-act" id="file-attach">📎 Прикрепить</button></h3>
-              ${files.files.length ? `<div id="files-list">${files.files.map(fileHtml).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — прикрепите или перетащите файл на окно.</div>`}
+              <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}</h3>
+              ${files.files.length ? `<div id="files-list">${files.files.map(fileHtml).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — их присылают боту в карточке отчёта.</div>`}
             </div>
 
             ${(raws.raws || []).length ? `
             <div class="rd-sec">
               <h3>Равки и субтитры <span class="n">${raws.raws.filter(r => r.present).length} из ${raws.raws.length}</span></h3>
+              <div class="no-assignee" style="margin-bottom:6px;">Загружаются через бота: карточка отчёта → «📥 Равка озв.» / «📥 Равка свед.» / «📥 Субтитры».</div>
               <div class="raw-list">${raws.raws.map(r => `
                 <div class="raw-row${r.present ? " on" : ""}">
                   <span class="raw-label">${esc(r.label)}</span>
                   <span class="raw-name">${r.present ? esc(r.name || "загружено") : "не загружено"}</span>
                   ${r.present ? `<button class="icon-btn" data-raw-dl="${r.kind}" data-raw-name="${esc(r.name || r.kind)}" title="Скачать">⬇️</button>` : ""}
-                  <button class="btn" data-raw-up="${r.kind}">${r.present ? "Заменить" : "Загрузить"}</button>
                 </div>`).join("")}</div>
             </div>` : ""}
           </div>
@@ -448,35 +447,13 @@ export async function openReportDetail(publicId) {
     };
     renderPending(sheet.querySelector("#note-pending"), pendingNoteFile, () => setNoteFile(null));
     sheet.querySelector("#note-attach").addEventListener("click", async () => {
-      const file = await pickFile();
+      const file = await pickFile("image/*");
       if (file) setNoteFile(file);
     });
     sheet.querySelector("#note-new").addEventListener("paste", e => {
       const file = pastedFile(e);
       if (file) { e.preventDefault(); setNoteFile(file); }
     });
-    sheet.querySelector("#file-attach").addEventListener("click", async () => {
-      const file = await pickFile();
-      if (!file) return;
-      try {
-        toast(`Загружаю ${file.name}…`);
-        await apiUpload(`/report/${publicId}/files/upload`, file);
-        toast("Файл прикреплён.", "success");
-        await render();
-      } catch (e) { toast(`Не удалось прикрепить: ${e.message}`, "error"); }
-    });
-    sheet.querySelectorAll("[data-raw-up]").forEach(btn => btn.addEventListener("click", async () => {
-      const file = await pickFile();
-      if (!file) return;
-      if (tooBig(file)) return;
-      btn.disabled = true;
-      btn.textContent = "Загружаю…";
-      try {
-        await apiUpload(`/report/${publicId}/raws/${btn.dataset.rawUp}`, file);
-        toast("Загружено — исполнитель скачает в боте: «Мои задачи».", "success");
-        await render();
-      } catch (e) { toast(`Не удалось загрузить: ${e.message}`, "error"); btn.disabled = false; }
-    }));
     sheet.querySelectorAll("[data-raw-dl]").forEach(btn => btn.addEventListener("click", () =>
       downloadAttachment(`report/${publicId}/raws/${btn.dataset.rawDl}/file`, btn.dataset.rawName)));
     async function addNote() {

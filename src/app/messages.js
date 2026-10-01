@@ -273,7 +273,7 @@ function renderThread({ keepScroll } = {}) {
     <div class="ms-pending" id="ms-pending"></div>
     <div class="ms-compose">
       <div class="ms-suggest" id="ms-suggest" hidden></div>
-      <button type="button" class="icon-btn ms-attach" id="ms-attach" title="Прикрепить картинку или файл (или вставьте скриншот Ctrl+V)" aria-label="Прикрепить файл">${CLIP_ICON}</button>
+      <button type="button" class="icon-btn ms-attach" id="ms-attach" title="Прикрепить картинку (или вставьте скриншот Ctrl+V)" aria-label="Прикрепить картинку">${CLIP_ICON}</button>
       <textarea id="ms-input" rows="1" maxlength="2000" placeholder="${esc(placeholder)}"></textarea>
       <button type="button" class="btn primary ms-send" id="ms-send" aria-label="Отправить" title="Отправить (Enter)">${SEND_ICON}</button>
     </div>`;
@@ -353,7 +353,7 @@ function wireThread(el, c) {
   };
   renderPending(pendingBox, pendingFile, () => setPending(null));
   el.querySelector("#ms-attach").addEventListener("click", async () => {
-    const file = await pickFile();
+    const file = await pickFile("image/*");
     if (file) setPending(file);
   });
   input.addEventListener("paste", e => {
