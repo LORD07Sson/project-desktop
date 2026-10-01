@@ -2604,6 +2604,148 @@ body.watch-open #app-screen { pointer-events: none; }
   .wm-dots button.on i { animation: none; width: 100%; }
 }
 
+/* ---------- Плеер серий (player-anime.js) ----------
+   Видео во всё окно под шапкой, своё управление поверх (прячется вместе
+   с курсором, когда мышь стоит), панель серий/озвучек выезжает справа.
+   Тёмный «кинотеатр» независимо от темы приложения. */
+.ap-root {
+  position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 55; display: flex; background: #000; color: #f4f1ec;
+  opacity: 0; transform: scale(.985); transition: opacity .25s ease, transform .3s cubic-bezier(.22, .9, .3, 1);
+  --ap-accent: var(--accent-grad); user-select: none;
+}
+.ap-root.on { opacity: 1; transform: none; }
+.ap-root.fs { inset: 0; }
+.ap-stage { position: relative; flex: 1; min-width: 0; overflow: hidden; background: #000; }
+.ap-root:not(.show-ui) .ap-stage { cursor: none; }
+.ap-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.ap-shade { position: absolute; left: 0; right: 0; pointer-events: none; opacity: 0; transition: opacity .3s; }
+.ap-shade.top { top: 0; height: 130px; background: linear-gradient(rgba(0, 0, 0, .75), transparent); }
+.ap-shade.bottom { bottom: 0; height: 200px; background: linear-gradient(transparent, rgba(0, 0, 0, .85)); }
+.ap-top, .ap-controls { position: absolute; left: 0; right: 0; opacity: 0; transition: opacity .3s, transform .3s cubic-bezier(.22, .9, .3, 1); }
+.ap-top { top: 0; display: flex; align-items: center; gap: 14px; padding: 16px 20px; transform: translateY(-8px); }
+.ap-controls { bottom: 0; padding: 0 20px 14px; transform: translateY(8px); }
+.ap-root.show-ui .ap-shade, .ap-root.show-ui .ap-top, .ap-root.show-ui .ap-controls,
+.ap-root.paused .ap-shade, .ap-root.paused .ap-top, .ap-root.paused .ap-controls { opacity: 1; transform: none; }
+.ap-title { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.ap-title b { font-size: 17px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 12px rgba(0, 0, 0, .6); }
+.ap-title span { font-size: 13px; color: rgba(244, 241, 236, .7); }
+.ap-sp { flex: 1; }
+.ap-icon { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border: none; border-radius: 50%; background: none; color: #fff; cursor: pointer; transition: background .15s, transform .15s; }
+.ap-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ap-icon:hover { background: rgba(255, 255, 255, .14); }
+.ap-icon:active { transform: scale(.92); }
+.ap-icon:disabled { opacity: .35; cursor: default; background: none; }
+.ap-icon.big { width: 46px; height: 46px; }
+.ap-icon.big svg { width: 26px; height: 26px; }
+.ap-back { background: rgba(0, 0, 0, .35); backdrop-filter: blur(8px); }
+.ap-pill { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .2); background: rgba(0, 0, 0, .35); backdrop-filter: blur(10px); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.ap-pill svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ap-pill:hover { background: rgba(255, 255, 255, .14); }
+.ap-pill.ghost { border-color: transparent; background: none; backdrop-filter: none; }
+.ap-pill.ghost:hover { background: rgba(255, 255, 255, .14); }
+
+.ap-center {
+  position: absolute; left: 50%; top: 50%; width: 84px; height: 84px; margin: -42px 0 0 -42px; display: grid; place-items: center;
+  border: none; border-radius: 50%; background: rgba(0, 0, 0, .45); backdrop-filter: blur(10px); color: #fff; cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .15); opacity: 0; transform: scale(.85); pointer-events: none; transition: opacity .25s, transform .25s cubic-bezier(.34, 1.56, .64, 1);
+}
+.ap-center svg { width: 36px; height: 36px; }
+.ap-root.paused .ap-center { opacity: 1; transform: none; pointer-events: auto; }
+.ap-center:hover { background: var(--ap-accent); color: #1a0d00; }
+.ap-flash { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; display: grid; place-items: center; border-radius: 50%; background: rgba(0, 0, 0, .5); color: #fff; opacity: 0; pointer-events: none; }
+.ap-flash svg { width: 32px; height: 32px; }
+.ap-flash-txt { font-size: 17px; font-weight: 800; }
+.ap-flash.go { animation: ap-flash .6s ease-out; }
+@keyframes ap-flash { 0% { opacity: .95; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.25); } }
+.ap-root.paused .ap-flash { display: none; }
+.ap-buffer { position: absolute; left: 50%; top: 50%; margin: -26px 0 0 -26px; display: none; pointer-events: none; }
+.ap-buffer span { display: block; width: 52px; height: 52px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .15); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; }
+.ap-root.buffering:not(.paused) .ap-buffer { display: block; }
+.ap-wait { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: rgba(244, 241, 236, .65); font-size: 14px; text-align: center; padding: 30px; background: radial-gradient(circle at center, #15151a, #000 70%); }
+.ap-wait[hidden] { display: none; }
+.ap-wait span { width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .12); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; }
+.ap-wait b { font-weight: 600; }
+.ap-wait.err span { display: none; }
+.ap-wait.err b { color: #ff9d8f; }
+
+.ap-seek { position: relative; height: 22px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
+.ap-seek-track { position: relative; width: 100%; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .22); overflow: hidden; transition: height .15s; }
+.ap-seek:hover .ap-seek-track, .ap-seek.drag .ap-seek-track { height: 7px; }
+.ap-seek-track i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: inherit; }
+.ap-buf { background: rgba(255, 255, 255, .35); }
+.ap-hov { background: rgba(255, 255, 255, .28); }
+.ap-fill { background: var(--ap-accent); }
+.ap-op { background: rgba(255, 200, 120, .35); left: auto; mix-blend-mode: screen; }
+.ap-thumb { position: absolute; top: 50%; left: 0; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px rgba(255, 140, 50, .35), 0 2px 6px rgba(0, 0, 0, .5); transform: scale(0); transition: transform .15s; pointer-events: none; }
+.ap-seek:hover .ap-thumb, .ap-seek.drag .ap-thumb { transform: scale(1); }
+.ap-tip { position: absolute; bottom: 24px; left: 0; transform: translateX(-50%); padding: 4px 8px; border-radius: 6px; background: rgba(15, 15, 18, .92); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0; transition: opacity .15s; pointer-events: none; white-space: nowrap; }
+.ap-seek:hover .ap-tip, .ap-seek.drag .ap-tip { opacity: 1; }
+.ap-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.ap-time { margin-left: 10px; font-size: 13px; color: rgba(244, 241, 236, .75); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-time b { color: #fff; font-weight: 700; }
+.ap-vol { display: flex; align-items: center; }
+.ap-vol input {
+  -webkit-appearance: none; appearance: none; width: 0; height: 4px; border-radius: 4px; opacity: 0; cursor: pointer; transition: width .2s, opacity .2s, margin .2s;
+  background: linear-gradient(90deg, #fff var(--p, 100%), rgba(255, 255, 255, .25) var(--p, 100%));
+}
+.ap-vol:hover input, .ap-vol input:focus { width: 90px; opacity: 1; margin: 0 8px 0 2px; }
+.ap-vol input::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+
+.ap-menu-wrap { position: relative; }
+.ap-menu { position: absolute; right: 0; bottom: 46px; min-width: 200px; padding: 8px; border-radius: 14px; background: rgba(20, 20, 25, .96); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 20px 40px -10px rgba(0, 0, 0, .8); animation: ap-pop .18s cubic-bezier(.22, .9, .3, 1); }
+.ap-menu[hidden] { display: none; }
+@keyframes ap-pop { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+.ap-menu-h { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: rgba(244, 241, 236, .45); padding: 6px 8px 4px; }
+.ap-menu > button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 10px; border: none; border-radius: 8px; background: none; color: #fff; font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.ap-menu > button i { font-style: normal; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .14); }
+.ap-menu > button:hover { background: rgba(255, 255, 255, .08); }
+.ap-menu > button.on { color: var(--gold); font-weight: 800; }
+.ap-menu > button.on::after { content: "✓"; }
+.ap-speeds { display: flex; gap: 4px; padding: 2px 4px 4px; }
+.ap-speeds button { flex: 1; padding: 6px 0; border: 1px solid rgba(255, 255, 255, .12); border-radius: 7px; background: none; color: rgba(244, 241, 236, .8); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.ap-speeds button.on { background: #fff; color: #111; border-color: #fff; }
+
+.ap-skip { position: absolute; right: 24px; bottom: 96px; display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(10, 10, 14, .7); backdrop-filter: blur(10px); color: #fff; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; animation: ap-pop .3s cubic-bezier(.22, .9, .3, 1); }
+.ap-skip svg { width: 16px; height: 16px; }
+.ap-skip:hover { background: #fff; color: #111; }
+.ap-skip[hidden] { display: none; }
+.ap-nextcard { position: absolute; right: 24px; bottom: 96px; display: flex; align-items: center; gap: 14px; padding: 12px 12px 12px 18px; border-radius: 16px; background: rgba(14, 14, 18, .88); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 20px 40px -12px rgba(0, 0, 0, .8); animation: ap-pop .35s cubic-bezier(.22, .9, .3, 1); }
+.ap-nextcard[hidden] { display: none; }
+.ap-nextcard small { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: rgba(244, 241, 236, .55); }
+.ap-nextcard b { font-size: 15px; }
+.ap-nextgo { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 18px; border-radius: 12px; border: none; background: var(--ap-accent); color: #1a0d00; font: inherit; font-weight: 800; cursor: pointer; overflow: hidden; }
+.ap-nextgo svg { width: 16px; height: 16px; position: relative; }
+.ap-nextgo span { position: relative; font-variant-numeric: tabular-nums; }
+.ap-nextgo i { position: absolute; inset: 0; background: rgba(255, 255, 255, .35); transform-origin: left; transform: scaleX(0); }
+@keyframes ap-ring { to { transform: scaleX(1); } }
+.ap-nextno { width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(255, 255, 255, .08); color: rgba(244, 241, 236, .7); cursor: pointer; }
+.ap-nextno:hover { background: rgba(255, 255, 255, .18); color: #fff; }
+
+.ap-panel { width: 0; flex: none; overflow: hidden; background: #0d0d10; border-left: 1px solid rgba(255, 255, 255, .06); transition: width .35s cubic-bezier(.22, .9, .3, 1); }
+.ap-root.panel-open .ap-panel { width: 330px; overflow-y: auto; }
+.ap-root.fs .ap-panel { position: absolute; right: 0; top: 0; bottom: 0; z-index: 3; }
+.ap-panel > * { width: 330px; box-sizing: border-box; }
+.ap-panel-head { display: flex; align-items: baseline; justify-content: space-between; padding: 18px 18px 10px; }
+.ap-panel-head b { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: rgba(244, 241, 236, .55); }
+.ap-panel-head span { font-size: 12px; color: rgba(244, 241, 236, .4); }
+.ap-eps { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; padding: 0 18px 8px; }
+.ap-ep { height: 40px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .04); color: #f4f1ec; font: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; transition: border-color .15s, transform .15s; }
+.ap-ep:hover { border-color: rgba(255, 180, 68, .55); transform: translateY(-1px); }
+.ap-ep.seen { color: rgba(244, 241, 236, .4); }
+.ap-ep.on { background: var(--ap-accent); color: #1a0d00; border-color: transparent; }
+.ap-trs { display: flex; flex-direction: column; gap: 3px; padding: 0 12px 20px; }
+.ap-group { font-size: 11px; font-weight: 800; color: var(--gold); margin: 10px 6px 3px; }
+.ap-tr { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px; border: 1px solid transparent; background: none; color: rgba(244, 241, 236, .85); font: inherit; font-size: 13px; cursor: pointer; }
+.ap-tr span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-tr small { flex: none; font-size: 10.5px; color: rgba(244, 241, 236, .45); font-weight: 800; }
+.ap-tr:hover { background: rgba(255, 255, 255, .05); }
+.ap-tr.on { border-color: rgba(255, 180, 68, .55); background: rgba(255, 180, 68, .1); color: #fff; }
+.ap-muted { color: rgba(244, 241, 236, .4); font-size: 12.5px; padding: 0 6px; }
+@media (prefers-reduced-motion: reduce) {
+  .ap-root, .ap-top, .ap-controls, .ap-center, .ap-panel { transition: none; }
+  .ap-flash.go, .ap-menu, .ap-skip, .ap-nextcard { animation: none; }
+}
+
 /* ---------- Команда / чужой профиль / режим разработчика ----------
    Портировано из мини-аппа: список команды (тизер профиля кликабелен),
    развёрнутая карточка коллеги (тот же profileHtml, что у своей «Я»),

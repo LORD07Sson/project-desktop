@@ -133,7 +133,7 @@ function heroTextHtml(t) {
     ${t.description ? `<p>${esc(t.description)}</p>` : ""}
     ${t.genres && t.genres.length ? `<div class="wm-tags">${t.genres.map(g => `<span>${esc(g)}</span>`).join("")}</div>` : ""}
     <div class="wm-acts">
-      <button type="button" class="wm-play" data-wm-play>${PLAY_ICON}Смотреть</button>
+      <button type="button" class="wm-play" data-wm-play="${t.id}">${PLAY_ICON}Смотреть</button>
       <button type="button" class="wm-ghost" data-wm-open="s:${t.id}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Подробнее</button>
       <button type="button" class="wm-ghost" data-wm-list="s:${t.id}">${inList ? "✓ В списке" : "+ В список"}</button>
     </div>`;
@@ -250,8 +250,12 @@ function renderBody(root) {
 }
 
 function wireActions(scope) {
-  scope.querySelectorAll("[data-wm-play]").forEach(b => b.addEventListener("click", () => {
-    toast("Свой плеер — следующий этап. Пока смотреть отсюда нельзя.");
+  scope.querySelectorAll("[data-wm-play]").forEach(b => b.addEventListener("click", async () => {
+    const id = Number(b.dataset.wmPlay);
+    const t = data && data.catalog.find(x => x.id === id);
+    document.querySelector(".wm-modal")?.remove();
+    const { openAnimePlayer } = await import("./player-anime.js");
+    openAnimePlayer({ shikiId: id, name: t ? t.name : "" });
   }));
   scope.querySelectorAll("[data-wm-list]").forEach(b => b.addEventListener("click", () => {
     const added = toggleList(b.dataset.wmList);
@@ -290,7 +294,7 @@ async function openItem(key) {
           <div class="wm-eyebrow">${[t.score ? `<span class="wm-gold">★ ${t.score.toFixed(1)}</span>` : "", KIND[t.kind] || "", t.episodes ? `${t.episodes} эп.` : ""].filter(Boolean).join("<i></i>")}<span data-wm-studio></span></div>
           <p data-wm-desc>${t.description ? esc(t.description) : `<span class="tt-loading"></span>`}</p>
           <div class="wm-acts">
-            <button type="button" class="wm-play" data-wm-play>${PLAY_ICON}Смотреть</button>
+            <button type="button" class="wm-play" data-wm-play="${t.id}">${PLAY_ICON}Смотреть</button>
             <button type="button" class="wm-ghost" data-wm-list="s:${t.id}">${myList().includes(`s:${t.id}`) ? "✓ В списке" : "+ В список"}</button>
           </div>
         </div>
@@ -399,7 +403,7 @@ document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   const root = $("#watch-mode");
   if (!root || root.hidden) return;
-  if (document.querySelector(".overlay, .wm-modal")) return; // сначала закрываются окна поверх
+  if (document.querySelector(".overlay, .wm-modal, .ap-root")) return; // сначала закрываются окна поверх
   closeWatchMode();
 });
 
