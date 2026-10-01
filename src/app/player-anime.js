@@ -37,7 +37,7 @@ const I = {
   skip: '<svg viewBox="0 0 24 24"><path d="M5 6l7 6-7 6zM12 6l7 6-7 6z" fill="currentColor" stroke="none"/></svg>',
 };
 
-function memKey(shikiId) { return `project_player_${state.telegramId || "anon"}_${shikiId}`; }
+export function memKey(shikiId) { return `project_player_${state.telegramId || "anon"}_${shikiId}`; }
 function readMem(shikiId) {
   try { return JSON.parse(localStorage.getItem(memKey(shikiId)) || "{}"); } catch (_) { return {}; }
 }
@@ -319,7 +319,9 @@ function saveProgress() {
   const mem = readMem(P.shikiId);
   const times = { ...(mem.times || {}) };
   times[ep.id] = v.currentTime > v.duration - 20 ? 0 : Math.floor(v.currentTime);
-  writeMem(P.shikiId, { times });
+  // Для ряда «Продолжить просмотр» в режиме «Смотреть».
+  const last = { episodeId: ep.id, label: ep.label, time: Math.floor(v.currentTime), duration: Math.floor(v.duration), at: Date.now() };
+  writeMem(P.shikiId, { times, last, title: P.name });
 }
 
 // ---------- управление ----------
