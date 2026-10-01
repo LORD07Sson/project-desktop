@@ -2029,6 +2029,7 @@ kbd {
      дорожка, потом подпись", а не всё одним слоем. */
   animation-delay: .15s;
 }
+.gantt-tag.end { transform-origin: right center; }
 .gantt-tag.current {
   background: var(--fire); color: var(--on-accent); font-weight: 700; border-color: var(--fire);
   box-shadow: 0 2px 8px -2px rgba(0,0,0,.5);
@@ -3284,25 +3285,24 @@ body.focus-mode .report-detail-overlay .sheet {
 }
 :root[data-look="glow"][data-theme="dark"] .an-metrics::before {
   /* луч: тонкий, плавно проявляется сверху, ярчает к точке удара */
-  content: ""; position: absolute; left: 50%; bottom: 100%; width: 2px; height: 150px;
+  /* Тише, чем было, и без пульсации: прежний яркий луч на 150px,
+     мерцающий каждые 4 с, отвлекал от цифр (план, п. 3 — «перебор»). */
+  content: ""; position: absolute; left: 50%; bottom: 100%; width: 1px; height: 70px;
   transform: translateX(-50%);
-  background: linear-gradient(180deg, rgba(255, 200, 120, 0) 0%, rgba(255, 200, 120, .25) 40%, rgba(255, 225, 170, .95) 92%, #fff8e8);
-  box-shadow: 0 0 6px 1px rgba(255, 180, 80, .45), 0 0 22px 4px rgba(255, 160, 50, .18);
-  -webkit-mask: linear-gradient(180deg, transparent, #000 45%);
-          mask: linear-gradient(180deg, transparent, #000 45%);
-  animation: glow-beam 4s ease-in-out infinite;
+  background: linear-gradient(180deg, rgba(255, 200, 120, 0) 0%, rgba(255, 215, 150, .55) 100%);
+  box-shadow: 0 0 10px 1px rgba(255, 170, 70, .18);
+  -webkit-mask: linear-gradient(180deg, transparent, #000 60%);
+          mask: linear-gradient(180deg, transparent, #000 60%);
 }
 :root[data-look="glow"][data-theme="dark"] .an-metrics::after {
   /* блик по кромке: плоский, яркий в центре и тающий к краям */
   content: ""; position: absolute; left: 50%; top: -1px; width: 70%; height: 2px;
   transform: translateX(-50%);
-  background: linear-gradient(90deg, transparent, rgba(255, 210, 140, .55) 30%, #fff3d6 50%, rgba(255, 210, 140, .55) 70%, transparent);
-  box-shadow: 0 0 16px 3px rgba(255, 190, 90, .6), 0 0 60px 14px rgba(255, 160, 50, .2);
+  background: linear-gradient(90deg, transparent, rgba(255, 210, 140, .35) 30%, rgba(255, 236, 200, .8) 50%, rgba(255, 210, 140, .35) 70%, transparent);
+  box-shadow: 0 0 12px 2px rgba(255, 190, 90, .3), 0 0 40px 8px rgba(255, 160, 50, .08);
   border-radius: 2px; pointer-events: none; z-index: 1;
-  animation: glow-flare 4s ease-in-out infinite;
 }
 @keyframes glow-beam { 0%, 100% { opacity: .85; } 50% { opacity: 1; } }
-@keyframes glow-flare { 0%, 100% { opacity: .75; transform: translateX(-50%) scaleX(.92); } 50% { opacity: 1; transform: translateX(-50%) scaleX(1); } }
 @media (prefers-reduced-motion: reduce) {
   :root[data-look="glow"] .an-metrics::before, :root[data-look="glow"] .an-metrics::after { animation: none; }
 }
@@ -3595,20 +3595,23 @@ body.focus-mode .report-detail-overlay .sheet {
    ================================================================ */
 .team-notice {
   flex: none; display: flex; align-items: center; gap: 12px;
-  margin: 12px 24px 0; padding: 10px 10px 10px 14px; border-radius: 12px;
+  margin: 10px 24px 0; padding: 5px 6px 5px 8px; border-radius: 11px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 14%, var(--surface)), var(--surface) 70%);
   border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--line));
   animation: tab-in .3s ease;
 }
 .team-notice[hidden] { display: none; }
 .tn-ic {
-  width: 30px; height: 30px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center;
   background: color-mix(in srgb, var(--gold) 22%, transparent); color: var(--gold);
 }
+.team-notice.expanded { align-items: flex-start; padding-top: 8px; padding-bottom: 8px; }
 .tn-ic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.tn-body { flex: 1; min-width: 0; }
-.tn-text { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.4; overflow-wrap: anywhere; user-select: text; }
-.tn-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 11px; color: var(--ink-dim); }
+.tn-body { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 12px; cursor: pointer; }
+.team-notice.expanded .tn-body { flex-direction: column; gap: 3px; }
+.tn-text { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.4; overflow-wrap: anywhere; user-select: text; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.team-notice.expanded .tn-text { white-space: normal; }
+.tn-meta { display: flex; align-items: center; gap: 6px; flex: none; font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
 .tn-av { width: 16px !important; height: 16px !important; font-size: 8px !important; margin: 0 !important; }
 .tn-btn { flex: none; }
 .tn-hint { margin: -4px 0 12px; color: var(--ink-soft); font-size: 12.5px; }

@@ -141,6 +141,11 @@ export function timelineHtml(rows, rangeStart, rangeEnd, todayMs) {
   // обычно тёмная и приглушённая, но белая и жирная, если задача
   // пересекает «сегодня» (тот же смысл, что подсветка today-строки на
   // Гант-чарте референса).
+  // Серия, начавшаяся у правого края, раньше вылезала плашкой за
+  // карточку и обрезалась — там плашка заканчивается у начала полосы.
+  const tagHtml = (left, current, text) => left > 65
+    ? `<div class="gantt-tag end${current ? " current" : ""}" style="right:${(100 - left).toFixed(2)}%;">${esc(text)}</div>`
+    : `<div class="gantt-tag${current ? " current" : ""}" style="left:${left.toFixed(2)}%;">${esc(text)}</div>`;
   const bars = rows.map(r => {
     const left = pct(r.startMs);
     const width = Math.max(2, pct(r.endMs) - left);
@@ -148,7 +153,7 @@ export function timelineHtml(rows, rangeStart, rangeEnd, todayMs) {
     return `
       <div class="gantt-row" title="${esc(r.title)}: ${esc(fmt(r.startMs))} → ${esc(fmt(r.endMs))}">
         <div class="gantt-track">
-          <div class="gantt-tag${current ? " current" : ""}" style="left:${left.toFixed(2)}%;">${esc(fmt(r.startMs))} ${esc(r.title)}</div>
+          ${tagHtml(left, current, `${fmt(r.startMs)} ${r.title}`)}
           <div class="gantt-bar" style="left:${left.toFixed(2)}%; width:0%; background:var(${r.colorVar}); color:var(${r.colorVar});" data-target-width="${width.toFixed(2)}"></div>
         </div>
       </div>`;
