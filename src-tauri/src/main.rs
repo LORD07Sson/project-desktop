@@ -1228,7 +1228,7 @@ fn main() {
                 .max_file_size(5_000_000)
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
                 .level(log::LevelFilter::Off)
-                .level_for("phoenix_dub_desktop", log::LevelFilter::Off)
+                .level_for("project_desktop", log::LevelFilter::Off)
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())

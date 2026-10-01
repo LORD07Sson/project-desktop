@@ -1,5 +1,5 @@
 [package]
-name = "phoenix-dub-desktop"
+name = "project-desktop"
 version = "0.6.0"
 description = "Project Desktop — клиент студии дубляжа"
 edition = "2021"
@@ -113,5 +113,5 @@ opt-level = "s"
 strip = true
 
 [[bin]]
-name = "phoenix-dub-desktop"
+name = "project-desktop"
 path = "src/main.rs"
