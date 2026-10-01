@@ -168,7 +168,9 @@ function uploadProgress(name, size) {
   document.body.append(el);
   const set = frac => {
     const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
-    label.textContent = pct < 100 ? `⬆ ${name} — ${pct}%` : `⬆ ${name} — сервер сохраняет…`;
+    // Проценты первыми — длинное имя файла обрезается многоточием и
+    // раньше съедало их целиком.
+    label.textContent = pct < 100 ? `⬆ ${pct}% · ${name}` : `⬆ Сохраняю… · ${name}`;
     bar.style.width = `${pct}%`;
   };
   set(0);
