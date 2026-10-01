@@ -129,7 +129,7 @@ function heroTextHtml(t) {
   ].filter(Boolean);
   return `
     <div class="wm-eyebrow">${eyebrow.join("<i></i>")}</div>
-    <h1>${esc(t.name)}</h1>
+    <h1 title="${esc(t.name)}">${esc(t.name)}</h1>
     ${t.description ? `<p>${esc(t.description)}</p>` : ""}
     ${t.genres && t.genres.length ? `<div class="wm-tags">${t.genres.map(g => `<span>${esc(g)}</span>`).join("")}</div>` : ""}
     <div class="wm-acts">
