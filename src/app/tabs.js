@@ -14,6 +14,7 @@ import { loadProfile } from "./profile.js";
 import { loadAnalytics } from "./analytics.js";
 import { loadServices } from "./services.js";
 import { loadTeam } from "./team.js";
+import { loadQueue } from "./queue.js";
 import { clearDirectoryCache } from "./titles-admin.js";
 import { refreshTeamNotice, clearTeamNotice } from "./team-notice.js";
 import { refreshLockdown, clearLockdown } from "./lockdown.js";
@@ -21,6 +22,7 @@ import { refreshLockdown, clearLockdown } from "./lockdown.js";
 // Загрузчики возвращают false, если данные взять не удалось (сеть/сервер)
 // — см. loadActiveTab ниже.
 const LOADERS = {
+  queue: loadQueue,
   overview: loadOverview,
   list: loadReports,
   board: loadBoard,
@@ -36,7 +38,7 @@ const LOADERS = {
 
 // Контейнеры вкладок — чистятся при выходе из аккаунта, чтобы данные
 // предыдущего пользователя не остались висеть в DOM.
-const TAB_BODIES = ["#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#analytics-body", "#services-body", "#team-body", "#profile-body", "#reports-body"];
+const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#analytics-body", "#services-body", "#team-body", "#profile-body", "#reports-body"];
 
 // Последняя открытая вкладка переживает не только смену пользователя
 // (см. комментарий у state.activeTab в state.js — это настройка
@@ -47,7 +49,7 @@ const TAB_BODIES = ["#overview-body", "#board-body", "#titles-body", "#calendar-
 const LAST_TAB_KEY = "project-last-tab";
 
 // Вкладки, которые видит рядовой участник студии.
-export const MEMBER_TABS = new Set(["titles", "messages", "team", "profile"]);
+export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
 export function switchTab(name) {
   if (!state.isAdmin && !MEMBER_TABS.has(name)) name = "messages";
@@ -181,8 +183,11 @@ export async function loadSidebarStatusCounts() {
   try {
     const d = await apiGet("/overview");
     const statuses = (d.reports && d.reports.statuses) || [];
-    if (!statuses.length) { el.hidden = true; return; }
-    el.innerHTML = statuses.map(s => `
+    // Пустые этапы не показываем — шесть нулей подряд только шумят;
+    // этап появится в меню, как только в нём окажется серия.
+    const shown = statuses.filter(s => s.count > 0 && s.status !== "cancelled");
+    if (!shown.length) { el.hidden = true; return; }
+    el.innerHTML = shown.map(s => `
       <div class="sidebar-sub-item" data-goto-status="${esc(s.status)}">
         <span class="dot" style="background:var(${STATUS_COLOR_VAR[s.status] || "--s-draft"})"></span>
         <span class="lbl">${esc(s.label)}</span>

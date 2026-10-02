@@ -7,6 +7,8 @@ import { state, resetSessionState } from "./state.js";
 import { api, apiGet, armSessionExpiry, ensureMediaToken, API_BASE } from "./api.js";
 import { $ } from "./utils.js";
 import { refreshAll, clearTabDom, restoreLastTab, loadSidebarStatusCounts } from "./tabs.js";
+import { setTitlebarIdentity } from "./titlebar-menus.js";
+import { refreshQueueBadge } from "./queue.js";
 import { resetAssignmentsBaseline } from "./notifications.js";
 import { resetFeedBadge } from "./feed-badge.js";
 import { pingPresence } from "./presence.js";
@@ -42,6 +44,7 @@ export function setDisplayName(name) {
   state.name = name || null;
   const el = $("#whoami");
   if (el) el.textContent = state.name ? `— ${state.name}` : "";
+  setTitlebarIdentity(state.name);
 }
 
 // Один запрос /me на старте закрывает сразу двоих: имя для шапки и
@@ -168,6 +171,7 @@ export function showApp() {
   pingPresence();
   loadTitlebarTeam();
   loadSidebarStatusCounts();
+  refreshQueueBadge();
   refreshInbox();
   // Новичку — приветствие с предложением пройти обучение (один раз).
   maybeWelcome();

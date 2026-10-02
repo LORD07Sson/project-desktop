@@ -5,49 +5,54 @@
 // в конце файла, та же схема, что была раньше (сходить на сервер, потом
 // отрисовать), только рисует теперь Solid, а не шаблонные строки.
 //
-// donutHtml/donutLegendHtml (charts.js) — общие для Обзора, профиля и
-// карточки коллеги, которые остаются на vanilla JS — переиспользуем как
-// есть через innerHTML, а не переписываем в JSX-компонент: два разных
-// рантайма на один и тот же SVG иначе неизбежно разойдутся.
+// Обзор 2.0: вместо стены счётчиков — «что делать»: срочное с кнопкой,
+// конвейер по этапам, ближайшие дедлайны, загрузка команды. В пустой
+// студии — три шага онбординга вместо нулей.
 
 import { render } from "solid-js/web";
-import { For, Show, onMount } from "solid-js";
+import { For, Show } from "solid-js";
 import { apiGet, openSheet, dialogSkeletonHtml } from "./api.js";
 import { $, esc, initials, relTime, STATUS_COLOR_VAR } from "./utils.js";
-// esc() нужен только в строковых шаблонах (openMonthlyTopSheet ниже,
-// donutHtml в charts.js). В JSX его быть не должно: Solid экранирует
+// esc() нужен только в строковых шаблонах (openMonthlyTopSheet ниже). В JSX его быть не должно: Solid экранирует
 // текстовые узлы сам, и esc() поверх этого даёт двойное экранирование —
 // имя «Иванов & Co» рендерилось как «Иванов &amp; Co».
-import { donutHtml, donutLegendHtml, playDonutIntro } from "./charts.js";
 
-// Сравнивает вторую половину 14-дневного окна с первой — тот же смысл,
-// что "From Last Month" у референса, но на доступных нам данных
-// (помесячного среза бэкенд не считает, а придумывать число нельзя).
-function periodDeltaPct(days) {
-  if (!days || days.length < 4) return null;
-  const mid = Math.floor(days.length / 2);
-  const firstHalf = days.slice(0, mid).reduce((s, x) => s + x.created, 0);
-  const secondHalf = days.slice(mid).reduce((s, x) => s + x.created, 0);
-  if (firstHalf === 0) return secondHalf === 0 ? 0 : null;
-  return Math.round(((secondHalf - firstHalf) / firstHalf) * 100);
-}
 import { avatarHtml, loadAvatars } from "./profile.js";
 import { openReportDetail } from "./report-detail.js";
 import { openTicketsSheet } from "./tickets.js";
 import { openBirthdaysSheet } from "./birthdays.js";
-import { boardCardHtml } from "./board.js";
-import { timelineHtml, playTimelineIntro } from "./charts.js";
+import { imgProxy } from "./title-page.js";
+import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 
-// Русские подписи колонок для превью-канбана — у /api/dashboard/project
-// они приходят по-английски (Pending/In Progress/...), тем же смыслом,
-// что и у референса, но остальной интерфейс студии целиком на русском
-// (см. PRIORITY_LABELS/STATUS_DOT_CLASS в utils.js) — переопределяем
-// только подпись, сама группировка (draft/working/review+revision/
-// completed) остаётся серверной.
-const PREVIEW_COLUMN_LABELS = { draft: "Черновики", working: "В работе", review: "Озвучка", completed: "Завершено" };
-const PREVIEW_CARDS_PER_COLUMN = 2;
-const PREVIEW_TIMELINE_MAX_ROWS = 6;
+const DAY_MS = 86400000;
+const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+// Этапы конвейера слева направо — в том же порядке, что колонки «Доски».
+const FLOW = ["draft", "review", "revision", "working", "completed"];
+const FLOW_CHIPS = 3;
+const ATTENTION_MAX = 5;
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 5) return "Доброй ночи";
+  if (h < 12) return "Доброе утро";
+  if (h < 17) return "Добрый день";
+  return "Добрый вечер";
+}
+
+function todayLabel() {
+  const d = new Date();
+  const wd = WEEKDAYS[d.getDay()];
+  return `${wd[0].toUpperCase()}${wd.slice(1)}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
 
 function todayStr() {
   const d = new Date();
@@ -55,296 +60,264 @@ function todayStr() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// Превращает отчёт из /api/dashboard/project в форму, которую ждёт
-// boardCardHtml (та же карточка, что рисует настоящая «Доска» —
-// board.js). daysLeft/overdue считаем тут же, как их считал бы
-// board_layout на стороне Rust: без выдуманных полей, только
-// deadline/status, которые и так пришли с сервера.
-function toBoardCardShape(r) {
-  const today = todayStr();
-  const hasDeadline = !!r.deadline;
-  const daysLeft = hasDeadline
-    ? Math.round((Date.parse(r.deadline) - Date.parse(today)) / 86400000)
-    : null;
-  const overdue = hasDeadline && r.deadline < today && r.status !== "completed" && r.status !== "cancelled";
-  return {
-    publicId: r.public_id,
-    deadline: r.deadline,
-    daysLeft,
-    overdue,
-    priority: r.priority,
-    title: r.title,
-    assignees: r.assignees || [],
-    filesCount: r.files_count || 0,
-    notesCount: r.notes_count || 0,
-    stale: false,
-    unassigned: !(r.assignees && r.assignees.length),
-    heat: 0,
+// Дни до дедлайна относительно сегодняшней даты (дедлайн — дата без времени).
+function daysLeft(deadline) {
+  if (!deadline) return null;
+  return Math.round((Date.parse(deadline.slice(0, 10)) - Date.parse(todayStr())) / DAY_MS);
+}
+
+function ddmm(deadline) {
+  return `${deadline.slice(8, 10)}.${deadline.slice(5, 7)}`;
+}
+
+const isOpen = r => r.status !== "completed" && r.status !== "cancelled";
+
+// «Требует внимания»: просроченное, дедлайн сегодня/завтра, застрявшее
+// без смены статуса 3+ дня — по срочности, у каждой строки своя кнопка.
+function attentionItems(reports) {
+  const items = [];
+  const seen = new Set();
+  const push = (r, rank, tag, tone, sub) => {
+    if (seen.has(r.public_id)) return;
+    seen.add(r.public_id);
+    items.push({ r, rank, tag, tone, sub });
   };
+  const open = reports.filter(isOpen);
+  open.forEach(r => {
+    const left = daysLeft(r.deadline);
+    if (left !== null && left < 0) {
+      push(r, left / 1000, `просрочено на ${-left} ${plural(-left, "день", "дня", "дней")}`, "red", `${r.status_label} · срок был ${ddmm(r.deadline)}`);
+    }
+  });
+  open.forEach(r => {
+    const left = daysLeft(r.deadline);
+    if (left === 0 || left === 1) push(r, 1 + left, left === 0 ? "сегодня" : "завтра", "yel", `${r.status_label} · дедлайн ${left === 0 ? "сегодня" : "завтра"}`);
+  });
+  open.filter(r => r.stuck).forEach(r => push(r, 3, "без движения", "blue", `${r.status_label} · статус не менялся 3+ дня`));
+  return items.sort((a, b) => a.rank - b.rank).slice(0, ATTENTION_MAX);
 }
 
-function KanbanPreview(props) {
-  const columns = props.dash?.board?.columns || [];
-  let root;
-  onMount(() => { playTimelineIntro(root); });
-
-  const ganttRows = columns
-    .filter(col => col.key !== "completed")
-    .flatMap(col => col.reports || [])
-    .filter(r => r.created_at && r.deadline && Date.parse(r.deadline) > Date.parse(r.created_at))
-    .map(r => ({
-      title: r.title,
-      colorVar: STATUS_COLOR_VAR[r.status] || "--s-draft",
-      startMs: Date.parse(r.created_at),
-      endMs: Date.parse(r.deadline),
-    }))
-    .sort((a, b) => a.endMs - b.endMs)
-    .slice(0, PREVIEW_TIMELINE_MAX_ROWS);
-
-  const now = Date.now();
-  const rangeStart = ganttRows.length ? Math.min(...ganttRows.map(r => r.startMs)) : now;
-  const rangeEnd = ganttRows.length ? Math.max(now, ...ganttRows.map(r => r.endMs)) : now;
-
+function Sparkline(props) {
+  const vals = props.values || [];
+  if (vals.length < 2 || vals.every(v => !v)) return <div class="ov2-spark-empty" />;
+  const max = Math.max(1, ...vals);
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * 100},${26 - (v / max) * 22}`).join(" ");
   return (
-    <div class="bcell full" style={{ "animation-delay": "380ms" }} ref={root}>
-      <h3>Доска</h3>
-      <Show when={ganttRows.length}>
-        <div style={{ "margin-bottom": "14px" }} innerHTML={timelineHtml(ganttRows, rangeStart, rangeEnd, now)} />
-      </Show>
-      <div class="preview-kanban-grid">
-        <For each={columns}>
-          {col => (
-            <div class="preview-kanban-col">
-              <div class="preview-kanban-col-head">
-                <span class="dot" style={{ background: `var(${STATUS_COLOR_VAR[col.key] || "--s-draft"})` }} />
-                <b>{col.total}</b><span>{PREVIEW_COLUMN_LABELS[col.key] || col.label}</span>
-              </div>
-              <div
-                class="preview-kanban-cards"
-                onClick={e => {
-                  const cardEl = e.target.closest("[data-open]");
-                  if (cardEl) openReportDetail(cardEl.dataset.open);
-                }}
-                innerHTML={(col.reports || []).slice(0, PREVIEW_CARDS_PER_COLUMN)
-                  .map(r => boardCardHtml(toBoardCardShape(r), r.status)).join("")
-                  || `<div class="board-col-empty">пусто</div>`}
-              />
-            </div>
-          )}
-        </For>
-      </div>
-      <button
-        class="btn"
-        style={{ "margin-top": "8px", width: "100%", "justify-content": "center" }}
-        onClick={() => switchTab("board")}
-      >
-        Открыть доску
-      </button>
+    <svg class="ov2-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points={pts} fill="none" stroke={`var(${props.color})`} stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
+    </svg>
+  );
+}
+
+function Kpi(props) {
+  return (
+    <div class="bcell ov2-kpi" style={{ "animation-delay": `${props.delay}ms` }}>
+      <span class="ov2-kpi-lbl">{props.label}</span>
+      <b class={`ov2-kpi-num ${props.tone || ""}`}>{props.value}</b>
+      <span class="ov2-kpi-sub">{props.sub}</span>
+      <Sparkline values={props.spark} color={props.color} />
     </div>
   );
 }
 
-function TrendChart(props) {
-  const days = props.trend?.days || [];
-  const peak = Math.max(1, ...days.map(x => Math.max(x.created, x.completed)));
-  const noMovement = days.every(x => x.created === 0 && x.completed === 0);
+function Poster(props) {
+  const src = props.url ? imgProxy(props.url) : null;
+  return src
+    ? <img class="ov2-poster" src={src} alt="" loading="lazy" />
+    : <span class="ov2-poster ov2-poster-ph" />;
+}
+
+// Пустая студия — вместо стены нулей три шага, чтобы было понятно, с чего начать.
+function EmptyStudio(props) {
+  const members = props.data.access?.allowed || 0;
+  const teamReady = members > 1;
   return (
-    <div class="bcell dash-trend-cell" style={{ "animation-delay": "160ms" }}>
-      <div class="dash-cell-head">
-        <span class="dash-cell-title">Создано и завершено</span>
-        <span class="dash-cell-hint">последние 14 дней</span>
-      </div>
-      <div class="dash-legend">
-        <span><i style={{ background: "var(--surface-4)" }} />создано</span>
-        <span><i style={{ background: "var(--s-done)" }} />завершено</span>
-      </div>
-      <Show when={days.length && !noMovement} fallback={<div class="no-assignee">Пока без движения</div>}>
-        <div class="dash-trend">
-          <For each={days}>
-            {x => (
-              <div class="dash-trend-col" title={`${x.date}: ${x.created} создано, ${x.completed} завершено`}>
-                <div class="dash-trend-bars">
-                  <div class="dash-trend-bar created" style={{ height: `${Math.round((x.created / peak) * 100)}%` }} />
-                  <div class="dash-trend-bar completed" style={{ height: `${Math.round((x.completed / peak) * 100)}%` }} />
-                </div>
-                <div class="dash-trend-label">{Number(x.date.slice(8, 10))}</div>
-              </div>
-            )}
-          </For>
+    <div class="ov2-empty">
+      <div class="ov2-empty-mark brand-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19" /><path class="bm-b" d="M19 5L5 19" /></svg></div>
+      <h1>Студия готова к первому сезону</h1>
+      <p>Серий пока нет — поэтому здесь три шага вместо пустых графиков. Как только появится первая серия, тут будет живой обзор.</p>
+      <div class="ov2-steps">
+        <div class={`bcell ov2-step${teamReady ? " done" : ""}`}>
+          <span class="ov2-step-n">{teamReady ? "✓" : "1"}</span>
+          <b>{teamReady ? "Команда в сборе" : "Соберите команду"}</b>
+          <p>{teamReady ? `В студии ${members} ${plural(members, "участник", "участника", "участников")}.` : "Пригласите озвучку и звукорежиссёра — доступ выдаётся через бота."}</p>
+          <button class="btn" onClick={() => switchTab("team")}>Команда</button>
         </div>
-      </Show>
-    </div>
-  );
-}
-
-function StatCard(props) {
-  return (
-    <div class="bcell kpi-cell" style={{ "animation-delay": `${props.delay}ms` }}>
-      <h3>{props.label}</h3>
-      <div class="dash-stat">
-        <span class={`big-num ${props.tone || ""}`}>{props.value}</span>
-        <Show when={props.pill}>
-          <span class="dash-pill" style={{ color: `var(${props.pillVar})`, background: `color-mix(in srgb, var(${props.pillVar}) 16%, transparent)` }}>{props.pill}</span>
-        </Show>
+        <div class="bcell ov2-step">
+          <span class="ov2-step-n">2</span>
+          <b>Выберите тайтл</b>
+          <p>Проголосуйте за тайтлы эфир-сезона — лидер голосования и пойдёт в работу.</p>
+          <button class="btn primary" onClick={() => switchTab("titles")}>К голосованию</button>
+        </div>
+        <div class="bcell ov2-step">
+          <span class="ov2-step-n">3</span>
+          <b>Заведите первую серию</b>
+          <p>На «Доске» — серия, исполнители и дедлайн. Дальше статусы двигаются по ходу работы.</p>
+          <button class="btn" onClick={() => switchTab("board")}>Открыть доску</button>
+        </div>
       </div>
-      <div class="sub">{props.sub}</div>
     </div>
   );
 }
 
 function Overview(props) {
   const d = props.data;
+  if (!d.reports.total) return <EmptyStudio data={d} />;
+
   const count = st => d.reports.statuses.find(s => s.status === st)?.count || 0;
-  const segments = d.reports.statuses.map(s => ({
-    label: s.label, count: s.count, colorVar: STATUS_COLOR_VAR[s.status] || "--s-draft",
-  }));
+  const label = st => d.reports.statuses.find(s => s.status === st)?.label || st;
+  const reports = (props.dash?.board?.columns || []).flatMap(c => c.reports || []);
   const activeTotal = d.reports.total - count("completed") - count("cancelled");
-  const activeDelta = periodDeltaPct(props.trend?.days);
-  const maxAssigned = Math.max(1, ...d.performers.map(x => x.assigned));
-
-  // «Требует внимания» — отчёты со статусом stuck (3+ дня без смены
-  // статуса, см. _attach_stuck на сервере) из /api/dashboard/project.
-  const stuckReports = (props.dash?.board?.columns || [])
-    .flatMap(c => c.reports || [])
-    .filter(r => r.stuck)
+  const attention = attentionItems(reports);
+  const days = props.trend?.days || [];
+  const sum = (key, from = 0) => days.slice(from).reduce((s, x) => s + (x[key] || 0), 0);
+  const upcoming = reports
+    .filter(r => isOpen(r) && r.deadline && daysLeft(r.deadline) >= 0)
+    .sort((a, b) => a.deadline.localeCompare(b.deadline))
     .slice(0, 5);
+  const maxAssigned = Math.max(1, ...d.performers.map(x => x.assigned));
   const activity = (props.feed?.events || []).slice(0, 4);
-
-  let root;
-  onMount(() => { playDonutIntro(root); });
+  const summary = [
+    `${activeTotal} ${plural(activeTotal, "серия", "серии", "серий")} в работе`,
+    attention.length ? `${attention.length} ${plural(attention.length, "требует", "требуют", "требуют")} внимания` : "срочного нет",
+  ].join(" · ");
 
   return (
     <>
-    <div class="page-header">
+    <div class="page-header ov2-head">
       <div>
-        <h1>Обзор студии</h1>
-        <div class="sub">Где сейчас находится конвейер дубляжа.</div>
+        <h1>{greeting()}{state.name ? `, ${state.name}` : ""}</h1>
+        <div class="sub">{todayLabel()} · {summary}</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn" onClick={() => switchTab("board")}>Открыть доску</button>
+        <button class="btn primary" onClick={() => switchTab("titles")}>Взять тайтл</button>
       </div>
     </div>
-    <div ref={root}>
-      <div class="an-metrics">
-        <StatCard delay={0} label="Активные серии" value={activeTotal} sub={`из ${d.reports.total} всего`}
-          pill={activeDelta !== null ? `${activeDelta >= 0 ? "+" : ""}${activeDelta}%` : null}
-          pillVar={activeDelta !== null && activeDelta < 0 ? "--s-stop" : "--s-done"} />
-        <StatCard delay={40} label="В работе" value={count("working")} sub={`${count("review") + count("revision")} в озвучке и на перезаписи`} />
-        <StatCard delay={80} label="Завершено" value={count("completed")} sub="за всё время" />
-        <StatCard delay={120} label="Просрочено" value={d.reports.overdue} tone={d.reports.overdue > 0 ? "danger" : ""}
-          sub={`${d.reports.important} важных (высокий/срочный)`} />
-      </div>
 
-      <div class="dash-main-row">
-        <TrendChart trend={props.trend} />
-        <div class="dash-side">
-          <div class="bcell dash-side-cell" style={{ "animation-delay": "200ms" }}>
-            <div class="dash-cell-head">
-              <span class="dash-cell-title">Требует внимания</span>
-              <Show when={stuckReports.length}>
-                <span class="dash-pill" style={{ color: "var(--s-stop)", background: "color-mix(in srgb, var(--s-stop) 16%, transparent)" }}>{stuckReports.length} без движения</span>
-              </Show>
-            </div>
-            <div class="dash-list">
-              <Show when={stuckReports.length} fallback={<div class="no-assignee">Всё движется</div>}>
-                <For each={stuckReports}>
-                  {r => (
-                    <button type="button" class="dash-stuck-row" onClick={() => openReportDetail(r.public_id)}>
-                      <span class="dash-stuck-dot" />
-                      <span class="dash-stuck-text">
-                        <span class="dash-stuck-title">{r.title}</span>
-                        <span class="dash-stuck-sub">{r.status_label} · без движения</span>
-                      </span>
-                    </button>
-                  )}
-                </For>
-              </Show>
-            </div>
-          </div>
-          <div class="bcell dash-side-cell" style={{ "animation-delay": "240ms" }}>
-            <div class="dash-cell-head">
-              <span class="dash-cell-title">Недавняя активность</span>
-              <button type="button" class="dash-link" onClick={() => switchTab("feed")}>вся лента</button>
-            </div>
-            <div class="dash-list">
-              <Show when={activity.length} fallback={<div class="no-assignee">Пока тихо</div>}>
-                <For each={activity}>
-                  {ev => (
-                    <div class="dash-activity-row">
-                      <span class="avatar-bubble" style={{ "margin-left": "0" }} data-avatar-for={ev.actor_telegram_id || ""}>{initials(ev.actor || "?")}</span>
-                      <span class="dash-activity-text">
-                        <span><b>{ev.actor}</b> {ev.action}{ev.title ? ` · ${ev.title}` : ""}</span>
-                        <span class="dash-activity-time">{relTime(ev.created_at)}</span>
-                      </span>
+    <div class="ov2-grid">
+      <div class="ov2-col">
+        <div class="bcell ov2-card" style={{ "animation-delay": "0ms" }}>
+          <div class="ov2-card-head"><b>Требует внимания</b><span>сначала срочное</span></div>
+          <Show when={attention.length} fallback={<div class="ov2-calm">Всё идёт по плану — просроченного и застрявшего нет.</div>}>
+            <div class="ov2-att">
+              <For each={attention}>
+                {it => (
+                  <div class="ov2-att-row" onClick={() => openReportDetail(it.r.public_id)}>
+                    <Poster url={it.r.poster_url} />
+                    <div class="ov2-att-text">
+                      <b>{it.r.title}</b>
+                      <span>{it.sub}</span>
                     </div>
-                  )}
-                </For>
-              </Show>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bento dash-secondary">
-        <div class="bcell wide" style={{ "animation-delay": "280ms" }}>
-          <h3>Структура загрузки</h3>
-          <div class="donut-wrap">
-            <div innerHTML={donutHtml(segments)} />
-            <div class="donut-legend" innerHTML={donutLegendHtml(segments)} />
-          </div>
-        </div>
-        <div class="bcell wide" style={{ "animation-delay": "300ms" }}>
-          <h3>Топ исполнителей</h3>
-          <div class="an-perf-list">
-            <Show when={d.performers.length} fallback={<div class="no-assignee">Пока нет данных</div>}>
-              <For each={d.performers}>
-                {p => (
-                  <div class="an-perf">
-                    <div class="an-perf-head">
-                      <span>{p.name}</span>
-                      <span>{p.assigned} назначено{p.overdue ? ` · просрочено ${p.overdue}` : ""}</span>
-                    </div>
-                    <div class="an-perf-track">
-                      <div class="an-perf-fill" style={{ width: `${Math.round((p.assigned / maxAssigned) * 100)}%` }} />
-                    </div>
+                    <span class={`ov2-tag ${it.tone}`}>{it.tag}</span>
+                    <button class="btn" onClick={e => { e.stopPropagation(); openReportDetail(it.r.public_id); }}>Открыть</button>
                   </div>
                 )}
               </For>
-            </Show>
-          </div>
-          <Show when={d.performers.length}>
-            <button class="btn" style={{ "margin-top": "14px", width: "100%", "justify-content": "center" }} onClick={openMonthlyTopSheet}>
-              Рейтинг месяца
-            </button>
+            </div>
           </Show>
         </div>
-        <div class="bcell kpi-cell" style={{ "animation-delay": "320ms" }}>
-          <h3>Доступ</h3>
-          <div class="big-num">{d.access.allowed}</div>
-          <div class="sub">{d.access.pending_requests ? `${d.access.pending_requests} заявок ждут решения` : "заявок нет"}</div>
+
+        <div class="bcell ov2-card" style={{ "animation-delay": "60ms" }}>
+          <div class="ov2-card-head"><b>Конвейер</b><span>{activeTotal} в работе</span><button type="button" class="dash-link" onClick={() => switchTab("board")}>Открыть доску →</button></div>
+          <div class="ov2-flow">
+            <For each={FLOW}>
+              {st => {
+                const items = reports.filter(r => r.status === st);
+                return (
+                  <button type="button" class="ov2-stage" onClick={() => switchTab("board")}>
+                    <span class="ov2-stage-lbl"><i style={{ background: `var(${STATUS_COLOR_VAR[st] || "--s-draft"})` }} />{label(st)}</span>
+                    <b>{count(st)}</b>
+                    <span class="ov2-stage-eps">
+                      <For each={items.slice(0, FLOW_CHIPS)}>{r => <em title={r.title}>{r.public_id}</em>}</For>
+                      <Show when={count(st) > FLOW_CHIPS}><em>+{count(st) - FLOW_CHIPS}</em></Show>
+                    </span>
+                  </button>
+                );
+              }}
+            </For>
+          </div>
         </div>
-        <div class="bcell kpi-cell dash-clickable" style={{ "animation-delay": "340ms" }} role="button" tabindex="0" title="Открыть тикеты"
-          onClick={() => openTicketsSheet()} onKeyDown={e => { if (e.key === "Enter") openTicketsSheet(); }}>
-          <h3>Тикеты в поддержку</h3>
-          <div class={`big-num ${d.open_tickets > 0 ? "warn" : ""}`}>{d.open_tickets}</div>
-          <div class="sub">открыто сейчас</div>
+
+        <div class="ov2-kpis">
+          <Kpi delay={100} label="Завершено" value={sum("completed")} sub={`за 14 дней · ${sum("completed", 7)} за неделю`} spark={days.map(x => x.completed)} color="--s-done" />
+          <Kpi delay={130} label="Создано" value={sum("created")} sub={`за 14 дней · ${sum("created", 7)} за неделю`} spark={days.map(x => x.created)} color="--ember" />
+          <Kpi delay={160} label="Просрочено" value={d.reports.overdue} tone={d.reports.overdue ? "danger" : ""} sub={`${d.reports.important} ${plural(d.reports.important, "важная", "важные", "важных")} в работе`} />
+          <Kpi delay={190} label="Всего серий" value={d.reports.total} sub={`${count("completed")} готово · ${count("cancelled")} отменено`} />
         </div>
-        <Show when={d.birthdays.length}>
-          <div class="bcell kpi-cell dash-clickable" style={{ "animation-delay": "360ms" }} role="button" tabindex="0" title="Все дни рождения"
-            onClick={() => openBirthdaysSheet(loadOverview)} onKeyDown={e => { if (e.key === "Enter") openBirthdaysSheet(loadOverview); }}>
-            <h3>Дни рождения</h3>
-            <div class="mini-list">
-              <For each={d.birthdays}>
-                {b => (
-                  <div class="mini-row">
-                    <span class="name">{b.name}</span>
-                    <span class="val">{b.day}.{String(b.month).padStart(2, "0")}</span>
+      </div>
+
+      <div class="ov2-col">
+        <div class="bcell ov2-card" style={{ "animation-delay": "40ms" }}>
+          <div class="ov2-card-head"><b>Ближайшие дедлайны</b><button type="button" class="dash-link" onClick={() => switchTab("calendar")}>Календарь →</button></div>
+          <Show when={upcoming.length} fallback={<div class="ov2-calm">Дедлайнов впереди нет.</div>}>
+            <For each={upcoming}>
+              {r => {
+                const left = daysLeft(r.deadline);
+                return (
+                  <button type="button" class="ov2-dl-row" onClick={() => openReportDetail(r.public_id)}>
+                    <time>{ddmm(r.deadline)}</time>
+                    <b>{r.title}</b>
+                    <span class={`ov2-tag ${left === 0 ? "red" : left === 1 ? "yel" : ""}`}>{left === 0 ? "сегодня" : left === 1 ? "завтра" : `через ${left} ${plural(left, "день", "дня", "дней")}`}</span>
+                  </button>
+                );
+              }}
+            </For>
+          </Show>
+        </div>
+
+        <div class="bcell ov2-card" style={{ "animation-delay": "80ms" }}>
+          <div class="ov2-card-head"><b>Загрузка команды</b><span>назначено серий</span></div>
+          <Show when={d.performers.length} fallback={<div class="ov2-calm">Пока никому ничего не назначено.</div>}>
+            <div class="ov2-load">
+              <For each={d.performers.slice(0, 6)}>
+                {p => (
+                  <div class="ov2-load-row">
+                    <span class="avatar sm" data-avatar-for={p.telegram_id || ""}>{initials(p.name || "?")}</span>
+                    <span class="ov2-load-name">{p.name}</span>
+                    <span class="ov2-bar"><i class={p.overdue ? "hot" : ""} style={{ width: `${Math.round((p.assigned / maxAssigned) * 100)}%` }} /></span>
+                    <em>{p.assigned}{p.overdue ? ` · ${p.overdue} просрочено` : ""}</em>
                   </div>
                 )}
               </For>
             </div>
+            <button class="btn ov2-wide-btn" onClick={openMonthlyTopSheet}>Рейтинг месяца</button>
+          </Show>
+        </div>
+
+        <div class="bcell ov2-card" style={{ "animation-delay": "120ms" }}>
+          <div class="ov2-card-head"><b>Недавно</b><button type="button" class="dash-link" onClick={() => switchTab("feed")}>Вся лента →</button></div>
+          <Show when={activity.length} fallback={<div class="ov2-calm">Пока тихо.</div>}>
+            <For each={activity}>
+              {ev => (
+                <div class="dash-activity-row">
+                  <span class="avatar-bubble" style={{ "margin-left": "0" }} data-avatar-for={ev.actor_telegram_id || ""}>{initials(ev.actor || "?")}</span>
+                  <span class="dash-activity-text">
+                    <span><b>{ev.actor}</b> {ev.action}{ev.title ? ` · ${ev.title}` : ""}</span>
+                    <span class="dash-activity-time">{relTime(ev.created_at)}</span>
+                  </span>
+                </div>
+              )}
+            </For>
+          </Show>
+        </div>
+
+        <div class="ov2-mini">
+          <div class="bcell ov2-mini-cell">
+            <span>Доступ</span><b>{d.access.allowed}</b>
+            <em>{d.access.pending_requests ? `${d.access.pending_requests} ${plural(d.access.pending_requests, "заявка ждёт", "заявки ждут", "заявок ждут")}` : "заявок нет"}</em>
           </div>
-        </Show>
-        <Show when={props.dash?.board?.columns?.length}>
-          <KanbanPreview dash={props.dash} />
-        </Show>
+          <div class="bcell ov2-mini-cell dash-clickable" role="button" tabindex="0" title="Открыть тикеты"
+            onClick={() => openTicketsSheet()} onKeyDown={e => { if (e.key === "Enter") openTicketsSheet(); }}>
+            <span>Тикеты</span><b class={d.open_tickets ? "warn" : ""}>{d.open_tickets}</b><em>открыто сейчас</em>
+          </div>
+          <Show when={d.birthdays.length}>
+            <div class="bcell ov2-mini-cell dash-clickable" role="button" tabindex="0" title="Все дни рождения"
+              onClick={() => openBirthdaysSheet(loadOverview)} onKeyDown={e => { if (e.key === "Enter") openBirthdaysSheet(loadOverview); }}>
+              <span>День рождения</span><b class="ov2-bday">{d.birthdays[0]?.name}</b><em>{d.birthdays[0]?.day}.{String(d.birthdays[0]?.month).padStart(2, "0")}</em>
+            </div>
+          </Show>
+        </div>
       </div>
     </div>
     </>
