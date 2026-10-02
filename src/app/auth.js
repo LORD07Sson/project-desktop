@@ -4,7 +4,7 @@ import { invoke } from "./tauri.js";
 import oopsFallGif from "../assets/oops-fall.gif";
 import oopsFrierenGif from "../assets/friren.gif";
 import { state, resetSessionState } from "./state.js";
-import { api, apiGet, armSessionExpiry, ensureMediaToken } from "./api.js";
+import { api, apiGet, armSessionExpiry, ensureMediaToken, API_BASE } from "./api.js";
 import { $ } from "./utils.js";
 import { refreshAll, clearTabDom, restoreLastTab, loadSidebarStatusCounts } from "./tabs.js";
 import { resetAssignmentsBaseline } from "./notifications.js";
@@ -109,7 +109,38 @@ export function applyRole(isAdmin) {
   document.documentElement.dataset.role = isAdmin ? "admin" : "member";
 }
 
+// Стена обложек на экране входа. Картинки — с нашего сервера по номеру
+// (/api/login-wall/N): входа ещё нет, а внешние картинки CSP не пускает.
+let wallLoaded = false;
+async function loadLoginWall() {
+  if (wallLoaded) return;
+  const host = $("#auth-wall");
+  if (!host) return;
+  try {
+    const resp = await fetch(`${API_BASE}/login-wall`);
+    const { count } = await resp.json();
+    if (!count) return;
+    wallLoaded = true;
+    const COLS = 5;
+    let html = "";
+    for (let c = 0; c < COLS; c++) {
+      const ids = [];
+      for (let i = c; i < count; i += COLS) ids.push(i);
+      if (!ids.length) continue;
+      const imgs = ids.concat(ids).map(i => `<img src="${API_BASE}/login-wall/${i}" alt="" loading="lazy" decoding="async">`).join("");
+      html += `<div class="aw-col" style="animation-delay:${-c * 9}s">${imgs}</div>`;
+    }
+    host.innerHTML = html;
+    host.querySelectorAll("img").forEach(img => {
+      img.addEventListener("load", () => img.classList.add("in"), { once: true });
+      img.addEventListener("error", () => img.remove(), { once: true });
+    });
+    requestAnimationFrame(() => host.classList.add("on"));
+  } catch (_) { /* без стены — просто фон */ }
+}
+
 export function showAuth(err) {
+  loadLoginWall();
   spawnEmbers();
   replayWordmark();
   $("#auth-screen").hidden = false;
