@@ -5246,3 +5246,33 @@ body.focus-mode .report-detail-overlay .sheet {
   .tr-spot, .tr-card, .tr-w-card, .tr-hint { transition: none; }
   .tr-spot::after, .tr-w-glow, .tr-card.swap .tr-text, .tr-card.swap h3 { animation: none; }
 }
+
+/* ---------- Экран входа: стена обложек сезона ----------
+   Слева наклонённые колонки постеров едут навстречу друг другу,
+   справа — бренд и форма входа. Затемнение уводит стену в фон. */
+#auth-screen .auth-split { position: relative; z-index: 2; grid-template-columns: 420px; gap: 0; width: 420px; margin-left: auto; margin-right: max(6vw, 32px); }
+#auth-screen .auth-brand { align-items: flex-start; margin-bottom: 22px; }
+#auth-screen .auth-points, #auth-screen .auth-beam { display: none; }
+#auth-screen .auth-logo { width: 52px; height: 52px; border-radius: 15px; margin-bottom: 14px; }
+#auth-screen .auth-logo .brand-mark { width: 26px; height: 26px; }
+#auth-screen .auth-word { font-size: 30px; }
+.auth-hero { margin-top: 18px; font-size: 36px; font-weight: 800; line-height: 1.08; letter-spacing: -.02em; color: var(--ink); }
+.auth-hero span { background: linear-gradient(90deg, var(--fire), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.auth-wall { position: absolute; z-index: 0; left: -14%; top: -45%; width: 84%; height: 190%; display: flex; gap: 16px; transform: rotate(13deg); opacity: 0; transition: opacity 1.2s ease; pointer-events: none; }
+.auth-wall.on { opacity: 1; }
+.aw-col { flex: 1; display: flex; flex-direction: column; gap: 16px; animation: aw-up 70s linear infinite; }
+.aw-col:nth-child(even) { animation-name: aw-down; animation-duration: 82s; }
+@keyframes aw-up { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@keyframes aw-down { from { transform: translateY(-50%); } to { transform: translateY(0); } }
+.aw-col img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 14px; background: var(--surface-2); box-shadow: 0 18px 40px -14px rgba(0, 0, 0, .8); opacity: 0; transition: opacity .6s ease; }
+.aw-col img.in { opacity: 1; }
+.auth-wall-shade { position: absolute; z-index: 1; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 20%, color-mix(in srgb, var(--bg) 78%, transparent) 50%, var(--bg) 66%),
+    linear-gradient(0deg, var(--bg) 0%, transparent 16%, transparent 84%, var(--bg) 100%),
+    radial-gradient(40% 50% at 82% 50%, color-mix(in srgb, var(--fire) 14%, transparent), transparent 70%); }
+:root[data-theme="light"] .auth-wall-shade { background:
+    linear-gradient(90deg, transparent 20%, color-mix(in srgb, var(--bg) 82%, transparent) 50%, var(--bg) 66%),
+    linear-gradient(0deg, var(--bg) 0%, transparent 16%, transparent 84%, var(--bg) 100%); }
+@media (max-width: 860px) { .auth-wall, .auth-wall-shade { display: none; } #auth-screen .auth-split { margin: 0 auto; width: min(420px, 92vw); grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .aw-col { animation: none; } }
