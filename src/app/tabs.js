@@ -181,8 +181,11 @@ export async function loadSidebarStatusCounts() {
   try {
     const d = await apiGet("/overview");
     const statuses = (d.reports && d.reports.statuses) || [];
-    if (!statuses.length) { el.hidden = true; return; }
-    el.innerHTML = statuses.map(s => `
+    // Пустые этапы не показываем — шесть нулей подряд только шумят;
+    // этап появится в меню, как только в нём окажется серия.
+    const shown = statuses.filter(s => s.count > 0 && s.status !== "cancelled");
+    if (!shown.length) { el.hidden = true; return; }
+    el.innerHTML = shown.map(s => `
       <div class="sidebar-sub-item" data-goto-status="${esc(s.status)}">
         <span class="dot" style="background:var(${STATUS_COLOR_VAR[s.status] || "--s-draft"})"></span>
         <span class="lbl">${esc(s.label)}</span>
