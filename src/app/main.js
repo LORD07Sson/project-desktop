@@ -26,6 +26,7 @@ installFileLogging();
 // двигать и закрывать.
 installWindowChrome();
 import "./density.js";
+import "./ui-prefs.js";
 import "./tabs.js";
 import "./qc.js";
 import "./media-tools.js";

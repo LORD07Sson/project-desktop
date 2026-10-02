@@ -2,18 +2,23 @@
 
 import { invoke, listen } from "./tauri.js";
 import { state } from "./state.js";
-import { apiGet, openSheet, toast, dismissSheet } from "./api.js";
+import { apiGet, openSheet, toast, dismissSheet, API_BASE } from "./api.js";
 import { $, esc } from "./utils.js";
 import { applyTheme, applyLook } from "./theme.js";
 import { applyDensity, currentDensity } from "./density.js";
 import { focusModePreferred, setFocusModePreferred } from "./focus-mode.js";
 import { isDevModeOn, setDevModeOn } from "./devmode.js";
-import { desktopNotifyEnabled, setDesktopNotifyEnabled } from "./desktop-notify.js";
+import { desktopNotifyEnabled, setDesktopNotifyEnabled, NOTIFY_KINDS, notifyKinds, setNotifyKind, quietHours, setQuietHours } from "./desktop-notify.js";
+import { ACCENTS, SCALES, START_TABS, currentAccent, applyAccent, currentScale, applyScale, currentMotion, applyMotion, sidebarCompact, applySidebarCompact, startTab, setStartTab } from "./ui-prefs.js";
+import { GROUPS as SHORTCUT_GROUPS } from "./shortcuts-help.js";
+import { avatarHtml, loadAvatars } from "./profile.js";
+import { fetchPerson, openPauseDialog } from "./people.js";
 import { openAdminPanel } from "./admin.js";
 import { tagLogger } from "./applog.js";
 import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints, resetTourProgress } from "./tour.js";
 
 const updateLog = tagLogger("updates");
+
 
 // Версию подставляет Vite на этапе сборки (define: __APP_VERSION__ в
 // vite.config.js — читает файл VERSION, а в CI ещё и переменную
@@ -48,6 +53,19 @@ async function openSettings() {
 
   const ic = d => `<span class="st-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></span>`;
   const ICONS = {
+    acc: '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/>',
+    keys: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+    palette: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.9 1.4-1.9-.5-1.2.2-2.6 1.6-2.6h1.7a3.8 3.8 0 0 0 3.8-3.8C20.5 7.4 16.7 3.5 12 3.5Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="15" cy="8" r="1"/>',
+    scale: '<path d="M4 20h6M7 20V8M3 8h8M14 20h7M17.5 20V4M14 4h7"/>',
+    motion: '<path d="M4 12h3l2-5 4 10 2-5h5"/>',
+    sidebar: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9 4.5v15"/>',
+    dot: '<circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/>',
+    moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>',
+    pause: '<rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/>',
+    home: '<path d="M4 11 12 4l8 7v9H4zM10 20v-5h4v5"/>',
+    server: '<rect x="3.5" y="4" width="17" height="7" rx="1.5"/><rect x="3.5" y="13" width="17" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
     look: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M12 3.5a8.5 8.5 0 0 1 0 17" fill="currentColor" stroke="none" opacity=".35"/>',
     behave: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
     update: '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>',
@@ -77,86 +95,148 @@ async function openSettings() {
   ];
   const theme = document.documentElement.dataset.theme || "dark";
   const look = document.documentElement.dataset.look || "glow";
+  const themeCard = theme === "light" ? "light" : look;
   const density = currentDensity();
+  const accent = currentAccent();
+  const scale = currentScale();
+  const motion = currentMotion();
+  const start = startTab();
+  const kinds = notifyKinds();
+  const quiet = quietHours();
   const sw = (id, on, extra = "") => `<label class="mn-switch st-switch"><input type="checkbox" id="${id}" ${on ? "checked" : ""} ${extra}><span></span></label>`;
+  const seg = (attr, items, cur) => `<div class="seg-toggle" role="group">${items.map(([v, l]) => `<button type="button" class="seg-btn${String(v) === String(cur) ? " active" : ""}" ${attr}="${v}">${l}</button>`).join("")}</div>`;
+  const row = (icon, title, sub, control, keywords = "") => `<div class="st-row" data-st-find="${esc(`${title} ${sub} ${keywords}`.toLowerCase())}">${ic(icon)}<div class="st-text"><b>${title}</b>${sub ? `<span>${sub}</span>` : ""}</div>${control}</div>`;
+  const NAV = [
+    ["Личное", [["st-acc", "Аккаунт", ICONS.acc], ["st-look", "Внешний вид", ICONS.look], ["st-notif", "Уведомления", ICONS.bell], ["st-behave", "Поведение", ICONS.behave], ["st-keys", "Горячие клавиши", ICONS.keys]]],
+    ["Приложение", [["st-update", "Обновления", ICONS.update], ["st-learn", "Обучение", ICONS.learn], ["st-diag", "Диагностика", ICONS.diag]]],
+    ...(state.isAdmin || state.isDeveloper ? [["Студия", [["st-studio", "Студия", ICONS.studio], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot]] : [])]]] : []),
+  ];
 
   const overlay = openSheet(`
-    <div class="st-head">
-      <h2>Настройки</h2>
-      <button type="button" class="icon-btn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    </div>
     <div class="st-layout">
       <nav class="st-nav" aria-label="Разделы настроек">
-        ${[["st-look", "Внешний вид", ICONS.look], ["st-behave", "Поведение", ICONS.behave], ["st-update", "Обновления", ICONS.update], ["st-studio", "Студия", ICONS.studio],
-           ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot]] : []), ["st-learn", "Обучение", ICONS.learn], ["st-diag", "Диагностика", ICONS.diag]]
-          .map(([id, label, i], n) => `<button type="button" class="st-nav-btn${n === 0 ? " on" : ""}" data-st-go="${id}">${ic(i)}<span>${label}</span></button>`).join("")}
+        <div class="st-nav-title">Настройки</div>
+        <label class="st-find">${ic(ICONS.search)}<input type="search" id="st-find" placeholder="Найти настройку…" autocomplete="off"></label>
+        ${NAV.map(([group, items]) => `<div class="st-nav-grp">${group}</div>` + items.map(([id, label, i], n) => `<button type="button" class="st-nav-btn${id === "st-acc" && n === 0 ? " on" : ""}" data-st-go="${id}">${ic(i)}<span>${label}</span></button>`).join("")).join("")}
       </nav>
       <div class="st-body" id="st-body">
+        <button type="button" class="icon-btn st-close" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <div class="st-empty" id="st-find-empty" hidden>Ничего не нашлось — попробуйте другое слово.</div>
+
+        <section class="st-sec on" id="st-acc">
+          <h3>Аккаунт</h3><p class="st-lead">Кто вы в студии и выход с этого компьютера.</p>
+          <div class="st-group">
+            <div class="st-acc" data-st-find="аккаунт профиль имя аватар">
+              ${avatarHtml(state.telegramId, state.name || "?", "xl")}
+              <div class="st-text"><b>${esc(state.name || "Без имени")}</b><span>${state.isAdmin ? "Администратор студии" : "Участник студии"}</span></div>
+              <button type="button" class="btn" id="s-acc-profile">Открыть профиль</button>
+            </div>
+          </div>
+          <div class="st-group">
+            ${row(ICONS.power, "Выйти из аккаунта", "На этом компьютере — для входа понадобится новый код из бота", `<button type="button" class="btn danger" id="s-acc-logout">Выйти</button>`, "logout выход")}
+          </div>
+        </section>
 
         <section class="st-sec" id="st-look">
-          <h3>Внешний вид</h3>
-          <div class="st-label">Тема</div>
-          <div class="st-cards">
-            <button type="button" class="st-card${theme === "dark" ? " on" : ""}" data-st-theme="dark"><span class="st-prev st-prev-dark"><i></i><i></i><i></i></span><b>Тёмная</b></button>
-            <button type="button" class="st-card${theme === "light" ? " on" : ""}" data-st-theme="light"><span class="st-prev st-prev-light"><i></i><i></i><i></i></span><b>Светлая</b></button>
-          </div>
-          <div class="st-label">Стиль тёмной темы</div>
-          <div class="st-cards">
-            <button type="button" class="st-card${look === "glow" ? " on" : ""}" data-st-look="glow"><span class="st-prev st-prev-glow"><i></i><i></i><i></i></span><b>Золотое свечение</b><em>луч света и золотые кромки</em></button>
-            <button type="button" class="st-card${look === "fire" ? " on" : ""}" data-st-look="fire"><span class="st-prev st-prev-fire"><i></i><i></i><i></i></span><b>Огонь</b><em>огненное свечение снизу</em></button>
-          </div>
-          <div class="st-row">
-            ${ic(ICONS.density)}
-            <div class="st-text"><b>Плотность таблиц</b><span>Сколько строк влезает в «Список»</span></div>
-            <div class="seg-toggle" role="group" aria-label="Плотность">
-              <button type="button" class="seg-btn${density === "comfortable" ? " active" : ""}" data-st-density="comfortable">Обычная</button>
-              <button type="button" class="seg-btn${density === "compact" ? " active" : ""}" data-st-density="compact">Компактная</button>
+          <h3>Внешний вид</h3><p class="st-lead">Изменения видны сразу, без перезапуска.</p>
+          <div class="st-group" data-st-find="тема тёмная светлая огонь золото свечение">
+            <div class="st-group-h">Тема</div>
+            <div class="st-cards st-cards-3">
+              <button type="button" class="st-card${themeCard === "fire" ? " on" : ""}" data-st-themecard="fire"><span class="st-prev st-prev-fire"><i></i><i></i><i></i></span><b>Огонь</b><em>тёмная, свечение снизу</em></button>
+              <button type="button" class="st-card${themeCard === "glow" ? " on" : ""}" data-st-themecard="glow"><span class="st-prev st-prev-glow"><i></i><i></i><i></i></span><b>Золотое свечение</b><em>тёмная, золотые кромки</em></button>
+              <button type="button" class="st-card${themeCard === "light" ? " on" : ""}" data-st-themecard="light"><span class="st-prev st-prev-light"><i></i><i></i><i></i></span><b>Светлая</b><em>для дня</em></button>
             </div>
+          </div>
+          <div class="st-group">
+            ${row(ICONS.palette, "Акцентный цвет", "Кнопки, подсветка, графики", `<div class="st-accents">${Object.entries(ACCENTS).map(([k, a]) => `<button type="button" class="st-accent${k === accent ? " on" : ""}" data-st-accent="${k}" title="${a.label}" style="--a1:${a.fire || "#ff6a2b"};--a2:${a.gold || "#ffb444"}"></button>`).join("")}</div>`, "цвет акцент")}
+            ${row(ICONS.scale, "Масштаб интерфейса", "Для больших мониторов и 4K", seg("data-st-scale", SCALES.map(v => [v, `${v}%`]), scale), "размер шрифт крупнее")}
+            ${row(ICONS.density, "Плотность таблиц", "Сколько строк влезает в «Список»", seg("data-st-density", [["comfortable", "Обычная"], ["compact", "Компактная"]], density))}
+            ${row(ICONS.motion, "Анимации", "Выключите на слабом компьютере", seg("data-st-motion", [["on", "Включены"], ["off", "Выключены"]], motion), "движение плавность")}
+            ${row(ICONS.sidebar, "Компактное боковое меню", "Только иконки — больше места под содержимое", sw("s-sidebar-compact", sidebarCompact()), "сайдбар")}
           </div>
           <select id="s-theme" hidden><option value="dark">Тёмная</option><option value="light">Светлая</option></select>
           <select id="s-density" hidden><option value="comfortable">Обычная</option><option value="compact">Компактная</option></select>
         </section>
 
+        <section class="st-sec" id="st-notif">
+          <h3>Уведомления</h3><p class="st-lead">Всплывашки Windows — когда окно свёрнуто, в трее или за другими окнами. Колокольчик в шапке собирает всё в любом случае.</p>
+          <div class="st-group">
+            ${row(ICONS.bell, "Уведомления на рабочий стол", "Общий выключатель", sw("s-desktop-notify", desktopNotifyEnabled()), "windows всплывашки")}
+          </div>
+          <div class="st-group" id="st-kinds">
+            <div class="st-group-h">Что показывать</div>
+            ${Object.entries(NOTIFY_KINDS).map(([k, [t, sub]]) => row(ICONS.dot, t, sub, sw(`s-kind-${k}`, kinds[k], `data-st-kind="${k}"`), "уведомления")).join("")}
+          </div>
+          <div class="st-group">
+            ${row(ICONS.moon, "Тихие часы", "В это время всплывашки не показываются", `<div class="st-quiet"><input type="time" id="s-quiet-from" value="${esc(quiet.from)}"><span>—</span><input type="time" id="s-quiet-to" value="${esc(quiet.to)}">${sw("s-quiet-on", quiet.on)}</div>`, "ночь не беспокоить")}
+            ${row(ICONS.pause, "Пауза — отпуск или болезнь", "Бот не напоминает о сроках и не пишет о просрочке", `<button type="button" class="btn" id="s-pause">Настроить</button>`, "отпуск пауза бот")}
+          </div>
+        </section>
+
         <section class="st-sec" id="st-behave">
-          <h3>Поведение</h3>
-          <div class="st-row">${ic(ICONS.power)}<div class="st-text"><b>Запускать при старте системы</b><span>Окно сразу уходит в трей и следит за назначениями</span></div>${sw("s-autostart", autostartOn)}</div>
-          <div class="st-row">${ic(ICONS.bell)}<div class="st-text"><b>Уведомления на рабочий стол</b><span>Личные, упоминания, назначения и действия по вашим отчётам — когда окно свёрнуто или в трее</span></div>${sw("s-desktop-notify", desktopNotifyEnabled())}</div>
-          <div class="st-row">${ic(ICONS.focus)}<div class="st-text"><b>Фокус-режим при открытии отчёта</b><span>Карточка отчёта на весь экран, остальное прячется</span></div>${sw("s-focus-mode", focusModePreferred())}</div>
-          ${state.isDeveloper ? `<div class="st-row dev-pill-toggle">${ic(ICONS.dev)}<div class="st-text"><b>Режим разработчика</b><span>Правка чужих ролей, профиля, даты вступления и наград — на карточке коллеги</span></div>${sw("s-dev-mode", isDevModeOn())}</div>` : ""}
+          <h3>Поведение</h3><p class="st-lead">Как приложение ведёт себя в системе.</p>
+          <div class="st-group">
+            ${row(ICONS.power, "Запускать при старте системы", "Окно сразу уходит в трей и следит за назначениями", sw("s-autostart", autostartOn), "автозапуск windows")}
+            ${row(ICONS.home, "Стартовый раздел", "Что открывать при запуске", seg("data-st-start", Object.entries(START_TABS), start), "запуск вкладка")}
+            ${row(ICONS.focus, "Фокус-режим при открытии отчёта", "Карточка отчёта на весь экран, остальное прячется", sw("s-focus-mode", focusModePreferred()))}
+            ${state.isDeveloper ? `<div class="dev-pill-toggle">${row(ICONS.dev, "Режим разработчика", "Правка чужих ролей, профиля, даты вступления и наград — на карточке коллеги", sw("s-dev-mode", isDevModeOn()))}</div>` : ""}
+          </div>
+        </section>
+
+        <section class="st-sec" id="st-keys">
+          <h3>Горячие клавиши</h3><p class="st-lead">То же, что по клавише <kbd>?</kbd> из любого места.</p>
+          ${SHORTCUT_GROUPS.map(g => `<div class="st-group"><div class="st-group-h">${esc(g.title)}</div><div class="st-keylist">${g.rows.map(([k, d]) => `<div data-st-find="${esc(`${k} ${d}`.toLowerCase())}"><span class="st-kbd">${k.split(/\s*\+\s*/).map(x => `<kbd>${esc(x)}</kbd>`).join("")}</span><span>${esc(d)}</span></div>`).join("")}</div></div>`).join("")}
         </section>
 
         <section class="st-sec" id="st-update">
-          <h3>Обновления</h3>
-          <div class="st-version">
-            <div class="st-version-logo">${ic('<path d="M5 5L19 19M19 5L5 19"/>')}</div>
-            <div class="st-text"><b>Project Desktop</b><span>версия ${esc(APP_VERSION)}</span></div>
-            <button class="btn primary" id="s-check-update">Проверить обновления</button>
-          </div>
-          <div class="st-row">
-            ${ic(ICONS.update)}
-            <div class="st-text"><b>Канал обновлений</b><span>Альфа — сборка на каждый коммит, для проверки нового</span></div>
-            <div class="seg-toggle" role="group" aria-label="Канал">
-              <button type="button" class="seg-btn${updateChannel === "stable" ? " active" : ""}" data-st-channel="stable">Стабильный</button>
-              <button type="button" class="seg-btn${updateChannel === "alpha" ? " active" : ""}" data-st-channel="alpha">Альфа</button>
+          <h3>Обновления</h3><p class="st-lead">Версия приложения и канал обновлений.</p>
+          <div class="st-group">
+            <div class="st-version">
+              <div class="st-version-logo">${ic('<path d="M5 5L19 19M19 5L5 19"/>')}</div>
+              <div class="st-text"><b>Project Desktop</b><span>версия ${esc(APP_VERSION)}</span></div>
+              <button class="btn primary" id="s-check-update">Проверить обновления</button>
+            </div>
+            ${row(ICONS.update, "Канал обновлений", "Альфа — сборка на каждый коммит, для проверки нового", seg("data-st-channel", [["stable", "Стабильный"], ["alpha", "Альфа"]], updateChannel), "альфа стабильный")}
+            <select id="s-update-channel" hidden>
+              <option value="stable" ${updateChannel === "stable" ? "selected" : ""}>Стабильный</option>
+              <option value="alpha" ${updateChannel === "alpha" ? "selected" : ""}>Альфа</option>
+            </select>
+            <div id="s-alpha-block" hidden>
+              <div class="alpha-warn">Альфа-сборки собираются на каждый коммит в main и не являются стабильными релизами — автоматического отката нет.</div>
+              <div class="st-commits">
+                <div><span>Текущий коммит</span><code id="s-commit-current">—</code></div>
+                <div><span>Последний коммит</span><code id="s-commit-latest">—</code></div>
+              </div>
             </div>
           </div>
-          <select id="s-update-channel" hidden>
-            <option value="stable" ${updateChannel === "stable" ? "selected" : ""}>Стабильный</option>
-            <option value="alpha" ${updateChannel === "alpha" ? "selected" : ""}>Альфа</option>
-          </select>
-          <div id="s-alpha-block" hidden>
-            <div class="alpha-warn">Альфа-сборки собираются на каждый коммит в main и не являются стабильными релизами — автоматического отката нет.</div>
-            <div class="st-commits">
-              <div><span>Текущий коммит</span><code id="s-commit-current">—</code></div>
-              <div><span>Последний коммит</span><code id="s-commit-latest">—</code></div>
-            </div>
+        </section>
+
+        <section class="st-sec" id="st-learn">
+          <h3>Обучение</h3><p class="st-lead">Уроки по каждому разделу — любой можно пройти снова.</p>
+          <div class="st-learn-top">
+            <div class="st-learn-prog"><b id="st-learn-count"></b><span>уроков пройдено</span><i><em id="st-learn-bar"></em></i></div>
+            <button class="btn primary" id="s-learn-intro">Пройти знакомство</button>
+          </div>
+          <div class="st-learn-grid" id="st-learn-grid"></div>
+          <div class="st-group">
+            ${row(ICONS.hint, "Подсказки «Впервые в разделе?»", "При первом входе в раздел предложить его разбор — показать или пропустить", sw("s-learn-hints", tourHintsEnabled()), "обучение подсказки")}
+          </div>
+          <div class="st-learn-foot"><button type="button" class="btn ghost" id="s-learn-reset">Начать обучение с нуля</button><span>снова покажет приветствие и все подсказки</span></div>
+        </section>
+
+        <section class="st-sec" id="st-diag">
+          <h3>Диагностика</h3><p class="st-lead">Если что-то сломалось — отсюда проще всего рассказать, что именно.</p>
+          <div class="st-group">
+            ${row(ICONS.server, "Сервер студии", "Связь с сервером и время ответа", `<span class="st-ping" id="s-ping">проверяю…</span><button type="button" class="btn" id="s-ping-again">Проверить</button>`, "сеть сервер соединение")}
+            ${row(ICONS.logs, "Файловые логи приложения", "Обновления, QC звука, инструменты ffmpeg, плеер", `<button class="btn" id="s-open-logs">Открыть логи</button>`, "логи")}
+            ${row(ICONS.copy, "Отчёт для разработчика", "Версия, система, канал, связь с сервером — одним текстом в буфер обмена", `<button class="btn" id="s-copy-report">Скопировать</button>`, "баг ошибка")}
           </div>
         </section>
 
         <section class="st-sec" id="st-studio">
-          <h3>Студия</h3>
+          <h3>Студия</h3><p class="st-lead">Инструменты администратора.</p>
           <div class="st-tiles">
-            ${TILES.map(([id, title, sub, path]) => `<button type="button" class="st-tile" id="${id}">${ic(path)}<b>${title}</b><span>${sub}</span></button>`).join("")}
+            ${TILES.map(([id, title, sub, path]) => `<button type="button" class="st-tile" id="${id}" data-st-find="${esc(`${title} ${sub}`.toLowerCase())}">${ic(path)}<b>${title}</b><span>${sub}</span></button>`).join("")}
           </div>
         </section>
 
@@ -165,28 +245,6 @@ async function openSettings() {
           <h3>Чаты бота</h3>
           <div id="st-bot-chats"></div>
         </section>` : ""}
-
-        <section class="st-sec" id="st-learn">
-          <h3>Обучение</h3>
-          <div class="st-learn-top">
-            <div class="st-learn-prog"><b id="st-learn-count"></b><span>уроков пройдено</span><i><em id="st-learn-bar"></em></i></div>
-            <button class="btn primary" id="s-learn-intro">Пройти знакомство</button>
-          </div>
-          <div class="st-learn-grid" id="st-learn-grid"></div>
-          <div class="st-row">${ic(ICONS.hint)}<div class="st-text"><b>Подсказки «Впервые в разделе?»</b><span>При первом входе в раздел предложить его разбор — показать или пропустить</span></div>${sw("s-learn-hints", tourHintsEnabled())}</div>
-          <div class="st-learn-foot"><button type="button" class="btn ghost" id="s-learn-reset">Начать обучение с нуля</button><span>снова покажет приветствие и все подсказки</span></div>
-        </section>
-
-        <section class="st-sec" id="st-diag">
-          <h3>Диагностика</h3>
-          <div class="st-row">${ic(ICONS.logs)}<div class="st-text"><b>Файловые логи приложения</b><span>Обновления, QC звука, инструменты ffmpeg, плеер</span></div><button class="btn" id="s-open-logs">Открыть логи</button></div>
-          <div class="st-keys">
-            <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd><span>показать или скрыть окно откуда угодно, даже из трея</span></div>
-            <div><kbd>?</kbd><span>все горячие клавиши</span></div>
-            <div><kbd>Ctrl</kbd><kbd>K</kbd><span>поиск по отчётам, тайтлам и людям</span></div>
-            <div><kbd>✕</kbd><span>у окна — свернуть в трей, назначения продолжают отслеживаться</span></div>
-          </div>
-        </section>
       </div>
     </div>
   `, "wide");
@@ -271,14 +329,8 @@ async function openSettings() {
     overlay.querySelectorAll(`[${attr}]`).forEach(b => b.classList.toggle(b.classList.contains("seg-btn") ? "active" : "on", b.getAttribute(attr) === value));
     if (sel) { const el = overlay.querySelector(sel); el.value = value; el.dispatchEvent(new window.Event("change")); }
   };
-  overlay.querySelectorAll("[data-st-theme]").forEach(b => b.addEventListener("click", () => pick("data-st-theme", "#s-theme", b.dataset.stTheme)));
   overlay.querySelectorAll("[data-st-density]").forEach(b => b.addEventListener("click", () => pick("data-st-density", "#s-density", b.dataset.stDensity)));
   overlay.querySelectorAll("[data-st-channel]").forEach(b => b.addEventListener("click", () => pick("data-st-channel", "#s-update-channel", b.dataset.stChannel)));
-  overlay.querySelectorAll("[data-st-look]").forEach(b => b.addEventListener("click", () => {
-    pick("data-st-look", null, b.dataset.stLook);
-    applyLook(b.dataset.stLook);
-    if (document.documentElement.dataset.theme === "light") toast("Стиль применяется в тёмной теме.");
-  }));
   const tile = (id, fn) => { const el = overlay.querySelector(`#${id}`); if (el) el.addEventListener("click", fn); };
   tile("s-tile-notice", () => import("./team-notice.js").then(m => m.openNoticeEditor()));
   tile("s-tile-tickets", () => import("./tickets.js").then(m => m.openTicketsSheet()));
@@ -319,16 +371,135 @@ async function openSettings() {
   const botRoot = overlay.querySelector("#st-bot-chats");
   if (botRoot) import("./bot-chats.js").then(m => m.mountBotChats(botRoot));
 
-  // Навигация слева: клик — прокрутка к разделу, подсветка — по прокрутке.
+  // ---------- Настройки 2.0: разделы по одному, поиск, новые пункты ----------
   const body = overlay.querySelector("#st-body");
+  const showSection = id => {
+    overlay.querySelectorAll(".st-sec").forEach(sec => sec.classList.toggle("on", sec.id === id));
+    overlay.querySelectorAll("[data-st-go]").forEach(b => b.classList.toggle("on", b.dataset.stGo === id));
+    body.scrollTop = 0;
+  };
   overlay.querySelectorAll("[data-st-go]").forEach(b => b.addEventListener("click", () => {
-    body.scrollTo({ top: overlay.querySelector(`#${b.dataset.stGo}`).offsetTop - body.offsetTop - 8, behavior: "smooth" });
+    const find = overlay.querySelector("#st-find");
+    if (find.value) { find.value = ""; applyFind(""); }
+    showSection(b.dataset.stGo);
   }));
-  body.addEventListener("scroll", () => {
-    let current = "st-look";
-    overlay.querySelectorAll(".st-sec").forEach(sec => { if (sec.offsetTop - body.offsetTop - 40 <= body.scrollTop) current = sec.id; });
-    if (body.scrollTop + body.clientHeight >= body.scrollHeight - 4) current = "st-diag";
-    overlay.querySelectorAll("[data-st-go]").forEach(b => b.classList.toggle("on", b.dataset.stGo === current));
+
+  // Поиск: показываем все разделы, в них — только подходящие строки.
+  const applyFind = q => {
+    q = q.trim().toLowerCase();
+    overlay.classList.toggle("st-finding", !!q);
+    let any = false;
+    overlay.querySelectorAll(".st-sec").forEach(sec => {
+      if (!q) { sec.querySelectorAll("[data-st-find]").forEach(el => { el.hidden = false; }); return; }
+      const title = sec.querySelector("h3")?.textContent.toLowerCase() || "";
+      let hit = 0;
+      sec.querySelectorAll("[data-st-find]").forEach(el => {
+        const ok = title.includes(q) || el.dataset.stFind.includes(q);
+        el.hidden = !ok;
+        if (ok) hit++;
+      });
+      sec.classList.toggle("st-hit", hit > 0);
+      if (hit) any = true;
+    });
+    overlay.querySelector("#st-find-empty").hidden = !q || any;
+    if (!q) showSection(overlay.querySelector("[data-st-go].on")?.dataset.stGo || "st-acc");
+  };
+  overlay.querySelector("#st-find").addEventListener("input", e => applyFind(e.target.value));
+
+  // Аккаунт
+  overlay.querySelector("#s-acc-profile").addEventListener("click", () => {
+    dismissSheet(overlay);
+    import("./tabs.js").then(m => m.switchTab("profile"));
+  });
+  overlay.querySelector("#s-acc-logout").addEventListener("click", () => {
+    dismissSheet(overlay);
+    $("#logout-btn").click();
+  });
+  loadAvatars(overlay.querySelector(".st-acc"));
+
+  // Внешний вид
+  overlay.querySelectorAll("[data-st-themecard]").forEach(b => b.addEventListener("click", () => {
+    overlay.querySelectorAll("[data-st-themecard]").forEach(x => x.classList.toggle("on", x === b));
+    const v = b.dataset.stThemecard;
+    if (v === "light") { applyTheme("light"); return; }
+    applyLook(v);
+    applyTheme("dark");
+  }));
+  overlay.querySelectorAll("[data-st-accent]").forEach(b => b.addEventListener("click", () => {
+    overlay.querySelectorAll("[data-st-accent]").forEach(x => x.classList.toggle("on", x === b));
+    applyAccent(b.dataset.stAccent);
+  }));
+  overlay.querySelectorAll("[data-st-scale]").forEach(b => b.addEventListener("click", () => {
+    pick("data-st-scale", null, b.dataset.stScale);
+    applyScale(Number(b.dataset.stScale));
+  }));
+  overlay.querySelectorAll("[data-st-motion]").forEach(b => b.addEventListener("click", () => {
+    pick("data-st-motion", null, b.dataset.stMotion);
+    applyMotion(b.dataset.stMotion);
+  }));
+  overlay.querySelector("#s-sidebar-compact").addEventListener("change", e => applySidebarCompact(e.target.checked));
+
+  // Уведомления
+  overlay.querySelectorAll("[data-st-kind]").forEach(inp => inp.addEventListener("change", () => setNotifyKind(inp.dataset.stKind, inp.checked)));
+  const kindsBox = overlay.querySelector("#st-kinds");
+  const syncKinds = () => kindsBox.classList.toggle("st-off", !overlay.querySelector("#s-desktop-notify").checked);
+  overlay.querySelector("#s-desktop-notify").addEventListener("change", syncKinds);
+  syncKinds();
+  const saveQuiet = () => setQuietHours({
+    on: overlay.querySelector("#s-quiet-on").checked,
+    from: overlay.querySelector("#s-quiet-from").value || "23:00",
+    to: overlay.querySelector("#s-quiet-to").value || "09:00",
+  });
+  ["#s-quiet-on", "#s-quiet-from", "#s-quiet-to"].forEach(sel => overlay.querySelector(sel).addEventListener("change", saveQuiet));
+  overlay.querySelector("#s-pause").addEventListener("click", async () => {
+    const p = await fetchPerson(state.telegramId);
+    if (p) openPauseDialog(p, () => {});
+    else toast("Не удалось загрузить ваш профиль.", "error");
+  });
+
+  // Поведение
+  overlay.querySelectorAll("[data-st-start]").forEach(b => b.addEventListener("click", () => {
+    pick("data-st-start", null, b.dataset.stStart);
+    setStartTab(b.dataset.stStart);
+  }));
+
+  // Диагностика: связь с сервером и отчёт для разработчика.
+  let lastPing = null;
+  const ping = async () => {
+    const el = overlay.querySelector("#s-ping");
+    el.className = "st-ping";
+    el.textContent = "проверяю…";
+    const t0 = window.performance.now();
+    try {
+      await apiGet("/whoami");
+      lastPing = Math.round(window.performance.now() - t0);
+      el.textContent = `в сети · ${lastPing} мс`;
+      el.classList.add(lastPing > 1500 ? "slow" : "ok");
+    } catch (e) {
+      lastPing = null;
+      el.textContent = `нет связи: ${e.message}`;
+      el.classList.add("bad");
+    }
+  };
+  ping();
+  overlay.querySelector("#s-ping-again").addEventListener("click", ping);
+  overlay.querySelector("#s-copy-report").addEventListener("click", async () => {
+    const lines = [
+      `Project Desktop ${APP_VERSION}`,
+      `Канал: ${overlay.querySelector("#s-update-channel").value}`,
+      `Система: ${navigator.userAgent}`,
+      `Экран: ${window.screen.width}×${window.screen.height} @${window.devicePixelRatio}`,
+      `Сервер: ${API_BASE} · ${lastPing == null ? "нет связи" : `${lastPing} мс`}`,
+      `Роль: ${state.isAdmin ? "админ" : "участник"} · вкладка: ${state.activeTab}`,
+      `Тема: ${document.documentElement.dataset.theme}/${document.documentElement.dataset.look} · масштаб ${currentScale()}%`,
+      `Время: ${new Date().toISOString()}`,
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      toast("Отчёт скопирован — вставьте его в сообщение разработчику.");
+    } catch (e) {
+      toast(`Не удалось скопировать: ${e.message}`, "error");
+    }
   });
 }
 $("#open-settings").addEventListener("click", openSettings);
