@@ -21,6 +21,7 @@ import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, media
 import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { $, esc, relTime } from "./utils.js";
 import { loadAvatars, openUserProfile } from "./profile.js";
+import { openReportDetail } from "./report-detail.js";
 
 const POLL_MS = 7000;
 const SEND_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12l18-8-8 18-2-8-8-2Z"/></svg>';
@@ -42,6 +43,20 @@ let filter = "all";
 let query = "";
 let pendingFile = null;       // вложение, которое уйдёт со следующим сообщением
 let pollTimer = null;
+// Сообщения 2.0: ответ с цитатой, реакции, закреплённые и файлы беседы.
+let replyTo = null;           // {id, author, text} — на что отвечаем следующим сообщением
+let info = null;              // /chats/{id}/info: {pinned, files, files_total, can_pin, reactions}
+const REACTIONS = ["👍", "❤️", "😂", "🔥", "🙏", "👀", "✅"];
+const REPLY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8 5 12l5 4M5 12h9a5 5 0 0 1 5 5v1"/></svg>';
+const SMILE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg>';
+const PIN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3zM12 14v6"/></svg>';
+const INFO_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg>';
+const INFO_KEY = "project_ms_info";
+function infoOpen() { try { return localStorage.getItem(INFO_KEY) !== "0"; } catch (_) { return true; } }
+function setInfoOpen(on) { try { localStorage.setItem(INFO_KEY, on ? "1" : "0"); } catch (_) { /* не критично */ } }
+// Номера отчётов в тексте (R-000068) — карточкой под сообщением (только админам: /report открыт им).
+const REPORT_RE = /\bR-\d{6}\b/g;
+const reportCache = new Map();
 
 // ---------- помощники ----------
 
@@ -217,15 +232,23 @@ function messagesHtml(c) {
     // Подряд от одного человека в пределах 5 минут — без повторной шапки.
     const grouped = prev && prev.author_telegram_id === m.author_telegram_id && d - parseTs(prev.created_at) < 5 * 60000;
     const canDelete = m.mine || moderated;
+    const reps = state.isAdmin && m.text ? [...new Set(m.text.match(REPORT_RE) || [])].slice(0, 3) : [];
     html += `
-      <div class="ms-msg ${m.mine ? "out" : "in"}${grouped ? " grouped" : ""}">
+      <div class="ms-msg ${m.mine ? "out" : "in"}${grouped ? " grouped" : ""}${m.pinned ? " pinned" : ""}" data-mid="${m.id}">
         ${m.mine ? "" : `<span class="avatar-bubble ms-av" data-avatar-for="${m.author_telegram_id || ""}"${grouped ? ' style="visibility:hidden"' : ""}>${initial(m.author)}</span>`}
         <div class="ms-msg-col">
-          ${grouped ? "" : `<div class="ms-meta">${m.mine ? "" : `<b>${esc(m.author)}</b>`}<time>${hhmm(d)}</time></div>`}
+          ${grouped && !m.pinned ? "" : `<div class="ms-meta">${m.mine ? "" : `<b>${esc(m.author)}</b>`}<time>${hhmm(d)}</time>${m.pinned ? `<span class="ms-pinned-mark" title="Закреплено">${PIN_ICON}</span>` : ""}</div>`}
           <div class="ms-bubble-row">
-            <div class="ms-bubble${m.attach ? " has-att" : ""}${m.attach && !m.text ? " att-only" : ""}">${m.attach ? attachHtml(m.attach) : ""}${m.text ? `<div class="ms-text">${richText(m.text)}</div>` : ""}</div>
-            ${canDelete ? `<button type="button" class="ms-del" data-del="${m.id}" title="${m.mine ? "Удалить сообщение" : "Удалить как владелец"}" aria-label="Удалить сообщение">${TRASH_ICON}</button>` : ""}
+            <div class="ms-bubble${m.attach ? " has-att" : ""}${m.attach && !m.text ? " att-only" : ""}">${m.reply ? `<button type="button" class="ms-quote" data-goto="${m.reply.id}"><b>${esc(m.reply.author)}</b><span>${esc(m.reply.text)}</span></button>` : ""}${m.attach ? attachHtml(m.attach) : ""}${m.text ? `<div class="ms-text">${richText(m.text)}</div>` : ""}</div>
+            <div class="ms-acts">
+              <button type="button" data-reply="${m.id}" title="Ответить" aria-label="Ответить">${REPLY_ICON}</button>
+              <button type="button" data-react-pick="${m.id}" title="Реакция" aria-label="Реакция">${SMILE_ICON}</button>
+              ${info && info.can_pin ? `<button type="button" data-pin="${m.id}" title="${m.pinned ? "Открепить" : "Закрепить"}" aria-label="Закрепить">${PIN_ICON}</button>` : ""}
+              ${canDelete ? `<button type="button" class="ms-del" data-del="${m.id}" title="${m.mine ? "Удалить сообщение" : "Удалить как владелец"}" aria-label="Удалить сообщение">${TRASH_ICON}</button>` : ""}
+            </div>
           </div>
+          ${reps.length ? `<div class="ms-reps">${reps.map(id => `<button type="button" class="ms-rep" data-rep="${id}"><span class="ms-rep-poster"></span><span class="ms-rep-t"><b>${id}</b><span>загружаю…</span></span></button>`).join("")}</div>` : ""}
+          ${(m.reactions || []).length ? `<div class="ms-reacts">${m.reactions.map(r => `<button type="button" class="ms-react${r.mine ? " mine" : ""}" data-react="${m.id}" data-emoji="${esc(r.emoji)}" title="${esc((r.who || []).join(", "))}">${esc(r.emoji)}<b>${r.count}</b></button>`).join("")}</div>` : ""}
         </div>
       </div>`;
     prev = m;
@@ -247,6 +270,7 @@ function threadHeadHtml(c) {
     <div class="ms-head">
       ${chatAvatarHtml(c, true)}
       <div class="ms-head-text"><b>${title}</b><span>${sub}</span></div>
+      <button type="button" class="icon-btn ms-info-btn${infoOpen() ? " active" : ""}" data-info-toggle title="О беседе: закреплённые, файлы, участники" aria-label="О беседе">${INFO_ICON}</button>
       ${c.kind === "general" ? `<div class="ms-people">${c.participants.slice(0, 6).map(p => `<span class="avatar-bubble" data-avatar-for="${p.telegram_id}" title="${esc(p.name)}">${initial(p.name)}</span>`).join("")}${c.participants.length > 6 ? `<span class="ms-people-more">+${c.participants.length - 6}</span>` : ""}</div>` : ""}
       ${c.kind === "dm" && c.peer ? `<button type="button" class="btn" data-open-profile="${c.peer.telegram_id}">${OPEN_ICON}Профиль</button>` : ""}
       ${c.kind === "dm" ? `<button type="button" class="btn" data-clear-dm title="Переписка пропадёт только у вас, у собеседника останется">${TRASH_ICON}Очистить</button>` : ""}
@@ -271,6 +295,7 @@ function renderThread({ keepScroll } = {}) {
     ${threadHeadHtml(c)}
     <div class="ms-msgs" id="ms-msgs">${messagesHtml(c)}</div>
     <div class="ms-pending" id="ms-pending"></div>
+    <div class="ms-replybar" id="ms-replybar" ${replyTo ? "" : "hidden"}>${REPLY_ICON}<span>Ответ <b>${esc(replyTo ? replyTo.author : "")}</b>: ${esc(replyTo ? replyTo.text : "")}</span><button type="button" class="icon-btn" data-reply-cancel aria-label="Не отвечать">✕</button></div>
     <div class="ms-compose">
       <div class="ms-suggest" id="ms-suggest" hidden></div>
       <button type="button" class="icon-btn ms-attach" id="ms-attach" title="Прикрепить картинку (или вставьте скриншот Ctrl+V)" aria-label="Прикрепить картинку">${CLIP_ICON}</button>
@@ -279,6 +304,8 @@ function renderThread({ keepScroll } = {}) {
     </div>`;
   loadAvatars(el);
   wireAttachments(el);
+  fillReportCards(el);
+  renderInfo();
   const msgs = el.querySelector("#ms-msgs");
   if (!keepScroll || nearBottom) msgs.scrollTop = msgs.scrollHeight;
   const input = el.querySelector("#ms-input");
@@ -294,6 +321,60 @@ function autoGrow(t) { t.style.height = "auto"; t.style.height = `${Math.min(160
 function wireThread(el, c) {
   const input = el.querySelector("#ms-input");
   const suggest = el.querySelector("#ms-suggest");
+  const key = encodeURIComponent(c.id);
+  const findMsg = id => messages.find(x => String(x.id) === String(id));
+  el.querySelector("[data-info-toggle]")?.addEventListener("click", () => {
+    setInfoOpen(!infoOpen());
+    renderThread({ keepScroll: true });
+  });
+  el.querySelectorAll("[data-reply]").forEach(b => b.addEventListener("click", () => {
+    const m = findMsg(b.dataset.reply);
+    if (!m) return;
+    replyTo = { id: m.id, author: m.author, text: m.text || (m.attach ? `📎 ${m.attach.name || "вложение"}` : "") };
+    const bar = el.querySelector("#ms-replybar");
+    bar.hidden = false;
+    bar.querySelector("span").innerHTML = `Ответ <b>${esc(replyTo.author)}</b>: ${esc(replyTo.text.slice(0, 140))}`;
+    input.focus();
+  }));
+  el.querySelector("[data-reply-cancel]")?.addEventListener("click", () => {
+    replyTo = null;
+    el.querySelector("#ms-replybar").hidden = true;
+  });
+  const react = async (mid, emoji) => {
+    const m = findMsg(mid);
+    if (!m) return;
+    try {
+      const r = await apiPost(`/chats/${key}/messages/${mid}/react`, { emoji });
+      m.reactions = r.reactions || [];
+      renderThread({ keepScroll: true });
+    } catch (e) { toast(e.message, "error"); }
+  };
+  el.querySelectorAll("[data-react]").forEach(b => b.addEventListener("click", () => react(b.dataset.react, b.dataset.emoji)));
+  el.querySelectorAll("[data-react-pick]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    document.querySelector(".ms-react-pop")?.remove();
+    const pop = document.createElement("div");
+    pop.className = "ms-react-pop";
+    pop.innerHTML = REACTIONS.map(x => `<button type="button" data-e="${x}">${x}</button>`).join("");
+    b.closest(".ms-bubble-row").appendChild(pop);
+    pop.addEventListener("click", ev => {
+      const t = ev.target.closest("[data-e]");
+      if (t) { pop.remove(); react(b.dataset.reactPick, t.dataset.e); }
+    });
+    setTimeout(() => document.addEventListener("click", () => pop.remove(), { once: true }), 0);
+  }));
+  el.querySelectorAll("[data-pin]").forEach(b => b.addEventListener("click", async () => {
+    try {
+      const r = await apiPost(`/chats/${key}/messages/${b.dataset.pin}/pin`, {});
+      const m = findMsg(b.dataset.pin);
+      if (m) m.pinned = r.pinned;
+      toast(r.pinned ? "Сообщение закреплено." : "Сообщение откреплено.");
+      await loadInfo(c.id);
+      renderThread({ keepScroll: true });
+    } catch (e) { toast(e.message, "error"); }
+  }));
+  el.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => gotoMessage(b.dataset.goto)));
+  el.querySelectorAll("[data-rep]").forEach(b => b.addEventListener("click", () => openReportDetail(b.dataset.rep)));
   el.querySelector("[data-open-profile]")?.addEventListener("click", e => openUserProfile(Number(e.currentTarget.dataset.openProfile)));
   // Личная переписка: «Очистить» — только у себя (у собеседника всё
   // остаётся, новое сообщение снова покажет беседу); «У обоих» — владелец
@@ -369,10 +450,12 @@ function wireThread(el, c) {
     const sendBtn = el.querySelector("#ms-send");
     sendBtn.disabled = true;
     try {
+      const reply = replyTo ? replyTo.id : "";
       const r = file
-        ? await apiUpload(`/chats/${encodeURIComponent(c.id)}/attach`, file, { text })
-        : await apiPost(`/chats/${encodeURIComponent(c.id)}/messages`, { text });
+        ? await apiUpload(`/chats/${encodeURIComponent(c.id)}/attach`, file, { text, reply_to: String(reply) })
+        : await apiPost(`/chats/${encodeURIComponent(c.id)}/messages`, { text, reply_to: reply || null });
       pendingFile = null;
+      replyTo = null;
       messages = r.messages || messages;
       const target = c._topic || chats.find(x => x.id === c.id);
       if (target) target.last = messages[messages.length - 1] || { author: state.name, text, created_at: new Date().toISOString(), mine: true };
@@ -509,9 +592,19 @@ async function openNewChannelDialog() {
 
 // ---------- загрузка и опрос ----------
 
+async function loadInfo(id) {
+  try {
+    const d = await apiGet(`/chats/${encodeURIComponent(id)}/info`);
+    if (activeId === id) info = d;
+  } catch (_) { info = null; } // старый сервер без /info — панель просто без закреплённых
+}
+
 async function openChat(id) {
   activeId = id;
   pendingFile = null;
+  replyTo = null;
+  info = null;
+  loadInfo(id).then(() => { if (activeId === id) renderThread({ keepScroll: true }); });
   renderList();
   const el = $("#ms-thread");
   el.innerHTML = dialogSkeletonHtml(5);
@@ -569,10 +662,66 @@ async function poll() {
     if (activeId) {
       const r = await apiGet(`/chats/${encodeURIComponent(activeId)}/messages`);
       const fresh = r.messages || [];
-      const changed = fresh.length !== messages.length || fresh.some((m, i) => messages[i] && m.kind !== messages[i].kind);
+      const sig = list => list.map(m => `${m.id}:${m.kind}:${m.pinned ? 1 : 0}:${(m.reactions || []).map(r => r.emoji + r.count).join("")}`).join("|");
+      const changed = sig(fresh) !== sig(messages);
       if (changed) { messages = fresh; renderThread({ keepScroll: true }); }
     }
   } catch (_) { /* тихо: следующий опрос попробует снова */ }
+}
+
+// ---------- Сообщения 2.0: карточки отчётов, переход к цитате, панель «о беседе» ----------
+
+async function fillReportCards(root) {
+  for (const b of root.querySelectorAll("[data-rep]:not([data-filled])")) {
+    b.dataset.filled = "1";
+    const id = b.dataset.rep;
+    let r = reportCache.get(id);
+    if (r === undefined) {
+      try { r = await apiGet(`/report/${encodeURIComponent(id)}`); } catch (_) { r = null; }
+      reportCache.set(id, r);
+    }
+    if (!b.isConnected) continue;
+    if (!r) { b.remove(); continue; }
+    const src = posterSrc(r.poster_url);
+    b.querySelector(".ms-rep-poster").outerHTML = src ? `<img class="ms-rep-poster" src="${src}" alt="">` : `<span class="ms-rep-poster"></span>`;
+    b.querySelector(".ms-rep-t").innerHTML = `<b>${esc(id)} · ${esc(r.title)}</b><span>${esc(String(r.status_label || "").replace(/^\S+\s/, ""))}${r.deadline ? ` · до ${esc(r.deadline.slice(8, 10))}.${esc(r.deadline.slice(5, 7))}` : ""}</span>`;
+  }
+}
+
+function gotoMessage(id) {
+  const el = document.querySelector(`.ms-msg[data-mid="${Number(id)}"]`);
+  if (!el) { toast("Это сообщение выше — прокрутите историю."); return; }
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.classList.remove("flash");
+  void el.offsetWidth;
+  el.classList.add("flash");
+}
+
+function renderInfo() {
+  const box = $("#ms-info");
+  const layout = document.querySelector(".ms-layout");
+  if (!box || !layout) return;
+  const c = findChat(activeId);
+  const open = infoOpen() && !!c;
+  layout.classList.toggle("info-open", open);
+  if (!open) { box.innerHTML = ""; return; }
+  const members = c.kind === "dm" ? [c.peer].filter(Boolean) : (c.participants || []);
+  const pinned = info ? info.pinned : [];
+  const files = info ? info.files : [];
+  box.innerHTML = `
+    <div class="ms-info-head">${chatAvatarHtml(c, true)}<div><b>${esc(c.kind === "topic" ? `${c.channel_name} › ${c.title}` : c.title)}</b><span>${c.kind === "general" ? "вся студия" : c.kind === "dm" ? "личная переписка" : "тема канала"}</span></div></div>
+    <div class="ms-info-sec"><h4>Закреплено${pinned.length ? ` · ${pinned.length}` : ""}</h4>
+      ${pinned.length ? pinned.map(m => `<button type="button" class="ms-pin-item" data-goto="${m.id}"><b>${esc(m.author)} · ${esc(relTime(m.created_at))}</b><span>${esc((m.text || (m.attach ? `📎 ${m.attach.name}` : "")).slice(0, 160))}</span></button>`).join("")
+        : `<div class="ms-info-empty">${info && info.can_pin ? "Наведите на сообщение → 📌, чтобы закрепить важное." : "Пока ничего не закреплено."}</div>`}
+    </div>
+    <div class="ms-info-sec"><h4>Файлы${info && info.files_total ? ` · ${info.files_total}` : ""}</h4>
+      ${files.length ? files.slice(0, 8).map(m => `<button type="button" class="ms-file-item" data-goto="${m.id}"><i>${m.attach.kind === "image" ? "🖼" : "📄"}</i><span><b>${esc(m.attach.name || "файл")}</b><em>${esc(m.author)} · ${esc(relTime(m.created_at))}</em></span></button>`).join("")
+        : `<div class="ms-info-empty">Картинок и файлов пока нет.</div>`}
+    </div>
+    ${members.length ? `<div class="ms-info-sec"><h4>Участники · ${members.length}</h4>${members.slice(0, 30).map(p => `<button type="button" class="ms-mem" data-open-profile="${p.telegram_id}"><span class="avatar-bubble" data-avatar-for="${p.telegram_id}">${initial(p.name)}</span><span>${esc(p.name)}</span></button>`).join("")}</div>` : ""}`;
+  loadAvatars(box);
+  box.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => gotoMessage(b.dataset.goto)));
+  box.querySelectorAll("[data-open-profile]").forEach(b => b.addEventListener("click", () => openUserProfile(Number(b.dataset.openProfile))));
 }
 
 function shellHtml() {
@@ -596,6 +745,7 @@ function shellHtml() {
         <div class="ms-list" id="ms-list"></div>
       </aside>
       <section class="ms-thread" id="ms-thread"></section>
+      <aside class="ms-info" id="ms-info"></aside>
     </div>`;
 }
 

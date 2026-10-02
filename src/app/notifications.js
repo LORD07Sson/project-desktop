@@ -71,7 +71,7 @@ async function pollAssignments() {
       if (fresh.length) {
         notifyDesktop("Project", fresh.length === 1
           ? `Вам назначен отчёт ${fresh[0]}`
-          : `Вам назначено ${fresh.length} новых отчётов`);
+          : `Вам назначено ${fresh.length} новых отчётов`, "assign");
       }
     }
     knownAssigned = ids;

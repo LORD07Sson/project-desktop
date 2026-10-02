@@ -12,7 +12,7 @@ import { $, $all } from "./utils.js";
 import { openSheet } from "./api.js";
 import { switchTab } from "./tabs.js";
 
-const GROUPS = [
+export const GROUPS = [
   {
     title: "Навигация",
     rows: [
