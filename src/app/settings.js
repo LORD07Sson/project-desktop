@@ -11,6 +11,7 @@ import { isDevModeOn, setDevModeOn } from "./devmode.js";
 import { desktopNotifyEnabled, setDesktopNotifyEnabled } from "./desktop-notify.js";
 import { openAdminPanel } from "./admin.js";
 import { tagLogger } from "./applog.js";
+import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints, resetTourProgress } from "./tour.js";
 
 const updateLog = tagLogger("updates");
 
@@ -59,6 +60,8 @@ async function openSettings() {
     density: '<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>',
     logs: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/>',
     bot: '<path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5"/>',
+    learn: '<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11M21.5 9v5"/>',
+    hint: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4M12 17h.01"/>',
   };
   const TILES = [
     ["s-open-admin", "Админ-панель", "Доступ, заявки, система", '<circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5"/>'],
@@ -85,7 +88,7 @@ async function openSettings() {
     <div class="st-layout">
       <nav class="st-nav" aria-label="Разделы настроек">
         ${[["st-look", "Внешний вид", ICONS.look], ["st-behave", "Поведение", ICONS.behave], ["st-update", "Обновления", ICONS.update], ["st-studio", "Студия", ICONS.studio],
-           ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot]] : []), ["st-diag", "Диагностика", ICONS.diag]]
+           ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot]] : []), ["st-learn", "Обучение", ICONS.learn], ["st-diag", "Диагностика", ICONS.diag]]
           .map(([id, label, i], n) => `<button type="button" class="st-nav-btn${n === 0 ? " on" : ""}" data-st-go="${id}">${ic(i)}<span>${label}</span></button>`).join("")}
       </nav>
       <div class="st-body" id="st-body">
@@ -162,6 +165,17 @@ async function openSettings() {
           <h3>Чаты бота</h3>
           <div id="st-bot-chats"></div>
         </section>` : ""}
+
+        <section class="st-sec" id="st-learn">
+          <h3>Обучение</h3>
+          <div class="st-learn-top">
+            <div class="st-learn-prog"><b id="st-learn-count"></b><span>уроков пройдено</span><i><em id="st-learn-bar"></em></i></div>
+            <button class="btn primary" id="s-learn-intro">Пройти знакомство</button>
+          </div>
+          <div class="st-learn-grid" id="st-learn-grid"></div>
+          <div class="st-row">${ic(ICONS.hint)}<div class="st-text"><b>Подсказки «Впервые в разделе?»</b><span>При первом входе в раздел предложить его разбор — показать или пропустить</span></div>${sw("s-learn-hints", tourHintsEnabled())}</div>
+          <div class="st-learn-foot"><button type="button" class="btn ghost" id="s-learn-reset">Начать обучение с нуля</button><span>снова покажет приветствие и все подсказки</span></div>
+        </section>
 
         <section class="st-sec" id="st-diag">
           <h3>Диагностика</h3>
@@ -275,6 +289,32 @@ async function openSettings() {
   tile("s-tile-log", () => import("./admin-log.js").then(m => m.openAdminLogSheet()));
   tile("s-tile-lockdown", () => { dismissSheet(overlay); import("./lockdown.js").then(m => m.openLockdownSheet()); });
   tile("s-tile-trash", () => { dismissSheet(overlay); import("./lockdown.js").then(m => m.openTrashSheet()); });
+
+  // Обучение: список уроков, запуск закрывает настройки.
+  const renderLearn = () => {
+    const tours = availableTours();
+    const done = tours.filter(t => t.done).length;
+    overlay.querySelector("#st-learn-count").textContent = `${done} из ${tours.length}`;
+    overlay.querySelector("#st-learn-bar").style.width = `${tours.length ? (done / tours.length) * 100 : 0}%`;
+    overlay.querySelector("#st-learn-grid").innerHTML = tours.map(t => `
+      <button type="button" class="st-lesson${t.done ? " done" : ""}" data-learn="${t.id}">
+        <span class="st-lesson-ic">${t.icon}</span>
+        <span class="st-lesson-t"><b>${esc(t.name)}</b><span>${esc(t.about)}</span></span>
+        <em>${t.done ? "✓ пройден" : `${t.steps} шаг.`}</em>
+      </button>`).join("");
+    overlay.querySelectorAll("[data-learn]").forEach(b => b.addEventListener("click", () => {
+      dismissSheet(overlay);
+      setTimeout(() => startTour(b.dataset.learn), 200);
+    }));
+  };
+  renderLearn();
+  overlay.querySelector("#s-learn-intro").addEventListener("click", () => { dismissSheet(overlay); setTimeout(() => startTour("intro"), 200); });
+  overlay.querySelector("#s-learn-hints").addEventListener("change", e => setTourHints(e.target.checked));
+  overlay.querySelector("#s-learn-reset").addEventListener("click", () => {
+    resetTourProgress();
+    dismissSheet(overlay);
+    setTimeout(showWelcome, 200);
+  });
 
   const botRoot = overlay.querySelector("#st-bot-chats");
   if (botRoot) import("./bot-chats.js").then(m => m.mountBotChats(botRoot));

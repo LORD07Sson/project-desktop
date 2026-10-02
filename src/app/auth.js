@@ -12,6 +12,7 @@ import { resetFeedBadge } from "./feed-badge.js";
 import { pingPresence } from "./presence.js";
 import { loadTitlebarTeam } from "./profile.js";
 import { refreshInbox, resetInbox } from "./inbox.js";
+import { maybeWelcome, resetTourUi } from "./tour.js";
 
 // Экран загрузки при старте — тот же маскот/прогресс-бар, что и в
 // мини-аппе (см. #splash в miniapp/static/index.html). Держим минимум
@@ -137,6 +138,8 @@ export function showApp() {
   loadTitlebarTeam();
   loadSidebarStatusCounts();
   refreshInbox();
+  // Новичку — приветствие с предложением пройти обучение (один раз).
+  maybeWelcome();
 }
 
 async function submitCode() {
@@ -285,6 +288,7 @@ renderCodeCells();
 // N новых отчётов» на весь свой список (diff считался относительно
 // списка предыдущего пользователя).
 function logout() {
+  resetTourUi();
   resetSessionState();
   resetAssignmentsBaseline();
   resetFeedBadge();
