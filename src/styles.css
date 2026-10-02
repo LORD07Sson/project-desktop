@@ -2782,6 +2782,7 @@ body.watch-open #app-screen { pointer-events: none; }
 .ap-buffer { position: absolute; left: 50%; top: 50%; margin: -26px 0 0 -26px; display: none; pointer-events: none; }
 .ap-buffer span { display: block; width: 52px; height: 52px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .15); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; }
 .ap-root.buffering:not(.paused) .ap-buffer { display: block; }
+.ap-root.loading .ap-buffer, .ap-root.loading .ap-center, .ap-root.loading .ap-flash { display: none; }
 .ap-wait { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: rgba(244, 241, 236, .65); font-size: 14px; text-align: center; padding: 30px; background: radial-gradient(circle at center, #15151a, #000 70%); }
 .ap-wait[hidden] { display: none; }
 .ap-wait span { width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .12); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; }
@@ -2843,9 +2844,20 @@ body.watch-open #app-screen { pointer-events: none; }
 .ap-nextno:hover { background: rgba(255, 255, 255, .18); color: #fff; }
 
 .ap-panel { width: 0; flex: none; overflow: hidden; background: #0d0d10; border-left: 1px solid rgba(255, 255, 255, .06); transition: width .35s cubic-bezier(.22, .9, .3, 1); }
-.ap-root.panel-open .ap-panel { width: 330px; overflow-y: auto; }
-.ap-root.fs .ap-panel { position: absolute; right: 0; top: 0; bottom: 0; z-index: 3; }
-.ap-panel > * { width: 330px; box-sizing: border-box; }
+.ap-root.panel-open .ap-panel { width: 330px; }
+/* Прокрутка внутри фиксированной колонки: полоса прокрутки не сдвигает
+   и не обрезает сетку серий. */
+.ap-panel-in { width: 330px; height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .2) transparent; }
+/* Во весь экран панель — плавающая карточка между шапкой и управлением:
+   не закрывает кнопку «Серии и озвучка» и прячется вместе с управлением. */
+.ap-root.fs .ap-panel {
+  position: absolute; z-index: 3; top: 72px; right: 16px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 16px;
+  background: rgba(13, 13, 16, .84); backdrop-filter: blur(18px); box-shadow: 0 24px 50px -16px rgba(0, 0, 0, .8);
+  transition: width .35s cubic-bezier(.22, .9, .3, 1), opacity .3s, transform .3s cubic-bezier(.22, .9, .3, 1);
+}
+.ap-root.fs .ap-panel-in { height: auto; max-height: calc(100vh - 176px); }
+.ap-root.fs:not(.panel-open) .ap-panel { border-color: transparent; box-shadow: none; }
+.ap-root.fs:not(.show-ui):not(.paused) .ap-panel { opacity: 0; transform: translateX(16px); pointer-events: none; }
 .ap-panel-head { display: flex; align-items: baseline; justify-content: space-between; padding: 18px 18px 10px; }
 .ap-panel-head b { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: rgba(244, 241, 236, .55); }
 .ap-panel-head span { font-size: 12px; color: rgba(244, 241, 236, .4); }
