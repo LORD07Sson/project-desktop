@@ -5616,3 +5616,12 @@ body.focus-mode .report-detail-overlay .sheet {
 .cal-ev .cal-work.wip { color: #1c1404; background: var(--s-work); }
 .cal-ev .cal-work.late { color: #fff; background: var(--s-stop); }
 .cal-ev .cal-work.done { color: #04140a; background: var(--s-done); }
+.tw-nyaa { display: flex; flex-direction: column; gap: 8px; }
+.tw-nyaa-q { display: flex; gap: 8px; }
+.tw-nyaa-q input { flex: 1; min-width: 0; height: 34px; }
+.tw-nyaa-q.off { opacity: .45; pointer-events: none; }
+.tw-nyaa-res { font-size: 12px; color: var(--ink-soft); line-height: 1.45; }
+.tw-nyaa-res:empty { display: none; }
+.tw-nyaa-res b { color: var(--s-done); font-weight: 700; }
+.tw-nyaa-res.bad { color: var(--s-work); }
+.tw-field > label.tw-toggle { display: flex; margin: 0; font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink); }

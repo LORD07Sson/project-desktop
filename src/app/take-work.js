@@ -114,6 +114,17 @@ export async function openTakeWork(titleId, onDone) {
         <datalist id="tw-roles">${[...new Set([...(plan.roles_suggest || []), ...DEFAULT_ROLES])].map(r => `<option value="${esc(r)}">`).join("")}</datalist>
         <button type="button" class="btn ghost tw-add" data-crew-add>+ Роль</button>
       </div>
+      <div class="tw-field tw-full tw-nyaa">
+        <label class="tw-toggle">
+          <input type="checkbox" data-nyaa${!work || work.nyaa_enabled ? " checked" : ""}>
+          <span><b>Раздача с nyaa — каждому из состава в личку</b><small>Как только серия появится на nyaa, бот пришлёт .torrent с кнопкой «Скачать» всем из состава, у кого назначен человек.</small></span>
+        </label>
+        <div class="tw-nyaa-q">
+          <input data-nyaa-q value="${esc((work && work.nyaa_query) || plan.nyaa_query_default || "")}" placeholder="Запрос на nyaa (ромадзи-название)" maxlength="120">
+          <button type="button" class="btn" data-nyaa-test>Проверить</button>
+        </div>
+        <div class="tw-nyaa-res" data-nyaa-res></div>
+      </div>
       <label class="tw-toggle tw-full">
         <input type="checkbox" data-backfill checked>
         <span><b>Завести уже вышедшие серии</b><small data-backfill-note></small></span>
@@ -161,6 +172,28 @@ export async function openTakeWork(titleId, onDone) {
     summary();
   });
   sheet.querySelector("[data-backfill]").addEventListener("change", summary);
+  const nyaaBox = sheet.querySelector(".tw-nyaa-q");
+  const syncNyaa = () => { nyaaBox.classList.toggle("off", !sheet.querySelector("[data-nyaa]").checked); };
+  sheet.querySelector("[data-nyaa]").addEventListener("change", syncNyaa);
+  syncNyaa();
+  sheet.querySelector("[data-nyaa-test]").addEventListener("click", async e => {
+    const btn = e.target.closest("button");
+    const res = sheet.querySelector("[data-nyaa-res]");
+    btn.disabled = true;
+    res.textContent = "Ищу на nyaa…";
+    try {
+      const r = await apiGet(`/titles/${titleId}/nyaa-test`, { q: sheet.querySelector("[data-nyaa-q]").value.trim() });
+      res.innerHTML = r.found
+        ? `Серия ${r.episode}: <b>${esc(r.found.title)}</b> · ${esc(r.found.size || "?")} · 🌱 ${r.found.seeders}${r.found.trusted ? " · trusted" : ""}`
+        : `Для серии ${r.episode} по запросу «${esc(r.query)}» ничего не нашлось — попробуйте название как у релизов (например, без «2nd Season»).`;
+      res.classList.toggle("bad", !r.found);
+    } catch (err) {
+      res.textContent = `Не удалось проверить: ${err.message}`;
+      res.classList.add("bad");
+    } finally {
+      btn.disabled = false;
+    }
+  });
   sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
 
   sheet.querySelector("[data-stop]")?.addEventListener("click", async e => {
@@ -191,6 +224,8 @@ export async function openTakeWork(titleId, onDone) {
         deadline_hours: val.hours,
         priority: val.priority,
         backfill: sheet.querySelector("[data-backfill]").checked,
+        nyaa: sheet.querySelector("[data-nyaa]").checked,
+        nyaa_query: sheet.querySelector("[data-nyaa-q]").value.trim(),
       });
       const n = r.created_episodes.length;
       toast(n
