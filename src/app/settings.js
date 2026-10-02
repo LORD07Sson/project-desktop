@@ -19,20 +19,6 @@ import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints,
 
 const updateLog = tagLogger("updates");
 
-// «Что нового» в Настройках → Обновления. Пополняется руками вместе с релизом.
-const CHANGELOG = [
-  ["0.6", [
-    "Настройки 2.0: поиск, акцентный цвет, масштаб, уведомления по типам и тихие часы",
-    "«Взять в работу»: серии по расписанию и раздачи с nyaa каждому из состава в личку",
-    "«Моя очередь» и статус серий в календаре",
-    "Новые Обзор, Тайтлы и шапка с поиском Ctrl+K",
-  ]],
-  ["0.5", [
-    "Экран входа — стена обложек сезона",
-    "Обучение для новичков и уроки по каждому разделу",
-    "Плеер: озвучки, весь экран без чёрной полосы",
-  ]],
-];
 
 // Версию подставляет Vite на этапе сборки (define: __APP_VERSION__ в
 // vite.config.js — читает файл VERSION, а в CI ещё и переменную
@@ -203,7 +189,7 @@ async function openSettings() {
         </section>
 
         <section class="st-sec" id="st-update">
-          <h3>Обновления</h3><p class="st-lead">Версия, канал и что нового.</p>
+          <h3>Обновления</h3><p class="st-lead">Версия приложения и канал обновлений.</p>
           <div class="st-group">
             <div class="st-version">
               <div class="st-version-logo">${ic('<path d="M5 5L19 19M19 5L5 19"/>')}</div>
@@ -222,10 +208,6 @@ async function openSettings() {
                 <div><span>Последний коммит</span><code id="s-commit-latest">—</code></div>
               </div>
             </div>
-          </div>
-          <div class="st-group" data-st-find="что нового изменения версии">
-            <div class="st-group-h">Что нового</div>
-            <div class="st-changelog">${CHANGELOG.map(([v, items]) => `<div class="st-cl"><b>${esc(v)}</b><ul>${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</div>
           </div>
         </section>
 

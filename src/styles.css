@@ -5671,12 +5671,6 @@ body.focus-mode .report-detail-overlay .sheet {
 .st-kbd kbd { font: 600 11px ui-monospace, "SF Mono", Consolas, monospace; padding: 3px 7px; border-radius: 6px; background: var(--surface-3); color: var(--ink); border-bottom: 2px solid var(--surface-4); white-space: nowrap; }
 .st-group .st-version { margin: 0; border-radius: 0; border: 0; border-bottom: 1px solid var(--line-soft); }
 .st-group #s-alpha-block { padding: 0 16px 14px; }
-.st-changelog { padding: 4px 16px 10px; }
-.st-cl { display: flex; gap: 16px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
-.st-cl:first-child { border-top: 0; }
-.st-cl b { font: 800 13px ui-monospace, Consolas, monospace; color: var(--ember); width: 40px; flex: none; }
-.st-cl ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-soft); }
-.st-cl li::before { content: "•"; color: var(--fire); margin-right: 8px; }
 .st-ping { font-size: 12px; font-weight: 700; color: var(--ink-dim); white-space: nowrap; }
 .st-ping.ok { color: var(--s-done); }
 .st-ping.slow { color: var(--s-work); }
