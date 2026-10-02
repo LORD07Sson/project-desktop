@@ -8,7 +8,7 @@
 // цепочку «Озвучка → Перезапись/дозапись → В работе».
 
 import { state } from "./state.js";
-import { apiGet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
 import { $, esc, relTime, STATUS_COLOR_VAR } from "./utils.js";
 import { openReportDetail } from "./report-detail.js";
 import { markFeedSeen, getFeedLastSeen } from "./feed-badge.js";
@@ -18,6 +18,10 @@ const FEED_PAGE_SIZE = 60;
 // Смены статуса одного отчёта одним человеком в пределах этого окна
 // сворачиваются в одну строку-цепочку.
 const CHAIN_WINDOW_MS = 30 * 60 * 1000;
+// Подряд идущие файлы/заметки/правки одного человека в одном отчёте
+// сворачиваются в группу «N изменений» (Лента 2.0).
+const GROUP_WINDOW_MS = 60 * 60 * 1000;
+const GROUP_TYPES = new Set(["note", "file", "edit", "deadline", "pipeline"]);
 
 const ICONS = {
   status: '<path d="M4 12a8 8 0 0 1 13.7-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.7L4 15.5M4 20v-4.5h4.5"/>',
@@ -89,6 +93,13 @@ function personChip(detail) {
   return `<span class="fd-person"><span class="avatar-bubble fd-mini-av" data-avatar-for="${tid}">${esc(name.charAt(0).toUpperCase() || "?")}</span>${esc(name)}</span>`;
 }
 
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
 function parseTs(iso) {
   if (!iso) return new Date(NaN);
   return new Date(iso.replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? "" : "Z"));
@@ -115,6 +126,12 @@ function collapse(events) {
       prev.chain.unshift(ev.detail); // лента идёт от новых к старым — старые статусы в начало цепочки
       continue;
     }
+    if (prev && GROUP_TYPES.has(a.type) && (prev.group || GROUP_TYPES.has(prev.a.type)) && prev.ev.public_id === ev.public_id
+      && prev.ev.actor === ev.actor && Math.abs(parseTs(prev.ev.created_at) - parseTs(ev.created_at)) <= GROUP_WINDOW_MS) {
+      if (!prev.group) prev.group = [{ ev: prev.ev, a: prev.a }];
+      prev.group.push({ ev, a });
+      continue;
+    }
     out.push({ ev, a, chain: a.type === "status" ? [ev.detail] : null });
   }
   return out;
@@ -126,6 +143,16 @@ function resultHtml(item) {
   if (a.type === "assign" || a.type === "unassign") return ev.detail ? personChip(ev.detail) : "";
   if (ev.detail) return `<span class="fd-detail">${esc(ev.detail)}</span>`;
   return "";
+}
+
+function posterHtml(ev) {
+  const src = ev.poster_url ? mediaUrl("/img_proxy", { url: ev.poster_url }) : "";
+  return src ? `<img class="fd-poster" src="${src}" alt="" loading="lazy">` : "";
+}
+
+function groupHtml(item) {
+  return `<div class="fd-group">${item.group.map(({ ev, a }) => `
+    <div class="fd-group-row"><span class="fd-group-dot" style="--c:${a.color}"></span><span class="fd-verb">${esc(a.label)}</span>${ev.detail ? `<span class="fd-detail">${esc(ev.detail)}</span>` : ""}<time>${hhmm(parseTs(ev.created_at))}</time></div>`).join("")}</div>`;
 }
 
 function rowHtml(item, lastSeen) {
@@ -143,13 +170,14 @@ function rowHtml(item, lastSeen) {
       <div class="fd-main">
         <div class="fd-line">
           <b class="fd-actor">${esc(ev.actor || "система")}</b>
-          <span class="fd-verb">${esc(a.label)}</span>
+          <span class="fd-verb">${item.group ? `${item.group.length} ${plural(item.group.length, "изменение", "изменения", "изменений")} в` : esc(a.label)}</span>
+          ${posterHtml(ev)}
           ${ev.public_id ? `<span class="fd-rid">${esc(ev.public_id)}</span>` : ""}
           ${ev.title ? `<span class="fd-title">${esc(ev.title)}</span>` : ""}
           ${a.type === "admin" ? `<span class="fd-tag owner">владелец</span>` : ""}
           ${a.source ? `<span class="fd-tag">${esc(a.source)}</span>` : ""}
         </div>
-        ${result ? `<div class="fd-result">${result}</div>` : ""}
+        ${item.group ? groupHtml(item) : (result ? `<div class="fd-result">${result}</div>` : "")}
       </div>
       <time class="fd-time" title="${esc(relTime(ev.created_at))}">${isNew ? '<i class="fd-new-dot"></i>' : ""}${hhmm(d)}</time>
     </div>`;
@@ -191,6 +219,7 @@ const FILTER_TYPES = {
 };
 let activeFilter = "all";
 let query = "";
+let person = "";
 
 function applyFilters(root) {
   const q = query.trim().toLowerCase();
@@ -198,6 +227,7 @@ function applyFilters(root) {
   root.querySelectorAll(".fd-row").forEach(row => {
     let ok = activeFilter === "all"
       || (activeFilter === "mine" ? row.dataset.fdActor.toLowerCase() === me || row.querySelector(`[data-avatar-for="${state.telegramId}"]`) : (FILTER_TYPES[activeFilter] || []).includes(row.dataset.fdType));
+    if (ok && person) ok = row.dataset.fdActor === person;
     if (ok && q) ok = row.textContent.toLowerCase().includes(q);
     row.hidden = !ok;
   });
@@ -213,18 +243,44 @@ function applyFilters(root) {
 function summaryHtml(events) {
   const today = dayKey(new Date());
   const todays = events.filter(e => dayKey(parseTs(e.created_at)) === today);
-  const count = t => todays.filter(e => parseAction(e).type === t).length;
-  const people = [...new Map(todays.filter(e => e.actor).map(e => [e.actor, e])).values()];
+  const count = types => todays.filter(e => types.includes(parseAction(e).type)).length;
+  const weekAgo = Date.now() - 7 * 86400000;
+  const byActor = new Map();
+  for (const e of events) {
+    if (!e.actor || parseTs(e.created_at) < weekAgo) continue;
+    const cur = byActor.get(e.actor) || { e, n: 0 };
+    cur.n++;
+    byActor.set(e.actor, cur);
+  }
+  const active = [...byActor.values()].sort((x, y) => y.n - x.n).slice(0, 6);
+  const top = Math.max(1, ...active.map(x => x.n));
   return `
-    <div class="fd-summary">
-      <div class="fd-sum-cell"><b>${todays.length}</b><span>событий сегодня</span></div>
-      <div class="fd-sum-cell"><b>${count("status")}</b><span>смен статуса</span></div>
-      <div class="fd-sum-cell"><b>${count("assign")}</b><span>назначений</span></div>
-      <div class="fd-sum-cell fd-sum-people">
-        <div class="fd-stack">${people.slice(0, 5).map(e => `<span class="avatar-bubble" data-avatar-for="${e.actor_telegram_id || ""}" title="${esc(e.actor)}">${esc(e.actor.charAt(0).toUpperCase())}</span>`).join("") || '<span class="fd-dim">никого</span>'}</div>
-        <span>${people.length ? `${people.length} ${people.length === 1 ? "человек" : "человека"} в деле` : "сегодня тихо"}</span>
+    <aside class="fd-side">
+      <div class="bcell fd-side-card">
+        <div class="fd-side-h">Сегодня</div>
+        <div class="fd-today">
+          <div><b>${todays.length}</b><span>${plural(todays.length, "событие", "события", "событий")}</span></div>
+          <div><b>${count(["status"])}</b><span>смен статуса</span></div>
+          <div><b>${count(["assign", "unassign"])}</b><span>назначений</span></div>
+          <div><b>${count(["file", "note"])}</b><span>файлов и заметок</span></div>
+        </div>
       </div>
-    </div>`;
+      <div class="bcell fd-side-card">
+        <div class="fd-side-h">Кто активен <span>за неделю</span></div>
+        ${active.length ? active.map(({ e, n }) => `
+          <button type="button" class="fd-active${person === e.actor ? " on" : ""}" data-fd-person="${esc(e.actor)}" title="Показать только ${esc(e.actor)}">
+            <span class="avatar-bubble" data-avatar-for="${e.actor_telegram_id || ""}">${esc(e.actor.charAt(0).toUpperCase())}</span>
+            <span class="fd-active-n">${esc(e.actor)}</span>
+            <span class="fd-active-bar"><i style="width:${Math.round((n / top) * 100)}%"></i></span>
+            <em>${n}</em>
+          </button>`).join("") : `<div class="fd-dim">за неделю тихо</div>`}
+      </div>
+    </aside>`;
+}
+
+function personOptions(events) {
+  const names = [...new Set(events.map(e => e.actor).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
+  return `<option value="">Все люди</option>${names.map(n => `<option value="${esc(n)}"${person === n ? " selected" : ""}>${esc(n)}</option>`).join("")}`;
 }
 
 function headerHtml(isOwner) {
@@ -235,6 +291,7 @@ function headerHtml(isOwner) {
         <div class="sub">Все изменения в отчётах студии: кто, что и когда.</div>
       </div>
       <div class="page-header-actions">
+        <select id="fd-person" class="fd-person-sel" aria-label="Человек"></select>
         <label class="fd-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <input type="search" id="fd-q" placeholder="Отчёт, человек, статус…" value="${esc(query)}" aria-label="Поиск по ленте">
@@ -279,10 +336,31 @@ export async function loadFeed() {
   let all = events.slice();
   const first = groupsHtml(collapse(all), lastSeen, null);
   let lastDay = first.lastDayKey;
-  root.innerHTML = headerHtml(d.is_owner) + summaryHtml(all) + `
-    <div class="fd-list" id="fd-list" data-count="${events.length}">${first.html}</div>
-    <div class="empty-state" id="fd-empty" hidden>Под фильтр ничего не попало</div>
-    ${d.has_more ? `<button class="btn feed-load-more" id="feed-loadmore">Показать ещё (${d.total - events.length})</button>` : ""}`;
+  root.innerHTML = headerHtml(d.is_owner) + `
+    <div class="fd-wrap">
+      <div class="fd-main-col">
+        <div class="fd-list" id="fd-list" data-count="${events.length}">${first.html}</div>
+        <div class="empty-state" id="fd-empty" hidden>Под фильтр ничего не попало</div>
+        ${d.has_more ? `<button class="btn feed-load-more" id="feed-loadmore">Показать ещё (${d.total - events.length})</button>` : ""}
+      </div>
+      <div id="fd-side-slot">${summaryHtml(all)}</div>
+    </div>`;
+  const sel = root.querySelector("#fd-person");
+  const wirePeople = () => {
+    sel.innerHTML = personOptions(all);
+    root.querySelectorAll("[data-fd-person]").forEach(b => b.addEventListener("click", () => {
+      person = person === b.dataset.fdPerson ? "" : b.dataset.fdPerson;
+      sel.value = person;
+      root.querySelectorAll("[data-fd-person]").forEach(x => x.classList.toggle("on", x.dataset.fdPerson === person));
+      applyFilters(root);
+    }));
+  };
+  wirePeople();
+  sel.addEventListener("change", () => {
+    person = sel.value;
+    root.querySelectorAll("[data-fd-person]").forEach(x => x.classList.toggle("on", x.dataset.fdPerson === person));
+    applyFilters(root);
+  });
   wire(root);
   applyFilters(root);
 
@@ -313,6 +391,8 @@ export async function loadFeed() {
       if (cut >= 0) list.insertAdjacentHTML("beforeend", next.html.slice(cut));
       lastDay = next.lastDayKey;
       list.dataset.count = offset + fresh.length;
+      root.querySelector("#fd-side-slot").innerHTML = summaryHtml(all);
+      wirePeople();
       wire(root);
       applyFilters(root);
       if (res.has_more) {
