@@ -109,10 +109,12 @@ export async function openAnimePlayer({ shikiId, name }) {
       </div>
     </div>
     <aside class="ap-panel" data-ap-side>
-      <div class="ap-panel-head"><b>Серии</b><span data-ap-count></span></div>
-      <div class="ap-eps" data-ap-eps></div>
-      <div class="ap-panel-head"><b>Озвучка</b></div>
-      <div class="ap-trs" data-ap-trs><div class="ap-muted">—</div></div>
+      <div class="ap-panel-in">
+        <div class="ap-panel-head"><b>Серии</b><span data-ap-count></span></div>
+        <div class="ap-eps" data-ap-eps></div>
+        <div class="ap-panel-head"><b>Озвучка</b></div>
+        <div class="ap-trs" data-ap-trs><div class="ap-muted">—</div></div>
+      </div>
     </aside>`;
   document.body.appendChild(root);
   requestAnimationFrame(() => root.classList.add("on"));
@@ -145,6 +147,9 @@ function setWait(text) {
   const w = $r("[data-ap-wait]");
   w.hidden = !text;
   w.classList.remove("err");
+  // Пока идёт загрузка, свой индикатор буфера и кнопка паузы не нужны —
+  // иначе поверх друг друга крутятся два «загружаю».
+  P.root.classList.toggle("loading", !!text);
   if (text) $r("[data-ap-wait-text]").textContent = text;
 }
 function fail(text) {
@@ -165,7 +170,7 @@ function poke() {
   P.root.classList.add("show-ui");
   window.clearTimeout(P.hideTimer);
   P.hideTimer = window.setTimeout(() => {
-    if (!P || P.video.paused || P.root.querySelector(".ap-seek.drag") || !$r("[data-ap-menu]").hidden) return;
+    if (!P || P.video.paused || P.root.querySelector(".ap-seek.drag, .ap-panel:hover") || !$r("[data-ap-menu]").hidden) return;
     P.root.classList.remove("show-ui");
   }, HIDE_AFTER_MS);
 }
