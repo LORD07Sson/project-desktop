@@ -64,6 +64,8 @@ export function switchTab(name) {
   // Аналитика/Сервисы/Команда) это то, чего и просили: не кэш, а
   // текущее состояние.
   loadActiveTab(true).catch(e => toast(`Не удалось открыть вкладку: ${e.message}`, "error"));
+  // Подсказка «Впервые в разделе?» (tour.js) слушает это событие.
+  document.dispatchEvent(new CustomEvent("project:tab", { detail: name }));
 }
 $all(".tab-btn").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 
