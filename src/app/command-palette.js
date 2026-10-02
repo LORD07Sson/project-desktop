@@ -13,19 +13,29 @@ import { openReportDetail } from "./report-detail.js";
 import { recentReports } from "./recent-reports.js";
 
 const ACTIONS = [
+  { label: "Моя очередь", icon: "☑", sub: "мои серии и сроки", run: () => switchTab("queue") },
   { label: "Обзор", icon: "📊", run: () => switchTab("overview") },
   { label: "Список", icon: "📋", run: () => switchTab("list") },
   { label: "Доска", icon: "🗂", run: () => switchTab("board") },
   { label: "Тайтлы", icon: "🗳️", run: () => switchTab("titles") },
+  { label: "Календарь", icon: "📅", run: () => switchTab("calendar") },
+  { label: "Сообщения", icon: "💬", run: () => switchTab("messages") },
   { label: "Лента", icon: "🕘", run: () => switchTab("feed") },
+  { label: "Аналитика", icon: "📈", run: () => switchTab("analytics") },
+  { label: "Команда", icon: "👥", run: () => switchTab("team") },
   { label: "Я", icon: "👤", run: () => switchTab("profile") },
+  // Инструменты из меню шапки — те же кнопки, просто с клавиатуры.
+  { label: "QC звука", icon: "🎧", sub: "проверить дорожки", run: () => $("#open-qc").click() },
+  { label: "Инструменты ffmpeg", icon: "🎞", sub: "обрезка, конвертация, сведение", run: () => $("#open-media-tools").click() },
+  { label: "Смотреть", icon: "▶", run: () => $("#open-watch").click() },
+  { label: "Горячие клавиши", icon: "⌨", sub: "?", run: () => $("#open-shortcuts").click() },
   { label: "Настройки", icon: "⚙️", run: () => $("#open-settings").click() },
   { label: "Обновить", icon: "↻", run: () => $("#refresh-btn").click() },
 ];
 
 let searchDebounce = null;
 
-function openPalette() {
+export function openPalette() {
   const overlay = openSheet(`
     <div class="cmdk-input-row">
       <span class="cmdk-ic">🔎</span>
@@ -130,7 +140,7 @@ function openPalette() {
     }
   });
 
-  setItems([...recentItems(), ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, run: a.run }))]);
+  setItems([...recentItems(), ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, sub: a.sub, run: a.run }))]);
   input.focus();
 }
 
@@ -145,3 +155,6 @@ document.addEventListener("keydown", e => {
     openPalette();
   }
 });
+
+// Кнопка поиска в шапке — то же, что Ctrl+K.
+$("#open-cmdk")?.addEventListener("click", () => { if (!$(".cmdk-overlay")) openPalette(); });

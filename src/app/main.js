@@ -33,6 +33,7 @@ import { maybeAutoCheckUpdates } from "./settings.js";
 import "./notifications.js";
 import "./presence.js";
 import "./command-palette.js";
+import "./titlebar-menus.js";
 import "./shortcuts-help.js";
 import "./focus-mode.js";
 import "./file-drop.js";
