@@ -8,6 +8,7 @@ import { $, esc } from "./utils.js";
 import { openSeasonsAdminSheet } from "./titles-admin.js";
 import { clearTitleHoverCache } from "./title-hover.js";
 import { imgProxy, hdPosterAttrs, titlePageHtml, wireTitlePage } from "./title-page.js";
+import { openTakeWork } from "./take-work.js";
 
 function voteActivity(t) { return t.likes + t.dislikes; }
 
@@ -151,7 +152,17 @@ function heroTitle(titles) {
   return titles.slice().sort(TABLE_SORTS.rank)[0] || null;
 }
 
+// «Взять в работу» — только админам; у взятого тайтла та же кнопка
+// открывает его настройки (состав, дедлайн, остановить автосерии).
+function takeButtonHtml(t) {
+  if (!state.isAdmin) return "";
+  return t.in_work
+    ? `<button class="btn tl-take on" data-take-title="${t.id}" title="Состав, дедлайн, автосерии">● В работе</button>`
+    : `<button class="btn tl-take" data-take-title="${t.id}">⚑ Взять в работу</button>`;
+}
+
 function heroEyebrow(t) {
+  if (t.in_work) return "● В работе у студии";
   if (!voteActivity(t)) return "Ждёт первых голосов";
   return t.likes > t.dislikes ? "★ Лидер голосования" : "Пока впереди";
 }
@@ -185,6 +196,7 @@ function heroBodyHtml(t, seasonName) {
         <button class="btn primary tl-hero-like${t.my_vote === 1 ? " on-like" : ""}" data-vote-title="${t.id}" data-vote-choice="1">${LIKE_ICON}Нравится <span>${t.likes}</span></button>
         <button class="btn tl-hero-dislike${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1" title="Не то">${DISLIKE_ICON}<span>${t.dislikes}</span></button>
         <button class="btn tl-hero-more" data-open-title-detail="${t.id}">${HERO_ICONS.info}Подробнее</button>
+        ${takeButtonHtml(t)}
       </div>
     </div>
     <div class="tl-spot-vote">
@@ -223,8 +235,9 @@ function voteCardHtml(t) {
   const voteCls = t.my_vote === 1 ? " voted-like" : (t.my_vote === -1 ? " voted-dislike" : "");
 
   return `
-    <div class="vote-card${voteCls}">
+    <div class="vote-card${voteCls}${t.in_work ? " in-work" : ""}">
       <div class="vote-card-tap" data-open-title-detail="${t.id}">
+        ${t.in_work ? `<span class="vote-work-chip">● В работе</span>` : ""}
         ${poster}
         <div class="vote-name">${esc(t.name)}</div>
         <div class="vote-meta" data-card-meta="${t.id}">${esc(cardMetaText(detailsCache.get(t.id)))}</div>
@@ -306,6 +319,12 @@ function wireVoteButtons(root) {
   root.querySelectorAll("[data-open-title-detail]").forEach(el => {
     el.addEventListener("click", () => openTitleDetail(parseInt(el.dataset.openTitleDetail, 10)));
   });
+  root.querySelectorAll("[data-take-title]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      openTakeWork(parseInt(btn.dataset.takeTitle, 10), () => loadTitlesTab());
+    });
+  });
 }
 
 export async function openTitleDetail(titleId) {
@@ -364,6 +383,7 @@ let currentSeasonName = "";
 
 const FILTERS = {
   all: { label: "Все", test: () => true },
+  work: { label: "В работе", test: t => t.in_work },
   novote: { label: "Без моего голоса", test: t => !t.my_vote },
   like: { label: "Мне нравится", test: t => t.my_vote === 1 },
   dislike: { label: "Не то", test: t => t.my_vote === -1 },

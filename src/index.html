@@ -159,6 +159,8 @@
   <div class="app-body">
   <div class="sidebar" id="tabstrip">
     <div class="sidebar-brand"><span class="sidebar-brand-ic brand-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19"/><path class="bm-b" d="M19 5L5 19"/></svg></span><span class="sidebar-brand-txt">Project</span></div>
+    <div class="sidebar-group-label">Моё</div>
+    <button class="tab-btn" data-tab="queue" title="Моя очередь"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span><span class="tab-lbl">Моя очередь</span><em class="tab-badge" id="queue-badge" hidden>0</em></button>
     <div class="sidebar-group-label">Основное</div>
     <button class="tab-btn active" data-tab="overview" title="Обзор"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span><span class="tab-lbl">Обзор</span></button>
     <button class="tab-btn" data-tab="list" title="Список"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg></span><span class="tab-lbl">Список</span></button>
@@ -179,6 +181,13 @@
   <div class="app-content">
   <div class="lockdown-banner" id="lockdown-banner" role="alert" hidden></div>
     <div class="team-notice" id="team-notice" role="status" hidden></div>
+  <!-- ===== Моя очередь ===== -->
+  <div class="tab-panel" data-panel="queue">
+    <div class="scroll-panel" id="queue-panel">
+      <div id="queue-body"></div>
+    </div>
+  </div>
+
   <!-- ===== Обзор ===== -->
   <div class="tab-panel active" data-panel="overview">
     <div class="scroll-panel" id="overview-panel">

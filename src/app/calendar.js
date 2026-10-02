@@ -80,6 +80,24 @@ async function fetchAirings() {
   return out;
 }
 
+// Ход нашей работы по сериям взятых тайтлов (/work/episodes, только
+// админам): {title_id: {номер: {total, completed, overdue}}}.
+async function fetchWork() {
+  if (!state.isAdmin) return {};
+  try { return (await apiGet("/work/episodes")).titles || {}; } catch (_) { return {}; }
+}
+
+// Подпись серии взятого тайтла: что с ней у студии.
+function workPill(e, work, past) {
+  const eps = work[String(e.id)];
+  if (!eps) return "";
+  const st = eps[String(e.num)];
+  if (!st) return past ? `<em class="cal-work todo">не заведена</em>` : `<em class="cal-work">ждём выхода</em>`;
+  if (st.completed >= st.total) return `<em class="cal-work done">готово</em>`;
+  if (st.overdue) return `<em class="cal-work late">опаздываем · ${st.completed}/${st.total}</em>`;
+  return `<em class="cal-work wip">в работе · ${st.completed}/${st.total}</em>`;
+}
+
 async function fetchDeadlines(from, to) {
   const out = [];
   for (let page = 0; page < 5; page++) {
@@ -145,7 +163,7 @@ function headerHtml(start) {
     <div class="page-header">
       <div>
         <h1>Календарь</h1>
-        <div class="sub">Выход серий, дедлайны и дни рождения команды.</div>
+        <div class="sub">Выход серий и ход нашей работы по ним, дедлайны и дни рождения команды.</div>
       </div>
       <div class="page-header-actions cal-layers">
         ${Object.entries(LAYERS).map(([k, label]) => `<button type="button" class="qchip cal-layer cal-layer-${k}${f[k] ? " on" : ""}" data-cal-layer="${k}" aria-pressed="${f[k]}"><i></i>${label}</button>`).join("")}
@@ -234,6 +252,7 @@ function gridHtml(start, data) {
             ${poster && h >= 70 ? `<img src="${poster}" alt="" loading="lazy">` : ""}
             <b>${esc(e.name)}</b>
             <span>Серия ${e.num}${e.total ? ` из ${e.total}` : ""} · ${hhmm(e.at)}</span>
+            ${workPill(e, data.work || {}, past)}
           </button>`;
         }).join("")}
       </div>`;
@@ -273,8 +292,8 @@ async function renderWeek() {
   const from = ymd(weekStart);
   const to = ymd(addDays(weekStart, 6));
   if (!cache) {
-    const [airings, birthdays, rem] = await Promise.all([fetchAirings(), fetchBirthdays(), fetchReminders()]);
-    cache = { airings, birthdays, reminders: rem ? rem.reminders : [], deadlines: [], from: null, to: null };
+    const [airings, birthdays, rem, work] = await Promise.all([fetchAirings(), fetchBirthdays(), fetchReminders(), fetchWork()]);
+    cache = { airings, birthdays, reminders: rem ? rem.reminders : [], work, deadlines: [], from: null, to: null };
   }
   if (cache.from !== from) {
     cache.deadlines = await fetchDeadlines(from, to);
