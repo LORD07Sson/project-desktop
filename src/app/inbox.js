@@ -10,7 +10,7 @@ import { $, esc, relTime } from "./utils.js";
 import { switchTab } from "./tabs.js";
 import { openReportDetail } from "./report-detail.js";
 import { openChatKey } from "./messages.js";
-import { notifyDesktop } from "./desktop-notify.js";
+import { notifyDesktop, notifyKinds } from "./desktop-notify.js";
 
 const POLL_MS = 60_000;
 const FILTERS = [["all", "Все"], ["at", "Упоминания"], ["due", "Сроки"], ["work", "Работа"], ["chat", "Личные"]];
@@ -88,8 +88,12 @@ function notifyFresh() {
   const first = notified === null;
   notified = new Set([...(notified || []), ...items.map(it => it.id)]);
   if (first || !fresh.length) return;
-  if (fresh.length === 1) notifyDesktop(`Project — ${TITLE[fresh[0].kind] || "уведомление"}`, plainOf(fresh[0]));
-  else notifyDesktop("Project", `Новых уведомлений: ${fresh.length}. ${plainOf(fresh[0])}`);
+  // Только включённые в Настройках типы (см. NOTIFY_KINDS).
+  const kinds = notifyKinds();
+  const shown = fresh.filter(it => kinds[it.kind] !== false);
+  if (!shown.length) return;
+  if (shown.length === 1) notifyDesktop(`Project — ${TITLE[shown[0].kind] || "уведомление"}`, plainOf(shown[0]), shown[0].kind);
+  else notifyDesktop("Project", `Новых уведомлений: ${shown.length}. ${plainOf(shown[0])}`);
 }
 
 function paint() {

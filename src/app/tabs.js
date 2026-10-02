@@ -15,6 +15,7 @@ import { loadAnalytics } from "./analytics.js";
 import { loadServices } from "./services.js";
 import { loadTeam } from "./team.js";
 import { loadQueue } from "./queue.js";
+import { startTab } from "./ui-prefs.js";
 import { clearDirectoryCache } from "./titles-admin.js";
 import { refreshTeamNotice, clearTeamNotice } from "./team-notice.js";
 import { refreshLockdown, clearLockdown } from "./lockdown.js";
@@ -101,6 +102,9 @@ export function restoreLastTab() {
   refreshLockdown();
   let saved = null;
   try { saved = localStorage.getItem(LAST_TAB_KEY); } catch (_) { /* не критично */ }
+  // Настройки → Поведение → «Стартовый раздел».
+  const start = startTab();
+  if (start !== "last") saved = start;
   if (!state.isAdmin && (!saved || !MEMBER_TABS.has(saved))) saved = "messages";
   if (!saved || !LOADERS[saved]) return;
   state.activeTab = saved;
