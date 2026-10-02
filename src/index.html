@@ -88,12 +88,17 @@
 
 <!-- ===================== Экран входа ===================== -->
 <div id="auth-screen">
+  <!-- Стена обложек сезона (auth.js → /api/login-wall): наклонённые
+       колонки едут навстречу друг другу. Нет каталога — остаётся фон. -->
+  <div class="auth-wall" id="auth-wall" aria-hidden="true"></div>
+  <div class="auth-wall-shade" aria-hidden="true"></div>
   <div class="auth-split">
     <section class="auth-brand" aria-hidden="true">
       <div class="auth-beam"></div>
       <div class="auth-logo brand-logo"><svg class="brand-mark" viewBox="0 0 24 24"><path class="bm-a" d="M5 5L19 19"/><path class="bm-b" d="M19 5L5 19"/></svg></div>
       <div class="auth-word" aria-label="Project"><span class="aw-part aw-dub" aria-hidden="true"><i style="--i:0">P</i><i style="--i:1">R</i><i style="--i:2">O</i><i style="--i:3">J</i><i style="--i:4">E</i><i style="--i:5">C</i><i style="--i:6">T</i><span class="aw-embers"></span></span></div>
       <div class="auth-tag">студия дубляжа аниме</div>
+      <div class="auth-hero">Каждый сезон —<br><span>нашими голосами</span></div>
       <ul class="auth-points">
         <li><i><svg viewBox="0 0 24 24"><path d="M3 7l2-3h7l2 3h7v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg></i><span><b>Доска и отчёты</b>весь конвейер серий в одном окне</span></li>
         <li><i><svg viewBox="0 0 24 24"><path d="M4 12h3l2-6 4 12 2-6h5"/></svg></i><span><b>QC звука и ffmpeg</b>проверка и сборка дорожек локально</span></li>
