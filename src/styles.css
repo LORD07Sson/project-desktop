@@ -2735,7 +2735,8 @@ body.watch-open #app-screen { pointer-events: none; }
   --ap-accent: var(--accent-grad); user-select: none;
 }
 .ap-root.on { opacity: 1; transform: none; }
-.ap-root.fs { inset: 0; }
+/* Во весь экран — поверх своей шапки окна (у неё z-index 1000). */
+.ap-root.fs { inset: 0; z-index: 1001; }
 .ap-stage { position: relative; flex: 1; min-width: 0; overflow: hidden; background: #000; }
 .ap-root:not(.show-ui) .ap-stage { cursor: none; }
 .ap-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
@@ -2781,8 +2782,8 @@ body.watch-open #app-screen { pointer-events: none; }
 .ap-root.paused .ap-flash { display: none; }
 .ap-buffer { position: absolute; left: 50%; top: 50%; margin: -26px 0 0 -26px; display: none; pointer-events: none; }
 .ap-buffer span { display: block; width: 52px; height: 52px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .15); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; }
-.ap-root.buffering:not(.paused) .ap-buffer { display: block; }
-.ap-root.loading .ap-buffer, .ap-root.loading .ap-center, .ap-root.loading .ap-flash { display: none; }
+.ap-root.buffering:not(.paused):not(.loading) .ap-buffer { display: block; }
+.ap-root.loading .ap-center, .ap-root.loading .ap-flash { display: none; }
 .ap-wait { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: rgba(244, 241, 236, .65); font-size: 14px; text-align: center; padding: 30px; background: radial-gradient(circle at center, #15151a, #000 70%); }
 .ap-wait[hidden] { display: none; }
 .ap-wait span { width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .12); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; }
