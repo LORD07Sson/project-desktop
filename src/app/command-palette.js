@@ -13,6 +13,7 @@ import { openReportDetail } from "./report-detail.js";
 import { recentReports } from "./recent-reports.js";
 
 const ACTIONS = [
+  { label: "Моя очередь", icon: "☑", sub: "мои серии и сроки", run: () => switchTab("queue") },
   { label: "Обзор", icon: "📊", run: () => switchTab("overview") },
   { label: "Список", icon: "📋", run: () => switchTab("list") },
   { label: "Доска", icon: "🗂", run: () => switchTab("board") },
