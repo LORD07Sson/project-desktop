@@ -12,6 +12,7 @@
 import { state } from "./state.js";
 import { apiGet, toast } from "./api.js";
 import { esc } from "./utils.js";
+import { appWindow } from "./tauri.js";
 
 const SAVE_EVERY_MS = 5000;
 const HIDE_AFTER_MS = 2600;
@@ -58,6 +59,12 @@ function fmtTime(sec) {
 const qLabel = h => (h >= 2160 ? "4K" : `${h}p`);
 
 let P = null; // состояние открытого плеера
+
+// «Во весь экран» в приложении — полноэкранным становится само окно Tauri,
+// а плеер просто растягивается на него (класс fs). Fullscreen API страницы
+// в WebView2 без рамки окна оставлял снизу чёрную полосу высотой с шапку
+// и сжимал видео; он остаётся только для запуска в обычном браузере.
+const IN_TAURI = "__TAURI_INTERNALS__" in window;
 
 export async function openAnimePlayer({ shikiId, name }) {
   closeAnimePlayer();
@@ -123,7 +130,7 @@ export async function openAnimePlayer({ shikiId, name }) {
   const vol = readVolume();
   video.volume = vol.v;
   video.muted = vol.muted;
-  P = { root, video, shikiId, name, series: null, episodeIdx: 0, translations: [], trId: null, sources: [], quality: null, saveTimer: null, hideTimer: null, nextCancelled: false, nextTimer: null };
+  P = { root, video, shikiId, name, series: null, episodeIdx: 0, translations: [], trId: null, sources: [], quality: null, saveTimer: null, hideTimer: null, nextCancelled: false, nextTimer: null, fs: false };
   wireControls();
   setWait("Ищу серии…");
 
@@ -348,10 +355,16 @@ function setVolume(value, muted) {
   v.muted = muted;
   try { localStorage.setItem(VOL_KEY, JSON.stringify({ v: v.volume, muted: v.muted })); } catch (_) { /* не критично */ }
 }
-function toggleFullscreen() {
-  if (document.fullscreenElement) document.exitFullscreen();
-  else P.root.requestFullscreen?.().catch(() => {});
+function setFullscreen(on) {
+  if (!P) return;
+  P.fs = on;
+  P.root.classList.toggle("fs", on);
+  $r("[data-ap-full]").innerHTML = on ? I.unfull : I.full;
+  if (IN_TAURI) appWindow.setFullscreen(on).catch(() => {});
+  else if (on) document.documentElement.requestFullscreen?.().catch(() => {});
+  else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
+function toggleFullscreen() { setFullscreen(!P.fs); }
 function renderMenu() {
   const menu = $r("[data-ap-menu]");
   const v = P.video;
@@ -485,11 +498,9 @@ function wireControls() {
   document.addEventListener("fullscreenchange", onFullscreen);
 }
 
+// В браузере полноэкранный режим можно снять системно (Esc/F11) — догоняем.
 function onFullscreen() {
-  if (!P) return;
-  const on = document.fullscreenElement === P.root;
-  P.root.classList.toggle("fs", on);
-  $r("[data-ap-full]").innerHTML = on ? I.unfull : I.full;
+  if (P && P.fs && !document.fullscreenElement) setFullscreen(false);
 }
 
 export function closeAnimePlayer() {
@@ -499,7 +510,7 @@ export function closeAnimePlayer() {
   window.clearInterval(P.nextTimer);
   window.clearTimeout(P.hideTimer);
   document.removeEventListener("fullscreenchange", onFullscreen);
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (P.fs) setFullscreen(false);
   const { root, video } = P;
   video.pause();
   video.removeAttribute("src");
@@ -518,8 +529,8 @@ document.addEventListener("keydown", e => {
   const k = e.key;
   if (k === "Escape") {
     if (!$r("[data-ap-menu]").hidden) { $r("[data-ap-menu]").hidden = true; e.stopImmediatePropagation(); return; }
-    if (document.fullscreenElement) return;
     e.stopImmediatePropagation();
+    if (P.fs) { setFullscreen(false); return; }
     closeAnimePlayer();
     return;
   }
