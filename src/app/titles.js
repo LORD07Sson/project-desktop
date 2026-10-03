@@ -227,26 +227,41 @@ function wireHero(wrap, titles, seasonName) {
   hero._refresh = id => { if (Number(hero.dataset.heroId) === id) redraw(); };
 }
 
-function voteCardHtml(t) {
-  const posterSrc = imgProxy(t.poster_url);
-  const poster = posterSrc
-    ? `<img class="vote-poster" ${hdPosterAttrs(t.id, t.poster_url, 180)} alt="" loading="lazy">`
-    : `<div class="vote-poster vote-poster-ph">🎬</div>`;
-  const voteCls = t.my_vote === 1 ? " voted-like" : (t.my_vote === -1 ? " voted-dislike" : "");
+// Афиша: крупный постер, поверх — место в рейтинге, метки, название,
+// доля одобрения и кнопки голоса. Лидер — в цветной рамке; «Взять в
+// работу» (админам) — при наведении.
+function votesWord(n) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return "голос";
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "голоса";
+  return "голосов";
+}
 
+function voteCardHtml(t, rank, isLeader) {
+  const posterSrc = imgProxy(t.poster_url);
+  const pct = approvalPct(t);
+  const total = voteActivity(t);
   return `
-    <div class="vote-card${voteCls}${t.in_work ? " in-work" : ""}">
-      <div class="vote-card-tap" data-open-title-detail="${t.id}">
-        ${t.in_work ? `<span class="vote-work-chip">● В работе</span>` : ""}
-        ${poster}
-        <div class="vote-name">${esc(t.name)}</div>
-        <div class="vote-meta" data-card-meta="${t.id}">${esc(cardMetaText(detailsCache.get(t.id)))}</div>
-      </div>
-      <div class="vote-actions">
-        <button class="vote-btn${t.my_vote === 1 ? " on-like" : ""}" data-vote-title="${t.id}" data-vote-choice="1">👍 <span>${t.likes}</span></button>
-        <button class="vote-btn${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1">👎 <span>${t.dislikes}</span></button>
+    <div class="af-card${isLeader ? " lead" : ""}${t.in_work ? " in-work" : ""}" data-open-title-detail="${t.id}" data-af="${t.id}">
+      ${posterSrc ? `<img class="af-poster" ${hdPosterAttrs(t.id, t.poster_url, 320)} alt="" loading="lazy">` : `<div class="af-poster af-poster-ph">🎬</div>`}
+      <div class="af-tags">${isLeader ? `<span class="af-tag lead">★ Лидер</span>` : ""}${t.in_work ? `<span class="af-tag work">● В работе</span>` : ""}</div>
+      <span class="af-rank">${rank}</span>
+      <div class="af-body">
+        <h3 class="af-name">${esc(t.name)}</h3>
+        <div class="af-meta" data-card-meta="${t.id}">${esc(cardMetaText(detailsCache.get(t.id)))}</div>
+        <div class="af-votes"><b>${pct == null ? "—" : `${pct}%`}</b><span class="af-bar"><i style="width:${pct ?? 0}%"></i></span><span>${total ? `${total} ${votesWord(total)}` : "нет голосов"}</span></div>
+        <div class="vote-actions af-acts">
+          <button class="vote-btn${t.my_vote === 1 ? " on-like" : ""}" data-vote-title="${t.id}" data-vote-choice="1">${LIKE_ICON}<span>${t.likes}</span></button>
+          <button class="vote-btn${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1">${DISLIKE_ICON}<span>${t.dislikes}</span></button>
+        </div>
+        ${takeButtonHtml(t)}
       </div>
     </div>`;
+}
+
+function leaderOf(titles) {
+  const t = heroTitle(titles);
+  return t && voteActivity(t) && t.likes > t.dislikes ? t.id : null;
 }
 
 async function castVote(titleId, choice, btn) {
@@ -258,7 +273,7 @@ async function castVote(titleId, choice, btn) {
   // нельзя вообще, причём молча.
   const group = btn.closest(".vote-actions, .td-vote-cta");
   if (!group) return;
-  const pendingHost = btn.closest(".vote-card") || group;
+  const pendingHost = btn.closest(".vote-card, .af-card") || group;
   const likeBtn = group.querySelector('[data-vote-choice="1"]');
   const dislikeBtn = group.querySelector('[data-vote-choice="-1"]');
   const already = btn.classList.contains(choice === 1 ? "on-like" : "on-dislike");
@@ -289,6 +304,8 @@ async function castVote(titleId, choice, btn) {
     if (row && t) row.querySelector(".tt-approval-cell").innerHTML = approvalCellHtml(t);
     const hero = document.querySelector("#titles-grid [data-hero]");
     if (hero && hero._refresh) hero._refresh(titleId);
+    const grid = btn.closest("#titles-grid");
+    if (grid && btn.closest(".af-card")) renderTitlesBody(grid);
     const sheet = btn.closest(".sheet");
     if (sheet) {
       setCount(sheet.querySelector(".td-stat-pill.like"), `👍 ${r.likes}`);
@@ -414,9 +431,15 @@ function renderTitlesBody(wrap) {
   const view = getView();
   const shown = visibleTitles();
   const empty = `<div class="tl-empty">Под этот фильтр тайтлов нет.</div>`;
-  wrap.innerHTML = voteHeroHtml(currentTitles, currentSeasonName) + toolbarHtml() + (!shown.length ? empty : view === "table"
-    ? titlesTableHtml(shown)
-    : `<div class="vote-grid">${shown.map(voteCardHtml).join("")}</div>`);
+  const ranked = currentTitles.slice().sort(TABLE_SORTS.rank);
+  const rankOf = new Map(ranked.map((t, i) => [t.id, i + 1]));
+  const leader = leaderOf(currentTitles);
+  const addCard = state.isAdmin
+    ? `<button type="button" class="af-add" data-af-add><b>＋</b><span>Добавить тайтл</span><em>сезоны и тайтлы — в «Управлении»</em></button>` : "";
+  wrap.innerHTML = toolbarHtml() + (!shown.length ? empty : view === "table"
+    ? voteHeroHtml(currentTitles, currentSeasonName) + titlesTableHtml(shown)
+    : `<div class="af-grid">${shown.map(t => voteCardHtml(t, rankOf.get(t.id), t.id === leader)).join("")}${addCard}</div>`);
+  wrap.querySelector("[data-af-add]")?.addEventListener("click", () => openSeasonsAdminSheet(() => loadTitlesTab()));
   wrap.querySelectorAll("[data-titles-filter]").forEach(btn => {
     btn.addEventListener("click", () => { titlesFilter = btn.dataset.titlesFilter; renderTitlesBody(wrap); });
   });
