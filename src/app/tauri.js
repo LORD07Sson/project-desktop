@@ -24,9 +24,15 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { sendNotification } from "@tauri-apps/plugin-notification";
+export { invoke, listen, emit, getCurrentWindow, WebviewWindow, convertFileSrc };
 
-export { invoke, listen, emit, getCurrentWindow, WebviewWindow, sendNotification, convertFileSrc };
+// Системное уведомление — своей командой, а не @tauri-apps/plugin-notification:
+// плагин на Windows показывает тост от имени «Windows PowerShell» (см.
+// src-tauri/src/desktop_notify.rs). Сигнатура та же: { title, body }.
+export function sendNotification({ title, body } = {}) {
+  invoke("notify_desktop", { title: String(title || "Project"), body: body == null ? null : String(body) })
+    .catch(() => { /* нет уведомлений — молчим */ });
+}
 
 // Диалоги выбора файлов — НЕ @tauri-apps/plugin-dialog, а свои команды в
 // Rust (см. src-tauri/src/file_scope.rs). Разница не в удобстве: когда

@@ -10,6 +10,7 @@
 
 mod audio_qc;
 mod board;
+mod desktop_notify;
 mod file_scope;
 mod media_tools;
 #[cfg(windows)]
@@ -1328,6 +1329,7 @@ fn main() {
         .manage(DroppedFiles::default())
         .manage(file_scope::FileScope::default())
         .invoke_handler(tauri::generate_handler![
+            desktop_notify::notify_desktop,
             qc_analyze,
             generate_waveform,
             export_audio_clip,
@@ -1385,6 +1387,10 @@ fn main() {
             // сборки — иначе непонятно, к какому коммиту относится баг-
             // репорт присланного файла).
             log::info!("Project Desktop {} запускается", app.package_info().version);
+
+            // Тосты от имени «Project Desktop», а не «Windows PowerShell».
+            #[cfg(windows)]
+            desktop_notify::register();
 
             // Глобальная горячая клавиша — свернуть/показать окно из любого
             // места (Ctrl+Shift+P). Не через `?`: если комбинацию уже занял
