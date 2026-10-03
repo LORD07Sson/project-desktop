@@ -11,13 +11,15 @@ const KEYS = {
   start: "project-start-tab",
 };
 
-// Акцент: основной цвет, светлее, золото для градиента и цвет текста на нём.
+// Цветовая тема: перекрашивает всё приложение — фон, карточки, линии,
+// текст, свечение и акцент (палитры — в styles.css, :root[data-accent]).
+// sw — цвета для образца в Настройках: фон, карточка, акцент, золото.
 export const ACCENTS = {
-  fire: { label: "Огонь", fire: null },
-  sakura: { label: "Сакура", fire: "#ff4d7d", ember: "#ff7fa0", gold: "#ffb3c6", on: "#2a0610" },
-  violet: { label: "Фиалка", fire: "#8b5cff", ember: "#a98bff", gold: "#d0bcff", on: "#12062a" },
-  sky: { label: "Небо", fire: "#1fa8ff", ember: "#5cc4ff", gold: "#9fe3ff", on: "#04182a" },
-  mint: { label: "Мята", fire: "#1fc77a", ember: "#4fdc97", gold: "#b4f06a", on: "#04190e" },
+  fire: { label: "Янтарь", sw: ["#070403", "#1c1310", "#ff6a2b", "#ffb444"] },
+  sakura: { label: "Сакура", sw: ["#090407", "#1f1118", "#ff4d7d", "#ffb3c6"] },
+  violet: { label: "Фиалка", sw: ["#06050b", "#171224", "#8b5cff", "#d0bcff"] },
+  sky: { label: "Небо", sw: ["#04070a", "#101a22", "#1fa8ff", "#9fe3ff"] },
+  mint: { label: "Мята", sw: ["#040805", "#111c16", "#1fc77a", "#b4f06a"] },
 };
 export const SCALES = [90, 100, 110, 125];
 export const START_TABS = { last: "Последний", queue: "Моя очередь", overview: "Обзор" };
@@ -33,16 +35,12 @@ const root = document.documentElement;
 
 export function currentAccent() { return ACCENTS[get(KEYS.accent, "fire")] ? get(KEYS.accent, "fire") : "fire"; }
 export function applyAccent(name) {
-  const a = ACCENTS[name] || ACCENTS.fire;
-  set(KEYS.accent, ACCENTS[name] ? name : "fire");
-  const props = ["--fire", "--ember", "--gold", "--on-accent", "--accent-soft", "--accent-grad"];
-  if (!a.fire) { props.forEach(p => root.style.removeProperty(p)); return; }
-  root.style.setProperty("--fire", a.fire);
-  root.style.setProperty("--ember", a.ember);
-  root.style.setProperty("--gold", a.gold);
-  root.style.setProperty("--on-accent", a.on);
-  root.style.setProperty("--accent-soft", `color-mix(in srgb, ${a.fire} 16%, transparent)`);
-  root.style.setProperty("--accent-grad", `linear-gradient(135deg, ${a.fire}, ${a.gold})`);
+  const key = ACCENTS[name] ? name : "fire";
+  set(KEYS.accent, key);
+  // Старые сборки красили акцент инлайн-стилями — убираем их.
+  ["--fire", "--ember", "--gold", "--on-accent", "--accent-soft", "--accent-grad"].forEach(p => root.style.removeProperty(p));
+  if (key === "fire") delete root.dataset.accent;
+  else root.dataset.accent = key;
 }
 
 export function currentScale() {
