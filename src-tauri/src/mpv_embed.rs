@@ -310,7 +310,7 @@ async fn connect_with_retry(
 /// косметика: без них mpv читает `%APPDATA%\mpv\mpv.conf` пользователя, и
 /// чужая строчка вроде `fullscreen=yes`, `vo=`, `profile=…` или сторонний
 /// скрипт ломают встраивание молча и невоспроизводимо на чужой машине
-/// (плеер «просто не работает у одного человека из студии»).
+/// (плеер «просто не работает у одного человека из команды»).
 /// `--no-terminal` — mpv не пытается работать с консолью, которой у GUI-
 /// приложения нет.
 fn mpv_args(hwnd_raw: isize, pipe_name: &str) -> Vec<String> {
@@ -716,7 +716,7 @@ pub async fn mpv_set_track(kind: &str, id: i64) -> Result<(), String> {
 }
 
 /// Сохранить текущий кадр в файл. "video" — без наложенных субтитров и
-/// экранного меню: студии нужен исходный кадр, а не скриншот плеера.
+/// экранного меню: команде нужен исходный кадр, а не скриншот плеера.
 pub async fn mpv_screenshot(path: &str) -> Result<(), String> {
     send_command(json!({ "command": ["screenshot-to-file", path, "video"] })).await
 }

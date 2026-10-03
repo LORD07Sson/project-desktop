@@ -4,8 +4,8 @@
 // приём, что и у аватаров (avatar-hover.js): делегированный
 // обработчик на document, задержка перед показом, кэш ответов на
 // сессию. Элементы-триггеры уже несут data-open-title-detail (тот же
-// атрибут, что используется для клика — voteCardHtml/voteBentoHtml в
-// titles.js), новый атрибут заводить не нужно.
+// атрибут, что используется для клика — voteCardHtml в titles.js
+// и строки таблицы), новый атрибут заводить не нужно.
 
 import { apiGet, mediaUrl } from "./api.js";
 import { esc } from "./utils.js";
