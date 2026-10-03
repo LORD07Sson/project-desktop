@@ -2502,29 +2502,37 @@ kbd {
 .wm-pad { height: 74px; }
 
 /* навигация */
-.wm-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 18px; padding: 14px 44px; transition: background .35s, padding .35s, box-shadow .35s; }
-.wm-nav.solid { background: color-mix(in srgb, var(--wm-bg) 78%, transparent); backdrop-filter: blur(18px) saturate(1.4); padding: 9px 44px; box-shadow: 0 1px 0 var(--wm-line); }
-.wm-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; white-space: nowrap; }
-.wm-brand i { position: relative; width: 24px; height: 24px; border-radius: 50%; background: conic-gradient(from 210deg, var(--amb), var(--gold), var(--fire), var(--amb)); animation: wm-spin 8s linear infinite; }
-.wm-brand i::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: var(--wm-bg); }
-.wm-brand span { color: var(--gold); }
-.wm-tabs { position: relative; display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, .05); border: 1px solid var(--wm-line); }
-.wm-tabs button { position: relative; z-index: 1; border: none; background: none; padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--wm-soft); white-space: nowrap; cursor: pointer; transition: color .2s; }
-#watch-mode .wm-tabs button.on { color: #111; }
-.wm-pill { position: absolute; top: 4px; bottom: 4px; border-radius: 999px; background: #fff; transition: left .45s var(--wm-spring), width .45s var(--wm-spring); }
-.wm-sp { flex: 1; }
-.wm-search { display: flex; align-items: center; gap: 10px; width: 230px; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .07); backdrop-filter: blur(10px); font-size: 13px; cursor: pointer; }
-#watch-mode .wm-search { color: var(--wm-dim); }
-.wm-search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
-.wm-search kbd { margin-left: auto; font: 700 11px inherit; padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .18); color: var(--wm-soft); }
-.wm-lucky { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 999px; border: none; background: var(--accent-grad); font-weight: 800; font-size: 13px; cursor: pointer; box-shadow: 0 8px 24px -10px var(--fire); transition: transform .2s var(--wm-spring); white-space: nowrap; }
-#watch-mode .wm-lucky { color: var(--on-accent); }
-.wm-lucky:hover { transform: translateY(-1px) rotate(-2deg) scale(1.04); }
-.wm-back { padding: 8px 15px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(0, 0, 0, .28); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-.wm-back:hover { background: rgba(255, 255, 255, .12); }
+/* Шапка — плавающий остров по центру: значок со словом, вкладки капсом
+   с наклоном (активная залита цветом темы), справа одна кнопка меню с
+   поиском, «Мне повезёт» и выходом. */
+.wm-nav { position: sticky; top: 12px; z-index: 20; width: fit-content; max-width: calc(100% - 32px); margin: 12px auto 0; display: flex; align-items: center; gap: 16px;
+  padding: 6px 6px 6px 18px; border-radius: 999px; background: rgba(18, 18, 20, .5); border: 1px solid rgba(255, 255, 255, .14);
+  backdrop-filter: blur(18px) saturate(1.4); box-shadow: 0 12px 34px -16px rgba(0, 0, 0, .8); transition: background .35s, box-shadow .35s; }
+.wm-nav.solid { background: color-mix(in srgb, var(--wm-bg) 82%, transparent); box-shadow: 0 14px 40px -14px rgba(0, 0, 0, .95); }
+.wm-brand { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 15px; white-space: nowrap; }
+.wm-brand i { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, var(--fire), var(--gold)); }
+.wm-tabs { display: flex; gap: 2px; }
+.wm-tabs button { border: none; background: none; padding: 7px 12px; font-size: 12.5px; font-weight: 900; letter-spacing: .03em; text-transform: uppercase; color: rgba(255, 255, 255, .62);
+  white-space: nowrap; cursor: pointer; transform: skew(-9deg); transition: color .2s, background .2s; }
+.wm-tabs button:hover { color: #fff; }
+#watch-mode .wm-tabs button.on { background: var(--fire); color: var(--on-accent); }
+.wm-menu-wrap { position: relative; }
+.wm-menu-btn { width: 38px; height: 38px; border: none; border-radius: 50%; display: grid; place-items: center; background: var(--fire); cursor: pointer; transition: transform .2s var(--wm-spring); }
+#watch-mode .wm-menu-btn { color: var(--on-accent); }
+.wm-menu-btn:hover, .wm-menu-btn.on { transform: scale(1.06); }
+.wm-menu-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.wm-menu { position: absolute; right: 0; top: calc(100% + 10px); min-width: 250px; padding: 6px; border-radius: 16px; background: var(--wm-bg2); border: 1px solid rgba(255, 255, 255, .12);
+  box-shadow: 0 24px 50px -16px #000; animation: wm-menu-in .2s var(--wm-ease); }
+.wm-menu[hidden] { display: none; }
+@keyframes wm-menu-in { from { opacity: 0; transform: translateY(-6px); } }
+.wm-menu button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: none; border-radius: 10px; background: none; font-size: 13.5px; font-weight: 700; text-align: left; cursor: pointer; }
+.wm-menu button:hover { background: rgba(255, 255, 255, .08); }
+.wm-menu svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; flex: none; }
+.wm-menu i { width: 17px; text-align: center; font-style: normal; flex: none; }
+.wm-menu kbd { margin-left: auto; font: 700 11px ui-monospace, Consolas, monospace; padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .18); color: var(--wm-dim); }
 
 /* живой баннер */
-.wm-hero { position: relative; height: clamp(560px, 80vh, 760px); margin-top: -64px; overflow: hidden; }
+.wm-hero { position: relative; height: clamp(560px, 80vh, 760px); margin-top: -62px; overflow: hidden; }
 .wm-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s var(--wm-ease); pointer-events: none; }
 .wm-slide.on { opacity: 1; pointer-events: auto; }
 .wm-frames { position: absolute; inset: -6%; transform: translate(var(--px, 0), var(--py, 0)); transition: transform .8s var(--wm-ease); }
@@ -2755,9 +2763,8 @@ kbd {
 
 body.watch-open #app-screen { pointer-events: none; }
 @media (max-width: 1200px) {
-  .wm-nav { gap: 12px; padding-left: 24px; padding-right: 24px; }
-  .wm-search { width: 44px; padding: 8px 12px; }
-  .wm-search span, .wm-search kbd { display: none; }
+  .wm-nav { gap: 10px; }
+  .wm-tabs button { padding: 7px 9px; font-size: 11.5px; }
   .wm-htext { left: 24px; right: 24px; width: auto; max-width: 640px; }
   .wm-peek { display: none; }
   .wm-top10 { grid-template-columns: 1fr; grid-auto-flow: row; grid-template-rows: none; padding-left: 24px; padding-right: 24px; }
@@ -2768,7 +2775,7 @@ body.watch-open #app-screen { pointer-events: none; }
   .wm-slide, .wm-frame, .wm-frames, .wm-pic, .wm-pic img, .wm-reveal { transition: none !important; }
   .wm-reveal { opacity: 1; transform: none; }
   .wm-htext h1 .w { animation: none; opacity: 1; transform: none; filter: none; }
-  .wm-brand i, .wm-play::before, .wm-kb, .wm-chip.live i, .wm-next i { animation: none; }
+  .wm-play::before, .wm-kb, .wm-chip.live i, .wm-next i { animation: none; }
   .wm-pk-bar em { animation: none; width: 100%; }
   .wm-pk-img { animation: none; }
 }

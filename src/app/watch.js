@@ -40,6 +40,7 @@ const I = {
   left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
   right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
   search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
 };
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -696,40 +697,45 @@ function lucky() {
 }
 
 // ---------- вкладки ----------
-function movePill(r) {
-  const on = r.querySelector(".wm-tabs .on");
-  const pill = r.querySelector(".wm-pill");
-  if (on && pill) { pill.style.left = `${on.offsetLeft}px`; pill.style.width = `${on.offsetWidth}px`; }
-}
 function shellHtml() {
   return `
     <div class="wm-scroll" id="wm-scroll">
       <nav class="wm-nav" id="wm-nav">
-        <div class="wm-brand"><i></i>Project <span>Смотреть</span></div>
-        <div class="wm-tabs"><span class="wm-pill"></span>${TABS.map(([k, label]) => `<button type="button" data-wm-tab="${k}" class="${k === tab ? "on" : ""}">${label}</button>`).join("")}</div>
-        <span class="wm-sp"></span>
-        <button type="button" class="wm-search" data-wm-spot>${I.search}<span>Найти тайтл</span><kbd>/</kbd></button>
-        <button type="button" class="wm-lucky" data-wm-lucky>🎲 Мне повезёт</button>
-        <button type="button" class="wm-back" id="wm-back">← Команда</button>
+        <div class="wm-brand"><i></i>Смотреть</div>
+        <div class="wm-tabs">${TABS.map(([k, label]) => `<button type="button" data-wm-tab="${k}" class="${k === tab ? "on" : ""}">${label}</button>`).join("")}</div>
+        <div class="wm-menu-wrap">
+          <button type="button" class="wm-menu-btn" id="wm-menu-btn" aria-label="Меню" aria-expanded="false">${I.menu}</button>
+          <div class="wm-menu" id="wm-menu" hidden>
+            <button type="button" data-wm-spot>${I.search}<span>Найти тайтл</span><kbd>/</kbd></button>
+            <button type="button" data-wm-lucky><i>🎲</i><span>Мне повезёт</span></button>
+            <button type="button" id="wm-back"><i>←</i><span>Вернуться к команде</span><kbd>Esc</kbd></button>
+          </div>
+        </div>
       </nav>
       <div id="wm-body"><div class="wm-loading"><span></span>Загружаю каталог…</div></div>
     </div>`;
 }
 function wireShell(r) {
-  r.querySelector("#wm-back").addEventListener("click", closeWatchMode);
-  r.querySelector("[data-wm-spot]").addEventListener("click", openSpot);
-  r.querySelector("[data-wm-lucky]").addEventListener("click", lucky);
+  // Поиск, «Мне повезёт» и выход — в меню за одной кнопкой; пункт меню
+  // сначала закрывает само меню.
+  const menu = r.querySelector("#wm-menu");
+  const menuBtn = r.querySelector("#wm-menu-btn");
+  const setMenu = open => { menu.hidden = !open; menuBtn.setAttribute("aria-expanded", String(open)); menuBtn.classList.toggle("on", open); };
+  menuBtn.addEventListener("click", e => { e.stopPropagation(); setMenu(menu.hidden); });
+  r.addEventListener("click", e => { if (!menu.hidden && !e.target.closest(".wm-menu-wrap")) setMenu(false); });
+  const item = fn => () => { setMenu(false); fn(); };
+  r.querySelector("#wm-back").addEventListener("click", item(closeWatchMode));
+  r.querySelector("[data-wm-spot]").addEventListener("click", item(openSpot));
+  r.querySelector("[data-wm-lucky]").addEventListener("click", item(lucky));
   r.querySelectorAll("[data-wm-tab]").forEach(b => b.addEventListener("click", () => {
     tab = b.dataset.wmTab;
     r.querySelectorAll("[data-wm-tab]").forEach(x => x.classList.toggle("on", x === b));
-    movePill(r);
     if (data) renderBody(r);
     r.querySelector("#wm-scroll").scrollTo({ top: 0, behavior: "smooth" });
   }));
   const scroll = r.querySelector("#wm-scroll");
   const nav = r.querySelector("#wm-nav");
   scroll.addEventListener("scroll", () => { hidePop(); nav.classList.toggle("solid", scroll.scrollTop > 30); }, { passive: true });
-  requestAnimationFrame(() => movePill(r));
 }
 
 // живые отсчёты до серий
@@ -807,7 +813,7 @@ export function closeWatchMode() {
   r.animate([{ clipPath: `circle(${radius}px at ${cx}px ${cy}px)` }, { clipPath: `circle(0px at ${cx}px ${cy}px)` }], { duration: 750, easing: ease }).onfinish = done;
 }
 
-// Esc закрывает верхнее: прожектор → барабан → «Подробнее» → окна → сам режим.
+// Esc закрывает верхнее: меню → прожектор → барабан → «Подробнее» → окна → сам режим.
 // «/» открывает поиск. Плеер (.ap-root) обрабатывает свои клавиши сам.
 document.addEventListener("keydown", e => {
   const r = root();
@@ -820,6 +826,8 @@ document.addEventListener("keydown", e => {
     return;
   }
   if (e.key !== "Escape") return;
+  const menu = r.querySelector("#wm-menu");
+  if (menu && !menu.hidden) { e.stopImmediatePropagation(); menu.hidden = true; r.querySelector("#wm-menu-btn")?.classList.remove("on"); return; }
   if (r.querySelector(".wm-spot.on")) { e.stopImmediatePropagation(); closeSpot(); return; }
   if (r.querySelector(".wm-slot.on")) { e.stopImmediatePropagation(); return; }
   const modal = document.querySelector(".wm-modal");
