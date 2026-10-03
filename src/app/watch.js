@@ -249,13 +249,36 @@ function moodRowsHtml() {
       ${rowHtml("Скоро выйдет", f(cat.filter(t => t.group === "anons")).map(t => tileHtml(t, { meta: t.aired_on ? `с ${new Date(t.aired_on).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}` : "дата уточняется" })).join(""), { note: "анонсы" })}
     </div>`;
 }
+// Топ-10 строками: у каждой фоном баннер тайтла, слева место и обложка,
+// справа оценка. Две колонки по пять, нумерация идёт вниз по колонке.
+function top10Html(top10) {
+  if (!top10.length) return "";
+  const dubs = studioByShiki();
+  return `
+    <section class="wm-row wm-reveal">
+      <div class="wm-row-h"><h2>Топ-10 сезона</h2><small>по оценкам Shikimori</small></div>
+      <div class="wm-top10">${top10.map((t, i) => {
+        const bg = t.banner || (t.frames && t.frames[0]) || t.cover;
+        const meta = [(t.genres || []).slice(0, 2).join(" · "), t.episodes || t.episodes_aired ? `${t.episodes || t.episodes_aired} эп.` : ""].filter(Boolean).join(" · ");
+        return `
+        <button type="button" class="wm-tr" data-wm-open="s:${t.id}">
+          <span class="wm-tr-bg" style="background-image:url('${imgProxy(bg)}')"></span>
+          <b class="wm-tr-n">${i + 1}</b>
+          <img src="${imgProxy(t.cover)}" alt="" loading="lazy">
+          <span class="wm-tr-t"><em>${esc(t.name)}</em><small>${esc(meta)}</small></span>
+          ${dubs.get(t.id) ? `<span class="wm-tag">Project</span>` : ""}
+          <span class="wm-tr-s">${t.score ? `★ ${t.score.toFixed(1)}` : ""}</span>
+        </button>`;
+      }).join("")}</div>
+    </section>`;
+}
 function homeHtml() {
   const top10 = byScore(data.catalog.filter(t => t.group !== "anons")).slice(0, 10);
   return `
     ${heroHtml()}
     <div class="wm-rows">
       ${continueHtml()}
-      ${rowHtml("Топ-10 сезона", top10.map((t, i) => `<div class="wm-top"><span class="wm-num">${i + 1}</span>${tileHtml(t, { badge: studioByShiki().get(t.id) ? "Project" : "", hot: true })}</div>`).join(""), { note: "по оценкам Shikimori" })}
+      ${top10Html(top10)}
       ${weekSectionHtml("Расписание")}
       <div data-wm-moodbox>${moodsHtml()}</div>
       ${moodRowsHtml()}
@@ -275,10 +298,10 @@ function heroHtml() {
         </div>`).join("")}
       <div class="wm-grain"></div>
       <div class="wm-htext" id="wm-htext"></div>
-      <div class="wm-rail">${list.map((t, i) => {
-        const pics = heroPics(t);
-        return `<button type="button" data-wm-hero="${i}" class="${i === heroIdx ? "on" : ""}"><span class="wm-qth" style="background-image:url('${imgProxy(t.banner || pics[1] || pics[0])}')"></span><span class="wm-qn">${esc(t.name)}</span><span class="wm-qp"><i></i></span></button>`;
-      }).join("")}</div>
+      <button type="button" class="wm-peek" data-wm-peek aria-label="Следующий тайтл">
+        <span class="wm-pk-img"></span>
+        <span class="wm-pk-txt"><small>далее</small><b></b><i class="wm-pk-bar"><em></em></i></span>
+      </button>
     </div>`;
 }
 function nextText(t) {
@@ -321,11 +344,18 @@ function showHero(i, r) {
     s.classList.toggle("on", on);
     if (on) s.querySelectorAll(".wm-frame").forEach((f, k) => f.classList.toggle("on", k === 0));
   });
-  r.querySelectorAll("[data-wm-hero]").forEach(b => {
-    b.classList.remove("on");
-    void b.offsetWidth;
-    b.classList.toggle("on", Number(b.dataset.wmHero) === heroIdx);
-  });
+  // Срез справа — следующий слайд: его кадр по диагонали, название и
+  // полоска времени до смены (перезапускается с каждым слайдом).
+  const peek = r.querySelector("[data-wm-peek]");
+  if (peek) {
+    const nx = list[(heroIdx + 1) % list.length];
+    const pics = heroPics(nx);
+    const pic = peek.querySelector(".wm-pk-img");
+    pic.style.backgroundImage = `url('${imgProxy(nx.banner || pics[0] || nx.cover)}')`;
+    peek.querySelector("b").textContent = nx.name;
+    peek.hidden = list.length < 2;
+    [pic, peek.querySelector(".wm-pk-bar em")].forEach(el => { el.style.animation = "none"; void el.offsetWidth; el.style.animation = ""; });
+  }
   const text = r.querySelector("#wm-htext");
   if (text) {
     text.innerHTML = heroTextHtml(t);
@@ -354,7 +384,7 @@ function showHero(i, r) {
 function wireHero(r) {
   const hero = r.querySelector("#wm-hero");
   if (!hero) return;
-  hero.querySelectorAll("[data-wm-hero]").forEach(b => b.addEventListener("click", () => showHero(Number(b.dataset.wmHero), r)));
+  hero.querySelector("[data-wm-peek]")?.addEventListener("click", () => showHero(heroIdx + 1, r));
   if (reduceMotion()) return;
   hero.addEventListener("pointermove", e => {
     const box = hero.getBoundingClientRect();
