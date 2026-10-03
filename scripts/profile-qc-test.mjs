@@ -141,7 +141,7 @@ check("пустые руки: свободные серии и просрочк�
 check("пустые руки: есть кнопка перехода", !!(idle && idle.querySelector(".idle-go")), "");
 
 const pace = profile.querySelector("#goal-pace");
-check("цель не задана: подсказан темп студии",
+check("цель не задана: подсказан темп команды",
   pace && !pace.hidden && /4 серий на человека/.test(pace.textContent),
   pace ? `hidden=${pace.hidden} · ${pace.textContent}` : "нет блока");
 

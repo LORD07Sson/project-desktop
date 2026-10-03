@@ -5,7 +5,8 @@ export function applyTheme(theme) {
   try { localStorage.setItem("project-theme", theme); } catch (_) {}
 }
 
-// Стиль тёмной темы: "glow" (золотое свечение) или "fire" (огонь).
+// Фон тёмной темы (Настройки → Внешний вид → Фон): "glow" — «Свечение
+// сверху», "fire" — «Свечение снизу».
 export function applyLook(look) {
   document.documentElement.dataset.look = look;
   try { localStorage.setItem("project-look", look); } catch (_) {}
