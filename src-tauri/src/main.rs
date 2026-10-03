@@ -27,25 +27,14 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
-// Репозиторий публичный — GithubSource читает releases напрямую через
-// GitHub API, прокси на своём сервере не нужен.
-const UPDATE_REPO_URL: &str = "https://github.com/LORD07Sson/project-desktop";
-
-// Токен поднимает лимит запросов к GitHub API с 60/час (без токена, на
-// IP — см. friendly_update_error/check_for_update_cached ниже, этого не
-// хватало) до 5000/час. Зашивается на этапе СБОРКИ из переменной
-// окружения CI (см. .github/workflows/build.yml/build-alpha.yml,
-// секрет PROJECT_UPDATE_TOKEN) — option_env! читает её во время
-// компиляции, а не во время работы приложения у пользователя, так что
-// сам токен пользователю не виден иначе как разбором бинарника.
-// Ожидаемый токен — fine-grained PAT с доступом ТОЛЬКО "Public
-// Repositories (read-only)", без единого дополнительного права: он
-// читает исключительно то, что и без него публично доступно всем, компрометация
-// не даёт доступа ни к чему приватному, только выше лимит на чтение
-// публичных данных. Локальная сборка без секрета (`cargo build` у
-// разработчика) — токена просто нет, GithubSource откатывается на
-// анонимный доступ, как было всегда; ничего не ломается.
-const GITHUB_UPDATE_TOKEN: Option<&str> = option_env!("PROJECT_UPDATE_TOKEN");
+// Обновления — по прямым ссылкам на файлы релизов GitHub, а не через
+// GitHub API: у ссылок вида /releases/latest/download/<файл> нет лимита
+// 60 запросов в час, ради которого раньше в бинарник вшивался токен
+// (его было видно любому, кто скачал exe). Velopack HttpSource читает
+// <база>/releases.<канал>.json и качает пакет из той же папки — в каждом
+// релизе лежат и фид, и полный пакет этой версии.
+const UPDATE_STABLE_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/latest/download";
+const UPDATE_ALPHA_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/alpha-latest";
 
 // Канал обновлений — та же настройка Velopack, что описана в
 // docs.velopack.io/packaging/channels: сборки альфа-канала публикует
@@ -82,24 +71,17 @@ fn set_update_channel(app: tauri::AppHandle, channel: String) -> Result<(), Stri
 fn velopack_update_manager(app: &tauri::AppHandle) -> Result<velopack::UpdateManager, String> {
     let channel = get_update_channel(app.clone())?;
     let is_alpha = channel == ALPHA_CHANNEL;
-    // Третий аргумент GithubSource — «смотреть ли на pre-release».
-    // Альфа-канал публикуется build-alpha.yml именно как pre-release
-    // (vpk upload --pre, тег alpha-latest), поэтому при false альфа-клиент
-    // не видел НИ ОДНОГО обновления вообще. Стабильному каналу, наоборот,
-    // pre-release не нужны: у альфа-релиза в ассетах лежит только
-    // releases.alpha.json, стабильный фид (releases.win.json) там искать
-    // бессмысленно — поэтому флаг зависит от выбранного канала.
-    let source = velopack::sources::GithubSource::new(UPDATE_REPO_URL, GITHUB_UPDATE_TOKEN.map(str::to_string), is_alpha);
-    // AllowVersionDowngrade — иначе переключение обратно на stable
-    // после альфы не увидело бы стабильную версию как обновление:
-    // "0.5.8-alpha.90" по SemVer СТАРШЕ "0.5.8" (у прешрелиза ниже
-    // приоритет, чем у финальной версии с теми же числами), а стабильный
-    // канал вообще может не успеть обогнать номер, до которого дошла
-    // альфа. Ровно тот сценарий "хочу вернуться на stable без
-    // переустановки", который описывает сам ExplicitChannel в докстринге
-    // Velopack.
+    // Альфа публикуется отдельным pre-release с постоянным тегом
+    // alpha-latest (build-alpha.yml), стабильная — обычными релизами.
+    let source = velopack::sources::HttpSource::new(if is_alpha { UPDATE_ALPHA_URL } else { UPDATE_STABLE_URL });
+    // Откат на более старую версию разрешён только в одном случае:
+    // стоит альфа, а выбран стабильный канал — "0.9.2-alpha.90" по SemVer
+    // старше "0.9.2", и без этого вернуться на stable можно было бы лишь
+    // переустановкой. В остальных случаях откат запрещён: иначе подменённый
+    // фид мог бы вернуть всех на старую версию с известной уязвимостью.
+    let on_prerelease = !app.package_info().version.pre.is_empty();
     let options = velopack::UpdateOptions {
-        AllowVersionDowngrade: true,
+        AllowVersionDowngrade: !is_alpha && on_prerelease,
         ExplicitChannel: if is_alpha { Some(ALPHA_CHANNEL.to_string()) } else { None },
         ..Default::default()
     };
@@ -112,15 +94,10 @@ struct UpdateInfoOut {
     notes: String,
 }
 
-// Даже с токеном (GITHUB_UPDATE_TOKEN выше, лимит 5000/час) 403 в
-// принципе возможен — сборка без секрета (например, локальная у
-// разработчика) откатывается на анонимный доступ (60/час на IP), плюс
-// сам клиент и один способен дать несколько независимых запросов за
-// сессию: автопроверка на старте (main.js) + открытие Настроек на
-// альфа-канале (settings.js: refreshAlphaBlock тоже зовёт
-// check_for_update отдельно) + ручная кнопка «Проверить обновления».
-// check_for_update_cached ниже схлопывает их в один реальный запрос на
-// короткое окно — независимо от того, что именно исчерпывает лимит.
+// 403/429 от GitHub возможны и на прямых ссылках (временные ограничения
+// с одного IP). Клиент сам даёт несколько запросов за сессию:
+// автопроверка на старте + Настройки на альфа-канале + ручная кнопка —
+// check_for_update_cached ниже схлопывает их в один на короткое окно.
 fn friendly_update_error(e: impl std::fmt::Display) -> String {
     let text = e.to_string();
     if text.contains("403") {
@@ -896,7 +873,7 @@ async fn is_autostart(app: tauri::AppHandle) -> Result<bool, String> {
 
 // Тот же хост, что и API_BASE в src/app/api.js — держать в синхроне
 // руками, если он когда-нибудь сменится (не тянем сюда JS-константу,
-// у Rust-стороны и так уже есть свой захардкоженный UPDATE_REPO_URL —
+// у Rust-стороны и так уже есть свои захардкоженные UPDATE_*_URL —
 // тот же принцип: несколько мест, где живёт "адрес прода", это
 // осознанный компромисс маленького проекта без общего конфига).
 const API_BASE: &str = "https://minitg.shitstudent.com:8443/api";

@@ -513,7 +513,7 @@ $("#open-settings").addEventListener("click", openSettings);
 
 // ---------- автообновление (Velopack) ----------
 // Апдейтер целиком на Rust-стороне (см. check_for_update/
-// download_and_apply_update в main.rs, Velopack + GithubSource читает
+// download_and_apply_update в main.rs, Velopack + HttpSource читает
 // релизы репозитория напрямую, без прокси на своём сервере). JS только
 // вызывает команды и слушает событие "update-progress" для прогресс-бара.
 
