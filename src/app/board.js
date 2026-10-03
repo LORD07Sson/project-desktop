@@ -651,7 +651,7 @@ async function renderBoard(root) {
     <div class="page-header">
       <div>
         <h1>Доска</h1>
-        <div class="sub">Все активные серии студии, разложенные по статусам.</div>
+        <div class="sub">Все активные серии команды, разложенные по статусам.</div>
       </div>
       <div class="page-header-actions">
         <select id="board-month" class="board-sort" title="Показать серии со сроком в этом месяце">${monthOptionsHtml(boardView.month)}</select>
@@ -664,7 +664,7 @@ async function renderBoard(root) {
       ${timelineCell}
       ${performanceHtml(stats)}
     </div>
-    <div class="board-section-title">Серии студии</div>
+    <div class="board-section-title">Серии команды</div>
     ${boardToolbarHtml(layout)}
     <div class="board">${layout.columns.map(col => columnHtml(col, collapsed)).join("")}</div>
   `;

@@ -109,7 +109,7 @@ async function openSettings() {
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc], ["st-look", "Внешний вид", ICONS.look], ["st-notif", "Уведомления", ICONS.bell], ["st-behave", "Поведение", ICONS.behave], ["st-keys", "Горячие клавиши", ICONS.keys]]],
     ["Приложение", [["st-update", "Обновления", ICONS.update], ["st-learn", "Обучение", ICONS.learn], ["st-diag", "Диагностика", ICONS.diag]]],
-    ...(state.isAdmin || state.isDeveloper ? [["Студия", [["st-studio", "Студия", ICONS.studio], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot]] : [])]]] : []),
+    ...(state.isAdmin || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`
@@ -124,11 +124,11 @@ async function openSettings() {
         <div class="st-empty" id="st-find-empty" hidden>Ничего не нашлось — попробуйте другое слово.</div>
 
         <section class="st-sec on" id="st-acc">
-          <h3>Аккаунт</h3><p class="st-lead">Кто вы в студии и выход с этого компьютера.</p>
+          <h3>Аккаунт</h3><p class="st-lead">Кто вы в команде и выход с этого компьютера.</p>
           <div class="st-group">
             <div class="st-acc" data-st-find="аккаунт профиль имя аватар">
               ${avatarHtml(state.telegramId, state.name || "?", "xl")}
-              <div class="st-text"><b>${esc(state.name || "Без имени")}</b><span>${state.isAdmin ? "Администратор студии" : "Участник студии"}</span></div>
+              <div class="st-text"><b>${esc(state.name || "Без имени")}</b><span>${state.isAdmin ? "Администратор команды" : "Участник команды"}</span></div>
               <button type="button" class="btn" id="s-acc-profile">Открыть профиль</button>
             </div>
           </div>
@@ -234,14 +234,14 @@ async function openSettings() {
         <section class="st-sec" id="st-diag">
           <h3>Диагностика</h3><p class="st-lead">Если что-то сломалось — отсюда проще всего рассказать, что именно.</p>
           <div class="st-group">
-            ${row(ICONS.server, "Сервер студии", "Связь с сервером и время ответа", `<span class="st-ping" id="s-ping">проверяю…</span><button type="button" class="btn" id="s-ping-again">Проверить</button>`, "сеть сервер соединение")}
+            ${row(ICONS.server, "Сервер команды", "Связь с сервером и время ответа", `<span class="st-ping" id="s-ping">проверяю…</span><button type="button" class="btn" id="s-ping-again">Проверить</button>`, "сеть сервер соединение")}
             ${row(ICONS.logs, "Файловые логи приложения", "Обновления, QC звука, инструменты ffmpeg, плеер", `<button class="btn" id="s-open-logs">Открыть логи</button>`, "логи")}
             ${row(ICONS.copy, "Отчёт для разработчика", "Версия, система, канал, связь с сервером — одним текстом в буфер обмена", `<button class="btn" id="s-copy-report">Скопировать</button>`, "баг ошибка")}
           </div>
         </section>
 
         <section class="st-sec" id="st-studio">
-          <h3>Студия</h3><p class="st-lead">Инструменты администратора.</p>
+          <h3>Команда</h3><p class="st-lead">Инструменты администратора.</p>
           <div class="st-tiles">
             ${TILES.map(([id, title, sub, path]) => `<button type="button" class="st-tile" id="${id}" data-st-find="${esc(`${title} ${sub}`.toLowerCase())}">${ic(path)}<b>${title}</b><span>${sub}</span></button>`).join("")}
           </div>
