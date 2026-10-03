@@ -1248,6 +1248,29 @@ fn disable_browser_accelerator_keys(win: &tauri::WebviewWindow) {
     }
 }
 
+/// Удаляет из `packages/` полный пакет (.nupkg, ~170 МБ) уже
+/// установленной версии. Velopack после обновления сам чистит пакеты
+/// старых версий, но пакет текущей оставляет — он нужен только чтобы
+/// собирать дельта-обновления, а мы их не публикуем (в релизах только
+/// full). Без этого рядом с `current/` всегда лежит его сжатая копия.
+/// Скачанное, но ещё не применённое обновление (версия выше текущей)
+/// не трогаем. Не установлено через Velopack (запуск из target/) —
+/// ничего не делаем.
+fn drop_installed_package() {
+    use velopack::locator::{auto_locate_app_manifest, find_local_full_packages, LocationContext};
+    let Ok(locator) = auto_locate_app_manifest(LocationContext::FromCurrentExe) else { return };
+    let current = locator.get_manifest_version();
+    for (path, manifest) in find_local_full_packages(&locator.get_packages_dir()) {
+        if manifest.version > current {
+            continue;
+        }
+        match std::fs::remove_file(&path) {
+            Ok(()) => log::info!("Удалён пакет установленной версии: {}", path.display()),
+            Err(e) => log::warn!("Не удалось удалить {}: {e}", path.display()),
+        }
+    }
+}
+
 fn toggle_main_window(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let visible = win.is_visible().unwrap_or(false);
@@ -1387,6 +1410,9 @@ fn main() {
             // сборки — иначе непонятно, к какому коммиту относится баг-
             // репорт присланного файла).
             log::info!("Project Desktop {} запускается", app.package_info().version);
+
+            // Пакет уже установленной версии в packages/ больше не нужен.
+            std::thread::spawn(drop_installed_package);
 
             // Тосты от имени «Project Desktop», а не «Windows PowerShell».
             #[cfg(windows)]
