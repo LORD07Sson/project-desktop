@@ -152,11 +152,8 @@ jobs:
           test -s src-tauri/binaries/mpv.exe || { echo "::error::mpv.exe не найден в архиве"; exit 1; }
           test -s src-tauri/binaries/d3dcompiler_43.dll || { echo "::error::d3dcompiler_43.dll не найден в архиве"; exit 1; }
 
-      # Тот же секрет, что и в build.yml — см. комментарий там.
       - name: cargo build --release
         shell: bash
-        env:
-          PROJECT_UPDATE_TOKEN: ${{ secrets.PROJECT_UPDATE_TOKEN }}
         run: cargo build --release --manifest-path src-tauri/Cargo.toml --features custom-protocol
 
       - name: Собрать альфа-канал через vpk
@@ -242,8 +239,8 @@ jobs:
       # Отдельная проверка, что релиз реально виден пользователям.
       # vpk умеет завершиться с кодом 0, оставив релиз ЧЕРНОВИКОМ, —
       # именно так альфа-канал и умер в прошлый раз: сборка зелёная,
-      # ассеты на месте, но черновик не отдаётся публичным API, и
-      # GithubSource на клиенте не видит вообще ничего.
+      # ассеты на месте, но черновик не отдаётся по публичным ссылкам, и
+      # клиент по прямой ссылке не видит вообще ничего.
       - name: Проверить, что альфа-релиз опубликован
         shell: bash
         env:
