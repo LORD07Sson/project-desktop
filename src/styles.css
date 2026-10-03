@@ -2475,7 +2475,7 @@ kbd {
 @property --amb { syntax: "<color>"; inherits: true; initial-value: #ff8a3d; }
 .btn.watch-cta {
   background: var(--accent-grad); color: var(--on-accent, #1a0d00); border-color: transparent; font-weight: 800;
-  box-shadow: 0 6px 18px -8px rgba(255, 120, 40, .85);
+  box-shadow: 0 6px 18px -8px rgba(var(--fire-rgb), .85);
 }
 .btn.watch-cta:hover { filter: brightness(1.08); }
 .btn.watch-cta svg { width: 13px; height: 13px; }
