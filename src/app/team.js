@@ -130,7 +130,7 @@ function teamHtml(d) {
     <div class="page-header">
       <div>
         <h1>Команда</h1>
-        <div class="sub">Кто в студии, кто чем занят и кто свободен.</div>
+        <div class="sub">Кто в команде, кто чем занят и кто свободен.</div>
       </div>
       <div class="page-header-actions">
         <button class="btn" id="team-roles-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M16 11l2 2 4-4"/></svg>Роли</button>

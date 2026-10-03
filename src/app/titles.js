@@ -162,7 +162,7 @@ function takeButtonHtml(t) {
 }
 
 function heroEyebrow(t) {
-  if (t.in_work) return "● В работе у студии";
+  if (t.in_work) return "● В работе у команды";
   if (!voteActivity(t)) return "Ждёт первых голосов";
   return t.likes > t.dislikes ? "★ Лидер голосования" : "Пока впереди";
 }
@@ -485,7 +485,7 @@ function renderTitlesForSeason(seasons) {
     <div class="page-header">
       <div>
         <h1>Тайтлы</h1>
-        <div class="sub">Голосование за тайтлы эфир-сезона: что студия берёт в работу.</div>
+        <div class="sub">Голосование за тайтлы эфир-сезона: что команда берёт в работу.</div>
       </div>
       <div class="page-header-actions">
         <div class="seg-toggle" role="group" aria-label="Вид">

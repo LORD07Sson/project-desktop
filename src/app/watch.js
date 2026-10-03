@@ -8,8 +8,7 @@
 //    справа очередь следующих слайдов с полоской до смены;
 //  - вся витрина подкрашивается цветом обложки текущего слайда (--amb),
 //    а палитра (фон, акцент) — из цветовой темы приложения;
-//  - «Продолжить просмотр», полоса «В нашей озвучке» (ход озвучки по
-//    сериям), «Топ-10 сезона», расписание по дням (живой отсчёт), плитки
+//  - «Продолжить просмотр», «Топ-10 сезона», расписание по дням (живой отсчёт), плитки
 //    настроений, «В тренде», онгоинги, анонсы;
 //  - карточка при наведении, поиск-прожектор («/»), «Мне повезёт»,
 //    «Подробнее» с похожими, «Мой список».
@@ -26,7 +25,7 @@ import { imgProxy, hdPosterAttrs } from "./title-page.js";
 const KIND = { tv: "Сериал", movie: "Фильм", ova: "OVA", ona: "ONA", special: "Спешл", tv_special: "Спешл" };
 const HERO_MS = 9000;
 const FRAME_MS = 3000;
-const TABS = [["home", "Главная"], ["week", "Расписание"], ["list", "Мой список"], ["studio", "Озвучка студии"]];
+const TABS = [["home", "Главная"], ["week", "Расписание"], ["list", "Мой список"], ["studio", "Наша озвучка"]];
 const MOODS = [
   ["Экшен", "🔥 Экшен", "#ff6a2b"], ["Фэнтези", "✨ Фэнтези", "#9b7bff"],
   ["Комедия", "😂 Комедия", "#ffd84a"], ["Романтика", "💗 Романтика", "#ff6fae"], ["Драма", "🎭 Драма", "#6fb6ff"],
@@ -186,40 +185,6 @@ function continueHtml() {
   }).join(""), { note: "с того места, где остановились" });
 }
 
-// Полоса «В нашей озвучке»: что студия озвучивает в сезоне и как идёт —
-// готовые серии, серия в работе (штриховка), остальные.
-function dubHtml() {
-  if (!data.studio.length) return "";
-  const cards = data.studio.map(s => {
-    const total = s.episodes_total || 0, done = s.episodes_done || 0;
-    const status = !total ? "серии ещё не заведены"
-      : done >= total ? "Озвучено целиком"
-      : s.current_label ? `${s.current_label} · в работе, ${s.current_pct}%` : "в работе";
-    const segs = total && total <= 30
-      ? `<span class="wm-eps">${Array.from({ length: total }, (_, i) => `<i class="${i < done ? "d" : i === done ? "w" : ""}"></i>`).join("")}</span>`
-      : total ? `<span class="wm-bar"><i style="width:${Math.round((done / total) * 100)}%"></i></span>` : "";
-    return `
-      <button type="button" class="wm-dcard" data-wm-open="t:${s.title_id}">
-        ${s.poster_url ? `<img ${hdPosterAttrs(s.title_id, s.poster_url, 180)} alt="" loading="lazy">` : `<span class="wm-dph"></span>`}
-        <span class="wm-dbody">
-          <b>${esc(s.name)}</b>
-          <span class="wm-dst">${esc(status)}</span>
-          ${segs}
-          <span class="wm-drow"><span>${total ? `${done} из ${total} серий` : esc(s.season_name || "")}</span><em>${total && done >= total ? "✓ готово" : "подробнее →"}</em></span>
-        </span>
-      </button>`;
-  }).join("");
-  return `
-    <section class="wm-dub wm-reveal" data-wm-sec="studio">
-      <div class="wm-dintro">
-        <span class="wm-eyebrow"><b>Project</b></span>
-        <h2>В нашей озвучке</h2>
-        <p>Что студия озвучивает в этом сезоне: какие серии готовы, какая в работе.</p>
-        <button type="button" class="wm-ghost sm" data-wm-goto="studio">Все тайтлы студии →</button>
-      </div>
-      <div class="wm-dlist">${cards}</div>
-    </section>`;
-}
 function weekDays() {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -290,7 +255,6 @@ function homeHtml() {
     ${heroHtml()}
     <div class="wm-rows">
       ${continueHtml()}
-      ${dubHtml()}
       ${rowHtml("Топ-10 сезона", top10.map((t, i) => `<div class="wm-top"><span class="wm-num">${i + 1}</span>${tileHtml(t, { badge: studioByShiki().get(t.id) ? "Project" : "", hot: true })}</div>`).join(""), { note: "по оценкам Shikimori" })}
       ${weekSectionHtml("Расписание")}
       <div data-wm-moodbox>${moodsHtml()}</div>
@@ -410,7 +374,7 @@ function bodyHtml() {
     }).filter(Boolean);
     return `<div class="wm-pad"></div>${gridHtml("Мой список", tiles, "Пока пусто — жмите «+ В список» на баннере или в карточке.")}`;
   }
-  if (tab === "studio") return `<div class="wm-pad"></div>${gridHtml("Озвучка студии", studioTiles, "В сезонах студии пока нет тайтлов.")}`;
+  if (tab === "studio") return `<div class="wm-pad"></div>${gridHtml("Наша озвучка", studioTiles, "В сезонах команды пока нет тайтлов.")}`;
   if (tab === "week") return `<div class="wm-pad"></div>${weekSectionHtml("Расписание на неделю")}`;
   return homeHtml();
 }
@@ -433,9 +397,6 @@ function renderBody(r) {
     void sched.offsetWidth;
     sched.classList.add("swap");
     wireActions(sched);
-  }));
-  body.querySelectorAll("[data-wm-goto]").forEach(b => b.addEventListener("click", () => {
-    r.querySelector(`[data-wm-tab="${b.dataset.wmGoto}"]`)?.click();
   }));
   observeReveal(r);
 }
@@ -719,7 +680,7 @@ function shellHtml() {
         <span class="wm-sp"></span>
         <button type="button" class="wm-search" data-wm-spot>${I.search}<span>Найти тайтл</span><kbd>/</kbd></button>
         <button type="button" class="wm-lucky" data-wm-lucky>🎲 Мне повезёт</button>
-        <button type="button" class="wm-back" id="wm-back">← Студия</button>
+        <button type="button" class="wm-back" id="wm-back">← Команда</button>
       </nav>
       <div id="wm-body"><div class="wm-loading"><span></span>Загружаю каталог…</div></div>
     </div>`;

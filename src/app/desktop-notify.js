@@ -23,7 +23,7 @@ export const NOTIFY_KINDS = {
   at: ["Упоминания @вас", "в чатах и заметках"],
   chat: ["Личные сообщения", ""],
   due: ["Сроки", "завтра, сегодня и просрочка"],
-  team: ["Дни рождения", "коллег по студии"],
+  team: ["Дни рождения", "коллег по команде"],
 };
 const KINDS_KEY = "project_notify_kinds";
 const QUIET_KEY = "project_notify_quiet";

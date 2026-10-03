@@ -176,7 +176,7 @@ function teamTeaserHtml(me) {
   return `
     <div class="team-teaser" id="team-teaser">
       <span class="stack">${stack}</span>
-      <div><div class="tt">${me.team.count} ${pluralColleagues(me.team.count)} по студии</div>
+      <div><div class="tt">${me.team.count} ${pluralColleagues(me.team.count)} по команде</div>
       ${names ? `<div class="tsub">${esc(names)}${me.team.count > me.team.preview.length ? " и др." : ""}</div>` : ""}</div>
       <span class="go">→</span>
     </div>`;
@@ -632,7 +632,7 @@ async function suggestGoal(root) {
     const avg = Math.max(1, Math.round(done.reduce((a, b) => a + b, 0) / done.length));
     if (!el.isConnected) return avg;
     el.hidden = false;
-    el.textContent = `Темп студии за месяц — ${avg} ${avg === 1 ? "серия" : "серий"} на человека.`;
+    el.textContent = `Темп команды за месяц — ${avg} ${avg === 1 ? "серия" : "серий"} на человека.`;
     return avg;
   } catch (_) {
     return null;
@@ -831,7 +831,7 @@ export async function openUserProfile(telegramId) {
     ${person ? "" : reportsHtml}
     ${devModeActive() ? devPanelHtml(d) : ""}
     <div class="sheet-actions">
-      ${state.isDeveloper && String(telegramId) !== String(state.telegramId) ? `<button class="btn danger" data-purge-chats title="Только владелец студии">Удалить личные переписки</button><span style="flex:1"></span>` : ""}
+      ${state.isDeveloper && String(telegramId) !== String(state.telegramId) ? `<button class="btn danger" data-purge-chats title="Только владелец команды">Удалить личные переписки</button><span style="flex:1"></span>` : ""}
       <button class="btn" data-close>Закрыть</button>
     </div>
   `;
