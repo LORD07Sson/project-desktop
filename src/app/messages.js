@@ -263,7 +263,7 @@ function peopleWord(n) {
 
 function threadHeadHtml(c) {
   const title = c.kind === "topic" ? `<span class="ms-head-channel">${esc(c.channel_name)}</span><span class="ms-head-sep">›</span>${esc(c.title)}` : esc(c.title);
-  const sub = c.kind === "general" ? `Вся студия · ${c.participants.length} ${peopleWord(c.participants.length)}`
+  const sub = c.kind === "general" ? `Вся команда · ${c.participants.length} ${peopleWord(c.participants.length)}`
     : c.kind === "dm" ? `Личная переписка${c.peer && c.peer.username ? ` · @${esc(c.peer.username)}` : ""}`
     : `Тема канала${c.created_by ? ` · создал(а) ${esc(c.created_by)}` : ""}`;
   return `
@@ -289,7 +289,7 @@ function renderThread({ keepScroll } = {}) {
   const box = el.querySelector("#ms-msgs");
   const nearBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   const draft = el.querySelector("#ms-input")?.value || "";
-  const placeholder = c.kind === "general" ? "Написать всей студии… @ — упомянуть человека"
+  const placeholder = c.kind === "general" ? "Написать всей команде… @ — упомянуть человека"
     : c.kind === "topic" ? `Написать в тему «${c.title}»… @ — упомянуть` : "Написать сообщение…";
   el.innerHTML = `
     ${threadHeadHtml(c)}
@@ -709,7 +709,7 @@ function renderInfo() {
   const pinned = info ? info.pinned : [];
   const files = info ? info.files : [];
   box.innerHTML = `
-    <div class="ms-info-head">${chatAvatarHtml(c, true)}<div><b>${esc(c.kind === "topic" ? `${c.channel_name} › ${c.title}` : c.title)}</b><span>${c.kind === "general" ? "вся студия" : c.kind === "dm" ? "личная переписка" : "тема канала"}</span></div></div>
+    <div class="ms-info-head">${chatAvatarHtml(c, true)}<div><b>${esc(c.kind === "topic" ? `${c.channel_name} › ${c.title}` : c.title)}</b><span>${c.kind === "general" ? "вся команда" : c.kind === "dm" ? "личная переписка" : "тема канала"}</span></div></div>
     <div class="ms-info-sec"><h4>Закреплено${pinned.length ? ` · ${pinned.length}` : ""}</h4>
       ${pinned.length ? pinned.map(m => `<button type="button" class="ms-pin-item" data-goto="${m.id}"><b>${esc(m.author)} · ${esc(relTime(m.created_at))}</b><span>${esc((m.text || (m.attach ? `📎 ${m.attach.name}` : "")).slice(0, 160))}</span></button>`).join("")
         : `<div class="ms-info-empty">${info && info.can_pin ? "Наведите на сообщение → 📌, чтобы закрепить важное." : "Пока ничего не закреплено."}</div>`}

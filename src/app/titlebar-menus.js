@@ -66,6 +66,6 @@ export function setTitlebarIdentity(name) {
   } else if (!av.querySelector("img")) {
     av.textContent = initial;
   }
-  head.innerHTML = `<b>${esc(name || "Без имени")}</b><span>${state.isAdmin ? "Администратор студии" : "Участник студии"}</span>`;
+  head.innerHTML = `<b>${esc(name || "Без имени")}</b><span>${state.isAdmin ? "Администратор команды" : "Участник команды"}</span>`;
   loadAvatars(av.parentNode);
 }

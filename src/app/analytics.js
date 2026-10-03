@@ -85,7 +85,7 @@ function analyticsHtml(d) {
   return `
     <div class="page-header">
       <div>
-        <h1>Аналитика студии</h1>
+        <h1>Аналитика команды</h1>
         <div class="sub">Пропускная способность и загрузка конвейера дубляжа за последние 30 дней.</div>
       </div>
     </div>

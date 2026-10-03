@@ -134,13 +134,13 @@ function EmptyStudio(props) {
   return (
     <div class="ov2-empty">
       <div class="ov2-empty-mark brand-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19" /><path class="bm-b" d="M19 5L5 19" /></svg></div>
-      <h1>Студия готова к первому сезону</h1>
+      <h1>Команда готова к первому сезону</h1>
       <p>Серий пока нет — поэтому здесь три шага вместо пустых графиков. Как только появится первая серия, тут будет живой обзор.</p>
       <div class="ov2-steps">
         <div class={`bcell ov2-step${teamReady ? " done" : ""}`}>
           <span class="ov2-step-n">{teamReady ? "✓" : "1"}</span>
           <b>{teamReady ? "Команда в сборе" : "Соберите команду"}</b>
-          <p>{teamReady ? `В студии ${members} ${plural(members, "участник", "участника", "участников")}.` : "Пригласите озвучку и звукорежиссёра — доступ выдаётся через бота."}</p>
+          <p>{teamReady ? `В команде ${members} ${plural(members, "участник", "участника", "участников")}.` : "Пригласите озвучку и звукорежиссёра — доступ выдаётся через бота."}</p>
           <button class="btn" onClick={() => switchTab("team")}>Команда</button>
         </div>
         <div class="bcell ov2-step">
