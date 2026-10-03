@@ -125,10 +125,16 @@ async function loadLoginWall() {
     if (!count) return;
     wallLoaded = true;
     const COLS = 5;
+    // Порядок перемешивается при каждом показе — стена не повторяется.
+    const order = Array.from({ length: count }, (_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
     let html = "";
     for (let c = 0; c < COLS; c++) {
       const ids = [];
-      for (let i = c; i < count; i += COLS) ids.push(i);
+      for (let i = c; i < count; i += COLS) ids.push(order[i]);
       if (!ids.length) continue;
       const imgs = ids.concat(ids).map(i => `<img src="${API_BASE}/login-wall/${i}" alt="" loading="lazy" decoding="async">`).join("");
       html += `<div class="aw-col" style="animation-delay:${-c * 9}s">${imgs}</div>`;
