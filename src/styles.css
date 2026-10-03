@@ -2469,9 +2469,10 @@ kbd {
 }
 
 /* ---------- Режим «Смотреть» (watch.js) ----------
-   Витрина поверх приложения под шапкой окна. Тёмная «кино»-палитра
-   независимо от темы; --amb — цвет обложки текущего слайда баннера,
-   им плавно подкрашивается вся витрина. */
+   Витрина поверх приложения под шапкой окна. Тёмная «кино»-палитра;
+   в тёмных темах фон и поверхности берутся из цветовой темы, акцент —
+   всегда из неё. --amb — цвет обложки текущего слайда баннера, им плавно
+   подкрашивается вся витрина. */
 @property --amb { syntax: "<color>"; inherits: true; initial-value: #ff8a3d; }
 .btn.watch-cta {
   background: var(--accent-grad); color: var(--on-accent, #1a0d00); border-color: transparent; font-weight: 800;
@@ -2481,7 +2482,7 @@ kbd {
 .btn.watch-cta svg { width: 13px; height: 13px; }
 #watch-mode {
   position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 40; overflow: hidden; color: #f5f2ec;
-  --amb: #ff8a3d; --wm-bg: #0b0b0e; --wm-bg2: #121217; --wm-card: #17171d; --wm-line: rgba(255, 255, 255, .08);
+  --amb: var(--fire); --wm-bg: #0b0b0e; --wm-bg2: #121217; --wm-card: #17171d; --wm-line: rgba(255, 255, 255, .08);
   --wm-soft: rgba(245, 242, 236, .72); --wm-dim: rgba(245, 242, 236, .45);
   --wm-ease: cubic-bezier(.22, .9, .3, 1); --wm-spring: cubic-bezier(.34, 1.56, .64, 1);
   background:
@@ -2489,6 +2490,7 @@ kbd {
     radial-gradient(900px 600px at -10% 40%, color-mix(in srgb, var(--amb) 9%, transparent), transparent 60%), var(--wm-bg);
   transition: --amb 1.2s var(--wm-ease);
 }
+:root:not([data-theme="light"]) #watch-mode, :root:not([data-theme="light"]) .wm-modal { --wm-bg: var(--bg); --wm-bg2: var(--surface); --wm-card: var(--surface-2); }
 #watch-mode[hidden] { display: none; }
 #watch-mode button { font: inherit; color: inherit; }
 .wm-scroll { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; }
@@ -2516,7 +2518,7 @@ kbd {
 .wm-search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
 .wm-search kbd { margin-left: auto; font: 700 11px inherit; padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .18); color: var(--wm-soft); }
 .wm-lucky { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 999px; border: none; background: var(--accent-grad); font-weight: 800; font-size: 13px; cursor: pointer; box-shadow: 0 8px 24px -10px var(--fire); transition: transform .2s var(--wm-spring); white-space: nowrap; }
-#watch-mode .wm-lucky { color: #1a0d00; }
+#watch-mode .wm-lucky { color: var(--on-accent); }
 .wm-lucky:hover { transform: translateY(-1px) rotate(-2deg) scale(1.04); }
 .wm-back { padding: 8px 15px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(0, 0, 0, .28); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .wm-back:hover { background: rgba(255, 255, 255, .12); }
@@ -2533,7 +2535,7 @@ kbd {
   linear-gradient(180deg, rgba(11, 11, 14, .7) 0%, transparent 20%, transparent 58%, var(--wm-bg) 100%); }
 .wm-hero::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: soft-light; background: radial-gradient(70% 90% at 70% 40%, var(--amb), transparent 70%); opacity: .5; }
 .wm-grain { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: .06; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E"); }
-.wm-htext { position: absolute; z-index: 5; left: 44px; bottom: 27%; max-width: 640px; }
+.wm-htext { position: absolute; z-index: 5; left: 44px; bottom: 25%; width: min(600px, calc(100% - 750px)); }
 .wm-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .wm-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .12); backdrop-filter: blur(8px); }
 .wm-chip.score { color: #111; background: var(--gold); border-color: transparent; }
@@ -2542,34 +2544,40 @@ kbd {
 .wm-chip.live i { width: 7px; height: 7px; border-radius: 50%; background: #ff5b4a; animation: wm-live 1.6s infinite; }
 @keyframes wm-live { 0% { box-shadow: 0 0 0 0 rgba(255, 91, 74, .8); } 70% { box-shadow: 0 0 0 7px rgba(255, 91, 74, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 91, 74, 0); } }
 .wm-chip[hidden] { display: none; }
-.wm-htext h1 { margin: 16px 0 14px; font-size: clamp(30px, 3.8vw, 56px); line-height: 1.05; font-weight: 800; letter-spacing: -.025em; text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 6px 40px rgba(0, 0, 0, .5); color: #fff; }
+.wm-eyebrow { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); text-shadow: 0 1px 10px rgba(0, 0, 0, .6); }
+.wm-eyebrow b { padding: 3px 8px; border-radius: 6px; background: var(--fire); color: var(--on-accent); letter-spacing: .04em; text-shadow: none; }
+.wm-htext h1 { margin: 12px 0 10px; font-size: clamp(30px, 3.6vw, 52px); line-height: 1.05; font-weight: 900; letter-spacing: -.025em; text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 6px 40px rgba(0, 0, 0, .5); color: #fff; }
 .wm-htext h1 .w { display: inline-block; opacity: 0; transform: translateY(26px) rotate(3deg); filter: blur(6px); animation: wm-word .9s var(--wm-ease) forwards; }
 @keyframes wm-word { to { opacity: 1; transform: none; filter: none; } }
-.wm-htext p { margin: 0; color: var(--wm-soft); font-size: 14.5px; line-height: 1.65; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.wm-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
-.wm-play { position: relative; display: inline-flex; align-items: center; gap: 10px; padding: 12px 26px; border-radius: 999px; border: none; background: #fff; font-weight: 800; font-size: 15px; cursor: pointer; overflow: hidden; transition: transform .25s var(--wm-spring); box-shadow: 0 10px 40px -12px color-mix(in srgb, var(--amb) 80%, transparent); }
+.wm-hmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 11px; font-size: 13.5px; font-weight: 600; color: var(--wm-soft); }
+.wm-hmeta .sc { color: #ffd166; font-weight: 800; }
+.wm-hmeta i { width: 3px; height: 3px; border-radius: 50%; background: var(--wm-dim); }
+.wm-htext p { margin: 12px 0 0; color: var(--wm-soft); font-size: 14.5px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wm-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 22px; }
+.wm-play { position: relative; display: inline-flex; align-items: center; gap: 10px; padding: 12px 24px 12px 20px; border-radius: 12px; border: none; background: #fff; font-weight: 800; font-size: 15px; cursor: pointer; overflow: hidden; transition: transform .25s var(--wm-spring); box-shadow: 0 10px 40px -12px color-mix(in srgb, var(--amb) 80%, transparent); }
 #watch-mode .wm-play, .wm-modal .wm-play { color: #111; }
 .wm-play::before { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .9) 50%, transparent 70%); transform: translateX(-120%); animation: wm-shine 3.5s 1s infinite; mix-blend-mode: overlay; }
 @keyframes wm-shine { 30%, 100% { transform: translateX(120%); } }
-.wm-play:hover { transform: scale(1.05); }
+.wm-play:hover { transform: scale(1.04); }
 .wm-play svg, .wm-ghost svg { width: 16px; height: 16px; position: relative; }
-.wm-ghost { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, .35); background: rgba(0, 0, 0, .25); backdrop-filter: blur(10px); font-weight: 700; font-size: 15px; cursor: pointer; transition: background .2s, border-color .2s; }
+.wm-ghost { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 12px; border: none; background: rgba(255, 255, 255, .14); backdrop-filter: blur(10px); font-weight: 700; font-size: 15px; cursor: pointer; transition: background .2s; }
+.wm-ghost.sm { padding: 9px 14px; font-size: 13px; }
 .wm-ghost svg, .wm-round svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.wm-ghost:hover { background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .6); }
-#watch-mode .wm-ghost.on, .wm-modal .wm-ghost.on { border-color: var(--gold); color: var(--gold); }
-.wm-cover3d { position: absolute; z-index: 5; right: 9%; bottom: 29%; width: 230px; aspect-ratio: 2 / 3; perspective: 900px; opacity: 0; transform: translateY(30px); transition: opacity 1s var(--wm-ease) .25s, transform 1s var(--wm-ease) .25s; }
-.wm-slide.on .wm-cover3d { opacity: 1; transform: none; }
-.wm-c { position: absolute; inset: 0; border-radius: 18px; background: center / cover no-repeat; overflow: hidden; transform: rotateY(var(--ry, -8deg)) rotateX(var(--rx, 4deg)); transition: transform .5s var(--wm-ease); box-shadow: 0 40px 80px -25px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .12), 0 0 80px -10px color-mix(in srgb, var(--amb) 60%, transparent); }
-.wm-c::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at var(--gx, 30%) var(--gy, 20%), rgba(255, 255, 255, .35), transparent 45%); mix-blend-mode: overlay; }
-.wm-rail { position: absolute; z-index: 6; right: 44px; bottom: 15%; display: flex; gap: 10px; }
-.wm-rail button { position: relative; width: 116px; aspect-ratio: 16 / 9; padding: 0; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .14); background: center / cover no-repeat; overflow: hidden; opacity: .55; cursor: pointer; transition: opacity .3s, transform .3s var(--wm-spring), border-color .3s; }
-.wm-rail button:hover { opacity: .9; transform: translateY(-3px); }
-.wm-rail button.on { opacity: 1; border-color: #fff; }
-.wm-rail button::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(0, 0, 0, .75)); }
-.wm-rail span { position: absolute; z-index: 1; left: 6px; right: 6px; bottom: 5px; font-size: 10.5px; font-weight: 700; text-align: left; text-shadow: 0 1px 6px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wm-rail i { position: absolute; z-index: 2; left: 0; bottom: 0; height: 3px; width: 0; background: var(--gold); }
-.wm-rail button.on i { animation: wm-fill 9s linear forwards; }
-.wm-hero:hover .wm-rail button.on i { animation-play-state: paused; }
+.wm-ghost:hover { background: rgba(255, 255, 255, .24); }
+#watch-mode .wm-ghost.on, .wm-modal .wm-ghost.on { box-shadow: inset 0 0 0 1.5px var(--gold); color: var(--gold); }
+.wm-next { display: inline-flex; align-items: center; gap: 9px; margin-top: 18px; padding: 7px 13px 7px 10px; border-radius: 10px; background: rgba(0, 0, 0, .38); backdrop-filter: blur(10px); border: 1px solid var(--wm-line); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wm-next i { width: 8px; height: 8px; border-radius: 50%; background: #ff5b4a; animation: wm-live 1.6s infinite; }
+.wm-rail { position: absolute; z-index: 6; right: 44px; bottom: 25%; display: flex; gap: 10px; }
+.wm-rail button { width: 112px; padding: 0; border: none; background: none; text-align: left; opacity: .55; cursor: pointer; transition: opacity .3s, transform .3s var(--wm-spring); }
+.wm-rail button:hover { opacity: .9; }
+.wm-rail button.on { opacity: 1; transform: translateY(-4px); }
+.wm-qth { display: block; aspect-ratio: 16 / 9; border-radius: 10px; background: center / cover no-repeat var(--wm-card); border: 1px solid rgba(255, 255, 255, .16); }
+.wm-rail button.on .wm-qth { border-color: #fff; }
+.wm-qn { display: block; margin-top: 6px; font-size: 11.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 6px #000; }
+.wm-qp { display: block; height: 2px; margin-top: 5px; border-radius: 2px; background: rgba(255, 255, 255, .18); overflow: hidden; }
+.wm-qp i { display: block; height: 100%; width: 0; background: #fff; }
+.wm-rail button.on .wm-qp i { animation: wm-fill 9s linear forwards; }
+.wm-hero:hover .wm-rail button.on .wm-qp i { animation-play-state: paused; }
 @keyframes wm-fill { to { width: 100%; } }
 
 /* ряды */
@@ -2578,7 +2586,7 @@ kbd {
 .wm-row-h { display: flex; align-items: baseline; gap: 12px; margin: 0 44px 12px; }
 .wm-row-h h2 { margin: 0; font-size: 20px; font-weight: 800; color: #fff; }
 .wm-row-h small { color: var(--wm-dim); font-size: 12.5px; font-weight: 600; }
-.wm-tag { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: var(--accent-grad); color: #1a0d00; }
+.wm-tag { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: var(--accent-grad); color: var(--on-accent); }
 .wm-strip-wrap { position: relative; }
 .wm-strip { display: flex; gap: 16px; overflow-x: auto; padding: 10px 44px 18px; scrollbar-width: none; }
 .wm-strip::-webkit-scrollbar { display: none; }
@@ -2600,7 +2608,7 @@ kbd {
 .wm-tile:hover .wm-pic img { transform: scale(1.07); }
 .wm-tile:focus-visible { outline: none; }
 .wm-badge { position: absolute; top: 9px; right: 9px; font-size: 10.5px; font-weight: 800; padding: 4px 9px; border-radius: 999px; background: rgba(10, 10, 12, .62); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, .14); }
-.wm-badge.hot { background: var(--accent-grad); color: #1a0d00; border: none; }
+.wm-badge.hot { background: var(--accent-grad); color: var(--on-accent); border: none; }
 .wm-score { position: absolute; left: 9px; top: 9px; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 8px; background: rgba(10, 10, 12, .62); backdrop-filter: blur(8px); color: var(--gold); }
 .wm-ring { position: absolute; right: 9px; bottom: 9px; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: conic-gradient(var(--gold) calc(var(--p) * 1%), rgba(255, 255, 255, .18) 0); }
 .wm-ring::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: rgba(10, 10, 12, .85); }
@@ -2610,8 +2618,8 @@ kbd {
 .wm-meta { margin-top: 3px; font-size: 12px; color: var(--wm-dim); }
 
 .wm-top { flex: none; display: flex; align-items: flex-end; }
-.wm-num { font-size: 165px; line-height: .78; font-weight: 800; letter-spacing: -.08em; color: transparent; -webkit-text-stroke: 3px rgba(255, 255, 255, .28); margin-right: -26px; transition: -webkit-text-stroke-color .3s, transform .4s var(--wm-spring); user-select: none; }
-.wm-top:hover .wm-num { -webkit-text-stroke-color: var(--gold); transform: translateX(-6px); }
+.wm-num { font-size: 160px; line-height: .78; font-weight: 900; letter-spacing: -.08em; color: var(--wm-bg); -webkit-text-stroke: 2px rgba(255, 255, 255, .3); margin-right: -26px; transition: -webkit-text-stroke-color .3s, transform .4s var(--wm-spring); user-select: none; }
+.wm-top:hover .wm-num { -webkit-text-stroke-color: var(--fire); transform: translateX(-6px); }
 .wm-top .wm-tile { width: 150px; }
 
 .wm-cont { flex: none; width: 320px; padding: 0; border: none; background: none; cursor: pointer; text-align: left; }
@@ -2621,30 +2629,70 @@ kbd {
 .wm-pp { position: absolute; z-index: 2; left: 50%; top: 42%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .92); color: #111; transform: scale(.7); opacity: 0; transition: all .3s var(--wm-spring); }
 .wm-cont:hover .wm-pp { transform: none; opacity: 1; }
 .wm-pp svg { width: 20px; height: 20px; margin-left: 2px; }
-.wm-cinfo { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 13px; display: block; }
-.wm-cinfo b { display: block; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wm-cinfo { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 14px; display: block; }
+.wm-cinfo b { display: block; font-size: 13.5px; }
 .wm-cinfo > span { font-size: 12px; color: var(--wm-soft); }
+.wm-shot > .wm-bar { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; margin: 0; height: 3px; border-radius: 0; }
+.wm-cname { display: block; margin-top: 9px; font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wm-bar { display: block; margin-top: 8px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .22); overflow: hidden; }
 .wm-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent-grad); }
 
-.wm-week { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 10px; padding: 6px 44px 10px; overflow-x: auto; scrollbar-width: none; }
-.wm-day { border-radius: 16px; background: rgba(255, 255, 255, .035); border: 1px solid var(--wm-line); padding: 12px; min-height: 150px; max-height: 300px; overflow-y: auto; scrollbar-width: none; }
-.wm-day.today { background: linear-gradient(160deg, color-mix(in srgb, var(--amb) 18%, transparent), rgba(255, 255, 255, .02)); border-color: color-mix(in srgb, var(--amb) 45%, transparent); }
-.wm-day h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--wm-dim); display: flex; justify-content: space-between; }
-.wm-day.today h4 { color: var(--gold); }
-.wm-ep { display: flex; gap: 9px; align-items: center; width: calc(100% + 12px); margin: 0 -6px; padding: 6px; border: none; background: none; border-radius: 10px; cursor: pointer; text-align: left; transition: background .2s; }
-.wm-ep:hover { background: rgba(255, 255, 255, .06); }
-.wm-ep img { width: 34px; height: 48px; object-fit: cover; border-radius: 6px; flex: none; }
-.wm-ep b { display: -webkit-box; font-size: 12px; line-height: 1.25; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.wm-ep span span { display: block; font-size: 11px; color: var(--wm-dim); font-variant-numeric: tabular-nums; }
-.wm-ep span span.soon { color: #ff8a7a; font-weight: 800; }
-.wm-none { color: var(--wm-dim); font-size: 12px; }
+/* полоса «В нашей озвучке» */
+.wm-dub { position: relative; margin: 0 44px 40px; padding: 26px; border-radius: 20px; overflow: hidden; display: grid; grid-template-columns: 280px 1fr; gap: 26px;
+  background: linear-gradient(120deg, rgba(var(--fire-rgb), .2), rgba(var(--fire-rgb), .04) 50%, transparent), var(--wm-bg2); border: 1px solid rgba(var(--fire-rgb), .25); }
+.wm-dub::before { content: ""; position: absolute; width: 420px; height: 420px; left: -120px; top: -200px; border-radius: 50%; background: radial-gradient(rgba(var(--fire-rgb), .32), transparent 70%); pointer-events: none; }
+.wm-dintro { position: relative; display: flex; flex-direction: column; gap: 10px; }
+.wm-dintro h2 { margin: 0; font-size: 26px; font-weight: 900; line-height: 1.1; letter-spacing: -.02em; color: #fff; }
+.wm-dintro p { margin: 0; color: var(--wm-soft); font-size: 13.5px; line-height: 1.55; }
+.wm-dintro .wm-ghost { align-self: flex-start; margin-top: auto; }
+.wm-dlist { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; align-content: start; }
+.wm-dcard { display: grid; grid-template-columns: 76px 1fr; gap: 14px; padding: 10px; border-radius: 14px; border: 1px solid var(--wm-line); background: rgba(0, 0, 0, .28); text-align: left; cursor: pointer; transition: background .2s, border-color .2s; }
+.wm-dcard:hover { background: rgba(0, 0, 0, .42); border-color: rgba(var(--fire-rgb), .45); }
+.wm-dcard img, .wm-dph { width: 76px; height: 106px; object-fit: cover; border-radius: 9px; background: var(--wm-card); }
+.wm-dbody { display: flex; flex-direction: column; min-width: 0; }
+.wm-dbody b { font-size: 14.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wm-dst { margin-top: 4px; font-size: 12.5px; color: var(--wm-soft); }
+.wm-eps { display: flex; gap: 3px; margin-top: auto; padding-top: 10px; }
+.wm-eps i { flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .1); }
+.wm-eps i.d { background: var(--fire); }
+.wm-eps i.w { background: repeating-linear-gradient(45deg, var(--gold) 0 3px, transparent 3px 6px); }
+.wm-dbody > .wm-bar { margin-top: auto; }
+.wm-drow { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--wm-dim); }
+.wm-drow em { font-style: normal; color: var(--gold); white-space: nowrap; }
 
-.wm-moods { display: flex; gap: 8px; padding: 0 44px 30px; overflow-x: auto; scrollbar-width: none; }
-.wm-moods button { flex: none; padding: 9px 16px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .04); font-size: 13.5px; font-weight: 700; cursor: pointer; transition: all .25s var(--wm-ease); }
-#watch-mode .wm-moods button { color: var(--wm-soft); }
-#watch-mode .wm-moods button:hover { color: #fff; transform: translateY(-1px); }
-#watch-mode .wm-moods button.on { color: #111; border-color: transparent; background: var(--g); box-shadow: 0 8px 22px -10px var(--g); }
+/* расписание по дням */
+.wm-weekwrap { padding: 0 44px; }
+.wm-days { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; }
+.wm-days button { flex: none; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--wm-line); background: rgba(255, 255, 255, .04); font-weight: 700; font-size: 13px; text-align: left; cursor: pointer; transition: background .2s; }
+#watch-mode .wm-days button { color: var(--wm-soft); }
+.wm-days button small { display: block; font-size: 11px; font-weight: 600; color: var(--wm-dim); }
+.wm-days button:hover { background: rgba(255, 255, 255, .08); }
+#watch-mode .wm-days button.on { background: #fff; border-color: #fff; color: #111; }
+.wm-days button.on small { color: #555; }
+.wm-sched { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
+.wm-sched.swap { animation: wm-swap .4s var(--wm-ease); }
+.wm-air { display: grid; grid-template-columns: 56px 44px 1fr auto; align-items: center; gap: 12px; padding: 8px 12px 8px 6px; border-radius: 12px; border: 1px solid var(--wm-line); background: rgba(255, 255, 255, .035); text-align: left; cursor: pointer; transition: border-color .2s, background .2s; }
+.wm-air:hover { border-color: rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .06); }
+.wm-air.dub { border-color: rgba(var(--fire-rgb), .4); }
+.wm-air time { font-size: 17px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.wm-air img { width: 44px; height: 60px; object-fit: cover; border-radius: 7px; }
+.wm-sn { min-width: 0; }
+.wm-sn b { display: -webkit-box; font-size: 13px; line-height: 1.25; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wm-sn span { font-size: 12px; font-weight: 600; color: var(--wm-dim); }
+.wm-cd { max-width: 100px; font-size: 12px; font-weight: 700; text-align: right; color: var(--wm-soft); font-variant-numeric: tabular-nums; }
+.wm-cd.soon { color: #ff8a7a; }
+
+/* настроения */
+.wm-moods { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; padding: 0 44px; }
+.wm-mood { position: relative; height: 100px; padding: 14px; border-radius: 14px; border: none; overflow: hidden; isolation: isolate; display: flex; align-items: flex-end; text-align: left; font-size: 15px; font-weight: 800; cursor: pointer;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--g) 30%, #000), color-mix(in srgb, var(--g) 80%, #000)); transition: transform .25s var(--wm-spring), box-shadow .25s; }
+.wm-mood img { position: absolute; z-index: -1; right: -8px; top: 10px; width: 70px; border-radius: 7px; transform: rotate(14deg); box-shadow: -8px 8px 20px rgba(0, 0, 0, .5); transition: transform .3s var(--wm-spring); }
+.wm-mood span { text-shadow: 0 1px 8px rgba(0, 0, 0, .5); }
+.wm-mood:hover { transform: translateY(-3px); }
+.wm-mood:hover img { transform: rotate(6deg) translateY(-6px); }
+.wm-mood.on { box-shadow: 0 0 0 2px #fff, 0 12px 30px -10px var(--g); }
+.wm-reset { margin-left: auto; padding: 0; border: none; background: none; font-size: 13px; font-weight: 700; cursor: pointer; }
+#watch-mode .wm-reset { color: var(--gold); }
 
 .wm-gridsec { padding-top: 6px; }
 .wm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 22px 16px; padding: 6px 44px 40px; }
@@ -2667,6 +2715,8 @@ kbd {
 #watch-mode .wm-round.on { border-color: var(--gold); color: var(--gold); }
 .wm-round svg { width: 16px; height: 16px; }
 .wm-round.w svg { fill: currentColor; stroke: none; }
+.wm-round.big { width: 46px; height: 46px; background: rgba(0, 0, 0, .25); backdrop-filter: blur(10px); }
+.wm-round.big svg { width: 19px; height: 19px; }
 
 /* поиск-прожектор и «мне повезёт» */
 .wm-spot, .wm-slot { position: absolute; inset: 0; z-index: 35; display: grid; background: rgba(5, 5, 8, .72); backdrop-filter: blur(14px); opacity: 0; pointer-events: none; transition: opacity .25s; }
@@ -2715,17 +2765,18 @@ body.watch-open #app-screen { pointer-events: none; }
   .wm-nav { gap: 12px; padding-left: 24px; padding-right: 24px; }
   .wm-search { width: 44px; padding: 8px 12px; }
   .wm-search span, .wm-search kbd { display: none; }
-  .wm-htext { left: 24px; }
-  .wm-cover3d { display: none; }
+  .wm-htext { left: 24px; right: 24px; width: auto; max-width: 640px; }
+  .wm-rail { display: none; }
   .wm-row-h, .wm-empty { margin-left: 24px; margin-right: 24px; }
-  .wm-strip, .wm-grid, .wm-moods, .wm-week { padding-left: 24px; padding-right: 24px; }
+  .wm-dub { margin-left: 24px; margin-right: 24px; grid-template-columns: 1fr; }
+  .wm-strip, .wm-grid, .wm-moods, .wm-weekwrap { padding-left: 24px; padding-right: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .wm-slide, .wm-frame, .wm-frames, .wm-cover3d, .wm-c, .wm-pic, .wm-pic img, .wm-reveal { transition: none !important; }
+  .wm-slide, .wm-frame, .wm-frames, .wm-pic, .wm-pic img, .wm-reveal { transition: none !important; }
   .wm-reveal { opacity: 1; transform: none; }
   .wm-htext h1 .w { animation: none; opacity: 1; transform: none; filter: none; }
-  .wm-brand i, .wm-play::before, .wm-kb, .wm-chip.live i { animation: none; }
-  .wm-rail button.on i { animation: none; width: 100%; }
+  .wm-brand i, .wm-play::before, .wm-kb, .wm-chip.live i, .wm-next i { animation: none; }
+  .wm-rail button.on .wm-qp i { animation: none; width: 100%; }
 }
 
 /* ---------- Плеер серий (player-anime.js) ----------
