@@ -61,8 +61,13 @@ jobs:
         with:
           node-version: "24"
 
-      # Версия альфа-сборки — VERSION + "-alpha.<номер запуска>+<короткий
-      # коммит>". Хвост "-alpha.N" — то, по чему Velopack реально сравнивает
+      # Версия альфа-сборки — СЛЕДУЮЩАЯ после VERSION версия (патч + 1) +
+      # "-alpha.<номер запуска>+<короткий коммит>". Именно следующая: по
+      # SemVer "0.9.4-alpha.N" МЕНЬШЕ "0.9.4", и после выхода стабильной 0.9.4
+      # альфа-канал не видел ни одной новой сборки (откат версии клиент
+      # разрешает только при переходе с альфы на stable). "0.9.5-alpha.N"
+      # новее текущей стабильной, а будущая стабильная 0.9.5 — новее её.
+      # Хвост "-alpha.N" — то, по чему Velopack реально сравнивает
       # версии (номер запуска монотонно растёт, поэтому каждая альфа-сборка
       # гарантированно "новее" предыдущей даже если VERSION между ними не
       # менялся); "+sha" — SemVer build-metadata, в сравнение версий не
@@ -74,7 +79,8 @@ jobs:
         run: |
           short_sha="$(echo "${{ github.sha }}" | cut -c1-8)"
           echo "SHORT_SHA=$short_sha" >> "$GITHUB_ENV"
-          echo "PKG_VERSION=$(cat VERSION)-alpha.${{ github.run_number }}+$short_sha" >> "$GITHUB_ENV"
+          next="$(awk -F. '{printf "%d.%d.%d", $1, $2, $3 + 1}' VERSION)"
+          echo "PKG_VERSION=$next-alpha.${{ github.run_number }}+$short_sha" >> "$GITHUB_ENV"
 
       # APP_VERSION в интерфейсе подставляет Vite из PKG_VERSION (см.
       # vite.config.js) — sed по src/app/settings.js больше не нужен.
