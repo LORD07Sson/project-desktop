@@ -1,14 +1,16 @@
 // Режим «Смотреть» — витрина поверх приложения. Кнопка «Смотреть» в
 // шапке раскрывает его кругом из себя, «← Студия» / Esc сворачивают.
 //
-// Что на экране:
-//  - живой баннер: кадры из серий сменяются внутри слайда с наездом
-//    камеры, параллакс за мышью, 3D-обложка с бликом, мини-кадры
-//    следующих слайдов, отсчёт до новой серии;
-//  - вся витрина подкрашивается цветом обложки текущего слайда (--amb);
-//  - ряды: «Продолжить просмотр» (из памяти плеера), «Топ-10 сезона»,
-//    «Выходит на этой неделе» (живой отсчёт), настроения, «В тренде»,
-//    «Озвучивает студия» (кольцо хода озвучки), онгоинги, анонсы;
+// Что на экране (2.0):
+//  - баннер во всю ширину: кадры серий (или баннер AniList) с наездом
+//    камеры; слева метка «в нашей озвучке», название, оценка/год/жанры,
+//    «Продолжить · N серия» из памяти плеера и живой отсчёт до серии;
+//    справа очередь следующих слайдов с полоской до смены;
+//  - вся витрина подкрашивается цветом обложки текущего слайда (--amb),
+//    а палитра (фон, акцент) — из цветовой темы приложения;
+//  - «Продолжить просмотр», полоса «В нашей озвучке» (ход озвучки по
+//    сериям), «Топ-10 сезона», расписание по дням (живой отсчёт), плитки
+//    настроений, «В тренде», онгоинги, анонсы;
 //  - карточка при наведении, поиск-прожектор («/»), «Мне повезёт»,
 //    «Подробнее» с похожими, «Мой список».
 //
@@ -26,7 +28,7 @@ const HERO_MS = 9000;
 const FRAME_MS = 3000;
 const TABS = [["home", "Главная"], ["week", "Расписание"], ["list", "Мой список"], ["studio", "Озвучка студии"]];
 const MOODS = [
-  ["", "Всё", "#ffffff"], ["Экшен", "🔥 Экшен", "#ff6a2b"], ["Фэнтези", "✨ Фэнтези", "#9b7bff"],
+  ["Экшен", "🔥 Экшен", "#ff6a2b"], ["Фэнтези", "✨ Фэнтези", "#9b7bff"],
   ["Комедия", "😂 Комедия", "#ffd84a"], ["Романтика", "💗 Романтика", "#ff6fae"], ["Драма", "🎭 Драма", "#6fb6ff"],
   ["Повседневность", "☕ Уют", "#9be38a"], ["Приключения", "🧭 Приключения", "#4fd8c4"],
   ["Детектив", "🔎 Детектив", "#c8a2ff"], ["Сверхъестественное", "👻 Мистика", "#a0e0ff"],
@@ -46,6 +48,7 @@ let data = null;
 let loading = null;
 let tab = "home";
 let mood = "";
+let weekDay = 0;
 let heroIdx = 0;
 let heroTimer = null;
 let frameTimer = null;
@@ -74,8 +77,9 @@ function studioByShiki() {
   for (const s of data.studio) if (s.shiki_id) m.set(s.shiki_id, s);
   return m;
 }
+const heroPics = t => (t.frames && t.frames.length ? t.frames : t.banner ? [t.banner] : []);
 function heroes() {
-  return byScore(data.catalog.filter(t => t.hero && t.frames && t.frames.length));
+  return byScore(data.catalog.filter(t => t.hero && heroPics(t).length));
 }
 async function load() {
   if (data) return data;
@@ -104,6 +108,7 @@ function continueItems() {
   } catch (_) { /* не критично */ }
   return out.sort((a, b) => b.at - a.at).slice(0, 12);
 }
+const continueFor = id => continueItems().find(c => c.shikiId === id);
 function untilText(sec) {
   if (sec <= 0) return "уже вышла";
   const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
@@ -166,38 +171,107 @@ function continueHtml() {
   if (!items.length) return "";
   return rowHtml("Продолжить просмотр", items.map(c => {
     const t = byId.get(c.shikiId);
-    const pic = t ? ((t.frames && t.frames[1]) || t.banner || t.cover) : null;
+    const pic = t ? (t.banner || (t.frames && t.frames[1]) || t.cover) : null;
     const left = Math.max(1, Math.round((c.duration - c.time) / 60));
     const name = c.title || (t && t.name) || "Тайтл";
     return `
       <button type="button" class="wm-cont" data-wm-play="${c.shikiId}" data-wm-name="${esc(name)}">
         <span class="wm-shot"${pic ? ` style="background-image:url('${imgProxy(pic)}')"` : ""}>
           <span class="wm-pp">${I.play}</span>
-          <span class="wm-cinfo"><b>${esc(name)}</b><span>${esc(c.label || "")} · осталось ${left} мин</span>
-            <span class="wm-bar"><i style="width:${Math.round((c.time / c.duration) * 100)}%"></i></span></span>
+          <span class="wm-cinfo"><b>${esc(c.label || "Серия")}</b><span>осталось ${left} мин</span></span>
+          <span class="wm-bar"><i style="width:${Math.round((c.time / c.duration) * 100)}%"></i></span>
         </span>
+        <span class="wm-cname">${esc(name)}</span>
       </button>`;
   }).join(""), { note: "с того места, где остановились" });
 }
-function weekHtml() {
-  const now = Date.now() / 1000;
+
+// Полоса «В нашей озвучке»: что студия озвучивает в сезоне и как идёт —
+// готовые серии, серия в работе (штриховка), остальные.
+function dubHtml() {
+  if (!data.studio.length) return "";
+  const cards = data.studio.map(s => {
+    const total = s.episodes_total || 0, done = s.episodes_done || 0;
+    const status = !total ? "серии ещё не заведены"
+      : done >= total ? "Озвучено целиком"
+      : s.current_label ? `${s.current_label} · в работе, ${s.current_pct}%` : "в работе";
+    const segs = total && total <= 30
+      ? `<span class="wm-eps">${Array.from({ length: total }, (_, i) => `<i class="${i < done ? "d" : i === done ? "w" : ""}"></i>`).join("")}</span>`
+      : total ? `<span class="wm-bar"><i style="width:${Math.round((done / total) * 100)}%"></i></span>` : "";
+    return `
+      <button type="button" class="wm-dcard" data-wm-open="t:${s.title_id}">
+        ${s.poster_url ? `<img ${hdPosterAttrs(s.title_id, s.poster_url, 180)} alt="" loading="lazy">` : `<span class="wm-dph"></span>`}
+        <span class="wm-dbody">
+          <b>${esc(s.name)}</b>
+          <span class="wm-dst">${esc(status)}</span>
+          ${segs}
+          <span class="wm-drow"><span>${total ? `${done} из ${total} серий` : esc(s.season_name || "")}</span><em>${total && done >= total ? "✓ готово" : "подробнее →"}</em></span>
+        </span>
+      </button>`;
+  }).join("");
+  return `
+    <section class="wm-dub wm-reveal" data-wm-sec="studio">
+      <div class="wm-dintro">
+        <span class="wm-eyebrow"><b>Project</b></span>
+        <h2>В нашей озвучке</h2>
+        <p>Что студия озвучивает в этом сезоне: какие серии готовы, какая в работе.</p>
+        <button type="button" class="wm-ghost sm" data-wm-goto="studio">Все тайтлы студии →</button>
+      </div>
+      <div class="wm-dlist">${cards}</div>
+    </section>`;
+}
+function weekDays() {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  const names = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
-  const days = [...Array(7)].map((_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
-  return `<div class="wm-week">${days.map((d, i) => {
-    const from = d.getTime() / 1000, to = from + 86400;
-    const eps = data.catalog.filter(t => t.next_at >= from && t.next_at < to).sort((a, b) => a.next_at - b.next_at);
+  return [...Array(7)].map((_, i) => {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const from = d.getTime() / 1000;
+    const eps = data.catalog.filter(t => t.next_at >= from && t.next_at < from + 86400).sort((a, b) => a.next_at - b.next_at);
+    return { d, eps };
+  });
+}
+function schedHtml(eps) {
+  if (!eps.length) return `<div class="wm-none">В этот день новых серий нет.</div>`;
+  const now = Date.now() / 1000;
+  const dubs = studioByShiki();
+  return eps.map(t => {
+    const dub = dubs.get(t.id);
     return `
-      <div class="wm-day${i === 0 ? " today" : ""}">
-        <h4><span>${i === 0 ? "Сегодня" : i === 1 ? "Завтра" : names[d.getDay()]}</span><span>${d.getDate()}.${String(d.getMonth() + 1).padStart(2, "0")}</span></h4>
-        ${eps.length ? eps.map(t => `
-          <button type="button" class="wm-ep" data-wm-open="s:${t.id}">
-            <img src="${imgProxy(t.cover)}" alt="" loading="lazy">
-            <span><b>${esc(t.name)}</b><span data-wm-at="${t.next_at}" data-wm-ep="${t.next_ep}" class="${t.next_at - now < 6 * 3600 ? "soon" : ""}">${t.next_ep} сер. · ${new Date(t.next_at * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span></span>
-          </button>`).join("") : `<div class="wm-none">без новых серий</div>`}
-      </div>`;
-  }).join("")}</div>`;
+      <button type="button" class="wm-air${dub ? " dub" : ""}" data-wm-open="s:${t.id}" data-wm-pop="${t.id}">
+        <time>${new Date(t.next_at * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time>
+        <img src="${imgProxy(t.cover)}" alt="" loading="lazy">
+        <span class="wm-sn"><b>${esc(t.name)}</b><span>${t.next_ep} серия${dub ? " · Project" : ""}</span></span>
+        <span class="wm-cd${t.next_at - now < 6 * 3600 ? " soon" : ""}" data-wm-at="${t.next_at}">${untilText(t.next_at - now)}</span>
+      </button>`;
+  }).join("");
+}
+function weekHtml() {
+  const names = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+  const days = weekDays();
+  weekDay = Math.min(weekDay, days.length - 1);
+  return `
+    <div class="wm-days">${days.map(({ d, eps }, i) => `
+      <button type="button" data-wm-day="${i}" class="${i === weekDay ? "on" : ""}">${i === 0 ? "Сегодня" : i === 1 ? "Завтра" : names[d.getDay()]}<small>${d.getDate()}.${String(d.getMonth() + 1).padStart(2, "0")} · ${eps.length}</small></button>`).join("")}
+    </div>
+    <div class="wm-sched" data-wm-sched>${schedHtml(days[weekDay].eps)}</div>`;
+}
+function weekSectionHtml(title) {
+  return `<section class="wm-row wm-reveal" data-wm-sec="week"><div class="wm-row-h"><h2>${esc(title)}</h2><small>время ваше, отсчёт живой</small></div><div class="wm-weekwrap">${weekHtml()}</div></section>`;
+}
+// Плитки настроений: жанр + постер самого популярного тайтла этого жанра.
+function moodsHtml() {
+  const pop = data.catalog.slice().sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  // Разные постеры: самый популярный тайтл жанра, который ещё не занят
+  // другой плиткой (иначе «Ван-Пис» был бы почти на всех).
+  const used = new Set();
+  const tiles = MOODS.map(([g, label, c]) => {
+    const t = pop.find(x => !used.has(x.id) && (x.genres || []).includes(g)) || pop.find(x => (x.genres || []).includes(g));
+    if (t) used.add(t.id);
+    if (!t) return "";
+    return `<button type="button" class="wm-mood${g === mood ? " on" : ""}" data-wm-mood="${esc(g)}" style="--g:${c}"><img src="${imgProxy(t.cover)}" alt="" loading="lazy"><span>${label}</span></button>`;
+  }).join("");
+  return tiles ? `<section class="wm-row wm-reveal"><div class="wm-row-h"><h2>По настроению</h2>${mood ? `<button type="button" class="wm-reset" data-wm-mood="">сбросить</button>` : ""}</div><div class="wm-moods">${tiles}</div></section>` : "";
 }
 function moodRowsHtml() {
   const cat = data.catalog;
@@ -205,8 +279,7 @@ function moodRowsHtml() {
   const trending = f(cat.filter(t => t.group !== "anons").sort((a, b) => (b.popularity || 0) - (a.popularity || 0))).slice(0, 18);
   return `
     <div class="wm-moodrows">
-      ${rowHtml(mood ? "Подобрано по настроению" : "В тренде", trending.map(t => tileHtml(t)).join("")) || `<div class="wm-empty">Под это настроение ничего не нашлось — попробуйте другое.</div>`}
-      ${rowHtml("Озвучивает студия", data.studio.map(studioTileHtml).join(""), { tag: "Project", id: "studio" })}
+      ${rowHtml(mood ? `Под настроение: ${MOODS.find(m => m[0] === mood)?.[1] || mood}` : "В тренде", trending.map(t => tileHtml(t)).join("")) || `<div class="wm-empty">Под это настроение ничего не нашлось — попробуйте другое.</div>`}
       ${rowHtml("Онгоинги сезона", f(byScore(cat.filter(t => t.group === "ongoing"))).map(t => tileHtml(t)).join(""))}
       ${rowHtml("Скоро выйдет", f(cat.filter(t => t.group === "anons")).map(t => tileHtml(t, { meta: t.aired_on ? `с ${new Date(t.aired_on).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}` : "дата уточняется" })).join(""), { note: "анонсы" })}
     </div>`;
@@ -217,9 +290,10 @@ function homeHtml() {
     ${heroHtml()}
     <div class="wm-rows">
       ${continueHtml()}
-      ${rowHtml("Топ-10 сезона", top10.map((t, i) => `<div class="wm-top"><span class="wm-num">${i + 1}</span>${tileHtml(t, { badge: "" })}</div>`).join(""))}
-      <section class="wm-row wm-reveal" data-wm-sec="week"><div class="wm-row-h"><h2>Выходит на этой неделе</h2><small>время местное, отсчёт живой</small></div>${weekHtml()}</section>
-      <div class="wm-moods wm-reveal">${MOODS.map(([g, label, c]) => `<button type="button" data-wm-mood="${esc(g)}" class="${g === mood ? "on" : ""}" style="--g:${c}">${label}</button>`).join("")}</div>
+      ${dubHtml()}
+      ${rowHtml("Топ-10 сезона", top10.map((t, i) => `<div class="wm-top"><span class="wm-num">${i + 1}</span>${tileHtml(t, { badge: studioByShiki().get(t.id) ? "Project" : "", hot: true })}</div>`).join(""), { note: "по оценкам Shikimori" })}
+      ${weekSectionHtml("Расписание")}
+      <div data-wm-moodbox>${moodsHtml()}</div>
       ${moodRowsHtml()}
     </div>`;
 }
@@ -233,29 +307,45 @@ function heroHtml() {
     <div class="wm-hero" id="wm-hero">
       ${list.map((t, i) => `
         <div class="wm-slide${i === heroIdx ? " on" : ""}" data-wm-slide="${i}">
-          <div class="wm-frames">${t.frames.map((f, k) => `<div class="wm-frame${k === 0 ? " on" : ""}" style="background-image:url('${imgProxy(f)}');--kx:${k % 2 ? "-2%" : "2%"};--ky:${k % 3 ? "1.5%" : "-1.5%"}"></div>`).join("")}</div>
-          <div class="wm-cover3d"><div class="wm-c" style="background-image:url('${imgProxy(t.cover)}')"></div></div>
+          <div class="wm-frames">${heroPics(t).map((f, k) => `<div class="wm-frame${k === 0 ? " on" : ""}" style="background-image:url('${imgProxy(f)}');--kx:${k % 2 ? "-2%" : "2%"};--ky:${k % 3 ? "1.5%" : "-1.5%"}"></div>`).join("")}</div>
         </div>`).join("")}
       <div class="wm-grain"></div>
       <div class="wm-htext" id="wm-htext"></div>
-      <div class="wm-rail">${list.map((t, i) => `<button type="button" data-wm-hero="${i}" class="${i === heroIdx ? "on" : ""}" style="background-image:url('${imgProxy(t.frames[1] || t.frames[0])}')"><span>${esc(t.name)}</span><i></i></button>`).join("")}</div>
+      <div class="wm-rail">${list.map((t, i) => {
+        const pics = heroPics(t);
+        return `<button type="button" data-wm-hero="${i}" class="${i === heroIdx ? "on" : ""}"><span class="wm-qth" style="background-image:url('${imgProxy(t.banner || pics[1] || pics[0])}')"></span><span class="wm-qn">${esc(t.name)}</span><span class="wm-qp"><i></i></span></button>`;
+      }).join("")}</div>
     </div>`;
+}
+function nextText(t) {
+  const left = t.next_at - Date.now() / 1000;
+  return left > 0 ? `${t.next_ep} серия через ${untilText(left).replace(/^через /, "")}` : `${t.next_ep} серия уже вышла`;
 }
 function heroTextHtml(t) {
   const now = Date.now() / 1000;
   const dub = studioByShiki().get(t.id);
-  const live = t.next_at && t.next_at - now < 7 * 86400 ? `<span class="wm-chip live" data-wm-live><i></i>${t.next_ep} серия ${untilText(t.next_at - now)}</span>` : "";
+  const cont = continueFor(t.id);
+  const live = t.next_at && t.next_at - now < 7 * 86400 ? `<div class="wm-next" data-wm-live><i></i><span>${esc(nextText(t))}</span></div>` : "";
   const words = esc(t.name).split(" ").map((w, i) => `<span class="w" style="animation-delay:${i * 70}ms">${w}</span>`).join(" ");
   const key = `s:${t.id}`;
+  const meta = [
+    t.score ? `<span class="sc">★ ${t.score.toFixed(2)}</span>` : "",
+    t.aired_on ? `<span>${t.aired_on.slice(0, 4)}</span>` : "",
+    KIND[t.kind] ? `<span>${KIND[t.kind]}</span>` : "",
+    t.episodes || t.episodes_aired ? `<span>${t.episodes || t.episodes_aired} эп.</span>` : "",
+    (t.genres || []).length ? `<span>${esc(t.genres.slice(0, 2).join(" · "))}</span>` : "",
+  ].filter(Boolean).join("<i></i>");
   return `
-    <div class="wm-chips"><span class="wm-chip score">★ ${t.score.toFixed(1)}</span><span class="wm-chip">${KIND[t.kind] || "Сериал"}</span>${t.aired_on ? `<span class="wm-chip">${t.aired_on.slice(0, 4)}</span>` : ""}${t.episodes ? `<span class="wm-chip">${t.episodes} эп.</span>` : ""}${dub ? `<span class="wm-chip gold">Озвучивает Project</span>` : ""}${live}</div>
+    ${dub ? `<span class="wm-eyebrow"><b>Project</b>в нашей озвучке</span>` : `<span class="wm-eyebrow">${t.group === "anons" ? "Скоро" : "Сейчас в сезоне"}</span>`}
     <h1 title="${esc(t.name)}">${words}</h1>
+    <div class="wm-hmeta">${meta}</div>
     ${t.description ? `<p>${esc(t.description)}</p>` : ""}
     <div class="wm-acts">
-      <button type="button" class="wm-play" data-wm-play="${t.id}">${I.play}Смотреть</button>
+      <button type="button" class="wm-play" data-wm-play="${t.id}">${I.play}${cont ? `Продолжить${cont.label ? ` · ${esc(cont.label)}` : ""}` : "Смотреть"}</button>
       <button type="button" class="wm-ghost" data-wm-open="${key}">${I.info}Подробнее</button>
-      <button type="button" class="wm-ghost${inList(key) ? " on" : ""}" data-wm-list="${key}">${inList(key) ? `${I.check}В списке` : `${I.plus}В список`}</button>
-    </div>`;
+      <button type="button" class="wm-round big${inList(key) ? " on" : ""}" data-wm-list="${key}" title="В список">${inList(key) ? I.check : I.plus}</button>
+    </div>
+    ${live}`;
 }
 function showHero(i, r) {
   const list = heroes();
@@ -277,7 +367,8 @@ function showHero(i, r) {
     text.innerHTML = heroTextHtml(t);
     wireActions(text);
   }
-  r.style.setProperty("--amb", t.color || "#ff8a3d");
+  if (t.color) r.style.setProperty("--amb", t.color);
+  else r.style.removeProperty("--amb");
   window.clearInterval(frameTimer);
   window.clearInterval(heroTimer);
   if (reduceMotion()) return;
@@ -306,12 +397,7 @@ function wireHero(r) {
     const x = (e.clientX - box.left) / box.width - 0.5, y = (e.clientY - box.top) / box.height - 0.5;
     hero.style.setProperty("--px", `${-x * 26}px`);
     hero.style.setProperty("--py", `${-y * 18}px`);
-    hero.style.setProperty("--ry", `${x * 22}deg`);
-    hero.style.setProperty("--rx", `${-y * 16}deg`);
-    hero.style.setProperty("--gx", `${(x + 0.5) * 100}%`);
-    hero.style.setProperty("--gy", `${(y + 0.5) * 100}%`);
   });
-  hero.addEventListener("pointerleave", () => { hero.style.setProperty("--ry", "-8deg"); hero.style.setProperty("--rx", "4deg"); });
 }
 
 // ---------- отрисовка ----------
@@ -325,7 +411,7 @@ function bodyHtml() {
     return `<div class="wm-pad"></div>${gridHtml("Мой список", tiles, "Пока пусто — жмите «+ В список» на баннере или в карточке.")}`;
   }
   if (tab === "studio") return `<div class="wm-pad"></div>${gridHtml("Озвучка студии", studioTiles, "В сезонах студии пока нет тайтлов.")}`;
-  if (tab === "week") return `<div class="wm-pad"></div><section class="wm-row"><div class="wm-row-h"><h2>Расписание на неделю</h2><small>время местное, отсчёт живой</small></div>${weekHtml()}</section>`;
+  if (tab === "week") return `<div class="wm-pad"></div>${weekSectionHtml("Расписание на неделю")}`;
   return homeHtml();
 }
 function renderBody(r) {
@@ -336,18 +422,41 @@ function renderBody(r) {
   wireHero(r);
   if (body.querySelector("#wm-hero")) showHero(heroIdx, r);
   else { window.clearInterval(heroTimer); window.clearInterval(frameTimer); }
-  body.querySelectorAll("[data-wm-mood]").forEach(b => b.addEventListener("click", () => {
-    mood = b.dataset.wmMood;
+  wireMoods(body, r);
+  body.querySelectorAll("[data-wm-day]").forEach(b => b.addEventListener("click", () => {
+    weekDay = Number(b.dataset.wmDay);
+    const sec = b.closest(".wm-weekwrap");
+    sec.querySelectorAll("[data-wm-day]").forEach(x => x.classList.toggle("on", x === b));
+    const sched = sec.querySelector("[data-wm-sched]");
+    sched.innerHTML = schedHtml(weekDays()[weekDay].eps);
+    sched.classList.remove("swap");
+    void sched.offsetWidth;
+    sched.classList.add("swap");
+    wireActions(sched);
+  }));
+  body.querySelectorAll("[data-wm-goto]").forEach(b => b.addEventListener("click", () => {
+    r.querySelector(`[data-wm-tab="${b.dataset.wmGoto}"]`)?.click();
+  }));
+  observeReveal(r);
+}
+// Плитка настроения: выбрать — ряды ниже подбираются под жанр, ещё раз
+// (или «сбросить») — снова «В тренде».
+function wireMoods(scope, r) {
+  scope.querySelectorAll("[data-wm-mood]").forEach(b => b.addEventListener("click", () => {
+    const body = r.querySelector("#wm-body");
+    mood = b.dataset.wmMood === mood ? "" : b.dataset.wmMood;
     const tmp = document.createElement("div");
     tmp.innerHTML = moodRowsHtml();
     const fresh = tmp.firstElementChild;
     body.querySelector(".wm-moodrows").replaceWith(fresh);
-    body.querySelectorAll("[data-wm-mood]").forEach(x => x.classList.toggle("on", x.dataset.wmMood === mood));
+    const box = body.querySelector("[data-wm-moodbox]");
+    box.innerHTML = moodsHtml();
+    box.querySelector(".wm-reveal")?.classList.add("in");
+    wireMoods(box, r);
     fresh.classList.add("swap");
     wireActions(fresh);
     observeReveal(r);
   }));
-  observeReveal(r);
 }
 let io = null;
 function observeReveal(r) {
@@ -639,11 +748,11 @@ function tick() {
   const now = Date.now() / 1000;
   r.querySelectorAll("[data-wm-at]").forEach(el => {
     const left = Number(el.dataset.wmAt) - now;
-    if (left < 6 * 3600) { el.textContent = `${el.dataset.wmEp} сер. · ${untilText(left)}`; el.classList.add("soon"); }
+    if (left < 6 * 3600) { el.textContent = untilText(left); el.classList.add("soon"); }
   });
-  const live = r.querySelector("[data-wm-live]");
+  const live = r.querySelector("[data-wm-live] span");
   const t = heroes()[heroIdx];
-  if (live && t && t.next_at) live.innerHTML = `<i></i>${t.next_ep} серия ${untilText(t.next_at - now)}`;
+  if (live && t && t.next_at) live.textContent = nextText(t);
 }
 
 // ---------- открыть / закрыть ----------
