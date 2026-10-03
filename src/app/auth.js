@@ -114,27 +114,34 @@ export function applyRole(isAdmin) {
 
 // Стена обложек на экране входа. Картинки — с нашего сервера по номеру
 // (/api/login-wall/N): входа ещё нет, а внешние картинки CSP не пускает.
-let wallLoaded = false;
+// Размер пула спрашиваем один раз за запуск, а набор и порядок обложек —
+// новые при каждом показе экрана входа (и после выхода тоже).
+let wallCount = null;
 async function loadLoginWall() {
-  if (wallLoaded) return;
   const host = $("#auth-wall");
   if (!host) return;
   try {
-    const resp = await fetch(`${API_BASE}/login-wall`);
-    const { count } = await resp.json();
+    if (wallCount === null) {
+      const resp = await fetch(`${API_BASE}/login-wall`);
+      wallCount = (await resp.json()).count || 0;
+    }
+    const count = wallCount;
     if (!count) return;
-    wallLoaded = true;
+    host.classList.remove("on");
     const COLS = 5;
-    // Порядок перемешивается при каждом показе — стена не повторяется.
+    // Сервер держит пул на ~200 тайтлов (популярные и лучшие на Shikimori
+    // за все годы); каждый показ — свои случайные 40 в случайном порядке,
+    // поэтому стена не повторяется.
     const order = Array.from({ length: count }, (_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
     }
+    const shown = order.slice(0, Math.min(count, 40));
     let html = "";
     for (let c = 0; c < COLS; c++) {
       const ids = [];
-      for (let i = c; i < count; i += COLS) ids.push(order[i]);
+      for (let i = c; i < shown.length; i += COLS) ids.push(shown[i]);
       if (!ids.length) continue;
       const imgs = ids.concat(ids).map(i => `<img src="${API_BASE}/login-wall/${i}" alt="" loading="lazy" decoding="async">`).join("");
       html += `<div class="aw-col" style="animation-delay:${-c * 9}s">${imgs}</div>`;
