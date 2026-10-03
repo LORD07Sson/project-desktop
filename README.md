@@ -27,11 +27,11 @@
 ## Стек
 
 - **Tauri v2** (Rust) + **Vite** во фронтенде — большинство вкладок на
-  обычном vanilla JS, `Overview.jsx` — на [SolidJS](https://solidjs.com)
-  (первый пример частичной миграции, см. CHANGELOG; остальные вкладки
-  переносятся постепенно, не одним махом)
+  обычном vanilla JS, `src/app/Overview.jsx` — на [SolidJS](https://solidjs.com)
+  через `vite-plugin-solid` (первый пример частичной миграции; остальные
+  вкладки переносятся постепенно, не одним махом)
 - **Автообновление** — [Velopack](https://velopack.io), рассылка через
-  GitHub Releases, отдельные stable/alpha-каналы
+  GitHub Releases, отдельные stable/alpha-каналы (см. «Релизы» ниже)
 - **Токены** — в системном keyring ОС, не в localStorage/файле
 - **Вход** — по одноразовому коду из Telegram-бота (см. `/desktop` в
   боте), не по паролю
@@ -129,17 +129,28 @@ Layouts по наведению на «развернуть», для него �
 `cargo run --features devtools`. Диагностика у пользователя закрыта
 файловыми логами («Настройки» → «Открыть логи»).
 
+## Релизы
+
 Номер версии живёт в одном месте — файле `VERSION` в корне. В
 `tauri.conf.json`/`Cargo.toml` его подставляет CI перед сборкой, в
 интерфейс («Настройки» → «Версия») — сам Vite через
 `define: __APP_VERSION__` (см. `vite.config.js`), так что локальная
 сборка показывает ту же версию, что лежит в `VERSION`.
 
-Установщики (`Setup.exe`, `Portable.zip`, `.nupkg`) собирает CI —
-[`build.yml`](.github/workflows/build.yml) для стабильных релизов,
-[`build-alpha.yml`](.github/workflows/build-alpha.yml) — на каждый
-пуш в `main`, тестовая rolling-сборка (см. переключатель канала в
-Настройках приложения).
+Установщики (`Setup.exe`, `Portable.zip`, `.nupkg`) собирает только CI,
+на `windows-latest`, через `vpk` (Velopack) — `cargo-tauri`/NSIS не
+используются:
+
+- **stable** — [`build.yml`](.github/workflows/build.yml), запускается
+  пушем в `main`, который меняет `VERSION`. Прогоняет lint и тесты,
+  собирает `cargo build --release --features custom-protocol`, делает
+  `vpk pack` и `vpk upload github` в релиз `v<VERSION>`.
+- **alpha** — [`build-alpha.yml`](.github/workflows/build-alpha.yml),
+  на каждый пуш в `main`; версия `<VERSION>-alpha.<номер запуска>+<коммит>`,
+  отдельный Velopack-канал `alpha`.
+
+Канал пользователь выбирает сам в Настройках приложения. Чтобы выпустить
+стабильную версию — поднять номер в `VERSION` и влить это в `main`.
 
 ## Структура репозитория
 
@@ -149,10 +160,14 @@ Layouts по наведению на «развернуть», для него �
 | `src-tauri/src/file_scope.rs` | Какие пути на диске вебвью вправе попросить прочитать/перезаписать |
 | `src-tauri/src/media_tools.rs` | Операции ffmpeg: резка (в т.ч. точная), конвертация, звук, склейка, муксинг, дубляж, скорость, кадры, GIF, субтитры |
 | `src-tauri/src/board.rs` | Раскладка доски: срочность карточек, метрики колонок, поиск (чистая функция, покрыта тестами) |
-| `src/` | Фронтенд-исходники — HTML/CSS/JS, раздроблен по темам в `src/app/*.js`; `Overview.jsx` — на SolidJS, остальные вкладки на vanilla JS (частичная миграция, см. CHANGELOG) |
+| `src-tauri/binaries/` | `ffmpeg.exe`, `ffprobe.exe`, `mpv.exe` — бандлятся в Windows-сборку |
+| `src/` | Фронтенд-исходники — HTML/CSS/JS, раздроблен по темам в `src/app/*.js`; `Overview.jsx` — на SolidJS, остальные вкладки на vanilla JS (частичная миграция) |
 | `dist/` | Собранный фронтенд (`npm run build`, Vite) — не в git, пересобирается всегда |
+| `scripts/` | Тесты на собранном бандле (jsdom), запускаются через `npm test` |
 | `docs/API.md` | Список эндпоинтов сервера, которые дёргает клиент |
-| `legacy_python_client/` | Старый клиент на Python/Tk, до миграции на Tauri — оставлен для истории, не используется и не поддерживается |
+| `.github/workflows/` | CI: stable- и alpha-сборки через Velopack, CodeQL, лейблер |
+| `.cargo/config.toml` | Статическая линковка C-рантайма для Windows-сборки |
+| `VERSION` | Единственный источник номера версии |
 
 ## Лицензия
 
