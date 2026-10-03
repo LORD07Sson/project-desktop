@@ -139,16 +139,23 @@ async function openSettings() {
 
         <section class="st-sec" id="st-look">
           <h3>Внешний вид</h3><p class="st-lead">Изменения видны сразу, без перезапуска.</p>
-          <div class="st-group" data-st-find="тема тёмная светлая огонь золото свечение">
-            <div class="st-group-h">Тема</div>
+          <div class="st-group" data-st-find="цветовая тема цвет акцент палитра янтарь сакура фиалка небо мята">
+            <div class="st-group-h">Цветовая тема</div>
+            <div class="st-palettes">
+              ${Object.entries(ACCENTS).map(([k, a]) => `<button type="button" class="st-palette${k === accent ? " on" : ""}" data-st-accent="${k}">
+                <span class="st-pal-prev" style="--p0:${a.sw[0]};--p1:${a.sw[1]};--p2:${a.sw[2]};--p3:${a.sw[3]}"><i></i><i></i><i></i><i></i></span>
+                <b>${a.label}</b></button>`).join("")}
+            </div>
+          </div>
+          <div class="st-group" data-st-find="тема тёмная светлая огонь золото свечение фон">
+            <div class="st-group-h">Фон</div>
             <div class="st-cards st-cards-3">
-              <button type="button" class="st-card${themeCard === "fire" ? " on" : ""}" data-st-themecard="fire"><span class="st-prev st-prev-fire"><i></i><i></i><i></i></span><b>Огонь</b><em>тёмная, свечение снизу</em></button>
-              <button type="button" class="st-card${themeCard === "glow" ? " on" : ""}" data-st-themecard="glow"><span class="st-prev st-prev-glow"><i></i><i></i><i></i></span><b>Золотое свечение</b><em>тёмная, золотые кромки</em></button>
-              <button type="button" class="st-card${themeCard === "light" ? " on" : ""}" data-st-themecard="light"><span class="st-prev st-prev-light"><i></i><i></i><i></i></span><b>Светлая</b><em>для дня</em></button>
+              <button type="button" class="st-card${themeCard === "fire" ? " on" : ""}" data-st-themecard="fire"><span class="st-prev st-prev-fire"><i></i><i></i><i></i></span><b>Свечение снизу</b><em>тёмный, тёплое зарево</em></button>
+              <button type="button" class="st-card${themeCard === "glow" ? " on" : ""}" data-st-themecard="glow"><span class="st-prev st-prev-glow"><i></i><i></i><i></i></span><b>Свечение сверху</b><em>тёмный, светлые кромки</em></button>
+              <button type="button" class="st-card${themeCard === "light" ? " on" : ""}" data-st-themecard="light"><span class="st-prev st-prev-light"><i></i><i></i><i></i></span><b>Светлый</b><em>для дня</em></button>
             </div>
           </div>
           <div class="st-group">
-            ${row(ICONS.palette, "Акцентный цвет", "Кнопки, подсветка, графики", `<div class="st-accents">${Object.entries(ACCENTS).map(([k, a]) => `<button type="button" class="st-accent${k === accent ? " on" : ""}" data-st-accent="${k}" title="${a.label}" style="--a1:${a.fire || "#ff6a2b"};--a2:${a.gold || "#ffb444"}"></button>`).join("")}</div>`, "цвет акцент")}
             ${row(ICONS.scale, "Масштаб интерфейса", "Для больших мониторов и 4K", seg("data-st-scale", SCALES.map(v => [v, `${v}%`]), scale), "размер шрифт крупнее")}
             ${row(ICONS.density, "Плотность таблиц", "Сколько строк влезает в «Список»", seg("data-st-density", [["comfortable", "Обычная"], ["compact", "Компактная"]], density))}
             ${row(ICONS.motion, "Анимации", "Выключите на слабом компьютере", seg("data-st-motion", [["on", "Включены"], ["off", "Выключены"]], motion), "движение плавность")}
