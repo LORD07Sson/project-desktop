@@ -158,6 +158,7 @@ export function showAuth(err) {
   // висеть над формой входа.
   $("#auth-error").textContent = err || "";
   $("#code-input").focus();
+  loadCodeLength();
 }
 
 export function showApp() {
@@ -258,10 +259,32 @@ function hideOops() {
 $("#submit-code").addEventListener("click", submitCode);
 $("#code-input").addEventListener("keydown", e => { if (e.key === "Enter") submitCode(); });
 
-// Шесть ячеек — только картинка поверх одного настоящего поля ввода:
-// вставка из буфера, автозаполнение и ввод работают как обычно, а
-// ячейки просто показывают цифры. Шестая цифра — сразу вход.
-const CODE_LEN = 6;
+// Ячейки — только картинка поверх одного настоящего поля ввода: вставка
+// из буфера, автозаполнение и ввод работают как обычно, а ячейки просто
+// показывают цифры. Последняя цифра — сразу вход. Сколько цифр в коде,
+// решает сервер (/desktop/pair-info): 6 или 8; не ответил — 6.
+let CODE_LEN = 6;
+
+function layoutCodeCells(n) {
+  CODE_LEN = n;
+  const box = $(".code-boxes");
+  const input = $("#code-input");
+  box.querySelectorAll(".code-cell, .code-gap").forEach(el => el.remove());
+  const half = n / 2;
+  const cells = Array.from({ length: n }, () => '<span class="code-cell"></span>');
+  box.insertAdjacentHTML("beforeend", [...cells.slice(0, half), '<span class="code-gap"></span>', ...cells.slice(half)].join(""));
+  input.maxLength = n;
+  $("#code-len-hint").textContent = `Введите ${n} цифр из ответа`;
+  renderCodeCells();
+}
+
+async function loadCodeLength() {
+  try {
+    const info = await apiGet("/desktop/pair-info");
+    const n = Number(info && info.code_length);
+    if ((n === 6 || n === 8) && n !== CODE_LEN) layoutCodeCells(n);
+  } catch (_) { /* старый сервер или нет сети — остаёмся на 6 */ }
+}
 
 function renderCodeCells() {
   const input = $("#code-input");
