@@ -1,0 +1,75 @@
+name: Checks
+
+# Lint и тесты на каждом PR — раньше они гонялись только внутри
+# build.yml/build-alpha.yml, то есть уже ПОСЛЕ мержа в main, и сломанный
+# PR всплывал только упавшей сборкой альфы. Здесь ничего не собирается
+# и не публикуется, только проверки.
+on:
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Новый push в тот же PR отменяет предыдущий прогон — результат старого
+# коммита уже никому не нужен (в отличие от build*.yml, где обрывать
+# публикацию релиза нельзя).
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: npm lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Та же версия Node, что в build.yml (jsdom 30.x требует ^24.15.0).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      # npm test (scripts/verify-modules.mjs) проверяет собранный dist/,
+      # поэтому сначала build — тот же порядок, что в build.yml.
+      - run: npm run build
+      - run: npm test
+
+  rust:
+    name: cargo check + test
+    # Клиент собирается только под Windows, и часть кода (mpv_embed.rs,
+    # windows-rs) за cfg(windows) — на Linux проверялось бы не то, что
+    # уходит пользователям.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      # generate_context!() в main.rs требует существующий
+      # build.frontendDist (../dist) уже на этапе компиляции.
+      - name: Собрать фронтенд для tauri::generate_context!
+        shell: bash
+        run: |
+          npm ci
+          npm run build
+
+      - name: cargo check
+        shell: bash
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --features custom-protocol
+
+      - name: cargo test
+        shell: bash
+        run: cargo test --manifest-path src-tauri/Cargo.toml
