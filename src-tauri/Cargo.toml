@@ -97,7 +97,18 @@ windows = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
     "Win32_System_LibraryLoader",
+    # desktop_notify.rs: AUMID процесса и ярлык в «Пуске» под него —
+    # иначе Windows подписывает тосты «Windows PowerShell».
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_Storage_EnhancedStorage",
 ] }
+# Тосты под своим AUMID (desktop_notify.rs) — та же версия, что тянет
+# tauri-plugin-notification, отдельной копии крейта не появляется.
+tauri-winrt-notification = "0.7"
 # Только для disable_browser_accelerator_keys (main.rs) — версия "0.38"
 # специально совпадает с тем, что резолвит сам tauri/wry (Cargo.lock:
 # "webview2-com-sys" -> "windows 0.61.3"), чтобы ICoreWebView2Settings3

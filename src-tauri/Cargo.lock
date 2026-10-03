@@ -3075,6 +3075,7 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
+ "tauri-winrt-notification",
  "tokio",
  "velopack",
  "webview2-com",
