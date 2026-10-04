@@ -28,7 +28,6 @@ import { timelineHtml, playTimelineIntro } from "./charts.js";
 import { assigneesHtml } from "./reports.js";
 import { openReportDetail } from "./report-detail.js";
 import { state } from "./state.js";
-import { loadSidebarStatusCounts } from "./tabs.js";
 import { ATTACH_EXTENSIONS } from "./file-drop.js";
 import { loadAvatars } from "./profile.js";
 
@@ -354,7 +353,7 @@ function wireCardDrag(card) {
       if (!targetStatus || targetStatus === card.dataset.status) return;
       try {
         const res = await apiPost(`/report/${encodeURIComponent(card.dataset.id)}/status`, { status: targetStatus });
-        if (res.changed) { toast("Статус изменён."); await loadBoard(); loadSidebarStatusCounts(); }
+        if (res.changed) { toast("Статус изменён."); await loadBoard(); }
         else if (res.detail) toast(res.detail, "error");
       } catch (e) {
         toast(`Не удалось перенести карточку: ${e.message}`, "error");
@@ -866,7 +865,6 @@ async function openCreateProjectDialog(filePicked) {
       toast(`Проект создан: ${res.public_id}`);
       overlay.remove();
       await loadBoard();
-      loadSidebarStatusCounts();
     } catch (e) {
       toast(`Не удалось создать проект: ${e.message}`, "error");
       btn.disabled = false;

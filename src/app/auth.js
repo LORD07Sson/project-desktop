@@ -6,7 +6,7 @@ import oopsFrierenGif from "../assets/friren.gif";
 import { state, resetSessionState } from "./state.js";
 import { api, apiGet, armSessionExpiry, ensureMediaToken, API_BASE } from "./api.js";
 import { $ } from "./utils.js";
-import { refreshAll, clearTabDom, restoreLastTab, loadSidebarStatusCounts } from "./tabs.js";
+import { refreshAll, clearTabDom, restoreLastTab } from "./tabs.js";
 import { setTitlebarIdentity } from "./titlebar-menus.js";
 import { refreshQueueBadge } from "./queue.js";
 import { resetAssignmentsBaseline } from "./notifications.js";
@@ -43,7 +43,7 @@ export function hideSplash() {
 export function setDisplayName(name) {
   state.name = name || null;
   const el = $("#whoami");
-  if (el) el.textContent = state.name ? `— ${state.name}` : "";
+  if (el) el.textContent = state.name || "";
   setTitlebarIdentity(state.name);
 }
 
@@ -184,7 +184,6 @@ export function showApp() {
   // и его первый заход всегда уходил впустую.
   pingPresence();
   loadTitlebarTeam();
-  loadSidebarStatusCounts();
   refreshQueueBadge();
   refreshInbox();
   // Новичку — приветствие с предложением пройти обучение (один раз).

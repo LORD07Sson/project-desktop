@@ -1,5 +1,5 @@
 // Личные настройки вида (Настройки → Внешний вид / Поведение): акцентный
-// цвет, масштаб интерфейса, анимации, компактное боковое меню, стартовый
+// цвет, масштаб интерфейса, анимации, фон из обложки тайтла, стартовый
 // раздел. Хранятся в localStorage и применяются сразу при импорте модуля —
 // до первой отрисовки, чтобы не мигало.
 
@@ -7,7 +7,7 @@ const KEYS = {
   accent: "project-accent",
   scale: "project-scale",
   motion: "project-motion",
-  sidebar: "project-sidebar",
+  backdrop: "project-backdrop",
   start: "project-start-tab",
 };
 
@@ -60,11 +60,13 @@ export function applyMotion(mode) {
   else delete root.dataset.motion;
 }
 
-export function sidebarCompact() { return get(KEYS.sidebar, "full") === "compact"; }
-export function applySidebarCompact(on) {
-  set(KEYS.sidebar, on ? "compact" : "full");
-  if (on) root.dataset.sidebar = "compact";
-  else delete root.dataset.sidebar;
+// Размытая обложка тайтла за интерфейсом (app/backdrop.js). Выключенная
+// оставляет ровный фон — на слабом компьютере блюр на всё окно дорогой.
+export function backdropOn() { return get(KEYS.backdrop, "on") !== "off"; }
+export function applyBackdrop(on) {
+  set(KEYS.backdrop, on ? "on" : "off");
+  if (on) delete root.dataset.backdrop;
+  else root.dataset.backdrop = "off";
 }
 
 // Стартовый раздел: «last» — как раньше, последний открытый.
@@ -75,5 +77,5 @@ export function setStartTab(v) { set(KEYS.start, START_TABS[v] ? v : "last"); }
   applyAccent(currentAccent());
   applyScale(currentScale());
   applyMotion(currentMotion());
-  applySidebarCompact(sidebarCompact());
+  applyBackdrop(backdropOn());
 })();

@@ -24,6 +24,7 @@ import { openBirthdaysSheet } from "./birthdays.js";
 import { imgProxy } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
+import { setBackdrop } from "./backdrop.js";
 
 const DAY_MS = 86400000;
 const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
@@ -388,4 +389,9 @@ export async function loadOverview() {
   root.innerHTML = "";
   disposePrev = render(() => <Overview data={d} trend={trend} dash={dash} feed={feed} />, root);
   loadAvatars(root);
+  // Фон окна — обложка самой горячей серии, а если горящих нет —
+  // любой серии в работе с обложкой.
+  const reports = (dash?.board?.columns || []).flatMap(c => c.reports || []);
+  const hot = attentionItems(reports).find(it => it.r.poster_url)?.r || reports.find(r => isOpen(r) && r.poster_url);
+  if (hot) setBackdrop(imgProxy(hot.poster_url));
 }

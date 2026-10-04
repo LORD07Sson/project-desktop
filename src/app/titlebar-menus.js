@@ -1,5 +1,5 @@
-// Меню шапки: «Инструменты» (QC, ffmpeg, обновить, клавиши, настройки)
-// и профиль (аватар → «Мой профиль» / «Выйти»). Сами кнопки внутри меню
+// Меню шапки: «Ещё» (редкие разделы), «Инструменты» (QC, ffmpeg, тема,
+// обновить, клавиши, настройки) и профиль (аватар → «Мой профиль» / «Выйти»). Сами кнопки внутри меню
 // — те же #open-qc, #refresh-btn, #logout-btn и т.д., их обработчики
 // живут в своих модулях; здесь только открыть/закрыть меню.
 
@@ -8,6 +8,7 @@ import { $, esc } from "./utils.js";
 import { loadAvatars } from "./profile.js";
 
 const MENUS = [
+  { wrap: "#more-wrap", btn: "#more-btn", menu: "#more-menu" },
   { wrap: "#tools-wrap", btn: "#tools-btn", menu: "#tools-menu" },
   { wrap: "#me-wrap", btn: "#me-btn", menu: "#me-menu" },
 ];
@@ -51,6 +52,19 @@ window.addEventListener("blur", () => closeAll());
 $("#me-profile")?.addEventListener("click", () => {
   import("./tabs.js").then(m => m.switchTab("profile"));
 });
+
+// «Настройки» в меню «Ещё» — та же кнопка, что в «Инструментах».
+$("#more-settings")?.addEventListener("click", () => $("#open-settings")?.click());
+
+// Счётчики новых событий (лента, профиль) висят на пунктах меню «Ещё»,
+// а меню закрыто — поэтому на самой кнопке «Ещё» загорается точка,
+// пока внутри есть хоть один непустой бейдж.
+const moreMenu = $("#more-menu");
+if (moreMenu) {
+  const syncDot = () => $("#more-btn")?.classList.toggle("has-badge",
+    !!moreMenu.querySelector(".tab-badge:not([hidden])"));
+  new MutationObserver(syncDot).observe(moreMenu, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
+}
 
 // Аватар и имя в меню профиля. Зовётся из setDisplayName (auth.js):
 // имя приходит не сразу — после /me.

@@ -1,0 +1,298 @@
+/* ================================================================
+   Десктоп 2.0 «Кадр» — каркас: шрифт, палитра, фон из обложки тайтла,
+   шапка-остров с разделами вместо бокового меню, общие кнопки и меню.
+   Подключается после styles.css и переопределяет его; экраны
+   переводятся на новый вид по одному — их стили дописываются ниже
+   отдельными секциями.
+
+   Правила, которых держимся (см. обсуждение дизайна):
+   — один акцентный цвет, и только на главном действии и на том, что
+     горит; всё остальное — спокойные полупрозрачные слои;
+   — никакого мигания, сплошного капса и плотных рамок: мелкие подписи
+     капсом с разрядкой — единственное исключение;
+   — плавность: элементы проявляются и сдвигаются, а не щёлкают.
+   ================================================================ */
+
+:root {
+  --font: "Manrope Variable", Manrope, "Segoe UI", system-ui, sans-serif;
+  --titlebar-h: 58px;
+
+  --bg: #0b0908;
+  --bg-2: #100c0a;
+  --surface: #16110e;
+  --surface-2: #1d1713;
+  --surface-3: #282019;
+  --surface-4: #352a22;
+  --line: rgba(255, 255, 255, .08);
+  --line-soft: rgba(255, 255, 255, .05);
+  --ink: #f1ebe6;
+  --ink-soft: #b9aca4;
+  --ink-dim: #807169;
+
+  --radius-sm: 9px;
+  --radius-md: 13px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --glass-bg: rgba(21, 16, 14, .6);
+  --glass-bg-strong: rgba(24, 18, 15, .9);
+  --glass-border: rgba(255, 255, 255, .1);
+  --glass-blur: 26px;
+  --hairline: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .035) 38%, rgba(255, 255, 255, .06));
+  --kadr-ease: cubic-bezier(.22, .9, .3, 1);
+}
+:root[data-theme="light"] {
+  --glass-bg-strong: rgba(255, 252, 249, .92);
+  --hairline: linear-gradient(180deg, rgba(255, 255, 255, .9), rgba(120, 60, 30, .08));
+}
+
+body {
+  font-family: var(--font);
+  font-feature-settings: "cv11";
+  -webkit-font-smoothing: antialiased;
+  background: var(--bg);
+}
+
+/* ---------- Фон из кадра (app/backdrop.js) ---------- */
+.app-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.app-backdrop i {
+  position: absolute; inset: -90px; background-size: cover; background-position: center;
+  filter: blur(64px) saturate(1.15) brightness(.32); opacity: 0;
+  transition: opacity 1.4s var(--kadr-ease);
+}
+.app-backdrop i.on { opacity: 1; }
+.app-backdrop::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(120% 70% at 50% -10%, transparent 40%, color-mix(in srgb, var(--bg) 55%, transparent) 100%),
+    linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--bg) 70%, transparent));
+}
+:root[data-theme="light"] .app-backdrop i { filter: blur(70px) saturate(1.1) brightness(1.25); }
+:root[data-theme="light"] .app-backdrop i.on { opacity: .45; }
+:root[data-backdrop="off"] .app-backdrop { display: none; }
+/* Шапка остаётся выше всего (z-index 1000 в styles.css) — из неё
+   выпадают меню; экран приложения просто поднят над слоем фона. */
+#app-screen { position: relative; z-index: 1; }
+
+/* ---------- Шапка ---------- */
+.titlebar {
+  height: var(--titlebar-h);
+  padding-left: 20px;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 0;
+  box-shadow: none;
+  gap: 14px;
+}
+.titlebar-left { gap: 11px; flex: none; }
+.titlebar-left .logo {
+  width: 30px; height: 30px; border-radius: 10px;
+  box-shadow: 0 8px 20px -8px rgba(var(--fire-rgb), .7), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.tb-brand { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.tb-brand b { font-size: 15px; font-weight: 800; letter-spacing: .01em; }
+.tb-brand #whoami {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;
+}
+.titlebar-right { flex: 1; min-width: 0; justify-content: flex-end; }
+.titlebar-apps { flex: 1; min-width: 0; gap: 14px; padding-right: 8px; }
+.titlebar-apps[hidden] { display: none; }
+
+/* Остров разделов */
+.tb-nav {
+  margin: 0 auto; display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 16px;
+  background: color-mix(in srgb, var(--bg) 52%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  box-shadow: 0 12px 30px -16px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .04);
+  min-width: 0;
+}
+#tabstrip > .tab-btn, .tb-more-btn {
+  position: relative; width: auto; height: 34px; padding: 0 13px; gap: 7px; border: 0; border-radius: 11px;
+  background: transparent; color: var(--ink-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  transition: color .25s, background .25s;
+  white-space: nowrap;
+}
+#tabstrip > .tab-btn .tab-lbl, .tb-more-btn .tab-lbl { font-size: inherit; font-weight: inherit; }
+#tabstrip > .tab-btn .tab-ic, .tb-more-btn .tab-ic { display: none; }
+#tabstrip > .tab-btn:hover, .tb-more-btn:hover { color: var(--ink-soft); background: transparent; }
+#tabstrip > .tab-btn.active, .tb-more-btn.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .035));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+#tabstrip > .tab-btn.active::before { content: none; }
+#tabstrip > .tab-btn.active::after, .tb-more-btn.active::after {
+  content: ""; position: absolute; left: 50%; bottom: 3px; width: 14px; height: 2px; margin-left: -7px; border-radius: 2px;
+  background: var(--fire); box-shadow: 0 0 10px rgba(var(--fire-rgb), .8);
+}
+.tb-nav .tab-btn:focus-visible, .tb-more-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fire) 55%, transparent); }
+#tabstrip > .tab-btn .tab-badge {
+  position: static; margin: 0 0 0 1px; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 9px;
+  font-size: 10px; letter-spacing: 0; box-shadow: none;
+}
+.tb-more-btn .tb-chev { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; margin-left: -2px; }
+.tb-more-btn[aria-expanded="true"] .tb-chev { transform: rotate(180deg); }
+.tb-more-btn.has-badge::before {
+  content: ""; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--fire); box-shadow: 0 0 0 2px var(--bg);
+}
+
+/* Меню шапки — стекло с тонкой кромкой */
+.tb-menu {
+  top: calc(100% + 10px); padding: 8px; border-radius: 18px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(30px) saturate(1.3);
+  -webkit-backdrop-filter: blur(30px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .85);
+  animation: kadr-pop .3s var(--kadr-ease);
+}
+@keyframes kadr-pop { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+.tb-mi { height: 38px; border-radius: 11px; font-size: 13px; transition: background .2s; }
+.tb-mi:hover, .tb-mi:focus-visible { background: rgba(255, 255, 255, .06); }
+:root[data-theme="light"] .tb-mi:hover, :root[data-theme="light"] .tb-mi:focus-visible { background: rgba(80, 40, 20, .06); }
+.tb-sep { margin: 6px 8px; }
+
+/* «Ещё»: пункты с иконкой в плашке и пояснением */
+#more-menu { left: auto; right: 0; width: 330px; }
+#more-menu .tb-mi { height: auto; padding: 9px 10px; gap: 13px; justify-content: flex-start; width: 100%; color: var(--ink); letter-spacing: 0; text-transform: none; }
+#more-menu .tb-mi .tab-ic {
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; flex: none; color: var(--gold);
+  background: linear-gradient(145deg, rgba(var(--gold-rgb), .16), rgba(var(--fire-rgb), .05));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+#more-menu .tb-mi .tab-ic svg { width: 17px; height: 17px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; fill: none; color: var(--gold); }
+#more-menu .tm-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+#more-menu .tm-txt .tab-lbl { font-size: 13px; font-weight: 700; }
+#more-menu .tm-txt small { font-size: 11.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#more-menu .tab-btn.active { background: rgba(255, 255, 255, .07); }
+#more-menu .tab-btn.active::before { content: none; }
+#more-menu .tab-badge { position: static; margin-left: auto; box-shadow: none; }
+
+/* Справа: поиск, колокольчик, инструменты, «Смотреть», аватар */
+.tb-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.tb-search {
+  width: 196px; height: 36px; border-radius: 12px; padding: 0 7px 0 12px;
+  background: rgba(255, 255, 255, .045); border-color: var(--line); color: var(--ink-dim); transition: border-color .2s, background .2s;
+}
+.tb-search:hover { background: rgba(255, 255, 255, .065); border-color: rgba(255, 255, 255, .14); }
+.tb-search kbd { font: 700 10px/1 var(--font); padding: 4px 6px; border-radius: 6px; background: rgba(255, 255, 255, .06); color: var(--ink-dim); }
+.tb-actions .icon-btn, #tools-btn {
+  width: 36px; min-width: 36px; height: 36px; padding: 0; border-radius: 12px; justify-content: center;
+  border: 0; background: transparent; color: var(--ink-dim); transition: background .2s, color .2s;
+}
+.tb-actions .icon-btn:hover, #tools-btn:hover, #tools-btn[aria-expanded="true"] { background: rgba(255, 255, 255, .06); color: var(--ink); }
+.tb-actions .icon-btn svg, #tools-btn svg { width: 16px; height: 16px; }
+#tools-btn .btn-lbl, #tools-btn .tb-chev { display: none; }
+.ib-bell em { top: 4px; right: 4px; min-width: 15px; height: 15px; font-size: 9px; line-height: 15px; box-shadow: 0 0 0 2px var(--bg); }
+.btn.watch-cta {
+  height: 36px; padding: 0 15px; border-radius: 12px; gap: 8px; font-size: 12.5px; font-weight: 700;
+  background: linear-gradient(180deg, rgba(var(--gold-rgb), .14), rgba(var(--gold-rgb), .04));
+  border: 1px solid rgba(var(--gold-rgb), .32); color: color-mix(in srgb, var(--gold) 70%, #fff);
+  box-shadow: none; filter: none;
+}
+.btn.watch-cta:hover { border-color: rgba(var(--gold-rgb), .6); background: linear-gradient(180deg, rgba(var(--gold-rgb), .2), rgba(var(--gold-rgb), .06)); filter: none; }
+.btn.watch-cta svg { width: 10px; height: 10px; }
+.tb-me {
+  width: 36px; height: 36px; padding: 2px; border: 0; border-radius: 50%; margin-left: 4px;
+  background: conic-gradient(from 200deg, var(--fire), var(--gold), rgba(255, 255, 255, .15), var(--fire));
+}
+.tb-me .avatar.sm { width: 32px; height: 32px; font-size: 12.5px; box-shadow: 0 0 0 2px var(--bg); }
+.titlebar-team { padding: 4px 8px; border-radius: 12px; }
+.titlebar-team .tt { display: none; }
+.window-controls { margin-left: 4px; }
+.win-btn:hover { background: rgba(255, 255, 255, .06); }
+
+/* Узкое окно: сначала прячем подписи у поиска и «Смотреть», потом
+   имя рядом с логотипом, и под конец остров переходит на иконки. */
+@media (max-width: 1679px) { .titlebar-team { display: none !important; } }
+@media (max-width: 1519px) {
+  .tb-search { width: 36px; padding: 0; justify-content: center; }
+  .tb-search-lbl, .tb-search kbd { display: none; }
+}
+@media (max-width: 1240px) {
+  .btn.watch-cta { width: 36px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+  #tabstrip > .tab-btn, .tb-more-btn { padding: 0 10px; letter-spacing: .04em; }
+}
+@media (max-width: 1060px) {
+  .tb-brand { display: none; }
+  #tabstrip > .tab-btn .tab-lbl, .tb-more-btn .tab-lbl, .tb-more-btn .tb-chev { display: none; }
+  #tabstrip > .tab-btn .tab-ic, .tb-more-btn .tab-ic { display: flex; }
+  #tabstrip > .tab-btn .tab-ic svg, .tb-more-btn .tab-ic svg { width: 17px; height: 17px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  #tabstrip > .tab-btn, .tb-more-btn { width: 40px; padding: 0; }
+  #tabstrip > .tab-btn .tab-badge { position: absolute; top: 2px; right: 1px; min-width: 15px; height: 14px; font-size: 9px; padding: 0 4px; }
+}
+
+/* Старое правило узкого окна для бокового меню (styles.css, 860px)
+   прятало подписи у всех .tab-btn — в меню «Ещё» они нужны всегда. */
+@media (max-width: 860px) {
+  #more-menu .tb-mi { width: 100%; height: auto; padding: 9px 10px; justify-content: flex-start; }
+  #more-menu .tab-lbl { display: inline; }
+}
+
+/* Участнику — только его разделы (как и раньше скрывалось в боковом
+   меню, см. styles.css :root[data-role="member"]); «Ещё» у него —
+   команда и профиль. */
+:root[data-role="member"] #more-menu .tb-sep:first-of-type { display: none; }
+
+/* ---------- Экран приложения без бокового меню ---------- */
+.app-body { display: block; height: 100%; }
+.app-content { height: 100%; }
+.scroll-panel { padding: 10px 32px 40px; }
+.tab-panel.active { animation: kadr-rise .55s var(--kadr-ease) both; }
+@keyframes kadr-rise { from { opacity: 0; transform: translateY(10px); } }
+
+.page-header { margin: 12px 0 22px; align-items: flex-end; }
+.page-header h1 { font-size: 32px; font-weight: 800; letter-spacing: -.025em; line-height: 1.1; margin: 0 0 6px; }
+.page-header .sub { font-size: 13px; color: var(--ink-dim); }
+
+/* ---------- Общие элементы ---------- */
+.btn {
+  height: 36px; padding: 0 15px; border-radius: 12px; font-weight: 700; font-size: 12.5px;
+  background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .09);
+  transition: background .2s, border-color .2s, transform .25s var(--kadr-ease), box-shadow .25s;
+}
+.btn:hover { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .14); transform: translateY(-1px); }
+.btn:active { transform: none; }
+.btn.primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fire) 88%, #fff), var(--fire));
+  color: var(--on-accent); border-color: transparent;
+  box-shadow: 0 12px 26px -12px rgba(var(--fire-rgb), .75), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+.btn.primary:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--fire) 80%, #fff), var(--fire)); filter: none; box-shadow: 0 16px 30px -12px rgba(var(--fire-rgb), .85), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover { background: rgba(255, 255, 255, .06); }
+.btn.danger:hover { transform: none; }
+.btn:disabled:hover { transform: none; }
+.icon-btn { border-radius: 11px; background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .08); }
+.icon-btn:hover { background: rgba(255, 255, 255, .09); border-color: rgba(255, 255, 255, .12); }
+:root[data-theme="light"] .btn, :root[data-theme="light"] .icon-btn { background: rgba(255, 255, 255, .75); border-color: var(--line); }
+:root[data-theme="light"] .btn:hover, :root[data-theme="light"] .icon-btn:hover { background: #fff; }
+:root[data-theme="light"] .btn.primary { background: linear-gradient(180deg, color-mix(in srgb, var(--fire) 88%, #fff), var(--fire)); }
+:root[data-theme="light"] .btn.ghost { background: transparent; }
+:root[data-theme="light"] .tb-search { background: rgba(255, 255, 255, .7); }
+:root[data-theme="light"] #tabstrip > .tab-btn.active, :root[data-theme="light"] .tb-more-btn.active { background: rgba(255, 255, 255, .85); box-shadow: 0 2px 8px -4px rgba(60, 25, 10, .25); }
+:root[data-theme="light"] .tb-nav { background: rgba(255, 255, 255, .55); }
+
+.chip { border-radius: 9px; border-color: transparent; background: rgba(255, 255, 255, .06); font-weight: 700; font-size: 11.5px; }
+:root[data-theme="light"] .chip { background: rgba(80, 40, 20, .06); }
+
+input, select, textarea { font-family: inherit; }
+
+/* Модалки и выпадашки — стекло с тонкой кромкой, мягкое появление */
+.overlay { background: rgba(6, 4, 3, .52); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+:root[data-theme="light"] .overlay { background: rgba(60, 30, 15, .22); }
+.sheet {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 60px 120px -40px rgba(0, 0, 0, .9);
+}
+
+:root[data-motion="off"] .tab-panel.active, :root[data-motion="off"] .tb-menu, :root[data-motion="off"] .app-backdrop i { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) { .tab-panel.active, .tb-menu, .app-backdrop i { animation: none; transition: none; } }

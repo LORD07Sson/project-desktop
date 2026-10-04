@@ -8,6 +8,7 @@ import { $, esc } from "./utils.js";
 import { imgProxy } from "./title-page.js";
 import { openReportDetail } from "./report-detail.js";
 import { switchTab } from "./tabs.js";
+import { setBackdrop } from "./backdrop.js";
 
 const DAY_MS = 86400000;
 
@@ -78,6 +79,9 @@ export async function loadQueue() {
   }
   const today = d.today;
   const items = d.items || [];
+  // Фон окна — обложка первой (самой срочной) серии на руках.
+  const lead = items.find(it => it.poster_url);
+  if (lead) setBackdrop(imgProxy(lead.poster_url));
   const lefts = items.map(it => daysLeft(it.deadline, today)).filter(l => l !== null);
   const nearest = lefts.length ? Math.min(...lefts) : null;
   const overdue = lefts.filter(l => l < 0).length;
