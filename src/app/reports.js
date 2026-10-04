@@ -227,16 +227,20 @@ export function priorityFlagHtml(p) {
   return "";
 }
 
-// Этапы пайплайна точками: пройденные закрашены, текущий светится.
-// pipeline_roles/pipeline_stage — прямо из отчёта; нет цепочки — прочерк.
-export function pipelineDotsHtml(r) {
+// «Кадр»: этап словом и готовность шкалой. Есть цепочка этапов —
+// берём её; нет — положение статуса на пути «черновик → готово».
+const STATUS_PCT = { draft: 6, working: 45, revision: 60, review: 75, completed: 100, cancelled: 0 };
+const cleanStatus = s => String(s || "").replace(/^[^\p{L}\p{N}]+/u, "");
+function stageLabel(r) {
   const roles = r.pipeline_roles || [];
-  if (!roles.length) return `<span class="ls-nopipe">—</span>`;
-  const stage = r.status === "completed" ? roles.length : (r.pipeline_stage ?? 0);
-  const dots = roles.map((role, i) =>
-    `<i class="${i < stage ? "done" : i === stage ? "cur" : ""}" title="${esc(role)}${i < stage ? " — готово" : i === stage ? " — сейчас" : ""}"></i>`).join("");
-  const cur = stage < roles.length ? roles[stage] : "готово";
-  return `<span class="ls-pipe"><span class="dots">${dots}</span><span class="lbl">${esc(cur)}</span></span>`;
+  if (!roles.length) return "—";
+  return r.status === "completed" ? "Готово" : roles[Math.min(r.pipeline_stage ?? 0, roles.length - 1)];
+}
+function progressPct(r) {
+  const roles = r.pipeline_roles || [];
+  if (r.status === "completed") return 100;
+  if (roles.length && r.pipeline_stage != null) return Math.round((r.pipeline_stage / roles.length) * 100);
+  return STATUS_PCT[r.status] ?? 0;
 }
 
 // Срок пилюлей с отсчётом («завтра», «просрочено 2 дн.») и цветом —
@@ -405,9 +409,10 @@ export function renderReports() {
           </div>
         </div>
       </td>
-      <td><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(r.status_label)}</span>${r.stuck ? `<span class="ls-stuck" title="Статус не менялся 3+ дня">застряло</span>` : ""}</td>
-      <td>${pipelineDotsHtml(r)}</td>
+      <td><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(cleanStatus(r.status_label))}</span>${r.stuck ? `<span class="ls-stuck" title="Статус не менялся 3+ дня">застряло</span>` : ""}</td>
+      <td class="ls-stage">${esc(stageLabel(r))}</td>
       <td class="ls-dl">${deadlineCellHtml(r, overdue)}</td>
+      <td class="ls-prog"><span class="kd-track"><i style="width:${progressPct(r)}%; background:var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"></i></span></td>
       <td>${assigneesHtml(r.assignees)}</td>
       <td class="row-actions">
         <button class="icon-btn" data-quick-assign title="Назначить">👤</button>

@@ -14,8 +14,11 @@ const KEYS = {
 // Цветовая тема: перекрашивает всё приложение — фон, карточки, линии,
 // текст, свечение и акцент (палитры — в styles.css, :root[data-accent]).
 // sw — цвета для образца в Настройках: фон, карточка, акцент, золото.
+// «Оригинал» — палитра десктопа 2.0 «Кадр» (по умолчанию); «Янтарь» —
+// прежняя оранжевая тема до 2.0.
 export const ACCENTS = {
-  fire: { label: "Янтарь", sw: ["#070403", "#1c1310", "#ff6a2b", "#ffb444"] },
+  original: { label: "Оригинал", sw: ["#0b0908", "#1d1713", "#ff7a3d", "#ffb35c"] },
+  amber: { label: "Янтарь", sw: ["#070403", "#1c1310", "#ff6a2b", "#ffb444"] },
   sakura: { label: "Сакура", sw: ["#090407", "#1f1118", "#ff4d7d", "#ffb3c6"] },
   violet: { label: "Фиалка", sw: ["#06050b", "#171224", "#8b5cff", "#d0bcff"] },
   sky: { label: "Небо", sw: ["#04070a", "#101a22", "#1fa8ff", "#9fe3ff"] },
@@ -33,13 +36,16 @@ function set(key, value) {
 
 const root = document.documentElement;
 
-export function currentAccent() { return ACCENTS[get(KEYS.accent, "fire")] ? get(KEYS.accent, "fire") : "fire"; }
+// Старое значение "fire" было темой по умолчанию до 2.0 — такие
+// пользователи получают новый «Оригинал», а прежние цвета остаются
+// выбором «Янтарь».
+export function currentAccent() { const v = get(KEYS.accent, "original"); return ACCENTS[v] ? v : "original"; }
 export function applyAccent(name) {
-  const key = ACCENTS[name] ? name : "fire";
+  const key = ACCENTS[name] ? name : "original";
   set(KEYS.accent, key);
   // Старые сборки красили акцент инлайн-стилями — убираем их.
   ["--fire", "--ember", "--gold", "--on-accent", "--accent-soft", "--accent-grad"].forEach(p => root.style.removeProperty(p));
-  if (key === "fire") delete root.dataset.accent;
+  if (key === "original") delete root.dataset.accent;
   else root.dataset.accent = key;
 }
 

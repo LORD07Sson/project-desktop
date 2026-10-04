@@ -139,7 +139,7 @@ async function openSettings() {
 
         <section class="st-sec" id="st-look">
           <h3>Внешний вид</h3><p class="st-lead">Изменения видны сразу, без перезапуска.</p>
-          <div class="st-group" data-st-find="цветовая тема цвет акцент палитра янтарь сакура фиалка небо мята">
+          <div class="st-group" data-st-find="цветовая тема цвет акцент палитра оригинал янтарь сакура фиалка небо мята">
             <div class="st-group-h">Цветовая тема</div>
             <div class="st-palettes">
               ${Object.entries(ACCENTS).map(([k, a]) => `<button type="button" class="st-palette${k === accent ? " on" : ""}" data-st-accent="${k}">
