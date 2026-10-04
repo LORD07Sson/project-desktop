@@ -15,6 +15,7 @@ import { recordRecentReport } from "./recent-reports.js";
 import { toggleFocusMode, syncFocusButton } from "./focus-mode.js";
 import { loadAvatars } from "./profile.js";
 import { createPlayer, isAudioFile } from "./player.js";
+import { titleArt } from "./title-page.js";
 
 // Ключи "kind" — ровно те, что отдаёт серверный audio_qc.py (miniapp/audio_qc.py):
 // "clip"/"noise"/"silence"/"silence_long"/"no_speech". Раньше здесь жил набор
@@ -139,6 +140,8 @@ export async function openReportDetail(publicId) {
 
     const t = seriesParts(detail);
     const poster = posterSrc(detail.poster_url);
+    // Баннер тайтла (AniList) — шапкой карточки; нет баннера — размытая обложка.
+    const banner = titleArt(detail.title_id, "banner", 1080);
     const authorName = (detail.author && (detail.author.first_name || detail.author.username)) || "?";
     const hasPipe = detail.pipeline && detail.pipeline.length;
     const doneItems = checklist.items.filter(i => i.done).length;
@@ -150,13 +153,15 @@ export async function openReportDetail(publicId) {
     const side = detail.status === "revision" || detail.status === "cancelled" ? detail.status : "";
 
     overlay.querySelector(".sheet").innerHTML = `
-      <div class="rd-hero">
+      <div class="rd-hero${banner ? "" : " no-ban"}">
         <div class="rd-hero-bg"${poster ? ` style="background-image:url('${esc(poster)}')"` : ""}></div>
+        ${banner ? `<img class="rd-ban" src="${esc(banner)}" alt="">` : ""}
         <div class="rd-hero-in">
           <span class="rd-poster"${poster ? ` style="background-image:url('${esc(poster)}')"` : ""}>${poster ? "" : esc(initials(t.name))}</span>
           <div class="rd-titles">
-            <h2>${esc(t.name)}${t.ep ? `<span class="ls-ep">${esc(t.ep)}</span>` : ""}${priorityFlagHtml(detail.priority)}</h2>
-            <div class="rd-sub">${esc(detail.public_id)}${t.sub ? ` · ${esc(t.sub)}` : ""} · создал ${esc(authorName)} · ${esc(String(detail.created_at || "").slice(0, 16))}</div>
+            <span class="kd-kick${overdue ? " hot" : ""}"><i></i>${esc(detail.public_id)}${t.ep ? ` · ${esc(t.ep)}` : ""}</span>
+            <h2>${esc(t.name)}${priorityFlagHtml(detail.priority)}</h2>
+            <div class="rd-sub">${t.sub ? `${esc(t.sub)} · ` : ""}создал ${esc(authorName)} · ${esc(String(detail.created_at || "").slice(0, 16))}</div>
           </div>
           <div class="detail-head-actions">
             ${nav ? `
@@ -272,6 +277,7 @@ export async function openReportDetail(publicId) {
     `;
 
     const sheet = overlay.querySelector(".sheet");
+    sheet.querySelector(".rd-ban")?.addEventListener("error", e => e.currentTarget.closest(".rd-hero").classList.add("no-ban"));
     sheet.querySelectorAll("[data-set-status]").forEach(b => b.addEventListener("click", async () => {
       const status = b.dataset.setStatus;
       if (status === detail.status) return;
@@ -606,10 +612,12 @@ function pipelineAdvanceHtml(pipeline, assignable) {
   if (!pipeline || !pipeline.length) return "";
   const curIdx = pipeline.findIndex(s => s.current);
   const hasNext = curIdx !== -1 && curIdx < pipeline.length - 1;
+  const cur = pipeline[curIdx];
   const advanceRow = hasNext
-    ? `<div class="add-row" style="margin-bottom:8px;">
+    ? `<div class="rd-pass">
+        <span>Сейчас — <b>${esc(cur.role)}</b>${cur.user_name ? ` у ${esc(cur.user_name)}` : ""}. Дальше — <b>${esc(pipeline[curIdx + 1].role)}</b>:</span>
         <select id="pipeline-next-user" class="field-input">${userOptionsHtml(assignable, null)}</select>
-        <button class="btn" id="btn-pipeline-advance">Передать дальше</button>
+        <button class="btn primary" id="btn-pipeline-advance">Передать дальше</button>
       </div>`
     : "";
   return advanceRow;
@@ -619,12 +627,17 @@ function pipelineAdvanceHtml(pipeline, assignable) {
 // «перезапись/дозапись» и «отменено» — боковые, рисуются отдельно.
 const STATUS_PATH = [["draft", "Черновик"], ["review", "Озвучка"], ["working", "В работе"], ["completed", "Готово"]];
 
-// Пайплайн таймлайном: кто на каком этапе, пройденное отмечено.
+// Пайплайн шкалой этапов: кто на каком этапе, пройденное закрашено,
+// линия доходит до текущего этапа.
 function pipelineTimelineHtml(pipeline) {
-  return `<div class="rd-timeline">${pipeline.map((s, i) => `
+  const cur = pipeline.findIndex(s => s.current);
+  const at = cur !== -1 ? cur : pipeline.filter(s => s.done).length;
+  const p = pipeline.length > 1 ? Math.min(at, pipeline.length - 1) / (pipeline.length - 1) : 0;
+  return `<div class="rd-timeline" style="--n:${pipeline.length};--p:${p}">${pipeline.map((s, i) => `
     <div class="rd-tl${s.done ? " done" : ""}${s.current ? " cur" : ""}">
-      <span class="rd-tl-dot">${s.done ? "✓" : i + 1}</span>
-      <div><div class="rd-tl-t">${esc(s.role)}</div><div class="rd-tl-p">${s.user_name ? esc(s.user_name) : "исполнитель не выбран"}</div></div>
+      <span class="rd-tl-dot">${s.done ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : i + 1}</span>
+      <div class="rd-tl-t">${esc(s.role)}</div>
+      <div class="rd-tl-p">${s.user_name ? esc(s.user_name) : "не выбран"}</div>
     </div>`).join("")}</div>`;
 }
 
