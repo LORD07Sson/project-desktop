@@ -10,7 +10,7 @@
 // студии — три шага онбординга вместо нулей.
 
 import { render } from "solid-js/web";
-import { For, Show } from "solid-js";
+import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
 import { apiGet, openSheet, dialogSkeletonHtml } from "./api.js";
 import { $, esc, initials, relTime, STATUS_COLOR_VAR } from "./utils.js";
 // esc() нужен только в строковых шаблонах (openMonthlyTopSheet ниже). В JSX его быть не должно: Solid экранирует
@@ -21,17 +21,17 @@ import { avatarHtml, loadAvatars } from "./profile.js";
 import { openReportDetail } from "./report-detail.js";
 import { openTicketsSheet } from "./tickets.js";
 import { openBirthdaysSheet } from "./birthdays.js";
-import { imgProxy } from "./title-page.js";
+import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 import { setBackdrop } from "./backdrop.js";
 
 const DAY_MS = 86400000;
+const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
 const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 // Этапы конвейера слева направо — в том же порядке, что колонки «Доски».
 const FLOW = ["draft", "review", "revision", "working", "completed"];
-const FLOW_CHIPS = 3;
 const ATTENTION_MAX = 5;
 
 function greeting() {
@@ -110,24 +110,6 @@ function Sparkline(props) {
   );
 }
 
-function Kpi(props) {
-  return (
-    <div class="bcell ov2-kpi" style={{ "animation-delay": `${props.delay}ms` }}>
-      <span class="ov2-kpi-lbl">{props.label}</span>
-      <b class={`ov2-kpi-num ${props.tone || ""}`}>{props.value}</b>
-      <span class="ov2-kpi-sub">{props.sub}</span>
-      <Sparkline values={props.spark} color={props.color} />
-    </div>
-  );
-}
-
-function Poster(props) {
-  const src = props.url ? imgProxy(props.url) : null;
-  return src
-    ? <img class="ov2-poster" src={src} alt="" loading="lazy" />
-    : <span class="ov2-poster ov2-poster-ph" />;
-}
-
 // Пустая студия — вместо стены нулей три шага, чтобы было понятно, с чего начать.
 function EmptyStudio(props) {
   const members = props.data.access?.allowed || 0;
@@ -161,12 +143,128 @@ function EmptyStudio(props) {
   );
 }
 
+// «Кадр»: серия — номер эпизода, этап и готовность в одном месте.
+const cleanLabel = s => (s || "").replace(/^[^\p{L}\p{N}]+/u, "");
+const epNum = r => { const m = (r.title || "").match(/сери[яи]\s*(\d+)/i); return m ? Number(m[1]) : null; };
+const showName = r => r.title_name || (r.title || "").replace(/\s*[,—–-]\s*сери[яи].*$/i, "");
+const stageOf = r => (r.pipeline_roles && r.pipeline_roles.length && r.pipeline_stage != null
+  ? r.pipeline_roles[Math.min(r.pipeline_stage, r.pipeline_roles.length - 1)]
+  : cleanLabel(r.status_label));
+const STATUS_PCT = { draft: 6, working: 45, revision: 60, review: 75, completed: 100 };
+const progressOf = r => (r.pipeline_roles && r.pipeline_roles.length && r.pipeline_stage != null
+  ? Math.round((r.pipeline_stage / r.pipeline_roles.length) * 100)
+  : STATUS_PCT[r.status] ?? 0);
+const statusColor = st => `var(${STATUS_COLOR_VAR[st] || "--s-draft"})`;
+const pad2 = n => String(n).padStart(2, "0");
+
+// Сколько осталось до конца дня срока (сроки — даты, без времени).
+function countdown(now) {
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 0);
+  const s = Math.max(0, Math.floor((end - now) / 1000));
+  return `${pad2(Math.floor(s / 3600))}:${pad2(Math.floor((s % 3600) / 60))}:${pad2(s % 60)}`;
+}
+
+function heroLead(it) {
+  const left = daysLeft(it.r.deadline);
+  if (it.tone === "blue") return "Статус не менялся три дня и больше — стоит узнать, что мешает.";
+  if (left !== null && left < 0) return `Срок был ${ddmm(it.r.deadline)} — серия опаздывает на ${-left} ${plural(-left, "день", "дня", "дней")}.`;
+  if (left === 0) return "Сдать нужно сегодня до полуночи.";
+  if (left === 1) return "Срок завтра — самое время проверить, всё ли готово.";
+  return left !== null ? `Срок ${ddmm(it.r.deadline)} — через ${left} ${plural(left, "день", "дня", "дней")}.` : "Срок не назначен.";
+}
+
+function heroKick(it) {
+  const left = daysLeft(it.r.deadline);
+  if (it.tone === "red") return `Горит · ${it.tag}`;
+  if (it.tone === "blue") return "Без движения";
+  if (left === 0) return "Горит · сдать сегодня";
+  if (left === 1) return "Срок завтра";
+  return "Ближайший срок";
+}
+
+// Герой: самые срочные серии слайдами. Картинка — баннер тайтла с
+// нашего сервера; если баннера нет — размытая обложка и сама обложка
+// справа. Слайды листаются сами раз в 8 секунд, наведение — пауза.
+function Hero(props) {
+  const items = props.items;
+  const [idx, setIdx] = createSignal(0);
+  const [now, setNow] = createSignal(new Date());
+  const [paused, setPaused] = createSignal(false);
+  const tick = setInterval(() => setNow(new Date()), 1000);
+  const flip = setInterval(() => { if (!paused() && items.length > 1) setIdx(i => (i + 1) % items.length); }, 8000);
+  onCleanup(() => { clearInterval(tick); clearInterval(flip); });
+  createEffect(() => {
+    const r = items[idx()]?.r;
+    if (r) setBackdrop(titleArt(r.title_id, "banner", 1440), imgProxy(r.poster_url));
+  });
+  const go = i => setIdx(i);
+  return (
+    <section class="kd-hero" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <For each={items}>
+        {(it, i) => {
+          const r = it.r;
+          const poster = imgProxy(r.poster_url);
+          const banner = titleArt(r.title_id, "banner", 1440);
+          const left = daysLeft(r.deadline);
+          const ep = epNum(r);
+          return (
+            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner ? "" : " no-ban"}`}>
+              <div class="kd-slide-amb" style={poster ? { "background-image": `url("${poster}")` } : {}} />
+              <Show when={banner}>
+                <img class="kd-slide-ban" src={banner} alt="" onError={e => e.currentTarget.closest(".kd-slide").classList.add("no-ban")} />
+              </Show>
+              <Show when={poster}><img class="kd-slide-art" src={poster} alt="" /></Show>
+              <div class="kd-slide-fade" />
+              <div class="kd-slide-tx">
+                <span class={`kd-kick ${it.tone === "red" || left === 0 ? "hot" : ""}`}><i />{heroKick(it)}</span>
+                <h2 class="kd-ttl">{showName(r)}</h2>
+                <p class="kd-lead">{heroLead(it)}</p>
+                <div class="kd-strip">
+                  <div><small>Серия</small><b>{ep != null ? pad2(ep) : r.public_id}</b></div>
+                  <div><small>Этап</small><b>{stageOf(r)}</b></div>
+                  <div><small>Команда</small><b class="kd-avs">
+                    <Show when={(r.assignees || []).length} fallback={<span class="kd-none">не назначено</span>}>
+                      <For each={(r.assignees || []).slice(0, 4)}>{a => <span class="avatar sm" data-avatar-for={a.telegram_id || ""}>{initials(a.name || "?")}</span>}</For>
+                    </Show>
+                  </b></div>
+                  <div><small>{left === 0 ? "Осталось" : "Срок"}</small>
+                    <b class={left !== null && left <= 1 ? "hot" : ""}>{left === 0 ? countdown(now()) : r.deadline ? ddmm(r.deadline) : "—"}</b></div>
+                </div>
+                <div class="kd-acts">
+                  <button class="btn primary" onClick={() => openReportDetail(r.public_id)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none" /></svg>Открыть серию</button>
+                  <button class="btn" onClick={() => switchTab("board")}>Открыть доску</button>
+                </div>
+              </div>
+            </div>
+          );
+        }}
+      </For>
+      <span class="kd-cb a" /><span class="kd-cb b" /><span class="kd-cb c" /><span class="kd-cb d" />
+      <Show when={items.length > 1}>
+        <div class="kd-cnt"><b>{pad2(idx() + 1)}</b> / {pad2(items.length)}</div>
+        <div class="kd-pager">
+          <For each={items}>
+            {(it, i) => (
+              <button type="button" class={`kd-pg${i() === idx() ? " on" : ""}`} onClick={() => go(i())}>
+                <Show when={it.r.poster_url} fallback={<i class="kd-pg-ph" />}><img src={imgProxy(it.r.poster_url)} alt="" /></Show>
+                <span><b>{showName(it.r)}</b><span>{epNum(it.r) != null ? `серия ${epNum(it.r)} · ` : ""}{it.tag}</span></span>
+                <Show when={i() === idx() && !paused()}><u /></Show>
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+    </section>
+  );
+}
+
 function Overview(props) {
   const d = props.data;
   if (!d.reports.total) return <EmptyStudio data={d} />;
 
   const count = st => d.reports.statuses.find(s => s.status === st)?.count || 0;
-  const label = st => d.reports.statuses.find(s => s.status === st)?.label || st;
+  const label = st => cleanLabel(d.reports.statuses.find(s => s.status === st)?.label || st);
   const reports = (props.dash?.board?.columns || []).flatMap(c => c.reports || []);
   const activeTotal = d.reports.total - count("completed") - count("cancelled");
   const attention = attentionItems(reports);
@@ -176,152 +274,148 @@ function Overview(props) {
     .filter(r => isOpen(r) && r.deadline && daysLeft(r.deadline) >= 0)
     .sort((a, b) => a.deadline.localeCompare(b.deadline))
     .slice(0, 5);
+  const heroItems = attention.length
+    ? attention.slice(0, 4)
+    : upcoming.slice(0, 3).map(r => { const l = daysLeft(r.deadline); return { r, tone: "", tag: l === 0 ? "сегодня" : l === 1 ? "завтра" : `через ${l} ${plural(l, "день", "дня", "дней")}` }; });
+  const reel = reports.filter(isOpen).sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")).slice(0, 24);
   const maxAssigned = Math.max(1, ...d.performers.map(x => x.assigned));
   const activity = (props.feed?.events || []).slice(0, 4);
   const summary = [
     `${activeTotal} ${plural(activeTotal, "серия", "серии", "серий")} в работе`,
     attention.length ? `${attention.length} ${plural(attention.length, "требует", "требуют", "требуют")} внимания` : "срочного нет",
   ].join(" · ");
+  const flowTotal = Math.max(1, FLOW.reduce((s, st) => s + count(st), 0));
+  // Фон окна ведёт герой (смена слайда — смена фона); без героя — первая
+  // серия в работе.
+  if (!heroItems.length && reel[0]) setBackdrop(titleArt(reel[0].title_id, "banner", 1440), imgProxy(reel[0].poster_url));
 
   return (
-    <>
-    <div class="page-header ov2-head">
-      <div>
+    <div class="kd-ov">
+      <div class="kd-hello">
         <h1>{greeting()}{state.name ? `, ${state.name}` : ""}</h1>
-        <div class="sub">{todayLabel()} · {summary}</div>
-      </div>
-      <div class="page-header-actions">
-        <button class="btn" onClick={() => switchTab("board")}>Открыть доску</button>
-        <button class="btn primary" onClick={() => switchTab("titles")}>Взять тайтл</button>
-      </div>
-    </div>
-
-    <div class="ov2-grid">
-      <div class="ov2-col">
-        <div class="bcell ov2-card" style={{ "animation-delay": "0ms" }}>
-          <div class="ov2-card-head"><b>Требует внимания</b><span>сначала срочное</span></div>
-          <Show when={attention.length} fallback={<div class="ov2-calm">Всё идёт по плану — просроченного и застрявшего нет.</div>}>
-            <div class="ov2-att">
-              <For each={attention}>
-                {it => (
-                  <div class="ov2-att-row" onClick={() => openReportDetail(it.r.public_id)}>
-                    <Poster url={it.r.poster_url} />
-                    <div class="ov2-att-text">
-                      <b>{it.r.title}</b>
-                      <span>{it.sub}</span>
-                    </div>
-                    <span class={`ov2-tag ${it.tone}`}>{it.tag}</span>
-                    <button class="btn" onClick={e => { e.stopPropagation(); openReportDetail(it.r.public_id); }}>Открыть</button>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
+        <span>{todayLabel()} · {summary}</span>
+        <div class="kd-hello-acts">
+          <button class="btn primary" onClick={() => switchTab("titles")}>Взять тайтл</button>
         </div>
+      </div>
 
-        <div class="bcell ov2-card" style={{ "animation-delay": "60ms" }}>
-          <div class="ov2-card-head"><b>Конвейер</b><span>{activeTotal} в работе</span><button type="button" class="dash-link" onClick={() => switchTab("board")}>Открыть доску →</button></div>
-          <div class="ov2-flow">
-            <For each={FLOW}>
-              {st => {
-                const items = reports.filter(r => r.status === st);
-                return (
-                  <button type="button" class="ov2-stage" onClick={() => switchTab("board")}>
-                    <span class="ov2-stage-lbl"><i style={{ background: `var(${STATUS_COLOR_VAR[st] || "--s-draft"})` }} />{label(st)}</span>
-                    <b>{count(st)}</b>
-                    <span class="ov2-stage-eps">
-                      <For each={items.slice(0, FLOW_CHIPS)}>{r => <em title={r.title}>{r.public_id}</em>}</For>
-                      <Show when={count(st) > FLOW_CHIPS}><em>+{count(st) - FLOW_CHIPS}</em></Show>
-                    </span>
-                  </button>
-                );
-              }}
-            </For>
+      <Show when={heroItems.length} fallback={<div class="kd-gl kd-calm">Всё идёт по плану — просроченного и застрявшего нет, сроков впереди тоже нет.</div>}>
+        <Hero items={heroItems} />
+      </Show>
+
+      <div class="kd-gl kd-pipe">
+        <div class="kd-pipe-lbl"><b>Конвейер</b><span>{activeTotal} в работе · {count("completed")} готово</span></div>
+        <div class="kd-pipe-bar">
+          <div class="kd-pipe-tk">
+            <For each={FLOW}>{st => <Show when={count(st)}><i title={`${label(st)}: ${count(st)}`} style={{ background: statusColor(st), flex: count(st) / flowTotal }} /></Show>}</For>
+          </div>
+          <div class="kd-pipe-lg">
+            <For each={FLOW}>{st => <button type="button" onClick={() => switchTab("board")}><i class="kd-dot" style={{ background: statusColor(st) }} />{label(st)} <b>{count(st)}</b></button>}</For>
           </div>
         </div>
-
-        <div class="ov2-kpis">
-          <Kpi delay={100} label="Завершено" value={sum("completed")} sub={`за 14 дней · ${sum("completed", 7)} за неделю`} spark={days.map(x => x.completed)} color="--s-done" />
-          <Kpi delay={130} label="Создано" value={sum("created")} sub={`за 14 дней · ${sum("created", 7)} за неделю`} spark={days.map(x => x.created)} color="--ember" />
-          <Kpi delay={160} label="Просрочено" value={d.reports.overdue} tone={d.reports.overdue ? "danger" : ""} sub={`${d.reports.important} ${plural(d.reports.important, "важная", "важные", "важных")} в работе`} />
-          <Kpi delay={190} label="Всего серий" value={d.reports.total} sub={`${count("completed")} готово · ${count("cancelled")} отменено`} />
-        </div>
+        <button class="btn" onClick={() => switchTab("board")}>Открыть доску</button>
       </div>
 
-      <div class="ov2-col">
-        <div class="bcell ov2-card" style={{ "animation-delay": "40ms" }}>
-          <div class="ov2-card-head"><b>Ближайшие дедлайны</b><button type="button" class="dash-link" onClick={() => switchTab("calendar")}>Календарь →</button></div>
-          <Show when={upcoming.length} fallback={<div class="ov2-calm">Дедлайнов впереди нет.</div>}>
-            <For each={upcoming}>
+      <Show when={reel.length}>
+        <div class="kd-sh"><h2>На плёнке</h2><span class="kd-label">в работе · {activeTotal}</span><span class="kd-orn" /><button type="button" class="kd-link" onClick={() => switchTab("board")}>Вся доска</button></div>
+        <div class="kd-reel">
+          <For each={reel}>
+            {r => {
+              const left = daysLeft(r.deadline);
+              const ep = epNum(r);
+              return (
+                <button type="button" class="kd-fr" onClick={() => openReportDetail(r.public_id)} title={r.title}>
+                  <span class="kd-fr-pc">
+                    <Show when={r.poster_url} fallback={<span class="kd-fr-ph">{initials(showName(r))}</span>}><img src={imgProxy(r.poster_url)} alt="" loading="lazy" /></Show>
+                    <span class={`kd-fr-ep${left !== null && left <= 0 ? " hot" : ""}`}>{ep != null ? `EP ${pad2(ep)}` : r.public_id}</span>
+                    <span class="kd-track"><i style={{ width: `${progressOf(r)}%`, background: statusColor(r.status) }} /></span>
+                  </span>
+                  <b>{showName(r)}</b>
+                  <span class="kd-fr-sub"><i class="kd-dot" style={{ background: statusColor(r.status) }} />{stageOf(r)}{r.deadline ? ` · ${left === 0 ? "сегодня" : left === 1 ? "завтра" : left < 0 ? "просрочено" : ddmm(r.deadline)}` : ""}</span>
+                </button>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
+
+      <div class="kd-three">
+        <section class="kd-gl">
+          <div class="kd-ch"><h3>Ближайшие сроки</h3><button type="button" class="kd-link" onClick={() => switchTab("calendar")}>Календарь</button></div>
+          <Show when={upcoming.length} fallback={<div class="kd-quiet">Сроков впереди нет.</div>}>
+            <For each={upcoming.slice(0, 4)}>
               {r => {
                 const left = daysLeft(r.deadline);
+                const dt = new Date(r.deadline.slice(0, 10) + "T00:00:00");
                 return (
-                  <button type="button" class="ov2-dl-row" onClick={() => openReportDetail(r.public_id)}>
-                    <time>{ddmm(r.deadline)}</time>
-                    <b>{r.title}</b>
-                    <span class={`ov2-tag ${left === 0 ? "red" : left === 1 ? "yel" : ""}`}>{left === 0 ? "сегодня" : left === 1 ? "завтра" : `через ${left} ${plural(left, "день", "дня", "дней")}`}</span>
+                  <button type="button" class={`kd-dl${left <= 1 ? " hot" : ""}`} onClick={() => openReportDetail(r.public_id)}>
+                    <span class="kd-dl-d"><b>{pad2(dt.getDate())}</b><small>{WEEKDAYS_SHORT[dt.getDay()]}</small></span>
+                    <span class="kd-dl-t"><b>{showName(r)}{epNum(r) != null ? ` · ${epNum(r)}` : ""}</b><span>{stageOf(r)} · {left === 0 ? "сегодня" : left === 1 ? "завтра" : `через ${left} ${plural(left, "день", "дня", "дней")}`}</span></span>
                   </button>
                 );
               }}
             </For>
           </Show>
-        </div>
+        </section>
 
-        <div class="bcell ov2-card" style={{ "animation-delay": "80ms" }}>
-          <div class="ov2-card-head"><b>Загрузка команды</b><span>назначено серий</span></div>
-          <Show when={d.performers.length} fallback={<div class="ov2-calm">Пока никому ничего не назначено.</div>}>
-            <div class="ov2-load">
-              <For each={d.performers.slice(0, 6)}>
-                {p => (
-                  <div class="ov2-load-row">
-                    <span class="avatar sm" data-avatar-for={p.telegram_id || ""}>{initials(p.name || "?")}</span>
-                    <span class="ov2-load-name">{p.name}</span>
-                    <span class="ov2-bar"><i class={p.overdue ? "hot" : ""} style={{ width: `${Math.round((p.assigned / maxAssigned) * 100)}%` }} /></span>
-                    <em>{p.assigned}{p.overdue ? ` · ${p.overdue} просрочено` : ""}</em>
-                  </div>
-                )}
-              </For>
-            </div>
-            <button class="btn ov2-wide-btn" onClick={openMonthlyTopSheet}>Рейтинг месяца</button>
-          </Show>
-        </div>
-
-        <div class="bcell ov2-card" style={{ "animation-delay": "120ms" }}>
-          <div class="ov2-card-head"><b>Недавно</b><button type="button" class="dash-link" onClick={() => switchTab("feed")}>Вся лента →</button></div>
-          <Show when={activity.length} fallback={<div class="ov2-calm">Пока тихо.</div>}>
-            <For each={activity}>
-              {ev => (
-                <div class="dash-activity-row">
-                  <span class="avatar-bubble" style={{ "margin-left": "0" }} data-avatar-for={ev.actor_telegram_id || ""}>{initials(ev.actor || "?")}</span>
-                  <span class="dash-activity-text">
-                    <span><b>{ev.actor}</b> {ev.action}{ev.title ? ` · ${ev.title}` : ""}</span>
-                    <span class="dash-activity-time">{relTime(ev.created_at)}</span>
-                  </span>
+        <section class="kd-gl">
+          <div class="kd-ch"><h3>Команда</h3><span class="kd-label">назначено серий</span><button type="button" class="kd-link" onClick={openMonthlyTopSheet}>Рейтинг месяца</button></div>
+          <Show when={d.performers.length} fallback={<div class="kd-quiet">Пока никому ничего не назначено.</div>}>
+            <For each={d.performers.slice(0, 5)}>
+              {p => (
+                <div class="kd-mb">
+                  <span class="avatar sm" data-avatar-for={p.telegram_id || ""}>{initials(p.name || "?")}</span>
+                  <span class="kd-mb-n"><b>{p.name}</b><span>{p.overdue ? `${p.overdue} просрочено` : "без просрочек"}</span></span>
+                  <span class="kd-mb-ld"><span class="kd-track"><i class={p.overdue ? "hot" : ""} style={{ width: `${Math.round((p.assigned / maxAssigned) * 100)}%` }} /></span><small>{p.assigned} {plural(p.assigned, "серия", "серии", "серий")}</small></span>
                 </div>
               )}
             </For>
           </Show>
-        </div>
+        </section>
 
-        <div class="ov2-mini">
-          <div class="bcell ov2-mini-cell">
-            <span>Доступ</span><b>{d.access.allowed}</b>
-            <em>{d.access.pending_requests ? `${d.access.pending_requests} ${plural(d.access.pending_requests, "заявка ждёт", "заявки ждут", "заявок ждут")}` : "заявок нет"}</em>
+        <section class="kd-gl">
+          <div class="kd-ch"><h3>Сводка</h3><span class="kd-label">14 дней</span><button type="button" class="kd-link" onClick={() => switchTab("analytics")}>Аналитика</button></div>
+          <div class="kd-st4">
+            <div class="kd-sb"><small>Завершено</small><b>{sum("completed")}<em>{sum("completed", 7)} за неделю</em></b><Sparkline values={days.map(x => x.completed)} color="--gold" /></div>
+            <div class="kd-sb"><small>Создано</small><b>{sum("created")}<em>{sum("created", 7)} за неделю</em></b><Sparkline values={days.map(x => x.created)} color="--gold" /></div>
+            <div class="kd-sb"><small>Просрочено</small><b class={d.reports.overdue ? "hot" : ""}>{d.reports.overdue}<em class="w">{d.reports.important} {plural(d.reports.important, "важная", "важные", "важных")}</em></b></div>
+            <div class="kd-sb"><small>Всего серий</small><b>{d.reports.total}<em>{count("completed")} готово</em></b></div>
           </div>
-          <div class="bcell ov2-mini-cell dash-clickable" role="button" tabindex="0" title="Открыть тикеты"
-            onClick={() => openTicketsSheet()} onKeyDown={e => { if (e.key === "Enter") openTicketsSheet(); }}>
-            <span>Тикеты</span><b class={d.open_tickets ? "warn" : ""}>{d.open_tickets}</b><em>открыто сейчас</em>
-          </div>
-          <Show when={d.birthdays.length}>
-            <div class="bcell ov2-mini-cell dash-clickable" role="button" tabindex="0" title="Все дни рождения"
-              onClick={() => openBirthdaysSheet(loadOverview)} onKeyDown={e => { if (e.key === "Enter") openBirthdaysSheet(loadOverview); }}>
-              <span>День рождения</span><b class="ov2-bday">{d.birthdays[0]?.name}</b><em>{d.birthdays[0]?.day}.{String(d.birthdays[0]?.month).padStart(2, "0")}</em>
+        </section>
+      </div>
+
+      <div class="kd-row2">
+        <section class="kd-gl">
+          <div class="kd-ch"><h3>Недавно</h3><button type="button" class="kd-link" onClick={() => switchTab("feed")}>Вся лента</button></div>
+          <Show when={activity.length} fallback={<div class="kd-quiet">Пока тихо.</div>}>
+            <div class="kd-act">
+              <For each={activity}>
+                {ev => (
+                  <div class="kd-act-row">
+                    <span class="avatar sm" data-avatar-for={ev.actor_telegram_id || ""}>{initials(ev.actor || "?")}</span>
+                    <span class="kd-act-t"><span><b>{ev.actor}</b> {ev.action}{ev.title ? ` · ${ev.title}` : ""}</span><small>{relTime(ev.created_at)}</small></span>
+                  </div>
+                )}
+              </For>
             </div>
+          </Show>
+        </section>
+        <div class="kd-tiles">
+          <div class="kd-gl kd-tile">
+            <small>Доступ</small><b>{d.access.allowed}</b>
+            <span>{d.access.pending_requests ? `${d.access.pending_requests} ${plural(d.access.pending_requests, "заявка ждёт", "заявки ждут", "заявок ждут")}` : "заявок нет"}</span>
+          </div>
+          <button type="button" class="kd-gl kd-tile" title="Открыть тикеты" onClick={() => openTicketsSheet()}>
+            <small>Тикеты</small><b class={d.open_tickets ? "hot" : ""}>{d.open_tickets}</b><span>открыто сейчас</span>
+          </button>
+          <Show when={d.birthdays.length}>
+            <button type="button" class="kd-gl kd-tile" title="Все дни рождения" onClick={() => openBirthdaysSheet(loadOverview)}>
+              <small>День рождения</small><b class="kd-bday">{d.birthdays[0]?.name}</b><span>{d.birthdays[0]?.day}.{String(d.birthdays[0]?.month).padStart(2, "0")}</span>
+            </button>
           </Show>
         </div>
       </div>
     </div>
-    </>
   );
 }
 
@@ -389,9 +483,4 @@ export async function loadOverview() {
   root.innerHTML = "";
   disposePrev = render(() => <Overview data={d} trend={trend} dash={dash} feed={feed} />, root);
   loadAvatars(root);
-  // Фон окна — обложка самой горячей серии, а если горящих нет —
-  // любой серии в работе с обложкой.
-  const reports = (dash?.board?.columns || []).flatMap(c => c.reports || []);
-  const hot = attentionItems(reports).find(it => it.r.poster_url)?.r || reports.find(r => isOpen(r) && r.poster_url);
-  if (hot) setBackdrop(imgProxy(hot.poster_url));
 }

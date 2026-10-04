@@ -8,21 +8,31 @@ const host = document.getElementById("app-backdrop");
 let front = 0;
 let current = "";
 
-export function setBackdrop(url) {
-  // Адрес попадает в CSS url(...) — кавычки, скобки и переводы строк
-  // в нём не нужны и могли бы сломать правило, такие просто пропускаем.
-  if (!host || !url || url === current || /["'()\\\s]/.test(url)) return;
-  current = url;
-  const img = new Image();
-  img.onload = () => {
-    if (url !== current) return; // пока грузилась, попросили другую
-    const layers = host.querySelectorAll("i");
-    front ^= 1;
-    layers[front].style.backgroundImage = `url("${url}")`;
-    layers[front].classList.add("on");
-    layers[front ^ 1].classList.remove("on");
+// Адрес попадает в CSS url(...) — кавычки, скобки, обратная косая и
+// пробелы в нём не нужны и могли бы сломать правило.
+const safe = url => !!url && !/["'()\\\s]/.test(url);
+
+// url — основная картинка (баннер тайтла), fallback — запасная (обложка):
+// баннера у тайтла может не быть, тогда берём обложку.
+export function setBackdrop(url, fallback) {
+  const want = [url, fallback].filter(safe);
+  if (!host || !want.length || want[0] === current) return;
+  current = want[0];
+  const tryLoad = i => {
+    if (i >= want.length) return;
+    const img = new Image();
+    img.onload = () => {
+      if (current !== want[0]) return; // пока грузилась, попросили другую
+      const layers = host.querySelectorAll("i");
+      front ^= 1;
+      layers[front].style.backgroundImage = `url("${want[i]}")`;
+      layers[front].classList.add("on");
+      layers[front ^ 1].classList.remove("on");
+    };
+    img.onerror = () => tryLoad(i + 1);
+    img.src = want[i];
   };
-  img.src = url;
+  tryLoad(0);
 }
 
 // Выход из аккаунта: обложки прошлого пользователя за экраном входа
