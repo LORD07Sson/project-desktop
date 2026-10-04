@@ -7,7 +7,7 @@ import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js"
 import { $, esc } from "./utils.js";
 import { openSeasonsAdminSheet } from "./titles-admin.js";
 import { clearTitleHoverCache } from "./title-hover.js";
-import { imgProxy, hdPosterAttrs, titlePageHtml, wireTitlePage } from "./title-page.js";
+import { imgProxy, hdPosterAttrs, titleArt, titlePageHtml, wireTitlePage } from "./title-page.js";
 import { openTakeWork } from "./take-work.js";
 
 function voteActivity(t) { return t.likes + t.dislikes; }
@@ -182,6 +182,7 @@ function heroBodyHtml(t, seasonName) {
   const eps = episodesText(det);
   return `
     <div class="tl-spot-bg"${posterSrc ? ` style="background-image:url('${posterSrc}')"` : ""}></div>
+    <img class="tl-spot-ban" src="${titleArt(t.id, "banner", 1280)}" alt="">
     ${posterSrc ? `<img class="tl-spot-poster" ${hdPosterAttrs(t.id, t.poster_url, 150)} alt="" data-open-title-detail="${t.id}">` : `<span class="tl-spot-poster tt-poster-ph"></span>`}
     <div class="tl-spot-body">
       <span class="tl-spot-eyebrow">${heroEyebrow(t)}</span>
@@ -207,6 +208,11 @@ function heroBodyHtml(t, seasonName) {
     </div>`;
 }
 
+// Баннера у тайтла может не быть — тогда остаётся размытая обложка.
+function wireBanner(hero) {
+  hero.querySelector(".tl-spot-ban")?.addEventListener("error", e => e.currentTarget.remove());
+}
+
 function voteHeroHtml(titles, seasonName) {
   const t = heroTitle(titles);
   if (!t) return "";
@@ -221,7 +227,9 @@ function wireHero(wrap, titles, seasonName) {
     if (!t) return;
     hero.innerHTML = heroBodyHtml(t, seasonName);
     wireVoteButtons(hero);
+    wireBanner(hero);
   };
+  wireBanner(hero);
   // Подробности (описание, серии) догружаются после отрисовки, голоса
   // меняются кликами — перерисовываем блок лидера из тех же объектов.
   hero._refresh = id => { if (Number(hero.dataset.heroId) === id) redraw(); };
@@ -436,8 +444,8 @@ function renderTitlesBody(wrap) {
   const leader = leaderOf(currentTitles);
   const addCard = state.isAdmin
     ? `<button type="button" class="af-add" data-af-add><b>＋</b><span>Добавить тайтл</span><em>сезоны и тайтлы — в «Управлении»</em></button>` : "";
-  wrap.innerHTML = toolbarHtml() + (!shown.length ? empty : view === "table"
-    ? voteHeroHtml(currentTitles, currentSeasonName) + titlesTableHtml(shown)
+  wrap.innerHTML = voteHeroHtml(currentTitles, currentSeasonName) + toolbarHtml() + (!shown.length ? empty : view === "table"
+    ? titlesTableHtml(shown)
     : `<div class="af-grid">${shown.map(t => voteCardHtml(t, rankOf.get(t.id), t.id === leader)).join("")}${addCard}</div>`);
   wrap.querySelector("[data-af-add]")?.addEventListener("click", () => openSeasonsAdminSheet(() => loadTitlesTab()));
   wrap.querySelectorAll("[data-titles-filter]").forEach(btn => {
@@ -484,8 +492,8 @@ function renderTitlesForSeason(seasons) {
   root.innerHTML = `
     <div class="page-header">
       <div>
+        <span class="kd-label">Команда · голосование сезона</span>
         <h1>Тайтлы</h1>
-        <div class="sub">Голосование за тайтлы эфир-сезона: что команда берёт в работу.</div>
       </div>
       <div class="page-header-actions">
         <div class="seg-toggle" role="group" aria-label="Вид">
