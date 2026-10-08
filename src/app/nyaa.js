@@ -9,7 +9,7 @@
 // Вкладка только для админов, как и Nyaa в боте.
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
-import { toast, API_BASE, apiBlob } from "./api.js";
+import { toast, API_BASE, apiBlob, openSheet } from "./api.js";
 import { state } from "./state.js";
 import { notifyDesktop } from "./desktop-notify.js";
 import { $, esc } from "./utils.js";
@@ -21,6 +21,7 @@ import {
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
+  groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
@@ -29,7 +30,7 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [] };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
@@ -43,6 +44,24 @@ const markSeen = id => {
   seen.add(id);
   try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-3000))); } catch (_) { /* не запомнится */ }
 };
+// Серии, которые уже отправлены в клиент: по ним ставится пометка и работает «скрыть скачанное».
+const EPS_KEY = "project-nyaa-eps";
+const sentEps = (() => { try { return new Set(JSON.parse(localStorage.getItem(EPS_KEY) || "[]")); } catch (_) { return new Set(); } })();
+const markSent = list => {
+  list.forEach(i => { const k = episodeKey(i); if (k) sentEps.add(k); });
+  try { localStorage.setItem(EPS_KEY, JSON.stringify([...sentEps].slice(-2000))); } catch (_) { /* не запомнится */ }
+};
+const openGroups = new Set();
+
+// Кэш последней ленты: если сайт не отвечает, показываем её с пометкой, сколько данным минут.
+const CACHE_KEY = "project-nyaa-cache";
+const cacheId = () => [prefs.base, prefs.q, prefs.cat, prefs.filter].join("|");
+const cacheSave = xml => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ id: cacheId(), at: Date.now(), xml })); } catch (_) { /* не поместилось */ } };
+const cacheLoad = () => {
+  try { const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); return c && c.id === cacheId() && Date.now() - c.at < 24 * 3600e3 ? c : null; } catch (_) { return null; }
+};
+let stale = 0;               // метка времени кэша, если показываем старые данные
+
 const savePrefs = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) { /* не запомнится */ } };
 
 let items = [];
@@ -57,9 +76,9 @@ let anchorId = null;
 let client = null;          // настройки торрент-клиента (без пароля)
 let clientDraft = null;
 const selected = new Set();
-let checks = {};           // url → результат проверки (с сервера студии, если он отвечает, иначе с этого компьютера)
-let localChecks = {};      // url → проверка с этого компьютера (для пометки «у вас закрыт»)
-let checkedBy = "";        // "server" | "local" — откуда сейчас результаты
+let checks = {};           // url → результат проверки по выбранному для сервиса соединению
+let localChecks = {};      // url → проверка с этого компьютера
+let serverChecks = {};     // url → проверка с сервера студии (через его туннель WireGuard)
 let checking = false;
 let detail = null;         // { item, state, view, err, tab, imgs, lightbox }
 
@@ -80,7 +99,10 @@ const ICONS = {
   plug: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg>',
 };
 
-const view = () => sortItems(applyFilters(items, prefs.filters, { seen }), prefs.sort, "desc");
+const view = () => {
+  const l = sortItems(applyFilters(items, prefs.filters, { seen }), prefs.sort, "desc");
+  return prefs.hideDone ? l.filter(i => { const k = episodeKey(i); return !k || !sentEps.has(k); }) : l;
+};
 const serverOrigin = () => { try { return new URL(API_BASE).origin; } catch (_) { return ""; } };
 
 function statsHtml(list) {
@@ -93,6 +115,60 @@ function statsHtml(list) {
     <div class="ny-stat"><b>${s.trusted}</b><span>доверенных</span></div>`;
 }
 
+// ---------- обложки вместо значков ----------
+// Обложка берётся с AniList по названию тайтла (одна на аниме, не на каждую раздачу) и держится
+// в памяти; в localStorage лежит только адрес картинки. Не нашлась — остаётся значок.
+const COVERS_KEY = "project-nyaa-covers";
+const coverUrls = (() => { try { return JSON.parse(localStorage.getItem(COVERS_KEY) || "{}"); } catch (_) { return {}; } })();
+const coverData = new Map();   // ключ → data-URL
+const coverBusy = new Set();
+const saveCovers = () => {
+  const keys = Object.keys(coverUrls);
+  if (keys.length > 500) keys.slice(0, keys.length - 500).forEach(k => delete coverUrls[k]);
+  try { localStorage.setItem(COVERS_KEY, JSON.stringify(coverUrls)); } catch (_) { /* не запомнится */ }
+};
+
+function kindHtml(it, kind) {
+  const key = coverKey(it.title);
+  const src = key && coverData.get(key);
+  return `<span class="ny-kind k-${kind}${src ? " has-cover" : ""}" data-ck="${esc(key)}" title="${esc(it.category)}">${src ? `<img src="${esc(src)}" alt="">` : KIND_ICON[kind]}</span>`;
+}
+
+function paintCover(key) {
+  const src = coverData.get(key);
+  if (!src) return;
+  document.querySelectorAll(".ny-kind[data-ck]").forEach(el => {
+    if (el.dataset.ck !== key || el.querySelector("img")) return;
+    el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(src)}" alt="">`;
+  });
+}
+
+async function fetchCover(key) {
+  if (coverBusy.has(key) || coverData.has(key)) return;
+  coverBusy.add(key);
+  try {
+    let url = coverUrls[key];
+    if (url === undefined) {
+      url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s: key } }));
+      coverUrls[key] = url; saveCovers();
+    }
+    if (url) { coverData.set(key, await invoke("fetch_image", { url })); paintCover(key); }
+  } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
+  coverBusy.delete(key);
+}
+
+let coverQueueOn = false;
+async function loadListCovers() {
+  if (coverQueueOn) return;
+  coverQueueOn = true;
+  try {
+    const keys = [...new Set(view().slice(0, 60).map(i => coverKey(i.title)).filter(k => k && !coverData.has(k) && coverUrls[k] !== ""))].slice(0, 30);
+    let next = 0;
+    const worker = async () => { while (next < keys.length) await fetchCover(keys[next++]); };
+    await Promise.all([worker(), worker()]);
+  } finally { coverQueueOn = false; }
+}
+
 function rowHtml(it, maxSeed, now) {
   const { group, tags } = splitTitle(it.title);
   const kind = categoryKind(it.categoryId);
@@ -100,7 +176,7 @@ function rowHtml(it, maxSeed, now) {
   return `
     <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}" data-id="${it.id}">
       <label class="ny-ck"><input type="checkbox" ${selected.has(it.id) ? "checked" : ""} aria-label="Выбрать"></label>
-      <span class="ny-kind k-${kind}" title="${esc(it.category)}">${KIND_ICON[kind]}</span>
+      ${kindHtml(it, kind)}
       <div class="ny-main">
         <div class="ny-title">${group ? `<em>${esc(group)}</em>` : ""}${esc(group ? it.title.replace(/^\s*\[[^\]]*\]\s*/, "") : it.title)}</div>
         <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
@@ -118,6 +194,19 @@ function rowHtml(it, maxSeed, now) {
         <button type="button" class="ny-ib" data-a="open" title="Открыть страницу в браузере" aria-label="Открыть в браузере">${ICONS.open}</button>
       </div>
     </div>`;
+}
+
+// Карточка аниме: серии одного сезона вместе, внутри — лучшая раздача на каждую серию.
+function groupHtml(g, maxSeed, now) {
+  const open = openGroups.has(g.key);
+  const fresh = g.episodes.filter(e => !sentEps.has(episodeKey(e.item))).length;
+  return `<div class="ny-grp${open ? " open" : ""}" data-gkey="${esc(g.key)}">
+    <div class="ny-grp-h" data-grp-toggle="${esc(g.key)}"><span class="ny-grp-ar">${open ? "▾" : "▸"}</span>
+      <div class="ny-grp-t"><b>${esc(g.title)}${g.season > 1 ? ` · сезон ${g.season}` : ""}</b><span>${g.items.length} раздач · ${g.groups || 1} групп · серий: ${g.episodes.length}</span></div>
+      ${fresh ? `<i class="ny-grp-new">${fresh} ${fresh === 1 ? "новая" : "новых"}</i>` : `<i class="ny-grp-done">всё отправлено</i>`}
+      <button type="button" class="btn ghost" data-grp-send="${esc(g.key)}" title="Отправить в торрент-клиент лучшие раздачи неотправленных серий">${ICONS.send} Все новые</button></div>
+    ${open ? `<div class="ny-grp-b">${g.episodes.map(e => `<div class="ny-ep${sentEps.has(episodeKey(e.item)) ? " done" : ""}"><span class="ny-ep-n">E${String(e.episode).padStart(2, "0")}</span>${rowHtml(e.item, maxSeed, now)}</div>`).join("")}</div>` : ""}
+  </div>`;
 }
 
 function skeleton() {
@@ -138,7 +227,9 @@ function listHtml() {
   }
   const maxSeed = Math.max(...list.map(i => i.seeders), 1);
   const now = Date.now();
-  return list.map(i => rowHtml(i, maxSeed, now)).join("")
+  const body = prefs.group ? groupReleases(list).map(g => g.kind === "item" ? rowHtml(g.item, maxSeed, now) : groupHtml(g, maxSeed, now)).join("") : list.map(i => rowHtml(i, maxSeed, now)).join("");
+  return (stale ? `<div class="ny-stale">Сайт не отвечает — показаны сохранённые данные (${esc(relTime(stale))}). <button type="button" class="ny-link" id="ny-retry">Обновить</button></div>` : "")
+    + body
     + `<div class="ny-more-wrap">${hidden ? `<span class="ny-hint">фильтры скрывают ${hidden}</span>` : ""}${hasMore ? `<button type="button" class="btn" data-more>${moreBusy ? "Загружаю…" : "Показать ещё"}</button>` : `<span class="ny-hint">это всё, что отдал сайт</span>`}</div>`;
 }
 
@@ -157,7 +248,7 @@ function shellHtml() {
   return `
   <div class="ny">
     <header class="ny-hero">
-      <div class="ny-hero-t"><span class="kd-label">Релизы</span><h2>Nyaa</h2>
+      <div class="ny-hero-t"><span class="kd-label">Релизы · бета</span><h2>Nyaa <span class="ny-beta">Beta</span></h2>
         <p>Свежие раздачи из публичной ленты — не нужно заходить на сайт. Двойной щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p>
         <button type="button" class="ny-src-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
         <div class="ny-hero-btns">
@@ -181,6 +272,7 @@ function shellHtml() {
       <div class="ny-seg" id="ny-filter"></div>
       <span class="ny-sp"></span>
       <div class="ny-seg" id="ny-sort"></div>
+      <div class="ny-seg" id="ny-view"></div>
       <button type="button" class="ny-flt-btn" id="ny-flt-btn" aria-expanded="false">${ICONS.filter}<span>Фильтры</span><b id="ny-flt-n"></b></button>
       <button type="button" class="ny-ib wide" id="ny-refresh" title="Обновить список" aria-label="Обновить список">${ICONS.refresh}</button>
     </div>
@@ -201,6 +293,7 @@ function paintStatic() {
     + `<select id="ny-cat-more" aria-label="Другие категории"><option value="">Ещё категории…</option>${CATEGORIES.filter(([k]) => !QUICK_CATS.some(q => q[0] === k)).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
   $("#ny-filter").innerHTML = seg(FILTERS, prefs.filter, "data-filter");
   $("#ny-sort").innerHTML = seg(SORTS, prefs.sort, "data-sort");
+  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button>`;
   $("#ny-saved").innerHTML = prefs.saved.length
     ? `<span class="ny-saved-l">Мои запросы</span>` + prefs.saved.map((s, i) => `<span class="ny-chip"><button type="button" data-saved="${i}">${esc(s.q || "без слов")} <small>${esc((QUICK_CATS.concat(CATEGORIES).find(c => c[0] === s.cat) || [0, s.cat])[1])}</small></button><button type="button" class="x" data-saved-del="${i}" aria-label="Убрать">×</button></span>`).join("")
     : "";
@@ -234,6 +327,7 @@ function paintList() {
   if (all) all.checked = !!list.length && list.every(i => selected.has(i.id));
   const upd = $("#ny-upd");
   if (upd) upd.textContent = fetchedAt ? `обновлено ${relTime(fetchedAt)}` : "";
+  loadListCovers();
 }
 
 async function load() {
@@ -246,10 +340,17 @@ async function load() {
     page = 1;
     hasMore = items.length >= 50;
     fetchedAt = Date.now();
+    stale = 0;
+    cacheSave(xml);
     selected.clear();
   } catch (e) {
-    error = String(e && e.message ? e.message : e);
-    items = [];
+    const c = cacheLoad();
+    if (c) {
+      items = parseNyaaRss(c.xml); page = 1; hasMore = false; fetchedAt = c.at; stale = c.at; selected.clear();
+    } else {
+      error = friendlyError(e);
+      items = [];
+    }
   }
   loading = false;
   $("#ny-refresh")?.classList.remove("spin");
@@ -419,6 +520,7 @@ async function sendToClient(list) {
   try {
     const n = await invoke("tc_add", { magnets });
     list.forEach(i => touch(i.id));
+    markSent(list); paintList();
     toast(`Отправлено в ${CLIENT_NAMES[client.kind]}: ${n}.`, "success");
   } catch (e) { toast(`Не удалось отправить: ${e}`, "error"); }
 }
@@ -444,7 +546,7 @@ function monitorsHtml() {
     <div class="ny-mons">${prefs.monitors.length ? prefs.monitors.map(m => `
       <div class="ny-mon${m.new ? " has-new" : ""}">
         <label class="ny-chk"><input type="checkbox" data-mon-toggle="${esc(m.id)}" ${m.on ? "checked" : ""}></label>
-        <div class="ny-mon-t"><b>${esc(monitorTitle(m))}</b><span>${m.type === "user" ? "загрузчик" : esc((CATEGORIES.find(c => c[0] === m.cat) || [0, m.cat])[1])}${m.new ? ` · новых: ${m.new}` : ""}</span></div>
+        <div class="ny-mon-t"><b>${esc(monitorTitle(m))}</b><span>${m.type === "user" ? "загрузчик" : esc((CATEGORIES.find(c => c[0] === m.cat) || [0, m.cat])[1])}${m.rule ? ` · ${esc(ruleText(m.rule))}` : ""}${m.new ? ` · новых: ${m.new}` : ""}</span></div>
         <button type="button" class="btn ghost" data-mon-open="${esc(m.id)}">Открыть</button>
         <button type="button" class="ny-ib" data-mon-del="${esc(m.id)}" title="Убрать" aria-label="Убрать">${ICONS.close}</button>
       </div>`).join("") : `<div class="wt-empty">Пока ничего не отслеживается.</div>`}</div>
@@ -453,7 +555,13 @@ function monitorsHtml() {
       <input type="text" id="ny-mon-q" placeholder="слова запроса или имя загрузчика" spellcheck="false">
       <select id="ny-mon-cat">${cats}</select>
       <button type="button" class="btn primary" data-mon-add>Добавить</button>
-    </div>`;
+    </div>
+    <div class="ny-mon-rule"><b>Правило (по желанию)</b>
+      <input type="text" id="ny-mon-groups" placeholder="группы по приоритету: Erai-raws, VARYG" spellcheck="false">
+      <select id="ny-mon-res"><option value="">любое качество</option><option value="1080p">1080p</option><option value="720p">720p</option><option value="2160p">2160p</option></select>
+      <label><input type="checkbox" id="ny-mon-nohevc"> не HEVC</label>
+      <label><input type="checkbox" id="ny-mon-auto"> сразу в торрент-клиент</label>
+      <span class="ny-hint">С правилом уведомление приходит только о подходящих раздачах, по одной лучшей на серию — без дублей разных кодеков.</span></div>`;
 }
 
 function paintMonitors() {
@@ -467,10 +575,15 @@ async function checkMonitor(m, quiet) {
   const xml = await nyaaRss({
     base: prefs.base, query: m.type === "query" ? m.q : "", category: m.cat, filter: "0", page: 1, user: m.type === "user" ? m.q : null,
   });
-  const { fresh, seen: nextSeen } = diffMonitor(parseNyaaRss(xml), m);
+  const { fresh: raw, seen: nextSeen } = diffMonitor(parseNyaaRss(xml), m);
   m.seen = nextSeen;
+  const fresh = freshForRule(raw, m);
   if (fresh.length) {
     m.new = (m.new || 0) + fresh.length;
+    if (m.rule) m.got = [...new Set([...(m.got || []), ...fresh.map(episodeKey).filter(Boolean)])].slice(-300);
+    if (m.rule && m.rule.auto && client && !quiet) {
+      try { await invoke("tc_add", { magnets: fresh.map(magnetLink).filter(Boolean) }); markSent(fresh); fresh.forEach(i => touch(i.id)); } catch (_) { /* уведомление ниже скажет о новом */ }
+    }
     if (!quiet) {
       const text = `${monitorTitle(m)}: ${fresh[0].title}${fresh.length > 1 ? ` и ещё ${fresh.length - 1}` : ""}`;
       toast(`Новое на Nyaa — ${text}`, "success");
@@ -491,8 +604,8 @@ async function checkMonitors(manual = false) {
   if (manual) toast(failed ? `Не удалось проверить: ${failed}` : "Проверка завершена.", failed ? "error" : "success");
 }
 
-async function addMonitor({ type, q, cat }) {
-  const m = makeMonitor({ type, q, cat: cat || prefs.cat });
+async function addMonitor({ type, q, cat, rule = null }) {
+  const m = makeMonitor({ type, q, cat: cat || prefs.cat, rule });
   if (!m) { toast(type === "user" ? "Имя загрузчика: латинские буквы, цифры, _ - ." : "Введите слова для слежения.", "error"); return; }
   if (prefs.monitors.some(x => x.type === m.type && x.q.toLowerCase() === m.q.toLowerCase() && x.cat === m.cat)) { toast("Такое слежение уже есть."); return; }
   prefs.monitors = [...prefs.monitors, m].slice(-12);
@@ -509,15 +622,46 @@ function startMonitoring() {
 }
 startMonitoring();
 
+// Фоновое обновление ленты: раз в 5 минут, если страница открыта, ничего не грузится и поиск не набирается.
+setInterval(() => {
+  if (!$("#ny-list") || loading || moreBusy || document.hidden || detail) return;
+  const q = $("#ny-q");
+  if (q && document.activeElement === q) return;
+  load();
+}, 5 * 60 * 1000);
+
+// ---------- выбор соединения для каждого сервиса ----------
+// auto — сначала этот компьютер, если связи нет — сервер (WireGuard); pc — только этот компьютер;
+// server — всегда через сервер студии.
+const ROUTES = [["auto", "Авто"], ["pc", "Мой компьютер"], ["server", "Сервер (WireGuard)"]];
+const routeOf = id => (prefs.route && ["pc", "server"].includes(prefs.route[id])) ? prefs.route[id] : "auto";
+const serviceOfUrl = url => {
+  const h = hostOf(url);
+  const sv = buildServices(prefs.custom, serverOrigin()).find(s => s.mirrors.some(m => hostOf(m) === h));
+  return sv ? sv.id : "";
+};
+// сам сервер студии проверяется только отсюда: его адрес для проверки «с сервера» недопустим (свой порт)
+const routeOfUrl = url => { const id = serviceOfUrl(url); return id === "server" ? "pc" : routeOf(id); };
+
+// Результат проверки по выбранному соединению сервиса.
+function applyChecks() {
+  new Set([...Object.keys(serverChecks), ...Object.keys(localChecks)]).forEach(u => {
+    const mode = routeOfUrl(u);
+    const r = mode === "pc" ? localChecks[u] : mode === "server" ? serverChecks[u] : (serverChecks[u] || localChecks[u]);
+    if (r) checks[u] = r;
+  });
+}
+
 // ---------- источники и зеркала ----------
 function sourcesHtml() {
   const services = buildServices(prefs.custom, serverOrigin());
   return `
-    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>${checkedBy === "local" ? "Сервер студии недоступен — показана проверка с этого компьютера." : "Проверка идёт с сервера студии: через него работают «Релизы» и «Смотреть»."} Если сайт переехал, выберите рабочее зеркало.</span></div>
+    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>Для каждого сервиса выберите, как подключаться: с этого компьютера или через сервер студии (WireGuard). По этому выбору идёт и проверка, и сами запросы.</span></div>
       <div><button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить всё"}</button><button type="button" class="ny-ib wide" data-close-sources title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
     <div class="ny-src-grid">${services.map(sv => `
       <div class="ny-svc">
         <div class="ny-svc-h"><b>${esc(sv.name)}</b><span>${esc(sv.note)}</span></div>
+        ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>`}
         ${sv.mirrors.map(m => {
           const c = classifyCheck(checks[m]);
           const active = sv.apply && m === prefs.base;
@@ -529,7 +673,7 @@ function sourcesHtml() {
         }).join("")}
         ${sv.id === "nyaa" ? fastHint(sv.mirrors) : ""}
         ${sv.id === "nyaa" ? `<div class="ny-mir-add"><input id="ny-mir-in" type="text" placeholder="Своё зеркало, например nyaa.example" spellcheck="false"><button type="button" class="btn" id="ny-mir-add">Добавить</button></div>` : ""}
-        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» берёт эти данные через сервер студии, поэтому важно, что видит сервер.</p>` : ""}
+        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» всегда берёт эти данные через сервер студии; выбор влияет на проверку и на запросы из «Релизов».</p>` : ""}
       </div>`).join("")}</div>`;
 }
 
@@ -561,20 +705,19 @@ async function runChecks(urls) {
     invoke("net_check", { urls }),
   ]);
   if (loc.status === "fulfilled") loc.value.forEach(r => { localChecks[r.url] = r; });
-  if (srv.status === "fulfilled" && Array.isArray(srv.value)) {
-    srv.value.forEach(r => { checks[r.url] = r; });
-    checkedBy = "server";
-  } else if (loc.status === "fulfilled") {
-    loc.value.forEach(r => { checks[r.url] = r; });
-    checkedBy = "local";
-  } else toast(`Проверка не удалась: ${loc.reason}`, "error");
+  if (srv.status === "fulfilled" && Array.isArray(srv.value)) srv.value.forEach(r => { serverChecks[r.url] = r; });
+  else urls.forEach(u => {
+    if (routeOfUrl(u) === "server") serverChecks[u] = { url: u, ok: false, status: 0, ms: 0, error: "сервер студии недоступен" };
+  });
+  if (srv.status !== "fulfilled" && loc.status !== "fulfilled") toast(`Проверка не удалась: ${loc.reason}`, "error");
+  applyChecks();
   checking = false; paintSources();
 }
 
 // «У вас закрыт»: серверу сайт виден, а с этого компьютера — нет.
 const closedHere = m => {
-  const s = checks[m], l = localChecks[m];
-  return checkedBy === "server" && s && s.ok && l && (l.error || !l.ok);
+  const s = serverChecks[m], l = localChecks[m];
+  return routeOfUrl(m) !== "pc" && s && s.ok && l && (l.error || !l.ok);
 };
 
 function allMirrorUrls() {
@@ -652,9 +795,17 @@ const isNotFound = e => /ответил 404/.test(String(e && e.message ? e.mess
 const isNoConnection = e => /Не удалось загрузить|error sending request|timed out|connect/i.test(String(e && e.message ? e.message : e));
 
 async function metaGet(url) {
+  const mode = routeOf("sources");
+  const viaRelay = async () => {
+    const wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}`)).text());
+    if (wrapped.status === 404) throw new Error("Сайт ответил 404");
+    if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
+    return String(wrapped.body || "");
+  };
+  if (mode === "server") return viaRelay();
   try { return await invoke("meta_get", { url }); }
   catch (e) {
-    if (isNotFound(e) || !isNoConnection(e)) throw e;
+    if (mode === "pc" || isNotFound(e) || !isNoConnection(e)) throw e;
     let wrapped;
     try { wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}`)).text()); }
     catch (_) { throw e; }                      // на сервере ручки нет или он недоступен — показываем исходную ошибку
@@ -676,9 +827,16 @@ async function relayJson(params) {
 }
 
 async function nyaaDirectOrRelay(direct, relayParams, pick) {
+  const mode = routeOf("nyaa");
+  if (mode === "server") {
+    const w = await relayJson(relayParams);
+    if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
+    viaServer = true; paintSourceChip();
+    return pick(w);
+  }
   try { return await direct(); }
   catch (e) {
-    if (isNotFound(e) || !isNoConnection(e)) throw e;
+    if (mode === "pc" || isNotFound(e) || !isNoConnection(e)) throw e;
     let w;
     try { w = await relayJson(relayParams); } catch (_) { throw e; }   // ручки нет / сервер недоступен — исходная ошибка
     if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
@@ -693,16 +851,35 @@ const nyaaView = a => nyaaDirectOrRelay(() => invoke("nyaa_view", a),
   { kind: "view", base: a.base, id: a.id }, w => String(w.body || ""));
 
 async function nyaaSaveTorrent(base, id, path) {
-  try { return await invoke("nyaa_save_torrent", { base, id, path }); }
-  catch (e) {
-    if (!isNoConnection(e)) throw e;
+  const mode = routeOf("nyaa");
+  const viaRelay = async rethrow => {
     let w;
-    try { w = await relayJson({ kind: "torrent", base, id }); } catch (_) { throw e; }
+    try { w = await relayJson({ kind: "torrent", base, id }); } catch (_) { if (rethrow) throw rethrow; throw _; }
     if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
     const bin = atob(w.b64 || "");
     await invoke("write_bytes_file", { path, bytes: Array.from(bin, ch => ch.charCodeAt(0)) });
     viaServer = true; paintSourceChip();
+  };
+  if (mode === "server") return viaRelay();
+  try { return await invoke("nyaa_save_torrent", { base, id, path }); }
+  catch (e) {
+    if (mode === "pc" || !isNoConnection(e)) throw e;
+    return viaRelay(e);
   }
+}
+
+// Понятное объяснение вместо технического текста ошибки.
+function friendlyError(e) {
+  const m = String(e && e.message ? e.message : e);
+  if (/401|403|Cloudflare|forbidden/i.test(m)) return `Сайт не пускает приложение (${m.slice(0, 80)}). Попробуйте другое зеркало.`;
+  if (/ответил 5\d\d|50[0-4]/.test(m)) return "Сайт сейчас перегружен или чинится. Подождите минуту и нажмите «Повторить».";
+  if (isNoConnection({ message: m })) {
+    const mode = routeOf("nyaa");
+    return mode === "pc" ? "Нет связи с сайтом напрямую. В «Источниках» переключите Nyaa на «Авто» или «Сервер (WireGuard)»."
+      : mode === "server" ? "Сервер студии тоже не достучался до сайта. Попробуйте другое зеркало."
+      : "Нет связи ни напрямую, ни через сервер студии. Попробуйте другое зеркало в «Источниках».";
+  }
+  return m.slice(0, 160);
 }
 
 const shortErr = e => {
@@ -940,7 +1117,23 @@ function wire(root) {
     }
     if (t.closest("[data-open-monitors]")) { openPanel("ny-monitors"); paintMonitors(); return; }
     if (t.closest("[data-mon-check]")) { checkMonitors(true); return; }
-    if (t.closest("[data-mon-add]")) { addMonitor({ type: $("#ny-mon-type").value, q: $("#ny-mon-q").value, cat: $("#ny-mon-cat").value }); return; }
+    if (t.closest("[data-mon-add]")) {
+      const rule = makeRule({ groups: $("#ny-mon-groups").value, res: $("#ny-mon-res").value, noHevc: $("#ny-mon-nohevc").checked, auto: $("#ny-mon-auto").checked });
+      if (rule && rule.auto && !client) { toast("Сначала настройте торрент-клиент: правило отправляет серии в него."); return; }
+      addMonitor({ type: $("#ny-mon-type").value, q: $("#ny-mon-q").value, cat: $("#ny-mon-cat").value, rule });
+      return;
+    }
+    const tg = t.closest("[data-toggle]");
+    if (tg) { prefs[tg.dataset.toggle] = !prefs[tg.dataset.toggle]; savePrefs(); paintStatic(); paintList(); return; }
+    const gt = t.closest("[data-grp-toggle]");
+    if (gt && !t.closest("[data-grp-send]")) { const k = gt.dataset.grpToggle; if (openGroups.has(k)) openGroups.delete(k); else openGroups.add(k); paintList(); return; }
+    const gs = t.closest("[data-grp-send]");
+    if (gs) {
+      const g = groupReleases(view()).find(x => x.kind === "group" && x.key === gs.dataset.grpSend);
+      const todo = g ? g.episodes.map(e => e.item).filter(i => !sentEps.has(episodeKey(i))) : [];
+      if (!todo.length) { toast("Новых серий нет."); return; }
+      sendToClient(todo); return;
+    }
     if (t.closest("[data-watch-query]")) { addMonitor({ type: "query", q: $("#ny-q").value, cat: prefs.cat }); return; }
     const mo = t.closest("[data-mon-open]");
     if (mo) {
@@ -1011,6 +1204,14 @@ function wire(root) {
       }
     }
     // источники
+    const rt = t.closest("[data-route]");
+    if (rt) {
+      const [sid, mode] = rt.dataset.route.split(":");
+      prefs.route = { ...prefs.route, [sid]: mode };
+      savePrefs(); viaServer = false; applyChecks(); paintSources();
+      if (sid === "nyaa") { items = []; load(); }
+      return;
+    }
     if (t.closest("[data-open-sources]")) { openSources(); return; }
     if (t.closest("[data-close-sources]")) { $("#ny-sources").hidden = true; return; }
     if (t.closest("#ny-check-all")) { runChecks(allMirrorUrls()); return; }
@@ -1100,9 +1301,34 @@ function wire(root) {
   });
 }
 
+// Предупреждение о бета-версии: при открытии вкладки, пока не отмечено «больше не показывать».
+const BETA_KEY = "project-nyaa-beta-ok";
+let betaShown = false;
+function maybeWarnBeta() {
+  let skip = false;
+  try { skip = localStorage.getItem(BETA_KEY) === "1"; } catch (_) { /* покажем окно */ }
+  if (betaShown || skip) return;
+  betaShown = true;
+  const overlay = openSheet(`
+    <div class="nda">
+      <span class="kd-label">Бета-версия</span>
+      <h2>Nyaa (Beta)</h2>
+      <p>Раздел «Релизы» ещё тестируется: что-то может работать нестабильно, а сайты — быть недоступными у вашего провайдера.</p>
+      <p>Программа сама ничего не скачивает: она показывает ленту, копирует magnet и по вашей кнопке отправляет раздачи в ваш торрент-клиент. Скачивайте только то, что вам разрешено законом и правами на материал.</p>
+      <p>Если что-то работает неправильно, сообщите администратору.</p>
+      <label class="ny-beta-ck"><input type="checkbox" id="ny-beta-skip"> Больше не показывать</label>
+      <div class="nda-actions"><button class="btn primary" id="ny-beta-ok">Понятно</button></div>
+    </div>`);
+  overlay.querySelector("#ny-beta-ok").addEventListener("click", () => {
+    if (overlay.querySelector("#ny-beta-skip").checked) { try { localStorage.setItem(BETA_KEY, "1"); } catch (_) { /* покажем снова */ } }
+    overlay.remove();
+  });
+}
+
 export async function loadNyaa() {
   const body = $("#nyaa-body");
   if (!body) return true;
+  maybeWarnBeta();
   if (!body.querySelector(".ny")) {
     body.innerHTML = shellHtml();
     paintStatic();

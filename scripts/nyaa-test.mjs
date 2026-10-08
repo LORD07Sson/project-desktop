@@ -217,3 +217,42 @@ assert.equal(parseSimilar("oops").found, false);
 assert.ok(SIMILAR_QUERY.includes("recommendations"));
 
 console.log("nyaa-test: ok");
+
+// ---------- Релизы 2.0 ----------
+{
+  const core = await import("../src/app/nyaa-core.js");
+  const { parseRelease, groupReleases, bestPerEpisode, makeRule, freshForRule, makeMonitor: mk, episodeKey } = core;
+  const a = parseRelease("[Erai-raws] Seihantai na Kimi to Boku 2nd Season - 13 [1080p CR WEBRip HEVC AAC][MultiSub]");
+  assert.equal(a.episode, 13); assert.equal(a.season, 2); assert.equal(a.group, "Erai-raws"); assert.equal(a.res, "1080p"); assert.equal(a.codec, "hevc");
+  const b = parseRelease("You and I Are Polar Opposites S02E13 1080p CR WEB-DL AAC2.0 H.264 | Seihantai na Kimi to Boku 2nd Season");
+  assert.equal(b.episode, 13); assert.equal(b.season, 2); assert.equal(b.codec, "avc");
+  assert.equal(parseRelease("[JMAX] Night Watch OST [FLAC]").episode, null);
+  assert.equal(parseRelease("[Group] Show Name (Batch) 01-12 [1080p]").episode, null);
+  assert.equal(parseRelease("[SubsPlease] Night Watch - 09 (1080p) [HEVC]").episode, 9);
+  const mkItem = (id, title, seeders = 10) => ({ id, title, seeders });
+  const list = [
+    mkItem("1", "[A] Show X - 03 [1080p HEVC]", 50), mkItem("2", "[B] Show X - 03 [1080p AVC]", 20),
+    mkItem("3", "[A] Show X - 02 [720p]", 5), mkItem("4", "[A] Other OST [FLAC]", 5),
+  ];
+  const g = groupReleases(list);
+  assert.equal(g.length, 2); assert.equal(g[0].kind, "group"); assert.equal(g[0].episodes.length, 2); assert.equal(g[1].kind, "item");
+  assert.equal(bestPerEpisode(list, { groups: ["B", "A"] })[0].item.id, "2", "по правилу приоритет у группы B");
+  assert.equal(bestPerEpisode(list, { noHevc: true })[0].item.id, "2", "без HEVC выбирается AVC");
+  assert.equal(bestPerEpisode(list, { res: "720p" }).length, 1);
+  assert.equal(makeRule({}), null);
+  assert.deepEqual(makeRule({ groups: "A, B, A", res: "1080p", auto: true }), { groups: ["A", "B"], res: "1080p", noHevc: false, auto: true });
+  const m = mk({ type: "query", q: "show x", rule: makeRule({ groups: "A" }) });
+  assert.deepEqual(m.got, []);
+  const fr = freshForRule(list, { ...m, got: [episodeKey(list[0])] });
+  assert.ok(!fr.some(i => i.id === "1" || i.id === "2"), "серия 3 уже получена");
+  assert.equal(mk({ type: "query", q: "x" }).rule, undefined);
+}
+
+{
+  const { parseCover, coverKey } = await import("../src/app/nyaa-core.js");
+  assert.equal(parseCover('{"data":{"Media":{"id":1,"coverImage":{"medium":"https://s4.anilist.co/a.jpg"}}}}'), "https://s4.anilist.co/a.jpg");
+  assert.equal(parseCover('{"data":{"Media":null}}'), "");
+  assert.equal(parseCover("не json"), "");
+  assert.equal(coverKey("[Sokudo] Re ZERO - S04E19 [1080p AV1]"), coverKey("[Breeze] Re ZERO - S04E19 [1080p AV1]"));
+  assert.ok(coverKey("[A] Show X - 03 [1080p]").startsWith("show x"));
+}
