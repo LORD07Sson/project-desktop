@@ -256,3 +256,11 @@ console.log("nyaa-test: ok");
   assert.equal(coverKey("[Sokudo] Re ZERO - S04E19 [1080p AV1]"), coverKey("[Breeze] Re ZERO - S04E19 [1080p AV1]"));
   assert.ok(coverKey("[A] Show X - 03 [1080p]").startsWith("show x"));
 }
+
+{
+  const html = '<html><body><div class="panel-heading"><h3 class="panel-title">T</h3></div><div id="torrent-description">![alt text](https://i.ibb.co/KpVhrcHV/Cover.jpg)\n\nТрек-лист: [сайт](https://example.com/a)</div></body></html>';
+  const v = parseView(html, win.DOMParser);
+  assert.deepEqual(v.images, ["https://i.ibb.co/KpVhrcHV/Cover.jpg"]);
+  assert.ok(!v.description.includes("!["), "markdown-картинка убрана из текста");
+  assert.ok(v.description.includes("сайт (https://example.com/a)"));
+}

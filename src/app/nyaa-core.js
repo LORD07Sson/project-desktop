@@ -276,6 +276,10 @@ export function parseView(html, Parser = globalThis.DOMParser) {
       if (/^https:\/\//i.test(src) && !images.includes(src)) images.push(src);
     });
   }
+  // Описание на Nyaa — сырой markdown, который сайт рисует скриптом: ![alt](https://…) и [текст](https://…).
+  let description = cleanText(parts.join(""));
+  description = description.replace(/!\[[^\]]*\]\((https:\/\/[^\s)]+)(?:\s+"[^"]*")?\)/g, (_, u) => { if (!images.includes(u)) images.push(u); return ""; });
+  description = cleanText(description.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t, u) => (t.trim() === u ? u : `${t} (${u})`)));
   const files = [];
   doc.querySelectorAll(".torrent-file-list li").forEach(li => {
     if (li.querySelector("ul")) return;
@@ -288,7 +292,7 @@ export function parseView(html, Parser = globalThis.DOMParser) {
     fields,
     date: ts,
     magnet: magnetA ? magnetA.getAttribute("href") : "",
-    description: cleanText(parts.join("")).slice(0, 5000),
+    description: description.slice(0, 5000),
     images: images.slice(0, 12),
     files: files.slice(0, 300),
   };

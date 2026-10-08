@@ -128,17 +128,48 @@ const saveCovers = () => {
   try { localStorage.setItem(COVERS_KEY, JSON.stringify(coverUrls)); } catch (_) { /* не запомнится */ }
 };
 
+// У раздач без аниме-обложки (музыка, OST) аватар — первая картинка из описания раздачи.
+const THUMBS_KEY = "project-nyaa-thumbs";
+const thumbUrls = (() => { try { return JSON.parse(localStorage.getItem(THUMBS_KEY) || "{}"); } catch (_) { return {}; } })();
+const thumbData = new Map();   // id → data-URL
+const saveThumbs = () => {
+  const keys = Object.keys(thumbUrls);
+  if (keys.length > 800) keys.slice(0, keys.length - 800).forEach(k => delete thumbUrls[k]);
+  try { localStorage.setItem(THUMBS_KEY, JSON.stringify(thumbUrls)); } catch (_) { /* не запомнится */ }
+};
+
+async function fetchThumb(it) {
+  const id = it.id;
+  if (coverBusy.has(`t${id}`) || thumbData.has(id)) return;
+  coverBusy.add(`t${id}`);
+  try {
+    let url = thumbUrls[id];
+    if (url === undefined) {
+      url = parseView(await nyaaView({ base: prefs.base, id })).images[0] || "";
+      thumbUrls[id] = url; saveThumbs();
+    }
+    if (url) {
+      thumbData.set(id, await invoke("fetch_image", { url }));
+      document.querySelectorAll(".ny-kind[data-tid]").forEach(el => {
+        if (el.dataset.tid !== String(id) || el.querySelector("img")) return;
+        el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(thumbData.get(id))}" alt="">`;
+      });
+    }
+  } catch (_) { /* нет связи: попробуем позже */ }
+  coverBusy.delete(`t${id}`);
+}
+
 function kindHtml(it, kind) {
   const key = coverKey(it.title);
-  const src = key && coverData.get(key);
-  return `<span class="ny-kind k-${kind}${src ? " has-cover" : ""}" data-ck="${esc(key)}" title="${esc(it.category)}">${src ? `<img src="${esc(src)}" alt="">` : KIND_ICON[kind]}</span>`;
+  const src = thumbData.get(it.id) || (key && kind === "anime" && coverData.get(key)) || (kind !== "audio" && key && coverData.get(key));
+  return `<span class="ny-kind k-${kind}${src ? " has-cover" : ""}" data-ck="${esc(key)}" data-tid="${esc(it.id)}" title="${esc(it.category)}">${src ? `<img src="${esc(src)}" alt="">` : KIND_ICON[kind]}</span>`;
 }
 
 function paintCover(key) {
   const src = coverData.get(key);
   if (!src) return;
   document.querySelectorAll(".ny-kind[data-ck]").forEach(el => {
-    if (el.dataset.ck !== key || el.querySelector("img")) return;
+    if (el.dataset.ck !== key || el.querySelector("img") || el.classList.contains("k-audio")) return;
     el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(src)}" alt="">`;
   });
 }
@@ -162,9 +193,13 @@ async function loadListCovers() {
   if (coverQueueOn) return;
   coverQueueOn = true;
   try {
-    const keys = [...new Set(view().slice(0, 60).map(i => coverKey(i.title)).filter(k => k && !coverData.has(k) && coverUrls[k] !== ""))].slice(0, 30);
+    const vis = view().slice(0, 60);
+    const isAudio = i => categoryKind(i.categoryId) === "audio";
+    const keys = [...new Set(vis.filter(i => !isAudio(i)).map(i => coverKey(i.title)).filter(k => k && !coverData.has(k) && coverUrls[k] !== ""))].slice(0, 30);
+    const thumbs = vis.filter(i => isAudio(i) && !thumbData.has(i.id) && thumbUrls[i.id] !== "").slice(0, 30);
+    const jobs = [...keys.map(k => () => fetchCover(k)), ...thumbs.map(i => () => fetchThumb(i))];
     let next = 0;
-    const worker = async () => { while (next < keys.length) await fetchCover(keys[next++]); };
+    const worker = async () => { while (next < jobs.length) await jobs[next++](); };
     await Promise.all([worker(), worker()]);
   } finally { coverQueueOn = false; }
 }
