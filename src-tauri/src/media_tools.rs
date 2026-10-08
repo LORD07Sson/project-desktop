@@ -23,6 +23,25 @@ pub(crate) fn resolve_ffprobe() -> &'static str {
     RESOLVED.get_or_init(|| resolve_binary_uncached("ffprobe", "ffprobe.exe")).as_str()
 }
 
+/// Версия программы (первая строка `-version`) или None, если не запускается.
+fn tool_version(bin: &str) -> Option<String> {
+    let out = std::process::Command::new(bin).arg("-version").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).lines().next().map(|l| l.trim().to_string())
+}
+
+#[derive(Serialize)]
+pub struct ToolStatus {
+    pub ffmpeg: Option<String>,
+    pub ffprobe: Option<String>,
+}
+
+pub fn tool_status() -> ToolStatus {
+    ToolStatus { ffmpeg: tool_version(resolve_ffmpeg()), ffprobe: tool_version(resolve_ffprobe()) }
+}
+
 // ---------- probe_media ----------
 
 #[derive(Serialize, Default)]

@@ -332,6 +332,11 @@ fn pick_output_dir(app: tauri::AppHandle) -> Option<String> {
 // ---------- «Инструменты ffmpeg» (media_tools.rs) ----------
 
 #[tauri::command(async)]
+fn mt_tool_status() -> media_tools::ToolStatus {
+    media_tools::tool_status()
+}
+
+#[tauri::command(async)]
 fn mt_probe_media(app: tauri::AppHandle, path: String) -> Result<media_tools::MediaInfo, String> {
     log_result("mt_probe_media", (|| {
         let path = app.state::<file_scope::FileScope>().check_read(&path)?;
@@ -1382,6 +1387,7 @@ fn main() {
             mt_extract_subtitles,
             write_text_file,
             fetch_text,
+            mt_tool_status,
             mt_probe_media,
             mt_probe_keyframes,
             mt_register_media_file,
