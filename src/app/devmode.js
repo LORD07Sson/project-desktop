@@ -27,24 +27,22 @@ async function loadMetaRoles() {
 
 export function devPanelHtml(d) {
   return `
-    <div class="sec-title" style="margin-top:16px;">Служебные данные</div>
+    <div class="dev-head"><span class="kd-label">Служебные данные</span><span class="dev-tag">режим разработчика</span></div>
     <div class="dev-bento">
       <div class="dev-bcell wide">
         <div class="h">Идентификаторы</div>
-        <div class="ro-line"><span>telegram_id</span><b>${d.telegram_id}</b></div>
-        <div class="ro-line"><span>internal id</span><b>${d.internal_id != null ? d.internal_id : "—"}</b></div>
-        <div class="ro-line"><span>в базе с</span><b style="font-family:inherit; font-weight:400;">${esc(d.created_at || "—")}</b></div>
+        <div class="dev-ids">
+          <button class="dev-id" data-copy="${esc(String(d.telegram_id))}" title="Копировать"><span>telegram_id</span><b>${d.telegram_id}</b></button>
+          <button class="dev-id" data-copy="${d.internal_id != null ? d.internal_id : ""}" title="Копировать"><span>internal id</span><b>${d.internal_id != null ? d.internal_id : "—"}</b></button>
+          <div class="dev-id static"><span>в базе с</span><b class="plain">${esc(d.created_at || "—")}</b></div>
+        </div>
       </div>
       <div class="dev-bcell wide">
-        <div class="h">Роль</div>
+        <div class="h">Роль и профиль</div>
         <select id="dev-role-select" class="field-input"><option value="">— загрузка…</option></select>
-        <button id="dev-role-save" class="dev-save-btn">Сохранить роль</button>
-      </div>
-      <div class="dev-bcell wide">
-        <div class="h">Статус и о себе</div>
         <input type="text" id="dev-status-input" class="field-input" maxlength="80" placeholder="Короткий статус" value="${esc(d.status_text || "")}">
         <textarea id="dev-bio-input" class="field-textarea" maxlength="300" placeholder="О себе">${esc(d.bio || "")}</textarea>
-        <button id="dev-profile-save" class="dev-save-btn">Сохранить профиль</button>
+        <button id="dev-profile-save" class="dev-save-btn">Сохранить</button>
       </div>
       <div class="dev-bcell">
         <div class="h">Дата вступления</div>
@@ -64,9 +62,15 @@ export function devPanelHtml(d) {
 }
 
 export function wireDevPanel(root, telegramId, onSaved, currentRole) {
+  root.querySelectorAll(".dev-id[data-copy]").forEach(btn => btn.addEventListener("click", async () => {
+    const v = btn.dataset.copy;
+    if (!v) return;
+    try { await navigator.clipboard.writeText(v); toast("Скопировано."); } catch (_) { toast("Не удалось скопировать.", "error"); }
+  }));
   loadMetaRoles().then(roles => {
     const sel = root.querySelector("#dev-role-select");
     if (!sel) return;
+    sel.dataset.ready = "1";
     // Текущая роль человека должна быть выбрана: раньше список
     // заполнялся без selected, открывался на «— без роли —», и
     // «Сохранить роль», нажатое не глядя, стирало роль в пустую.
@@ -74,28 +78,21 @@ export function wireDevPanel(root, telegramId, onSaved, currentRole) {
       `<option value="${esc(r)}" ${r === currentRole ? "selected" : ""}>${esc(r)}</option>`).join("");
   });
 
-  const roleBtn = root.querySelector("#dev-role-save");
-  if (roleBtn) roleBtn.addEventListener("click", async () => {
-    const role = root.querySelector("#dev-role-select").value;
-    roleBtn.disabled = true;
-    try {
-      await apiPost(`/dev/user/${telegramId}/role`, { role });
-      toast("Роль обновлена.");
-      if (onSaved) await onSaved();
-    } catch (e) { toast(`Не удалось сохранить роль: ${e.message}`, "error"); }
-    finally { roleBtn.disabled = false; }
-  });
-
   const profileBtn = root.querySelector("#dev-profile-save");
   if (profileBtn) profileBtn.addEventListener("click", async () => {
+    const sel = root.querySelector("#dev-role-select");
     const status_text = root.querySelector("#dev-status-input").value;
     const bio = root.querySelector("#dev-bio-input").value;
+    // Роль шлём только когда список загрузился и значение изменилось:
+    // иначе «— загрузка…» стёрло бы текущую роль пустой.
+    const roleChanged = sel?.dataset.ready === "1" && sel.value !== (currentRole || "");
     profileBtn.disabled = true;
     try {
+      if (roleChanged) await apiPost(`/dev/user/${telegramId}/role`, { role: sel.value });
       await apiPost(`/dev/user/${telegramId}/profile`, { status_text, bio });
-      toast("Профиль обновлён.");
+      toast("Сохранено.");
       if (onSaved) await onSaved();
-    } catch (e) { toast(`Не удалось сохранить профиль: ${e.message}`, "error"); }
+    } catch (e) { toast(`Не удалось сохранить: ${e.message}`, "error"); }
     finally { profileBtn.disabled = false; }
   });
 

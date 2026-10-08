@@ -1231,3 +1231,53 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 .st-prev-kadr { background: radial-gradient(80% 100% at 30% 0, rgba(60, 120, 140, .5), transparent 70%), #0b0908; }
 .st-prev-kadr i { background: rgba(255, 255, 255, .07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); backdrop-filter: blur(4px); }
 :root[data-look="kadr"] .an-metrics::before, :root[data-look="kadr"] .an-metrics::after { content: none; }
+
+/* ================================================================
+   Режим разработчика и «Инструменты ffmpeg» — в языке «Кадра»:
+   стеклянные карточки, акцент вместо фиолетового/синего.
+   ================================================================ */
+.dev-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 10px; }
+.dev-tag { font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; color: var(--gold); background: rgba(var(--fire-rgb), .1); border: 1px solid rgba(var(--fire-rgb), .22); }
+.dev-bento { gap: 12px; margin-top: 0; }
+.dev-bcell {
+  border: 0; border-radius: var(--radius-lg); padding: 16px 18px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(26px) saturate(1.2); -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow: 0 26px 50px -32px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+:root[data-theme="light"] .dev-bcell { background: rgba(255, 255, 255, .72); box-shadow: 0 20px 40px -28px rgba(60, 25, 10, .3), inset 0 0 0 1px rgba(255, 255, 255, .8); }
+.dev-bcell .h { font-size: 10px; font-weight: 700; letter-spacing: .22em; color: var(--ink-dim); margin-bottom: 12px; }
+.dev-ids { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dev-id {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; font: inherit; color: inherit;
+  padding: 11px 13px; border-radius: 13px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035);
+  cursor: pointer; transition: border-color .2s, background .2s;
+}
+.dev-id.static { cursor: default; }
+.dev-id:not(.static):hover { border-color: rgba(var(--fire-rgb), .45); background: rgba(var(--fire-rgb), .07); }
+.dev-id span { font-size: 10.5px; letter-spacing: .08em; color: var(--ink-dim); }
+.dev-id b { font-size: 14px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.dev-id b.plain { font-weight: 500; font-size: 13px; }
+.dev-bcell .field-input, .dev-bcell .field-textarea, .mt-sheet .mt-pool-select, .mt-sheet select {
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--line); border-radius: 12px; color: var(--ink);
+}
+:root[data-theme="light"] .dev-bcell .field-input, :root[data-theme="light"] .dev-bcell .field-textarea { background: rgba(255, 255, 255, .8); }
+.dev-bcell .field-input:focus, .dev-bcell .field-textarea:focus { border-color: rgba(var(--fire-rgb), .5); box-shadow: 0 0 0 3px rgba(var(--fire-rgb), .1); }
+.dev-save-btn { padding: 9px 18px; border-radius: 11px; box-shadow: 0 8px 20px -10px rgba(var(--fire-rgb), .6); transition: transform .2s var(--kadr-ease), filter .2s; }
+.dev-save-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+
+/* ffmpeg */
+.mt-sheet { background: var(--glass-bg-strong); backdrop-filter: blur(30px) saturate(1.2); -webkit-backdrop-filter: blur(30px) saturate(1.2); }
+.mt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.mt-head h2 { margin: 4px 0 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+.mt-head-close { width: 34px; height: 34px; padding: 0; border-radius: 11px; display: grid; place-items: center; flex: none; }
+.mt-pool-bar { background: rgba(255, 255, 255, .035); border: 1px dashed rgba(255, 255, 255, .14); border-radius: 16px; padding: 12px 14px; }
+.mt-pool-chip { border-radius: 999px; background: rgba(var(--fire-rgb), .1); border-color: rgba(var(--fire-rgb), .25); }
+.mt-op-tabs { gap: 2px; padding: 4px; margin-bottom: 16px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.mt-op-tabs::-webkit-scrollbar { display: none; }
+.mt-op-tab { flex: 1 0 auto; border: 0; background: transparent; border-radius: 10px; padding: 8px 14px; font-size: 13px; white-space: nowrap; }
+.mt-op-tab:hover { background: rgba(255, 255, 255, .05); border: 0; }
+.mt-op-tab.active { background: rgba(var(--fire-rgb), .18); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(var(--fire-rgb), .4); }
+.mt-empty { border: 1px dashed rgba(255, 255, 255, .14); border-radius: 18px; padding: 34px 24px; background: rgba(255, 255, 255, .02); }
+:root[data-theme="light"] .mt-op-tabs, :root[data-theme="light"] .mt-pool-bar { background: rgba(80, 40, 20, .04); }
+@media (max-width: 760px) { .dev-ids { grid-template-columns: 1fr; } }
