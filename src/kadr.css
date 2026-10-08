@@ -1306,3 +1306,10 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 .tl-smart .tl-dub { flex-direction: row; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
 @media (max-width: 760px) { .tl-smart-row { grid-template-columns: 1fr; } }
 .mt-sheet > .tl-smart, .mt-sheet > .tl-bar, .mt-sheet > .tl-cols, .mt-sheet > .tl-actions, .mt-sheet > .tl-mode { flex-shrink: 0; }
+
+/* Выпадающие списки: у нативного <select> окно выбора рисуется системой с
+   белым фоном, а цвет текста у <option> наследуется светлый — пункты
+   становились неразличимы. Задаём и фон, и цвет. */
+select { color-scheme: dark; }
+:root[data-theme="light"] select { color-scheme: light; }
+select option, select optgroup { background-color: var(--surface); color: var(--ink); }
