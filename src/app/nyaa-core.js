@@ -311,13 +311,28 @@ export function buildServices(nyaaCustom = [], serverOrigin = "") {
 }
 
 /** Результат проверки → { level: ok|slow|warn|bad, text }. */
+// У адресов API без пути (graphql.…, api.…) ответ 404 на простой GET — норма: ручки открываются запросом POST или с путём.
+const isApiHost = url => { try { return /^(graphql|api)\./.test(new URL(url).hostname); } catch (_) { return false; } };
+
 export function classifyCheck(r) {
   if (!r) return { level: "idle", text: "не проверено" };
   if (r.error) return { level: "bad", text: r.error };
   if (!r.ok) return { level: "bad", text: `ошибка сервера ${r.status}` };
+  if (r.status === 404 && isApiHost(r.url)) return { level: r.ms > 1500 ? "slow" : "ok", text: `API отвечает · ${r.ms} мс` };
   if (r.status >= 400) return { level: "warn", text: `отвечает (${r.status}), но может не пускать` };
   if (r.ms > 1500) return { level: "slow", text: `медленно · ${r.ms} мс` };
   return { level: "ok", text: `доступен · ${r.ms} мс` };
+}
+
+/** Самое быстрое рабочее зеркало из списка (по результатам проверки), или null. */
+export function fastestMirror(mirrors, checks) {
+  let best = null;
+  for (const m of mirrors) {
+    const r = checks[m];
+    if (!r || r.error || !r.ok || r.status >= 400) continue;
+    if (!best || r.ms < checks[best].ms) best = m;
+  }
+  return best;
 }
 
 /** Привести введённое пользователем к виду https://host (или null). */
