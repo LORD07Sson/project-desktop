@@ -489,12 +489,12 @@ export function parseSimilar(text) {
 export const MONITOR_SEEN_MAX = 400;
 
 /** Новое слежение: type — query (запрос) или user (загрузчик). */
-export function makeMonitor({ type, q, cat = "0_0" }, now = Date.now()) {
+export function makeMonitor({ type, q, cat = "0_0", rule = null }, now = Date.now()) {
   const text = String(q || "").trim();
   if (!text) return null;
   const t = type === "user" ? "user" : "query";
   if (t === "user" && !/^[A-Za-z0-9_.-]{1,40}$/.test(text)) return null;
-  return { id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, type: t, q: text, cat: t === "user" ? "0_0" : cat, on: true, new: 0 };
+  return { id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, type: t, q: text, cat: t === "user" ? "0_0" : cat, on: true, new: 0, ...(rule ? { rule, got: [] } : {}) };
 }
 
 export const monitorTitle = m => (m.type === "user" ? `Загрузчик ${m.q}` : m.q);
@@ -520,4 +520,112 @@ export const CLIENT_PORTS = { qbittorrent: 8080, transmission: 9091, deluge: 811
 export function torrentFileName(item) {
   const base = String(item.title || `nyaa-${item.id}`).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 120);
   return `${base || `nyaa-${item.id}`}.torrent`;
+}
+
+// ---------- Релизы 2.0: группировка по аниме и правила слежения ----------
+
+const normShow = s => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * Разбор названия раздачи: аниме, сезон, серия, группа, качество, кодек.
+ * episode = null, если это не серия (пачка, OST, неразобранное название).
+ */
+export function parseRelease(title) {
+  const t = String(title || "");
+  const group = (/^\s*\[([^\]]{1,40})\]/.exec(t) || [])[1] || "";
+  let body = t.replace(/^\s*\[[^\]]*\]\s*/, "");
+  const res = (/(?:^|[^\d])(2160|1440|1080|720|576|480)\s*p\b/i.exec(t) || [])[1];
+  const codec = /\b(hevc|x265|h\.?265)\b/i.test(t) ? "hevc" : /\b(avc|x264|h\.?264)\b/i.test(t) ? "avc" : /\bav1\b/i.test(t) ? "av1" : "";
+  const batch = /\b(batch|complete|bd\s*box|season\s*\d+\s*\(|\d{1,3}\s*[-~]\s*\d{1,3}\s*(?:\[|\(|$))/i.test(body) && !/\bS\d{1,2}E\d{1,3}\b/i.test(body);
+  let season = 1, episode = null, show = body;
+  let m = /^(.*?)[\s._-]*\bS(\d{1,2})\s*E(\d{1,3})\b/i.exec(body);
+  if (m) { show = m[1]; season = +m[2]; episode = +m[3]; }
+  else if ((m = /^(.*?)\s+-\s+(\d{1,3})(?:v\d)?(?=\s|\[|\(|$)/.exec(body))) { show = m[1]; episode = +m[2]; }
+  else if ((m = /^(.*?)\s+(?:E|EP|Episode)\s*(\d{1,3})\b/i.exec(body))) { show = m[1]; episode = +m[2]; }
+  const sm = /^(.*?)[\s._-]+(?:S(?:eason)?\s*(\d{1,2})|(\d{1,2})(?:st|nd|rd|th)\s+Season|Season\s*(\d{1,2}))\s*$/i.exec(show);
+  if (sm) { show = sm[1]; season = +(sm[2] || sm[3] || sm[4]); }
+  show = show.replace(/\s*[[(][^\])]*[\])]\s*/g, " ").trim();
+  if (batch) episode = null;
+  return { show, key: `${normShow(show)}|${season}`, season, episode, group, res: res ? `${res}p` : "", codec };
+}
+
+const RES_RANK = { "2160p": 5, "1440p": 4, "1080p": 3, "720p": 2, "576p": 1, "480p": 0 };
+
+/** Оценка раздачи по правилу {groups[], res, noHevc}: чем больше, тем лучше; null — не подходит. */
+export function ruleScore(item, rule = {}) {
+  const r = item._rel || parseRelease(item.title);
+  const groups = (rule.groups || []).map(g => g.toLowerCase());
+  let score = 0;
+  if (groups.length) {
+    const gi = groups.indexOf((r.group || "").toLowerCase());
+    if (gi < 0) return null;
+    score += (groups.length - gi) * 1000;
+  }
+  if (rule.res) {
+    if (r.res !== rule.res) return null;
+    score += 500;
+  } else score += (RES_RANK[r.res] ?? 1) * 100;
+  if (rule.noHevc && r.codec === "hevc") score -= 300;
+  return score + Math.min(item.seeders || 0, 99) / 100;
+}
+
+/** Лучшая раздача на каждую серию (по правилу, иначе по качеству и раздающим). */
+export function bestPerEpisode(items, rule = {}) {
+  const best = new Map();
+  for (const it of items) {
+    const r = it._rel || (it._rel = parseRelease(it.title));
+    if (r.episode == null) continue;
+    const sc = ruleScore(it, rule);
+    if (sc == null) continue;
+    const cur = best.get(r.episode);
+    if (!cur || sc > cur.sc) best.set(r.episode, { it, sc });
+  }
+  return [...best.entries()].sort((a, b) => b[0] - a[0]).map(([ep, v]) => ({ episode: ep, item: v.it }));
+}
+
+/**
+ * Группировка списка: серии одного аниме и сезона собираются в одну карточку.
+ * Раздачи без номера серии остаются отдельными строками. Порядок — по первому появлению.
+ */
+export function groupReleases(list, rule = {}) {
+  const out = [];
+  const byKey = new Map();
+  for (const it of list) {
+    const r = it._rel || (it._rel = parseRelease(it.title));
+    if (r.episode == null || !r.show) { out.push({ kind: "item", item: it }); continue; }
+    let g = byKey.get(r.key);
+    if (!g) { g = { kind: "group", key: r.key, title: r.show, season: r.season, items: [] }; byKey.set(r.key, g); out.push(g); }
+    g.items.push(it);
+  }
+  return out.map(g => {
+    if (g.kind !== "group") return g;
+    if (g.items.length < 2) return { kind: "item", item: g.items[0] };
+    const groups = new Set(g.items.map(i => i._rel.group).filter(Boolean));
+    return { ...g, groups: groups.size, episodes: bestPerEpisode(g.items, rule), best: g.items.slice().sort((a, b) => (ruleScore(b, rule) ?? -1) - (ruleScore(a, rule) ?? -1))[0] };
+  });
+}
+
+/** Ключ серии для памяти «уже отправлено/скачано». */
+export const episodeKey = it => { const r = it._rel || parseRelease(it.title); return r.episode == null ? "" : `${r.key}|${r.episode}`; };
+
+/** Разбор правила из полей формы: группы через запятую, качество, без HEVC, действие. */
+export function makeRule({ groups = "", res = "", noHevc = false, auto = false } = {}) {
+  const gl = [...new Set(String(groups).split(/[,;]+/).map(s => s.trim()).filter(Boolean))].slice(0, 6);
+  const r = ["2160p", "1080p", "720p", "480p"].includes(res) ? res : "";
+  if (!gl.length && !r && !noHevc && !auto) return null;
+  return { groups: gl, res: r, noHevc: !!noHevc, auto: !!auto };
+}
+
+export const ruleText = rule => !rule ? "" : [
+  rule.groups.length ? rule.groups.join(" → ") : "любая группа", rule.res || "", rule.noHevc ? "не HEVC" : "", rule.auto ? "в клиент автоматически" : "",
+].filter(Boolean).join(" · ");
+
+/**
+ * Свежие раздачи для слежения с правилом: подходящие по правилу, по одной лучшей
+ * на серию, без серий, уже полученных раньше (m.got — ключи серий).
+ */
+export function freshForRule(fresh, m) {
+  if (!m.rule) return fresh;
+  const got = new Set(m.got || []);
+  return bestPerEpisode(fresh, m.rule).map(x => x.item).filter(it => { const k = episodeKey(it); return !k || !got.has(k); });
 }
