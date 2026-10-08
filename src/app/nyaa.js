@@ -519,7 +519,8 @@ const serviceOfUrl = url => {
   const sv = buildServices(prefs.custom, serverOrigin()).find(s => s.mirrors.some(m => hostOf(m) === h));
   return sv ? sv.id : "";
 };
-const routeOfUrl = url => routeOf(serviceOfUrl(url));
+// сам сервер студии проверяется только отсюда: его адрес для проверки «с сервера» недопустим (свой порт)
+const routeOfUrl = url => { const id = serviceOfUrl(url); return id === "server" ? "pc" : routeOf(id); };
 
 // Результат проверки по выбранному соединению сервиса.
 function applyChecks() {
