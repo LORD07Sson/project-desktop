@@ -85,3 +85,34 @@ export function parseCbr(json, codes = ["USD", "EUR", "KZT", "CNY", "JPY"]) {
     };
   });
 }
+
+/** Название релиза «[Группа] Название - 09 [1080p][HEVC]» → { group, episode, resolution, codec, source }. */
+export function parseRelease(title) {
+  const t = String(title || "");
+  const group = (/^\s*\[([^\]]{1,40})\]/.exec(t) || [])[1] || "";
+  const resolution = (/(?:^|[^\d])(2160|1440|1080|720|576|480)\s*p/i.exec(t) || [])[1];
+  const codec = (/\b(HEVC|x265|H\.?265|AV1|x264|H\.?264|AVC)\b/i.exec(t) || [])[1] || "";
+  const source = (/\b(BD(?:Rip)?|Blu-?ray|WEB(?:-?DL|Rip)?|HDTV|DVD)\b/i.exec(t) || [])[1] || "";
+  // Номер серии: « - 09», «E09», «ep09», «#09» — но не год и не разрешение.
+  const ep = /(?:\s-\s|\bE(?:p(?:isode)?)?\s?|#)(\d{1,3})(?:v\d)?\b(?!\s*p)/i.exec(t);
+  return {
+    group,
+    episode: ep ? Number(ep[1]) : null,
+    resolution: resolution ? `${resolution}p` : "",
+    codec: codec.replace(/^x265$|^h\.?265$/i, "HEVC").replace(/^x264$|^h\.?264$/i, "AVC"),
+    source,
+  };
+}
+
+/** Все слова фильтра (через пробел) есть в заголовке; пустой фильтр = подходит всё. */
+export function matchesWatch(title, filter) {
+  const words = String(filter || "").toLowerCase().split(/\s+/).filter(Boolean);
+  const t = String(title || "").toLowerCase();
+  return words.every(w => t.includes(w));
+}
+
+/** Записи, которых нет в seen (по ссылке, а без неё — по заголовку), подходящие под фильтр. */
+export function freshItems(items, seen, filter) {
+  const key = i => i.link || i.title;
+  return items.filter(i => !seen.has(key(i)) && matchesWatch(i.title, filter));
+}

@@ -6,8 +6,10 @@
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
 import { openSheet, toast } from "./api.js";
+import { state } from "./state.js";
 import { $, esc } from "./utils.js";
-import { parseLrc, parseFeed, isFeedUrl, parseCbr } from "./web-tools-core.js";
+import { parseLrc, parseFeed, isFeedUrl, parseCbr, parseRelease, freshItems } from "./web-tools-core.js";
+import { notifyDesktop } from "./desktop-notify.js";
 
 const FEEDS_KEY = "project-feeds";
 const DEFAULT_FEEDS = [];
@@ -94,14 +96,50 @@ function feedsHtml() {
       <button class="btn primary" id="wt-feed-add">Добавить</button>
     </div>
     <div class="wt-chips">${f.length ? f.map((x, i) => `<span class="wt-chip ${i === feedState.cur ? "on" : ""}" data-feed="${i}">${esc(x.title || x.url)}<button data-feed-del="${i}" aria-label="Убрать">×</button></span>`).join("") : `<span class="wt-empty">Лент пока нет. Вставьте ссылку на RSS или Atom.</span>`}</div>
+    ${f.length ? `<div class="wt-row"><input id="wt-feed-watch" class="field-input" placeholder="Следить: слова через пробел (например, night watch 1080p)" value="${esc(f[feedState.cur]?.watch || "")}"><label class="wt-watch"><input type="checkbox" id="wt-feed-watch-on" ${f[feedState.cur]?.watchOn ? "checked" : ""}> сообщать о новых</label></div>` : ""}
     ${f.length ? `<div class="wt-row"><input id="wt-feed-filter" class="field-input" placeholder="Фильтр по словам" value="${esc(feedState.filter)}"><button class="btn ghost" id="wt-feed-refresh">${feedState.loading ? "Загрузка…" : "Обновить"}</button></div>` : ""}
     <div class="wt-list tall">${items.length ? items.map(i => `
       <div class="wt-item static"><b>${esc(i.title)}</b>
-        <span>${esc(i.date || "")}${i.extra.size ? ` · ${esc(i.extra.size)}` : ""}${i.extra.seeders ? ` · раздающих ${esc(i.extra.seeders)}` : ""}</span>
+        <span>${releaseChips(i.title)}${esc(i.date || "")}${i.extra.size ? ` · ${esc(i.extra.size)}` : ""}${i.extra.seeders ? ` · раздающих ${esc(i.extra.seeders)}` : ""}</span>
         ${i.link ? `<button class="btn ghost" data-open="${esc(i.link)}">Открыть страницу</button>` : ""}
       </div>`).join("") : (f.length ? `<div class="wt-empty">${feedState.loading ? "Загрузка…" : "Записей нет."}</div>` : "")}</div>
     <p class="wt-note">Ленты только показывают заголовки и ссылки. Права на материалы проверяйте сами — программа ничего не скачивает.</p>`;
 }
+
+function releaseChips(title) {
+  const r = parseRelease(title);
+  const parts = [r.group && `[${r.group}]`, r.episode != null && `серия ${r.episode}`, r.resolution, r.codec, r.source].filter(Boolean);
+  return parts.length ? `<em class="wt-rel">${parts.map(esc).join(" · ")}</em> ` : "";
+}
+
+// ---------- слежение за лентами ----------
+const WATCH_EVERY_MS = 30 * 60 * 1000;
+const SEEN_MAX = 400;
+
+async function checkWatchedFeeds() {
+  if (!state.token) return;
+  let changed = false;
+  for (const f of feedState.feeds) {
+    if (!f.watchOn) continue;
+    try {
+      const items = parseFeed(await fetchText(f.url));
+      const seen = new Set(f.seen || []);
+      const first = !f.seen;
+      const fresh = first ? [] : freshItems(items, seen, f.watch);
+      items.forEach(i => seen.add(i.link || i.title));
+      f.seen = [...seen].slice(-SEEN_MAX);
+      changed = true;
+      if (fresh.length) {
+        const text = fresh.length === 1 ? fresh[0].title : `${fresh[0].title} и ещё ${fresh.length - 1}`;
+        toast(`Новое в ленте: ${text}`, "success");
+        notifyDesktop("Новое в ленте", text);
+      }
+    } catch (_) { /* лента недоступна — попробуем в следующий раз */ }
+  }
+  if (changed) saveFeeds(feedState.feeds);
+}
+setTimeout(checkWatchedFeeds, 20_000);
+setInterval(checkWatchedFeeds, WATCH_EVERY_MS);
 
 async function loadFeed(root) {
   const f = feedState.feeds[feedState.cur];
@@ -134,6 +172,18 @@ function wireFeeds(root) {
     feedState.cur = 0; feedState.items = []; saveFeeds(feedState.feeds); render(root);
   }));
   root.querySelector("#wt-feed-refresh")?.addEventListener("click", () => loadFeed(root));
+  const watchWords = root.querySelector("#wt-feed-watch");
+  const watchOn = root.querySelector("#wt-feed-watch-on");
+  const saveWatch = () => {
+    const f = feedState.feeds[feedState.cur];
+    if (!f) return;
+    f.watch = watchWords.value.trim();
+    f.watchOn = watchOn.checked;
+    if (!f.watchOn) delete f.seen;
+    saveFeeds(feedState.feeds);
+  };
+  watchWords?.addEventListener("input", saveWatch);
+  watchOn?.addEventListener("change", saveWatch);
   const flt = root.querySelector("#wt-feed-filter");
   flt?.addEventListener("input", () => {
     feedState.filter = flt.value;

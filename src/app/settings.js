@@ -16,6 +16,8 @@ import { fetchPerson, openPauseDialog } from "./people.js";
 import { openAdminPanel } from "./admin.js";
 import { tagLogger } from "./applog.js";
 import { midiEnabled, setMidiEnabled } from "./midi-control.js";
+import { currentTune, applyTune } from "./tune.js";
+import { TUNE_DEFAULT, TUNE_LIMITS } from "./tune-core.js";
 import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints, resetTourProgress } from "./tour.js";
 
 const updateLog = tagLogger("updates");
@@ -163,6 +165,12 @@ async function openSettings() {
             ${row(ICONS.motion, "Анимации", "Выключите на слабом компьютере", seg("data-st-motion", [["on", "Включены"], ["off", "Выключены"]], motion), "движение плавность")}
             ${row(ICONS.backdrop, "Фон из кадра тайтла", "Размытая обложка серии за интерфейсом", sw("s-backdrop", backdropOn()), "фон обложка размытие")}
           </div>
+          <div class="st-group" data-st-find="своя тема размытие стекла скругления углы блюр">
+            <div class="st-group-h">Своя тема</div>
+            ${row(ICONS.backdrop, "Размытие стекла", "От чёткого фона до плотного матового", `<input type="range" class="st-range" id="s-tune-blur" min="${TUNE_LIMITS.blur[0]}" max="${TUNE_LIMITS.blur[1]}" value="${currentTune().blur}">`, "блюр стекло")}
+            ${row(ICONS.density, "Скругления", "Острые углы или мягкие, как у таблетки", `<input type="range" class="st-range" id="s-tune-round" min="${TUNE_LIMITS.round[0]}" max="${TUNE_LIMITS.round[1]}" value="${currentTune().round}">`, "углы радиус")}
+            ${row(ICONS.motion, "Сбросить", "Вернуть размытие и скругления по умолчанию", `<button type="button" class="btn" id="s-tune-reset">Сбросить</button>`)}
+          </div>
           <select id="s-theme" hidden><option value="dark">Тёмная</option><option value="light">Светлая</option></select>
           <select id="s-density" hidden><option value="comfortable">Обычная</option><option value="compact">Компактная</option></select>
         </section>
@@ -265,6 +273,14 @@ async function openSettings() {
   overlay.querySelector("#s-density").addEventListener("change", e => applyDensity(e.target.value));
   overlay.querySelector("#s-focus-mode").addEventListener("change", e => setFocusModePreferred(e.target.checked));
   overlay.querySelector("#s-desktop-notify").addEventListener("change", e => setDesktopNotifyEnabled(e.target.checked));
+  const tuneNow = () => applyTune({ blur: overlay.querySelector("#s-tune-blur").value, round: overlay.querySelector("#s-tune-round").value });
+  overlay.querySelector("#s-tune-blur").addEventListener("input", tuneNow);
+  overlay.querySelector("#s-tune-round").addEventListener("input", tuneNow);
+  overlay.querySelector("#s-tune-reset").addEventListener("click", () => {
+    applyTune(TUNE_DEFAULT);
+    overlay.querySelector("#s-tune-blur").value = TUNE_DEFAULT.blur;
+    overlay.querySelector("#s-tune-round").value = TUNE_DEFAULT.round;
+  });
   overlay.querySelector("#s-midi").addEventListener("change", async e => {
     const ok = await setMidiEnabled(e.target.checked);
     if (!ok && e.target.checked) e.target.checked = false;
