@@ -688,7 +688,7 @@ export function parseToshoTorrent(text) {
       name: String(f.filename || ""),
       size: Number(f.size) || 0,
       subs: att.filter(a => a.type === "subtitle" && a.id).map(a => ({
-        id: Number(a.id), codec: String((a.info && a.info.codec) || "").toUpperCase(), lang: String((a.info && a.info.lang) || "und"),
+        id: Number(a.id), num: Number(a.info && a.info.tracknum) || 0, codec: String((a.info && a.info.codec) || "").toUpperCase(), lang: String((a.info && a.info.lang) || "und"),
         def: !!(a.info && a.info.default), forced: !!(a.info && a.info.forced), size: Number(a.size) || 0,
       })),
       fonts: att.filter(a => a.type === "other" && a.info && /font/i.test(String(a.info.mime || ""))).length,
@@ -756,4 +756,59 @@ export function normalizeTabs(saved) {
   ids.forEach(i => { if (!order.includes(i)) order.push(i); });
   const hidden = (saved && Array.isArray(saved.hidden) ? saved.hidden : []).filter(i => ids.includes(i) && i !== "desc");
   return { order, hidden };
+}
+
+/** Tsukihime по btih: номера торрента и файлов, точные ссылки на тайтл (AniList, MAL, AniDB). */
+export function parseTsukiFull(text) {
+  const j = safeJson(text);
+  if (!j || !j.id) return { found: false, files: [], ids: {} };
+  const a = j.anime || {};
+  return {
+    found: true, tid: Number(j.id) || 0,
+    files: (Array.isArray(j.files) ? j.files : []).slice(0, 40).map(f => ({ id: Number(f.id) || 0, name: String(f.filename || "") })),
+    ids: { anilist: Number(a.anilist) || 0, mal: Number(a.mal) || 0, anidb: Number(a.anidb) || 0 },
+  };
+}
+
+/** Точные ссылки по номерам из Tsukihime; пустой список, если номеров нет. */
+export function exactLinks(ids) {
+  const out = [];
+  if (ids && ids.anilist) out.push({ label: "AniList", url: `https://anilist.co/anime/${ids.anilist}` });
+  if (ids && ids.mal) out.push({ label: "MyAnimeList", url: `https://myanimelist.net/anime/${ids.mal}` });
+  if (ids && ids.anidb) out.push({ label: "AniDB", url: `https://anidb.net/anime/${ids.anidb}` });
+  return out;
+}
+
+/** MediaInfo из ответа Tsukihime по файлу. */
+export function parseMediainfo(text) {
+  const j = safeJson(text);
+  const m = j && (j.mediainfo || (j.info && j.info.mediainfo));
+  return typeof m === "string" ? m.trim().slice(0, 60000) : "";
+}
+
+const escH = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const HL_CAP = 100000;
+
+/**
+ * Подсветка исходного текста субтитров (ASS/SRT): HTML, уже экранированный.
+ * Длинные файлы выше порога остаются без подсветки.
+ */
+export function highlightSubtitle(raw) {
+  const text = String(raw || "");
+  if (text.length > HL_CAP) return escH(text.slice(0, 400000));
+  return text.split("\n").map(line => {
+    const l = line.replace(/\r$/, "");
+    if (/^\[[^\]]+\]\s*$/.test(l)) return `<span class="hl-sec">${escH(l)}</span>`;
+    const m = /^(Dialogue|Comment|Style|Format|Title|ScriptType|PlayRes[XY]):(.*)$/i.exec(l);
+    if (m) return `<span class="hl-key">${escH(m[1])}:</span>${escH(m[2]).replace(/\{[^}]*\}/g, t => `<span class="hl-tag">${t}</span>`)}`;
+    if (/^\d+$/.test(l.trim())) return `<span class="hl-num">${escH(l)}</span>`;
+    if (/-->/.test(l)) return `<span class="hl-time">${escH(l)}</span>`;
+    return escH(l).replace(/&lt;[^&]*?&gt;/g, t => `<span class="hl-tag">${t}</span>`);
+  }).join("\n");
+}
+
+/** Дорожка субтитров по умолчанию для кадров: первая не форсированная, ASS/SSA с номером дорожки. */
+export function defaultShotTrack(subs) {
+  const s = (subs || []).find(x => x.num && !x.forced && /ASS|SSA/i.test(x.codec));
+  return s ? s.num : 0;
 }

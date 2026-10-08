@@ -290,3 +290,19 @@ console.log("nyaa-test: ok");
   const best = bestPerEpisode([{ id: "1", title: "[A] X - 01 [1080p]", seeders: 90, _sd: "" }, { id: "2", title: "[B] X - 01 [1080p]", seeders: 1, _sd: "best" }], {});
   assert.equal(best[0].item.id, "2", "SeaDex-релиз выигрывает у более раздаваемого");
 }
+
+{
+  const { parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, parseToshoTorrent } = await import("../src/app/nyaa-core.js");
+  const t = parseTsukiFull(JSON.stringify({ id: 5, anime: { anilist: 11, mal: 22, anidb: 33 }, files: [{ id: 9, filename: "a.mkv" }] }));
+  assert.equal(t.tid, 5); assert.equal(t.files[0].id, 9); assert.equal(exactLinks(t.ids).length, 3);
+  assert.equal(exactLinks({ anilist: 0 }).length, 0); assert.equal(parseTsukiFull("{}").found, false);
+  assert.equal(parseMediainfo(JSON.stringify({ mediainfo: "General\nFormat : Matroska" })), "General\nFormat : Matroska");
+  assert.equal(parseMediainfo("не json"), "");
+  const h = highlightSubtitle("[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,x,,0,0,0,,{\i1}<b>Hi</b>");
+  assert.ok(h.includes('class="hl-sec"') && h.includes('class="hl-tag"') && !h.includes("<b>Hi"), "теги экранированы и подсвечены");
+  const f = parseToshoTorrent(JSON.stringify({ files: [{ id: 1, filename: "a", attachments: [
+    { id: 1, type: "subtitle", info: { codec: "SRT", lang: "eng", tracknum: 2 } }, { id: 2, type: "subtitle", info: { codec: "ASS", lang: "eng", tracknum: 3, forced: 1 } },
+    { id: 3, type: "subtitle", info: { codec: "ASS", lang: "eng", tracknum: 4 } }] }] }));
+  assert.equal(defaultShotTrack(f.files[0].subs), 4, "первая не форсированная ASS-дорожка");
+  assert.equal(defaultShotTrack([]), 0);
+}
