@@ -1323,3 +1323,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .nda h2 { margin: 4px 0 12px; }
 .nda p { color: var(--ink-soft); line-height: 1.55; margin: 8px 0; }
 .nda-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.wt-watch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.wt-rel { font-style: normal; color: var(--gold); margin-right: 6px; }
+.st-range { width: 160px; accent-color: var(--gold); }

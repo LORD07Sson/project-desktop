@@ -35,6 +35,7 @@ import "./media-tools.js";
 import "./web-tools.js";
 import "./midi-control.js";
 import "./deeplink.js";
+import "./tune.js";
 import { maybeAutoCheckUpdates } from "./settings.js";
 import "./notifications.js";
 import "./presence.js";
