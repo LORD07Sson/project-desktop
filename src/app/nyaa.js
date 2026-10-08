@@ -971,7 +971,7 @@ async function loadSources(d) {
 }
 
 // ---------- AnimeTosho: субтитры и кадры ----------
-const DATA_SHOT = b64 => `data:image/png;base64,${b64}`;
+const DATA_SHOT = b64 => `data:image/jpeg;base64,${b64}`;
 async function toshoRelay(params) {
   const q = new URLSearchParams(params);
   try { return JSON.parse(await (await apiBlob(`/tosho/relay?${q}`)).text()); }
