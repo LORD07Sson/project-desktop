@@ -630,7 +630,7 @@ function usersChecksHtml() {
 
 export function changeStatusDialog(publicIds, onDone, currentStatus) {
   const overlay = openSheet(`
-    <h2>Сменить статус — ${publicIds.length > 1 ? publicIds.length + " отчётов" : publicIds[0]}</h2>
+    <h2>Сменить статус — ${publicIds.length > 1 ? publicIds.length + " отчётов" : esc(publicIds[0])}</h2>
     <div class="row"><select id="dlg-status">${statusOptionsHtml(publicIds.length === 1 ? currentStatus : undefined)}</select></div>
     <div class="sheet-actions">
       <button class="btn ghost" data-close>Отмена</button>
@@ -660,7 +660,7 @@ export function changeStatusDialog(publicIds, onDone, currentStatus) {
 
 export function assignDialog(publicIds, onDone) {
   const overlay = openSheet(`
-    <h2>Исполнители / кого уведомить — ${publicIds.length > 1 ? publicIds.length + " отчётов" : publicIds[0]}</h2>
+    <h2>Исполнители / кого уведомить — ${publicIds.length > 1 ? publicIds.length + " отчётов" : esc(publicIds[0])}</h2>
     <input type="search" class="field-input assign-q" id="dlg-user-q" placeholder="Найти человека…" aria-label="Найти человека">
     <div class="assign-list" id="dlg-users">${usersChecksHtml()}</div>
     <div class="sheet-actions">
