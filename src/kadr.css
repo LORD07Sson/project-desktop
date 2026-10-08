@@ -960,3 +960,70 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 :root[data-theme="light"] .kcal-ac { background: rgba(255, 255, 255, .6); }
 @media (max-width: 1240px) { .kcal { grid-template-columns: 1fr; } .kcal-side { display: grid; grid-template-columns: 1fr 1fr; } }
 @media (max-width: 1000px) { .kcal-h, .kcal-r { grid-template-columns: 150px repeat(14, minmax(0, 1fr)); } .kcal-cols { left: 150px; } .kcal-who img, .kcal-ph { display: none; } .kcal-bar > span { display: none; } }
+
+/* ================================================================
+   Чат — три стеклянные панели: беседы, переписка, о беседе
+   ================================================================ */
+.ms-root { padding: 14px 32px 22px; }
+.ms-layout { gap: 14px; border: 0; border-radius: 0; overflow: visible; background: none; }
+.ms-layout.info-open { grid-template-columns: 300px minmax(0, 1fr) 290px; }
+.ms-side, .ms-thread, .ms-info {
+  border: 0; border-radius: var(--radius-lg); overflow: hidden; background: var(--glass-bg);
+  backdrop-filter: blur(26px) saturate(1.2); -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow: 0 26px 50px -32px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+:root[data-theme="light"] .ms-side, :root[data-theme="light"] .ms-thread, :root[data-theme="light"] .ms-info { background: rgba(255, 255, 255, .7); box-shadow: 0 20px 40px -28px rgba(60, 25, 10, .3), inset 0 0 0 1px rgba(255, 255, 255, .8); }
+.ms-side-head { padding: 16px 12px 10px; }
+.ms-side-head h1 { font-size: 16px; font-weight: 800; }
+.ms-new { height: 32px; border-radius: 10px; }
+.ms-search { height: 34px; border-radius: 11px; }
+.ms-list { padding: 4px 8px 12px; }
+.ms-chat { border-radius: 13px; padding: 9px 10px; transition: background .2s; }
+.ms-chat:hover { background: rgba(255, 255, 255, .04); }
+.ms-chat.active { background: rgba(255, 255, 255, .075); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05); }
+:root[data-theme="light"] .ms-chat.active { background: rgba(80, 40, 20, .06); }
+.ms-chat-av { border-radius: 50%; }
+.ms-chat-av.general { border-radius: 12px; background: linear-gradient(145deg, rgba(var(--gold-rgb), .22), rgba(var(--fire-rgb), .08)); color: var(--gold); }
+.ms-section { font-size: 9.5px; letter-spacing: .22em; padding: 14px 10px 6px; }
+.ms-channel-row, .ms-topic { border-radius: 11px; }
+.ms-topics { border-left-color: var(--line); }
+
+.ms-head { padding: 14px 18px; }
+.ms-head-text b { font-size: 15px; font-weight: 800; }
+.ms-msgs { padding: 12px 20px 8px; gap: 2px; }
+.ms-day { align-items: center; gap: 12px; margin: 10px 0 12px; }
+.ms-day::before, .ms-day::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.ms-day span { background: none; padding: 0; font-size: 10px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; }
+.ms-msg { max-width: 78%; margin-top: 12px; gap: 12px; align-items: flex-start; }
+.ms-msg.grouped { margin-top: 3px; }
+.ms-av, :root[data-density] .ms-msg .ms-av { width: 34px; height: 34px; }
+.ms-meta { gap: 8px; margin-bottom: 2px; font-size: 10.5px; }
+.ms-meta b { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.ms-bubble { padding: 10px 14px; font-size: 13.5px; }
+.ms-msg.in .ms-bubble { background: rgba(255, 255, 255, .055); border: 1px solid rgba(255, 255, 255, .05); border-radius: 6px 18px 18px 18px; }
+.ms-msg.in.grouped .ms-bubble { border-radius: 18px; }
+.ms-msg.out .ms-bubble { color: var(--ink); background: linear-gradient(160deg, rgba(var(--fire-rgb), .2), rgba(var(--fire-rgb), .1)); border: 1px solid rgba(var(--fire-rgb), .2); border-radius: 18px 6px 18px 18px; }
+.ms-msg.out.grouped .ms-bubble { border-radius: 18px; }
+:root[data-theme="light"] .ms-msg.in .ms-bubble { background: rgba(255, 255, 255, .85); border-color: var(--line); }
+.ms-msg.out .ms-tc { background: rgba(120, 174, 252, .14); color: #a9c9ff; }
+.ms-tc { background: rgba(120, 174, 252, .12); color: #a9c9ff; font: 700 11px/1.6 var(--font); font-variant-numeric: tabular-nums; border-radius: 7px; padding: 0 7px; }
+:root[data-theme="light"] .ms-tc, :root[data-theme="light"] .ms-msg.out .ms-tc { background: rgba(40, 110, 220, .1); color: #2c6ad1; }
+.ms-msg.out .ms-mention { color: var(--gold); text-decoration: none; }
+.ms-acts { padding: 3px; gap: 2px; border-radius: 11px; background: var(--glass-bg-strong); border: 1px solid var(--glass-border); box-shadow: 0 10px 24px -14px #000; }
+.ms-acts button { width: 28px; height: 28px; border-radius: 8px; }
+.ms-react { height: 26px; border-radius: 999px; background: rgba(255, 255, 255, .05); border: 1px solid var(--line); }
+.ms-react.mine { background: rgba(var(--fire-rgb), .13); border-color: rgba(var(--fire-rgb), .3); }
+.ms-quote { border-left: 2px solid var(--gold); border-radius: 4px 8px 8px 4px; background: rgba(0, 0, 0, .18); }
+.ms-compose { margin: 8px 14px 14px; padding: 6px 6px 6px 8px; gap: 6px; align-items: center; border: 1px solid rgba(255, 255, 255, .12); border-radius: 16px; background: rgba(255, 255, 255, .045); }
+.ms-compose textarea { min-height: 38px; padding: 9px 6px; border: 0; background: transparent; border-radius: 0; }
+.ms-compose textarea:focus { border: 0; }
+.ms-compose:focus-within { border-color: rgba(var(--fire-rgb), .45); box-shadow: 0 0 0 3px rgba(var(--fire-rgb), .1); }
+.ms-attach { border: 0; background: transparent; }
+.ms-send { width: 38px; height: 38px; }
+:root[data-theme="light"] .ms-compose { background: rgba(255, 255, 255, .8); border-color: var(--line); }
+.ms-info { padding: 0 0 14px; }
+.ms-info-head { padding: 18px 16px 6px; }
+.ms-info-sec { padding: 0 16px; }
+.ms-info-sec h4 { font-size: 9.5px; letter-spacing: .22em; margin: 18px 0 8px; }
+.ms-mem { border-radius: 10px; }
+@media (max-width: 1080px) { .ms-layout.info-open { grid-template-columns: 260px minmax(0, 1fr); } }
