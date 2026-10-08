@@ -18,7 +18,8 @@
     "test:tune": "node scripts/tune-test.mjs",
     "test:preload": "node scripts/preload-test.mjs",
     "test:cache": "node scripts/audio-cache-test.mjs",
-    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:web && npm run test:midi && npm run test:link && npm run test:nda && npm run test:tune && npm run test:preload && npm run test:cache"
+    "test:selfcheck": "node scripts/selfcheck-test.mjs",
+    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:web && npm run test:midi && npm run test:link && npm run test:nda && npm run test:tune && npm run test:preload && npm run test:cache && npm run test:selfcheck"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",
