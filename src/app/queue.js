@@ -5,9 +5,10 @@
 import { state } from "./state.js";
 import { apiGet } from "./api.js";
 import { $, esc } from "./utils.js";
-import { imgProxy } from "./title-page.js";
+import { imgProxy, titleArt } from "./title-page.js";
 import { openReportDetail } from "./report-detail.js";
 import { switchTab } from "./tabs.js";
+import { setBackdrop } from "./backdrop.js";
 
 const DAY_MS = 86400000;
 
@@ -31,39 +32,56 @@ function dueText(left) {
   return `через ${left} ${plural(left, "день", "дня", "дней")}`;
 }
 
-// Полоска «сколько осталось»: полная — срок прямо сейчас, пустая — неделя и больше.
-function urgencyPct(left) {
-  if (left === null) return 0;
-  if (left <= 0) return 100;
-  return Math.max(6, Math.round((1 - Math.min(left, 7) / 7) * 100));
-}
-
 const COLUMNS = [
   { key: "hot", label: "Горит", hint: "просрочено, сегодня и завтра", test: l => l !== null && l <= 1 },
   { key: "week", label: "На неделе", hint: "2–7 дней", test: l => l !== null && l > 1 && l <= 7 },
   { key: "later", label: "Позже", hint: "дальше недели и без срока", test: l => l === null || l > 7 },
 ];
 
-function cardHtml(it, today) {
+// Готовность по статусу: у серии в очереди нет цепочки этапов, только
+// статус — шкала показывает, как далеко серия по пути статусов.
+const STATUS_PCT = { draft: 6, working: 45, revision: 60, review: 75, completed: 100 };
+const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const pad2 = n => String(n).padStart(2, "0");
+const cleanLabel = s => String(s || "").replace(/^[^\p{L}\p{N}]+/u, "");
+
+// Сколько осталось до конца дня срока — для серий «сегодня».
+function countdown() {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 0);
+  const sec = Math.max(0, Math.floor((end - now) / 1000));
+  return `${pad2(Math.floor(sec / 3600))}:${pad2(Math.floor((sec % 3600) / 60))}:${pad2(sec % 60)}`;
+}
+
+function rowHtml(it, today) {
   const left = daysLeft(it.deadline, today);
   const src = it.poster_url ? imgProxy(it.poster_url) : null;
-  const hot = left !== null && left <= 0;
   const head = it.title_name || it.title;
-  const sub = it.title_name ? [it.episode, it.role && `роль ${it.role}`].filter(Boolean).join(" · ") : "";
+  const ep = it.title_name ? it.episode : "";
+  const pct = STATUS_PCT[it.status] ?? 0;
+  const hot = left !== null && left <= 1;
   return `
-    <div class="bcell q-card${hot ? " hot" : ""}${state.isAdmin ? " q-open" : ""}" data-q-open="${esc(it.public_id)}">
-      <div class="q-head">
-        ${src ? `<img class="q-poster" src="${src}" alt="" loading="lazy">` : `<span class="q-poster q-poster-ph"></span>`}
-        <div class="q-names">
-          <b>${esc(head)}</b>
-          ${sub ? `<span>${esc(sub)}</span>` : ""}
-          <span class="q-id">${esc(it.public_id)} · ${esc(it.status_label)}</span>
-        </div>
+    <div class="kd-gl kd-qr${hot ? " hot" : ""}${state.isAdmin ? " q-open" : ""}" data-q-open="${esc(it.public_id)}">
+      ${src ? `<img class="kd-qr-pc" src="${src}" alt="" loading="lazy">` : `<span class="kd-qr-pc kd-qr-ph"></span>`}
+      <div class="kd-qr-t">
+        <small>${esc(it.public_id)}${ep ? ` · ${esc(String(ep).toUpperCase())}` : ""}</small>
+        <b>${esc(head)}</b>
+        <span>${it.role ? `Моя роль — ${esc(it.role)}` : esc(cleanLabel(it.status_label))}</span>
       </div>
-      <div class="q-due"><span>${it.deadline ? `Срок ${it.deadline.slice(8, 10)}.${it.deadline.slice(5, 7)}` : "Срок не назначен"}</span><b>${dueText(left)}</b></div>
-      <div class="q-bar"><i style="width:${urgencyPct(left)}%"></i></div>
+      <div class="kd-qr-pr"><small><span>Готовность</span><span>${pct}%</span></small><span class="kd-track"><i style="width:${pct}%"></i></span></div>
+      <div class="kd-qr-cd">
+        <small>${left === 0 ? "Осталось" : "Срок"}</small>
+        <b ${left === 0 ? "data-q-cd" : ""}>${left === 0 ? countdown() : dueText(left)}</b>
+      </div>
+      <div class="kd-qr-ac">${state.isAdmin
+        ? `<button class="btn${left !== null && left <= 0 ? " primary" : ""}" type="button">Открыть</button>`
+        : `<span class="kd-qr-bot">сдать — в боте</span>`}</div>
     </div>`;
 }
+
+let tickTimer = null;
 
 export async function loadQueue() {
   const root = $("#queue-body");
@@ -78,22 +96,28 @@ export async function loadQueue() {
   }
   const today = d.today;
   const items = d.items || [];
+  // Фон окна — обложка первой (самой срочной) серии на руках.
+  const lead = items.find(it => it.title_id || it.poster_url);
+  if (lead) setBackdrop(titleArt(lead.title_id, "banner", 1440), imgProxy(lead.poster_url));
   const lefts = items.map(it => daysLeft(it.deadline, today)).filter(l => l !== null);
   const nearest = lefts.length ? Math.min(...lefts) : null;
   const overdue = lefts.filter(l => l < 0).length;
 
+  const hot = lefts.filter(l => l <= 1).length;
+  const now = new Date();
   const head = `
     <div class="page-header">
       <div>
+        <span class="kd-label">Моё · ${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}</span>
         <h1>Моя очередь</h1>
-        <div class="sub">Серии, назначенные на вас, — по срочности.${state.isAdmin ? " Клик по карточке открывает отчёт." : " Сдать работу — в боте: «📋 Мои задачи»."}</div>
+        ${state.isAdmin ? "" : `<div class="sub">Сдать работу — в боте: «📋 Мои задачи».</div>`}
       </div>
-    </div>
-    <div class="bcell q-stats">
-      <div><b>${items.length}</b><span>${plural(items.length, "серия", "серии", "серий")} на руках</span></div><i></i>
-      <div><b class="${nearest !== null && nearest <= 0 ? "danger" : ""}">${nearest === null ? "—" : dueText(nearest)}</b><span>ближайший срок</span></div><i></i>
-      <div><b class="${overdue ? "danger" : ""}">${overdue}</b><span>просрочено</span></div><i></i>
-      <div><b>${d.completed_week}</b><span>закрыто за неделю</span></div>
+      <div class="kd-sum">
+        <div><small>Активные</small><b>${items.length}</b></div>
+        <div><small>Горит</small><b class="${hot ? "hot" : ""}">${hot}</b></div>
+        <div><small>${overdue ? "Просрочено" : "Ближайший срок"}</small><b class="${overdue ? "hot" : ""}">${overdue || (nearest === null ? "—" : dueText(nearest))}</b></div>
+        <div><small>Сдано за неделю</small><b>${d.completed_week}</b></div>
+      </div>
     </div>`;
 
   if (!items.length) {
@@ -108,15 +132,24 @@ export async function loadQueue() {
     return;
   }
 
-  const cols = COLUMNS.map(col => {
+  const groups = COLUMNS.map(col => {
     const list = items.filter(it => col.test(daysLeft(it.deadline, today)));
+    if (!list.length) return "";
     return `
-      <div class="q-col">
-        <div class="q-col-head"><b>${col.label}</b><span>${list.length}</span><em>${col.hint}</em></div>
-        ${list.map(it => cardHtml(it, today)).join("") || `<div class="q-col-empty">пусто</div>`}
-      </div>`;
+      <div class="kd-sh"><h2>${col.label}</h2><span class="kd-label">${list.length} · ${col.hint}</span><span class="kd-orn"></span></div>
+      <div class="kd-qlist">${list.map(it => rowHtml(it, today)).join("")}</div>`;
   }).join("");
-  root.innerHTML = head + `<div class="q-cols">${cols}</div>`;
+  root.innerHTML = head + `<div class="kd-queue">${groups}</div>`;
+  // Живой отсчёт у серий со сроком сегодня; таймер один на экран.
+  clearInterval(tickTimer);
+  if (root.querySelector("[data-q-cd]")) {
+    tickTimer = setInterval(() => {
+      const els = root.querySelectorAll("[data-q-cd]");
+      if (!els.length || !root.isConnected) { clearInterval(tickTimer); return; }
+      const v = countdown();
+      els.forEach(el => { el.textContent = v; });
+    }, 1000);
+  }
   refreshQueueBadge();
   if (state.isAdmin) {
     root.querySelectorAll("[data-q-open]").forEach(el => el.addEventListener("click", () => openReportDetail(el.dataset.qOpen)));

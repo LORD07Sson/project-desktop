@@ -5,8 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Project Desktop</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="kadr.css">
 </head>
 <body>
+
+<!-- Фон «Кадр»: размытая обложка тайтла, с которым сейчас работают
+     (app/backdrop.js). Два слоя — новый проявляется поверх старого. -->
+<div class="app-backdrop" id="app-backdrop" aria-hidden="true"><i></i><i></i></div>
 
 <!-- ===================== Полоса заголовка окна =====================
      Своя, а не системная: у окна выключены decorations (см.
@@ -24,43 +29,68 @@
 <div class="titlebar" id="titlebar" data-tauri-drag-region>
   <div class="titlebar-left" data-tauri-drag-region>
     <div class="logo brand-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19"/><path class="bm-b" d="M19 5L5 19"/></svg></div>
-    <b data-tauri-drag-region>Project Desktop</b>
-    <span id="whoami"></span>
+    <span class="tb-brand" data-tauri-drag-region><b data-tauri-drag-region>Project</b><span id="whoami" data-tauri-drag-region></span></span>
   </div>
   <div class="titlebar-right">
     <div class="titlebar-apps" id="titlebar-apps" hidden>
-      <div class="team-teaser titlebar-team" id="titlebar-team" title="Команда" hidden></div>
-      <button id="open-cmdk" class="tb-search" title="Поиск и команды (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span class="tb-search-lbl">Найти серию, тайтл или команду…</span><kbd>Ctrl K</kbd></button>
-      <div class="ib-wrap">
-        <button id="ib-bell" class="icon-btn ib-bell" title="Уведомления" aria-label="Уведомления" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4l2-2ZM10 21h4"/></svg><em id="ib-badge" hidden>0</em></button>
-        <div class="ib-panel" id="ib-panel" hidden>
-          <div class="ib-h"><b>Уведомления</b><button type="button" id="ib-readall">Прочитать все</button></div>
-          <div class="ib-f" id="ib-filters"></div>
-          <div class="ib-list" id="ib-list"></div>
+      <!-- Разделы — островом по центру шапки (раньше — боковое меню слева,
+           съедавшее 220 пикселей ширины у каждого экрана). Классы и
+           data-tab прежние: tabs.js, бейджи и обучение работают с ними. -->
+      <nav class="tb-nav" id="tabstrip" aria-label="Разделы">
+        <button class="tab-btn" data-tab="queue" title="Моя очередь"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span><span class="tab-lbl">Очередь</span><em class="tab-badge" id="queue-badge" hidden>0</em></button>
+        <button class="tab-btn active" data-tab="overview" title="Обзор"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span><span class="tab-lbl">Обзор</span></button>
+        <button class="tab-btn" data-tab="list" title="Список"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg></span><span class="tab-lbl">Список</span></button>
+        <button class="tab-btn" data-tab="board" title="Доска"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 7l2-3h7l2 3h7v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg></span><span class="tab-lbl">Доска</span></button>
+        <button class="tab-btn" data-tab="titles" title="Тайтлы"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3v6l3-2 3 2V3"/></svg></span><span class="tab-lbl">Тайтлы</span></button>
+        <button class="tab-btn" data-tab="calendar" title="Календарь"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span><span class="tab-lbl">Календарь</span></button>
+        <button class="tab-btn" data-tab="messages" title="Сообщения"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h16v11H8l-4 4V5Z"/></svg></span><span class="tab-lbl">Чат</span></button>
+        <div class="tb-menu-wrap tb-more" id="more-wrap">
+          <button id="more-btn" class="tb-more-btn" aria-haspopup="menu" aria-expanded="false" title="Ещё разделы"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></span><span class="tab-lbl" id="more-lbl">Ещё</span><svg class="tb-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
+          <div class="tb-menu tb-more-menu" id="more-menu" role="menu" hidden>
+            <button class="tab-btn tb-mi" role="menuitem" data-tab="feed" title="Лента"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span><span class="tm-txt"><span class="tab-lbl">Лента</span><small>Всё, что происходит в команде</small></span></button>
+            <button class="tab-btn tb-mi" role="menuitem" data-tab="analytics" title="Аналитика"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20V10M12 20V4M20 20v-6"/></svg></span><span class="tm-txt"><span class="tab-lbl">Аналитика</span><small>Скорость, сроки и лидеры</small></span></button>
+            <button class="tab-btn tb-mi" role="menuitem" data-tab="services" title="Сервисы"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span><span class="tm-txt"><span class="tab-lbl">Сервисы</span><small>Бот, мини-апп и туннели</small></span></button>
+            <button class="tab-btn tb-mi" role="menuitem" data-tab="team" title="Команда"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="7" r="2.4"/></svg></span><span class="tm-txt"><span class="tab-lbl">Команда</span><small>Кто чем занят прямо сейчас</small></span></button>
+            <div class="tb-sep" role="separator"></div>
+            <button class="tab-btn tb-mi" role="menuitem" data-tab="profile" title="Мой профиль"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span><span class="tm-txt"><span class="tab-lbl">Мой профиль</span><small>Цель месяца и достижения</small></span></button>
+            <button id="more-settings" class="tb-mi" role="menuitem"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14 3h-4l-.6 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.3-1a7 7 0 0 0 2 1.2L10 21h4l.6-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg></span><span class="tm-txt"><span class="tab-lbl">Настройки</span><small>Тема, уведомления, обновления</small></span></button>
+          </div>
         </div>
-      </div>
-      <button id="theme-toggle" class="icon-btn" title="Светлая/тёмная тема" aria-label="Светлая/тёмная тема"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg></button>
-      <button id="open-watch" class="btn watch-cta" title="Режим «Смотреть»: онгоинги, анонсы и тайтлы команды"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></svg>Смотреть</button>
-      <!-- Инструменты одним меню: раньше в шапке стояли девять кнопок в ряд. -->
-      <div class="tb-menu-wrap" id="tools-wrap">
-        <button id="tools-btn" class="btn" aria-haspopup="menu" aria-expanded="false" title="Инструменты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span class="btn-lbl">Инструменты</span><svg class="tb-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
-        <div class="tb-menu" id="tools-menu" role="menu" hidden>
-          <button id="open-qc" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg><span>QC звука</span></button>
-          <button id="open-media-tools" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z"/></svg><span>Инструменты ffmpeg</span></button>
-          <div class="tb-sep" role="separator"></div>
-          <button id="refresh-btn" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg><span class="btn-lbl">Обновить</span></button>
-          <button id="open-shortcuts" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg><span>Горячие клавиши</span><kbd>?</kbd></button>
-          <button id="open-settings" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14 3h-4l-.6 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.3-1a7 7 0 0 0 2 1.2L10 21h4l.6-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg><span>Настройки</span></button>
+      </nav>
+      <div class="tb-actions">
+        <div class="team-teaser titlebar-team" id="titlebar-team" title="Команда" hidden></div>
+        <button id="open-cmdk" class="tb-search" title="Поиск и команды (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span class="tb-search-lbl">Поиск</span><kbd>Ctrl K</kbd></button>
+        <div class="ib-wrap">
+          <button id="ib-bell" class="icon-btn ib-bell" title="Уведомления" aria-label="Уведомления" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4l2-2ZM10 21h4"/></svg><em id="ib-badge" hidden>0</em></button>
+          <div class="ib-panel" id="ib-panel" hidden>
+            <div class="ib-h"><b>Уведомления</b><button type="button" id="ib-readall">Прочитать все</button></div>
+            <div class="ib-f" id="ib-filters"></div>
+            <div class="ib-list" id="ib-list"></div>
+          </div>
         </div>
-      </div>
-      <!-- Профиль: аватар с меню «Мой профиль / Выйти». -->
-      <div class="tb-menu-wrap" id="me-wrap">
-        <button id="me-btn" class="tb-me" aria-haspopup="menu" aria-expanded="false" title="Профиль"><span class="avatar sm" id="me-avatar">?</span></button>
-        <div class="tb-menu" id="me-menu" role="menu" hidden>
-          <div class="tb-me-head" id="me-head"></div>
-          <button id="me-profile" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg><span>Мой профиль</span></button>
-          <div class="tb-sep" role="separator"></div>
-          <button id="logout-btn" class="tb-mi danger" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/></svg><span>Выйти</span></button>
+        <!-- Инструменты одним меню: раньше в шапке стояли девять кнопок в ряд. -->
+        <div class="tb-menu-wrap" id="tools-wrap">
+          <button id="tools-btn" class="btn" aria-haspopup="menu" aria-expanded="false" title="Инструменты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span class="btn-lbl">Инструменты</span><svg class="tb-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
+          <div class="tb-menu" id="tools-menu" role="menu" hidden>
+            <button id="open-qc" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg><span>QC звука</span></button>
+            <button id="open-media-tools" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z"/></svg><span>Инструменты ffmpeg</span></button>
+            <div class="tb-sep" role="separator"></div>
+            <button id="theme-toggle" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg><span>Светлая / тёмная тема</span></button>
+            <button id="refresh-btn" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg><span class="btn-lbl">Обновить</span></button>
+            <button id="open-shortcuts" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg><span>Горячие клавиши</span><kbd>?</kbd></button>
+            <button id="open-settings" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14 3h-4l-.6 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.3-1a7 7 0 0 0 2 1.2L10 21h4l.6-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg><span>Настройки</span></button>
+          </div>
+        </div>
+        <button id="open-watch" class="btn watch-cta" title="Режим «Смотреть»: онгоинги, анонсы и тайтлы команды"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></svg>Смотреть</button>
+        <!-- Профиль: аватар с меню «Мой профиль / Выйти». -->
+        <div class="tb-menu-wrap" id="me-wrap">
+          <button id="me-btn" class="tb-me" aria-haspopup="menu" aria-expanded="false" title="Профиль"><span class="avatar sm" id="me-avatar">?</span></button>
+          <div class="tb-menu" id="me-menu" role="menu" hidden>
+            <div class="tb-me-head" id="me-head"></div>
+            <button id="me-profile" class="tb-mi" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg><span>Мой профиль</span></button>
+            <div class="tb-sep" role="separator"></div>
+            <button id="logout-btn" class="tb-mi danger" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/></svg><span>Выйти</span></button>
+          </div>
         </div>
       </div>
     </div>
@@ -157,27 +187,6 @@
 <section id="watch-mode" hidden></section>
 <div id="app-screen" hidden>
   <div class="app-body">
-  <div class="sidebar" id="tabstrip">
-    <div class="sidebar-brand"><span class="sidebar-brand-ic brand-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19"/><path class="bm-b" d="M19 5L5 19"/></svg></span><span class="sidebar-brand-txt">Project</span></div>
-    <div class="sidebar-group-label">Моё</div>
-    <button class="tab-btn" data-tab="queue" title="Моя очередь"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span><span class="tab-lbl">Моя очередь</span><em class="tab-badge" id="queue-badge" hidden>0</em></button>
-    <div class="sidebar-group-label">Основное</div>
-    <button class="tab-btn active" data-tab="overview" title="Обзор"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span><span class="tab-lbl">Обзор</span></button>
-    <button class="tab-btn" data-tab="list" title="Список"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg></span><span class="tab-lbl">Список</span></button>
-    <button class="tab-btn" data-tab="board" title="Доска"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 7l2-3h7l2 3h7v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg></span><span class="tab-lbl">Доска</span></button>
-    <div class="sidebar-sub" id="sidebar-board-sub" hidden></div>
-    <div class="sidebar-group-label">Команда</div>
-    <button class="tab-btn" data-tab="titles" title="Тайтлы"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3v6l3-2 3 2V3"/></svg></span><span class="tab-lbl">Тайтлы</span></button>
-    <button class="tab-btn" data-tab="calendar" title="Календарь"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span><span class="tab-lbl">Календарь</span></button>
-    <button class="tab-btn" data-tab="messages" title="Сообщения"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h16v11H8l-4 4V5Z"/></svg></span><span class="tab-lbl">Сообщения</span></button>
-    <button class="tab-btn" data-tab="feed" title="Лента"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span><span class="tab-lbl">Лента</span></button>
-    <button class="tab-btn" data-tab="analytics" title="Аналитика"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20V10M12 20V4M20 20v-6"/></svg></span><span class="tab-lbl">Аналитика</span></button>
-    <button class="tab-btn" data-tab="services" title="Сервисы"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span><span class="tab-lbl">Сервисы</span></button>
-    <button class="tab-btn" data-tab="team" title="Команда"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="7" r="2.4"/></svg></span><span class="tab-lbl">Команда</span></button>
-    <div class="sidebar-spacer"></div>
-    <button class="tab-btn" data-tab="profile" title="Я"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span><span class="tab-lbl">Я</span></button>
-  </div>
-
   <div class="app-content">
   <div class="lockdown-banner" id="lockdown-banner" role="alert" hidden></div>
     <div class="team-notice" id="team-notice" role="status" hidden></div>
@@ -199,8 +208,8 @@
   <div class="tab-panel" data-panel="list">
     <div class="page-header list-page-header">
       <div>
+        <span class="kd-label">Основное · все серии команды</span>
         <h1>Список серий</h1>
-        <div class="sub">Все отчёты команды: поиск, фильтры и массовые операции.</div>
       </div>
     </div>
     <div class="toolbar">
@@ -251,7 +260,8 @@
             <th data-sort="status">Статус</th>
             <th data-sort="pipeline_stage">Этап</th>
             <th data-sort="deadline">Срок</th>
-            <th>Исполнители</th>
+            <th class="col-prog">Готовность</th>
+            <th>Команда</th>
             <th class="col-actions"></th>
           </tr>
         </thead>

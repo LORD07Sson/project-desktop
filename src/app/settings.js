@@ -9,7 +9,7 @@ import { applyDensity, currentDensity } from "./density.js";
 import { focusModePreferred, setFocusModePreferred } from "./focus-mode.js";
 import { isDevModeOn, setDevModeOn } from "./devmode.js";
 import { desktopNotifyEnabled, setDesktopNotifyEnabled, NOTIFY_KINDS, notifyKinds, setNotifyKind, quietHours, setQuietHours } from "./desktop-notify.js";
-import { ACCENTS, SCALES, START_TABS, currentAccent, applyAccent, currentScale, applyScale, currentMotion, applyMotion, sidebarCompact, applySidebarCompact, startTab, setStartTab } from "./ui-prefs.js";
+import { ACCENTS, SCALES, START_TABS, currentAccent, applyAccent, currentScale, applyScale, currentMotion, applyMotion, backdropOn, applyBackdrop, startTab, setStartTab } from "./ui-prefs.js";
 import { GROUPS as SHORTCUT_GROUPS } from "./shortcuts-help.js";
 import { avatarHtml, loadAvatars } from "./profile.js";
 import { fetchPerson, openPauseDialog } from "./people.js";
@@ -58,7 +58,7 @@ async function openSettings() {
     palette: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.9 1.4-1.9-.5-1.2.2-2.6 1.6-2.6h1.7a3.8 3.8 0 0 0 3.8-3.8C20.5 7.4 16.7 3.5 12 3.5Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="15" cy="8" r="1"/>',
     scale: '<path d="M4 20h6M7 20V8M3 8h8M14 20h7M17.5 20V4M14 4h7"/>',
     motion: '<path d="M4 12h3l2-5 4 10 2-5h5"/>',
-    sidebar: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9 4.5v15"/>',
+    backdrop: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
     dot: '<circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/>',
     moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>',
     pause: '<rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/>',
@@ -139,7 +139,7 @@ async function openSettings() {
 
         <section class="st-sec" id="st-look">
           <h3>Внешний вид</h3><p class="st-lead">Изменения видны сразу, без перезапуска.</p>
-          <div class="st-group" data-st-find="цветовая тема цвет акцент палитра янтарь сакура фиалка небо мята">
+          <div class="st-group" data-st-find="цветовая тема цвет акцент палитра оригинал янтарь сакура фиалка небо мята">
             <div class="st-group-h">Цветовая тема</div>
             <div class="st-palettes">
               ${Object.entries(ACCENTS).map(([k, a]) => `<button type="button" class="st-palette${k === accent ? " on" : ""}" data-st-accent="${k}">
@@ -159,7 +159,7 @@ async function openSettings() {
             ${row(ICONS.scale, "Масштаб интерфейса", "Для больших мониторов и 4K", seg("data-st-scale", SCALES.map(v => [v, `${v}%`]), scale), "размер шрифт крупнее")}
             ${row(ICONS.density, "Плотность таблиц", "Сколько строк влезает в «Список»", seg("data-st-density", [["comfortable", "Обычная"], ["compact", "Компактная"]], density))}
             ${row(ICONS.motion, "Анимации", "Выключите на слабом компьютере", seg("data-st-motion", [["on", "Включены"], ["off", "Выключены"]], motion), "движение плавность")}
-            ${row(ICONS.sidebar, "Компактное боковое меню", "Только иконки — больше места под содержимое", sw("s-sidebar-compact", sidebarCompact()), "сайдбар")}
+            ${row(ICONS.backdrop, "Фон из кадра тайтла", "Размытая обложка серии за интерфейсом", sw("s-backdrop", backdropOn()), "фон обложка размытие")}
           </div>
           <select id="s-theme" hidden><option value="dark">Тёмная</option><option value="light">Светлая</option></select>
           <select id="s-density" hidden><option value="comfortable">Обычная</option><option value="compact">Компактная</option></select>
@@ -444,7 +444,7 @@ async function openSettings() {
     pick("data-st-motion", null, b.dataset.stMotion);
     applyMotion(b.dataset.stMotion);
   }));
-  overlay.querySelector("#s-sidebar-compact").addEventListener("change", e => applySidebarCompact(e.target.checked));
+  overlay.querySelector("#s-backdrop").addEventListener("change", e => applyBackdrop(e.target.checked));
 
   // Уведомления
   overlay.querySelectorAll("[data-st-kind]").forEach(inp => inp.addEventListener("change", () => setNotifyKind(inp.dataset.stKind, inp.checked)));

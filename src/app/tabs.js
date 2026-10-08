@@ -2,7 +2,7 @@
 
 import { state } from "./state.js";
 import { apiGet, toast } from "./api.js";
-import { $, $all, esc, STATUS_COLOR_VAR } from "./utils.js";
+import { $, $all } from "./utils.js";
 import { loadOverview } from "./Overview.jsx";
 import { loadReports } from "./reports.js";
 import { loadBoard } from "./board.js";
@@ -19,6 +19,7 @@ import { startTab } from "./ui-prefs.js";
 import { clearDirectoryCache } from "./titles-admin.js";
 import { refreshTeamNotice, clearTeamNotice } from "./team-notice.js";
 import { refreshLockdown, clearLockdown } from "./lockdown.js";
+import { clearBackdrop } from "./backdrop.js";
 
 // Загрузчики возвращают false, если данные взять не удалось (сеть/сервер)
 // — см. loadActiveTab ниже.
@@ -58,6 +59,7 @@ export function switchTab(name) {
   try { localStorage.setItem(LAST_TAB_KEY, name); } catch (_) { /* не критично */ }
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   $all(".tab-panel").forEach(p => p.classList.toggle("active", p.dataset.panel === name));
+  syncMoreButton(name);
   // force=true — каждый клик по вкладке идёт за свежими данными, а не
   // отдаёт то, что было загружено в прошлый раз (раньше loadedTabs
   // молча глушил повторную загрузку, и приходилось жать «Обновить»
@@ -110,9 +112,23 @@ export function restoreLastTab() {
   state.activeTab = saved;
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === saved));
   $all(".tab-panel").forEach(p => p.classList.toggle("active", p.dataset.panel === saved));
+  syncMoreButton(saved);
+}
+
+// Редкие разделы (лента, аналитика, сервисы, команда, профиль) живут в
+// меню «Ещё» шапки. Когда открыт один из них, кнопка «Ещё» подсвечена
+// и подписана его именем — иначе в шапке не видно, где вы сейчас.
+function syncMoreButton(name) {
+  const btn = $("#more-btn");
+  const lbl = $("#more-lbl");
+  if (!btn || !lbl) return;
+  const item = $(`#more-menu .tab-btn[data-tab="${name}"]`);
+  btn.classList.toggle("active", !!item);
+  lbl.textContent = item ? item.querySelector(".tab-lbl").textContent : "Ещё";
 }
 
 export function clearTabDom() {
+  clearBackdrop();
   clearTeamNotice();
   clearLockdown();
   for (const sel of TAB_BODIES) {
@@ -170,37 +186,3 @@ export async function loadUsers() {
 }
 
 $("#refresh-btn").addEventListener("click", refreshAll);
-
-// Вложенные пункты под «Доской» в сайдбаре — статусы с точкой-цветом и
-// числом справа. Перенесено вживую с референса пользователя (Dribbble:
-// Xentra Digital Marketing Dashboard, dribbble.com/shots/27265906) —
-// там под «Projects» раскрыт список статусов с их количеством, тем же
-// приёмом, что уже красит колонки самой доски (STATUS_COLOR_VAR). Число
-// берём из /overview (то же, что уже питает донат-чарт «Структура
-// загрузки») — отдельным, независимым от активной вкладки запросом
-// при входе, тем же способом, что pingPresence()/loadTitlebarTeam()
-// в auth.js: сайдбар виден всегда, не только когда открыт «Обзор».
-export async function loadSidebarStatusCounts() {
-  const el = $("#sidebar-board-sub");
-  if (!el) return;
-  if (!state.isAdmin) { el.hidden = true; return; }
-  try {
-    const d = await apiGet("/overview");
-    const statuses = (d.reports && d.reports.statuses) || [];
-    // Пустые этапы не показываем — шесть нулей подряд только шумят;
-    // этап появится в меню, как только в нём окажется серия.
-    const shown = statuses.filter(s => s.count > 0 && s.status !== "cancelled");
-    if (!shown.length) { el.hidden = true; return; }
-    el.innerHTML = shown.map(s => `
-      <div class="sidebar-sub-item" data-goto-status="${esc(s.status)}">
-        <span class="dot" style="background:var(${STATUS_COLOR_VAR[s.status] || "--s-draft"})"></span>
-        <span class="lbl">${esc(s.label)}</span>
-        <span class="cnt">${s.count}</span>
-      </div>
-    `).join("");
-    el.hidden = false;
-    el.querySelectorAll("[data-goto-status]").forEach(row => {
-      row.addEventListener("click", () => switchTab("board"));
-    });
-  } catch (_) { /* не критично — сайдбар просто останется без раскладки по статусам */ }
-}

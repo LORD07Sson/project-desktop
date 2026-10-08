@@ -13,6 +13,8 @@
 // импортируется ни одним из уже переходимых отсюда — добавьте import
 // сюда тоже, иначе его код просто никогда не выполнится.
 
+// Шрифт интерфейса — Manrope (лежит в сборке, CSP пускает только свои шрифты).
+import "@fontsource-variable/manrope";
 import { installFileLogging } from "./applog.js";
 import { appWindow } from "./tauri.js";
 import { installWindowChrome } from "./window-chrome.js";

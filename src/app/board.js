@@ -23,12 +23,11 @@
 
 import { apiGet, apiPost, toast, dialogSkeletonHtml, openSheet } from "./api.js";
 import { invoke, pickInputFile } from "./tauri.js";
-import { $, esc, STATUS_DOT_CLASS, STATUS_COLOR_VAR, PRIORITY_LABELS } from "./utils.js";
+import { $, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, PRIORITY_LABELS } from "./utils.js";
 import { timelineHtml, playTimelineIntro } from "./charts.js";
-import { assigneesHtml } from "./reports.js";
+import { assigneesHtml, seriesParts, posterSrc } from "./reports.js";
 import { openReportDetail } from "./report-detail.js";
 import { state } from "./state.js";
-import { loadSidebarStatusCounts } from "./tabs.js";
 import { ATTACH_EXTENSIONS } from "./file-drop.js";
 import { loadAvatars } from "./profile.js";
 
@@ -46,7 +45,12 @@ function writeCollapsed(set) {
   try { localStorage.setItem(collapsedKey(), JSON.stringify([...set])); } catch (_) { /* не критично */ }
 }
 
-const PRIORITY_COLOR_VAR = { urgent: "--s-stop", high: "--ember", normal: "--ink-soft", low: "--ink-dim" };
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
 
 // Позиция статуса в пайплайне студии, в процентах — НЕ метрика
 // «сколько реально сделано» (такого поля у отчёта нет и не будет,
@@ -82,6 +86,10 @@ const SORTS = [
 // набрали в параллель и ничего не доводят.
 const WIP_LIMITS = { working: 8, review: 6, revision: 6 };
 const STALE_AFTER_DAYS = 7;
+
+// «Колонки» или «Таймлайн» (над колонками — сроки серий и загрузка).
+function boardMode() { try { return localStorage.getItem("project_board_mode") === "timeline" ? "timeline" : "cols"; } catch (_) { return "cols"; } }
+function setBoardMode(v) { try { localStorage.setItem("project_board_mode", v); } catch (_) { /* не критично */ } }
 
 function sortKey() { return `project_board_sort_${state.telegramId || "anon"}`; }
 function readSort() {
@@ -163,44 +171,43 @@ function deadlineLabel(c) {
   return c.deadline;
 }
 
-// Экспортирована для превью-канбана на Обзоре (Overview.jsx) — та же
-// разметка карточки, что и здесь, без второй копии кода.
+// Обложка, тайтл и этапы серии — из ответа /board (раскладка board.rs
+// их не прокидывает, она про порядок и сроки). Обновляется на каждой
+// перерисовке доски.
+let seriesById = new Map();
+function rememberSeries(statuses) {
+  seriesById = new Map();
+  for (const col of statuses || []) for (const r of col.reports || []) seriesById.set(r.public_id, r);
+}
+const cleanLabel = s => String(s || "").replace(/^[^\p{L}\p{N}]+/u, "");
+
+// Карточка «Кадра»: обложка, номер и эпизод, этап и срок, полоска
+// готовности и исполнители. Насыщенность полоски слева по-прежнему
+// показывает срочность (heat из board.rs).
 export function boardCardHtml(c, status) {
-  const accent = `var(${STATUS_COLOR_VAR[status] || "--s-draft"})`;
-  const prColor = `var(${PRIORITY_COLOR_VAR[c.priority] || "--ink-soft"})`;
-  // Полоска слева — не просто цвет статуса: её насыщенность показывает
-  // срочность (heat считает board.rs). Раньше все карточки колонки
-  // выглядели одинаково, и «что горит» приходилось искать глазами по
-  // датам.
-  const heat = Math.max(0, Math.min(1, c.heat || 0));
+  const r = seriesById.get(c.publicId) || {};
+  const parts = seriesParts({ ...r, title: c.title, public_id: c.publicId });
+  const poster = posterSrc(r.poster_url);
+  const roles = r.pipeline_roles || [];
+  const stage = roles.length && r.pipeline_stage != null ? roles[Math.min(r.pipeline_stage, roles.length - 1)] : cleanLabel(r.status_label) || "";
+  const pct = roles.length && r.pipeline_stage != null ? Math.round((r.pipeline_stage / roles.length) * 100) : STATUS_PROGRESS[status] ?? 6;
+  const hotDue = c.overdue || c.daysLeft === 0 || c.daysLeft === 1;
   return `
-    <div class="board-card${c.overdue ? " is-overdue" : ""}${c.stale ? " is-stale" : ""}${heat >= .7 ? " is-hot" : ""}"
+    <div class="board-card${c.overdue ? " is-overdue" : ""}${c.stale ? " is-stale" : ""}${(c.heat || 0) >= .7 ? " is-hot" : ""}"
          data-open="${esc(c.publicId)}" data-id="${esc(c.publicId)}" data-status="${esc(status)}"
-         style="--accent-dot: ${accent}; --heat: ${heat.toFixed(3)};">
-      <span class="board-card-heat" style="background:${accent}; color:${accent};"></span>
-      <div class="board-card-due ${c.overdue ? "overdue" : ""}" title="${esc(c.deadline || "срок не назначен")}">${c.overdue ? "⏰ " : "Срок: "}${esc(deadlineLabel(c))}</div>
-      <div class="board-card-top">
-        <span class="id">${esc(c.publicId)}</span>
-        ${c.priority ? `<span class="pr-badge" style="color:${prColor}; border-color:${prColor};">${c.priority === "urgent" ? "⚡ " : ""}${esc(PRIORITY_LABELS[c.priority] || c.priority)}</span>` : ""}
-      </div>
-      <div class="ttl">${esc(c.title)}</div>
-      ${STATUS_PROGRESS[status] != null ? `<div class="board-card-progress-row">
-        <span>Прогресс</span><span>${STATUS_PROGRESS[status]}%</span>
-      </div>
-      <div class="board-card-progress-track"><i style="background:${accent}; color:${accent};" data-target-width="${STATUS_PROGRESS[status]}"></i></div>` : ""}
-      <div class="foot">
-        ${assigneesHtml(c.assignees)}
-        ${c.filesCount || c.notesCount ? `<span class="board-card-counts">
-          ${c.filesCount ? `<span title="Файлов: ${c.filesCount}">📎 ${c.filesCount}</span>` : ""}
-          ${c.notesCount ? `<span title="Заметок: ${c.notesCount}">💬 ${c.notesCount}</span>` : ""}
-        </span>` : ""}
-      </div>
-      ${c.stale || c.unassigned ? `<div class="board-card-flags">
-        ${c.stale ? `<span class="board-flag stale" title="Ничего не менялось ${c.ageDays} дн.">🕸 ${c.ageDays} дн. без движения</span>` : ""}
-        ${c.unassigned ? `<span class="board-flag free" title="Исполнитель не назначен">👤 без исполнителя</span>` : ""}
-      </div>` : ""}
+         style="--accent-dot: var(${STATUS_COLOR_VAR[status] || "--s-draft"});">
+      ${c.priority === "urgent" ? `<i class="kc-flag" title="Срочно"></i>` : ""}
+      ${poster ? `<img class="kc-pc" src="${poster}" alt="" loading="lazy">` : `<span class="kc-pc kc-pc-ph">${esc(initials(parts.name))}</span>`}
+      <span class="kc-id">${esc(c.publicId)}${parts.ep ? ` · ${esc(parts.ep.replace("серия ", "EP "))}` : ""}</span>
+      <b class="ttl">${esc(parts.name)}</b>
+      <span class="kc-sg">${stage ? `${esc(stage)} · ` : ""}<span class="${hotDue ? "hot" : ""}">${esc(deadlineLabel(c))}</span>${c.stale ? ` · без движения ${c.ageDays} дн.` : ""}</span>
+      <span class="kc-ft">
+        <span class="board-card-progress-track"><i data-target-width="${pct}"></i></span>
+        ${c.unassigned ? `<span class="kc-none">не назначено</span>` : assigneesHtml(c.assignees)}
+      </span>
     </div>`;
 }
+
 
 // Ручной drag одной карточки — от pointerdown до pointerup.
 //
@@ -354,7 +361,7 @@ function wireCardDrag(card) {
       if (!targetStatus || targetStatus === card.dataset.status) return;
       try {
         const res = await apiPost(`/report/${encodeURIComponent(card.dataset.id)}/status`, { status: targetStatus });
-        if (res.changed) { toast("Статус изменён."); await loadBoard(); loadSidebarStatusCounts(); }
+        if (res.changed) { toast("Статус изменён."); await loadBoard(); }
         else if (res.detail) toast(res.detail, "error");
       } catch (e) {
         toast(`Не удалось перенести карточку: ${e.message}`, "error");
@@ -440,25 +447,13 @@ function wireBoardCards(root) {
   });
 }
 
-function columnBadgesHtml(col) {
-  const badges = [];
-  if (col.overdue) badges.push(`<span class="board-col-badge late" title="Просрочено">⏰ ${col.overdue}</span>`);
-  if (col.stale) badges.push(`<span class="board-col-badge stale" title="Без движения больше ${STALE_AFTER_DAYS} дн.">🕸 ${col.stale}</span>`);
-  if (col.unassigned) badges.push(`<span class="board-col-badge free" title="Без исполнителя">👤 ${col.unassigned}</span>`);
-  return badges.join("");
-}
-
-function boardToolbarHtml(layout) {
-  const summary = [];
-  if (layout.totalOverdue) summary.push(`<span class="board-sum late">⏰ ${layout.totalOverdue} просрочено</span>`);
-  if (layout.totalStale) summary.push(`<span class="board-sum stale">🕸 ${layout.totalStale} без движения</span>`);
-  if (!summary.length) summary.push(`<span class="board-sum ok">✓ всё в сроках</span>`);
+function boardToolbarHtml() {
   const seasons = seasonsList || [];
   const titles = boardView.seasonId ? (titlesBySeasonCache.get(boardView.seasonId) || []) : [];
   return `
     <div class="board-toolbar">
       <label class="board-search">
-        <span aria-hidden="true">🔎</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
         <input type="search" id="board-search" placeholder="Номер или название" value="${esc(boardView.query)}" autocomplete="off">
       </label>
       <select id="board-season" class="board-sort" title="Фильтр по сезону">
@@ -469,28 +464,23 @@ function boardToolbarHtml(layout) {
         <option value="0" ${boardView.titleId ? "" : "selected"}>Все тайтлы</option>
         ${titles.map(t => `<option value="${t.id}" ${t.id === boardView.titleId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
       </select>
+      <select id="board-month" class="board-sort" title="Показать серии со сроком в этом месяце">${monthOptionsHtml(boardView.month)}</select>
       <select id="board-sort" class="board-sort" title="Порядок карточек в колонках">
         ${SORTS.map(([v, l]) => `<option value="${v}" ${v === boardView.sort ? "selected" : ""}>${esc(l)}</option>`).join("")}
       </select>
-      <div class="board-summary">${summary.join("")}</div>
     </div>`;
 }
 
 function columnHtml(col, collapsed) {
   const colorVar = STATUS_COLOR_VAR[col.status] || "--s-draft";
-  // Полоска заполнения показывает, какая часть колонки уже загружена
-  // (колонки подгружаются порциями), а не долю выполнения.
-  const loaded = col.total ? Math.round((col.cards.length / col.total) * 100) : 100;
   return `
     <div class="board-col ${collapsed.has(col.status) ? "collapsed" : ""}${col.overWip ? " over-wip" : ""}"
          data-status="${esc(col.status)}" style="--col-accent: var(${colorVar});">
       <div class="board-col-head">
-        <span class="lb"><span class="dot ${STATUS_DOT_CLASS[col.status] || "draft"}"></span>${esc(col.label)}</span>
+        <span class="lb"><span class="dot ${STATUS_DOT_CLASS[col.status] || "draft"}"></span>${esc(cleanLabel(col.label))}</span>
         <span class="cnt${col.overWip ? " over" : ""}" title="${col.overWip ? `Больше ${col.wipLimit} в работе одновременно — многовато` : "Всего в статусе"}">${col.total}${col.overWip ? ` / ${col.wipLimit}` : ""}</span>
         <button class="board-col-collapse" data-collapse="${esc(col.status)}" title="Свернуть/развернуть колонку">‹</button>
       </div>
-      ${columnBadgesHtml(col) ? `<div class="board-col-badges">${columnBadgesHtml(col)}</div>` : ""}
-      <div class="board-col-progress"><i style="width:${loaded}%; background:var(${colorVar});"></i></div>
       <div class="board-cards" data-count="${col.cards.length}">
         ${col.cards.length ? col.cards.map(c => boardCardHtml(c, col.status)).join("") : `<div class="board-col-empty">${boardView.query ? "ничего не нашлось" : "пусто"}</div>`}
       </div>
@@ -521,23 +511,6 @@ function boardStats(layout) {
     ...g,
     count: g.statuses.reduce((sum, st) => sum + (totals[st] || 0), 0),
   }));
-}
-
-function statCardsHtml(stats) {
-  return `
-    <div class="bento board-stats-row">
-      ${stats.map((s, i) => {
-        const colorVar = STATUS_COLOR_VAR[s.statuses[0]] || "--s-draft";
-        return `
-        <div class="bcell" style="animation-delay:${i * 40}ms;">
-          <h3>${esc(s.label)}</h3>
-          <div class="kpi-row">
-            <span class="kpi-icon" style="background:color-mix(in srgb, var(${colorVar}) 20%, var(--surface-2)); color:var(${colorVar});">${s.icon}</span>
-            <div class="big-num">${s.count}</div>
-          </div>
-        </div>`;
-      }).join("")}
-    </div>`;
 }
 
 function performanceHtml(stats) {
@@ -645,29 +618,34 @@ async function renderBoard(root) {
     return;
   }
   const collapsed = readCollapsed();
+  rememberSeries(lastBoardData.statuses);
   const stats = boardStats(layout);
-  const timelineCell = timelineSectionHtml(layout);
+  const active = layout.columns.filter(c => c.status !== "completed" && c.status !== "cancelled").reduce((n, c) => n + (c.total || 0), 0);
+  const timeline = boardMode() === "timeline";
+  const timelineCell = timeline ? timelineSectionHtml(layout) : "";
   root.innerHTML = `
     <div class="page-header">
       <div>
+        <span class="kd-label">Основное · ${active} ${plural(active, "активная серия", "активные серии", "активных серий")}</span>
         <h1>Доска</h1>
-        <div class="sub">Все активные серии команды, разложенные по статусам.</div>
       </div>
       <div class="page-header-actions">
-        <select id="board-month" class="board-sort" title="Показать серии со сроком в этом месяце">${monthOptionsHtml(boardView.month)}</select>
-        <button class="btn" id="board-import-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v9M8 10l4 4 4-4M5 19h14"/></svg>Импорт</button>
-        <button class="btn primary" id="board-add-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Добавить проект</button>
+        <div class="kd-seg" role="tablist">
+          <button type="button" data-board-mode="cols" class="${timeline ? "" : "on"}">Колонки</button>
+          <button type="button" data-board-mode="timeline" class="${timeline ? "on" : ""}">Таймлайн</button>
+        </div>
+        <button class="btn" id="board-import-btn">Импорт</button>
+        <button class="btn primary" id="board-add-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Новый проект</button>
       </div>
     </div>
-    ${statCardsHtml(stats)}
-    <div class="board-top-row${timelineCell ? "" : " single"}">
-      ${timelineCell}
-      ${performanceHtml(stats)}
-    </div>
-    <div class="board-section-title">Серии команды</div>
-    ${boardToolbarHtml(layout)}
+    ${boardToolbarHtml()}
+    ${timeline ? `<div class="board-top-row${timelineCell ? "" : " single"}">${timelineCell}${performanceHtml(stats)}</div>` : ""}
     <div class="board">${layout.columns.map(col => columnHtml(col, collapsed)).join("")}</div>
   `;
+  root.querySelectorAll("[data-board-mode]").forEach(b => b.addEventListener("click", () => {
+    setBoardMode(b.dataset.boardMode);
+    renderBoard(root);
+  }));
   wireBoardCards(root);
   loadAvatars(root);
   wireBoardScroll(root.querySelector(".board"));
@@ -682,6 +660,7 @@ async function renderBoard(root) {
 // появлении доски — тот же приём, что у playTimelineIntro/playSegBarIntro.
 function playBoardCardsIntro(root) {
   const bars = root.querySelectorAll(".board-card-progress-track i");
+  bars.forEach(el => { el.style.background = "var(--accent-dot)"; });
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       bars.forEach(el => { el.style.width = `${el.dataset.targetWidth}%`; });
@@ -866,7 +845,6 @@ async function openCreateProjectDialog(filePicked) {
       toast(`Проект создан: ${res.public_id}`);
       overlay.remove();
       await loadBoard();
-      loadSidebarStatusCounts();
     } catch (e) {
       toast(`Не удалось создать проект: ${e.message}`, "error");
       btn.disabled = false;

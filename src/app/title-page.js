@@ -21,6 +21,14 @@ function screenWidth(cssWidth) {
   return Math.round(cssWidth * Math.min(3, window.devicePixelRatio || 1));
 }
 
+// Постер или баннер тайтла с нашего сервера (AniList, иначе Shikimori;
+// под нужную ширину, кэш на диске) — для «Кадра»: фон окна, герой Обзора.
+// Баннера у тайтла может не быть — сервер тогда отвечает без картинки,
+// и вызывающий код берёт запасной вариант (обычно imgProxy постера).
+export function titleArt(titleId, kind, cssWidth) {
+  return titleId ? mediaUrl(`/titles/${titleId}/art/${kind}`, { w: screenWidth(cssWidth) }) : "";
+}
+
 // HD-постер с запасным вариантом: если сервер не смог собрать картинку
 // (204) — <img> получает error, и подставляется обычный постер Shikimori
 // (см. обработчик ниже).
