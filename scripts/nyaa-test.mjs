@@ -194,6 +194,9 @@ assert.equal(ts.anime, "Yoru (Night)");
 assert.equal(ts.size, "5.0 ГиБ");
 assert.equal(ts.subs, "en, ru");
 assert.equal(parseTsukihime(JSON.stringify({ detail: "x" })).found, false);
+const fresh = parseTsukihime(JSON.stringify({ id: 5, name: "N", totalsize: 0, filecount: 0 }));
+assert.equal(fresh.size, "", "нулевой размер не показывается");
+assert.equal(fresh.files, "");
 
 assert.equal(cleanTitleForSearch("[SubsPlease] Night Watch - 09 (1080p) [ABCD1234].mkv"), "Night Watch");
 assert.equal(cleanTitleForSearch("[Group] Show Name S02E05 [WEB-DL][HEVC]"), "Show Name");
