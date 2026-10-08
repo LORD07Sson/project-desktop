@@ -13,6 +13,7 @@ mod board;
 mod desktop_notify;
 mod file_scope;
 mod nyaa;
+mod torrent_clients;
 mod media_tools;
 #[cfg(windows)]
 mod mpv_embed;
@@ -1384,6 +1385,11 @@ fn main() {
             nyaa::nyaa_view,
             nyaa::fetch_image,
             nyaa::net_check,
+            torrent_clients::tc_save,
+            torrent_clients::tc_load,
+            torrent_clients::tc_clear,
+            torrent_clients::tc_test,
+            torrent_clients::tc_add,
             nyaa::nyaa_save_torrent,
             mt_tool_status,
             mt_probe_media,

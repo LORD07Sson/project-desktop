@@ -10,12 +10,15 @@
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
 import { toast, API_BASE } from "./api.js";
+import { state } from "./state.js";
+import { notifyDesktop } from "./desktop-notify.js";
 import { $, esc } from "./utils.js";
 import {
   CATEGORIES, FILTERS, parseNyaaRss, magnetLink, sortItems, relTime, fmtDate,
   splitTitle, categoryKind, summarize, fmtBytes, torrentFileName,
   parseView, buildServices, classifyCheck, normalizeMirror, hostOf, NYAA_MIRRORS,
   applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds,
+  makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
@@ -24,7 +27,7 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [] };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [] };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
@@ -49,6 +52,8 @@ let hasMore = false;
 let moreBusy = false;
 let filtersOpen = false;
 let anchorId = null;
+let client = null;          // настройки торрент-клиента (без пароля)
+let clientDraft = null;
 const selected = new Set();
 let checks = {};           // url → результат net_check
 let checking = false;
@@ -66,6 +71,8 @@ const ICONS = {
   info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   filter: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 8v6l-4-2v-4z"/></svg>',
+  send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 20 4l-4 16-4.5-6.5zM11.5 13.5 20 4"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg>',
   plug: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg>',
 };
 
@@ -101,6 +108,7 @@ function rowHtml(it, maxSeed, now) {
       </div>
       <div class="ny-act">
         <button type="button" class="ny-ib" data-a="info" title="Страница раздачи (двойной щелчок)" aria-label="Страница раздачи">${ICONS.info}</button>
+        <button type="button" class="ny-ib" data-a="send" title="Отправить в торрент-клиент" aria-label="Отправить в торрент-клиент">${ICONS.send}</button>
         <button type="button" class="ny-ib" data-a="mag" title="Копировать magnet" aria-label="Копировать magnet">${ICONS.magnet}</button>
         <button type="button" class="ny-ib" data-a="tor" title="Сохранить .torrent" aria-label="Сохранить .torrent">${ICONS.torrent}</button>
         <button type="button" class="ny-ib" data-a="open" title="Открыть страницу в браузере" aria-label="Открыть в браузере">${ICONS.open}</button>
@@ -135,6 +143,7 @@ function barHtml() {
   return `
     <span class="ny-bar-count"><b>${selected.size}</b> выбрано</span>
     <button type="button" class="btn primary" data-bulk="mag">${ICONS.magnet} Копировать magnet</button>
+    <button type="button" class="btn" data-bulk="send">${ICONS.send} В торрент-клиент</button>
     <button type="button" class="btn" data-bulk="titles">${ICONS.copy} Названия</button>
     <button type="button" class="btn" data-bulk="links">${ICONS.open} Ссылки на страницы</button>
     <button type="button" class="btn ghost" data-bulk="clear">Сбросить</button>`;
@@ -146,14 +155,21 @@ function shellHtml() {
     <header class="ny-hero">
       <div class="ny-hero-t"><span class="kd-label">Релизы</span><h2>Nyaa</h2>
         <p>Свежие раздачи из публичной ленты — не нужно заходить на сайт. Двойной щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p>
-        <button type="button" class="ny-src-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button></div>
+        <button type="button" class="ny-src-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
+        <div class="ny-hero-btns">
+          <button type="button" class="ny-src-btn" data-open-client>${ICONS.send}<span id="ny-client-lbl">Торрент-клиент</span></button>
+          <button type="button" class="ny-src-btn" data-open-monitors>${ICONS.bell}<span>Слежение</span><b id="ny-mon-n" class="ny-badge"></b></button>
+        </div></div>
       <div class="ny-stats" id="ny-stats"></div>
     </header>
     <section class="ny-sources" id="ny-sources" hidden></section>
+    <section class="ny-sources" id="ny-client" hidden></section>
+    <section class="ny-sources" id="ny-monitors" hidden></section>
     <div class="ny-search">
       <span class="ny-search-ic">${ICONS.search}</span>
       <input id="ny-q" type="text" placeholder="Название, группа, 1080p…" value="${esc(prefs.q)}" spellcheck="false" autocomplete="off">
       <button type="button" class="btn ghost" id="ny-save" title="Запомнить запрос и категорию">${ICONS.star} Запомнить</button>
+      <button type="button" class="btn ghost" data-watch-query title="Следить за этим запросом и сообщать о новых раздачах">${ICONS.bell} Следить</button>
       <button type="button" class="btn primary" id="ny-go">Найти</button>
     </div>
     <div class="ny-cats" id="ny-cats"></div>
@@ -236,6 +252,21 @@ async function load() {
   paintList();
 }
 
+function paintClientMsg(text) {
+  const el = $("#ny-client-msg");
+  if (el) el.textContent = text;
+}
+
+// Страница загрузчика: те же раздачи, но только его.
+async function loadUser(name) {
+  loading = true; error = ""; paintList();
+  try {
+    items = parseNyaaRss(await invoke("nyaa_rss", { base: prefs.base, query: "", category: "0_0", filter: "0", page: 1, user: name }));
+    page = 1; hasMore = false; fetchedAt = Date.now(); selected.clear();
+  } catch (e) { error = String(e && e.message ? e.message : e); items = []; }
+  loading = false; paintList();
+}
+
 async function loadMore() {
   if (moreBusy || !hasMore) return;
   moreBusy = true; paintList();
@@ -277,6 +308,7 @@ function bulk(kind) {
   if (kind === "clear") { selected.clear(); paintList(); return; }
   if (!list.length) return;
   list.forEach(i => touch(i.id));
+  if (kind === "send") { sendToClient(list); return; }
   if (kind === "mag") copy(list.map(magnetLink).filter(Boolean).join("\n"), `Скопировано magnet: ${list.length}`);
   else if (kind === "titles") copy(list.map(i => i.title).join("\n"), `Скопировано названий: ${list.length}`);
   else if (kind === "links") copy(list.map(pageUrl).join("\n"), `Скопировано ссылок: ${list.length}`);
@@ -331,6 +363,147 @@ function resetFilters() {
   prefs.filters = { ...DEFAULT_FILTERS };
   savePrefs(); paintFilters(); paintList();
 }
+
+// ---------- торрент-клиент ----------
+function paintClientLabel() {
+  const l = $("#ny-client-lbl");
+  if (l) l.textContent = client ? CLIENT_NAMES[client.kind] || "Торрент-клиент" : "Торрент-клиент";
+}
+
+function clientHtml(msg = "") {
+  const c = clientDraft || client || { kind: "qbittorrent", url: "", user: "", category: "", tags: "", paused: false, has_pass: false };
+  const hasPass = client && client.kind === c.kind && client.user === c.user && client.has_pass;
+  return `
+    <div class="ny-src-head"><div><b>Торрент-клиент</b><span>Отправка magnet в ваш клиент через его веб-интерфейс. Пароль хранится в защищённом хранилище Windows.</span></div>
+      <div><button type="button" class="ny-ib wide" data-close-panel title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
+    <div class="ny-f-grid">
+      <label class="ny-fld"><span>Клиент</span><select data-c="kind">${Object.entries(CLIENT_NAMES).map(([k, n]) => `<option value="${k}" ${c.kind === k ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label class="ny-fld"><span>Адрес веб-интерфейса</span><input type="text" data-c="url" value="${esc(c.url)}" placeholder="http://127.0.0.1:${CLIENT_PORTS[c.kind]}" spellcheck="false"></label>
+      <label class="ny-fld"><span>Логин</span><input type="text" data-c="user" value="${esc(c.user)}" spellcheck="false" autocomplete="off"></label>
+      <label class="ny-fld"><span>Пароль</span><input type="password" data-c="pass" value="" placeholder="${hasPass ? "сохранён — оставьте пустым" : "пароль"}" autocomplete="new-password"></label>
+      ${c.kind === "qbittorrent" ? `<label class="ny-fld"><span>Категория (необязательно)</span><input type="text" data-c="category" value="${esc(c.category)}"></label><label class="ny-fld"><span>Теги (через запятую)</span><input type="text" data-c="tags" value="${esc(c.tags)}"></label>` : ""}
+      <label class="ny-chk wide-row"><input type="checkbox" data-c="paused" ${c.paused ? "checked" : ""}> Добавлять на паузе</label>
+    </div>
+    <div class="ny-f-presets"><button type="button" class="btn" data-client-test>Проверить</button><button type="button" class="btn primary" data-client-save>Сохранить</button>${client ? `<button type="button" class="btn ghost" data-client-clear>Забыть клиент</button>` : ""}<span class="ny-client-msg" id="ny-client-msg">${esc(msg)}</span></div>`;
+}
+
+function readClientForm() {
+  const g = k => document.querySelector(`#ny-client [data-c="${k}"]`);
+  return {
+    kind: g("kind").value, url: g("url").value.trim(), user: g("user").value.trim(), pass: g("pass").value,
+    category: g("category") ? g("category").value.trim() : "", tags: g("tags") ? g("tags").value.trim() : "",
+    paused: g("paused").checked,
+  };
+}
+
+function paintClient(msg = "") {
+  const box = $("#ny-client");
+  if (!box || box.hidden) return;
+  box.innerHTML = clientHtml(msg);
+}
+
+function openPanel(id) {
+  ["ny-sources", "ny-client", "ny-monitors"].forEach(x => { const el = $(`#${x}`); if (el) el.hidden = x !== id; });
+  const box = $(`#${id}`);
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function sendToClient(list) {
+  if (!client) { openPanel("ny-client"); clientDraft = null; paintClient("Сначала настройте клиент."); toast("Сначала настройте торрент-клиент."); return; }
+  const magnets = list.map(magnetLink).filter(Boolean);
+  if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
+  try {
+    const n = await invoke("tc_add", { magnets });
+    list.forEach(i => touch(i.id));
+    toast(`Отправлено в ${CLIENT_NAMES[client.kind]}: ${n}.`, "success");
+  } catch (e) { toast(`Не удалось отправить: ${e}`, "error"); }
+}
+
+// ---------- слежение ----------
+const MON_EVERY_MS = 30 * 60 * 1000;
+let monitorsBusy = false;
+
+function newTotal() { return prefs.monitors.reduce((s, m) => s + (m.new || 0), 0); }
+
+function paintMonitorBadge() {
+  const b = $("#ny-mon-n");
+  if (!b) return;
+  const n = newTotal();
+  b.textContent = n ? String(n) : "";
+}
+
+function monitorsHtml() {
+  const cats = CATEGORIES.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
+  return `
+    <div class="ny-src-head"><div><b>Слежение</b><span>Программа раз в 30 минут (пока открыта) проверяет запросы и загрузчиков и сообщает о новых раздачах.</span></div>
+      <div><button type="button" class="btn" data-mon-check>${monitorsBusy ? "Проверяю…" : "Проверить сейчас"}</button><button type="button" class="ny-ib wide" data-close-panel title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
+    <div class="ny-mons">${prefs.monitors.length ? prefs.monitors.map(m => `
+      <div class="ny-mon${m.new ? " has-new" : ""}">
+        <label class="ny-chk"><input type="checkbox" data-mon-toggle="${esc(m.id)}" ${m.on ? "checked" : ""}></label>
+        <div class="ny-mon-t"><b>${esc(monitorTitle(m))}</b><span>${m.type === "user" ? "загрузчик" : esc((CATEGORIES.find(c => c[0] === m.cat) || [0, m.cat])[1])}${m.new ? ` · новых: ${m.new}` : ""}</span></div>
+        <button type="button" class="btn ghost" data-mon-open="${esc(m.id)}">Открыть</button>
+        <button type="button" class="ny-ib" data-mon-del="${esc(m.id)}" title="Убрать" aria-label="Убрать">${ICONS.close}</button>
+      </div>`).join("") : `<div class="wt-empty">Пока ничего не отслеживается.</div>`}</div>
+    <div class="ny-mon-add">
+      <select id="ny-mon-type"><option value="query">Запрос</option><option value="user">Загрузчик</option></select>
+      <input type="text" id="ny-mon-q" placeholder="слова запроса или имя загрузчика" spellcheck="false">
+      <select id="ny-mon-cat">${cats}</select>
+      <button type="button" class="btn primary" data-mon-add>Добавить</button>
+    </div>`;
+}
+
+function paintMonitors() {
+  const box = $("#ny-monitors");
+  paintMonitorBadge();
+  if (!box || box.hidden) return;
+  box.innerHTML = monitorsHtml();
+}
+
+async function checkMonitor(m, quiet) {
+  const xml = await invoke("nyaa_rss", {
+    base: prefs.base, query: m.type === "query" ? m.q : "", category: m.cat, filter: "0", page: 1, user: m.type === "user" ? m.q : null,
+  });
+  const { fresh, seen: nextSeen } = diffMonitor(parseNyaaRss(xml), m);
+  m.seen = nextSeen;
+  if (fresh.length) {
+    m.new = (m.new || 0) + fresh.length;
+    if (!quiet) {
+      const text = `${monitorTitle(m)}: ${fresh[0].title}${fresh.length > 1 ? ` и ещё ${fresh.length - 1}` : ""}`;
+      toast(`Новое на Nyaa — ${text}`, "success");
+      notifyDesktop("Новое на Nyaa", text);
+    }
+  }
+}
+
+async function checkMonitors(manual = false) {
+  if (monitorsBusy || !prefs.monitors.some(m => m.on)) { if (manual) toast("Нечего проверять."); return; }
+  monitorsBusy = true; paintMonitors();
+  let failed = 0;
+  for (const m of prefs.monitors.filter(x => x.on)) {
+    try { await checkMonitor(m, false); } catch (_) { failed++; }
+  }
+  savePrefs();
+  monitorsBusy = false; paintMonitors();
+  if (manual) toast(failed ? `Не удалось проверить: ${failed}` : "Проверка завершена.", failed ? "error" : "success");
+}
+
+async function addMonitor({ type, q, cat }) {
+  const m = makeMonitor({ type, q, cat: cat || prefs.cat });
+  if (!m) { toast(type === "user" ? "Имя загрузчика: латинские буквы, цифры, _ - ." : "Введите слова для слежения.", "error"); return; }
+  if (prefs.monitors.some(x => x.type === m.type && x.q.toLowerCase() === m.q.toLowerCase() && x.cat === m.cat)) { toast("Такое слежение уже есть."); return; }
+  prefs.monitors = [...prefs.monitors, m].slice(-12);
+  savePrefs(); paintMonitors();
+  try { await checkMonitor(m, true); savePrefs(); toast(`Слежу: ${monitorTitle(m)}.`, "success"); }
+  catch (e) { toast(`Добавлено, но проверить не удалось: ${e}`, "error"); }
+  paintMonitors();
+}
+
+function startMonitoring() {
+  const tick = () => { if (state.token && state.isAdmin) checkMonitors(false); };
+  setTimeout(tick, 25_000);
+  setInterval(tick, MON_EVERY_MS);
+}
+startMonitoring();
 
 // ---------- источники и зеркала ----------
 function sourcesHtml() {
@@ -438,6 +611,11 @@ function galleryHtml(d) {
   }).join("")}</div>`;
 }
 
+function uploaderOf(d) {
+  const name = d.view && d.view.fields ? d.view.fields.submitter : "";
+  return name && !/^anonymous$/i.test(name) && /^[A-Za-z0-9_.-]{1,40}$/.test(name) ? name : "";
+}
+
 function drawerBodyHtml(d) {
   const v = d.view;
   if (d.state === "loading") return `<div class="ny-d-load"><div class="ny-sk w80"></div><div class="ny-sk w40"></div><div class="ny-sk w80"></div></div>`;
@@ -466,7 +644,9 @@ function drawerHtml() {
         <button type="button" class="btn primary" data-d-a="mag">${ICONS.magnet} Magnet</button>
         <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
         <button type="button" class="btn" data-d-a="cp">${ICONS.copy} Название</button>
+        <button type="button" class="btn" data-d-a="send">${ICONS.send} В торрент-клиент</button>
         <button type="button" class="btn ghost" data-d-a="open">${ICONS.open} В браузере</button>
+        ${uploaderOf(d) ? `<button type="button" class="btn ghost" data-d-a="watch">${ICONS.bell} Следить за ${esc(uploaderOf(d))}</button>` : ""}
       </div>
       <div class="ny-d-grid">${grid.map(([k, val]) => `<div><span>${esc(k)}</span><b>${esc(String(val))}</b></div>`).join("")}
         ${hash ? `<div class="wide"><span>Info hash</span><b class="mono">${esc(hash)}</b></div>` : ""}</div>
@@ -534,6 +714,42 @@ function wire(root) {
   const onClick = e => {
     const t = e.target;
     if (t.closest("[data-more]")) { loadMore(); return; }
+    if (t.closest("[data-close-panel]")) { ["ny-client", "ny-monitors"].forEach(x => { $(`#${x}`).hidden = true; }); return; }
+    if (t.closest("[data-open-client]")) { clientDraft = null; openPanel("ny-client"); paintClient(); return; }
+    if (t.closest("[data-client-test]")) {
+      clientDraft = readClientForm();
+      paintClientMsg("Проверяю…");
+      invoke("tc_test", { cfg: clientDraft }).then(v => paintClientMsg(`Подключено: ${v}`), err => paintClientMsg(String(err)));
+      return;
+    }
+    if (t.closest("[data-client-save]")) {
+      const cfg = readClientForm();
+      invoke("tc_save", { cfg }).then(async () => {
+        client = await invoke("tc_load"); clientDraft = null; paintClientLabel(); paintClient("Сохранено."); toast("Клиент сохранён.", "success");
+      }, err => paintClientMsg(String(err)));
+      return;
+    }
+    if (t.closest("[data-client-clear]")) {
+      invoke("tc_clear").then(() => { client = null; clientDraft = null; paintClientLabel(); paintClient("Клиент забыт."); });
+      return;
+    }
+    if (t.closest("[data-open-monitors]")) { openPanel("ny-monitors"); paintMonitors(); return; }
+    if (t.closest("[data-mon-check]")) { checkMonitors(true); return; }
+    if (t.closest("[data-mon-add]")) { addMonitor({ type: $("#ny-mon-type").value, q: $("#ny-mon-q").value, cat: $("#ny-mon-cat").value }); return; }
+    if (t.closest("[data-watch-query]")) { addMonitor({ type: "query", q: $("#ny-q").value, cat: prefs.cat }); return; }
+    const mo = t.closest("[data-mon-open]");
+    if (mo) {
+      const m = prefs.monitors.find(x => x.id === mo.dataset.monOpen);
+      if (m) {
+        m.new = 0;
+        if (m.type === "query") { prefs.q = m.q; prefs.cat = m.cat; $("#ny-q").value = m.q; savePrefs(); paintStatic(); load(); }
+        else { prefs.q = ""; prefs.cat = "0_0"; $("#ny-q").value = ""; savePrefs(); paintStatic(); loadUser(m.q); }
+        paintMonitors();
+      }
+      return;
+    }
+    const md = t.closest("[data-mon-del]");
+    if (md) { prefs.monitors = prefs.monitors.filter(x => x.id !== md.dataset.monDel); savePrefs(); paintMonitors(); return; }
     if (t.closest("[data-flt-reset]")) { resetFilters(); return; }
     if (t.closest("#ny-flt-btn")) { filtersOpen = !filtersOpen; paintFilters(); return; }
     const ps = t.closest("[data-preset]");
@@ -566,6 +782,8 @@ function wire(root) {
       if (da) {
         const a = da.dataset.dA;
         const hash = (detail.view && detail.view.fields["info hash"]) || it.hash;
+        if (a === "send") { sendToClient([{ ...it, hash }]); return; }
+        if (a === "watch") { addMonitor({ type: "user", q: uploaderOf(detail) }); return; }
         if (a === "mag") copy(detail.view && detail.view.magnet ? detail.view.magnet : magnetLink({ ...it, hash }), "Magnet скопирован.");
         else if (a === "tor") saveTorrent(it);
         else if (a === "cp") copy(it.title, "Название скопировано.");
@@ -614,7 +832,8 @@ function wire(root) {
     const a = t.closest("[data-a]");
     if (a) {
       touch(it.id);
-      if (a.dataset.a === "mag") copy(magnetLink(it), "Magnet скопирован.");
+      if (a.dataset.a === "send") sendToClient([it]);
+      else if (a.dataset.a === "mag") copy(magnetLink(it), "Magnet скопирован.");
       else if (a.dataset.a === "tor") saveTorrent(it);
       else if (a.dataset.a === "info") openDetail(it);
       else if (a.dataset.a === "open") openExternal(pageUrl(it)).catch(() => toast("Не удалось открыть ссылку.", "error"));
@@ -636,6 +855,14 @@ function wire(root) {
     }
   };
   root.addEventListener("click", onClick);
+  root.querySelector("#ny-client").addEventListener("change", e => {
+    if (e.target.dataset.c !== "kind") return;
+    clientDraft = { ...readClientForm(), url: "" };
+    paintClient();
+  });
+  root.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target.id === "ny-mon-q") $("[data-mon-add]").click();
+  });
   const onFilterInput = () => { prefs.filters = readFilters(); savePrefs(); paintList(); };
   root.querySelector("#ny-filters").addEventListener("input", e => { if (e.target.dataset.f) onFilterInput(); });
   root.querySelector("#ny-filters").addEventListener("change", e => { if (e.target.dataset.f) onFilterInput(); });
@@ -661,7 +888,9 @@ export async function loadNyaa() {
     body.innerHTML = shellHtml();
     paintStatic();
     wire(body.querySelector(".ny"));
+    paintMonitorBadge();
   }
+  if (client === null) invoke("tc_load").then(c => { client = c || null; paintClientLabel(); }).catch(() => {});
   // Свежий список при открытии вкладки, но не чаще раза в 2 минуты.
   if (!items.length || Date.now() - fetchedAt > 120_000) await load();
   else paintList();

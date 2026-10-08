@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf, applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds } from "../src/app/nyaa-core.js";
+import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf, applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds, makeMonitor, monitorTitle, diffMonitor, CLIENT_PORTS, NYAA_MIRRORS } from "../src/app/nyaa-core.js";
 
 const xml = `<?xml version="1.0"?><rss xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel>
 <item><title>[JMAX] [2026.10.09] TVアニメ「Night」ED &amp; OP [FLAC]</title><link>https://nyaa.si/download/2090786.torrent</link><guid isPermaLink="true">https://nyaa.si/view/2090786</guid><pubDate>Thu, 08 Oct 2026 17:39:56 -0000</pubDate><nyaa:seeders>62</nyaa:seeders><nyaa:leechers>8</nyaa:leechers><nyaa:downloads>311</nyaa:downloads><nyaa:infoHash>ABCDEF0123456789ABCDEF0123456789ABCDEF01</nyaa:infoHash><nyaa:categoryId>2_1</nyaa:categoryId><nyaa:category>Audio - Lossless</nyaa:category><nyaa:size>73.6 MiB</nyaa:size><nyaa:comments>1</nyaa:comments><nyaa:trusted>Yes</nyaa:trusted><nyaa:remake>No</nyaa:remake></item>
@@ -117,7 +117,8 @@ assert.deepEqual(v.files, ["01 track.flac (30 MiB)", "02 track.flac (28 MiB)"]);
 assert.equal(parseView("", win.DOMParser).images.length, 0);
 
 const svc = buildServices(["https://my.mirror"], "https://srv.example");
-assert.deepEqual(svc.find(s => s.id === "nyaa").mirrors, ["https://nyaa.si", "https://nyaa.land", "https://my.mirror"]);
+assert.deepEqual(svc.find(s => s.id === "nyaa").mirrors, [...NYAA_MIRRORS, "https://my.mirror"]);
+assert.ok(NYAA_MIRRORS.includes("https://nyaa.si") && NYAA_MIRRORS.includes("https://nyaa.land"));
 assert.ok(svc.find(s => s.id === "nyaa").apply);
 assert.ok(!svc.find(s => s.id === "shikimori").apply);
 assert.equal(svc.at(-1).id, "server");
@@ -133,4 +134,21 @@ assert.equal(normalizeMirror("http://x.example"), null);
 assert.equal(normalizeMirror("localhost"), null);
 assert.equal(normalizeMirror(""), null);
 assert.equal(hostOf("https://nyaa.si:8443/x"), "nyaa.si:8443");
+const m1 = makeMonitor({ type: "query", q: "  night watch ", cat: "1_2" }, 1);
+assert.equal(m1.q, "night watch");
+assert.equal(m1.cat, "1_2");
+assert.equal(m1.new, 0);
+assert.equal(makeMonitor({ type: "query", q: "   " }), null);
+assert.equal(makeMonitor({ type: "user", q: "JMAX" }).cat, "0_0");
+assert.equal(makeMonitor({ type: "user", q: "bad name&" }), null, "имя загрузчика проверяется");
+assert.equal(monitorTitle({ type: "user", q: "JMAX" }), "Загрузчик JMAX");
+const first = diffMonitor([{ id: 3 }, { id: 2 }, { id: 1 }], { type: "query" });
+assert.deepEqual(first.fresh, [], "первая проверка ничего не объявляет");
+assert.deepEqual(first.seen, [3, 2, 1]);
+const second = diffMonitor([{ id: 5 }, { id: 4 }, { id: 3 }], { seen: [3, 2, 1] });
+assert.deepEqual(second.fresh.map(i => i.id), [5, 4]);
+assert.deepEqual(second.seen, [5, 4, 3, 2, 1]);
+assert.equal(diffMonitor(Array.from({ length: 500 }, (_, i) => ({ id: i })), { seen: [] }).seen.length, 400);
+assert.equal(CLIENT_PORTS.deluge, 8112);
+
 console.log("nyaa-test: ok");
