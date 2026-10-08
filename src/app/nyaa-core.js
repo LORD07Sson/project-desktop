@@ -305,6 +305,7 @@ export function buildServices(nyaaCustom = [], serverOrigin = "") {
     { id: "shikimori", name: "Shikimori", note: "каталог и постеры в режиме «Смотреть» идут через сервер студии", apply: false, mirrors: ["https://shikimori.one", "https://shikimori.io", "https://shikimori.me"] },
     { id: "anilist", name: "AniList", note: "описания, баннеры, расписание эфира", apply: false, mirrors: ["https://graphql.anilist.co", "https://anilist.co"] },
     { id: "jikan", name: "MyAnimeList (Jikan)", note: "оценки и опенинги", apply: false, mirrors: ["https://api.jikan.moe"] },
+    { id: "sources", name: "Источники раздачи", note: "SeaDex, AnimeTosho, nekoBT, Tsukihime на вкладке «Источники»", apply: false, mirrors: ["https://releases.moe", "https://feed.animetosho.org", "https://nekobt.to", "https://api.tsukihime.org"] },
   ];
   if (serverOrigin) services.push({ id: "server", name: "Сервер студии", note: "задачи, файлы, чат", apply: false, mirrors: [serverOrigin] });
   return services;

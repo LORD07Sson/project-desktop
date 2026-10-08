@@ -29,7 +29,7 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [] };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {} };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
@@ -57,9 +57,9 @@ let anchorId = null;
 let client = null;          // настройки торрент-клиента (без пароля)
 let clientDraft = null;
 const selected = new Set();
-let checks = {};           // url → результат проверки (с сервера студии, если он отвечает, иначе с этого компьютера)
-let localChecks = {};      // url → проверка с этого компьютера (для пометки «у вас закрыт»)
-let checkedBy = "";        // "server" | "local" — откуда сейчас результаты
+let checks = {};           // url → результат проверки по выбранному для сервиса соединению
+let localChecks = {};      // url → проверка с этого компьютера
+let serverChecks = {};     // url → проверка с сервера студии (через его туннель WireGuard)
 let checking = false;
 let detail = null;         // { item, state, view, err, tab, imgs, lightbox }
 
@@ -509,15 +509,37 @@ function startMonitoring() {
 }
 startMonitoring();
 
+// ---------- выбор соединения для каждого сервиса ----------
+// auto — сначала этот компьютер, если связи нет — сервер (WireGuard); pc — только этот компьютер;
+// server — всегда через сервер студии.
+const ROUTES = [["auto", "Авто"], ["pc", "Мой компьютер"], ["server", "Сервер (WireGuard)"]];
+const routeOf = id => (prefs.route && ["pc", "server"].includes(prefs.route[id])) ? prefs.route[id] : "auto";
+const serviceOfUrl = url => {
+  const h = hostOf(url);
+  const sv = buildServices(prefs.custom, serverOrigin()).find(s => s.mirrors.some(m => hostOf(m) === h));
+  return sv ? sv.id : "";
+};
+const routeOfUrl = url => routeOf(serviceOfUrl(url));
+
+// Результат проверки по выбранному соединению сервиса.
+function applyChecks() {
+  new Set([...Object.keys(serverChecks), ...Object.keys(localChecks)]).forEach(u => {
+    const mode = routeOfUrl(u);
+    const r = mode === "pc" ? localChecks[u] : mode === "server" ? serverChecks[u] : (serverChecks[u] || localChecks[u]);
+    if (r) checks[u] = r;
+  });
+}
+
 // ---------- источники и зеркала ----------
 function sourcesHtml() {
   const services = buildServices(prefs.custom, serverOrigin());
   return `
-    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>${checkedBy === "local" ? "Сервер студии недоступен — показана проверка с этого компьютера." : "Проверка идёт с сервера студии: через него работают «Релизы» и «Смотреть»."} Если сайт переехал, выберите рабочее зеркало.</span></div>
+    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>Для каждого сервиса выберите, как подключаться: с этого компьютера или через сервер студии (WireGuard). По этому выбору идёт и проверка, и сами запросы.</span></div>
       <div><button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить всё"}</button><button type="button" class="ny-ib wide" data-close-sources title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
     <div class="ny-src-grid">${services.map(sv => `
       <div class="ny-svc">
         <div class="ny-svc-h"><b>${esc(sv.name)}</b><span>${esc(sv.note)}</span></div>
+        ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>`}
         ${sv.mirrors.map(m => {
           const c = classifyCheck(checks[m]);
           const active = sv.apply && m === prefs.base;
@@ -529,7 +551,7 @@ function sourcesHtml() {
         }).join("")}
         ${sv.id === "nyaa" ? fastHint(sv.mirrors) : ""}
         ${sv.id === "nyaa" ? `<div class="ny-mir-add"><input id="ny-mir-in" type="text" placeholder="Своё зеркало, например nyaa.example" spellcheck="false"><button type="button" class="btn" id="ny-mir-add">Добавить</button></div>` : ""}
-        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» берёт эти данные через сервер студии, поэтому важно, что видит сервер.</p>` : ""}
+        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» всегда берёт эти данные через сервер студии; выбор влияет на проверку и на запросы из «Релизов».</p>` : ""}
       </div>`).join("")}</div>`;
 }
 
@@ -561,20 +583,19 @@ async function runChecks(urls) {
     invoke("net_check", { urls }),
   ]);
   if (loc.status === "fulfilled") loc.value.forEach(r => { localChecks[r.url] = r; });
-  if (srv.status === "fulfilled" && Array.isArray(srv.value)) {
-    srv.value.forEach(r => { checks[r.url] = r; });
-    checkedBy = "server";
-  } else if (loc.status === "fulfilled") {
-    loc.value.forEach(r => { checks[r.url] = r; });
-    checkedBy = "local";
-  } else toast(`Проверка не удалась: ${loc.reason}`, "error");
+  if (srv.status === "fulfilled" && Array.isArray(srv.value)) srv.value.forEach(r => { serverChecks[r.url] = r; });
+  else urls.forEach(u => {
+    if (routeOfUrl(u) === "server") serverChecks[u] = { url: u, ok: false, status: 0, ms: 0, error: "сервер студии недоступен" };
+  });
+  if (srv.status !== "fulfilled" && loc.status !== "fulfilled") toast(`Проверка не удалась: ${loc.reason}`, "error");
+  applyChecks();
   checking = false; paintSources();
 }
 
 // «У вас закрыт»: серверу сайт виден, а с этого компьютера — нет.
 const closedHere = m => {
-  const s = checks[m], l = localChecks[m];
-  return checkedBy === "server" && s && s.ok && l && (l.error || !l.ok);
+  const s = serverChecks[m], l = localChecks[m];
+  return routeOfUrl(m) !== "pc" && s && s.ok && l && (l.error || !l.ok);
 };
 
 function allMirrorUrls() {
@@ -652,9 +673,17 @@ const isNotFound = e => /ответил 404/.test(String(e && e.message ? e.mess
 const isNoConnection = e => /Не удалось загрузить|error sending request|timed out|connect/i.test(String(e && e.message ? e.message : e));
 
 async function metaGet(url) {
+  const mode = routeOf("sources");
+  const viaRelay = async () => {
+    const wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}`)).text());
+    if (wrapped.status === 404) throw new Error("Сайт ответил 404");
+    if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
+    return String(wrapped.body || "");
+  };
+  if (mode === "server") return viaRelay();
   try { return await invoke("meta_get", { url }); }
   catch (e) {
-    if (isNotFound(e) || !isNoConnection(e)) throw e;
+    if (mode === "pc" || isNotFound(e) || !isNoConnection(e)) throw e;
     let wrapped;
     try { wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}`)).text()); }
     catch (_) { throw e; }                      // на сервере ручки нет или он недоступен — показываем исходную ошибку
@@ -676,9 +705,16 @@ async function relayJson(params) {
 }
 
 async function nyaaDirectOrRelay(direct, relayParams, pick) {
+  const mode = routeOf("nyaa");
+  if (mode === "server") {
+    const w = await relayJson(relayParams);
+    if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
+    viaServer = true; paintSourceChip();
+    return pick(w);
+  }
   try { return await direct(); }
   catch (e) {
-    if (isNotFound(e) || !isNoConnection(e)) throw e;
+    if (mode === "pc" || isNotFound(e) || !isNoConnection(e)) throw e;
     let w;
     try { w = await relayJson(relayParams); } catch (_) { throw e; }   // ручки нет / сервер недоступен — исходная ошибка
     if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
@@ -693,15 +729,20 @@ const nyaaView = a => nyaaDirectOrRelay(() => invoke("nyaa_view", a),
   { kind: "view", base: a.base, id: a.id }, w => String(w.body || ""));
 
 async function nyaaSaveTorrent(base, id, path) {
-  try { return await invoke("nyaa_save_torrent", { base, id, path }); }
-  catch (e) {
-    if (!isNoConnection(e)) throw e;
+  const mode = routeOf("nyaa");
+  const viaRelay = async rethrow => {
     let w;
-    try { w = await relayJson({ kind: "torrent", base, id }); } catch (_) { throw e; }
+    try { w = await relayJson({ kind: "torrent", base, id }); } catch (_) { if (rethrow) throw rethrow; throw _; }
     if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
     const bin = atob(w.b64 || "");
     await invoke("write_bytes_file", { path, bytes: Array.from(bin, ch => ch.charCodeAt(0)) });
     viaServer = true; paintSourceChip();
+  };
+  if (mode === "server") return viaRelay();
+  try { return await invoke("nyaa_save_torrent", { base, id, path }); }
+  catch (e) {
+    if (mode === "pc" || !isNoConnection(e)) throw e;
+    return viaRelay(e);
   }
 }
 
@@ -1011,6 +1052,14 @@ function wire(root) {
       }
     }
     // источники
+    const rt = t.closest("[data-route]");
+    if (rt) {
+      const [sid, mode] = rt.dataset.route.split(":");
+      prefs.route = { ...prefs.route, [sid]: mode };
+      savePrefs(); viaServer = false; applyChecks(); paintSources();
+      if (sid === "nyaa") { items = []; load(); }
+      return;
+    }
     if (t.closest("[data-open-sources]")) { openSources(); return; }
     if (t.closest("[data-close-sources]")) { $("#ny-sources").hidden = true; return; }
     if (t.closest("#ny-check-all")) { runChecks(allMirrorUrls()); return; }
