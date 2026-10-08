@@ -1063,3 +1063,104 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 .st-nav-title { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
 .st-palette.on, .st-card.on { border-color: rgba(var(--gold-rgb), .5); box-shadow: 0 0 0 3px rgba(var(--gold-rgb), .1); }
 .page-header-actions .btn, .page-header-actions .icon-btn { height: 36px; }
+
+/* ================================================================
+   Команда: карточки с кольцом у аватара
+   ================================================================ */
+.tm-stats { gap: 10px; margin-bottom: 16px; }
+.tm-stat { flex: none; min-width: 0; padding: 12px 18px; gap: 10px; border-radius: 14px; }
+.tm-stat b { font-size: 20px; font-weight: 800; }
+.tm-stat span { font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-dim); }
+.tm-stat.on b { color: var(--s-done); }
+.tm-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+.tm-card { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 26px 18px 16px; gap: 0; overflow: hidden; }
+.tm-card::before { content: ""; position: absolute; left: 50%; top: -60px; width: 220px; height: 140px; margin-left: -110px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(var(--fire-rgb), .22), transparent); opacity: .7; }
+.tm-card.on::before { background: radial-gradient(closest-side, rgba(95, 211, 148, .2), transparent); }
+.tm-card.paused { opacity: .62; }
+.tm-av { margin-bottom: 12px; padding: 3px; border-radius: 50%; background: conic-gradient(from 210deg, var(--fire), var(--gold), rgba(255, 255, 255, .15), var(--fire)); }
+.tm-av .avatar.xl { width: 66px; height: 66px; font-size: 24px; box-shadow: 0 0 0 3px var(--bg); }
+.tm-dot { right: 4px; bottom: 4px; width: 14px; height: 14px; border: 3px solid var(--bg); background: var(--s-done); }
+.tm-name { font-size: 15px; font-weight: 800; }
+.tm-role { background: none; padding: 0; font-size: 12px; font-weight: 500; color: var(--ink-dim); }
+.tm-state { display: inline-block; max-width: 100%; margin: 12px 0 14px; padding: 5px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: rgba(255, 255, 255, .05); color: var(--ink-soft); }
+.tm-state.free { background: rgba(95, 211, 148, .1); color: var(--s-done); }
+.tm-state.paused { background: rgba(var(--gold-rgb), .1); color: var(--gold); }
+.tm-load { align-self: stretch; margin: 0; }
+.tm-foot { align-self: stretch; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.tm-foot b { font-size: 16px; color: var(--ink); }
+.tm-actions { opacity: 0; }
+.tm-act { border: 0; background: rgba(255, 255, 255, .07); }
+
+/* ================================================================
+   Сервисы: орб состояния
+   ================================================================ */
+.svc-hero { display: flex; align-items: center; gap: 24px; padding: 24px 28px; margin-bottom: 16px; }
+.svc-hero h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.svc-hero p { margin: 3px 0 0; color: var(--ink-soft); }
+.svc-orb { flex: none; width: 60px; height: 60px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 40%, #fff), var(--c) 50%, color-mix(in srgb, var(--c) 45%, #000));
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--c) 9%, transparent), 0 0 0 22px color-mix(in srgb, var(--c) 4%, transparent), 0 0 40px color-mix(in srgb, var(--c) 45%, transparent); }
+.svc-overall { display: none; }
+.svc-list-cell { padding: 14px 12px 8px; }
+.svc-row { padding: 12px 10px; border-radius: 12px; border: 0; border-top: 1px solid var(--line); }
+.svc-history-strip { gap: 3px; }
+.svc-history-bar { height: 28px; border-radius: 3px; opacity: .8; }
+.svc-history-bar:hover { opacity: 1; }
+.bs-card { margin-top: 14px; }
+.bs-cell { border-radius: 14px; background: rgba(255, 255, 255, .035); border: 1px solid var(--line); }
+
+/* ================================================================
+   Аналитика и Лента
+   ================================================================ */
+.an-bar { box-shadow: 0 12px 24px -14px currentColor; }
+.an-bottom { gap: 16px; }
+.fd-day { overflow: hidden; }
+.fd-day-head { background: transparent; border-bottom: 1px solid var(--line); padding: 14px 16px 12px; }
+.fd-day-head b { font-size: 10px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-dim); }
+.fd-row { border-bottom: 0; padding: 12px 16px; }
+.fd-row + .fd-row::before { content: ""; position: absolute; left: 33px; top: -12px; height: 24px; width: 1px; background: var(--line); }
+.fd-row.linkable:hover { background: rgba(255, 255, 255, .03); }
+.fd-sum-cell { padding: 14px 16px; }
+.fd-person-sel { height: 36px; border-radius: 11px; background-color: rgba(255, 255, 255, .045); border: 1px solid var(--line); }
+
+/* ================================================================
+   Профиль и достижения
+   ================================================================ */
+.pf-hero { border-radius: 24px; overflow: hidden; }
+.pf-banner { height: 170px; position: relative; }
+.pf-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 40%, transparent) 60%, transparent); opacity: .85; }
+.pf-hero-body { padding: 0 30px 26px; gap: 22px; align-items: flex-end; margin-top: -56px; position: relative; z-index: 1; }
+.pf-hero .avatar-ring { margin-top: 0; padding: 3px; border-radius: 50%; background: conic-gradient(from 200deg, var(--fire), var(--gold), rgba(255, 255, 255, .2), var(--fire)); }
+.pf-hero .avatar-ring .avatar.xl { width: 104px; height: 104px; font-size: 36px; box-shadow: 0 0 0 3px var(--bg); }
+.pf-who .nm { font-size: 30px; font-weight: 800; letter-spacing: -.025em; }
+.pf-about .st { font-weight: 700; }
+.pf-kpi { padding: 18px 20px; }
+.pf-kpi b, .pf-kpi .big-num { font-size: 32px; font-weight: 800; letter-spacing: -.03em; }
+.pf-grid { gap: 16px; }
+.pf-main, .pf-side { gap: 16px; }
+.pf-card { padding: 20px 22px; }
+.badge-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
+.badge-item { padding: 18px 8px 12px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); transition: transform .35s var(--kadr-ease), border-color .2s; }
+.badge-item:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, .14); }
+.badge-item.unlocked { background: linear-gradient(160deg, rgba(var(--gold-rgb), .12), rgba(255, 255, 255, .03)); border-color: rgba(var(--gold-rgb), .25); }
+.badge-item .lbl { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+
+/* ================================================================
+   Настройки
+   ================================================================ */
+.st-layout { gap: 18px; }
+.st-nav { border-right: 0; padding: 14px 12px; border-radius: var(--radius-lg); background: var(--glass-bg); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
+.st-nav-grp { font-size: 9.5px; letter-spacing: .22em; }
+.st-find { border-radius: 11px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); }
+.st-sec h3 { font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+.st-lead { color: var(--ink-dim); }
+.st-group { padding: 4px 18px; }
+.st-row { padding: 14px 0; border-top: 1px solid var(--line); }
+.st-row:first-child { border-top: 0; }
+.st-group-h { font-size: 9.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-dim); padding: 14px 0 4px; }
+.st-ic { border-radius: 12px; background: linear-gradient(145deg, rgba(var(--gold-rgb), .16), rgba(var(--fire-rgb), .05)); color: var(--gold); }
+.st-card, .st-palette { border-radius: 16px; background: rgba(255, 255, 255, .035); border: 1px solid var(--line); transition: border-color .25s, transform .3s var(--kadr-ease); }
+.st-card:hover, .st-palette:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, .16); }
+:root[data-theme="light"] .st-nav { background: rgba(255, 255, 255, .7); }
+:root[data-theme="light"] .st-card, :root[data-theme="light"] .st-palette, :root[data-theme="light"] .badge-item { background: rgba(255, 255, 255, .7); }

@@ -85,8 +85,8 @@ function analyticsHtml(d) {
   return `
     <div class="page-header">
       <div>
-        <h1>Аналитика команды</h1>
-        <div class="sub">Пропускная способность и загрузка конвейера дубляжа за последние 30 дней.</div>
+        <span class="kd-label">Команда · последние 30 дней</span>
+        <h1>Аналитика</h1>
       </div>
     </div>
     <div class="an-metrics">${metricCards}</div>

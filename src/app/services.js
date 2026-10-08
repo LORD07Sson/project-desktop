@@ -116,14 +116,15 @@ function servicesHtml(d) {
   return `
     <div class="page-header">
       <div>
+        <span class="kd-label">Система · состояние серверов</span>
         <h1>Сервисы</h1>
-        <div class="sub">Состояние серверов, время отклика и стабильность.</div>
       </div>
-      <span class="svc-overall" style="color:var(${overallMeta.colorVar});">
-        <span class="svc-dot" style="background:var(${overallMeta.colorVar}); box-shadow:0 0 0 3px color-mix(in srgb, var(${overallMeta.colorVar}) 18%, transparent);"></span>
-        ${d.overall === "operational" ? "Все системы работают" : esc(overallMeta.label)}
-      </span>
     </div>
+    <section class="kd-gl svc-hero" style="--c:var(${overallMeta.colorVar});">
+      <span class="svc-orb"></span>
+      <div><h2>${d.overall === "operational" ? "Все системы работают" : esc(overallMeta.label)}</h2>
+        <p>${counts.operational || 0} из ${services.length} сервисов в строю${incidents.length ? ` · инцидентов за 30 дней: ${incidents.length}` : ""}</p></div>
+    </section>
     <div class="an-metrics">${statCards}</div>
     <div class="svc-bottom-row">
       <div class="bcell svc-list-cell" style="animation-delay:160ms;">

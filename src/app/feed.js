@@ -287,8 +287,8 @@ function headerHtml(isOwner) {
   return `
     <div class="page-header">
       <div>
+        <span class="kd-label">Команда · журнал изменений</span>
         <h1>Лента</h1>
-        <div class="sub">Все изменения в отчётах команды: кто, что и когда.</div>
       </div>
       <div class="page-header-actions">
         <select id="fd-person" class="fd-person-sel" aria-label="Человек"></select>
