@@ -23,6 +23,7 @@ import {
 } from "./tauri.js";
 import { openSheet, toast } from "./api.js";
 import { $, esc, formatTime } from "./utils.js";
+import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "./media-formats.js";
 import { tagLogger } from "./applog.js";
 
 const mpvLog = tagLogger("mpv");
@@ -42,8 +43,6 @@ const ICONS = {
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
 };
 
-const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "avi", "webm", "m4v"];
-const AUDIO_EXTENSIONS = ["wav", "mp3", "flac", "m4a", "aac", "ogg", "opus"];
 const SUBTITLE_EXTENSIONS = ["srt", "ass", "ssa", "vtt", "sub"];
 const MEDIA_EXTENSIONS = [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS];
 const POOL_EXTENSIONS = [...MEDIA_EXTENSIONS, ...SUBTITLE_EXTENSIONS];

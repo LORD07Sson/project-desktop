@@ -3,6 +3,7 @@
 // профиля коллеги.
 
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { state } from "./state.js";
 import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow } from "./tauri.js";
@@ -675,7 +676,7 @@ async function fillLogPanel(panel, publicId, kind) {
 // раньше оставался без кнопки AI-проверки, потому что || до имени
 // просто не доходил.
 function fileHtml(f) {
-  const audioRe = /audio|\.(wav|mp3|flac|m4a|aac|ogg)$/i;
+  const audioRe = AUDIO_RE;
   const isAudio = audioRe.test(f.file_type || "") || audioRe.test(f.file_name || "");
   return `<div class="file-item">
     <div>${esc(FILE_ICONS[f.file_type] || "📎")} ${esc(f.file_name || f.file_type)} <span class="meta">${esc(f.file_size_label || "")}</span></div>

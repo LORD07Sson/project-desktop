@@ -33,7 +33,7 @@ export function setDropTarget(publicId) { activeReportId = publicId; }
 // Тот же список продублирован в Rust (ALLOWED_UPLOAD_EXT в main.rs) —
 // держать в синхроне руками, JS-проверку легко обойти, Rust-нельзя.
 export const ATTACH_EXTENSIONS = [
-  ...QC_EXTENSIONS, "oga", "avi", "png", "jpg", "jpeg", "webp", "pdf", "doc", "docx", "ppt", "pptx", "zip",
+  ...QC_EXTENSIONS, "png", "jpg", "jpeg", "webp", "pdf", "doc", "docx", "ppt", "pptx", "zip",
 ];
 const extRe = list => new RegExp(`\\.(${list.join("|")})$`, "i");
 const ALLOWED_EXT = extRe(ATTACH_EXTENSIONS);
