@@ -50,6 +50,7 @@
             <button class="tab-btn tb-mi" role="menuitem" data-tab="feed" title="Лента"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span><span class="tm-txt"><span class="tab-lbl">Лента</span><small>Всё, что происходит в команде</small></span></button>
             <button class="tab-btn tb-mi" role="menuitem" data-tab="analytics" title="Аналитика"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20V10M12 20V4M20 20v-6"/></svg></span><span class="tm-txt"><span class="tab-lbl">Аналитика</span><small>Скорость, сроки и лидеры</small></span></button>
             <button class="tab-btn tb-mi" role="menuitem" data-tab="services" title="Сервисы"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span><span class="tm-txt"><span class="tab-lbl">Сервисы</span><small>Бот, мини-апп и туннели</small></span></button>
+            <button class="tab-btn tb-mi" role="menuitem" data-tab="vpn" title="VPN помощник"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="tm-txt"><span class="tab-lbl">VPN помощник</span><small>X-UI: домены, блокировки, связь</small></span></button>
             <button class="tab-btn tb-mi" role="menuitem" data-tab="team" title="Команда"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="7" r="2.4"/></svg></span><span class="tm-txt"><span class="tab-lbl">Команда</span><small>Кто чем занят прямо сейчас</small></span></button>
             <div class="tb-sep" role="separator"></div>
             <button class="tab-btn tb-mi" role="menuitem" data-tab="profile" title="Мой профиль"><span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span><span class="tm-txt"><span class="tab-lbl">Мой профиль</span><small>Цель месяца и достижения</small></span></button>
@@ -336,6 +337,13 @@
   <div class="tab-panel" data-panel="services">
     <div class="scroll-panel" id="services-panel">
       <div id="services-body"></div>
+    </div>
+  </div>
+
+  <!-- ===== VPN помощник (только владелец) ===== -->
+  <div class="tab-panel" data-panel="vpn">
+    <div class="scroll-panel" id="vpn-panel">
+      <div id="vpn-body"></div>
     </div>
   </div>
 

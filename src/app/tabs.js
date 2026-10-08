@@ -13,6 +13,7 @@ import { loadFeed } from "./feed.js";
 import { loadProfile } from "./profile.js";
 import { loadAnalytics } from "./analytics.js";
 import { loadServices } from "./services.js";
+import { loadVpnHelper } from "./vpn-helper.js";
 import { loadTeam } from "./team.js";
 import { loadQueue } from "./queue.js";
 import { startTab } from "./ui-prefs.js";
@@ -34,13 +35,14 @@ const LOADERS = {
   feed: loadFeed,
   analytics: loadAnalytics,
   services: loadServices,
+  vpn: loadVpnHelper,
   team: loadTeam,
   profile: loadProfile,
 };
 
 // Контейнеры вкладок — чистятся при выходе из аккаунта, чтобы данные
 // предыдущего пользователя не остались висеть в DOM.
-const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#analytics-body", "#services-body", "#team-body", "#profile-body", "#reports-body"];
+const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#analytics-body", "#services-body", "#vpn-body", "#team-body", "#profile-body", "#reports-body"];
 
 // Последняя открытая вкладка переживает не только смену пользователя
 // (см. комментарий у state.activeTab в state.js — это настройка
@@ -55,6 +57,8 @@ export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "prof
 
 export function switchTab(name) {
   if (!state.isAdmin && !MEMBER_TABS.has(name)) name = "messages";
+  // «VPN помощник» — только владелец; сервер всё равно проверяет сам.
+  if (name === "vpn" && state.isDeveloper === false) name = "services";
   state.activeTab = name;
   try { localStorage.setItem(LAST_TAB_KEY, name); } catch (_) { /* не критично */ }
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));

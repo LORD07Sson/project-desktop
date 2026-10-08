@@ -74,7 +74,13 @@ reqwest = { version = "0.12", default-features = false, features = ["multipart",
 # IPC-клиент до mpv (mpv_embed.rs) — именованный пайп на Windows. tokio
 # уже тянется самим tauri (его runtime исполняет #[tauri::command(async)]),
 # здесь просто явная зависимость на тот же мажор ради net-типов.
-tokio = { version = "1", features = ["net", "io-util"] }
+tokio = { version = "1", features = ["net", "io-util", "time", "sync"] }
+# «VPN помощник» (vpn_probe.rs): свой TLS-хендшейк с выбранным SNI и
+# разбором сертификата — reqwest этого не умеет. Все три крейта уже
+# лежат в Cargo.lock через reqwest/rustls-tls, новых копий не появляется.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
+webpki-roots = "1"
 # reveal_item_in_dir для open_log_folder ("Открыть логи" в настройках) —
 # tauri-plugin-shell::Shell::open той же цели deprecated в пользу этого
 # плагина начиная с tauri 2.
@@ -126,3 +132,6 @@ strip = true
 [[bin]]
 name = "project-desktop"
 path = "src/main.rs"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

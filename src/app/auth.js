@@ -7,6 +7,7 @@ import { state, resetSessionState } from "./state.js";
 import { api, apiGet, armSessionExpiry, ensureMediaToken, API_BASE } from "./api.js";
 import { $ } from "./utils.js";
 import { refreshAll, clearTabDom, restoreLastTab } from "./tabs.js";
+import { scheduleVpnAuto } from "./vpn-helper.js";
 import { setTitlebarIdentity } from "./titlebar-menus.js";
 import { refreshQueueBadge } from "./queue.js";
 import { resetAssignmentsBaseline } from "./notifications.js";
@@ -55,6 +56,8 @@ async function hydrateIdentity() {
     const me = await apiGet("/me");
     setDisplayName(me.display_name || me.name);
     state.isDeveloper = !!me.is_developer;
+    document.documentElement.dataset.dev = state.isDeveloper ? "1" : "0";
+    scheduleVpnAuto();
   } catch (_) { /* не критично: шапка просто останется без имени */ }
 }
 
