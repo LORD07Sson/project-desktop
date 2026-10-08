@@ -707,7 +707,7 @@ export function assignDialog(publicIds, onDone) {
 
 export function priorityDialog(publicId, onDone, current) {
   const overlay = openSheet(`
-    <h2>Приоритет — ${publicId}</h2>
+    <h2>Приоритет — ${esc(publicId)}</h2>
     <div class="row"><select id="dlg-priority">${Object.entries(PRIORITY_LABELS).map(([v, l]) => `<option value="${v}" ${v === current ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
     <div class="sheet-actions">
       <button class="btn ghost" data-close>Отмена</button>
@@ -728,7 +728,7 @@ export function priorityDialog(publicId, onDone, current) {
 
 export function deadlineDialog(publicId, current, onDone) {
   const overlay = openSheet(`
-    <h2>Срок — ${publicId}</h2>
+    <h2>Срок — ${esc(publicId)}</h2>
     <div class="row"><input type="date" id="dlg-deadline" value="${esc(current || "")}"></div>
     <div class="sheet-actions">
       <button class="btn ghost" id="dlg-clear">Убрать срок</button>
