@@ -12,7 +12,6 @@ mod audio_qc;
 mod board;
 mod desktop_notify;
 mod file_scope;
-mod http_fetch;
 mod media_tools;
 #[cfg(windows)]
 mod mpv_embed;
@@ -305,12 +304,6 @@ fn pick_output_file(
     filters: Vec<file_scope::PickFilter>,
 ) -> Option<String> {
     file_scope::pick_output_file(&app, default_name, filters)
-}
-
-// Загрузка текста по https (тексты песен).
-#[tauri::command(async)]
-async fn fetch_text(url: String) -> Result<String, String> {
-    http_fetch::get_text(&url).await
 }
 
 // Запись небольшого текстового файла (проект Reaper и т.п.) — только по
@@ -1386,7 +1379,6 @@ fn main() {
             mt_burn_subtitles,
             mt_extract_subtitles,
             write_text_file,
-            fetch_text,
             mt_tool_status,
             mt_probe_media,
             mt_probe_keyframes,
