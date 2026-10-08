@@ -46,6 +46,10 @@ module.exports = [
         FormData: "readonly",
         XMLHttpRequest: "readonly",
         URLSearchParams: "readonly",
+        // spotify-core.js — PKCE: случайные байты, SHA-256, base64.
+        crypto: "readonly",
+        TextEncoder: "readonly",
+        btoa: "readonly",
         Promise: "readonly",
         Image: "readonly",
         confirm: "readonly",
@@ -92,6 +96,10 @@ module.exports = [
         process: "readonly",
         globalThis: "readonly",
         setTimeout: "readonly",
+        crypto: "readonly",
+        TextEncoder: "readonly",
+        btoa: "readonly",
+        URL: "readonly",
         // board-gestures-test.mjs сам кладёт jsdom-овский document в
         // globalThis (иначе бандл его не увидит) и дальше обращается к
         // нему по имени.

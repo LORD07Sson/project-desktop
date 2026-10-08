@@ -23,8 +23,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://minitg.shitstudent.com:8443; media-src 'self' asset: https://asset.localhost https:; connect-src 'self' https://minitg.shitstudent.com:8443; font-src 'self'",
-      "devCsp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://minitg.shitstudent.com:8443; media-src 'self' asset: https://asset.localhost https:; connect-src 'self' ws://localhost:1420 https://minitg.shitstudent.com:8443; font-src 'self'",
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://minitg.shitstudent.com:8443 https://i.scdn.co; media-src 'self' asset: https://asset.localhost https:; connect-src 'self' https://minitg.shitstudent.com:8443; font-src 'self'",
+      "devCsp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://minitg.shitstudent.com:8443 https://i.scdn.co; media-src 'self' asset: https://asset.localhost https:; connect-src 'self' ws://localhost:1420 https://minitg.shitstudent.com:8443; font-src 'self'",
       "assetProtocol": {
         "enable": true,
         "scope": []

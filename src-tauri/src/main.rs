@@ -13,6 +13,7 @@ mod board;
 mod desktop_notify;
 mod file_scope;
 mod http_fetch;
+mod spotify;
 mod media_tools;
 #[cfg(windows)]
 mod mpv_embed;
@@ -1382,6 +1383,11 @@ fn main() {
             mt_extract_subtitles,
             write_text_file,
             fetch_text,
+            spotify::spotify_save_refresh,
+            spotify::spotify_load_refresh,
+            spotify::spotify_clear_refresh,
+            spotify::spotify_wait_callback,
+            spotify::spotify_http,
             mt_probe_media,
             mt_probe_keyframes,
             mt_register_media_file,
