@@ -1497,7 +1497,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-mon-add input { flex: 1; min-width: 200px; }
 
 /* ---------- Nyaa: внешние источники и «Похожее» ---------- */
-.ny-srcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.ny-srcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; align-items: start; }
 .ny-src-card { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); display: grid; gap: 8px; align-content: start; }
 .ny-src-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .ny-src-top em { font-style: normal; font-size: 11px; padding: 2px 9px; border-radius: 999px; background: rgba(255, 255, 255, .08); color: var(--ink-dim); }

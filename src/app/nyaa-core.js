@@ -432,8 +432,9 @@ export function parseTsukihime(text) {
     title: String(j.name || ""), anime,
     group: j.group ? String(j.group.name || "") : "",
     episode: j.episode_no != null && j.episode_no !== "" ? String(j.episode_no) : "",
-    size: Number.isFinite(Number(j.totalsize)) ? fmtBytesEn(Number(j.totalsize)) : "",
-    files: j.filecount != null ? String(j.filecount) : "",
+    // у свежей раздачи Tsukihime ещё не посчитал размер и файлы: нули не показываем
+    size: Number(j.totalsize) > 0 ? fmtBytesEn(Number(j.totalsize)) : "",
+    files: Number(j.filecount) > 0 ? String(j.filecount) : "",
     audio: langList(j.audiolangs), subs: langList(j.sublangs),
   };
 }
