@@ -10,6 +10,7 @@ import { loadTitlesTab } from "./titles.js";
 import { loadCalendar } from "./calendar.js";
 import { loadMessages } from "./messages.js";
 import { loadFeed } from "./feed.js";
+import { loadNyaa } from "./nyaa.js";
 import { loadProfile } from "./profile.js";
 import { loadAnalytics } from "./analytics.js";
 import { loadServices } from "./services.js";
@@ -32,6 +33,7 @@ const LOADERS = {
   calendar: loadCalendar,
   messages: loadMessages,
   feed: loadFeed,
+  nyaa: loadNyaa,
   analytics: loadAnalytics,
   services: loadServices,
   team: loadTeam,
@@ -40,7 +42,7 @@ const LOADERS = {
 
 // Контейнеры вкладок — чистятся при выходе из аккаунта, чтобы данные
 // предыдущего пользователя не остались висеть в DOM.
-const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#analytics-body", "#services-body", "#team-body", "#profile-body", "#reports-body"];
+const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#services-body", "#team-body", "#profile-body", "#reports-body"];
 
 // Последняя открытая вкладка переживает не только смену пользователя
 // (см. комментарий у state.activeTab в state.js — это настройка

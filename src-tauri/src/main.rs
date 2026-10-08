@@ -12,6 +12,7 @@ mod audio_qc;
 mod board;
 mod desktop_notify;
 mod file_scope;
+mod nyaa;
 mod media_tools;
 #[cfg(windows)]
 mod mpv_embed;
@@ -1379,6 +1380,8 @@ fn main() {
             mt_burn_subtitles,
             mt_extract_subtitles,
             write_text_file,
+            nyaa::nyaa_rss,
+            nyaa::nyaa_save_torrent,
             mt_tool_status,
             mt_probe_media,
             mt_probe_keyframes,
