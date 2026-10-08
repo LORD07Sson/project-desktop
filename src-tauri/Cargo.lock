@@ -3062,7 +3062,6 @@ dependencies = [
  "keyring",
  "log",
  "reqwest 0.12.28",
- "rustls",
  "serde",
  "serde_json",
  "tauri",
@@ -3078,9 +3077,7 @@ dependencies = [
  "tauri-plugin-store",
  "tauri-winrt-notification",
  "tokio",
- "tokio-rustls",
  "velopack",
- "webpki-roots",
  "webview2-com",
  "windows 0.61.3",
 ]

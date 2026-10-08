@@ -16,7 +16,6 @@ mod media_tools;
 #[cfg(windows)]
 mod mpv_embed;
 mod token_store;
-mod vpn_probe;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -1331,9 +1330,6 @@ fn main() {
         .manage(file_scope::FileScope::default())
         .invoke_handler(tauri::generate_handler![
             desktop_notify::notify_desktop,
-            vpn_probe::vpn_dns,
-            vpn_probe::vpn_tcp,
-            vpn_probe::vpn_tls,
             qc_analyze,
             generate_waveform,
             export_audio_clip,

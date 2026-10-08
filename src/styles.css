@@ -5972,16 +5972,3 @@ body.focus-mode .report-detail-overlay .sheet {
   background-image: linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%), linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
   background-position: calc(100% - 14px) 13px, calc(100% - 9px) 13px; background-size: 5px 5px; background-repeat: no-repeat; }
 .tl-sort select:hover { border-color: var(--surface-4); }
-
-/* ===== VPN помощник (vpn-helper.js) — только владелец ===== */
-:root:not([data-dev="1"]) .tab-btn[data-tab="vpn"] { display: none !important; }
-.vpn-auto { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
-.vpn-progress { margin: 0 0 12px; font-size: 12px; color: var(--ink-soft); }
-.vpn-progress::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--s-work); animation: vpn-pulse 1s ease-in-out infinite alternate; }
-@keyframes vpn-pulse { from { opacity: .3; } to { opacity: 1; } }
-.vpn-row { align-items: flex-start; }
-.vpn-row .svc-row-desc { white-space: normal; }
-.vpn-port { color: var(--ink-dim); font-weight: 500; font-variant-numeric: tabular-nums; }
-.vpn-note { margin-top: 4px; font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
-.vpn-sub { font-size: 10.5px; color: var(--ink-dim); margin-top: 2px; overflow-wrap: anywhere; }
-.vpn-warn { margin-bottom: 12px; font-size: 12px; line-height: 1.45; border-left: 3px solid var(--s-work); }
