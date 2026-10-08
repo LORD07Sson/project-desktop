@@ -1318,3 +1318,8 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .wt-rate em { font-style: normal; font-size: 12px; }
 .wt-rate em.up { color: #6fe39a; } .wt-rate em.down { color: #ff7b7b; }
 @media (max-width: 760px) { .wt-split { grid-template-columns: 1fr; } }
+/* ---------- Соглашение (nda.js) ---------- */
+.nda { max-width: 520px; }
+.nda h2 { margin: 4px 0 12px; }
+.nda p { color: var(--ink-soft); line-height: 1.55; margin: 8px 0; }
+.nda-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }

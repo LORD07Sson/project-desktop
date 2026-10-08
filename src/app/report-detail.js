@@ -16,6 +16,7 @@ import { recordRecentReport } from "./recent-reports.js";
 import { toggleFocusMode, syncFocusButton } from "./focus-mode.js";
 import { loadAvatars } from "./profile.js";
 import { createPlayer, isAudioFile } from "./player.js";
+import { linkifyProject } from "./deeplink-core.js";
 import { titleArt } from "./title-page.js";
 
 // Ключи "kind" — ровно те, что отдаёт серверный audio_qc.py (miniapp/audio_qc.py):
@@ -168,6 +169,7 @@ export async function openReportDetail(publicId) {
             ${nav ? `
               <button class="icon-btn" data-nav="prev" title="Предыдущий в списке (Alt+←)" aria-label="Предыдущий отчёт" ${nav.prev ? "" : "disabled"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
               <button class="icon-btn" data-nav="next" title="Следующий в списке (Alt+→)" aria-label="Следующий отчёт" ${nav.next ? "" : "disabled"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>` : ""}
+            <button class="icon-btn" data-copy-plink="${esc(detail.public_id)}" style="flex:none;" title="Копировать ссылку project://…" aria-label="Копировать ссылку на отчёт"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1"/></svg></button>
             <button class="icon-btn" id="btn-focus-toggle" data-focus-toggle style="flex:none;"></button>
             <button class="icon-btn" data-close style="flex:none;" title="Закрыть" aria-label="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           </div>
@@ -600,7 +602,7 @@ function noteHtml(n) {
     <div class="meta">${esc(n.author)} · ${esc(n.created_at || "")}</div>
     <div class="note-body">
       ${t ? `<span class="note-time" title="время на дорожке">${esc(t.label)}</span>` : ""}
-      ${body ? `<span>${esc(body)}</span>` : ""}
+      ${body ? `<span>${linkifyProject(esc(body))}</span>` : ""}
     </div>
     ${n.attach ? `<div class="note-att">${attachHtml(n.attach)}</div>` : ""}
   </div>`;

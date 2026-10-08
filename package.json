@@ -12,7 +12,10 @@
     "test:notes": "node scripts/notes-timecodes-test.mjs",
     "test:reaper": "node scripts/reaper-test.mjs",
     "test:web": "node scripts/web-tools-test.mjs",
-    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:web"
+    "test:midi": "node scripts/midi-test.mjs",
+    "test:link": "node scripts/deeplink-test.mjs",
+    "test:nda": "node scripts/nda-test.mjs",
+    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:web && npm run test:midi && npm run test:link && npm run test:nda"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",

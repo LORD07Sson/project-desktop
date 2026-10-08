@@ -1,5 +1,6 @@
 // Экран входа по коду из бота + экран загрузки при старте (splash).
 
+import { maybeAskNda } from "./nda.js";
 import { invoke } from "./tauri.js";
 import oopsFallGif from "../assets/oops-fall.gif";
 import oopsFrierenGif from "../assets/friren.gif";
@@ -189,6 +190,7 @@ export function showApp() {
   refreshInbox();
   // Новичку — приветствие с предложением пройти обучение (один раз).
   maybeWelcome();
+  maybeAskNda();
 }
 
 async function submitCode() {

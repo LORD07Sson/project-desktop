@@ -218,6 +218,15 @@ export function createPlayer({ publicId, onAddNote, onClose }) {
     else if (e.key === "n" || e.key === "N" || e.key === "т" || e.key === "Т") { e.preventDefault(); input.focus(); }
   }
   document.addEventListener("keydown", onKey);
+  // Команды с MIDI-контроллера (midi-control.js): пауза, перемотка, громкость.
+  function onTransport(e) {
+    if (!el.isConnected) return;
+    const c = e.detail || {};
+    if (c.cmd === "toggle") toggle();
+    else if (c.cmd === "seek") seek(cur() + c.delta);
+    else if (c.cmd === "volume") audio.volume = c.value;
+  }
+  window.addEventListener("project-transport", onTransport);
   const ro = new ResizeObserver(() => render());
   ro.observe(wave);
 
@@ -281,6 +290,7 @@ export function createPlayer({ publicId, onAddNote, onClose }) {
     blobUrl = "";
     cancelAnimationFrame(raf);
     document.removeEventListener("keydown", onKey);
+    window.removeEventListener("project-transport", onTransport);
     ro.disconnect();
   }
 
