@@ -1522,3 +1522,8 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-sim-card .ny-link { justify-self: start; padding: 0; margin-top: 2px; }
 .ny-sim-cover { width: 56px; height: 80px; border-radius: 9px; border: 0; padding: 0; flex: none; overflow: hidden; cursor: pointer; background: linear-gradient(135deg, rgba(var(--fire-rgb), .3), rgba(255, 255, 255, .06)); }
 .ny-sim-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Источники: длинные тексты не раздвигают карточку */
+.ny-src-card { min-width: 0; }
+.ny-src-card .ny-hint { overflow-wrap: anywhere; margin: 0; }
+.ny-src-top b { min-width: 0; }

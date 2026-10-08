@@ -9,7 +9,7 @@
 // Вкладка только для админов, как и Nyaa в боте.
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
-import { toast, API_BASE } from "./api.js";
+import { toast, API_BASE, apiBlob } from "./api.js";
 import { state } from "./state.js";
 import { notifyDesktop } from "./desktop-notify.js";
 import { $, esc } from "./utils.js";
@@ -614,7 +614,29 @@ function galleryHtml(d) {
 }
 
 // ---------- внешние источники (SeaDex, AnimeTosho, nekoBT, Tsukihime) ----------
-const metaGet = url => invoke("meta_get", { url });
+// Сначала напрямую с этого компьютера; если сайт не отвечает (закрыт у провайдера) —
+// через сервер студии (/api/meta/relay), у которого другая сеть. Ответ «404» от сайта —
+// это «в базе нет», а не поломка, поэтому дальше он не пробуется.
+const isNotFound = e => /ответил 404/.test(String(e && e.message ? e.message : e));
+const isNoConnection = e => /Не удалось загрузить|error sending request|timed out|connect/i.test(String(e && e.message ? e.message : e));
+
+async function metaGet(url) {
+  try { return await invoke("meta_get", { url }); }
+  catch (e) {
+    if (isNotFound(e) || !isNoConnection(e)) throw e;
+    let wrapped;
+    try { wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}`)).text()); }
+    catch (_) { throw e; }                      // на сервере ручки нет или он недоступен — показываем исходную ошибку
+    if (wrapped.status === 404) throw new Error("Сайт ответил 404");
+    if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
+    return String(wrapped.body || "");
+  }
+}
+
+const shortErr = e => {
+  const m = String(e && e.message ? e.message : e);
+  return isNoConnection({ message: m }) ? "нет связи с сайтом" : m.slice(0, 120);
+};
 const SRC_NAMES = { seadex: "SeaDex", at: "AnimeTosho", neko: "nekoBT", tsuki: "Tsukihime" };
 
 function hashOf(d) { return ((d.view && d.view.fields["info hash"]) || d.item.hash || "").toLowerCase(); }
@@ -626,7 +648,7 @@ async function loadSources(d) {
   const set = (k, v) => { d.src[k] = v; if (detail === d && d.tab === "src") $("#ny-d-body").innerHTML = drawerBodyHtml(d); };
   if (!isHash40(hash)) { Object.keys(d.src).forEach(k => { d.src[k] = { s: "none" }; }); return; }
   const u = sourceUrls(hash);
-  const fail = e => ({ s: "err", err: String(e && e.message ? e.message : e) });
+  const fail = e => (isNotFound(e) ? { s: "none" } : { s: "err", err: shortErr(e), full: String(e && e.message ? e.message : e) });
   const task = async (k, fn) => { try { set(k, await fn()); } catch (e) { set(k, fail(e)); } };
   task("seadex", async () => {
     const [a, b] = await Promise.allSettled([metaGet(u.seadexTorrent), metaGet(u.seadexEntry)]);
@@ -659,9 +681,9 @@ function sourcesTabHtml(d) {
   const src = d.src || {};
   return `<div class="ny-srcs">${Object.keys(SRC_NAMES).map(k => {
     const r = src[k] || { s: "loading" };
-    const badge = r.s === "loading" ? `<em class="load">проверяю…</em>` : r.s === "ok" ? `<em class="ok">${k === "seadex" ? (r.best === true ? "лучший" : r.best === false ? "запасной" : "найдено") : "найдено"}</em>` : r.s === "none" ? `<em>нет в базе</em>` : `<em class="bad" title="${esc(r.err || "")}">недоступен</em>`;
+    const badge = r.s === "loading" ? `<em class="load">проверяю…</em>` : r.s === "ok" ? `<em class="ok">${k === "seadex" ? (r.best === true ? "лучший" : r.best === false ? "запасной" : "найдено") : "найдено"}</em>` : r.s === "none" ? `<em>нет в базе</em>` : `<em class="bad" title="${esc(r.full || r.err || "")}">недоступен</em>`;
     return `<div class="ny-src-card"><div class="ny-src-top"><b>${SRC_NAMES[k]}</b>${badge}</div>
-      ${r.s === "ok" ? `<div class="ny-src-lines">${srcLines(k, r)}</div>${r.link ? `<button type="button" class="btn ghost" data-ext="${esc(r.link)}">${ICONS.open} Открыть</button>` : ""}` : r.s === "err" ? `<p class="ny-hint">${esc(r.err)}. Возможно, сайт закрыт у вашего провайдера — нужен VPN.</p>` : ""}
+      ${r.s === "ok" ? `<div class="ny-src-lines">${srcLines(k, r)}</div>${r.link ? `<button type="button" class="btn ghost" data-ext="${esc(r.link)}">${ICONS.open} Открыть</button>` : ""}` : r.s === "err" ? `<p class="ny-hint">${esc(r.err)}. Возможно, сайт закрыт у вашего провайдера: включите VPN (WireGuard) и откройте вкладку заново.</p>` : ""}
     </div>`;
   }).join("")}</div>
   <p class="ny-hint">Данные запрашиваются по info hash раздачи и только когда вы открыли эту вкладку.</p>`;
