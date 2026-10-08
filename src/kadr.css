@@ -1388,3 +1388,66 @@ select option, select optgroup { background-color: var(--surface); color: var(--
   .ny-row { grid-template-columns: 22px 40px minmax(0, 1fr) auto; }
   .ny-meta, .ny-health { display: none; }
 }
+
+/* ---------- Nyaa: источники, страница раздачи ---------- */
+.ny-hero-t { display: grid; gap: 4px; justify-items: start; }
+.ny-src-btn { margin-top: 8px; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .05); color: var(--ink-soft); font: inherit; font-size: 12px; cursor: pointer; }
+.ny-src-btn:hover { border-color: rgba(var(--fire-rgb), .5); color: var(--ink); }
+.ny-src-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.ny-src-btn i, .ny-mir i { width: 9px; height: 9px; border-radius: 50%; background: #5b6275; flex: none; }
+.ny-src-btn i.ok, .ny-mir i.ok { background: #6fe39a; box-shadow: 0 0 8px #6fe39a88; }
+.ny-src-btn i.slow, .ny-mir i.slow, .ny-src-btn i.warn, .ny-mir i.warn { background: #ffc857; }
+.ny-src-btn i.bad, .ny-mir i.bad { background: #ff7b7b; }
+.ny-sources { margin-bottom: 14px; padding: 16px; border-radius: var(--radius-xl); border: 1px solid var(--glass-border); background: var(--glass-bg); }
+.ny-sources[hidden] { display: none; }
+.ny-src-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.ny-src-head > div:first-child { display: grid; gap: 2px; }
+.ny-src-head span { font-size: 12px; color: var(--ink-dim); }
+.ny-src-head > div:last-child { display: flex; gap: 8px; align-items: center; }
+.ny-src-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.ny-svc { padding: 12px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); display: grid; gap: 6px; align-content: start; }
+.ny-svc-h { display: grid; gap: 1px; margin-bottom: 4px; }
+.ny-svc-h span { font-size: 11.5px; color: var(--ink-dim); }
+.ny-mir { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 12px; border: 1px solid transparent; }
+.ny-mir > div { flex: 1; min-width: 0; display: grid; }
+.ny-mir b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.ny-mir span { font-size: 11.5px; color: var(--ink-dim); }
+.ny-mir em { font-style: normal; font-size: 11px; color: var(--gold); white-space: nowrap; }
+.ny-mir.act { background: rgba(var(--fire-rgb), .12); border-color: rgba(var(--fire-rgb), .4); }
+.ny-mir .btn { padding: 4px 10px; font-size: 12px; }
+.ny-mir-add { display: flex; gap: 8px; margin-top: 4px; }
+.ny-mir-add input { flex: 1; min-width: 0; background: #0b0e18; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); padding: 7px 10px; font: inherit; font-size: 12.5px; }
+.ny-empty-act { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
+.ny-ib.wide.in-head { margin-left: auto; }
+
+.ny-drawer-host[hidden] { display: none; }
+.ny-scrim { position: fixed; inset: 46px 0 0 0; background: rgba(0, 0, 0, .5); backdrop-filter: blur(3px); z-index: 60; animation: ny-fade .2s ease; }
+.ny-drawer { position: fixed; top: 46px; right: 0; bottom: 0; width: min(780px, 94vw); z-index: 61; display: flex; flex-direction: column; gap: 12px; padding: 18px 20px 20px; overflow-y: auto; background: color-mix(in srgb, var(--surface) 98%, transparent); border-left: 1px solid var(--glass-border); border-radius: 24px 0 0 0; box-shadow: -30px 0 70px -30px rgba(0, 0, 0, .9); animation: ny-slide .28s var(--kadr-ease); }
+@keyframes ny-slide { from { transform: translateX(40px); opacity: 0; } }
+@keyframes ny-fade { from { opacity: 0; } }
+.ny-d-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+.ny-d-head h3 { margin: 4px 0 0; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; font-weight: 700; }
+.ny-d-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.ny-d-acts .btn svg, .ny-empty .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; vertical-align: -2px; margin-right: 4px; }
+.ny-d-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ny-d-grid > div { padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); display: grid; gap: 2px; min-width: 0; }
+.ny-d-grid > div.wide { grid-column: 1 / -1; }
+.ny-d-grid span { font-size: 11px; color: var(--ink-dim); }
+.ny-d-grid b { font-size: 13px; overflow-wrap: anywhere; font-weight: 600; }
+.ny-d-grid b.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; user-select: all; }
+.ny-d-tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, .05); border: 1px solid var(--line); width: fit-content; margin-bottom: 10px; }
+.ny-d-tabs button { border: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: 12.5px; padding: 6px 14px; border-radius: 9px; cursor: pointer; }
+.ny-d-tabs button.on { background: rgba(var(--fire-rgb), .22); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(var(--fire-rgb), .45); }
+.ny-d-load { display: grid; gap: 10px; padding: 8px 0; }
+.ny-gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.ny-img { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: rgba(255, 255, 255, .04); padding: 0; cursor: zoom-in; min-height: 120px; display: grid; place-items: center; color: var(--ink-dim); font: inherit; font-size: 12px; }
+.ny-img img { width: 100%; height: 100%; max-height: 300px; object-fit: cover; display: block; }
+.ny-img.sk { min-height: 160px; cursor: default; background: linear-gradient(90deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .13), rgba(255, 255, 255, .05)); background-size: 200% 100%; animation: ny-sh 1.4s linear infinite; }
+.ny-img.bad { cursor: pointer; padding: 12px; text-align: center; }
+.ny-desc { white-space: normal; font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); overflow-wrap: anywhere; padding: 4px 2px; }
+.ny-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 50vh; overflow: auto; }
+.ny-files li { font-size: 12.5px; padding: 6px 10px; border-radius: 9px; background: rgba(255, 255, 255, .035); overflow-wrap: anywhere; font-family: ui-monospace, Consolas, monospace; }
+.ny-lb { position: fixed; inset: 46px 0 0 0; z-index: 70; background: rgba(0, 0, 0, .88); display: grid; place-items: center; cursor: zoom-out; }
+.ny-lb img { max-width: 94vw; max-height: 86vh; border-radius: 12px; }
+.ny-lb .ny-ib { position: absolute; top: 14px; right: 18px; }
+@media (max-width: 760px) { .ny-drawer { border-radius: 0; } }

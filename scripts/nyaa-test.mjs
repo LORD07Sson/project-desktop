@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes } from "../src/app/nyaa-core.js";
+import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf } from "../src/app/nyaa-core.js";
 
 const xml = `<?xml version="1.0"?><rss xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel>
 <item><title>[JMAX] [2026.10.09] TVアニメ「Night」ED &amp; OP [FLAC]</title><link>https://nyaa.si/download/2090786.torrent</link><guid isPermaLink="true">https://nyaa.si/view/2090786</guid><pubDate>Thu, 08 Oct 2026 17:39:56 -0000</pubDate><nyaa:seeders>62</nyaa:seeders><nyaa:leechers>8</nyaa:leechers><nyaa:downloads>311</nyaa:downloads><nyaa:infoHash>ABCDEF0123456789ABCDEF0123456789ABCDEF01</nyaa:infoHash><nyaa:categoryId>2_1</nyaa:categoryId><nyaa:category>Audio - Lossless</nyaa:category><nyaa:size>73.6 MiB</nyaa:size><nyaa:comments>1</nyaa:comments><nyaa:trusted>Yes</nyaa:trusted><nyaa:remake>No</nyaa:remake></item>
@@ -67,4 +67,46 @@ assert.equal(fmtBytes(0), "0 Б");
 assert.equal(fmtBytes(1536), "1.5 КиБ");
 assert.equal(fmtBytes(5 * 1073741824), "5.0 ГиБ");
 assert.equal(fmtBytes(300 * 1048576), "300 МиБ");
+const { JSDOM } = await import("jsdom");
+const VIEW = `<html><body><div class="panel panel-success"><div class="panel-heading"><h3 class="panel-title">[261005]花たん - Insert Song[Amazon][FLAC]</h3></div>
+<div class="panel-body"><div class="row"><div class="col-md-1">Category:</div><div class="col-md-5"><a>Audio</a> - <a>Lossless</a></div><div class="col-md-1">Date:</div><div class="col-md-5" data-timestamp="1759599600">2026-10-04 17:40 UTC</div></div>
+<div class="row"><div class="col-md-1">Submitter:</div><div class="col-md-5">Anonymous</div><div class="col-md-1">Seeders:</div><div class="col-md-5"><span style="color: green;">4</span></div></div>
+<div class="row"><div class="col-md-1">File size:</div><div class="col-md-5">314.0 MiB</div><div class="col-md-1">Info hash:</div><div class="col-md-5"><kbd>bef1699b656e684865c8acbbac50554fc6835171</kbd></div></div></div>
+<div class="panel-footer"><a href="/download/2169558.torrent">Download Torrent</a> or <a href="magnet:?xt=urn:btih:bef1">Magnet</a></div></div>
+<div id="torrent-description"><p>Первая строка<br>вторая</p><p><img src="https://i.example/cover.jpg"><img src="http://insecure.example/a.png"><img src="https://i.example/cover.jpg"><img src="data:image/png;base64,AAAA"></p><script>alert(1)</script><p>Третья</p></div>
+<div class="torrent-file-list panel-body"><ul><li>Альбом<ul><li>01 track.flac (30 MiB)</li><li>02 track.flac (28 MiB)</li></ul></li></ul></div></body></html>`;
+const win = new JSDOM("").window;
+const v = parseView(VIEW, win.DOMParser);
+assert.equal(v.title, "[261005]花たん - Insert Song[Amazon][FLAC]");
+assert.equal(v.fields.category, "Audio - Lossless");
+assert.equal(v.fields.submitter, "Anonymous");
+assert.equal(v.fields.seeders, "4");
+assert.equal(v.fields["file size"], "314.0 MiB");
+assert.equal(v.fields["info hash"], "bef1699b656e684865c8acbbac50554fc6835171");
+assert.equal(v.date, 1759599600000);
+assert.equal(v.magnet, "magnet:?xt=urn:btih:bef1");
+assert.deepEqual(v.images, ["https://i.example/cover.jpg"], "только https, без дублей, без data:");
+assert.ok(v.description.includes("Первая строка\nвторая"));
+assert.ok(v.description.includes("Третья"));
+assert.ok(!v.description.includes("alert"), "скрипт не попадает в текст");
+assert.deepEqual(v.files, ["01 track.flac (30 MiB)", "02 track.flac (28 MiB)"]);
+assert.equal(parseView("", win.DOMParser).images.length, 0);
+
+const svc = buildServices(["https://my.mirror"], "https://srv.example");
+assert.deepEqual(svc.find(s => s.id === "nyaa").mirrors, ["https://nyaa.si", "https://nyaa.land", "https://my.mirror"]);
+assert.ok(svc.find(s => s.id === "nyaa").apply);
+assert.ok(!svc.find(s => s.id === "shikimori").apply);
+assert.equal(svc.at(-1).id, "server");
+assert.ok(!buildServices([], "").some(s => s.id === "server"));
+assert.equal(classifyCheck(null).level, "idle");
+assert.equal(classifyCheck({ ok: true, status: 200, ms: 120, error: "" }).level, "ok");
+assert.equal(classifyCheck({ ok: true, status: 200, ms: 2000, error: "" }).level, "slow");
+assert.equal(classifyCheck({ ok: true, status: 403, ms: 100, error: "" }).level, "warn");
+assert.equal(classifyCheck({ ok: false, status: 502, ms: 100, error: "" }).level, "bad");
+assert.equal(classifyCheck({ ok: false, status: 0, ms: 8000, error: "нет ответа за 8 секунд" }).text, "нет ответа за 8 секунд");
+assert.equal(normalizeMirror("nyaa.example/path?q=1"), "https://nyaa.example");
+assert.equal(normalizeMirror("http://x.example"), null);
+assert.equal(normalizeMirror("localhost"), null);
+assert.equal(normalizeMirror(""), null);
+assert.equal(hostOf("https://nyaa.si:8443/x"), "nyaa.si:8443");
 console.log("nyaa-test: ok");
