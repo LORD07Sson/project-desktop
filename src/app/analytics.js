@@ -6,6 +6,7 @@
 
 import { apiGet } from "./api.js";
 import { $, esc } from "./utils.js";
+import { loadAvatars } from "./profile.js";
 
 const WORKLOAD_COLOR_VAR = { draft: "--s-draft", working: "--s-work", review: "--s-review", completed: "--s-done" };
 // Сервер отдаёт подписи колонок по-английски (Pending/In Progress/...,
@@ -23,7 +24,49 @@ function trendLine(text, good) {
   return `<div class="an-trend" style="color:var(${good ? "--s-done" : "--s-stop"});">${esc(text)}</div>`;
 }
 
-function analyticsHtml(d) {
+
+// Плавная кривая через точки (Catmull-Rom → кубические Безье).
+function smoothPath(P) {
+  let d = `M${P[0][0]},${P[0][1]}`;
+  for (let i = 0; i < P.length - 1; i++) {
+    const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+
+// Завершено по дням — площадная кривая с отметкой на последней точке.
+function trendChartHtml(days) {
+  if (!days || days.length < 2) return `<div class="no-assignee">Данных для графика пока нет</div>`;
+  const vals = days.map(x => x.completed || 0);
+  const max = Math.max(3, ...vals);
+  const W = 600, H = 200;
+  const P = vals.map((v, i) => [+(i / (vals.length - 1) * W).toFixed(1), +(H - 10 - (v / max) * (H - 30)).toFixed(1)]);
+  const line = smoothPath(P);
+  const last = P[P.length - 1];
+  const total = vals.reduce((a, b) => a + b, 0);
+  const pk = Math.max(...vals);
+  const lbl = i => { const dt = String(days[i].date || "").slice(5).split("-").reverse().join("."); return dt; };
+  return `
+    <div class="an-chart">
+      ${[0, 1, 2, 3].map(i => `<div class="an-gl" style="top:${(i / 4) * 100 * (H - 6) / H}%"></div>`).join("")}
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="an-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--fire)" stop-opacity=".38"/><stop offset="1" stop-color="var(--fire)" stop-opacity="0"/></linearGradient>
+          <linearGradient id="an-stroke" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--fire)"/><stop offset="1" stop-color="var(--gold)"/></linearGradient>
+        </defs>
+        <path d="${line} L${W},${H} L0,${H} Z" fill="url(#an-fill)"/>
+        <path d="${line}" fill="none" stroke="url(#an-stroke)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <span class="an-mk" style="left:100%;top:${(last[1] / H) * 100}%"></span>
+      <div class="an-tip" style="top:${(last[1] / H) * 100}%"><b>${vals[vals.length - 1]} ${vals[vals.length - 1] === 1 ? "серия" : "серий"}</b><span>за последний день · всего ${total}, пик ${pk}</span></div>
+      <div class="an-xl"><span>${lbl(0)}</span><span>${lbl(Math.floor(days.length / 2))}</span><span>${lbl(days.length - 1)}</span></div>
+    </div>`;
+}
+
+function analyticsHtml(d, trend) {
   const workload = (d.workload || []).map(w => ({
     label: WORKLOAD_LABELS[w.key] || w.label, count: w.total, colorVar: WORKLOAD_COLOR_VAR[w.key] || "--s-draft",
   }));
@@ -75,10 +118,13 @@ function analyticsHtml(d) {
     </div>
   `).join("");
 
-  const performerRows = performers.map(p => `
-    <div class="an-perf">
-      <div class="an-perf-head"><span>${esc(p.name)}</span><span>${p.completed}</span></div>
-      <div class="an-perf-track"><div class="an-perf-fill" style="width:${Math.round((p.completed / maxCompleted) * 100)}%;"></div></div>
+  const performerRows = performers.map((p, i) => `
+    <div class="an-perf${i === 0 ? " r1" : ""}">
+      <span class="an-rk">${String(i + 1).padStart(2, "0")}</span>
+      <span class="avatar sm" data-avatar-for="${p.telegram_id || ""}">${esc((p.name || "?").charAt(0).toUpperCase())}</span>
+      <span class="an-pn">${esc(p.name)}</span>
+      <span class="kd-track"><i style="width:${Math.round((p.completed / maxCompleted) * 100)}%"></i></span>
+      <b>${p.completed}</b>
     </div>
   `).join("");
 
@@ -90,17 +136,20 @@ function analyticsHtml(d) {
       </div>
     </div>
     <div class="an-metrics">${metricCards}</div>
-    <div class="an-bottom">
+    <div class="an-two">
       <div class="bcell" style="animation-delay:160ms;">
-        <h3>Загрузка по колонкам доски</h3>
-        <div class="an-bars">${workloadBars || `<div class="no-assignee">Нет данных</div>`}</div>
+        <div class="kd-ch"><h3>Завершено по дням</h3><span class="kd-label">${(trend && trend.days ? trend.days.length : 0)} дней</span></div>
+        ${trendChartHtml(trend && trend.days)}
       </div>
       <div class="bcell" style="animation-delay:200ms;">
-        <h3 style="margin-bottom:2px;">Топ исполнителей</h3>
-        <div class="an-caption">завершённые отчёты за 30 дней</div>
-        <div class="an-perf-list">
-          ${performerRows || `<div class="no-assignee">Пока нет закрытых отчётов за этот период</div>`}
-        </div>
+        <div class="kd-ch"><h3>Загрузка доски</h3><span class="kd-label">сейчас</span></div>
+        <div class="an-bars">${workloadBars || `<div class="no-assignee">Нет данных</div>`}</div>
+      </div>
+    </div>
+    <div class="bcell" style="animation-delay:240ms; margin-top:16px;">
+      <div class="kd-ch"><h3>Топ исполнителей</h3><span class="kd-label">завершённые за 30 дней</span></div>
+      <div class="an-perf-list">
+        ${performerRows || `<div class="no-assignee">Пока нет закрытых отчётов за этот период</div>`}
       </div>
     </div>
   `;
@@ -109,12 +158,13 @@ function analyticsHtml(d) {
 export async function loadAnalytics() {
   const root = $("#analytics-body");
   root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
-  let d;
+  let d, trend;
   try {
-    d = await apiGet("/analytics/project");
+    [d, trend] = await Promise.all([apiGet("/analytics/project"), apiGet("/trend").catch(() => null)]);
   } catch (e) {
     root.innerHTML = `<div class="bento-empty">Не удалось загрузить аналитику: ${esc(e.message)}</div>`;
     return false;
   }
-  root.innerHTML = analyticsHtml(d);
+  root.innerHTML = analyticsHtml(d, trend);
+  loadAvatars(root);
 }

@@ -1164,3 +1164,56 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 .st-card:hover, .st-palette:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, .16); }
 :root[data-theme="light"] .st-nav { background: rgba(255, 255, 255, .7); }
 :root[data-theme="light"] .st-card, :root[data-theme="light"] .st-palette, :root[data-theme="light"] .badge-item { background: rgba(255, 255, 255, .7); }
+
+/* Аналитика: график, столбцы, рейтинг */
+.an-two { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; }
+.an-two > .bcell { padding: 20px 22px; min-width: 0; }
+.an-chart { position: relative; height: 230px; margin-top: 18px; }
+.an-chart svg { position: absolute; inset: 0 0 26px 0; width: 100%; height: calc(100% - 26px); overflow: visible; }
+.an-gl { position: absolute; left: 0; right: 0; height: 1px; background: rgba(255, 255, 255, .05); }
+.an-mk { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 5px rgba(var(--gold-rgb), .18), 0 0 18px rgba(var(--fire-rgb), .8); }
+.an-tip { position: absolute; right: 14px; transform: translateY(-140%); padding: 8px 12px; border-radius: 12px; background: var(--glass-bg-strong); border: 1px solid var(--glass-border); font-size: 12px; white-space: nowrap; box-shadow: 0 14px 30px -14px #000; }
+.an-tip b { display: block; font-size: 15px; font-weight: 800; }
+.an-tip span { color: var(--ink-dim); }
+.an-xl { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 600; color: var(--ink-dim); }
+.an-bars { display: flex; align-items: flex-end; gap: 14px; height: 230px; margin-top: 18px; }
+.an-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; height: 100%; }
+.an-bar { width: 100%; max-width: 46px; border-radius: 12px 12px 6px 6px; opacity: .9; }
+.an-bar-count { font-size: 14px; font-weight: 800; }
+.an-bar-label { font-size: 11px; color: var(--ink-dim); text-align: center; line-height: 1.25; min-height: 28px; }
+.an-perf { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+.an-perf:first-child { border-top: 0; }
+.an-rk { width: 22px; font-size: 12px; font-weight: 800; color: var(--ink-dim); }
+.an-perf.r1 .an-rk { color: var(--gold); }
+.an-perf .avatar { width: 30px; height: 30px; font-size: 11px; flex: none; margin: 0; }
+.an-pn { width: 130px; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.an-perf .kd-track { flex: 1; }
+.an-perf b { width: 30px; text-align: right; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+@media (max-width: 1000px) { .an-two { grid-template-columns: 1fr; } }
+
+/* Профиль: достижения медальонами, цель месяца кольцом, показатели */
+.pf-kpis { gap: 14px; }
+.pf-kpi .l { font-size: 9.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); }
+.pf-kpi b { display: block; margin: 6px 0 4px; }
+.pf-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; margin-top: 6px; }
+.pf-badge { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0; padding: 22px 10px 14px; border-radius: 16px; text-align: center;
+  background: rgba(255, 255, 255, .03); border: 1px solid var(--line); transition: transform .35s var(--kadr-ease), border-color .2s; }
+.pf-badge:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, .14); }
+.pf-badge .ic { position: relative; width: 50px; height: 50px; margin-bottom: 18px; display: grid; place-items: center; font-size: 22px; isolation: isolate; filter: grayscale(1) opacity(.45); }
+.pf-badge .ic::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 15px; transform: rotate(45deg);
+  background: linear-gradient(145deg, #3a302b, #1e1714); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+.pf-badge.won .ic { filter: none; }
+.pf-badge.won .ic::before { background: linear-gradient(145deg, color-mix(in srgb, var(--gold) 80%, #fff), color-mix(in srgb, var(--fire) 55%, #1a0f0a));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -6px 12px rgba(0, 0, 0, .25), 0 12px 24px -12px var(--fire); }
+.pf-badge.r-rare.won .ic::before { background: linear-gradient(145deg, #9ec5ff, #3d62b8); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 12px 24px -12px #5b9eff; }
+.pf-badge.r-epic.won .ic::before, .pf-badge.r-legendary.won .ic::before { background: linear-gradient(145deg, #d3b6ff, #6b3fd0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 12px 24px -12px #9b7bff; }
+.pf-badge .lb { font-size: 12.5px; font-weight: 700; line-height: 1.25; }
+.pf-badge .pr { margin-top: 4px; font-size: 11px; color: var(--ink-dim); }
+.pf-badge .tr { align-self: stretch; margin: 8px 6px 0; height: 3px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.pf-badge .tr i { display: block; height: 100%; background: linear-gradient(90deg, var(--fire), var(--gold)); border-radius: 3px; }
+.goal-ring-wrap { width: 118px; height: 118px; }
+.goal-ring-fill { stroke-linecap: round; }
+.goal-card.with-ring { display: flex; align-items: center; gap: 20px; padding: 20px 22px; }
+.goal-ring-label b { font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
+:root[data-theme="light"] .pf-badge { background: rgba(255, 255, 255, .7); }
+:root[data-theme="light"] .pf-badge .ic::before { background: linear-gradient(145deg, #e9ddd4, #cdbbae); }
