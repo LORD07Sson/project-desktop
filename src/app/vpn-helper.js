@@ -33,6 +33,11 @@ const MAX_INBOUNDS = 8;
 // Протоколы/транспорты поверх UDP — TCP-пробой их не проверить честно.
 const UDP_PROTOCOLS = new Set(["hysteria", "hysteria2", "wireguard", "tuic"]);
 const UDP_NETWORKS = new Set(["kcp", "quic"]);
+// Контрольные наборы: «белые» сайты открываются из РФ всегда, «чёрные» —
+// заблокированы РКН. Белые открылись, а чёрные нет — вы в зоне блокировок
+// и пробы показательны; открылось всё — вы за VPN/вне РФ и пробы меряют не то.
+const ZONE_WHITE = ["yandex.ru", "gosuslugi.ru"];
+const ZONE_BLACK = ["instagram.com", "facebook.com"];
 
 let running = false;
 let autoTimer = null;
@@ -96,7 +101,7 @@ function classifyInbound(ib, tcp, tls, control, others) {
         : `Сервер не отвечает ни на одном порту (${ERR[errs[0]] || errs[0]}) — похоже на блок по IP.`],
       recs: [otherPortsOk
         ? "Смените порт inbound'а в 3X-UI на 443, 8443, 2053 или 2083."
-        : "Смените IP-адрес сервера или провайдера VPS."],
+        : "Если по SSH сервер жив, а из РФ не открывается — блокируют адрес или подсеть хостера. Смените IP или хостера, держите запасной VPS у другого провайдера."],
     };
   }
   let tone = tcp.ok_count < tcp.attempts.length ? "warn" : "ok";
@@ -112,12 +117,17 @@ function classifyInbound(ib, tcp, tls, control, others) {
       recs.push("Замените serverNames (Target SNI) в настройках REALITY на менее популярный или нейтральный домен.");
     } else if (["reset", "timeout", "eof"].includes(tls.error)) {
       notes.push(`TCP проходит, а TLS-хендшейк — ${what}: похоже на DPI по TLS к этому серверу.`);
-      recs.push("Смените SNI/dest, а если не поможет — транспорт на gRPC, xhttp или httpupgrade.");
+      recs.push("Смените SNI/dest, а если не поможет — транспорт на gRPC, xhttp или httpupgrade. Если отвалы начинаются после серии подключений, подождите ~10 минут и переподключите мобильный интернет.");
     } else notes.push(`TLS не установился: ${what}${tls.error_text ? ` (${tls.error_text})` : ""}.`);
     return { tone: "bad", notes, recs };
   }
   if (ib.security === "reality") {
-    if (tls.cert_valid) notes.push(`Reality отвечает сертификатом ${ib.reality_dest || tls.sni} — маскировка выглядит правильно.`);
+    const tls13 = /3/.test(String(tls.version || ""));
+    if (tls.cert_valid && (!tls13 || tls.alpn !== "h2")) {
+      tone = "warn";
+      notes.push(`Донор Reality отвечает без ${!tls13 ? "TLS 1.3" : "h2"} — такая маскировка выделяется на фоне обычных сайтов.`);
+      recs.push("Выберите dest/serverNames — сайт с TLS 1.3 и HTTP/2, лучше не за популярным CDN.");
+    } else if (tls.cert_valid) notes.push(`Reality отвечает сертификатом ${ib.reality_dest || tls.sni} (TLS 1.3, h2) — маскировка выглядит правильно.`);
     else { tone = "warn"; notes.push(`Reality: сертификат не сходится с SNI «${tls.sni}» (${tls.cert_error || "?"}). Проверьте dest и serverNames.`); recs.push("Выберите dest/serverNames, у которого сайт отвечает по TLS 1.3 и h2."); }
   } else {
     if (tls.cert_valid === false) { tone = "bad"; notes.push(`SSL недействителен: ${tls.cert_error}.`); recs.push("Откройте вкладку «Сертификаты» и выпустите или назначите действующий сертификат."); }
@@ -136,6 +146,20 @@ function classifyFreeze(http) {
   return { tone: "ok", text: `Прочитано ${kb} КБ без остановки — заморозки нет.` };
 }
 
+async function zoneCheck() {
+  const run = async host => {
+    const r = await probe("vpn_tls", { host, port: 443, sni: host, httpGet: false });
+    return !!r?.tls_ok;
+  };
+  const white = [], black = [];
+  for (const h of ZONE_WHITE) white.push(await run(h));
+  const whiteOk = white.filter(Boolean).length;
+  if (!whiteOk) return { state: "offline", whiteOk, blackOpen: 0 };
+  for (const h of ZONE_BLACK) black.push(await run(h));
+  const blackOpen = black.filter(Boolean).length;
+  return { state: blackOpen === black.length ? "open" : "ru", whiteOk, blackOpen };
+}
+
 export async function runVpnChecks({ auto = false } = {}) {
   if (running) return null;
   const last = readJson(RESULT_KEY, null);
@@ -149,6 +173,8 @@ export async function runVpnChecks({ auto = false } = {}) {
     const ov = await apiGet("/dev/vpn/overview");
     if (!ov.configured) throw new Error(ov.reason || "X-UI не настроен на сервере.");
 
+    renderProgress("Контрольные сайты: где вы находитесь");
+    const zone = await zoneCheck();
     const domains = pickDomains(ov);
     const dns = [];
     for (const d of domains) {
@@ -210,7 +236,7 @@ export async function runVpnChecks({ auto = false } = {}) {
     // локальный VPN/прокси, пробы меряют его, а не провайдера.
     const tunnel = (stability?.median_ms ?? stabTarget?.tcp?.median_ms ?? 99) < 5;
 
-    const result = { at: Date.now(), auto, ov, serverIp, internetOk, dns, rows, freeze, stability, tunnel };
+    const result = { at: Date.now(), auto, ov, serverIp, internetOk, dns, rows, freeze, stability, tunnel, zone };
     writeJson(RESULT_KEY, stripForStorage(result));
     pushHistory(result);
     return result;
@@ -382,7 +408,8 @@ function resultHtml(r) {
       <div><h2>${tone === "ok" ? "Сервер доступен, блокировок не видно" : tone === "bad" ? "Найдены проблемы" : tone === "warn" ? "Работает, но есть вопросы" : "Нечего проверять"}</h2>
         <p>${esc(r.serverIp || "адрес сервера не найден")} · проверено ${esc(relTime(new Date(r.at).toISOString()))}${r.auto ? " (авто)" : ""} · трафик ${fmtBytes(traffic)}</p></div>
     </section>
-    ${r.tunnel ? `<div class="bcell vpn-warn">Соединение с сервером устанавливается меньше чем за 5 мс — похоже, на этом компьютере включён VPN или прокси, и проверки идут через него. Для честной картины блокировок выключите его и проверьте снова.</div>` : ""}
+    ${r.zone?.state === "open" ? `<div class="bcell vpn-warn">Заблокированные в РФ сайты (instagram.com, facebook.com) открываются — похоже, вы за VPN или вне РФ. Пробы покажут доступность сервера из вашей текущей сети, а не из зоны блокировок. Выключите VPN и проверьте снова.</div>` : r.zone?.state === "offline" ? `<div class="bcell vpn-warn">Даже «белые» сайты (Яндекс, Госуслуги) не открываются — похоже, нет интернета. Результаты ниже недостоверны.</div>` : ""}
+    ${r.tunnel && r.zone?.state !== "open" ? `<div class="bcell vpn-warn">Соединение с сервером устанавливается меньше чем за 5 мс — похоже, на этом компьютере включён VPN или прокси, и проверки идут через него. Для честной картины блокировок выключите его и проверьте снова.</div>` : ""}
     ${!r.internetOk ? `<div class="bcell vpn-warn">DoH-резолверы не ответили — возможно, пропал интернет, а не сервер заблокирован.</div>` : ""}
     ${!r.serverIp ? `<div class="bcell vpn-warn">Не удалось определить IP сервера. Укажите его в XUI_PUBLIC_HOSTS на сервере.</div>` : ""}
     <div class="an-metrics">${statCards}</div>
