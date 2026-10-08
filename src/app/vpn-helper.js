@@ -18,7 +18,7 @@
 
 import { state } from "./state.js";
 import { apiGet, toast } from "./api.js";
-import { invoke } from "./tauri.js";
+import { invoke, sendNotification } from "./tauri.js";
 import { $, esc, relTime } from "./utils.js";
 import { renderManage } from "./vpn-manage.js";
 
@@ -238,7 +238,15 @@ export async function runVpnChecks({ auto = false } = {}) {
 
     const result = { at: Date.now(), auto, ov, serverIp, internetOk, dns, rows, freeze, stability, tunnel, zone };
     writeJson(RESULT_KEY, stripForStorage(result));
+    const prevTone = readJson(HISTORY_KEY, [])[0]?.tone;
     pushHistory(result);
+    const nowTone = overallTone(result);
+    if (auto && prevTone === "ok" && (nowTone === "warn" || nowTone === "bad") && zone.state !== "open") {
+      const bad = result.rows.filter(x => x.tone === "bad" || x.tone === "warn");
+      try {
+        sendNotification({ title: "VPN помощник: сервер стал хуже отвечать", body: bad[0] ? `${bad[0].ib.remark || "inbound"}:${bad[0].ib.port} — ${(bad[0].notes || [])[0] || "есть проблема"}` : "Откройте «Проверка сети»." });
+      } catch (_) { /* нет уведомлений — молчим */ }
+    }
     return result;
   } catch (e) {
     toast(`VPN помощник: ${e.message}`, "error");
@@ -323,6 +331,7 @@ function headerHtml(r) {
         <label class="vpn-auto" title="Раз в 30–60 минут со случайным сдвигом, пока приложение открыто">
           <input type="checkbox" id="vpn-auto" ${auto ? "checked" : ""}> Авто-проверка
         </label>
+        <button class="btn ghost" id="vpn-report" ${r ? "" : "disabled"} title="Скопировать результат текстом — для хостера или заметок">Скопировать отчёт</button>
         <button class="btn" id="vpn-run" ${running ? "disabled" : ""}>Проверить сейчас</button>
       </div>` : ""}
     </div>
@@ -371,7 +380,8 @@ function dnsHtml(r) {
 function historyHtml() {
   const h = readJson(HISTORY_KEY, []);
   if (!h.length) return `<div class="no-assignee">Истории пока нет</div>`;
-  return h.slice(0, 10).map(x => `
+  const strip = `<div class="vpn-strip" title="Последние проверки, слева новые">${h.slice(0, 30).map(x => `<i class="${x.tone}" title="${esc(relTime(new Date(x.at).toISOString()))}"></i>`).join("")}</div>`;
+  return strip + h.slice(0, 10).map(x => `
     <div class="mini-row">
       ${dot(x.tone)}
       <div style="min-width:0; flex:1;">
@@ -436,6 +446,28 @@ function resultHtml(r) {
     </div>`;
 }
 
+function reportText(r) {
+  const t = TONE[overallTone(r)];
+  const L = [
+    `# VPN помощник — отчёт`,
+    `Время: ${new Date(r.at).toLocaleString("ru-RU")}${r.auto ? " (авто)" : ""}`,
+    `Сервер: ${r.serverIp || "не определён"} · итог: ${t.label}`,
+    `Где проверялось: ${r.zone?.state === "ru" ? "зона блокировок (белые сайты открываются, чёрные нет)" : r.zone?.state === "open" ? "ВНЕ зоны блокировок / через VPN (чёрные сайты открываются)" : r.zone?.state === "offline" ? "нет интернета" : "—"}`,
+    `Xray: ${r.ov.server?.xray_state || "—"} ${r.ov.server?.xray_version || ""}`,
+    ``, `## Inbound'ы`,
+  ];
+  for (const x of r.rows) {
+    L.push(`- ${x.ib.remark || x.ib.id} :${x.ib.port} (${[x.ib.protocol, x.ib.network, x.ib.security].filter(Boolean).join("/")}) — ${TONE[x.tone].label}, TCP ${fmtMs(x.tcp?.median_ms)}`);
+    for (const n of x.notes || []) L.push(`  · ${n}`);
+    for (const n of x.recs || []) L.push(`  → ${n}`);
+  }
+  L.push(``, `## DNS`);
+  for (const d of r.dns) L.push(`- ${d.host}: система ${d.system_error || (d.system || []).join(", ") || "пусто"}${d.mismatch ? " — НЕ СОВПАДАЕТ с DoH" : ""}`);
+  if (r.freeze) L.push(``, `## Заморозка после ~16 КБ`, `- порт ${r.freeze.port}: ${r.freeze.text}`);
+  if (r.stability) L.push(``, `## Стабильность`, `- медиана ${fmtMs(r.stability.median_ms)}, джиттер ${fmtMs(r.stability.jitter_ms)}, потерь ${r.stability.attempts.length - r.stability.ok_count} из ${r.stability.attempts.length}`);
+  return L.join("\n");
+}
+
 function renderFromCache() {
   const root = $("#vpn-body");
   if (!root) return;
@@ -453,6 +485,11 @@ function wire(root) {
     renderFromCache();
   });
   root.querySelector("#vpn-run")?.addEventListener("click", () => runVpnChecks());
+  root.querySelector("#vpn-report")?.addEventListener("click", async () => {
+    const r = readJson(RESULT_KEY, null);
+    if (!r) return;
+    try { await navigator.clipboard.writeText(reportText(r)); toast("Отчёт скопирован."); } catch (_) { toast("Не удалось скопировать.", "error"); }
+  });
   root.querySelector("#vpn-auto")?.addEventListener("change", e => {
     writeJson(AUTO_KEY, e.target.checked);
     scheduleVpnAuto();
