@@ -12,6 +12,7 @@ mod audio_qc;
 mod board;
 mod desktop_notify;
 mod file_scope;
+mod http_fetch;
 mod media_tools;
 #[cfg(windows)]
 mod mpv_embed;
@@ -304,6 +305,23 @@ fn pick_output_file(
     filters: Vec<file_scope::PickFilter>,
 ) -> Option<String> {
     file_scope::pick_output_file(&app, default_name, filters)
+}
+
+// Загрузка текста по https (RSS-ленты, тексты песен, курсы валют).
+#[tauri::command(async)]
+async fn fetch_text(url: String) -> Result<String, String> {
+    http_fetch::get_text(&url).await
+}
+
+// Запись небольшого текстового файла (проект Reaper и т.п.) — только по
+// пути, который пользователь сам выбрал в диалоге сохранения.
+#[tauri::command(async)]
+fn write_text_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
+    if content.len() > 4 * 1024 * 1024 {
+        return Err("Файл слишком большой.".into());
+    }
+    let path = app.state::<file_scope::FileScope>().check_write(&path)?;
+    std::fs::write(path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
@@ -1362,6 +1380,8 @@ fn main() {
             mt_make_gif,
             mt_burn_subtitles,
             mt_extract_subtitles,
+            write_text_file,
+            fetch_text,
             mt_probe_media,
             mt_probe_keyframes,
             mt_register_media_file,

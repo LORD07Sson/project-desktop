@@ -124,6 +124,11 @@ function parentDir(filePath) {
   const idx = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
   return idx > 0 ? filePath.slice(0, idx) : filePath;
 }
+// Открыть файл в программе по умолчанию (VLC, mpv, любой плеер, который
+// пользователь назначил на этот тип файлов) — тот же shell:allow-open.
+export function openInSystemPlayer(filePath) {
+  return invoke("plugin:shell|open", { path: filePath });
+}
 export function revealInFolder(filePath) {
   return invoke("plugin:shell|open", { path: parentDir(filePath) });
 }
