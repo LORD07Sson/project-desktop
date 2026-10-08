@@ -19,7 +19,9 @@ export function applyLook(look) {
   // Вариант оформления тёмной темы: "glow" (по умолчанию) или "fire".
   let look = null;
   try { look = localStorage.getItem("project-look"); } catch (_) {}
-  document.documentElement.dataset.look = look || "glow";
+  // "kadr" — матовое стекло «Кадра» (по умолчанию); "glow"/"fire" — прежние
+  // фоны со свечением.
+  document.documentElement.dataset.look = look || "kadr";
 })();
 
 // Смена темы раньше была одним мгновенным щелчком — все цвета разом.

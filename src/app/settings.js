@@ -150,6 +150,7 @@ async function openSettings() {
           <div class="st-group" data-st-find="тема тёмная светлая огонь золото свечение фон">
             <div class="st-group-h">Фон</div>
             <div class="st-cards st-cards-3">
+              <button type="button" class="st-card${themeCard === "kadr" ? " on" : ""}" data-st-themecard="kadr"><span class="st-prev st-prev-kadr"><i></i><i></i><i></i></span><b>Матовое стекло</b><em>фон из кадра тайтла</em></button>
               <button type="button" class="st-card${themeCard === "fire" ? " on" : ""}" data-st-themecard="fire"><span class="st-prev st-prev-fire"><i></i><i></i><i></i></span><b>Свечение снизу</b><em>тёмный, тёплое зарево</em></button>
               <button type="button" class="st-card${themeCard === "glow" ? " on" : ""}" data-st-themecard="glow"><span class="st-prev st-prev-glow"><i></i><i></i><i></i></span><b>Свечение сверху</b><em>тёмный, светлые кромки</em></button>
               <button type="button" class="st-card${themeCard === "light" ? " on" : ""}" data-st-themecard="light"><span class="st-prev st-prev-light"><i></i><i></i><i></i></span><b>Светлый</b><em>для дня</em></button>
