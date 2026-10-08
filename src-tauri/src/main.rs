@@ -16,6 +16,7 @@ mod media_tools;
 #[cfg(windows)]
 mod mpv_embed;
 mod token_store;
+mod translate;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -1336,6 +1337,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             desktop_notify::notify_desktop,
             qc_analyze,
+            translate::translate_text,
             generate_waveform,
             export_audio_clip,
             set_window_progress,
