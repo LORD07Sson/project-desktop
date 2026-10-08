@@ -276,7 +276,7 @@ function listHtml() {
   const list = view();
   const hidden = items.length - list.length;
   if (!list.length) {
-    return `<div class="ny-empty"><b>${items.length ? "Всё скрыто фильтрами" : "Ничего не найдено"}</b><p>${items.length ? `Фильтры прячут ${hidden} из ${items.length}.` : "Попробуйте другое слово или категорию."}</p>${items.length ? `<button type="button" class="btn" data-flt-reset>Сбросить фильтры</button>` : ""}${hasMore ? `<div class="ny-more-wrap"><button type="button" class="btn primary" data-more>Показать ещё</button></div>` : ""}</div>`;
+    return `<div class="ny-empty"><b>${items.length ? "Всё скрыто фильтрами" : "Ничего не найдено"}</b><p>${items.length ? `Фильтры прячут ${hidden} из ${items.length}.${prefs.onlySeadex ? " Включён «SeaDex»: в этом списке нет раздач из базы SeaDex." : ""}${prefs.hideDone ? " Включено «Скрыть отправленное»." : ""}` : "Попробуйте другое слово или категорию."}</p>${prefs.onlySeadex ? `<button type="button" class="btn" data-toggle="onlySeadex">Выключить «SeaDex»</button>` : ""}${items.length ? `<button type="button" class="btn" data-flt-reset>Сбросить фильтры</button>` : ""}${hasMore ? `<div class="ny-more-wrap"><button type="button" class="btn primary" data-more>Показать ещё</button></div>` : ""}</div>`;
   }
   const maxSeed = Math.max(...list.map(i => i.seeders), 1);
   const now = Date.now();
@@ -521,7 +521,8 @@ function readFilters() {
 
 function resetFilters() {
   prefs.filters = { ...DEFAULT_FILTERS };
-  savePrefs(); paintFilters(); paintList();
+  prefs.onlySeadex = false; prefs.hideDone = false;
+  savePrefs(); paintStatic(); paintFilters(); paintList();
 }
 
 // ---------- торрент-клиент ----------
