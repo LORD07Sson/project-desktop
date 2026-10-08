@@ -28,7 +28,6 @@ const ACTIONS = [
   // Инструменты из меню шапки — те же кнопки, просто с клавиатуры.
   { label: "QC звука", icon: "🎧", sub: "проверить дорожки", run: () => $("#open-qc").click() },
   { label: "Инструменты ffmpeg", icon: "🎞", sub: "обрезка, конвертация, сведение", run: () => $("#open-media-tools").click() },
-  { label: "Тексты песен", icon: "📝", sub: "поиск текста, сохранить .lrc", run: () => $("#open-web-tools").click() },
   { label: "Смотреть", icon: "▶", run: () => $("#open-watch").click() },
   { label: "Горячие клавиши", icon: "⌨", sub: "?", run: () => $("#open-shortcuts").click() },
   { label: "Настройки", icon: "⚙️", run: () => $("#open-settings").click() },

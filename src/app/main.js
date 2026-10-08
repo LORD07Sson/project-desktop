@@ -32,7 +32,6 @@ import "./ui-prefs.js";
 import "./tabs.js";
 import "./qc.js";
 import "./media-tools.js";
-import "./web-tools.js";
 import "./midi-control.js";
 import "./deeplink.js";
 import "./tune.js";
