@@ -296,7 +296,7 @@ export function parseView(html, Parser = globalThis.DOMParser) {
 
 // ---------- зеркала и проверка связи ----------
 
-export const NYAA_MIRRORS = ["https://nyaa.si", "https://nyaa.land"];
+export const NYAA_MIRRORS = ["https://nyaa.si", "https://nya.iss.one", "https://nyaa.ink", "https://nyaa.land", "https://nyaa.digital", "https://ny.iss.one"];
 
 /** Службы для проверки; apply — переключается ли зеркало в самой странице. */
 export function buildServices(nyaaCustom = [], serverOrigin = "") {
@@ -333,6 +333,38 @@ export function normalizeMirror(value) {
 }
 
 export const hostOf = base => { try { return new URL(base).host; } catch (_) { return String(base); } };
+
+// ---------- слежение ----------
+
+export const MONITOR_SEEN_MAX = 400;
+
+/** Новое слежение: type — query (запрос) или user (загрузчик). */
+export function makeMonitor({ type, q, cat = "0_0" }, now = Date.now()) {
+  const text = String(q || "").trim();
+  if (!text) return null;
+  const t = type === "user" ? "user" : "query";
+  if (t === "user" && !/^[A-Za-z0-9_.-]{1,40}$/.test(text)) return null;
+  return { id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, type: t, q: text, cat: t === "user" ? "0_0" : cat, on: true, new: 0 };
+}
+
+export const monitorTitle = m => (m.type === "user" ? `Загрузчик ${m.q}` : m.q);
+
+/**
+ * Сравнивает свежий список с уже виденным. Первая проверка (m.seen нет) только
+ * запоминает: уведомлять о «новом» там, где всё новое, было бы шумом.
+ */
+export function diffMonitor(items, m) {
+  const ids = items.map(i => i.id);
+  if (!Array.isArray(m.seen)) return { fresh: [], seen: ids.slice(0, MONITOR_SEEN_MAX) };
+  const have = new Set(m.seen);
+  const fresh = items.filter(i => !have.has(i.id));
+  const seen = [...ids, ...m.seen.filter(id => !ids.includes(id))].slice(0, MONITOR_SEEN_MAX);
+  return { fresh, seen };
+}
+
+/** Название клиента для подписей. */
+export const CLIENT_NAMES = { qbittorrent: "qBittorrent", transmission: "Transmission", deluge: "Deluge" };
+export const CLIENT_PORTS = { qbittorrent: 8080, transmission: 9091, deluge: 8112 };
 
 /** Безопасное имя файла .torrent из названия раздачи. */
 export function torrentFileName(item) {
