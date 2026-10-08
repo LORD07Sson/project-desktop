@@ -334,6 +334,139 @@ export function normalizeMirror(value) {
 
 export const hostOf = base => { try { return new URL(base).host; } catch (_) { return String(base); } };
 
+// ---------- внешние источники по info hash ----------
+
+export const isHash40 = h => /^[a-f0-9]{40}$/i.test(String(h || ""));
+
+const q = encodeURIComponent;
+export const sourceUrls = hash => {
+  const h = String(hash).toLowerCase();
+  return {
+    seadexTorrent: `https://releases.moe/api/collections/torrents/records?filter=${q(`infoHash="${h}"`)}&perPage=1&skipTotal=true`,
+    seadexEntry: `https://releases.moe/api/collections/entries/records?filter=${q(`trs.infoHash?="${h}"`)}&expand=trs&skipTotal=true`,
+    animetosho: `https://feed.animetosho.org/json?show=torrent&btih=${q(h)}`,
+    nekobtSearch: `https://nekobt.to/api/v1/torrents/search?query=${q(h)}`,
+    tsukihime: `https://api.tsukihime.org/v1/torrents/btih/${q(h)}`,
+  };
+};
+
+const safeJson = text => { try { return JSON.parse(text); } catch (_) { return null; } };
+
+/** SeaDex: лучший / запасной релиз и ссылка на запись. */
+export function parseSeadex(torrentText, entryText) {
+  const t = safeJson(torrentText), e = safeJson(entryText);
+  const tr = t && Array.isArray(t.items) ? t.items[0] : null;
+  const entry = e && Array.isArray(e.items) ? e.items[0] : null;
+  const found = !!(tr || entry);
+  let best = tr ? !!tr.isBest : null;
+  if (best === null && entry && entry.expand && Array.isArray(entry.expand.trs)) {
+    const hit = entry.expand.trs[0];
+    best = hit ? !!hit.isBest : null;
+  }
+  return { found, best, link: entry && entry.alID ? `https://releases.moe/${entry.alID}` : "" };
+}
+
+/** AnimeTosho (старый JSON): ссылка на страницу и число файлов. */
+export function parseAnimetosho(text) {
+  const j = safeJson(text);
+  if (!j || j.error) return { found: false };
+  let suffix = "";
+  if (j.nyaa_id) suffix = `n${j.nyaa_id}`;
+  else if (j.anidex_id) suffix = `d${j.anidex_id}`;
+  else if (j.tosho_id) suffix = `${j.tosho_id}`;
+  else if (j.nekobt_id) suffix = `k${j.nekobt_id}`;
+  if (!suffix) return { found: false };
+  return { found: true, link: `https://animetosho.org/view/${suffix}`, title: j.title || "", files: Array.isArray(j.files) ? j.files.length : 0 };
+}
+
+const LANG = /^[A-Za-z-]{2,8}$/;
+const langList = v => (Array.isArray(v) ? v : String(v || "").split(",")).map(x => String(x).trim()).filter(x => LANG.test(x)).join(", ");
+
+export function parseNekoSearch(text) {
+  const j = safeJson(text);
+  if (!j || j.error || !j.data || !j.data.infohash_match) return null;
+  const id = String(j.data.infohash_match);
+  return /^[A-Za-z0-9_-]{1,40}$/.test(id) ? id : null;
+}
+
+export function parseNekoTorrent(text) {
+  const j = safeJson(text);
+  const d = j && !j.error ? j.data : null;
+  if (!d) return { found: false };
+  const flags = [d.batch && "batch", d.hardsub && "hardsub", d.mtl && "MTL", d.otl && "OTL"].filter(Boolean);
+  const group = Array.isArray(d.groups) ? d.groups[0] : null;
+  return {
+    found: true,
+    link: `https://nekobt.to/torrents/${q(String(d.id))}`,
+    title: String(d.title || ""),
+    uploader: d.uploader ? String(d.uploader.display_name || d.uploader.username || "") : "",
+    group: group ? String(group.display_name || group.name || "") : "",
+    swarm: `${d.seeders ?? "?"} раздают · ${d.leechers ?? "?"} качают · ${d.completed ?? "?"} скачали`,
+    size: Number.isFinite(Number(d.filesize)) ? fmtBytesEn(Number(d.filesize)) : "",
+    audio: langList(d.audio_lang), subs: langList(d.sub_lang), flags,
+  };
+}
+
+export function parseTsukihime(text) {
+  const j = safeJson(text);
+  if (!j || j.id == null) return { found: false };
+  const anime = j.anime ? [j.anime.title, j.anime.english_title && `(${j.anime.english_title})`].filter(Boolean).join(" ") : "";
+  return {
+    found: true,
+    link: `https://tsukihime.org/view/${q(String(j.id))}`,
+    title: String(j.name || ""), anime,
+    group: j.group ? String(j.group.name || "") : "",
+    episode: j.episode_no != null && j.episode_no !== "" ? String(j.episode_no) : "",
+    size: Number.isFinite(Number(j.totalsize)) ? fmtBytesEn(Number(j.totalsize)) : "",
+    files: j.filecount != null ? String(j.filecount) : "",
+    audio: langList(j.audiolangs), subs: langList(j.sublangs),
+  };
+}
+
+function fmtBytesEn(b) {
+  const u = ["Б", "КиБ", "МиБ", "ГиБ", "ТиБ"];
+  let i = 0, v = b;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
+}
+
+// ---------- «Похожее» через AniList ----------
+
+/** Название раздачи → строка для поиска тайтла (без группы, качества, номера серии и скобок). */
+export function cleanTitleForSearch(title) {
+  let t = String(title || "");
+  t = t.replace(/^\s*\[[^\]]*\]\s*/, "");                 // [Группа]
+  t = t.replace(/[[(][^\])]*[\])]/g, " ");                 // любые скобки: [FLAC], (1080p), [ABCD1234]
+  t = t.replace(/\.(mkv|mp4|avi|flac|mp3|zip|rar|7z)$/i, " ");
+  t = t.replace(/\b(\d{3,4}p|HEVC|x26[45]|AVC|AV1|FLAC|BD(?:Rip)?|WEB(?:-?DL|Rip)?|Batch|Remux|Dual[- ]Audio|Multi[- ]?Subs?)\b/gi, " ");
+  t = t.replace(/\s-\s*\d{1,3}(v\d)?\b.*$/i, " ");        // « - 09»
+  t = t.replace(/\bS\d{1,2}E\d{1,3}\b.*$/i, " ");          // S02E05
+  return t.replace(/[_.]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
+export const SIMILAR_QUERY = `query($s:String){Media(search:$s,type:ANIME){id siteUrl format seasonYear averageScore genres title{romaji english native} coverImage{medium}
+relations{edges{relationType node{id siteUrl format averageScore title{romaji english} coverImage{medium}}}}
+recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id siteUrl format averageScore title{romaji english} coverImage{medium}}}}}}`;
+
+const REL = { SEQUEL: "Продолжение", PREQUEL: "Предыстория", SIDE_STORY: "Побочная история", SPIN_OFF: "Спин-офф", PARENT: "Основной тайтл", ALTERNATIVE: "Альтернатива", ADAPTATION: "Первоисточник", SUMMARY: "Пересказ", OTHER: "Связано" };
+
+const media = n => n && n.id ? ({
+  id: n.id, url: String(n.siteUrl || ""), format: n.format || "", score: n.averageScore || 0,
+  title: String((n.title && (n.title.english || n.title.romaji)) || ""), romaji: String((n.title && n.title.romaji) || ""),
+  cover: n.coverImage && /^https:\/\//.test(n.coverImage.medium || "") ? n.coverImage.medium : "",
+}) : null;
+
+export function parseSimilar(text) {
+  const j = safeJson(text);
+  const m = j && j.data ? j.data.Media : null;
+  if (!m) return { found: false };
+  const related = ((m.relations && m.relations.edges) || [])
+    .filter(e => e.node && e.node.id && ["SEQUEL", "PREQUEL", "SIDE_STORY", "SPIN_OFF", "PARENT", "ALTERNATIVE", "SUMMARY"].includes(e.relationType))
+    .map(e => ({ ...media(e.node), relation: REL[e.relationType] || REL.OTHER }));
+  const recs = ((m.recommendations && m.recommendations.nodes) || []).map(n => media(n && n.mediaRecommendation)).filter(Boolean);
+  return { found: true, self: media(m), year: m.seasonYear || "", genres: (m.genres || []).slice(0, 6), related, recs };
+}
+
 // ---------- слежение ----------
 
 export const MONITOR_SEEN_MAX = 400;

@@ -185,6 +185,54 @@ pub async fn fetch_image(url: String) -> Result<String, String> {
     Ok(format!("data:{mime};base64,{}", base64(&b)))
 }
 
+/// Сайты, с которых разрешено подтягивать сведения о раздаче по info hash.
+const META_HOSTS: [&str; 5] = ["feed.animetosho.org", "feed.animetosho.xyz", "releases.moe", "nekobt.to", "api.tsukihime.org"];
+
+pub fn meta_url_allowed(url: &str) -> Result<Url, String> {
+    let u = check_public_https(url)?;
+    let host = u.host_str().unwrap_or("");
+    if META_HOSTS.contains(&host) {
+        Ok(u)
+    } else {
+        Err("Этот источник не поддерживается.".into())
+    }
+}
+
+/// JSON/текст с одного из внешних источников (SeaDex, AnimeTosho, nekoBT, Tsukihime).
+#[tauri::command(async)]
+pub async fn meta_get(url: String) -> Result<String, String> {
+    let u = meta_url_allowed(&url)?;
+    let (b, _) = get_bytes(u, MAX_BYTES, Some("application/json")).await?;
+    Ok(String::from_utf8_lossy(&b).into_owned())
+}
+
+/// Запрос к AniList GraphQL: адрес зафиксирован, снаружи приходит только запрос и переменные.
+#[tauri::command(async)]
+pub async fn anilist_query(query: String, variables: serde_json::Value) -> Result<String, String> {
+    if query.len() > 4000 {
+        return Err("Слишком длинный запрос.".into());
+    }
+    let body = serde_json::json!({ "query": query, "variables": variables });
+    let resp = client()
+        .post("https://graphql.anilist.co")
+        .timeout(Duration::from_secs(15))
+        .header("User-Agent", "Project-Desktop/1.0")
+        .header("Accept", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Нет связи с AniList: {e}"))?;
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    if text.len() > MAX_BYTES {
+        return Err("Ответ слишком большой.".into());
+    }
+    if !status.is_success() && status.as_u16() != 404 {
+        return Err(format!("AniList ответил {}", status.as_u16()));
+    }
+    Ok(text)
+}
+
 #[derive(Serialize)]
 pub struct NetCheck {
     pub url: String,
@@ -280,6 +328,17 @@ mod tests {
         assert!(rss_url("https://nyaa.si", "", "0_0", "0", 1, Some("a&b")).is_err());
         assert!(rss_url("https://nyaa.si", "", "0_0", "0", 1, Some("")).is_ok());
         assert!(!rss_url("https://nyaa.si", "", "0_0", "0", 1, None).unwrap().query_pairs().any(|(k, _)| k == "u"));
+    }
+
+    #[test]
+    fn meta_hosts_are_whitelisted() {
+        assert!(meta_url_allowed("https://releases.moe/api/collections/torrents/records?filter=x").is_ok());
+        assert!(meta_url_allowed("https://nekobt.to/api/v1/torrents/search?query=abc").is_ok());
+        assert!(meta_url_allowed("https://feed.animetosho.org/json?show=torrent&btih=abc").is_ok());
+        assert!(meta_url_allowed("http://releases.moe/").is_err());
+        assert!(meta_url_allowed("https://evil.example/releases.moe").is_err());
+        assert!(meta_url_allowed("https://releases.moe.evil.example/").is_err());
+        assert!(meta_url_allowed("https://127.0.0.1/").is_err());
     }
 
     #[test]

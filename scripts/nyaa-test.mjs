@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf, applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds, makeMonitor, monitorTitle, diffMonitor, CLIENT_PORTS, NYAA_MIRRORS } from "../src/app/nyaa-core.js";
+import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf, applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds, makeMonitor, monitorTitle, diffMonitor, CLIENT_PORTS, NYAA_MIRRORS, isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime, cleanTitleForSearch, parseSimilar, SIMILAR_QUERY } from "../src/app/nyaa-core.js";
 
 const xml = `<?xml version="1.0"?><rss xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel>
 <item><title>[JMAX] [2026.10.09] TVアニメ「Night」ED &amp; OP [FLAC]</title><link>https://nyaa.si/download/2090786.torrent</link><guid isPermaLink="true">https://nyaa.si/view/2090786</guid><pubDate>Thu, 08 Oct 2026 17:39:56 -0000</pubDate><nyaa:seeders>62</nyaa:seeders><nyaa:leechers>8</nyaa:leechers><nyaa:downloads>311</nyaa:downloads><nyaa:infoHash>ABCDEF0123456789ABCDEF0123456789ABCDEF01</nyaa:infoHash><nyaa:categoryId>2_1</nyaa:categoryId><nyaa:category>Audio - Lossless</nyaa:category><nyaa:size>73.6 MiB</nyaa:size><nyaa:comments>1</nyaa:comments><nyaa:trusted>Yes</nyaa:trusted><nyaa:remake>No</nyaa:remake></item>
@@ -150,5 +150,62 @@ assert.deepEqual(second.fresh.map(i => i.id), [5, 4]);
 assert.deepEqual(second.seen, [5, 4, 3, 2, 1]);
 assert.equal(diffMonitor(Array.from({ length: 500 }, (_, i) => ({ id: i })), { seen: [] }).seen.length, 400);
 assert.equal(CLIENT_PORTS.deluge, 8112);
+
+// ---- внешние источники ----
+const H = "28881b6c87fc9e2801c634d4a35d91afc7f25e2e";
+assert.ok(isHash40(H));
+assert.ok(!isHash40("abc") && !isHash40(H + "0") && !isHash40("z".repeat(40)));
+const su = sourceUrls(H.toUpperCase());
+assert.ok(su.seadexTorrent.includes(encodeURIComponent(`infoHash="${H}"`)), "хэш в нижнем регистре, фильтр закодирован");
+assert.ok(su.animetosho.endsWith(`btih=${H}`));
+assert.ok(su.nekobtSearch.endsWith(`query=${H}`));
+assert.ok(su.tsukihime.endsWith(`/btih/${H}`));
+
+assert.deepEqual(parseSeadex(JSON.stringify({ items: [{ isBest: true }] }), JSON.stringify({ items: [{ alID: 12345 }] })), { found: true, best: true, link: "https://releases.moe/12345" });
+assert.equal(parseSeadex(JSON.stringify({ items: [{ isBest: false }] }), "").best, false);
+assert.equal(parseSeadex(JSON.stringify({ items: [] }), JSON.stringify({ items: [] })).found, false);
+assert.equal(parseSeadex("не json", "{").found, false);
+assert.equal(parseSeadex("", JSON.stringify({ items: [{ alID: 7, expand: { trs: [{ isBest: true }] } }] })).best, true);
+
+assert.deepEqual(parseAnimetosho(JSON.stringify({ nyaa_id: 2171202, title: "T", files: [{}, {}] })), { found: true, link: "https://animetosho.org/view/n2171202", title: "T", files: 2 });
+assert.equal(parseAnimetosho(JSON.stringify({ error: "nf" })).found, false);
+assert.equal(parseAnimetosho(JSON.stringify({})).found, false);
+
+assert.equal(parseNekoSearch(JSON.stringify({ error: false, data: { infohash_match: 4521 } })), "4521");
+assert.equal(parseNekoSearch(JSON.stringify({ error: false, data: { infohash_match: null } })), null);
+assert.equal(parseNekoSearch(JSON.stringify({ error: false, data: { infohash_match: "../x" } })), null, "странный id отбрасывается");
+const nk = parseNekoTorrent(JSON.stringify({ error: false, data: { id: 9, title: "Show", uploader: { display_name: "U" }, groups: [{ name: "G" }], seeders: 5, leechers: 1, completed: 40, filesize: 1048576 * 300, audio_lang: ["ja"], sub_lang: ["en", "ru"], batch: true } }));
+assert.equal(nk.found, true);
+assert.equal(nk.link, "https://nekobt.to/torrents/9");
+assert.equal(nk.group, "G");
+assert.equal(nk.size, "300 МиБ");
+assert.equal(nk.subs, "en, ru");
+assert.deepEqual(nk.flags, ["batch"]);
+assert.equal(parseNekoTorrent("{}").found, false);
+
+const ts = parseTsukihime(JSON.stringify({ id: 77, name: "N", anime: { title: "Yoru", english_title: "Night" }, group: { name: "G" }, episode_no: 9, totalsize: 5368709120, filecount: 12, audiolangs: ["ja"], sublangs: "en,ru" }));
+assert.equal(ts.link, "https://tsukihime.org/view/77");
+assert.equal(ts.anime, "Yoru (Night)");
+assert.equal(ts.size, "5.0 ГиБ");
+assert.equal(ts.subs, "en, ru");
+assert.equal(parseTsukihime(JSON.stringify({ detail: "x" })).found, false);
+
+assert.equal(cleanTitleForSearch("[SubsPlease] Night Watch - 09 (1080p) [ABCD1234].mkv"), "Night Watch");
+assert.equal(cleanTitleForSearch("[Group] Show Name S02E05 [WEB-DL][HEVC]"), "Show Name");
+assert.equal(cleanTitleForSearch("[JMAX] [2026.10.09] Fall in Dream [FLAC 48kHz]"), "Fall in Dream");
+assert.equal(cleanTitleForSearch(""), "");
+
+const sim = parseSimilar(JSON.stringify({ data: { Media: { id: 1, siteUrl: "https://anilist.co/anime/1", title: { romaji: "Yoru", english: "Night" }, seasonYear: 2023, genres: ["Action"], coverImage: { medium: "https://s4.anilist.co/a.jpg" },
+  relations: { edges: [{ relationType: "SEQUEL", node: { id: 2, title: { romaji: "Yoru 2" }, coverImage: { medium: "http://insecure/x.jpg" } } }, { relationType: "CHARACTER", node: { id: 3, title: { romaji: "X" } } }] },
+  recommendations: { nodes: [{ mediaRecommendation: { id: 4, title: { english: "Rec" }, averageScore: 80 } }, { mediaRecommendation: null }] } } } }));
+assert.equal(sim.found, true);
+assert.equal(sim.self.title, "Night");
+assert.equal(sim.related.length, 1, "лишние типы связей отбрасываются");
+assert.equal(sim.related[0].relation, "Продолжение");
+assert.equal(sim.related[0].cover, "", "картинка не по https не берётся");
+assert.equal(sim.recs.length, 1);
+assert.equal(parseSimilar(JSON.stringify({ data: { Media: null } })).found, false);
+assert.equal(parseSimilar("oops").found, false);
+assert.ok(SIMILAR_QUERY.includes("recommendations"));
 
 console.log("nyaa-test: ok");

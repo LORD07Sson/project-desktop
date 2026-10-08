@@ -1385,6 +1385,8 @@ fn main() {
             nyaa::nyaa_view,
             nyaa::fetch_image,
             nyaa::net_check,
+            nyaa::meta_get,
+            nyaa::anilist_query,
             torrent_clients::tc_save,
             torrent_clients::tc_load,
             torrent_clients::tc_clear,
