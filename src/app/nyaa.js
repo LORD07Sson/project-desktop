@@ -57,7 +57,9 @@ let anchorId = null;
 let client = null;          // настройки торрент-клиента (без пароля)
 let clientDraft = null;
 const selected = new Set();
-let checks = {};           // url → результат net_check
+let checks = {};           // url → результат проверки (с сервера студии, если он отвечает, иначе с этого компьютера)
+let localChecks = {};      // url → проверка с этого компьютера (для пометки «у вас закрыт»)
+let checkedBy = "";        // "server" | "local" — откуда сейчас результаты
 let checking = false;
 let detail = null;         // { item, state, view, err, tab, imgs, lightbox }
 
@@ -511,7 +513,7 @@ startMonitoring();
 function sourcesHtml() {
   const services = buildServices(prefs.custom, serverOrigin());
   return `
-    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>Проверка связи с этого компьютера. Если сайт переехал, выберите рабочее зеркало.</span></div>
+    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>${checkedBy === "local" ? "Сервер студии недоступен — показана проверка с этого компьютера." : "Проверка идёт с сервера студии: через него работают «Релизы» и «Смотреть»."} Если сайт переехал, выберите рабочее зеркало.</span></div>
       <div><button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить всё"}</button><button type="button" class="ny-ib wide" data-close-sources title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
     <div class="ny-src-grid">${services.map(sv => `
       <div class="ny-svc">
@@ -520,14 +522,14 @@ function sourcesHtml() {
           const c = classifyCheck(checks[m]);
           const active = sv.apply && m === prefs.base;
           const custom = sv.id === "nyaa" && prefs.custom.includes(m);
-          return `<div class="ny-mir${active ? " act" : ""}"><i class="${c.level}"></i><div><b>${esc(hostOf(m))}</b><span>${esc(c.text)}</span></div>
+          return `<div class="ny-mir${active ? " act" : ""}"><i class="${c.level}"></i><div><b>${esc(hostOf(m))}</b><span>${esc(c.text)}${closedHere(m) ? " · у вас напрямую закрыт" : ""}</span></div>
             ${sv.apply ? (active ? `<em>используется</em>` : `<button type="button" class="btn ghost" data-use="${esc(m)}">Использовать</button>`) : ""}
             ${custom ? `<button type="button" class="ny-ib" data-mir-del="${esc(m)}" title="Убрать зеркало" aria-label="Убрать зеркало">${ICONS.close}</button>` : ""}
             <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button></div>`;
         }).join("")}
         ${sv.id === "nyaa" ? fastHint(sv.mirrors) : ""}
         ${sv.id === "nyaa" ? `<div class="ny-mir-add"><input id="ny-mir-in" type="text" placeholder="Своё зеркало, например nyaa.example" spellcheck="false"><button type="button" class="btn" id="ny-mir-add">Добавить</button></div>` : ""}
-        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» берёт эти данные через сервер студии: здесь видно, доступен ли сайт с вашего компьютера.</p>` : ""}
+        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» берёт эти данные через сервер студии, поэтому важно, что видит сервер.</p>` : ""}
       </div>`).join("")}</div>`;
 }
 
@@ -548,14 +550,32 @@ function paintSources() {
   paintSourceChip();
 }
 
+// Главная проверка идёт с сервера студии: «Релизы» и «Смотреть» ходят через него (у него туннель
+// WireGuard), так что важно, виден ли сайт ему. Параллельно проверяется и этот компьютер — только
+// для пометки «у вас закрыт». Если сервер недоступен, остаётся проверка с компьютера.
 async function runChecks(urls) {
   checking = true; paintSources();
-  try {
-    const res = await invoke("net_check", { urls });
-    res.forEach(r => { checks[r.url] = r; });
-  } catch (e) { toast(`Проверка не удалась: ${e}`, "error"); }
+  const q = new URLSearchParams(); urls.forEach(u => q.append("u", u));
+  const [srv, loc] = await Promise.allSettled([
+    apiBlob(`/net/check?${q}`).then(b => b.text()).then(JSON.parse),
+    invoke("net_check", { urls }),
+  ]);
+  if (loc.status === "fulfilled") loc.value.forEach(r => { localChecks[r.url] = r; });
+  if (srv.status === "fulfilled" && Array.isArray(srv.value)) {
+    srv.value.forEach(r => { checks[r.url] = r; });
+    checkedBy = "server";
+  } else if (loc.status === "fulfilled") {
+    loc.value.forEach(r => { checks[r.url] = r; });
+    checkedBy = "local";
+  } else toast(`Проверка не удалась: ${loc.reason}`, "error");
   checking = false; paintSources();
 }
+
+// «У вас закрыт»: серверу сайт виден, а с этого компьютера — нет.
+const closedHere = m => {
+  const s = checks[m], l = localChecks[m];
+  return checkedBy === "server" && s && s.ok && l && (l.error || !l.ok);
+};
 
 function allMirrorUrls() {
   return buildServices(prefs.custom, serverOrigin()).flatMap(s => s.mirrors);
