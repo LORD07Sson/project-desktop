@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf, applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds, makeMonitor, monitorTitle, diffMonitor, CLIENT_PORTS, NYAA_MIRRORS, isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime, cleanTitleForSearch, parseSimilar, SIMILAR_QUERY } from "../src/app/nyaa-core.js";
+import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf, fastestMirror, applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds, makeMonitor, monitorTitle, diffMonitor, CLIENT_PORTS, NYAA_MIRRORS, isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime, cleanTitleForSearch, parseSimilar, SIMILAR_QUERY } from "../src/app/nyaa-core.js";
 
 const xml = `<?xml version="1.0"?><rss xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel>
 <item><title>[JMAX] [2026.10.09] TVアニメ「Night」ED &amp; OP [FLAC]</title><link>https://nyaa.si/download/2090786.torrent</link><guid isPermaLink="true">https://nyaa.si/view/2090786</guid><pubDate>Thu, 08 Oct 2026 17:39:56 -0000</pubDate><nyaa:seeders>62</nyaa:seeders><nyaa:leechers>8</nyaa:leechers><nyaa:downloads>311</nyaa:downloads><nyaa:infoHash>ABCDEF0123456789ABCDEF0123456789ABCDEF01</nyaa:infoHash><nyaa:categoryId>2_1</nyaa:categoryId><nyaa:category>Audio - Lossless</nyaa:category><nyaa:size>73.6 MiB</nyaa:size><nyaa:comments>1</nyaa:comments><nyaa:trusted>Yes</nyaa:trusted><nyaa:remake>No</nyaa:remake></item>
@@ -129,6 +129,11 @@ assert.equal(classifyCheck({ ok: true, status: 200, ms: 2000, error: "" }).level
 assert.equal(classifyCheck({ ok: true, status: 403, ms: 100, error: "" }).level, "warn");
 assert.equal(classifyCheck({ ok: false, status: 502, ms: 100, error: "" }).level, "bad");
 assert.equal(classifyCheck({ ok: false, status: 0, ms: 8000, error: "нет ответа за 8 секунд" }).text, "нет ответа за 8 секунд");
+assert.equal(classifyCheck({ url: "https://graphql.anilist.co", ok: true, status: 404, ms: 500, error: "" }).level, "ok", "404 у API без пути — норма");
+assert.equal(classifyCheck({ url: "https://nyaa.si", ok: true, status: 404, ms: 500, error: "" }).level, "warn", "а у обычного сайта 404 — подозрительно");
+const ck = { "https://a": { ok: true, status: 200, ms: 600 }, "https://b": { ok: true, status: 200, ms: 200 }, "https://c": { ok: false, status: 0, ms: 50, error: "x" }, "https://d": { ok: true, status: 403, ms: 10 } };
+assert.equal(fastestMirror(["https://a", "https://b", "https://c", "https://d", "https://e"], ck), "https://b");
+assert.equal(fastestMirror(["https://c"], ck), null);
 assert.equal(normalizeMirror("nyaa.example/path?q=1"), "https://nyaa.example");
 assert.equal(normalizeMirror("http://x.example"), null);
 assert.equal(normalizeMirror("localhost"), null);

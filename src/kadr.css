@@ -1527,3 +1527,5 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-src-card { min-width: 0; }
 .ny-src-card .ny-hint { overflow-wrap: anywhere; margin: 0; }
 .ny-src-top b { min-width: 0; }
+.ny-fast { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: 12px; font-size: 12.5px; background: rgba(var(--fire-rgb), .12); border: 1px solid rgba(var(--fire-rgb), .4); }
+.ny-fast .btn { padding: 4px 10px; font-size: 12px; margin-left: auto; }

@@ -16,7 +16,7 @@ import { $, esc } from "./utils.js";
 import {
   CATEGORIES, FILTERS, parseNyaaRss, magnetLink, sortItems, relTime, fmtDate,
   splitTitle, categoryKind, summarize, fmtBytes, torrentFileName,
-  parseView, buildServices, classifyCheck, normalizeMirror, hostOf, NYAA_MIRRORS,
+  parseView, buildServices, classifyCheck, normalizeMirror, hostOf, fastestMirror, NYAA_MIRRORS,
   applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds,
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
@@ -525,9 +525,20 @@ function sourcesHtml() {
             ${custom ? `<button type="button" class="ny-ib" data-mir-del="${esc(m)}" title="Убрать зеркало" aria-label="Убрать зеркало">${ICONS.close}</button>` : ""}
             <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button></div>`;
         }).join("")}
+        ${sv.id === "nyaa" ? fastHint(sv.mirrors) : ""}
         ${sv.id === "nyaa" ? `<div class="ny-mir-add"><input id="ny-mir-in" type="text" placeholder="Своё зеркало, например nyaa.example" spellcheck="false"><button type="button" class="btn" id="ny-mir-add">Добавить</button></div>` : ""}
         ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» берёт эти данные через сервер студии: здесь видно, доступен ли сайт с вашего компьютера.</p>` : ""}
       </div>`).join("")}</div>`;
+}
+
+// Подсказка «есть быстрее / текущее не отвечает» по результатам проверки.
+function fastHint(mirrors) {
+  const fast = fastestMirror(mirrors, checks);
+  const cur = checks[prefs.base];
+  if (!fast || fast === prefs.base) return "";
+  const curBad = cur && (cur.error || !cur.ok || cur.status >= 400);
+  if (!curBad && !(cur && cur.ms > checks[fast].ms * 1.6 + 100)) return "";
+  return `<div class="ny-fast">${curBad ? "Текущее зеркало не отвечает." : "Есть быстрее."} <b>${esc(hostOf(fast))}</b> · ${checks[fast].ms} мс <button type="button" class="btn" data-use="${esc(fast)}">Переключиться</button></div>`;
 }
 
 function paintSources() {
