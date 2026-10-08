@@ -209,7 +209,7 @@ function paintStatic() {
 function paintSourceChip() {
   const host = $("#ny-src-host"), dot = $("#ny-src-dot");
   if (!host) return;
-  host.textContent = hostOf(prefs.base);
+  host.textContent = hostOf(prefs.base) + (viaServer ? " · через сервер" : "");
   dot.className = classifyCheck(checks[prefs.base]).level;
 }
 
@@ -239,7 +239,7 @@ async function load() {
   $("#ny-refresh")?.classList.add("spin");
   paintList();
   try {
-    const xml = await invoke("nyaa_rss", { base: prefs.base, query: prefs.q, category: prefs.cat, filter: prefs.filter, page: 1 });
+    const xml = await nyaaRss({ base: prefs.base, query: prefs.q, category: prefs.cat, filter: prefs.filter, page: 1 });
     items = parseNyaaRss(xml);
     page = 1;
     hasMore = items.length >= 50;
@@ -263,7 +263,7 @@ function paintClientMsg(text) {
 async function loadUser(name) {
   loading = true; error = ""; paintList();
   try {
-    items = parseNyaaRss(await invoke("nyaa_rss", { base: prefs.base, query: "", category: "0_0", filter: "0", page: 1, user: name }));
+    items = parseNyaaRss(await nyaaRss({ base: prefs.base, query: "", category: "0_0", filter: "0", page: 1, user: name }));
     page = 1; hasMore = false; fetchedAt = Date.now(); selected.clear();
   } catch (e) { error = String(e && e.message ? e.message : e); items = []; }
   loading = false; paintList();
@@ -273,7 +273,7 @@ async function loadMore() {
   if (moreBusy || !hasMore) return;
   moreBusy = true; paintList();
   try {
-    const xml = await invoke("nyaa_rss", { base: prefs.base, query: prefs.q, category: prefs.cat, filter: prefs.filter, page: page + 1 });
+    const xml = await nyaaRss({ base: prefs.base, query: prefs.q, category: prefs.cat, filter: prefs.filter, page: page + 1 });
     const next = parseNyaaRss(xml);
     const before = items.length;
     items = mergePages(items, next);
@@ -301,7 +301,7 @@ const pageUrl = it => `${prefs.base}/view/${it.id}`;
 async function saveTorrent(it) {
   const out = await pickOutputFile(torrentFileName(it), [{ name: "Torrent", extensions: ["torrent"] }]);
   if (!out) return;
-  try { await invoke("nyaa_save_torrent", { base: prefs.base, id: it.id, path: out }); toast("Файл .torrent сохранён.", "success"); }
+  try { await nyaaSaveTorrent(prefs.base, it.id, out); toast("Файл .torrent сохранён.", "success"); }
   catch (e) { toast(`Не удалось сохранить: ${e}`, "error"); }
 }
 
@@ -462,7 +462,7 @@ function paintMonitors() {
 }
 
 async function checkMonitor(m, quiet) {
-  const xml = await invoke("nyaa_rss", {
+  const xml = await nyaaRss({
     base: prefs.base, query: m.type === "query" ? m.q : "", category: m.cat, filter: "0", page: 1, user: m.type === "user" ? m.q : null,
   });
   const { fresh, seen: nextSeen } = diffMonitor(parseNyaaRss(xml), m);
@@ -574,7 +574,7 @@ async function openDetail(it) {
   detail = { item: it, state: "loading", view: null, err: "", tab: "desc", imgs: {}, lightbox: null };
   paintDrawer();
   try {
-    detail.view = parseView(await invoke("nyaa_view", { base: prefs.base, id: it.id }));
+    detail.view = parseView(await nyaaView({ base: prefs.base, id: it.id }));
     detail.state = "ok";
   } catch (e) {
     detail.state = "error"; detail.err = String(e && e.message ? e.message : e);
@@ -641,6 +641,47 @@ async function metaGet(url) {
     if (wrapped.status === 404) throw new Error("Сайт ответил 404");
     if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
     return String(wrapped.body || "");
+  }
+}
+
+// ---------- Nyaa напрямую или через сервер студии ----------
+// Nyaa закрыт у части провайдеров и стран. У сервера есть туннель WireGuard, через который
+// он Nyaa видит, поэтому при отсутствии связи с компьютера запрос уходит на сервер
+// (/api/nyaa/relay) — это работает для всех участников, без VPN у каждого.
+let viaServer = false;
+
+async function relayJson(params) {
+  const q = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== "" && v != null)));
+  return JSON.parse(await (await apiBlob(`/nyaa/relay?${q}`)).text());
+}
+
+async function nyaaDirectOrRelay(direct, relayParams, pick) {
+  try { return await direct(); }
+  catch (e) {
+    if (isNotFound(e) || !isNoConnection(e)) throw e;
+    let w;
+    try { w = await relayJson(relayParams); } catch (_) { throw e; }   // ручки нет / сервер недоступен — исходная ошибка
+    if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
+    viaServer = true; paintSourceChip();
+    return pick(w);
+  }
+}
+
+const nyaaRss = a => nyaaDirectOrRelay(() => invoke("nyaa_rss", a),
+  { kind: "rss", base: a.base, q: a.query, c: a.category, f: a.filter, p: a.page || 1, u: a.user || "" }, w => String(w.body || ""));
+const nyaaView = a => nyaaDirectOrRelay(() => invoke("nyaa_view", a),
+  { kind: "view", base: a.base, id: a.id }, w => String(w.body || ""));
+
+async function nyaaSaveTorrent(base, id, path) {
+  try { return await invoke("nyaa_save_torrent", { base, id, path }); }
+  catch (e) {
+    if (!isNoConnection(e)) throw e;
+    let w;
+    try { w = await relayJson({ kind: "torrent", base, id }); } catch (_) { throw e; }
+    if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
+    const bin = atob(w.b64 || "");
+    await invoke("write_bytes_file", { path, bytes: Array.from(bin, ch => ch.charCodeAt(0)) });
+    viaServer = true; paintSourceChip();
   }
 }
 

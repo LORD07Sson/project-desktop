@@ -310,6 +310,17 @@ fn pick_output_file(
 
 // Запись небольшого текстового файла (проект Reaper и т.п.) — только по
 // пути, который пользователь сам выбрал в диалоге сохранения.
+// Запись небольшого бинарного файла (.torrent, пришедший через сервер) — по тому же
+// правилу: только в путь, выбранный в диалоге сохранения, и не больше 2 МБ.
+#[tauri::command(async)]
+fn write_bytes_file(app: tauri::AppHandle, path: String, bytes: Vec<u8>) -> Result<(), String> {
+    if bytes.len() > 2 * 1024 * 1024 {
+        return Err("Файл слишком большой.".into());
+    }
+    let path = app.state::<file_scope::FileScope>().check_write(&path)?;
+    std::fs::write(path, bytes).map_err(|e| e.to_string())
+}
+
 #[tauri::command(async)]
 fn write_text_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
     if content.len() > 4 * 1024 * 1024 {
@@ -1381,6 +1392,7 @@ fn main() {
             mt_burn_subtitles,
             mt_extract_subtitles,
             write_text_file,
+            write_bytes_file,
             nyaa::nyaa_rss,
             nyaa::nyaa_view,
             nyaa::fetch_image,
