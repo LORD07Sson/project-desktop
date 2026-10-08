@@ -38,7 +38,7 @@ let running = false;
 let autoTimer = null;
 let section = "check";
 const SECTIONS = [
-  ["check", "Проверка сети"], ["clients", "Клиенты"], ["inbounds", "Inbound'ы"],
+  ["check", "Проверка сети"], ["inbounds", "Inbound'ы"],
   ["certs", "Сертификаты"], ["server", "Сервер"],
 ];
 

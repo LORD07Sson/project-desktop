@@ -6,21 +6,13 @@
 // ход, ошибки панели выводятся как есть.
 
 import { apiGet, apiPost, openSheet, dismissSheet, toast } from "./api.js";
-import { esc, relTime } from "./utils.js";
+import { esc } from "./utils.js";
 
 let data = null;      // /dev/vpn/manage
-let filter = { q: "", inbound: "" };
 let busy = false;
 
 const GB = 1024 ** 3;
 const fmtBytes = n => n >= GB ? `${(n / GB).toFixed(n >= 10 * GB ? 0 : 1)} ГБ` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(0)} МБ` : `${Math.round((n || 0) / 1024)} КБ`;
-const daysLeft = ms => ms > 0 ? Math.ceil((ms - Date.now()) / 86400000) : null;
-const fmtExpiry = ms => {
-  const d = daysLeft(ms);
-  if (d == null) return "без срока";
-  return d < 0 ? `истёк ${-d} дн. назад` : d === 0 ? "истекает сегодня" : `ещё ${d} дн.`;
-};
-const iso = ms => new Date(ms).toISOString();
 
 async function guarded(btn, fn) {
   if (busy) return;
@@ -47,181 +39,9 @@ function confirmAction(text, okLabel = "Да", danger = false) {
   });
 }
 
-async function copy(text, ok = "Скопировано.") {
-  try { await navigator.clipboard.writeText(text); toast(ok); } catch (_) { toast("Не удалось скопировать.", "error"); }
-}
-
 async function load(force = false) {
   data = await apiGet("/dev/vpn/manage", force ? { force: 1 } : undefined);
   return data;
-}
-
-// ---------- клиенты ----------
-
-function clientRow(c, i) {
-  const used = (c.up || 0) + (c.down || 0);
-  const pct = c.total ? Math.min(100, Math.round(used / c.total * 100)) : 0;
-  const d = daysLeft(c.expiry);
-  const dead = (c.total && used >= c.total) || (d != null && d < 0);
-  const tone = !c.enable ? "off" : dead ? "bad" : c.online ? "ok" : "idle";
-  const tag = !c.enable ? "выключен" : dead ? "исчерпан" : c.online ? "онлайн" : (c.last_online ? `был ${relTime(iso(c.last_online))}` : "не подключался");
-  return `
-    <div class="vm-row" data-i="${i}" style="animation-delay:${Math.min(i, 12) * 20}ms">
-      <span class="vm-dot ${tone}"></span>
-      <div class="vm-main">
-        <div class="vm-name">${esc(c.email)} <span class="vm-chip">${esc(c.inbound)}</span></div>
-        <div class="vm-sub">${esc(tag)} · ${esc(fmtExpiry(c.expiry))}${c.comment ? ` · ${esc(c.comment)}` : ""}</div>
-        <div class="vm-bar${c.total ? "" : " free"}" title="${c.total ? `${pct}%` : "без лимита"}"><i style="width:${c.total ? pct : 100}%"></i></div>
-      </div>
-      <div class="vm-num"><b>${fmtBytes(used)}</b><span>${c.total ? `из ${fmtBytes(c.total)}` : "без лимита"}</span></div>
-      <div class="vm-acts">
-        <button class="icon-btn" data-act="link" title="Ссылка для подключения">Ссылка</button>
-        <button class="icon-btn" data-act="edit" title="Лимит и срок">Изменить</button>
-        <button class="icon-btn" data-act="toggle">${c.enable ? "Выключить" : "Включить"}</button>
-        <button class="icon-btn" data-act="reset" title="Обнулить счётчик трафика">Сброс</button>
-        <button class="icon-btn danger" data-act="del">Удалить</button>
-      </div>
-    </div>`;
-}
-
-function filteredClients() {
-  const q = filter.q.trim().toLowerCase();
-  return data.clients.filter(c =>
-    (!filter.inbound || String(c.inbound_id) === filter.inbound) &&
-    (!q || c.email.toLowerCase().includes(q) || c.comment.toLowerCase().includes(q)));
-}
-
-function clientsHtml() {
-  const cl = data.clients;
-  const expired = cl.filter(c => { const d = daysLeft(c.expiry); return (d != null && d < 0) || (c.total && c.up + c.down >= c.total); }).length;
-  const soon = cl.filter(c => { const d = daysLeft(c.expiry); return d != null && d >= 0 && d <= 3; }).length;
-  const traffic = cl.reduce((a, c) => a + c.up + c.down, 0);
-  const stats = [
-    ["Клиентов", cl.length, `выключено ${cl.filter(c => !c.enable).length}`],
-    ["Онлайн", data.online_count, "прямо сейчас"],
-    ["Скоро истекут", soon, `уже истекло ${expired}`],
-    ["Трафик", fmtBytes(traffic), "за всё время"],
-  ].map(([l, v, s]) => `<div class="bcell kpi-cell"><h3>${l}</h3><div class="svc-stat"><span class="big-num">${esc(String(v))}</span><span>${esc(s)}</span></div></div>`).join("");
-  const list = filteredClients();
-  return `
-    <div class="an-metrics">${stats}</div>
-    <div class="vm-toolbar">
-      <input class="field-input vm-search" id="vm-q" placeholder="Поиск по имени или заметке" value="${esc(filter.q)}">
-      <select class="field-input vm-sel" id="vm-ib"><option value="">Все inbound'ы</option>${data.inbounds.map(ib => `<option value="${ib.id}" ${String(ib.id) === filter.inbound ? "selected" : ""}>${esc(ib.remark || ib.id)}</option>`).join("")}</select>
-      <button class="btn primary" id="vm-add">Добавить клиента</button>
-    </div>
-    <div class="bcell vm-list" id="vm-clients">${list.length ? list.map(clientRow).join("") : `<div class="bento-empty">${cl.length ? "По фильтру никого нет." : "Клиентов пока нет."}</div>`}</div>`;
-}
-
-function addClientSheet() {
-  const ibs = data.inbounds.filter(i => i.can_add);
-  if (!ibs.length) { toast("Нет inbound'ов vless/vmess/trojan для добавления.", "error"); return; }
-  const o = openSheet(`
-    <h2>Новый клиент</h2>
-    <div class="vm-form">
-      <label>Inbound<select class="field-input" id="nc-ib">${ibs.map(i => `<option value="${i.id}">${esc(i.remark || i.id)} · ${esc(i.protocol)}:${i.port}</option>`).join("")}</select></label>
-      <label>Имя<input class="field-input" id="nc-email" placeholder="например, ivan" maxlength="64" autocomplete="off"></label>
-      <div class="vm-two">
-        <label>Лимит, ГБ<input class="field-input" id="nc-gb" type="number" min="0" step="1" placeholder="0 — без лимита"></label>
-        <label>Срок, дней<input class="field-input" id="nc-days" type="number" min="0" step="1" placeholder="0 — бессрочно"></label>
-      </div>
-      <div class="vm-two">
-        <label>Лимит устройств<input class="field-input" id="nc-ip" type="number" min="0" step="1" placeholder="0 — без лимита"></label>
-        <label>Заметка<input class="field-input" id="nc-comment" maxlength="120"></label>
-      </div>
-    </div>
-    <div class="sheet-actions"><button class="btn" data-no>Отмена</button><button class="btn primary" id="nc-save">Создать</button></div>`);
-  o.querySelector("[data-no]").addEventListener("click", () => dismissSheet(o));
-  o.querySelector("#nc-save").addEventListener("click", ev => guarded(ev.currentTarget, async () => {
-    const r = await apiPost("/dev/vpn/client/add", {
-      inbound_id: +o.querySelector("#nc-ib").value, email: o.querySelector("#nc-email").value.trim(),
-      limit_gb: o.querySelector("#nc-gb").value, expire_days: o.querySelector("#nc-days").value,
-      limit_ip: o.querySelector("#nc-ip").value, comment: o.querySelector("#nc-comment").value,
-    });
-    dismissSheet(o);
-    toast(`Клиент ${r.email} создан.`);
-    await refresh(true);
-    const c = data.clients.find(x => x.email === r.email && x.key === r.key);
-    if (c) showLink(c);
-  }));
-}
-
-function editClientSheet(c) {
-  const used = c.up + c.down;
-  const o = openSheet(`
-    <h2>${esc(c.email)}</h2>
-    <p class="vm-sub">Использовано ${esc(fmtBytes(used))}. Срок считается от сегодняшнего дня.</p>
-    <div class="vm-form">
-      <div class="vm-two">
-        <label>Лимит, ГБ<input class="field-input" id="ec-gb" type="number" min="0" step="1" value="${c.total ? Math.round(c.total / GB * 100) / 100 : 0}"></label>
-        <label>Срок, дней от сегодня<input class="field-input" id="ec-days" type="number" min="0" step="1" value="${Math.max(0, daysLeft(c.expiry) ?? 0)}"></label>
-      </div>
-      <div class="vm-two">
-        <label>Лимит устройств<input class="field-input" id="ec-ip" type="number" min="0" step="1" value="${c.limit_ip}"></label>
-        <label>Заметка<input class="field-input" id="ec-comment" maxlength="120" value="${esc(c.comment)}"></label>
-      </div>
-      <p class="vm-sub">0 — без лимита / бессрочно.</p>
-    </div>
-    <div class="sheet-actions"><button class="btn" data-no>Отмена</button><button class="btn primary" id="ec-save">Сохранить</button></div>`);
-  o.querySelector("[data-no]").addEventListener("click", () => dismissSheet(o));
-  o.querySelector("#ec-save").addEventListener("click", ev => guarded(ev.currentTarget, async () => {
-    await apiPost("/dev/vpn/client/update", {
-      inbound_id: c.inbound_id, key: c.key, limit_gb: o.querySelector("#ec-gb").value,
-      expire_days: o.querySelector("#ec-days").value, limit_ip: o.querySelector("#ec-ip").value,
-      comment: o.querySelector("#ec-comment").value,
-    });
-    dismissSheet(o);
-    toast("Сохранено.");
-    await refresh(true);
-  }));
-}
-
-async function showLink(c) {
-  const r = await apiPost("/dev/vpn/client/link", { inbound_id: c.inbound_id, key: c.key });
-  const o = openSheet(`
-    <h2>Подключение: ${esc(c.email)}</h2>
-    <p class="vm-sub">Ссылка для приложения-клиента (v2rayN, Hiddify, Streisand…). Не публикуйте её — по ней любой сможет пользоваться VPN.</p>
-    <textarea class="field-textarea vm-link" readonly rows="4">${esc(r.link)}</textarea>
-    ${r.sub ? `<p class="vm-sub">Подписка (обновляется сама):</p><textarea class="field-textarea vm-link" readonly rows="2">${esc(r.sub)}</textarea>` : ""}
-    <div class="sheet-actions"><button class="btn" data-no>Закрыть</button>${r.sub ? `<button class="btn" id="lk-sub">Копировать подписку</button>` : ""}<button class="btn primary" id="lk-copy">Копировать ссылку</button></div>`);
-  o.querySelector("[data-no]").addEventListener("click", () => dismissSheet(o));
-  o.querySelector("#lk-copy").addEventListener("click", () => copy(r.link));
-  o.querySelector("#lk-sub")?.addEventListener("click", () => copy(r.sub));
-}
-
-function wireClients(root) {
-  root.querySelector("#vm-q")?.addEventListener("input", e => {
-    filter.q = e.target.value;
-    const box = root.querySelector("#vm-clients");
-    const list = filteredClients();
-    box.innerHTML = list.length ? list.map(clientRow).join("") : `<div class="bento-empty">По фильтру никого нет.</div>`;
-  });
-  root.querySelector("#vm-ib")?.addEventListener("change", e => { filter.inbound = e.target.value; rerender(); });
-  root.querySelector("#vm-add")?.addEventListener("click", addClientSheet);
-  root.querySelector("#vm-clients")?.addEventListener("click", ev => {
-    const btn = ev.target.closest("[data-act]");
-    if (!btn) return;
-    const c = filteredClients()[+btn.closest(".vm-row").dataset.i];
-    if (!c) return;
-    const act = btn.dataset.act;
-    if (act === "edit") return editClientSheet(c);
-    guarded(btn, async () => {
-      if (act === "link") return showLink(c);
-      if (act === "toggle") {
-        await apiPost("/dev/vpn/client/update", { inbound_id: c.inbound_id, key: c.key, enable: !c.enable });
-        toast(c.enable ? "Клиент выключен." : "Клиент включён.");
-      } else if (act === "reset") {
-        if (!await confirmAction(`Обнулить счётчик трафика у «${c.email}»? Лимит начнёт считаться заново.`, "Обнулить")) return;
-        await apiPost("/dev/vpn/client/reset", { inbound_id: c.inbound_id, email: c.email });
-        toast("Трафик обнулён.");
-      } else if (act === "del") {
-        if (!await confirmAction(`Удалить клиента «${c.email}»? Его ссылка перестанет работать, вернуть её нельзя.`, "Удалить", true)) return;
-        await apiPost("/dev/vpn/client/delete", { inbound_id: c.inbound_id, key: c.key });
-        toast("Клиент удалён.");
-      }
-      await refresh(true);
-    });
-  });
 }
 
 // ---------- inbound'ы ----------
@@ -375,16 +195,7 @@ async function serverHtml() {
         <div class="vm-sub">${bk.items.length ? bk.items.map(b => `${esc(b.name)} · ${fmtBytes(b.size)}`).join("<br>") : "Бэкапов пока нет."}</div>
       </div>
     </div>
-    <div class="bcell">
-      <h3>Логи</h3>
-      <div class="vm-toolbar">
-        <select class="field-input vm-sel" id="lg-kind"><option value="xray">Xray (подключения)</option><option value="panel">Панель X-UI</option></select>
-        <select class="field-input vm-sel" id="lg-n"><option>100</option><option>300</option><option>500</option></select>
-        <input class="field-input vm-search" id="lg-q" placeholder="Фильтр по тексту">
-        <button class="btn" id="lg-load">Загрузить</button>
-      </div>
-      <pre class="vm-log" id="lg-out">Нажмите «Загрузить».</pre>
-    </div>`;
+`;
 }
 
 function wireServer(root) {
@@ -402,26 +213,11 @@ function wireServer(root) {
     toast(`Бэкап сохранён: ${r.name}`);
     rerender();
   }));
-  let lines = [];
-  const paint = () => {
-    const q = root.querySelector("#lg-q").value.trim().toLowerCase();
-    const shown = q ? lines.filter(l => l.toLowerCase().includes(q)) : lines;
-    root.querySelector("#lg-out").textContent = shown.length ? shown.join("\n") : "Пусто.";
-  };
-  root.querySelector("#lg-q")?.addEventListener("input", paint);
-  root.querySelector("#lg-load")?.addEventListener("click", ev => guarded(ev.currentTarget, async () => {
-    const kind = root.querySelector("#lg-kind").value, n = root.querySelector("#lg-n").value;
-    const r = await apiGet("/dev/vpn/logs", { kind, count: n });
-    lines = r.lines;
-    paint();
-    const out = root.querySelector("#lg-out");
-    out.scrollTop = out.scrollHeight;
-  }));
 }
 
 // ---------- вход ----------
 
-let current = { section: "clients", root: null };
+let current = { section: "inbounds", root: null };
 
 async function refresh(force) {
   await load(force);
@@ -435,8 +231,8 @@ async function rerender() {
     if (section === "certs") { if (!data) await load(); root.innerHTML = await certsHtml(); wireCerts(root); return; }
     if (section === "server") { root.innerHTML = await serverHtml(); wireServer(root); return; }
     if (!data) await load();
-    if (section === "inbounds") { root.innerHTML = inboundsHtml(); wireInbounds(root); }
-    else { root.innerHTML = clientsHtml(); wireClients(root); }
+    root.innerHTML = inboundsHtml();
+    wireInbounds(root);
   } catch (e) {
     root.innerHTML = `<div class="bcell vpn-warn">${esc(e.message || "Не удалось загрузить данные панели.")}</div>`;
   }
@@ -445,6 +241,6 @@ async function rerender() {
 export function renderManage(section, root) {
   current = { section, root };
   root.innerHTML = `<div class="bento-empty">Загружаю…</div>`;
-  if (section !== "clients" && section !== "inbounds") return rerender();
+  if (section !== "inbounds") return rerender();
   load().then(rerender).catch(e => { if (root.isConnected) root.innerHTML = `<div class="bcell vpn-warn">${esc(e.message || "Панель недоступна.")}</div>`; });
 }
