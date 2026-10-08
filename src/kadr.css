@@ -1425,6 +1425,8 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-mon-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; }
 .ny-mon-rule input[type=text] { flex: 1; min-width: 200px; }
 .ny-mon-rule .ny-hint { flex-basis: 100%; }
+.ny-beta { font-size: 11px; font-weight: 800; letter-spacing: .06em; vertical-align: middle; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 25%, transparent); color: var(--gold); }
+.ny-beta-ck { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-soft); margin: 4px 0 8px; }
 .ny-route { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
 .ny-route button { border: 1px solid var(--line); background: transparent; color: var(--ink-dim); font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 999px; cursor: pointer; }
 .ny-route button:hover { color: var(--ink); }

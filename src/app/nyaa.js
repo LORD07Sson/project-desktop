@@ -9,7 +9,7 @@
 // Вкладка только для админов, как и Nyaa в боте.
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
-import { toast, API_BASE, apiBlob } from "./api.js";
+import { toast, API_BASE, apiBlob, openSheet } from "./api.js";
 import { state } from "./state.js";
 import { notifyDesktop } from "./desktop-notify.js";
 import { $, esc } from "./utils.js";
@@ -194,7 +194,7 @@ function shellHtml() {
   return `
   <div class="ny">
     <header class="ny-hero">
-      <div class="ny-hero-t"><span class="kd-label">Релизы</span><h2>Nyaa</h2>
+      <div class="ny-hero-t"><span class="kd-label">Релизы · бета</span><h2>Nyaa <span class="ny-beta">Beta</span></h2>
         <p>Свежие раздачи из публичной ленты — не нужно заходить на сайт. Двойной щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p>
         <button type="button" class="ny-src-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
         <div class="ny-hero-btns">
@@ -1246,9 +1246,34 @@ function wire(root) {
   });
 }
 
+// Предупреждение о бета-версии: при открытии вкладки, пока не отмечено «больше не показывать».
+const BETA_KEY = "project-nyaa-beta-ok";
+let betaShown = false;
+function maybeWarnBeta() {
+  let skip = false;
+  try { skip = localStorage.getItem(BETA_KEY) === "1"; } catch (_) { /* покажем окно */ }
+  if (betaShown || skip) return;
+  betaShown = true;
+  const overlay = openSheet(`
+    <div class="nda">
+      <span class="kd-label">Бета-версия</span>
+      <h2>Nyaa (Beta)</h2>
+      <p>Раздел «Релизы» ещё тестируется: что-то может работать нестабильно, а сайты — быть недоступными у вашего провайдера.</p>
+      <p>Программа сама ничего не скачивает: она показывает ленту, копирует magnet и по вашей кнопке отправляет раздачи в ваш торрент-клиент. Скачивайте только то, что вам разрешено законом и правами на материал.</p>
+      <p>Если что-то работает неправильно, сообщите администратору.</p>
+      <label class="ny-beta-ck"><input type="checkbox" id="ny-beta-skip"> Больше не показывать</label>
+      <div class="nda-actions"><button class="btn primary" id="ny-beta-ok">Понятно</button></div>
+    </div>`);
+  overlay.querySelector("#ny-beta-ok").addEventListener("click", () => {
+    if (overlay.querySelector("#ny-beta-skip").checked) { try { localStorage.setItem(BETA_KEY, "1"); } catch (_) { /* покажем снова */ } }
+    overlay.remove();
+  });
+}
+
 export async function loadNyaa() {
   const body = $("#nyaa-body");
   if (!body) return true;
+  maybeWarnBeta();
   if (!body.querySelector(".ny")) {
     body.innerHTML = shellHtml();
     paintStatic();
