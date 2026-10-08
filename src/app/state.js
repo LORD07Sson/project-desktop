@@ -53,4 +53,5 @@ export function resetSessionState() {
   state.loadedTabs.clear();
   state.titleSeasonId = null;
   state.isDeveloper = null;
+  delete document.documentElement.dataset.dev;
 }
