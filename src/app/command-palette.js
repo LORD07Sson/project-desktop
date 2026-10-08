@@ -29,6 +29,7 @@ const ACTIONS = [
   { label: "QC звука", icon: "🎧", sub: "проверить дорожки", run: () => $("#open-qc").click() },
   { label: "Инструменты ffmpeg", icon: "🎞", sub: "обрезка, конвертация, сведение", run: () => $("#open-media-tools").click() },
   { label: "Ленты и тексты", icon: "📰", sub: "RSS, тексты песен, курс валют", run: () => $("#open-web-tools").click() },
+  { label: "Spotify", icon: "🎵", sub: "плеер и управление", run: () => $("#open-spotify").click() },
   { label: "Смотреть", icon: "▶", run: () => $("#open-watch").click() },
   { label: "Горячие клавиши", icon: "⌨", sub: "?", run: () => $("#open-shortcuts").click() },
   { label: "Настройки", icon: "⚙️", run: () => $("#open-settings").click() },

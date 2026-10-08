@@ -16,7 +16,8 @@
     "test:link": "node scripts/deeplink-test.mjs",
     "test:nda": "node scripts/nda-test.mjs",
     "test:tune": "node scripts/tune-test.mjs",
-    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:web && npm run test:midi && npm run test:link && npm run test:nda && npm run test:tune"
+    "test:spotify": "node scripts/spotify-test.mjs",
+    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:web && npm run test:midi && npm run test:link && npm run test:nda && npm run test:tune && npm run test:spotify"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",
