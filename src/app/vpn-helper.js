@@ -36,9 +36,9 @@ const UDP_NETWORKS = new Set(["kcp", "quic"]);
 
 let running = false;
 let autoTimer = null;
-let section = "check";
+let section = "health";
 const SECTIONS = [
-  ["check", "Проверка сети"], ["inbounds", "Inbound'ы"],
+  ["health", "Состояние"], ["check", "Проверка сети"], ["inbounds", "Inbound'ы"],
   ["certs", "Сертификаты"], ["server", "Сервер"],
 ];
 

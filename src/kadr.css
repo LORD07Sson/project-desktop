@@ -1332,3 +1332,5 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 .vm-log { margin: 0; max-height: 340px; overflow: auto; padding: 12px 14px; border-radius: 12px; background: rgba(0, 0, 0, .3); font: 11.5px/1.6 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; color: var(--ink-soft); }
 @media (max-width: 900px) { .vm-row { flex-wrap: wrap; } .vm-acts { max-width: none; justify-content: flex-start; } .vm-grid, .vm-two { grid-template-columns: 1fr; } }
 .vpn-rec { margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--gold); line-height: 1.4; }
+.vm-dot.warn { background: var(--s-work); box-shadow: 0 0 0 3px color-mix(in srgb, var(--s-work) 20%, transparent); }
+.vm-bar.bad i { background: var(--s-stop); }

@@ -6,7 +6,7 @@
 // ход, ошибки панели выводятся как есть.
 
 import { apiGet, apiPost, openSheet, dismissSheet, toast } from "./api.js";
-import { esc } from "./utils.js";
+import { esc, relTime } from "./utils.js";
 
 let data = null;      // /dev/vpn/manage
 let busy = false;
@@ -42,6 +42,87 @@ function confirmAction(text, okLabel = "Да", danger = false) {
 async function load(force = false) {
   data = await apiGet("/dev/vpn/manage", force ? { force: 1 } : undefined);
   return data;
+}
+
+// ---------- состояние (светофор) ----------
+
+const TONES = {
+  ok: { title: "Всё работает", text: "Сервер, Xray и сертификаты в порядке.", cls: "ok" },
+  warn: { title: "Есть предупреждения", text: "Ничего не сломано, но кое-что стоит поправить.", cls: "warn" },
+  bad: { title: "Нужно внимание", text: "Есть проблема, из-за которой VPN может не работать.", cls: "bad" },
+};
+const fmtUptime = s => !s ? "—" : s >= 86400 ? `${Math.floor(s / 86400)} дн.` : s >= 3600 ? `${Math.floor(s / 3600)} ч` : `${Math.floor(s / 60)} мин`;
+const meter = (label, pct, sub) => `
+  <div class="bcell kpi-cell"><h3>${label}</h3>
+    <div class="svc-stat"><span class="big-num">${pct == null ? "—" : pct + "%"}</span><span>${esc(sub || "")}</span></div>
+    <div class="vm-bar ${pct == null ? "free" : pct >= 90 ? "bad" : ""}"><i style="width:${pct ?? 0}%"></i></div>
+  </div>`;
+
+async function healthHtml(force) {
+  const h = await apiGet("/dev/vpn/health", force ? { force: 1 } : undefined);
+  const t = TONES[h.overall] || TONES.ok;
+  const m = h.metrics || {};
+  const issues = h.checks.filter(c => c.tone === "bad" || c.tone === "warn");
+  const rest = h.checks.filter(c => c.tone === "ok" || c.tone === "info");
+  const row = c => `
+    <div class="vm-row">
+      <span class="vm-dot ${c.tone === "ok" ? "ok" : c.tone === "bad" ? "bad" : c.tone === "warn" ? "warn" : "idle"}"></span>
+      <div class="vm-main">
+        <div class="vm-name">${esc(c.title)}</div>
+        ${c.detail ? `<div class="vm-sub">${esc(c.detail)}</div>` : ""}
+        ${c.action && c.tone !== "ok" ? `<div class="vpn-rec">→ ${esc(c.action)}</div>` : ""}
+      </div>
+    </div>`;
+  return `
+    <section class="kd-gl svc-hero" style="--c:var(${t.cls === "ok" ? "--s-done" : t.cls === "warn" ? "--s-work" : "--s-stop"});">
+      <span class="svc-orb"></span>
+      <div><h2>${t.title}</h2><p>${t.text} Проверено ${esc(relTime(new Date(h.at * 1000).toISOString()))}.</p></div>
+      <button class="btn" id="hl-refresh" style="margin-left:auto;">Обновить</button>
+    </section>
+    <div class="an-metrics">
+      ${meter("Процессор", m.cpu, m.load ? `нагрузка ${m.load.map(x => x.toFixed(2)).join(" / ")}` : "")}
+      ${meter("Память", m.mem_pct, "")}
+      ${meter("Диск", m.disk_pct, m.disk_free_gb != null ? `свободно ${m.disk_free_gb} ГБ` : "")}
+      <div class="bcell kpi-cell"><h3>Работает</h3><div class="svc-stat"><span class="big-num">${fmtUptime(m.uptime)}</span><span>${m.tcp != null ? `${m.tcp} TCP-соединений` : ""}</span></div></div>
+    </div>
+    ${issues.length ? `<div class="bcell vm-list"><h3>Что требует внимания</h3>${issues.map(row).join("")}</div>` : ""}
+    <div class="bcell vm-list"><h3>Проверки</h3>${rest.map(row).join("") || `<div class="bento-empty">Нет данных.</div>`}</div>
+    <div class="vm-grid">
+      <div class="bcell">
+        <h3>Оповещения в Telegram</h3>
+        <p class="vm-sub">Сервер проверяет всё выше раз в 5 минут, даже когда приложение закрыто, и пишет вам в Telegram, если что-то сломалось и когда починилось. Сам перезапускает упавший Xray, продлевает сертификат, который подходит к концу, и раз в сутки делает копию базы.</p>
+        <div class="vm-toolbar">
+          <label class="vpn-auto"><input type="checkbox" id="hl-alerts" ${h.alerts_on ? "checked" : ""}> Присылать оповещения</label>
+          <button class="btn" id="hl-test">Отправить тест</button>
+        </div>
+        <div class="vm-sub">${h.last_run ? `Последняя проверка сервером: ${esc(relTime(new Date(h.last_run * 1000).toISOString()))}` : "Сервер ещё не делал фоновую проверку (первая — через минуту после запуска)."}</div>
+      </div>
+      <div class="bcell vm-list">
+        <h3>Журнал инцидентов</h3>
+        ${h.incidents.length ? h.incidents.map(i => `
+          <div class="vm-row"><span class="vm-dot ${i.resolved_at ? "ok" : i.tone === "bad" ? "bad" : "warn"}"></span>
+            <div class="vm-main"><div class="vm-name">${esc(i.title)}</div>
+            <div class="vm-sub">${esc(relTime(new Date(i.at * 1000).toISOString()))}${i.resolved_at ? ` · устранено через ${Math.max(1, Math.round((i.resolved_at - i.at) / 60))} мин.` : " · продолжается"}</div></div></div>`).join("")
+          : `<div class="bento-empty">Инцидентов не было.</div>`}
+      </div>
+    </div>`;
+}
+
+function wireHealth(root) {
+  root.querySelector("#hl-refresh")?.addEventListener("click", ev => guarded(ev.currentTarget, async () => {
+    root.innerHTML = await healthHtml(true);
+    wireHealth(root);
+  }));
+  root.querySelector("#hl-alerts")?.addEventListener("change", async e => {
+    try {
+      await apiPost("/dev/vpn/monitor/alerts", { on: e.target.checked });
+      toast(e.target.checked ? "Оповещения включены." : "Оповещения выключены.");
+    } catch (err) { e.target.checked = !e.target.checked; toast(err.message, "error"); }
+  });
+  root.querySelector("#hl-test")?.addEventListener("click", ev => guarded(ev.currentTarget, async () => {
+    await apiPost("/dev/vpn/monitor/test");
+    toast("Тест отправлен — проверьте Telegram.");
+  }));
 }
 
 // ---------- inbound'ы ----------
@@ -228,6 +309,7 @@ async function rerender() {
   const { section, root } = current;
   if (!root || !root.isConnected) return;
   try {
+    if (section === "health") { root.innerHTML = await healthHtml(); wireHealth(root); return; }
     if (section === "certs") { if (!data) await load(); root.innerHTML = await certsHtml(); wireCerts(root); return; }
     if (section === "server") { root.innerHTML = await serverHtml(); wireServer(root); return; }
     if (!data) await load();
