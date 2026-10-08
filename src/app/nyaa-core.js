@@ -276,6 +276,10 @@ export function parseView(html, Parser = globalThis.DOMParser) {
       if (/^https:\/\//i.test(src) && !images.includes(src)) images.push(src);
     });
   }
+  // Описание на Nyaa — сырой markdown, который сайт рисует скриптом: ![alt](https://…) и [текст](https://…).
+  let description = cleanText(parts.join(""));
+  description = description.replace(/!\[[^\]]*\]\((https:\/\/[^\s)]+)(?:\s+"[^"]*")?\)/g, (_, u) => { if (!images.includes(u)) images.push(u); return ""; });
+  description = cleanText(description.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t, u) => (t.trim() === u ? u : `${t} (${u})`)));
   const files = [];
   doc.querySelectorAll(".torrent-file-list li").forEach(li => {
     if (li.querySelector("ul")) return;
@@ -288,7 +292,7 @@ export function parseView(html, Parser = globalThis.DOMParser) {
     fields,
     date: ts,
     magnet: magnetA ? magnetA.getAttribute("href") : "",
-    description: cleanText(parts.join("")).slice(0, 5000),
+    description: description.slice(0, 5000),
     images: images.slice(0, 12),
     files: files.slice(0, 300),
   };
@@ -583,6 +587,7 @@ export function ruleScore(item, rule = {}) {
     score += 500;
   } else score += (RES_RANK[r.res] ?? 1) * 100;
   if (rule.noHevc && r.codec === "hevc") score -= 300;
+  if (item._sd === "best") score += 2000; else if (item._sd === "alt") score += 800;
   return score + Math.min(item.seeders || 0, 99) / 100;
 }
 
@@ -645,4 +650,177 @@ export function freshForRule(fresh, m) {
   if (!m.rule) return fresh;
   const got = new Set(m.got || []);
   return bestPerEpisode(fresh, m.rule).map(x => x.item).filter(it => { const k = episodeKey(it); return !k || !got.has(k); });
+}
+
+// ---------- SeaDex по списку, AnimeTosho (субтитры, кадры), ссылки на тайтл, вкладки ----------
+
+/** Один запрос SeaDex на весь список: адрес по info hash'ам (до 75). */
+export function seadexListUrl(hashes) {
+  const hs = [...new Set(hashes.map(h => String(h || "").toLowerCase()).filter(isHash40))].slice(0, 75);
+  if (!hs.length) return "";
+  const filter = hs.map(h => `infoHash="${h}"`).join("||");
+  return `https://releases.moe/api/collections/torrents/records?filter=${encodeURIComponent(filter)}&perPage=75&skipTotal=true`;
+}
+
+/** Ответ SeaDex по списку → Map hash → "best" | "alt". */
+export function parseSeadexList(text) {
+  const out = new Map();
+  const j = safeJson(text);
+  if (!j || !Array.isArray(j.items)) return out;
+  for (const t of j.items) {
+    const h = String(t.infoHash || "").toLowerCase();
+    if (isHash40(h)) out.set(h, t.isBest ? "best" : "alt");
+  }
+  return out;
+}
+
+/**
+ * AnimeTosho (show=torrent): файлы раздачи с дорожками субтитров, числом шрифтов и
+ * отметками времени кадров. Ответ без файлов — found: false.
+ */
+export function parseToshoTorrent(text) {
+  const j = safeJson(text);
+  if (!j || !Array.isArray(j.files) || !j.files.length) return { found: false, files: [] };
+  const files = j.files.slice(0, 40).map(f => {
+    const att = Array.isArray(f.attachments) ? f.attachments : [];
+    return {
+      id: Number(f.id) || 0,
+      name: String(f.filename || ""),
+      size: Number(f.size) || 0,
+      subs: att.filter(a => a.type === "subtitle" && a.id).map(a => ({
+        id: Number(a.id), num: Number(a.info && a.info.tracknum) || 0, codec: String((a.info && a.info.codec) || "").toUpperCase(), lang: String((a.info && a.info.lang) || "und"),
+        def: !!(a.info && a.info.default), forced: !!(a.info && a.info.forced), size: Number(a.size) || 0,
+      })),
+      fonts: att.filter(a => a.type === "other" && a.info && /font/i.test(String(a.info.mime || ""))).length,
+      shots: Array.isArray(f.vidframe_timestamps) ? f.vidframe_timestamps.map(Number).filter(n => Number.isFinite(n) && n >= 0).slice(0, 12) : [],
+    };
+  });
+  return { found: true, files, anidb: Number(j.anidb_aid) || 0 };
+}
+
+const pad2 = n => String(n).padStart(2, "0");
+const clock = ms => `${Math.floor(ms / 3600000)}:${pad2(Math.floor(ms / 60000) % 60)}:${pad2(Math.floor(ms / 1000) % 60)}`;
+const assTime = s => { const m = /(\d+):(\d{2}):(\d{2})[.,](\d{1,3})/.exec(s); return m ? (+m[1] * 3600 + +m[2] * 60 + +m[3]) * 1000 + +m[4].padEnd(3, "0") : 0; };
+
+/** Реплики субтитров (ASS/SSA/SRT) для просмотра: [{ at, text }], теги и стили убраны. */
+// Убирает разметку вида <i>…</i> из реплики посимвольно (без регулярных выражений для HTML):
+// текст всё равно выводится только через экранирование.
+function dropMarkup(str) {
+  let out = "", depth = 0;
+  for (const ch of String(str)) {
+    if (ch === "<") depth++;
+    else if (ch === ">" && depth > 0) depth--;
+    else if (depth === 0) out += ch;
+  }
+  return out;
+}
+
+export function parseSubtitle(text, codec = "") {
+  const src = String(text || "").replace(/^﻿/, "").replace(/\r/g, "");
+  const out = [];
+  if (/ASS|SSA/i.test(codec) || /^\[Script Info\]/m.test(src)) {
+    let textCol = 9, startCol = 1, ready = false;
+    for (const line of src.split("\n")) {
+      const f = /^Format:\s*(.*)$/i.exec(line);
+      if (f && !ready && /Text/i.test(f[1]) && /Start/i.test(f[1])) {
+        const cols = f[1].split(",").map(c => c.trim().toLowerCase());
+        textCol = cols.indexOf("text"); startCol = cols.indexOf("start"); ready = true; continue;
+      }
+      const d = /^Dialogue:\s*(.*)$/i.exec(line);
+      if (!d) continue;
+      const parts = d[1].split(",");
+      const body = parts.slice(textCol).join(",").replace(/\{[^}]*\}/g, "").replace(/\\[Nn]/g, " / ").replace(/\\h/g, " ").trim();
+      if (body) out.push({ at: assTime(parts[startCol] || ""), text: body });
+      if (out.length >= 4000) break;
+    }
+  } else {
+    for (const block of src.split(/\n{2,}/)) {
+      const ls = block.split("\n").filter(Boolean);
+      const ti = ls.findIndex(l => l.includes("-->"));
+      if (ti < 0) continue;
+      const body = dropMarkup(ls.slice(ti + 1).join(" / ")).trim();
+      if (body) out.push({ at: assTime(ls[ti].split("-->")[0].trim()), text: body });
+      if (out.length >= 4000) break;
+    }
+  }
+  return out.sort((a, b) => a.at - b.at).map(x => ({ ...x, clock: clock(x.at) }));
+}
+
+/** Ссылки на тайтл из названия раздачи: поиск на AniList, MyAnimeList, AniDB, NekoBT. */
+export function titleLinks(title) {
+  const q = cleanTitleForSearch(title);
+  if (!q) return [];
+  const e = encodeURIComponent(q);
+  return [
+    { label: "AniList", url: `https://anilist.co/search/anime?search=${e}` },
+    { label: "MyAnimeList", url: `https://myanimelist.net/anime.php?q=${e}&cat=anime` },
+    { label: "AniDB", url: `https://anidb.net/search/anime/?adb.search=${e}&do.search=1` },
+    { label: "NekoBT", url: `https://nekobt.to/search?query=${e}` },
+  ];
+}
+
+export const DETAIL_TABS = [["desc", "Описание"], ["files", "Файлы"], ["src", "Источники"], ["tosho", "Субтитры и кадры"], ["sim", "Похожее"]];
+
+/** Порядок и видимость вкладок страницы раздачи по сохранённым настройкам. */
+export function normalizeTabs(saved) {
+  const ids = DETAIL_TABS.map(t => t[0]);
+  const order = [...new Set((saved && Array.isArray(saved.order) ? saved.order : []).filter(i => ids.includes(i)))];
+  ids.forEach(i => { if (!order.includes(i)) order.push(i); });
+  const hidden = (saved && Array.isArray(saved.hidden) ? saved.hidden : []).filter(i => ids.includes(i) && i !== "desc");
+  return { order, hidden };
+}
+
+/** Tsukihime по btih: номера торрента и файлов, точные ссылки на тайтл (AniList, MAL, AniDB). */
+export function parseTsukiFull(text) {
+  const j = safeJson(text);
+  if (!j || !j.id) return { found: false, files: [], ids: {} };
+  const a = j.anime || {};
+  return {
+    found: true, tid: Number(j.id) || 0,
+    files: (Array.isArray(j.files) ? j.files : []).slice(0, 40).map(f => ({ id: Number(f.id) || 0, name: String(f.filename || "") })),
+    ids: { anilist: Number(a.anilist) || 0, mal: Number(a.mal) || 0, anidb: Number(a.anidb) || 0 },
+  };
+}
+
+/** Точные ссылки по номерам из Tsukihime; пустой список, если номеров нет. */
+export function exactLinks(ids) {
+  const out = [];
+  if (ids && ids.anilist) out.push({ label: "AniList", url: `https://anilist.co/anime/${ids.anilist}` });
+  if (ids && ids.mal) out.push({ label: "MyAnimeList", url: `https://myanimelist.net/anime/${ids.mal}` });
+  if (ids && ids.anidb) out.push({ label: "AniDB", url: `https://anidb.net/anime/${ids.anidb}` });
+  return out;
+}
+
+/** MediaInfo из ответа Tsukihime по файлу. */
+export function parseMediainfo(text) {
+  const j = safeJson(text);
+  const m = j && (j.mediainfo || (j.info && j.info.mediainfo));
+  return typeof m === "string" ? m.trim().slice(0, 60000) : "";
+}
+
+const escH = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const HL_CAP = 100000;
+
+/**
+ * Подсветка исходного текста субтитров (ASS/SRT): HTML, уже экранированный.
+ * Длинные файлы выше порога остаются без подсветки.
+ */
+export function highlightSubtitle(raw) {
+  const text = String(raw || "");
+  if (text.length > HL_CAP) return escH(text.slice(0, 400000));
+  return text.split("\n").map(line => {
+    const l = line.replace(/\r$/, "");
+    if (/^\[[^\]]+\]\s*$/.test(l)) return `<span class="hl-sec">${escH(l)}</span>`;
+    const m = /^(Dialogue|Comment|Style|Format|Title|ScriptType|PlayRes[XY]):(.*)$/i.exec(l);
+    if (m) return `<span class="hl-key">${escH(m[1])}:</span>${escH(m[2]).replace(/\{[^}]*\}/g, t => `<span class="hl-tag">${t}</span>`)}`;
+    if (/^\d+$/.test(l.trim())) return `<span class="hl-num">${escH(l)}</span>`;
+    if (l.includes("-->")) return `<span class="hl-time">${escH(l)}</span>`;
+    return escH(l).replace(/&lt;[^&]*?&gt;/g, t => `<span class="hl-tag">${t}</span>`);
+  }).join("\n");
+}
+
+/** Дорожка субтитров по умолчанию для кадров: первая не форсированная, ASS/SSA с номером дорожки. */
+export function defaultShotTrack(subs) {
+  const s = (subs || []).find(x => x.num && !x.forced && /ASS|SSA/i.test(x.codec));
+  return s ? s.num : 0;
 }

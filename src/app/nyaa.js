@@ -22,6 +22,8 @@ import {
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
   groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
+  seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
+  parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
@@ -30,7 +32,7 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false, onlySeadex: false, tabs: {} };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
@@ -99,10 +101,26 @@ const ICONS = {
   plug: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg>',
 };
 
+// SeaDex: «лучший» (синий) и «запасной» (оранжевый) релизы по info hash, одним запросом на список.
+const sdMap = new Map();
+const sdOf = it => sdMap.get(String(it.hash || "").toLowerCase()) || "";
 const view = () => {
-  const l = sortItems(applyFilters(items, prefs.filters, { seen }), prefs.sort, "desc");
-  return prefs.hideDone ? l.filter(i => { const k = episodeKey(i); return !k || !sentEps.has(k); }) : l;
+  items.forEach(i => { i._sd = sdOf(i); });
+  let l = sortItems(applyFilters(items, prefs.filters, { seen }), prefs.sort, "desc");
+  if (prefs.hideDone) l = l.filter(i => { const k = episodeKey(i); return !k || !sentEps.has(k); });
+  if (prefs.onlySeadex) l = l.filter(i => i._sd);
+  return l;
 };
+
+async function loadSeadexList() {
+  const url = seadexListUrl(items.filter(i => !sdMap.has(String(i.hash || "").toLowerCase())).map(i => i.hash));
+  if (!url) return;
+  try {
+    const found = parseSeadexList(await metaGet(url));
+    items.forEach(i => { const h = String(i.hash || "").toLowerCase(); if (h && !sdMap.has(h)) sdMap.set(h, found.get(h) || ""); });
+    paintList();
+  } catch (_) { /* SeaDex недоступен — метки просто не показываются */ }
+}
 const serverOrigin = () => { try { return new URL(API_BASE).origin; } catch (_) { return ""; } };
 
 function statsHtml(list) {
@@ -128,17 +146,48 @@ const saveCovers = () => {
   try { localStorage.setItem(COVERS_KEY, JSON.stringify(coverUrls)); } catch (_) { /* не запомнится */ }
 };
 
+// У раздач без аниме-обложки (музыка, OST) аватар — первая картинка из описания раздачи.
+const THUMBS_KEY = "project-nyaa-thumbs";
+const thumbUrls = (() => { try { return JSON.parse(localStorage.getItem(THUMBS_KEY) || "{}"); } catch (_) { return {}; } })();
+const thumbData = new Map();   // id → data-URL
+const saveThumbs = () => {
+  const keys = Object.keys(thumbUrls);
+  if (keys.length > 800) keys.slice(0, keys.length - 800).forEach(k => delete thumbUrls[k]);
+  try { localStorage.setItem(THUMBS_KEY, JSON.stringify(thumbUrls)); } catch (_) { /* не запомнится */ }
+};
+
+async function fetchThumb(it) {
+  const id = it.id;
+  if (coverBusy.has(`t${id}`) || thumbData.has(id)) return;
+  coverBusy.add(`t${id}`);
+  try {
+    let url = thumbUrls[id];
+    if (url === undefined) {
+      url = parseView(await nyaaView({ base: prefs.base, id })).images[0] || "";
+      thumbUrls[id] = url; saveThumbs();
+    }
+    if (url) {
+      thumbData.set(id, await invoke("fetch_image", { url }));
+      document.querySelectorAll(".ny-kind[data-tid]").forEach(el => {
+        if (el.dataset.tid !== String(id) || el.querySelector("img")) return;
+        el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(thumbData.get(id))}" alt="">`;
+      });
+    }
+  } catch (_) { /* нет связи: попробуем позже */ }
+  coverBusy.delete(`t${id}`);
+}
+
 function kindHtml(it, kind) {
   const key = coverKey(it.title);
-  const src = key && coverData.get(key);
-  return `<span class="ny-kind k-${kind}${src ? " has-cover" : ""}" data-ck="${esc(key)}" title="${esc(it.category)}">${src ? `<img src="${esc(src)}" alt="">` : KIND_ICON[kind]}</span>`;
+  const src = thumbData.get(it.id) || (key && kind === "anime" && coverData.get(key)) || (kind !== "audio" && key && coverData.get(key));
+  return `<span class="ny-kind k-${kind}${src ? " has-cover" : ""}" data-ck="${esc(key)}" data-tid="${esc(it.id)}" title="${esc(it.category)}">${src ? `<img src="${esc(src)}" alt="">` : KIND_ICON[kind]}</span>`;
 }
 
 function paintCover(key) {
   const src = coverData.get(key);
   if (!src) return;
   document.querySelectorAll(".ny-kind[data-ck]").forEach(el => {
-    if (el.dataset.ck !== key || el.querySelector("img")) return;
+    if (el.dataset.ck !== key || el.querySelector("img") || el.classList.contains("k-audio")) return;
     el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(src)}" alt="">`;
   });
 }
@@ -162,9 +211,13 @@ async function loadListCovers() {
   if (coverQueueOn) return;
   coverQueueOn = true;
   try {
-    const keys = [...new Set(view().slice(0, 60).map(i => coverKey(i.title)).filter(k => k && !coverData.has(k) && coverUrls[k] !== ""))].slice(0, 30);
+    const vis = view().slice(0, 60);
+    const isAudio = i => categoryKind(i.categoryId) === "audio";
+    const keys = [...new Set(vis.filter(i => !isAudio(i)).map(i => coverKey(i.title)).filter(k => k && !coverData.has(k) && coverUrls[k] !== ""))].slice(0, 30);
+    const thumbs = vis.filter(i => isAudio(i) && !thumbData.has(i.id) && thumbUrls[i.id] !== "").slice(0, 30);
+    const jobs = [...keys.map(k => () => fetchCover(k)), ...thumbs.map(i => () => fetchThumb(i))];
     let next = 0;
-    const worker = async () => { while (next < keys.length) await fetchCover(keys[next++]); };
+    const worker = async () => { while (next < jobs.length) await jobs[next++](); };
     await Promise.all([worker(), worker()]);
   } finally { coverQueueOn = false; }
 }
@@ -174,12 +227,12 @@ function rowHtml(it, maxSeed, now) {
   const kind = categoryKind(it.categoryId);
   const health = maxSeed ? Math.max(4, Math.round(it.seeders / maxSeed * 100)) : 0;
   return `
-    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}" data-id="${it.id}">
+    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}${sdOf(it) ? ` sd-${sdOf(it)}` : ""}" data-id="${it.id}">
       <label class="ny-ck"><input type="checkbox" ${selected.has(it.id) ? "checked" : ""} aria-label="Выбрать"></label>
       ${kindHtml(it, kind)}
       <div class="ny-main">
         <div class="ny-title">${group ? `<em>${esc(group)}</em>` : ""}${esc(group ? it.title.replace(/^\s*\[[^\]]*\]\s*/, "") : it.title)}</div>
-        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
+        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
       </div>
       <div class="ny-meta"><b>${esc(it.size)}</b><span title="${esc(fmtDate(it.date))}">${esc(relTime(it.date, now))}</span></div>
       <div class="ny-health" title="раздают · качают · скачали">
@@ -223,7 +276,7 @@ function listHtml() {
   const list = view();
   const hidden = items.length - list.length;
   if (!list.length) {
-    return `<div class="ny-empty"><b>${items.length ? "Всё скрыто фильтрами" : "Ничего не найдено"}</b><p>${items.length ? `Фильтры прячут ${hidden} из ${items.length}.` : "Попробуйте другое слово или категорию."}</p>${items.length ? `<button type="button" class="btn" data-flt-reset>Сбросить фильтры</button>` : ""}${hasMore ? `<div class="ny-more-wrap"><button type="button" class="btn primary" data-more>Показать ещё</button></div>` : ""}</div>`;
+    return `<div class="ny-empty"><b>${items.length ? "Всё скрыто фильтрами" : "Ничего не найдено"}</b><p>${items.length ? `Фильтры прячут ${hidden} из ${items.length}.${prefs.onlySeadex ? " Включён «SeaDex»: в этом списке нет раздач из базы SeaDex." : ""}${prefs.hideDone ? " Включено «Скрыть отправленное»." : ""}` : "Попробуйте другое слово или категорию."}</p>${prefs.onlySeadex ? `<button type="button" class="btn" data-toggle="onlySeadex">Выключить «SeaDex»</button>` : ""}${items.length ? `<button type="button" class="btn" data-flt-reset>Сбросить фильтры</button>` : ""}${hasMore ? `<div class="ny-more-wrap"><button type="button" class="btn primary" data-more>Показать ещё</button></div>` : ""}</div>`;
   }
   const maxSeed = Math.max(...list.map(i => i.seeders), 1);
   const now = Date.now();
@@ -293,7 +346,7 @@ function paintStatic() {
     + `<select id="ny-cat-more" aria-label="Другие категории"><option value="">Ещё категории…</option>${CATEGORIES.filter(([k]) => !QUICK_CATS.some(q => q[0] === k)).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
   $("#ny-filter").innerHTML = seg(FILTERS, prefs.filter, "data-filter");
   $("#ny-sort").innerHTML = seg(SORTS, prefs.sort, "data-sort");
-  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button>`;
+  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы)">SeaDex</button>`;
   $("#ny-saved").innerHTML = prefs.saved.length
     ? `<span class="ny-saved-l">Мои запросы</span>` + prefs.saved.map((s, i) => `<span class="ny-chip"><button type="button" data-saved="${i}">${esc(s.q || "без слов")} <small>${esc((QUICK_CATS.concat(CATEGORIES).find(c => c[0] === s.cat) || [0, s.cat])[1])}</small></button><button type="button" class="x" data-saved-del="${i}" aria-label="Убрать">×</button></span>`).join("")
     : "";
@@ -355,6 +408,7 @@ async function load() {
   loading = false;
   $("#ny-refresh")?.classList.remove("spin");
   paintList();
+  loadSeadexList();
 }
 
 function paintClientMsg(text) {
@@ -385,6 +439,7 @@ async function loadMore() {
   } catch (e) { toast(`Не удалось загрузить дальше: ${e}`, "error"); }
   moreBusy = false;
   paintList();
+  loadSeadexList();
 }
 
 // Отметить раздачу «просмотренной» (открывали, копировали magnet, сохраняли .torrent).
@@ -466,7 +521,8 @@ function readFilters() {
 
 function resetFilters() {
   prefs.filters = { ...DEFAULT_FILTERS };
-  savePrefs(); paintFilters(); paintList();
+  prefs.onlySeadex = false; prefs.hideDone = false;
+  savePrefs(); paintStatic(); paintFilters(); paintList();
 }
 
 // ---------- торрент-клиент ----------
@@ -915,6 +971,124 @@ async function loadSources(d) {
   task("tsuki", async () => { const r = parseTsukihime(await metaGet(u.tsukihime)); return r.found ? { s: "ok", ...r } : { s: "none" }; });
 }
 
+// ---------- AnimeTosho: субтитры и кадры ----------
+const DATA_SHOT = b64 => `data:image/jpeg;base64,${b64}`;
+async function toshoRelay(params) {
+  const q = new URLSearchParams(params);
+  try { return JSON.parse(await (await apiBlob(`/tosho/relay?${q}`)).text()); }
+  catch (e) { throw new Error(/404|Not Found/i.test(String(e && e.message ? e.message : e)) ? "Нужно обновить сервер студии (нет ручки AnimeTosho)." : shortErr(e)); }
+}
+
+async function loadTosho(d) {
+  if (d.tosho) return;
+  d.tosho = { state: "loading", files: [], shots: {}, sub: null };
+  const paint = () => { if (detail === d && d.tab === "tosho") $("#ny-d-body").innerHTML = drawerBodyHtml(d); };
+  const hash = hashOf(d);
+  if (!isHash40(hash)) { d.tosho.state = "none"; paint(); return; }
+  // Tsukihime даёт точные номера тайтла (ссылки) и MediaInfo файла; не мешает AnimeTosho, если недоступен.
+  metaGet(sourceUrls(hash).tsukihime).then(txt => {
+    const r = parseTsukiFull(txt);
+    if (!r.found) return;
+    d.tosho.tsuki = r; d.exact = exactLinks(r.ids);
+    if (detail === d) paintDrawer();
+  }).catch(() => {});
+  try {
+    const r = parseToshoTorrent(await metaGet(sourceUrls(hash).animetosho));
+    d.tosho.files = r.files; d.tosho.state = r.found ? "ok" : "none";
+    if (r.found) d.tosho.track = defaultShotTrack(r.files[0].subs);
+  } catch (e) { d.tosho.state = isNotFound(e) ? "none" : "err"; d.tosho.err = shortErr(e); }
+  paint();
+  if (d.tosho.state === "ok") loadShots(d, paint);
+}
+
+async function loadMediainfo(d) {
+  const t = d.tosho;
+  if (!t || !t.tsuki || !t.tsuki.files.length || t.info) return;
+  const f = t.tsuki.files[0];
+  t.info = { state: "loading", text: "" };
+  $("#ny-d-body").innerHTML = drawerBodyHtml(d);
+  try {
+    t.info.text = parseMediainfo(await metaGet(`https://api.tsukihime.org/v1/torrents/${t.tsuki.tid}/file/${f.id}`));
+    t.info.state = t.info.text ? "ok" : "none";
+  } catch (e) { t.info.state = "err"; t.info.err = shortErr(e); }
+  if (detail === d && d.tab === "tosho") $("#ny-d-body").innerHTML = drawerBodyHtml(d);
+}
+
+async function loadShots(d, paint) {
+  const f = d.tosho.files[0];
+  if (!f || !f.id) return;
+  const stamps = f.shots.slice(0, 6);
+  const track = d.tosho.track || 0;
+  d.tosho.shots = {}; d.tosho.shotErr = "";
+  let next = 0;
+  const worker = async () => {
+    while (next < stamps.length) {
+      const ts = stamps[next++];
+      try {
+        const w = await toshoRelay({ kind: "shot", fid: f.id, ts, s: track });
+        if (d.tosho.track !== track) return;
+        if (w.status === 200 && w.b64) d.tosho.shots[ts] = DATA_SHOT(w.b64);
+      } catch (e) { d.tosho.shotErr = String(e.message || e); }
+      paint();
+    }
+  };
+  await Promise.all([worker(), worker()]);
+}
+
+async function openSubtitle(d, subId) {
+  const file = d.tosho.files.find(f => f.subs.some(s => s.id === subId));
+  const sub = file && file.subs.find(s => s.id === subId);
+  if (!sub) return;
+  d.tosho.sub = { id: subId, sub, state: "loading", lines: [], raw: "", q: "" };
+  $("#ny-d-body").innerHTML = drawerBodyHtml(d);
+  try {
+    const w = await toshoRelay({ kind: "sub", aid: subId });
+    if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
+    d.tosho.sub.raw = String(w.body || "");
+    d.tosho.sub.lines = parseSubtitle(d.tosho.sub.raw, sub.codec);
+    d.tosho.sub.state = "ok";
+  } catch (e) { d.tosho.sub.state = "err"; d.tosho.sub.err = String(e.message || e); }
+  if (detail === d && d.tab === "tosho") $("#ny-d-body").innerHTML = drawerBodyHtml(d);
+}
+
+async function saveSubtitle(d) {
+  const s = d.tosho && d.tosho.sub;
+  if (!s || s.state !== "ok") return;
+  const ext = (s.sub.codec || "srt").toLowerCase();
+  const out = await pickOutputFile(`${(d.item.title || "subtitle").replace(/[\\/:*?"<>|]/g, "_").slice(0, 80)}.${s.sub.lang}.${ext}`, [{ name: "Субтитры", extensions: [ext] }]);
+  if (!out) return;
+  try { await invoke("write_text_file", { path: out, content: s.raw }); toast("Субтитры сохранены.", "success"); }
+  catch (e) { toast(`Не удалось сохранить: ${e}`, "error"); }
+}
+
+function toshoTabHtml(d) {
+  if (!d.tosho) setTimeout(() => loadTosho(d), 0);
+  const t = d.tosho || { state: "loading" };
+  if (t.state === "loading") return `<div class="ny-d-load"><div class="ny-sk w80"></div><div class="ny-sk w40"></div></div>`;
+  if (t.state === "err") return `<div class="ny-empty"><b>AnimeTosho не отвечает</b><p>${esc(t.err || "")}</p></div>`;
+  if (t.state === "none") return `<div class="ny-empty"><b>Этой раздачи нет на AnimeTosho</b><p>Субтитры и кадры берутся оттуда, если сайт успел разобрать файл.</p></div>`;
+  const f0 = t.files[0];
+  const burn = f0.subs.filter(s => s.num);
+  const trackSel = burn.length ? `<div class="ny-shot-track"><span>Субтитры на кадрах:</span><select id="ny-shot-track"><option value="0">без субтитров</option>${burn.map(s => `<option value="${s.num}"${t.track === s.num ? " selected" : ""}>Дорожка ${s.num} · ${esc(s.lang)} · ${esc(s.codec || "—")}${s.forced ? " · форсированные" : ""}</option>`).join("")}</select></div>` : "";
+  const shots = trackSel + (Object.keys(t.shots).length || f0.shots.length
+    ? `<div class="ny-shots">${f0.shots.slice(0, 6).map(ts => t.shots[ts] ? `<button type="button" class="ny-shot" data-shot="${ts}"><img src="${esc(t.shots[ts])}" alt="Кадр"></button>` : `<div class="ny-shot sk"></div>`).join("")}</div>${t.shotErr ? `<p class="ny-hint">${esc(t.shotErr)}</p>` : ""}`
+    : `<p class="ny-hint">Кадров у файла нет.</p>`);
+  const LANG_OK = ["en", "eng", "enm", "und"];
+  const only = prefs.subLangs !== false;
+  const subs = `<label class="ny-sub-filter"><input type="checkbox" data-sub-langs ${only ? "checked" : ""}> только английские и без языка</label>` + t.files.slice(0, 6).map(f => `<div class="ny-tosho-file"><b>${esc(f.name)}</b><span>${esc(fmtBytes(f.size))}${f.fonts ? ` · шрифтов: ${f.fonts}` : ""}</span>
+    ${f.subs.length ? f.subs.filter(s => !only || LANG_OK.includes(s.lang.toLowerCase())).map(s => `<div class="ny-sub-row"><span class="ny-sub-lang">${esc(s.lang)}</span><span>${esc(s.codec || "—")}${s.def ? " · по умолчанию" : ""}${s.forced ? " · форсированные" : ""} · ${esc(fmtBytes(s.size))}</span><button type="button" class="btn ghost" data-sub-open="${s.id}">Смотреть</button></div>`).join("") || `<span class="ny-hint">Нет дорожек под фильтр языка.</span>` : `<span class="ny-hint">Дорожек субтитров нет.</span>`}</div>`).join("");
+  const sv = t.sub;
+  const viewer = !sv ? "" : sv.state === "loading" ? `<div class="ny-d-load"><div class="ny-sk w80"></div></div>`
+    : sv.state === "err" ? `<p class="ny-hint">${esc(sv.err)}</p>`
+    : `<div class="ny-sub-view"><div class="ny-sub-bar"><input type="text" id="ny-sub-q" placeholder="Найти в субтитрах" value="${esc(sv.q)}" spellcheck="false"><button type="button" class="btn" data-sub-find>Найти</button><button type="button" class="btn ghost" data-sub-raw>${sv.raw_on ? "Реплики" : "Исходный текст"}</button><button type="button" class="btn ghost" data-sub-save>Сохранить файл</button><button type="button" class="ny-ib" data-sub-close aria-label="Закрыть">${ICONS.close}</button></div>
+      ${sv.raw_on ? `<pre class="ny-sub-raw">${highlightSubtitle(sv.raw)}</pre>` : `<div class="ny-sub-lines">${(sv.q ? sv.lines.filter(l => l.text.toLowerCase().includes(sv.q.toLowerCase())) : sv.lines).slice(0, 600).map(l => `<div><time>${esc(l.clock)}</time><span>${esc(l.text)}</span></div>`).join("") || `<p class="ny-hint">Ничего не найдено.</p>`}</div>`}
+      <p class="ny-hint">Реплик: ${sv.lines.length}${sv.lines.length > 600 && !sv.q ? " (показаны первые 600)" : ""}</p></div>`;
+  const info = !t.tsuki || !t.tsuki.files.length ? "" : !t.info ? `<button type="button" class="btn ghost" data-fileinfo>Показать FileInfo (MediaInfo)</button>`
+    : t.info.state === "loading" ? `<div class="ny-d-load"><div class="ny-sk w80"></div></div>`
+    : t.info.state === "ok" ? `<pre class="ny-fileinfo">${esc(t.info.text)}</pre>` : `<p class="ny-hint">${esc(t.info.err || "MediaInfo недоступен.")}</p>`;
+  return `<h4 class="ny-sec">Кадры</h4>${shots}<h4 class="ny-sec">Субтитры и вложения</h4>${subs}${viewer}${info ? `<h4 class="ny-sec">FileInfo</h4>${info}` : ""}`;
+}
+
 function srcLines(k, r) {
   const L = [];
   const add = (label, v) => { if (v) L.push(`<div><span>${esc(label)}</span><b>${esc(String(v))}</b></div>`); };
@@ -1000,8 +1174,13 @@ function drawerBodyHtml(d) {
   const v = d.view;
   if (d.state === "loading") return `<div class="ny-d-load"><div class="ny-sk w80"></div><div class="ny-sk w40"></div><div class="ny-sk w80"></div></div>`;
   if (d.state === "error") return `<div class="ny-empty"><b>Страница не открылась</b><p>${esc(d.err)}</p><button type="button" class="btn primary" data-d-retry>Повторить</button></div>`;
-  const tabs = `<div class="ny-d-tabs"><button type="button" class="${d.tab === "desc" ? "on" : ""}" data-d-tab="desc">Описание</button><button type="button" class="${d.tab === "files" ? "on" : ""}" data-d-tab="files">Файлы${v.files.length ? ` · ${v.files.length}` : ""}</button><button type="button" class="${d.tab === "src" ? "on" : ""}" data-d-tab="src">Источники</button><button type="button" class="${d.tab === "sim" ? "on" : ""}" data-d-tab="sim">Похожее</button></div>`;
+  const tc = normalizeTabs(prefs.tabs);
+  if (tc.hidden.includes(d.tab)) d.tab = "desc";
+  const label = (id, l) => (id === "files" && v.files.length ? `${l} · ${v.files.length}` : l);
+  const tabs = `<div class="ny-d-tabs">${tc.order.filter(id => !tc.hidden.includes(id)).map(id => `<button type="button" class="${d.tab === id ? "on" : ""}" data-d-tab="${id}">${esc(label(id, DETAIL_TABS.find(x => x[0] === id)[1]))}</button>`).join("")}<button type="button" class="ny-ib ny-tabs-cfg" data-tabs-cfg title="Какие вкладки показывать и в каком порядке" aria-label="Настроить вкладки">⚙</button></div>`
+    + (d.tabsCfg ? `<div class="ny-tabs-pop">${tc.order.map((id, i) => `<div><label><input type="checkbox" data-tab-vis="${id}" ${tc.hidden.includes(id) ? "" : "checked"} ${id === "desc" ? "disabled" : ""}> ${esc(DETAIL_TABS.find(x => x[0] === id)[1])}</label><button type="button" class="ny-ib" data-tab-move="${id}:-1" ${i === 0 ? "disabled" : ""} aria-label="Выше">↑</button><button type="button" class="ny-ib" data-tab-move="${id}:1" ${i === tc.order.length - 1 ? "disabled" : ""} aria-label="Ниже">↓</button></div>`).join("")}</div>` : "");
   if (d.tab === "src") return tabs + sourcesTabHtml(d);
+  if (d.tab === "tosho") return tabs + toshoTabHtml(d);
   if (d.tab === "sim") return tabs + similarTabHtml(d);
   if (d.tab === "files") {
     return tabs + (v.files.length ? `<ul class="ny-files">${v.files.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : `<div class="ny-empty"><p>Список файлов не указан.</p></div>`);
@@ -1030,16 +1209,17 @@ function drawerHtml() {
         <button type="button" class="btn ghost" data-d-a="open">${ICONS.open} В браузере</button>
         ${uploaderOf(d) ? `<button type="button" class="btn ghost" data-d-a="watch">${ICONS.bell} Следить за ${esc(uploaderOf(d))}</button>` : ""}
       </div>
+      <div class="ny-d-links">${((d.exact && d.exact.length ? d.exact : titleLinks((v && v.title) || it.title))).concat([{ label: "NekoBT", url: titleLinks(it.title).find(x => x.label === "NekoBT")?.url || "" }].filter(x => x.url && d.exact && d.exact.length)).map(l => `<button type="button" class="ny-link" data-ext="${esc(l.url)}">${esc(l.label)} ↗</button>`).join("")}</div>
       <div class="ny-d-grid">${grid.map(([k, val]) => `<div><span>${esc(k)}</span><b>${esc(String(val))}</b></div>`).join("")}
         ${hash ? `<div class="wide"><span>Info hash</span><b class="mono">${esc(hash)}</b></div>` : ""}</div>
       <div class="ny-d-body" id="ny-d-body">${drawerBodyHtml(d)}</div>
-      ${d.lightbox != null ? lightboxHtml(d) : ""}
+      ${d.lightbox != null || d.lbSrc ? lightboxHtml(d) : ""}
     </aside>`;
 }
 
 function lightboxHtml(d) {
-  const url = d.view.images[d.lightbox];
-  const src = d.imgs[url];
+  const url = d.lightbox != null ? d.view.images[d.lightbox] : "";
+  const src = d.lbSrc || d.imgs[url];
   return `<div class="ny-lb" data-lb-close><img src="${esc(src)}" alt="Картинка"><button type="button" class="ny-ib wide" data-lb-close aria-label="Закрыть">${ICONS.close}</button></div>`;
 }
 
@@ -1051,6 +1231,13 @@ function drawerEl() {
     host = document.createElement("div");
     host.id = "ny-drawer"; host.className = "ny-drawer-host"; host.hidden = true;
     document.body.appendChild(host);
+    host.addEventListener("change", e => {
+      if (e.target.id !== "ny-shot-track" || !detail || !detail.tosho) return;
+      detail.tosho.track = Number(e.target.value) || 0;
+      detail.tosho.shots = {};
+      $("#ny-d-body").innerHTML = drawerBodyHtml(detail);
+      loadShots(detail, () => { if (detail && detail.tab === "tosho") $("#ny-d-body").innerHTML = drawerBodyHtml(detail); });
+    });
   }
   return host;
 }
@@ -1165,7 +1352,7 @@ function wire(root) {
       paintList(); return;
     }
     // страница раздачи
-    if (t.closest("[data-lb-close]")) { detail.lightbox = null; paintDrawer(); return; }
+    if (t.closest("[data-lb-close]")) { detail.lightbox = null; detail.lbSrc = null; paintDrawer(); return; }
     if (t.closest("[data-d-close]")) { closeDetail(); return; }
     if (detail) {
       const it = detail.item;
@@ -1177,6 +1364,31 @@ function wire(root) {
         if (detail.tab === "sim" && detail.sim && detail.sim.state === "ok") paintSimCovers(detail);
         return;
       }
+      if (t.closest("[data-tabs-cfg]")) { detail.tabsCfg = !detail.tabsCfg; $("#ny-d-body").innerHTML = drawerBodyHtml(detail); return; }
+      const tv = t.closest("[data-tab-vis]");
+      if (tv) {
+        const c = normalizeTabs(prefs.tabs);
+        prefs.tabs = { order: c.order, hidden: tv.checked ? c.hidden.filter(i => i !== tv.dataset.tabVis) : [...c.hidden, tv.dataset.tabVis] };
+        savePrefs(); $("#ny-d-body").innerHTML = drawerBodyHtml(detail); return;
+      }
+      const tm = t.closest("[data-tab-move]");
+      if (tm) {
+        const [id, dir] = tm.dataset.tabMove.split(":");
+        const c = normalizeTabs(prefs.tabs);
+        const i = c.order.indexOf(id), j = i + Number(dir);
+        if (j >= 0 && j < c.order.length) { [c.order[i], c.order[j]] = [c.order[j], c.order[i]]; prefs.tabs = c; savePrefs(); $("#ny-d-body").innerHTML = drawerBodyHtml(detail); }
+        return;
+      }
+      const sh = t.closest("[data-shot]");
+      if (sh && detail.tosho) { detail.lbSrc = detail.tosho.shots[sh.dataset.shot]; paintDrawer(); return; }
+      if (t.closest("[data-fileinfo]")) { loadMediainfo(detail); return; }
+      if (t.closest("[data-sub-langs]")) { prefs.subLangs = !(prefs.subLangs !== false); savePrefs(); $("#ny-d-body").innerHTML = drawerBodyHtml(detail); return; }
+      if (t.closest("[data-sub-raw]") && detail.tosho && detail.tosho.sub) { detail.tosho.sub.raw_on = !detail.tosho.sub.raw_on; $("#ny-d-body").innerHTML = drawerBodyHtml(detail); return; }
+      const so = t.closest("[data-sub-open]");
+      if (so) { openSubtitle(detail, Number(so.dataset.subOpen)); return; }
+      if (t.closest("[data-sub-find]") && detail.tosho && detail.tosho.sub) { detail.tosho.sub.q = $("#ny-sub-q").value.trim(); $("#ny-d-body").innerHTML = drawerBodyHtml(detail); return; }
+      if (t.closest("[data-sub-save]")) { saveSubtitle(detail); return; }
+      if (t.closest("[data-sub-close]") && detail.tosho) { detail.tosho.sub = null; $("#ny-d-body").innerHTML = drawerBodyHtml(detail); return; }
       const ext = t.closest("[data-ext]");
       if (ext) { openExternal(ext.dataset.ext).catch(() => toast("Не удалось открыть ссылку.", "error")); return; }
       if (t.closest("[data-sim-go]")) { loadSimilar(detail, $("#ny-sim-q").value.trim() || detail.sim.q); return; }

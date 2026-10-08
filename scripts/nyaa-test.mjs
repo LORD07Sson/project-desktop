@@ -256,3 +256,53 @@ console.log("nyaa-test: ok");
   assert.equal(coverKey("[Sokudo] Re ZERO - S04E19 [1080p AV1]"), coverKey("[Breeze] Re ZERO - S04E19 [1080p AV1]"));
   assert.ok(coverKey("[A] Show X - 03 [1080p]").startsWith("show x"));
 }
+
+{
+  const html = '<html><body><div class="panel-heading"><h3 class="panel-title">T</h3></div><div id="torrent-description">![alt text](https://i.ibb.co/KpVhrcHV/Cover.jpg)\n\nТрек-лист: [сайт](https://example.com/a)</div></body></html>';
+  const v = parseView(html, win.DOMParser);
+  assert.deepEqual(v.images, ["https://i.ibb.co/KpVhrcHV/Cover.jpg"]);
+  assert.ok(!v.description.includes("!["), "markdown-картинка убрана из текста");
+  assert.ok(v.description.includes("сайт (https://example.com/a)"));
+}
+
+// ---------- SeaDex по списку, AnimeTosho, вкладки ----------
+{
+  const { seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, normalizeTabs, bestPerEpisode } = await import("../src/app/nyaa-core.js");
+  const h1 = "a".repeat(40), h2 = "b".repeat(40);
+  const u = seadexListUrl([h1, h2, "bad", h1]);
+  assert.ok(u.includes("releases.moe") && decodeURIComponent(u).includes(`infoHash="${h1}"||infoHash="${h2}"`));
+  assert.equal(seadexListUrl(["x"]), "");
+  const m = parseSeadexList(JSON.stringify({ items: [{ infoHash: h1, isBest: true }, { infoHash: h2, isBest: false }] }));
+  assert.equal(m.get(h1), "best"); assert.equal(m.get(h2), "alt"); assert.equal(parseSeadexList("не json").size, 0);
+  const t = parseToshoTorrent(JSON.stringify({ anidb_aid: 5, files: [{ id: 7, filename: "a.mkv", size: 100, vidframe_timestamps: [10, 20],
+    attachments: [{ id: 3, type: "subtitle", info: { codec: "ASS", lang: "eng", default: 1 }, size: 9 }, { id: 4, type: "other", info: { mime: "font/ttf" } }] }] }));
+  assert.equal(t.found, true); assert.equal(t.files[0].subs[0].lang, "eng"); assert.equal(t.files[0].fonts, 1); assert.deepEqual(t.files[0].shots, [10, 20]);
+  assert.equal(parseToshoTorrent("{}").found, false);
+  const BS = String.fromCharCode(92), NL = String.fromCharCode(10);
+  const ass = ["[Script Info]", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text", "Dialogue: 0,0:00:05.50,0:00:07.00,Default,,0,0,0,,{" + BS + "i1}Привет{" + BS + "i0}" + BS + "Nмир, как дела"].join(NL);
+  const a = parseSubtitle(ass, "ASS");
+  assert.equal(a.length, 1); assert.equal(a[0].at, 5500); assert.equal(a[0].text, "Привет / мир, как дела");
+  const srt = "1\n00:00:01,000 --> 00:00:02,000\n<i>Hello</i>\nthere\n\n2\n00:00:03,500 --> 00:00:04,000\nBye";
+  const s2 = parseSubtitle(srt, "SRT");
+  assert.equal(s2.length, 2); assert.equal(s2[0].text, "Hello / there"); assert.equal(s2[1].at, 3500);
+  assert.equal(titleLinks("[Erai-raws] Show X - 03 [1080p]").length, 4);
+  assert.deepEqual(normalizeTabs({ order: ["sim", "desc"], hidden: ["desc", "files", "zzz"] }), { order: ["sim", "desc", "files", "src", "tosho"], hidden: ["files"] });
+  const best = bestPerEpisode([{ id: "1", title: "[A] X - 01 [1080p]", seeders: 90, _sd: "" }, { id: "2", title: "[B] X - 01 [1080p]", seeders: 1, _sd: "best" }], {});
+  assert.equal(best[0].item.id, "2", "SeaDex-релиз выигрывает у более раздаваемого");
+}
+
+{
+  const { parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, parseToshoTorrent } = await import("../src/app/nyaa-core.js");
+  const t = parseTsukiFull(JSON.stringify({ id: 5, anime: { anilist: 11, mal: 22, anidb: 33 }, files: [{ id: 9, filename: "a.mkv" }] }));
+  assert.equal(t.tid, 5); assert.equal(t.files[0].id, 9); assert.equal(exactLinks(t.ids).length, 3);
+  assert.equal(exactLinks({ anilist: 0 }).length, 0); assert.equal(parseTsukiFull("{}").found, false);
+  assert.equal(parseMediainfo(JSON.stringify({ mediainfo: "General\nFormat : Matroska" })), "General\nFormat : Matroska");
+  assert.equal(parseMediainfo("не json"), "");
+  const h = highlightSubtitle("[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,x,,0,0,0,,{\i1}<b>Hi</b>");
+  assert.ok(h.includes('class="hl-sec"') && h.includes('class="hl-tag"') && !h.includes("<b>Hi"), "теги экранированы и подсвечены");
+  const f = parseToshoTorrent(JSON.stringify({ files: [{ id: 1, filename: "a", attachments: [
+    { id: 1, type: "subtitle", info: { codec: "SRT", lang: "eng", tracknum: 2 } }, { id: 2, type: "subtitle", info: { codec: "ASS", lang: "eng", tracknum: 3, forced: 1 } },
+    { id: 3, type: "subtitle", info: { codec: "ASS", lang: "eng", tracknum: 4 } }] }] }));
+  assert.equal(defaultShotTrack(f.files[0].subs), 4, "первая не форсированная ASS-дорожка");
+  assert.equal(defaultShotTrack([]), 0);
+}
