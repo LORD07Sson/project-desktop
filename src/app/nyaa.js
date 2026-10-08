@@ -15,6 +15,7 @@ import {
   CATEGORIES, FILTERS, parseNyaaRss, magnetLink, sortItems, relTime, fmtDate,
   splitTitle, categoryKind, summarize, fmtBytes, torrentFileName,
   parseView, buildServices, classifyCheck, normalizeMirror, hostOf, NYAA_MIRRORS,
+  applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
@@ -23,16 +24,31 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [] };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [] };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
+prefs.filters = normalizeFilters(prefs.filters);
+
+// «Уже смотрел»: раздачи, которые открывали, копировали или сохраняли.
+const SEEN_KEY = "project-nyaa-seen";
+const seen = (() => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || "[]")); } catch (_) { return new Set(); } })();
+const markSeen = id => {
+  if (seen.has(id)) return;
+  seen.add(id);
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-3000))); } catch (_) { /* не запомнится */ }
+};
 const savePrefs = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) { /* не запомнится */ } };
 
 let items = [];
 let loading = false;
 let error = "";
 let fetchedAt = 0;
+let page = 1;
+let hasMore = false;
+let moreBusy = false;
+let filtersOpen = false;
+let anchorId = null;
 const selected = new Set();
 let checks = {};           // url → результат net_check
 let checking = false;
@@ -49,10 +65,11 @@ const ICONS = {
   comment: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H10l-5 4z"/></svg>',
   info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  filter: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 8v6l-4-2v-4z"/></svg>',
   plug: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg>',
 };
 
-const view = () => sortItems(items, prefs.sort, "desc");
+const view = () => sortItems(applyFilters(items, prefs.filters, { seen }), prefs.sort, "desc");
 const serverOrigin = () => { try { return new URL(API_BASE).origin; } catch (_) { return ""; } };
 
 function statsHtml(list) {
@@ -70,7 +87,7 @@ function rowHtml(it, maxSeed, now) {
   const kind = categoryKind(it.categoryId);
   const health = maxSeed ? Math.max(4, Math.round(it.seeders / maxSeed * 100)) : 0;
   return `
-    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}" data-id="${it.id}">
+    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}" data-id="${it.id}">
       <label class="ny-ck"><input type="checkbox" ${selected.has(it.id) ? "checked" : ""} aria-label="Выбрать"></label>
       <span class="ny-kind k-${kind}" title="${esc(it.category)}">${KIND_ICON[kind]}</span>
       <div class="ny-main">
@@ -103,10 +120,14 @@ function listHtml() {
       <p class="ny-hint">Если сайт переехал или заблокирован — выберите другое зеркало в «Источниках». Если открывается только через VPN, включите его.</p></div>`;
   }
   const list = view();
-  if (!list.length) return `<div class="ny-empty"><b>Ничего не найдено</b><p>Попробуйте другое слово или категорию.</p></div>`;
+  const hidden = items.length - list.length;
+  if (!list.length) {
+    return `<div class="ny-empty"><b>${items.length ? "Всё скрыто фильтрами" : "Ничего не найдено"}</b><p>${items.length ? `Фильтры прячут ${hidden} из ${items.length}.` : "Попробуйте другое слово или категорию."}</p>${items.length ? `<button type="button" class="btn" data-flt-reset>Сбросить фильтры</button>` : ""}${hasMore ? `<div class="ny-more-wrap"><button type="button" class="btn primary" data-more>Показать ещё</button></div>` : ""}</div>`;
+  }
   const maxSeed = Math.max(...list.map(i => i.seeders), 1);
   const now = Date.now();
-  return list.map(i => rowHtml(i, maxSeed, now)).join("");
+  return list.map(i => rowHtml(i, maxSeed, now)).join("")
+    + `<div class="ny-more-wrap">${hidden ? `<span class="ny-hint">фильтры скрывают ${hidden}</span>` : ""}${hasMore ? `<button type="button" class="btn" data-more>${moreBusy ? "Загружаю…" : "Показать ещё"}</button>` : `<span class="ny-hint">это всё, что отдал сайт</span>`}</div>`;
 }
 
 function barHtml() {
@@ -140,10 +161,12 @@ function shellHtml() {
       <div class="ny-seg" id="ny-filter"></div>
       <span class="ny-sp"></span>
       <div class="ny-seg" id="ny-sort"></div>
+      <button type="button" class="ny-flt-btn" id="ny-flt-btn" aria-expanded="false">${ICONS.filter}<span>Фильтры</span><b id="ny-flt-n"></b></button>
       <button type="button" class="ny-ib wide" id="ny-refresh" title="Обновить список" aria-label="Обновить список">${ICONS.refresh}</button>
     </div>
+    <section class="ny-filters" id="ny-filters" hidden></section>
     <div class="ny-saved" id="ny-saved"></div>
-    <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё в списке</label><span id="ny-upd"></span></div>
+    <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё в списке</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — выбрать диапазон</span><span class="ny-sp"></span><span id="ny-upd"></span></div>
     <div class="ny-list" id="ny-list"></div>
     <div class="ny-bar" id="ny-bar" hidden></div>
   </div>`;
@@ -162,6 +185,7 @@ function paintStatic() {
     ? `<span class="ny-saved-l">Мои запросы</span>` + prefs.saved.map((s, i) => `<span class="ny-chip"><button type="button" data-saved="${i}">${esc(s.q || "без слов")} <small>${esc((QUICK_CATS.concat(CATEGORIES).find(c => c[0] === s.cat) || [0, s.cat])[1])}</small></button><button type="button" class="x" data-saved-del="${i}" aria-label="Убрать">×</button></span>`).join("")
     : "";
   paintSourceChip();
+  paintFilters();
 }
 
 function paintSourceChip() {
@@ -171,7 +195,15 @@ function paintSourceChip() {
   dot.className = classifyCheck(checks[prefs.base]).level;
 }
 
+function paintFilterBadge() {
+  const n = activeFilterCount(prefs.filters);
+  const b = $("#ny-flt-n");
+  if (b) b.textContent = n ? String(n) : "";
+  $("#ny-flt-btn")?.classList.toggle("on", n > 0 || filtersOpen);
+}
+
 function paintList() {
+  paintFilterBadge();
   const list = view();
   $("#ny-list").innerHTML = listHtml();
   $("#ny-stats").innerHTML = statsHtml(list);
@@ -189,8 +221,10 @@ async function load() {
   $("#ny-refresh")?.classList.add("spin");
   paintList();
   try {
-    const xml = await invoke("nyaa_rss", { base: prefs.base, query: prefs.q, category: prefs.cat, filter: prefs.filter });
+    const xml = await invoke("nyaa_rss", { base: prefs.base, query: prefs.q, category: prefs.cat, filter: prefs.filter, page: 1 });
     items = parseNyaaRss(xml);
+    page = 1;
+    hasMore = items.length >= 50;
     fetchedAt = Date.now();
     selected.clear();
   } catch (e) {
@@ -200,6 +234,27 @@ async function load() {
   loading = false;
   $("#ny-refresh")?.classList.remove("spin");
   paintList();
+}
+
+async function loadMore() {
+  if (moreBusy || !hasMore) return;
+  moreBusy = true; paintList();
+  try {
+    const xml = await invoke("nyaa_rss", { base: prefs.base, query: prefs.q, category: prefs.cat, filter: prefs.filter, page: page + 1 });
+    const next = parseNyaaRss(xml);
+    const before = items.length;
+    items = mergePages(items, next);
+    page += 1;
+    hasMore = next.length >= 50 && items.length > before;
+  } catch (e) { toast(`Не удалось загрузить дальше: ${e}`, "error"); }
+  moreBusy = false;
+  paintList();
+}
+
+// Отметить раздачу «просмотренной» (открывали, копировали magnet, сохраняли .torrent).
+function touch(id) {
+  markSeen(id);
+  document.querySelector(`.ny-row[data-id="${id}"]`)?.classList.add("seen");
 }
 
 async function copy(text, okMsg) {
@@ -221,9 +276,60 @@ function bulk(kind) {
   const list = view().filter(i => selected.has(i.id));
   if (kind === "clear") { selected.clear(); paintList(); return; }
   if (!list.length) return;
+  list.forEach(i => touch(i.id));
   if (kind === "mag") copy(list.map(magnetLink).filter(Boolean).join("\n"), `Скопировано magnet: ${list.length}`);
   else if (kind === "titles") copy(list.map(i => i.title).join("\n"), `Скопировано названий: ${list.length}`);
   else if (kind === "links") copy(list.map(pageUrl).join("\n"), `Скопировано ссылок: ${list.length}`);
+}
+
+// ---------- фильтры ----------
+const AGES = [["all", "за всё время"], ["24h", "за 24 часа"], ["7d", "за неделю"], ["30d", "за месяц"], ["90d", "за 3 месяца"], ["365d", "за год"]];
+const OPS = [["any", "любое число"], ["gt", "больше"], ["lt", "меньше"], ["eq", "ровно"]];
+
+function filtersHtml() {
+  const f = prefs.filters;
+  const val = v => (v ? esc(String(v)) : "");
+  return `
+    <div class="ny-f-grid">
+      <label class="ny-chk"><input type="checkbox" data-f="hideDead" ${f.hideDead ? "checked" : ""}> Скрыть без раздающих</label>
+      <label class="ny-chk"><input type="checkbox" data-f="hideSeen" ${f.hideSeen ? "checked" : ""}> Скрыть уже просмотренные</label>
+      <label class="ny-fld"><span>Мин. раздающих</span><input type="number" min="0" data-f="minSeeders" value="${val(f.minSeeders)}" placeholder="0"></label>
+      <label class="ny-fld"><span>Размер, МиБ</span><div class="ny-pair"><input type="number" min="0" data-f="sizeMinMiB" value="${val(f.sizeMinMiB)}" placeholder="от"><input type="number" min="0" data-f="sizeMaxMiB" value="${val(f.sizeMaxMiB)}" placeholder="до"></div></label>
+      <label class="ny-fld"><span>Скачали</span><div class="ny-pair"><select data-f="completedOp">${OPS.map(([k, l]) => `<option value="${k}" ${f.completedOp === k ? "selected" : ""}>${l}</option>`).join("")}</select><input type="number" min="0" data-f="completedVal" value="${val(f.completedVal)}" placeholder="0"></div></label>
+      <label class="ny-fld"><span>Загружено</span><select data-f="age">${AGES.map(([k, l]) => `<option value="${k}" ${f.age === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="ny-fld wide"><span>Скрыть, если в названии есть (через запятую)</span><input type="text" data-f="block" value="${esc(f.block.join(", "))}" placeholder="например: raw, mp3, remake" spellcheck="false"></label>
+      <label class="ny-fld wide"><span>Показать только со словами (через запятую)</span><input type="text" data-f="require" value="${esc(f.require.join(", "))}" placeholder="например: flac, 1080p" spellcheck="false"></label>
+    </div>
+    <div class="ny-f-presets">
+      <span class="ny-saved-l">Наборы</span>
+      ${prefs.presets.map((p, i) => `<span class="ny-chip"><button type="button" data-preset="${i}">${esc(p.name)}</button><button type="button" class="x" data-preset-del="${i}" aria-label="Убрать">×</button></span>`).join("")}
+      <input type="text" id="ny-preset-name" placeholder="Название набора" maxlength="30">
+      <button type="button" class="btn" id="ny-preset-save">Сохранить набор</button>
+      <button type="button" class="btn ghost" data-flt-reset>Сбросить всё</button>
+    </div>`;
+}
+
+function paintFilters() {
+  const box = $("#ny-filters");
+  if (!box) return;
+  box.hidden = !filtersOpen;
+  if (filtersOpen) box.innerHTML = filtersHtml();
+  paintFilterBadge();
+}
+
+function readFilters() {
+  const g = k => document.querySelector(`#ny-filters [data-f="${k}"]`);
+  return normalizeFilters({
+    hideDead: g("hideDead").checked, hideSeen: g("hideSeen").checked,
+    minSeeders: g("minSeeders").value, sizeMinMiB: g("sizeMinMiB").value, sizeMaxMiB: g("sizeMaxMiB").value,
+    completedOp: g("completedOp").value, completedVal: g("completedVal").value, age: g("age").value,
+    block: splitWords(g("block").value), require: splitWords(g("require").value),
+  });
+}
+
+function resetFilters() {
+  prefs.filters = { ...DEFAULT_FILTERS };
+  savePrefs(); paintFilters(); paintList();
 }
 
 // ---------- источники и зеркала ----------
@@ -278,6 +384,7 @@ function openSources() {
 
 // ---------- страница раздачи ----------
 async function openDetail(it) {
+  touch(it.id);
   detail = { item: it, state: "loading", view: null, err: "", tab: "desc", imgs: {}, lightbox: null };
   paintDrawer();
   try {
@@ -426,6 +533,23 @@ function wire(root) {
   });
   const onClick = e => {
     const t = e.target;
+    if (t.closest("[data-more]")) { loadMore(); return; }
+    if (t.closest("[data-flt-reset]")) { resetFilters(); return; }
+    if (t.closest("#ny-flt-btn")) { filtersOpen = !filtersOpen; paintFilters(); return; }
+    const ps = t.closest("[data-preset]");
+    if (ps) { const x = prefs.presets[Number(ps.dataset.preset)]; if (x) { prefs.filters = normalizeFilters(x.filters); savePrefs(); paintFilters(); paintList(); } return; }
+    const pd = t.closest("[data-preset-del]");
+    if (pd) { prefs.presets.splice(Number(pd.dataset.presetDel), 1); savePrefs(); paintFilters(); return; }
+    if (t.closest("#ny-preset-save")) {
+      const name = $("#ny-preset-name").value.trim();
+      if (!name) { toast("Назовите набор.", "error"); return; }
+      prefs.presets = prefs.presets.filter(p => p.name !== name).concat({ name, filters: prefs.filters }).slice(-10);
+      savePrefs(); paintFilters(); toast("Набор сохранён.", "success"); return;
+    }
+    if (t.closest("#ny-invert")) {
+      view().forEach(i => { if (selected.has(i.id)) selected.delete(i.id); else selected.add(i.id); });
+      paintList(); return;
+    }
     // страница раздачи
     if (t.closest("[data-lb-close]")) { detail.lightbox = null; paintDrawer(); return; }
     if (t.closest("[data-d-close]")) { closeDetail(); return; }
@@ -489,6 +613,7 @@ function wire(root) {
     if (!it) return;
     const a = t.closest("[data-a]");
     if (a) {
+      touch(it.id);
       if (a.dataset.a === "mag") copy(magnetLink(it), "Magnet скопирован.");
       else if (a.dataset.a === "tor") saveTorrent(it);
       else if (a.dataset.a === "info") openDetail(it);
@@ -496,6 +621,13 @@ function wire(root) {
       return;
     }
     if (t.closest(".ny-ck") || !t.closest("button, a")) {
+      if (e.shiftKey && anchorId != null && anchorId !== it.id) {
+        rangeIds(view().map(i => i.id), anchorId, it.id).forEach(id => selected.add(id));
+        anchorId = it.id;
+        paintList();
+        return;
+      }
+      anchorId = it.id;
       if (selected.has(it.id)) selected.delete(it.id); else selected.add(it.id);
       row.classList.toggle("sel", selected.has(it.id));
       const cb = row.querySelector("input[type=checkbox]"); if (cb) cb.checked = selected.has(it.id);
@@ -504,6 +636,9 @@ function wire(root) {
     }
   };
   root.addEventListener("click", onClick);
+  const onFilterInput = () => { prefs.filters = readFilters(); savePrefs(); paintList(); };
+  root.querySelector("#ny-filters").addEventListener("input", e => { if (e.target.dataset.f) onFilterInput(); });
+  root.querySelector("#ny-filters").addEventListener("change", e => { if (e.target.dataset.f) onFilterInput(); });
   drawerEl().addEventListener("click", onClick);
   root.addEventListener("keydown", e => {
     if (e.key === "Enter" && e.target.id === "ny-mir-in") $("#ny-mir-add").click();

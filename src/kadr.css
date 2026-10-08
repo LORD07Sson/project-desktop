@@ -1451,3 +1451,29 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-lb img { max-width: 94vw; max-height: 86vh; border-radius: 12px; }
 .ny-lb .ny-ib { position: absolute; top: 14px; right: 18px; }
 @media (max-width: 760px) { .ny-drawer { border-radius: 0; } }
+
+/* ---------- Nyaa: фильтры, «Показать ещё», просмотренные ---------- */
+.ny-flt-btn { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink-soft); font: inherit; font-size: 12.5px; cursor: pointer; }
+.ny-flt-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linejoin: round; }
+.ny-flt-btn:hover, .ny-flt-btn.on { color: var(--ink); border-color: rgba(var(--fire-rgb), .5); }
+.ny-flt-btn b { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; display: grid; place-items: center; font-size: 11px; background: var(--fire); color: #1a0d00; }
+.ny-flt-btn b:empty { display: none; }
+.ny-filters { margin-bottom: 12px; padding: 14px; border-radius: 18px; border: 1px solid var(--glass-border); background: var(--glass-bg); display: grid; gap: 12px; }
+.ny-filters[hidden] { display: none; }
+.ny-f-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 14px; align-items: end; }
+.ny-fld { display: grid; gap: 4px; font-size: 11.5px; color: var(--ink-dim); }
+.ny-fld.wide { grid-column: 1 / -1; }
+.ny-fld input, .ny-fld select, .ny-f-presets input { background: #0b0e18; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); padding: 7px 10px; font: inherit; font-size: 13px; min-width: 0; }
+.ny-fld input:focus, .ny-f-presets input:focus { outline: 0; border-color: rgba(var(--fire-rgb), .6); }
+.ny-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ny-chk { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); cursor: pointer; }
+.ny-chk input { accent-color: var(--gold); width: 15px; height: 15px; }
+.ny-f-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.ny-f-presets input { width: 170px; }
+.ny-more-wrap { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 14px 0 4px; flex-wrap: wrap; }
+.ny-link { border: 0; background: none; color: var(--gold); font: inherit; font-size: 12px; cursor: pointer; padding: 0 8px; }
+.ny-link:hover { text-decoration: underline; }
+.ny-sel-all { align-items: center; gap: 10px; }
+.ny-sel-all .ny-sp { flex: 1; }
+.ny-row.seen .ny-title { color: var(--ink-dim); font-weight: 500; }
+.ny-row.seen .ny-kind { opacity: .55; }

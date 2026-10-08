@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf } from "../src/app/nyaa-core.js";
+import { parseNyaaRss, magnetLink, sizeToBytes, sortItems, fmtDate, torrentFileName, relTime, splitTitle, categoryKind, summarize, fmtBytes, parseView, buildServices, classifyCheck, normalizeMirror, hostOf, applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds } from "../src/app/nyaa-core.js";
 
 const xml = `<?xml version="1.0"?><rss xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel>
 <item><title>[JMAX] [2026.10.09] TVアニメ「Night」ED &amp; OP [FLAC]</title><link>https://nyaa.si/download/2090786.torrent</link><guid isPermaLink="true">https://nyaa.si/view/2090786</guid><pubDate>Thu, 08 Oct 2026 17:39:56 -0000</pubDate><nyaa:seeders>62</nyaa:seeders><nyaa:leechers>8</nyaa:leechers><nyaa:downloads>311</nyaa:downloads><nyaa:infoHash>ABCDEF0123456789ABCDEF0123456789ABCDEF01</nyaa:infoHash><nyaa:categoryId>2_1</nyaa:categoryId><nyaa:category>Audio - Lossless</nyaa:category><nyaa:size>73.6 MiB</nyaa:size><nyaa:comments>1</nyaa:comments><nyaa:trusted>Yes</nyaa:trusted><nyaa:remake>No</nyaa:remake></item>
@@ -67,6 +67,30 @@ assert.equal(fmtBytes(0), "0 Б");
 assert.equal(fmtBytes(1536), "1.5 КиБ");
 assert.equal(fmtBytes(5 * 1073741824), "5.0 ГиБ");
 assert.equal(fmtBytes(300 * 1048576), "300 МиБ");
+const NOW2 = Date.parse("2026-10-08T12:00:00Z");
+const mk = (id, title, seeders, mib, downloads, hoursAgo) => ({ id, title, seeders, sizeBytes: mib * 1048576, downloads, date: NOW2 - hoursAgo * 3600e3 });
+const L = [mk(1, "[A] Night Watch FLAC", 0, 50, 10, 2), mk(2, "[B] Night Watch 1080p", 40, 1500, 900, 30), mk(3, "[C] Other Show MP3", 5, 20, 3, 24 * 40), mk(4, "[D] night watch remaster", 12, 300, 100, 5)];
+const ids = (list) => list.map(i => i.id);
+assert.deepEqual(ids(applyFilters(L, {}, { now: NOW2 })), [1, 2, 3, 4], "пустой фильтр ничего не прячет");
+assert.deepEqual(ids(applyFilters(L, { hideDead: true }, { now: NOW2 })), [2, 3, 4]);
+assert.deepEqual(ids(applyFilters(L, { minSeeders: 10 }, { now: NOW2 })), [2, 4]);
+assert.deepEqual(ids(applyFilters(L, { block: ["remaster", "mp3"] }, { now: NOW2 })), [1, 2]);
+assert.deepEqual(ids(applyFilters(L, { require: ["1080p", "flac"] }, { now: NOW2 })), [1, 2]);
+assert.deepEqual(ids(applyFilters(L, { sizeMinMiB: 100, sizeMaxMiB: 1000 }, { now: NOW2 })), [4]);
+assert.deepEqual(ids(applyFilters(L, { completedOp: "gt", completedVal: 50 }, { now: NOW2 })), [2, 4]);
+assert.deepEqual(ids(applyFilters(L, { completedOp: "lt", completedVal: 10 }, { now: NOW2 })), [3]);
+assert.deepEqual(ids(applyFilters(L, { completedOp: "eq", completedVal: 10 }, { now: NOW2 })), [1]);
+assert.deepEqual(ids(applyFilters(L, { age: "7d" }, { now: NOW2 })), [1, 2, 4]);
+assert.deepEqual(ids(applyFilters(L, { hideSeen: true }, { now: NOW2, seen: new Set([2, 4]) })), [1, 3]);
+assert.equal(activeFilterCount({}), 0);
+assert.equal(activeFilterCount({ hideDead: true, block: ["x"], age: "7d" }), 3);
+assert.deepEqual(normalizeFilters({ minSeeders: "abc", age: "bogus", completedOp: "zzz" }), { ...DEFAULT_FILTERS });
+assert.deepEqual(splitWords(" Raw, DUAL audio ;\n  mp3 ,"), ["raw", "dual audio", "mp3"]);
+assert.deepEqual(ids(mergePages([{ id: 1 }, { id: 2 }], [{ id: 2 }, { id: 3 }])), [1, 2, 3]);
+assert.deepEqual(rangeIds([5, 6, 7, 8, 9], 6, 8), [6, 7, 8]);
+assert.deepEqual(rangeIds([5, 6, 7, 8, 9], 8, 6), [6, 7, 8], "в обе стороны");
+assert.deepEqual(rangeIds([5, 6], 99, 6), [6], "нет якоря — только цель");
+
 const { JSDOM } = await import("jsdom");
 const VIEW = `<html><body><div class="panel panel-success"><div class="panel-heading"><h3 class="panel-title">[261005]花たん - Insert Song[Amazon][FLAC]</h3></div>
 <div class="panel-body"><div class="row"><div class="col-md-1">Category:</div><div class="col-md-5"><a>Audio</a> - <a>Lossless</a></div><div class="col-md-1">Date:</div><div class="col-md-5" data-timestamp="1759599600">2026-10-04 17:40 UTC</div></div>

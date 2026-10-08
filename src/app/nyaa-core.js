@@ -153,6 +153,83 @@ export function fmtBytes(b) {
   return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
 }
 
+// ---------- фильтры списка ----------
+
+export const DEFAULT_FILTERS = {
+  hideDead: false,       // 0 раздающих
+  minSeeders: 0,
+  block: [],             // скрыть, если в названии есть любое из слов
+  require: [],           // показать только с одним из слов
+  sizeMinMiB: 0, sizeMaxMiB: 0,   // 0 — не ограничено
+  completedOp: "any",    // any | gt | lt | eq
+  completedVal: 0,
+  age: "all",            // all | 24h | 7d | 30d | 90d | 365d
+  hideSeen: false,
+};
+
+const AGE_MS = { "24h": 86400e3, "7d": 7 * 86400e3, "30d": 30 * 86400e3, "90d": 90 * 86400e3, "365d": 365 * 86400e3 };
+const toNum = v => { const n = Number(String(v ?? "").replace(",", ".")); return Number.isFinite(n) && n > 0 ? n : 0; };
+export const splitWords = text => String(text || "").split(/[,\n;]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+
+export function normalizeFilters(f = {}) {
+  const d = DEFAULT_FILTERS;
+  return {
+    hideDead: !!f.hideDead,
+    minSeeders: Math.floor(toNum(f.minSeeders)),
+    block: Array.isArray(f.block) ? f.block.map(String).filter(Boolean) : d.block,
+    require: Array.isArray(f.require) ? f.require.map(String).filter(Boolean) : d.require,
+    sizeMinMiB: toNum(f.sizeMinMiB), sizeMaxMiB: toNum(f.sizeMaxMiB),
+    completedOp: ["gt", "lt", "eq"].includes(f.completedOp) ? f.completedOp : "any",
+    completedVal: Math.floor(toNum(f.completedVal)),
+    age: AGE_MS[f.age] ? f.age : "all",
+    hideSeen: !!f.hideSeen,
+  };
+}
+
+/** Сколько условий фильтра сейчас включено (для значка на кнопке). */
+export function activeFilterCount(f) {
+  const n = normalizeFilters(f);
+  return [n.hideDead, n.minSeeders > 0, n.block.length > 0, n.require.length > 0, n.sizeMinMiB > 0 || n.sizeMaxMiB > 0,
+    n.completedOp !== "any", n.age !== "all", n.hideSeen].filter(Boolean).length;
+}
+
+/** Применяет фильтры к списку. seen — множество id, которые уже открывали/сохраняли. */
+export function applyFilters(items, filters, { now = Date.now(), seen = new Set() } = {}) {
+  const f = normalizeFilters(filters);
+  const block = f.block.map(w => w.toLowerCase());
+  const req = f.require.map(w => w.toLowerCase());
+  return items.filter(it => {
+    const t = it.title.toLowerCase();
+    if (f.hideDead && it.seeders === 0) return false;
+    if (it.seeders < f.minSeeders) return false;
+    if (block.some(w => t.includes(w))) return false;
+    if (req.length && !req.some(w => t.includes(w))) return false;
+    const mib = it.sizeBytes / 1048576;
+    if (f.sizeMinMiB && mib < f.sizeMinMiB) return false;
+    if (f.sizeMaxMiB && mib > f.sizeMaxMiB) return false;
+    if (f.completedOp === "gt" && !(it.downloads > f.completedVal)) return false;
+    if (f.completedOp === "lt" && !(it.downloads < f.completedVal)) return false;
+    if (f.completedOp === "eq" && it.downloads !== f.completedVal) return false;
+    if (f.age !== "all" && it.date && now - it.date > AGE_MS[f.age]) return false;
+    if (f.hideSeen && seen.has(it.id)) return false;
+    return true;
+  });
+}
+
+/** Склейка страниц: новые записи добавляются, повторы по id отбрасываются. */
+export function mergePages(current, next) {
+  const have = new Set(current.map(i => i.id));
+  return current.concat(next.filter(i => !have.has(i.id)));
+}
+
+/** Диапазон выбора при Shift+щелчке: id между якорем и целью в текущем порядке списка. */
+export function rangeIds(ids, anchorId, targetId) {
+  const a = ids.indexOf(anchorId), b = ids.indexOf(targetId);
+  if (a === -1 || b === -1) return [targetId];
+  const [from, to] = a < b ? [a, b] : [b, a];
+  return ids.slice(from, to + 1);
+}
+
 // ---------- страница раздачи ----------
 
 const BLOCK = new Set(["P", "DIV", "LI", "H1", "H2", "H3", "H4", "H5", "H6", "TR", "PRE", "BLOCKQUOTE", "UL", "OL", "TABLE"]);

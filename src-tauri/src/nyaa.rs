@@ -76,7 +76,10 @@ fn valid_category(c: &str) -> bool {
     b.len() == 3 && b[0].is_ascii_digit() && b[1] == b'_' && b[2].is_ascii_digit()
 }
 
-pub fn rss_url(base: &str, query: &str, category: &str, filter: &str) -> Result<Url, String> {
+pub fn rss_url(base: &str, query: &str, category: &str, filter: &str, page: u32) -> Result<Url, String> {
+    if !(1..=40).contains(&page) {
+        return Err("Неверный номер страницы.".into());
+    }
     if !valid_category(category) {
         return Err("Неверная категория.".into());
     }
@@ -93,6 +96,9 @@ pub fn rss_url(base: &str, query: &str, category: &str, filter: &str) -> Result<
         .append_pair("q", q)
         .append_pair("c", category)
         .append_pair("f", filter);
+    if page > 1 {
+        u.query_pairs_mut().append_pair("p", &page.to_string());
+    }
     Ok(u)
 }
 
@@ -122,8 +128,8 @@ async fn get_bytes(url: Url, limit: usize, accept: Option<&str>) -> Result<(Vec<
 }
 
 #[tauri::command(async)]
-pub async fn nyaa_rss(base: String, query: String, category: String, filter: String) -> Result<String, String> {
-    let (b, _) = get_bytes(rss_url(&base, &query, &category, &filter)?, MAX_BYTES, None).await?;
+pub async fn nyaa_rss(base: String, query: String, category: String, filter: String, page: Option<u32>) -> Result<String, String> {
+    let (b, _) = get_bytes(rss_url(&base, &query, &category, &filter, page.unwrap_or(1))?, MAX_BYTES, None).await?;
     Ok(String::from_utf8_lossy(&b).into_owned())
 }
 
@@ -222,7 +228,7 @@ mod tests {
 
     #[test]
     fn builds_rss_url_for_any_public_mirror() {
-        let u = rss_url("https://nyaa.land/some/path?x=1", "night watch 1080p", "1_2", "0").unwrap();
+        let u = rss_url("https://nyaa.land/some/path?x=1", "night watch 1080p", "1_2", "0", 1).unwrap();
         assert_eq!(u.host_str(), Some("nyaa.land"));
         assert_eq!(u.path(), "/");
         let pairs: Vec<(String, String)> = u.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
@@ -233,22 +239,32 @@ mod tests {
 
     #[test]
     fn query_is_encoded_not_injected() {
-        let u = rss_url("https://nyaa.si", "a&c=9_9#x", "0_0", "1").unwrap();
+        let u = rss_url("https://nyaa.si", "a&c=9_9#x", "0_0", "1", 1).unwrap();
         assert_eq!(u.query_pairs().filter(|(k, _)| k == "c").count(), 1);
         assert!(u.fragment().is_none());
     }
 
     #[test]
     fn rejects_bad_params_and_private_hosts() {
-        assert!(rss_url("https://nyaa.si", "x", "12", "0").is_err());
-        assert!(rss_url("https://nyaa.si", "x", "1_2", "5").is_err());
-        assert!(rss_url("https://nyaa.si", &"я".repeat(201), "1_2", "0").is_err());
+        assert!(rss_url("https://nyaa.si", "x", "12", "0", 1).is_err());
+        assert!(rss_url("https://nyaa.si", "x", "1_2", "5", 1).is_err());
+        assert!(rss_url("https://nyaa.si", &"я".repeat(201), "1_2", "0", 1).is_err());
         assert!(base_origin("http://nyaa.si").is_err());
         assert!(base_origin("https://localhost").is_err());
         assert!(base_origin("https://192.168.0.5").is_err());
         assert!(base_origin("https://10.0.0.1:8080").is_err());
         assert!(base_origin("https://router.local").is_err());
         assert!(base_origin("javascript:alert(1)").is_err());
+    }
+
+    #[test]
+    fn page_parameter() {
+        let u = rss_url("https://nyaa.si", "x", "1_2", "0", 3).unwrap();
+        assert!(u.query_pairs().any(|(k, v)| k == "p" && v == "3"));
+        let first = rss_url("https://nyaa.si", "x", "1_2", "0", 1).unwrap();
+        assert!(!first.query_pairs().any(|(k, _)| k == "p"));
+        assert!(rss_url("https://nyaa.si", "x", "1_2", "0", 0).is_err());
+        assert!(rss_url("https://nyaa.si", "x", "1_2", "0", 41).is_err());
     }
 
     #[test]
