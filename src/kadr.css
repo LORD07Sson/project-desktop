@@ -73,7 +73,15 @@ body {
 }
 
 /* ---------- Фон из кадра (app/backdrop.js) ---------- */
-.app-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.app-backdrop {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  /* Запасной фон, пока нет кадра тайтла (пустая очередь, нет сети): мягкие
+     пятна цвета акцента, чтобы стекло карточек было на чём размывать. */
+  background:
+    radial-gradient(60% 55% at 18% 8%, rgba(var(--fire-rgb), .22), transparent 70%),
+    radial-gradient(55% 60% at 88% 30%, rgba(var(--gold-rgb), .12), transparent 70%),
+    radial-gradient(70% 50% at 50% 105%, rgba(var(--fire-rgb), .14), transparent 70%);
+}
 .app-backdrop i {
   position: absolute; inset: -90px; background-size: cover; background-position: center;
   filter: blur(64px) saturate(1.15) brightness(.32); opacity: 0;
