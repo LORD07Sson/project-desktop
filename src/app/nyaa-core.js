@@ -153,6 +153,110 @@ export function fmtBytes(b) {
   return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
 }
 
+// ---------- страница раздачи ----------
+
+const BLOCK = new Set(["P", "DIV", "LI", "H1", "H2", "H3", "H4", "H5", "H6", "TR", "PRE", "BLOCKQUOTE", "UL", "OL", "TABLE"]);
+
+function textOf(node, out) {
+  for (const n of node.childNodes) {
+    if (n.nodeType === 3) out.push(n.nodeValue);
+    else if (n.nodeType === 1) {
+      if (n.tagName === "BR") out.push("\n");
+      else if (n.tagName === "SCRIPT" || n.tagName === "STYLE" || n.tagName === "IMG") continue;
+      else { textOf(n, out); if (BLOCK.has(n.tagName)) out.push("\n"); }
+    }
+  }
+}
+
+function cleanText(s) {
+  return s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
+}
+
+/**
+ * HTML страницы /view/{id} → { title, fields, date, magnet, description, images, files }.
+ * Текст описания берётся как простой текст (разметка с чужого сайта в программу
+ * не вставляется), картинки — только https. parser — конструктор DOMParser
+ * (в браузере по умолчанию свой, в тестах передаётся из jsdom).
+ */
+export function parseView(html, Parser = globalThis.DOMParser) {
+  const doc = new Parser().parseFromString(String(html || ""), "text/html");
+  const fields = {};
+  let ts = 0;
+  doc.querySelectorAll(".panel-body .col-md-1").forEach(lab => {
+    const key = lab.textContent.replace(":", "").trim().toLowerCase();
+    const val = lab.nextElementSibling;
+    if (!key || !val) return;
+    fields[key] = val.textContent.replace(/\s+/g, " ").trim();
+    if (key === "date") ts = Number(val.getAttribute("data-timestamp")) * 1000 || 0;
+  });
+  const desc = doc.querySelector("#torrent-description");
+  const parts = [];
+  if (desc) textOf(desc, parts);
+  const images = [];
+  if (desc) {
+    desc.querySelectorAll("img").forEach(img => {
+      const src = (img.getAttribute("src") || "").trim();
+      if (/^https:\/\//i.test(src) && !images.includes(src)) images.push(src);
+    });
+  }
+  const files = [];
+  doc.querySelectorAll(".torrent-file-list li").forEach(li => {
+    if (li.querySelector("ul")) return;
+    const t = li.textContent.replace(/\s+/g, " ").trim();
+    if (t) files.push(t);
+  });
+  const magnetA = doc.querySelector('a[href^="magnet:"]');
+  return {
+    title: (doc.querySelector(".panel-title") || { textContent: "" }).textContent.trim(),
+    fields,
+    date: ts,
+    magnet: magnetA ? magnetA.getAttribute("href") : "",
+    description: cleanText(parts.join("")).slice(0, 5000),
+    images: images.slice(0, 12),
+    files: files.slice(0, 300),
+  };
+}
+
+// ---------- зеркала и проверка связи ----------
+
+export const NYAA_MIRRORS = ["https://nyaa.si", "https://nyaa.land"];
+
+/** Службы для проверки; apply — переключается ли зеркало в самой странице. */
+export function buildServices(nyaaCustom = [], serverOrigin = "") {
+  const services = [
+    { id: "nyaa", name: "Nyaa", note: "список раздач и страницы", apply: true, mirrors: [...new Set([...NYAA_MIRRORS, ...nyaaCustom])] },
+    { id: "shikimori", name: "Shikimori", note: "каталог и постеры в режиме «Смотреть» идут через сервер студии", apply: false, mirrors: ["https://shikimori.one", "https://shikimori.io", "https://shikimori.me"] },
+    { id: "anilist", name: "AniList", note: "описания, баннеры, расписание эфира", apply: false, mirrors: ["https://graphql.anilist.co", "https://anilist.co"] },
+    { id: "jikan", name: "MyAnimeList (Jikan)", note: "оценки и опенинги", apply: false, mirrors: ["https://api.jikan.moe"] },
+  ];
+  if (serverOrigin) services.push({ id: "server", name: "Сервер студии", note: "задачи, файлы, чат", apply: false, mirrors: [serverOrigin] });
+  return services;
+}
+
+/** Результат проверки → { level: ok|slow|warn|bad, text }. */
+export function classifyCheck(r) {
+  if (!r) return { level: "idle", text: "не проверено" };
+  if (r.error) return { level: "bad", text: r.error };
+  if (!r.ok) return { level: "bad", text: `ошибка сервера ${r.status}` };
+  if (r.status >= 400) return { level: "warn", text: `отвечает (${r.status}), но может не пускать` };
+  if (r.ms > 1500) return { level: "slow", text: `медленно · ${r.ms} мс` };
+  return { level: "ok", text: `доступен · ${r.ms} мс` };
+}
+
+/** Привести введённое пользователем к виду https://host (или null). */
+export function normalizeMirror(value) {
+  let v = String(value || "").trim();
+  if (!v) return null;
+  if (!/^[a-z]+:\/\//i.test(v)) v = `https://${v}`;
+  try {
+    const u = new URL(v);
+    if (u.protocol !== "https:" || !u.hostname.includes(".")) return null;
+    return `https://${u.host}`;
+  } catch (_) { return null; }
+}
+
+export const hostOf = base => { try { return new URL(base).host; } catch (_) { return String(base); } };
+
 /** Безопасное имя файла .torrent из названия раздачи. */
 export function torrentFileName(item) {
   const base = String(item.title || `nyaa-${item.id}`).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 120);
