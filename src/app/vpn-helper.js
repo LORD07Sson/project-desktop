@@ -87,41 +87,49 @@ function classifyInbound(ib, tcp, tls, control, others) {
   if (!tcp || tcp._error) return { tone: "bad", notes: [tcp?._error || "TCP-проба не запустилась"] };
   if (!tcp.ok_count) {
     const errs = tcp.attempts.map(a => a.error);
-    if (errs.every(e => e === "refused")) return { tone: "bad", notes: ["Порт закрыт на сервере: inbound не слушает или режет фаервол VPS."] };
+    if (errs.every(e => e === "refused")) return { tone: "bad", notes: ["Порт закрыт на сервере: inbound не слушает или режет фаервол VPS."], recs: ["Проверьте, что inbound слушает этот порт и фаервол VPS (ufw/iptables) его пропускает."] };
     const otherPortsOk = others.some(t => t && t.ok_count > 0);
     return {
       tone: "bad",
       notes: [otherPortsOk
         ? `Похоже на блок порта ${ib.port}: другие порты этого сервера отвечают, а этот — ${ERR[errs[0]] || errs[0]}.`
         : `Сервер не отвечает ни на одном порту (${ERR[errs[0]] || errs[0]}) — похоже на блок по IP.`],
+      recs: [otherPortsOk
+        ? "Смените порт inbound'а в 3X-UI на 443, 8443, 2053 или 2083."
+        : "Смените IP-адрес сервера или провайдера VPS."],
     };
   }
   let tone = tcp.ok_count < tcp.attempts.length ? "warn" : "ok";
   if (tone === "warn") notes.push(`TCP: ${tcp.ok_count} из ${tcp.attempts.length} попыток прошли.`);
   if (!tls) return { tone, notes };
   if (tls._error) return { tone: "warn", notes: [...notes, tls._error] };
+  const recs = [];
   if (!tls.tls_ok) {
     const controlAnswered = control && !control._error && (control.tls_ok || ["tls_alert", "tls_other"].includes(control.error));
     const what = ERR[tls.error] || tls.error;
-    if (controlAnswered) notes.push(`DPI по SNI: с «${tls.sni}» — ${what}, а без SNI сервер отвечает.`);
-    else if (["reset", "timeout", "eof"].includes(tls.error)) notes.push(`TCP проходит, а TLS-хендшейк — ${what}: похоже на DPI по TLS к этому серверу.`);
-    else notes.push(`TLS не установился: ${what}${tls.error_text ? ` (${tls.error_text})` : ""}.`);
-    return { tone: "bad", notes };
+    if (controlAnswered) {
+      notes.push(`DPI по SNI: с «${tls.sni}» — ${what}, а без SNI сервер отвечает.`);
+      recs.push("Замените serverNames (Target SNI) в настройках REALITY на менее популярный или нейтральный домен.");
+    } else if (["reset", "timeout", "eof"].includes(tls.error)) {
+      notes.push(`TCP проходит, а TLS-хендшейк — ${what}: похоже на DPI по TLS к этому серверу.`);
+      recs.push("Смените SNI/dest, а если не поможет — транспорт на gRPC, xhttp или httpupgrade.");
+    } else notes.push(`TLS не установился: ${what}${tls.error_text ? ` (${tls.error_text})` : ""}.`);
+    return { tone: "bad", notes, recs };
   }
   if (ib.security === "reality") {
     if (tls.cert_valid) notes.push(`Reality отвечает сертификатом ${ib.reality_dest || tls.sni} — маскировка выглядит правильно.`);
-    else { tone = "warn"; notes.push(`Reality: сертификат не сходится с SNI «${tls.sni}» (${tls.cert_error || "?"}). Проверьте dest и serverNames.`); }
+    else { tone = "warn"; notes.push(`Reality: сертификат не сходится с SNI «${tls.sni}» (${tls.cert_error || "?"}). Проверьте dest и serverNames.`); recs.push("Выберите dest/serverNames, у которого сайт отвечает по TLS 1.3 и h2."); }
   } else {
-    if (tls.cert_valid === false) { tone = "bad"; notes.push(`SSL недействителен: ${tls.cert_error}.`); }
-    else if (tls.cert_days_left != null && tls.cert_days_left < 14) { tone = worst([tone, "warn"]); notes.push(`Сертификат истекает через ${tls.cert_days_left} дн.`); }
+    if (tls.cert_valid === false) { tone = "bad"; notes.push(`SSL недействителен: ${tls.cert_error}.`); recs.push("Откройте вкладку «Сертификаты» и выпустите или назначите действующий сертификат."); }
+    else if (tls.cert_days_left != null && tls.cert_days_left < 14) { tone = worst([tone, "warn"]); notes.push(`Сертификат истекает через ${tls.cert_days_left} дн.`); recs.push("Во вкладке «Сертификаты» включите авто-продление или продлите вручную."); }
   }
-  return { tone, notes };
+  return { tone, notes, recs };
 }
 
 function classifyFreeze(http) {
   if (!http) return null;
   const kb = Math.round(http.bytes / 1024);
-  if (http.stalled && http.bytes >= 10 * 1024 && http.bytes <= 32 * 1024) return { tone: "bad", text: `Поток встал на ${kb} КБ — типичная «заморозка» ТСПУ.` };
+  if (http.stalled && http.bytes >= 10 * 1024 && http.bytes <= 32 * 1024) return { tone: "bad", text: `Поток встал на ${kb} КБ — типичная «заморозка» ТСПУ.`, rec: "Смените транспорт inbound'а на gRPC, xhttp или httpupgrade (вместо сырого TCP/WS)." };
   if (http.stalled) return { tone: "warn", text: `Поток встал на ${kb} КБ (не похоже на ТСПУ, но ответ не дочитан).` };
   if (http.error && http.error !== "timeout") return { tone: "warn", text: `Чтение оборвалось на ${kb} КБ: ${ERR[http.error] || http.error}.` };
   if (http.bytes < 20 * 1024) return { tone: "skip", text: `Ответ всего ${kb} КБ — слишком мал, чтобы проверить порог ~16 КБ.` };
@@ -200,7 +208,7 @@ export async function runVpnChecks({ auto = false } = {}) {
 
     // connect за ~1 мс до удалённого сервера — соединение перехватил
     // локальный VPN/прокси, пробы меряют его, а не провайдера.
-    const tunnel = (stability?.median_ms ?? stabTarget?.tcp?.median_ms ?? 99) < 2;
+    const tunnel = (stability?.median_ms ?? stabTarget?.tcp?.median_ms ?? 99) < 5;
 
     const result = { at: Date.now(), auto, ov, serverIp, internetOk, dns, rows, freeze, stability, tunnel };
     writeJson(RESULT_KEY, stripForStorage(result));
@@ -309,6 +317,7 @@ function inboundRowHtml(x) {
         <div class="svc-row-name">${esc(ib.remark || `inbound ${ib.id}`)} <span class="vpn-port">:${ib.port}</span></div>
         <div class="svc-row-desc">${esc(proto)}${sni ? ` · ${esc(sni)}` : ""}${tlsBits ? ` · ${esc(tlsBits)}` : ""}</div>
         ${(x.notes || []).map(n => `<div class="vpn-note">${esc(n)}</div>`).join("")}
+        ${(x.recs || []).map(n => `<div class="vpn-rec">→ ${esc(n)}</div>`).join("")}
       </div>
       ${pill(x.tone)}
       <div class="svc-row-latency">${fmtMs(x.tcp?.median_ms)}</div>
@@ -327,7 +336,7 @@ function dnsHtml(r) {
         <div style="min-width:0;">
           <div style="font-size:12px; font-weight:600;">${esc(d.host)}</div>
           <div class="vpn-sub">Система: ${d.system_error ? esc(d.system_error) : esc(d.system.join(", ") || "пусто")} · ${doh}</div>
-          ${d.mismatch ? `<div class="vpn-note">Провайдерский DNS отвечает не так, как DoH, — похоже на подмену DNS.</div>` : ""}
+          ${d.mismatch ? `<div class="vpn-note">Провайдерский DNS отвечает не так, как DoH, — похоже на подмену DNS.</div><div class="vpn-rec">→ Включите в клиенте шифрование DNS (DoH / DoT).</div>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -373,7 +382,7 @@ function resultHtml(r) {
       <div><h2>${tone === "ok" ? "Сервер доступен, блокировок не видно" : tone === "bad" ? "Найдены проблемы" : tone === "warn" ? "Работает, но есть вопросы" : "Нечего проверять"}</h2>
         <p>${esc(r.serverIp || "адрес сервера не найден")} · проверено ${esc(relTime(new Date(r.at).toISOString()))}${r.auto ? " (авто)" : ""} · трафик ${fmtBytes(traffic)}</p></div>
     </section>
-    ${r.tunnel ? `<div class="bcell vpn-warn">Соединение с сервером устанавливается за ~1 мс — похоже, на этом компьютере включён VPN или прокси, и проверки идут через него. Для честной картины блокировок выключите его и проверьте снова.</div>` : ""}
+    ${r.tunnel ? `<div class="bcell vpn-warn">Соединение с сервером устанавливается меньше чем за 5 мс — похоже, на этом компьютере включён VPN или прокси, и проверки идут через него. Для честной картины блокировок выключите его и проверьте снова.</div>` : ""}
     ${!r.internetOk ? `<div class="bcell vpn-warn">DoH-резолверы не ответили — возможно, пропал интернет, а не сервер заблокирован.</div>` : ""}
     ${!r.serverIp ? `<div class="bcell vpn-warn">Не удалось определить IP сервера. Укажите его в XUI_PUBLIC_HOSTS на сервере.</div>` : ""}
     <div class="an-metrics">${statCards}</div>
@@ -390,7 +399,7 @@ function resultHtml(r) {
         </div>
         <div class="bcell" style="animation-delay:220ms;">
           <h3>Заморозка после ~16 КБ</h3>
-          <div class="mini-list">${r.freeze ? `<div class="mini-row">${dot(r.freeze.tone)}<div class="vpn-sub" style="color:inherit;">порт ${r.freeze.port}: ${esc(r.freeze.text)}</div></div>` : `<div class="no-assignee">Нет TLS-inbound'а, через который можно проверить</div>`}</div>
+          <div class="mini-list">${r.freeze ? `<div class="mini-row">${dot(r.freeze.tone)}<div class="vpn-sub" style="color:inherit;">порт ${r.freeze.port}: ${esc(r.freeze.text)}${r.freeze.rec ? `<div class="vpn-rec">→ ${esc(r.freeze.rec)}</div>` : ""}</div></div>` : `<div class="no-assignee">Нет TLS-inbound'а, через который можно проверить</div>`}</div>
         </div>
         <div class="bcell" style="flex-grow:1; animation-delay:240ms;">
           <h3>История проверок</h3>

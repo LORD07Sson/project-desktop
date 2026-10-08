@@ -280,6 +280,7 @@ async function certsHtml() {
   const st = await apiGet("/dev/vpn/certs");
   const need = st.certs.some(c => c.days_left != null && c.days_left < 10) && !st.auto_renew;
   return `
+    ${st.standalone?.length ? `<div class="bcell vpn-warn">Сертификат ${esc(st.standalone.join(", "))} выпущен в режиме standalone: продлению нужен свободный порт 80, а его занимает nginx, поэтому авто-продление не срабатывает. Нажмите «Проверить и продлить сейчас» — приложение переведёт его на проверку через nginx и продлит.</div>` : ""}
     ${need ? `<div class="bcell vpn-warn">Сертификат скоро истекает, а авто-продление выключено. Нажмите «Включить авто-продление».</div>` : ""}
     <div class="bcell vm-list">
       <h3>Сертификаты на сервере</h3>
