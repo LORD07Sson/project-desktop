@@ -2,6 +2,7 @@
 // этот модуль только открывает диалог выбора файла и рисует результат.
 
 import { invoke, pickInputFiles, pickOutputFile, revealInFolder, appWindow, sendNotification } from "./tauri.js";
+import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "./media-formats.js";
 import { openSheet, dialogSkeletonHtml, toast, apiPost } from "./api.js";
 import { $, esc, formatTime, formatRange, noteTimePrefix } from "./utils.js";
 
@@ -12,7 +13,7 @@ const FINDING_LABELS = {
 // Список расширений, которые умеет разбирать qc_analyze — общий и для
 // диалога выбора файла ниже, и для file-drop.js (перетащить файл на
 // окно без открытой карточки отчёта — тоже запускает этот же QC).
-export const QC_EXTENSIONS = ["wav", "mp3", "flac", "m4a", "aac", "ogg", "mp4", "mkv", "mov"];
+export const QC_EXTENSIONS = [...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS];
 
 function baseName(path) {
   return String(path).split(/[\\/]/).pop() || path;

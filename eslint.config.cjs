@@ -36,6 +36,7 @@ module.exports = [
         clearTimeout: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
+        TextDecoder: "readonly",
         requestAnimationFrame: "readonly",
         cancelAnimationFrame: "readonly",
         getComputedStyle: "readonly",

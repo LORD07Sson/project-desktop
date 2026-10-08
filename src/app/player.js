@@ -10,10 +10,9 @@
 // переставляется в новое место — звук при этом не прерывается.
 
 import { apiGet, apiPost, apiBlob, toast } from "./api.js";
+import { AUDIO_RE, MIME } from "./media-formats.js";
 import { esc, parseNoteTime, formatRange } from "./utils.js";
 
-const AUDIO_RE = /audio|\.(wav|mp3|flac|m4a|aac|ogg|oga|opus)$/i;
-const MIME = { wav: "audio/wav", mp3: "audio/mpeg", flac: "audio/flac", m4a: "audio/mp4", aac: "audio/aac", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg" };
 const QC_LABEL = { clip: "клиппинг", noise: "шум", silence: "тишина", silence_long: "долгая тишина", no_speech: "нет речи" };
 
 export function isAudioFile(f) {
@@ -259,7 +258,7 @@ export function createPlayer({ publicId, onAddNote, onClose }) {
       audio.src = blobUrl;
       await new Promise((res) => { audio.addEventListener("loadedmetadata", res, { once: true }); audio.addEventListener("error", res, { once: true }); });
       if (seq !== loadSeq) return;
-      if (audio.error) throw new Error("этот формат не играет — попробуйте mp3 или wav");
+      if (audio.error) throw new Error(`формат .${ext} не играет во встроенном плеере — QC и ffmpeg его откроют, а для прослушивания сконвертируйте в wav или mp3`);
       if (keep) audio.currentTime = Math.min(keep, dur() - 0.05);
       await peaksP;
       msg.hidden = true;

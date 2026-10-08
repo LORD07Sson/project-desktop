@@ -10,7 +10,8 @@
     "test:board": "node scripts/board-gestures-test.mjs",
     "test:profile": "node scripts/profile-qc-test.mjs",
     "test:notes": "node scripts/notes-timecodes-test.mjs",
-    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes"
+    "test:text": "node scripts/text-check-test.mjs",
+    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:text"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",

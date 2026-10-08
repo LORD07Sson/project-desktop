@@ -921,8 +921,13 @@ impl DroppedFiles {
 // синхроне руками. Проверка дублируется намеренно: JS-сторону можно
 // обойти, Rust-сторону — нет.
 const ALLOWED_UPLOAD_EXT: &[&str] = &[
-    "wav", "mp3", "flac", "m4a", "aac", "ogg", "oga", "mp4", "mov", "mkv", "avi", "png", "jpg",
-    "jpeg", "webp", "pdf", "doc", "docx", "ppt", "pptx", "zip",
+    // звук (AUDIO_EXTENSIONS в src/app/media-formats.js)
+    "wav", "wave", "w64", "mp3", "mp2", "flac", "m4a", "m4b", "aac", "ogg", "oga", "opus", "wma", "aiff",
+    "aif", "aifc", "ac3", "eac3", "dts", "mka", "ape", "wv", "amr", "caf", "au", "tta", "weba",
+    // видео (VIDEO_EXTENSIONS)
+    "mp4", "mkv", "mov", "avi", "webm", "m4v", "ts", "m2ts", "mts", "mpg", "mpeg", "wmv", "flv", "3gp", "ogv",
+    // картинки и документы
+    "png", "jpg", "jpeg", "webp", "pdf", "doc", "docx", "ppt", "pptx", "zip",
 ];
 
 // Гигабайтный файл, целиком загруженный в память, уронил бы приложение

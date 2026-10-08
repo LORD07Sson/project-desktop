@@ -1281,3 +1281,28 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 .mt-empty { border: 1px dashed rgba(255, 255, 255, .14); border-radius: 18px; padding: 34px 24px; background: rgba(255, 255, 255, .02); }
 :root[data-theme="light"] .mt-op-tabs, :root[data-theme="light"] .mt-pool-bar { background: rgba(80, 40, 20, .04); }
 @media (max-width: 760px) { .dev-ids { grid-template-columns: 1fr; } }
+
+/* ---------- Сверка текста (text-check.js) ---------- */
+.tc-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tc-src-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.tc-src-h .btn { padding: 4px 10px; font-size: 12px; }
+.tc-src .field-textarea { margin: 0; min-height: 110px; font-size: 13px; }
+.tc-out { margin-top: 14px; max-height: 46vh; overflow: auto; }
+.tc-sum { padding: 10px 14px; margin-bottom: 10px; border-radius: 12px; background: rgba(255, 255, 255, .04); font-size: 13px; color: var(--ink-soft); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tc-sum b { color: var(--ink); }
+.tc-sum.ok { color: var(--s-done); }
+.tc-chk { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; cursor: pointer; font-size: 12px; }
+.tc-row { display: flex; gap: 12px; padding: 10px 6px; border-top: 1px solid var(--line); }
+.tc-n { flex: none; width: 38px; text-align: right; font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.tc-line { font-size: 14px; line-height: 1.5; }
+.tc-hint { margin-top: 4px; font-size: 12px; color: var(--ink-soft); }
+.tc-hint b { color: var(--s-done); }
+.tc-hint i { color: var(--ink-dim); font-style: normal; margin-left: 4px; }
+mark.tc-m { background: rgba(var(--fire-rgb), .3); color: inherit; border-radius: 4px; padding: 0 2px; }
+mark.tc-d { background: rgba(255, 107, 94, .28); color: inherit; border-radius: 4px; padding: 0 2px; }
+.tc-cmp { display: grid; grid-template-columns: 44px 1fr 1fr; gap: 12px; padding: 9px 6px; border-top: 1px solid var(--line); font-size: 13.5px; line-height: 1.5; }
+.tc-cmp-h { border-top: 0; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
+.tc-cmp.onlyA, .tc-cmp.onlyB { background: rgba(240, 179, 74, .06); }
+.tc-cmp.same { color: var(--ink-dim); }
+.tc-none { color: var(--ink-dim); }
+@media (max-width: 760px) { .tc-two, .tc-cmp { grid-template-columns: 1fr; } }
