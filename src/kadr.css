@@ -1410,6 +1410,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-svc { padding: 12px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); display: grid; gap: 6px; align-content: start; }
 .ny-svc-h { display: grid; gap: 1px; margin-bottom: 4px; }
 .ny-svc-h span { font-size: 11.5px; color: var(--ink-dim); }
+.ny-seg button.dim:not(.on) { opacity: .6; }
 .ny-row.sd-best { background: rgba(0, 172, 255, .10); }
 .ny-row.sd-alt { background: rgba(255, 172, 0, .09); }
 .ny-tags i.sd-b { color: #7cc8ff; border-color: rgba(0, 172, 255, .45); }

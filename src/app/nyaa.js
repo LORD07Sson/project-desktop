@@ -108,9 +108,12 @@ const view = () => {
   items.forEach(i => { i._sd = sdOf(i); });
   let l = sortItems(applyFilters(items, prefs.filters, { seen }), prefs.sort, "desc");
   if (prefs.hideDone) l = l.filter(i => { const k = episodeKey(i); return !k || !sentEps.has(k); });
-  if (prefs.onlySeadex) l = l.filter(i => i._sd);
+  // «Только SeaDex» действует, только если в списке есть такие раздачи: иначе он бы пустил всё в ноль.
+  if (prefs.onlySeadex && items.some(i => i._sd)) l = l.filter(i => i._sd);
   return l;
 };
+const sdCount = () => items.filter(i => i._sd).length;
+const sdLabel = () => { const n = sdCount(); return n ? `SeaDex ${n}` : "SeaDex"; };
 
 async function loadSeadexList() {
   const url = seadexListUrl(items.filter(i => !sdMap.has(String(i.hash || "").toLowerCase())).map(i => i.hash));
@@ -346,7 +349,7 @@ function paintStatic() {
     + `<select id="ny-cat-more" aria-label="Другие категории"><option value="">Ещё категории…</option>${CATEGORIES.filter(([k]) => !QUICK_CATS.some(q => q[0] === k)).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
   $("#ny-filter").innerHTML = seg(FILTERS, prefs.filter, "data-filter");
   $("#ny-sort").innerHTML = seg(SORTS, prefs.sort, "data-sort");
-  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы)">SeaDex</button>`;
+  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы). SeaDex — курируемая база, в свежей ленте её раздач обычно мало.">${sdLabel()}</button>`;
   $("#ny-saved").innerHTML = prefs.saved.length
     ? `<span class="ny-saved-l">Мои запросы</span>` + prefs.saved.map((s, i) => `<span class="ny-chip"><button type="button" data-saved="${i}">${esc(s.q || "без слов")} <small>${esc((QUICK_CATS.concat(CATEGORIES).find(c => c[0] === s.cat) || [0, s.cat])[1])}</small></button><button type="button" class="x" data-saved-del="${i}" aria-label="Убрать">×</button></span>`).join("")
     : "";
@@ -381,6 +384,8 @@ function paintList() {
   const upd = $("#ny-upd");
   if (upd) upd.textContent = fetchedAt ? `обновлено ${relTime(fetchedAt)}` : "";
   loadListCovers();
+  const sb = $('[data-toggle="onlySeadex"]');
+  if (sb) { sb.textContent = sdLabel(); sb.classList.toggle("dim", !sdCount()); }
 }
 
 async function load() {
