@@ -247,3 +247,12 @@ console.log("nyaa-test: ok");
   assert.ok(!fr.some(i => i.id === "1" || i.id === "2"), "серия 3 уже получена");
   assert.equal(mk({ type: "query", q: "x" }).rule, undefined);
 }
+
+{
+  const { parseCover, coverKey } = await import("../src/app/nyaa-core.js");
+  assert.equal(parseCover('{"data":{"Media":{"id":1,"coverImage":{"medium":"https://s4.anilist.co/a.jpg"}}}}'), "https://s4.anilist.co/a.jpg");
+  assert.equal(parseCover('{"data":{"Media":null}}'), "");
+  assert.equal(parseCover("не json"), "");
+  assert.equal(coverKey("[Sokudo] Re ZERO - S04E19 [1080p AV1]"), coverKey("[Breeze] Re ZERO - S04E19 [1080p AV1]"));
+  assert.ok(coverKey("[A] Show X - 03 [1080p]").startsWith("show x"));
+}

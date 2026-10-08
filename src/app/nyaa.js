@@ -21,7 +21,7 @@ import {
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
-  groupReleases, episodeKey, makeRule, ruleText, freshForRule,
+  groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
@@ -115,6 +115,60 @@ function statsHtml(list) {
     <div class="ny-stat"><b>${s.trusted}</b><span>доверенных</span></div>`;
 }
 
+// ---------- обложки вместо значков ----------
+// Обложка берётся с AniList по названию тайтла (одна на аниме, не на каждую раздачу) и держится
+// в памяти; в localStorage лежит только адрес картинки. Не нашлась — остаётся значок.
+const COVERS_KEY = "project-nyaa-covers";
+const coverUrls = (() => { try { return JSON.parse(localStorage.getItem(COVERS_KEY) || "{}"); } catch (_) { return {}; } })();
+const coverData = new Map();   // ключ → data-URL
+const coverBusy = new Set();
+const saveCovers = () => {
+  const keys = Object.keys(coverUrls);
+  if (keys.length > 500) keys.slice(0, keys.length - 500).forEach(k => delete coverUrls[k]);
+  try { localStorage.setItem(COVERS_KEY, JSON.stringify(coverUrls)); } catch (_) { /* не запомнится */ }
+};
+
+function kindHtml(it, kind) {
+  const key = coverKey(it.title);
+  const src = key && coverData.get(key);
+  return `<span class="ny-kind k-${kind}${src ? " has-cover" : ""}" data-ck="${esc(key)}" title="${esc(it.category)}">${src ? `<img src="${esc(src)}" alt="">` : KIND_ICON[kind]}</span>`;
+}
+
+function paintCover(key) {
+  const src = coverData.get(key);
+  if (!src) return;
+  document.querySelectorAll(".ny-kind[data-ck]").forEach(el => {
+    if (el.dataset.ck !== key || el.querySelector("img")) return;
+    el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(src)}" alt="">`;
+  });
+}
+
+async function fetchCover(key) {
+  if (coverBusy.has(key) || coverData.has(key)) return;
+  coverBusy.add(key);
+  try {
+    let url = coverUrls[key];
+    if (url === undefined) {
+      url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s: key } }));
+      coverUrls[key] = url; saveCovers();
+    }
+    if (url) { coverData.set(key, await invoke("fetch_image", { url })); paintCover(key); }
+  } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
+  coverBusy.delete(key);
+}
+
+let coverQueueOn = false;
+async function loadListCovers() {
+  if (coverQueueOn) return;
+  coverQueueOn = true;
+  try {
+    const keys = [...new Set(view().slice(0, 60).map(i => coverKey(i.title)).filter(k => k && !coverData.has(k) && coverUrls[k] !== ""))].slice(0, 30);
+    let next = 0;
+    const worker = async () => { while (next < keys.length) await fetchCover(keys[next++]); };
+    await Promise.all([worker(), worker()]);
+  } finally { coverQueueOn = false; }
+}
+
 function rowHtml(it, maxSeed, now) {
   const { group, tags } = splitTitle(it.title);
   const kind = categoryKind(it.categoryId);
@@ -122,7 +176,7 @@ function rowHtml(it, maxSeed, now) {
   return `
     <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}" data-id="${it.id}">
       <label class="ny-ck"><input type="checkbox" ${selected.has(it.id) ? "checked" : ""} aria-label="Выбрать"></label>
-      <span class="ny-kind k-${kind}" title="${esc(it.category)}">${KIND_ICON[kind]}</span>
+      ${kindHtml(it, kind)}
       <div class="ny-main">
         <div class="ny-title">${group ? `<em>${esc(group)}</em>` : ""}${esc(group ? it.title.replace(/^\s*\[[^\]]*\]\s*/, "") : it.title)}</div>
         <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
@@ -273,6 +327,7 @@ function paintList() {
   if (all) all.checked = !!list.length && list.every(i => selected.has(i.id));
   const upd = $("#ny-upd");
   if (upd) upd.textContent = fetchedAt ? `обновлено ${relTime(fetchedAt)}` : "";
+  loadListCovers();
 }
 
 async function load() {

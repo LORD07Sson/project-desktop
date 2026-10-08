@@ -465,6 +465,23 @@ export const SIMILAR_QUERY = `query($s:String){Media(search:$s,type:ANIME){id si
 relations{edges{relationType node{id siteUrl format averageScore title{romaji english} coverImage{medium}}}}
 recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id siteUrl format averageScore title{romaji english} coverImage{medium}}}}}}`;
 
+export const COVER_QUERY = `query($s:String){Media(search:$s,type:ANIME){id coverImage{medium}}}`;
+
+/** Обложка из ответа AniList: https-адрес или пустая строка, если тайтл не нашёлся. */
+export function parseCover(text) {
+  try {
+    const u = JSON.parse(text).data.Media.coverImage.medium;
+    return /^https:\/\//.test(u || "") ? u : "";
+  } catch (_) { return ""; }
+}
+
+/** Ключ обложки: название тайтла без группы, серии и тегов. */
+export const coverKey = title => {
+  const r = parseRelease(title);
+  const base = r.episode != null && r.show ? r.show : cleanTitleForSearch(title);
+  return String(base || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 80);
+};
+
 const REL = { SEQUEL: "Продолжение", PREQUEL: "Предыстория", SIDE_STORY: "Побочная история", SPIN_OFF: "Спин-офф", PARENT: "Основной тайтл", ALTERNATIVE: "Альтернатива", ADAPTATION: "Первоисточник", SUMMARY: "Пересказ", OTHER: "Связано" };
 
 const media = n => n && n.id ? ({
