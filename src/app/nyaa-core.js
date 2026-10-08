@@ -703,6 +703,18 @@ const clock = ms => `${Math.floor(ms / 3600000)}:${pad2(Math.floor(ms / 60000) %
 const assTime = s => { const m = /(\d+):(\d{2}):(\d{2})[.,](\d{1,3})/.exec(s); return m ? (+m[1] * 3600 + +m[2] * 60 + +m[3]) * 1000 + +m[4].padEnd(3, "0") : 0; };
 
 /** Реплики субтитров (ASS/SSA/SRT) для просмотра: [{ at, text }], теги и стили убраны. */
+// Убирает разметку вида <i>…</i> из реплики посимвольно (без регулярных выражений для HTML):
+// текст всё равно выводится только через экранирование.
+function dropMarkup(str) {
+  let out = "", depth = 0;
+  for (const ch of String(str)) {
+    if (ch === "<") depth++;
+    else if (ch === ">" && depth > 0) depth--;
+    else if (depth === 0) out += ch;
+  }
+  return out;
+}
+
 export function parseSubtitle(text, codec = "") {
   const src = String(text || "").replace(/^﻿/, "").replace(/\r/g, "");
   const out = [];
@@ -724,9 +736,9 @@ export function parseSubtitle(text, codec = "") {
   } else {
     for (const block of src.split(/\n{2,}/)) {
       const ls = block.split("\n").filter(Boolean);
-      const ti = ls.findIndex(l => /-->/.test(l));
+      const ti = ls.findIndex(l => l.includes("-->"));
       if (ti < 0) continue;
-      const body = ls.slice(ti + 1).join(" / ").replace(/<[^>]+>/g, "").trim();
+      const body = dropMarkup(ls.slice(ti + 1).join(" / ")).trim();
       if (body) out.push({ at: assTime(ls[ti].split("-->")[0].trim()), text: body });
       if (out.length >= 4000) break;
     }
@@ -802,7 +814,7 @@ export function highlightSubtitle(raw) {
     const m = /^(Dialogue|Comment|Style|Format|Title|ScriptType|PlayRes[XY]):(.*)$/i.exec(l);
     if (m) return `<span class="hl-key">${escH(m[1])}:</span>${escH(m[2]).replace(/\{[^}]*\}/g, t => `<span class="hl-tag">${t}</span>`)}`;
     if (/^\d+$/.test(l.trim())) return `<span class="hl-num">${escH(l)}</span>`;
-    if (/-->/.test(l)) return `<span class="hl-time">${escH(l)}</span>`;
+    if (l.includes("-->")) return `<span class="hl-time">${escH(l)}</span>`;
     return escH(l).replace(/&lt;[^&]*?&gt;/g, t => `<span class="hl-tag">${t}</span>`);
   }).join("\n");
 }
