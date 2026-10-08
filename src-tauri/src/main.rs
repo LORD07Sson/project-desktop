@@ -308,7 +308,7 @@ fn pick_output_file(
     file_scope::pick_output_file(&app, default_name, filters)
 }
 
-// Загрузка текста по https (RSS-ленты, тексты песен, курсы валют).
+// Загрузка текста по https (тексты песен).
 #[tauri::command(async)]
 async fn fetch_text(url: String) -> Result<String, String> {
     http_fetch::get_text(&url).await
