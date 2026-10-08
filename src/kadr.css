@@ -1495,3 +1495,30 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-mon-add { display: flex; flex-wrap: wrap; gap: 8px; }
 .ny-mon-add select, .ny-mon-add input { background: #0b0e18; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); padding: 8px 10px; font: inherit; font-size: 13px; }
 .ny-mon-add input { flex: 1; min-width: 200px; }
+
+/* ---------- Nyaa: внешние источники и «Похожее» ---------- */
+.ny-srcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.ny-src-card { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); display: grid; gap: 8px; align-content: start; }
+.ny-src-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ny-src-top em { font-style: normal; font-size: 11px; padding: 2px 9px; border-radius: 999px; background: rgba(255, 255, 255, .08); color: var(--ink-dim); }
+.ny-src-top em.ok { background: rgba(111, 227, 154, .18); color: #6fe39a; }
+.ny-src-top em.bad { background: rgba(255, 123, 123, .16); color: #ff9a9a; }
+.ny-src-top em.load { color: var(--gold); }
+.ny-src-lines { display: grid; gap: 3px; }
+.ny-src-lines div { display: grid; grid-template-columns: 92px 1fr; gap: 8px; font-size: 12.5px; }
+.ny-src-lines span { color: var(--ink-dim); }
+.ny-src-lines b { font-weight: 600; overflow-wrap: anywhere; }
+.ny-src-card .btn { justify-self: start; padding: 4px 10px; font-size: 12px; }
+.ny-src-card .btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; vertical-align: -2px; margin-right: 4px; }
+.ny-sim-form { display: flex; gap: 8px; margin-bottom: 12px; }
+.ny-sim-form input { flex: 1; min-width: 0; background: #0b0e18; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); padding: 8px 12px; font: inherit; font-size: 13px; }
+.ny-sim-self { margin-bottom: 12px; display: grid; gap: 8px; }
+.ny-sim-h { margin: 14px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-dim); font-weight: 700; }
+.ny-sim-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.ny-sim-card { display: flex; gap: 10px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); min-width: 0; }
+.ny-sim-card > div { display: grid; gap: 2px; align-content: start; min-width: 0; }
+.ny-sim-card b { font-size: 13px; overflow-wrap: anywhere; }
+.ny-sim-card span { font-size: 11.5px; color: var(--ink-dim); }
+.ny-sim-card .ny-link { justify-self: start; padding: 0; margin-top: 2px; }
+.ny-sim-cover { width: 56px; height: 80px; border-radius: 9px; border: 0; padding: 0; flex: none; overflow: hidden; cursor: pointer; background: linear-gradient(135deg, rgba(var(--fire-rgb), .3), rgba(255, 255, 255, .06)); }
+.ny-sim-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }

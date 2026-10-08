@@ -19,6 +19,8 @@ import {
   parseView, buildServices, classifyCheck, normalizeMirror, hostOf, NYAA_MIRRORS,
   applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds,
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
+  isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
+  cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
@@ -611,6 +613,113 @@ function galleryHtml(d) {
   }).join("")}</div>`;
 }
 
+// ---------- внешние источники (SeaDex, AnimeTosho, nekoBT, Tsukihime) ----------
+const metaGet = url => invoke("meta_get", { url });
+const SRC_NAMES = { seadex: "SeaDex", at: "AnimeTosho", neko: "nekoBT", tsuki: "Tsukihime" };
+
+function hashOf(d) { return ((d.view && d.view.fields["info hash"]) || d.item.hash || "").toLowerCase(); }
+
+async function loadSources(d) {
+  if (d.src) return;
+  const hash = hashOf(d);
+  d.src = { seadex: { s: "loading" }, at: { s: "loading" }, neko: { s: "loading" }, tsuki: { s: "loading" } };
+  const set = (k, v) => { d.src[k] = v; if (detail === d && d.tab === "src") $("#ny-d-body").innerHTML = drawerBodyHtml(d); };
+  if (!isHash40(hash)) { Object.keys(d.src).forEach(k => { d.src[k] = { s: "none" }; }); return; }
+  const u = sourceUrls(hash);
+  const fail = e => ({ s: "err", err: String(e && e.message ? e.message : e) });
+  const task = async (k, fn) => { try { set(k, await fn()); } catch (e) { set(k, fail(e)); } };
+  task("seadex", async () => {
+    const [a, b] = await Promise.allSettled([metaGet(u.seadexTorrent), metaGet(u.seadexEntry)]);
+    if (a.status === "rejected" && b.status === "rejected") throw a.reason;
+    const r = parseSeadex(a.status === "fulfilled" ? a.value : "", b.status === "fulfilled" ? b.value : "");
+    return r.found ? { s: "ok", ...r } : { s: "none" };
+  });
+  task("at", async () => { const r = parseAnimetosho(await metaGet(u.animetosho)); return r.found ? { s: "ok", ...r } : { s: "none" }; });
+  task("neko", async () => {
+    const id = parseNekoSearch(await metaGet(u.nekobtSearch));
+    if (!id) return { s: "none" };
+    const r = parseNekoTorrent(await metaGet(`https://nekobt.to/api/v1/torrents/${encodeURIComponent(id)}`));
+    return r.found ? { s: "ok", ...r } : { s: "none" };
+  });
+  task("tsuki", async () => { const r = parseTsukihime(await metaGet(u.tsukihime)); return r.found ? { s: "ok", ...r } : { s: "none" }; });
+}
+
+function srcLines(k, r) {
+  const L = [];
+  const add = (label, v) => { if (v) L.push(`<div><span>${esc(label)}</span><b>${esc(String(v))}</b></div>`); };
+  if (k === "seadex") add("Оценка", r.best === true ? "лучший релиз" : r.best === false ? "запасной вариант" : "есть в базе");
+  if (k === "at") { add("Название", r.title); add("Файлов", r.files || ""); }
+  if (k === "neko") { add("Название", r.title); add("Загрузил", r.uploader); add("Группа", r.group); add("Раздача", r.swarm); add("Размер", r.size); add("Звук", r.audio); add("Субтитры", r.subs); add("Метки", (r.flags || []).join(", ")); }
+  if (k === "tsuki") { add("Название", r.title); add("Тайтл", r.anime); add("Группа", r.group); add("Серия", r.episode); add("Размер", r.size); add("Файлов", r.files); add("Звук", r.audio); add("Субтитры", r.subs); }
+  return L.join("");
+}
+
+function sourcesTabHtml(d) {
+  loadSources(d);
+  const src = d.src || {};
+  return `<div class="ny-srcs">${Object.keys(SRC_NAMES).map(k => {
+    const r = src[k] || { s: "loading" };
+    const badge = r.s === "loading" ? `<em class="load">проверяю…</em>` : r.s === "ok" ? `<em class="ok">${k === "seadex" ? (r.best === true ? "лучший" : r.best === false ? "запасной" : "найдено") : "найдено"}</em>` : r.s === "none" ? `<em>нет в базе</em>` : `<em class="bad" title="${esc(r.err || "")}">недоступен</em>`;
+    return `<div class="ny-src-card"><div class="ny-src-top"><b>${SRC_NAMES[k]}</b>${badge}</div>
+      ${r.s === "ok" ? `<div class="ny-src-lines">${srcLines(k, r)}</div>${r.link ? `<button type="button" class="btn ghost" data-ext="${esc(r.link)}">${ICONS.open} Открыть</button>` : ""}` : r.s === "err" ? `<p class="ny-hint">${esc(r.err)}. Возможно, сайт закрыт у вашего провайдера — нужен VPN.</p>` : ""}
+    </div>`;
+  }).join("")}</div>
+  <p class="ny-hint">Данные запрашиваются по info hash раздачи и только когда вы открыли эту вкладку.</p>`;
+}
+
+// ---------- «Похожее» (AniList) ----------
+async function loadSimilar(d, text) {
+  d.sim = { q: text, state: "loading", data: null, covers: {}, err: "" };
+  if ($("#ny-d-body") && d.tab === "sim") $("#ny-d-body").innerHTML = drawerBodyHtml(d);
+  try {
+    const raw = await invoke("anilist_query", { query: SIMILAR_QUERY, variables: { s: text } });
+    d.sim.data = parseSimilar(raw);
+    d.sim.state = d.sim.data.found ? "ok" : "none";
+  } catch (e) { d.sim.state = "err"; d.sim.err = String(e && e.message ? e.message : e); }
+  if (detail === d && d.tab === "sim") $("#ny-d-body").innerHTML = drawerBodyHtml(d);
+  if (d.sim.state === "ok") loadCovers(d);
+}
+
+async function loadCovers(d) {
+  const all = [d.sim.data.self, ...d.sim.data.related, ...d.sim.data.recs].filter(Boolean).map(m => m.cover).filter(Boolean);
+  const urls = [...new Set(all)].slice(0, 16);
+  let next = 0;
+  const worker = async () => {
+    while (next < urls.length) {
+      const url = urls[next++];
+      try { d.sim.covers[url] = await invoke("fetch_image", { url }); } catch (_) { d.sim.covers[url] = "err"; }
+      if (detail === d && d.tab === "sim") paintSimCovers(d);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+}
+
+function paintSimCovers(d) {
+  document.querySelectorAll("#ny-d-body [data-cover]").forEach(el => {
+    const src = d.sim.covers[el.dataset.cover];
+    if (src && src !== "err" && !el.querySelector("img")) el.innerHTML = `<img src="${esc(src)}" alt="">`;
+  });
+}
+
+function simCard(m, extra = "") {
+  return `<div class="ny-sim-card"><button type="button" class="ny-sim-cover" data-cover="${esc(m.cover)}" data-ext="${esc(m.url)}" title="Открыть на AniList"></button>
+    <div><b>${esc(m.title || m.romaji)}</b><span>${esc([extra, m.format, m.score ? `★ ${(m.score / 10).toFixed(1)}` : ""].filter(Boolean).join(" · "))}</span>
+    <button type="button" class="ny-link" data-sim-nyaa="${esc(m.romaji || m.title)}">искать на Nyaa</button></div></div>`;
+}
+
+function similarTabHtml(d) {
+  if (!d.sim) setTimeout(() => loadSimilar(d, cleanTitleForSearch(d.view ? d.view.title : d.item.title)), 0);
+  const sim = d.sim || { q: cleanTitleForSearch(d.view ? d.view.title : d.item.title), state: "loading" };
+  const form = `<div class="ny-sim-form"><input type="text" id="ny-sim-q" value="${esc(sim.q)}" placeholder="Название тайтла" spellcheck="false"><button type="button" class="btn" data-sim-go>Найти</button></div>`;
+  if (sim.state === "loading") return form + `<div class="ny-d-load"><div class="ny-sk w80"></div><div class="ny-sk w40"></div></div>`;
+  if (sim.state === "err") return form + `<div class="ny-empty"><p>${esc(sim.err)}</p></div>`;
+  if (sim.state === "none") return form + `<div class="ny-empty"><b>Тайтл не нашёлся</b><p>Поправьте название в строке выше: латиницей часто находится лучше.</p></div>`;
+  const data = sim.data;
+  return form + `<div class="ny-sim-self">${simCard(data.self, data.year ? String(data.year) : "")}<div class="ny-tags">${data.genres.map(g => `<i>${esc(g)}</i>`).join("")}</div></div>`
+    + (data.related.length ? `<h4 class="ny-sim-h">Связанное</h4><div class="ny-sim-grid">${data.related.map(m => simCard(m, m.relation)).join("")}</div>` : "")
+    + (data.recs.length ? `<h4 class="ny-sim-h">Рекомендуют</h4><div class="ny-sim-grid">${data.recs.map(m => simCard(m)).join("")}</div>` : "");
+}
+
 function uploaderOf(d) {
   const name = d.view && d.view.fields ? d.view.fields.submitter : "";
   return name && !/^anonymous$/i.test(name) && /^[A-Za-z0-9_.-]{1,40}$/.test(name) ? name : "";
@@ -620,7 +729,9 @@ function drawerBodyHtml(d) {
   const v = d.view;
   if (d.state === "loading") return `<div class="ny-d-load"><div class="ny-sk w80"></div><div class="ny-sk w40"></div><div class="ny-sk w80"></div></div>`;
   if (d.state === "error") return `<div class="ny-empty"><b>Страница не открылась</b><p>${esc(d.err)}</p><button type="button" class="btn primary" data-d-retry>Повторить</button></div>`;
-  const tabs = `<div class="ny-d-tabs"><button type="button" class="${d.tab === "desc" ? "on" : ""}" data-d-tab="desc">Описание</button><button type="button" class="${d.tab === "files" ? "on" : ""}" data-d-tab="files">Файлы${v.files.length ? ` · ${v.files.length}` : ""}</button></div>`;
+  const tabs = `<div class="ny-d-tabs"><button type="button" class="${d.tab === "desc" ? "on" : ""}" data-d-tab="desc">Описание</button><button type="button" class="${d.tab === "files" ? "on" : ""}" data-d-tab="files">Файлы${v.files.length ? ` · ${v.files.length}` : ""}</button><button type="button" class="${d.tab === "src" ? "on" : ""}" data-d-tab="src">Источники</button><button type="button" class="${d.tab === "sim" ? "on" : ""}" data-d-tab="sim">Похожее</button></div>`;
+  if (d.tab === "src") return tabs + sourcesTabHtml(d);
+  if (d.tab === "sim") return tabs + similarTabHtml(d);
   if (d.tab === "files") {
     return tabs + (v.files.length ? `<ul class="ny-files">${v.files.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : `<div class="ny-empty"><p>Список файлов не указан.</p></div>`);
   }
@@ -772,7 +883,21 @@ function wire(root) {
     if (detail) {
       const it = detail.item;
       const tab = t.closest("[data-d-tab]");
-      if (tab) { detail.tab = tab.dataset.dTab; $("#ny-d-body").innerHTML = drawerBodyHtml(detail); return; }
+      if (tab) {
+        detail.tab = tab.dataset.dTab;
+        $("#ny-d-body").innerHTML = drawerBodyHtml(detail);
+        document.querySelectorAll("#ny-drawer [data-d-tab]").forEach(b => b.classList.toggle("on", b === tab));
+        if (detail.tab === "sim" && detail.sim && detail.sim.state === "ok") paintSimCovers(detail);
+        return;
+      }
+      const ext = t.closest("[data-ext]");
+      if (ext) { openExternal(ext.dataset.ext).catch(() => toast("Не удалось открыть ссылку.", "error")); return; }
+      if (t.closest("[data-sim-go]")) { loadSimilar(detail, $("#ny-sim-q").value.trim() || detail.sim.q); return; }
+      const sn = t.closest("[data-sim-nyaa]");
+      if (sn) {
+        prefs.q = sn.dataset.simNyaa; prefs.cat = "0_0"; savePrefs(); const qi = $("#ny-q"); if (qi) qi.value = prefs.q;
+        closeDetail(); paintStatic(); load(); return;
+      }
       const lb = t.closest("[data-lb]");
       if (lb) { detail.lightbox = Number(lb.dataset.lb); paintDrawer(); return; }
       const io = t.closest("[data-img-open]");
