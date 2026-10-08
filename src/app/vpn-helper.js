@@ -20,6 +20,7 @@ import { state } from "./state.js";
 import { apiGet, toast } from "./api.js";
 import { invoke } from "./tauri.js";
 import { $, esc, relTime } from "./utils.js";
+import { renderManage } from "./vpn-manage.js";
 
 const RESULT_KEY = "project-vpn-last";
 const HISTORY_KEY = "project-vpn-history";
@@ -35,6 +36,11 @@ const UDP_NETWORKS = new Set(["kcp", "quic"]);
 
 let running = false;
 let autoTimer = null;
+let section = "check";
+const SECTIONS = [
+  ["check", "Проверка сети"], ["clients", "Клиенты"], ["inbounds", "Inbound'ы"],
+  ["certs", "Сертификаты"], ["server", "Сервер"],
+];
 
 const readJson = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch (_) { return fallback; } };
 const writeJson = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* не критично */ } };
@@ -205,7 +211,7 @@ export async function runVpnChecks({ auto = false } = {}) {
     return null;
   } finally {
     running = false;
-    if (state.activeTab === "vpn") renderFromCache();
+    if (state.activeTab === "vpn" && section === "check") renderFromCache();
   }
 }
 
@@ -272,21 +278,23 @@ function renderProgress(text) {
 
 function headerHtml(r) {
   const auto = autoOn();
+  const check = section === "check";
   return `
     <div class="page-header">
       <div>
         <span class="kd-label">Разработчик · X-UI на VPS</span>
         <h1>VPN помощник</h1>
       </div>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      ${check ? `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <label class="vpn-auto" title="Раз в 30–60 минут со случайным сдвигом, пока приложение открыто">
           <input type="checkbox" id="vpn-auto" ${auto ? "checked" : ""}> Авто-проверка
         </label>
         <button class="btn" id="vpn-run" ${running ? "disabled" : ""}>Проверить сейчас</button>
-      </div>
+      </div>` : ""}
     </div>
-    <div class="vpn-progress" id="vpn-progress" ${running ? "" : "hidden"}>Идёт проверка…</div>
-    ${r ? "" : `<div class="bcell"><div class="bento-empty">Проверок ещё не было. Нажмите «Проверить сейчас»: клиент прочитает список inbound'ов с панели и проверит их с этого компьютера.</div></div>`}`;
+    <nav class="vm-nav" id="vm-nav">${SECTIONS.map(([k, l]) => `<button class="vm-tab ${k === section ? "active" : ""}" data-sec="${k}">${l}</button>`).join("")}</nav>
+    ${check ? `<div class="vpn-progress" id="vpn-progress" ${running ? "" : "hidden"}>Идёт проверка…</div>
+    ${r ? "" : `<div class="bcell"><div class="bento-empty">Проверок ещё не было. Нажмите «Проверить сейчас»: клиент прочитает список inbound'ов с панели и проверит их с этого компьютера.</div></div>`}` : ""}`;
 }
 
 function inboundRowHtml(x) {
@@ -396,11 +404,18 @@ function renderFromCache() {
   const root = $("#vpn-body");
   if (!root) return;
   const r = readJson(RESULT_KEY, null);
-  root.innerHTML = headerHtml(r) + (r ? resultHtml(r) : "");
+  root.innerHTML = headerHtml(r) + (section === "check" ? (r ? resultHtml(r) : "") : `<div id="vm-pane"></div>`);
   wire(root);
+  if (section !== "check") renderManage(section, root.querySelector("#vm-pane"));
 }
 
 function wire(root) {
+  root.querySelector("#vm-nav")?.addEventListener("click", e => {
+    const b = e.target.closest("[data-sec]");
+    if (!b || b.dataset.sec === section) return;
+    section = b.dataset.sec;
+    renderFromCache();
+  });
   root.querySelector("#vpn-run")?.addEventListener("click", () => runVpnChecks());
   root.querySelector("#vpn-auto")?.addEventListener("change", e => {
     writeJson(AUTO_KEY, e.target.checked);
