@@ -13,6 +13,7 @@ import { state } from "./state.js";
 import { apiGet, toast } from "./api.js";
 import { esc } from "./utils.js";
 import { appWindow } from "./tauri.js";
+import { pickSameVoice, preloadFresh, shouldPreload } from "./preload-core.js";
 
 const SAVE_EVERY_MS = 5000;
 const HIDE_AFTER_MS = 2600;
@@ -130,7 +131,7 @@ export async function openAnimePlayer({ shikiId, name }) {
   const vol = readVolume();
   video.volume = vol.v;
   video.muted = vol.muted;
-  P = { root, video, shikiId, name, series: null, episodeIdx: 0, translations: [], trId: null, sources: [], quality: null, saveTimer: null, hideTimer: null, nextCancelled: false, nextTimer: null, fs: false };
+  P = { root, video, shikiId, name, series: null, episodeIdx: 0, translations: [], trId: null, sources: [], quality: null, saveTimer: null, hideTimer: null, nextCancelled: false, nextTimer: null, fs: false, pre: null, preBusy: null };
   wireControls();
   setWait("Ищу серии…");
 
@@ -212,7 +213,7 @@ async function goEpisode(idx) {
   setWait("Ищу озвучки…");
   let d;
   try {
-    d = await apiGet(`/player/episode/${ep.id}`);
+    d = preloadFresh(P.pre, ep.id) ? { translations: P.pre.translations } : await apiGet(`/player/episode/${ep.id}`);
   } catch (e) {
     return fail(`Не удалось получить озвучки: ${e.message}`);
   }
@@ -247,7 +248,8 @@ async function pickTranslation(trId, keepTime = false) {
   setWait("Загружаю видео…");
   let d;
   try {
-    d = await apiGet(`/player/stream/${trId}`);
+    const ep = P.series.episodes[P.episodeIdx];
+    d = preloadFresh(P.pre, ep.id) && P.pre.trId === trId ? { sources: P.pre.sources } : await apiGet(`/player/stream/${trId}`);
   } catch (e) {
     return fail(`Видео не получено: ${e.message}`);
   }
@@ -282,6 +284,23 @@ function playSource(src, resumeAt) {
   window.clearInterval(P.saveTimer);
   P.saveTimer = window.setInterval(saveProgress, SAVE_EVERY_MS);
   poke();
+}
+
+// ---------- предзагрузка следующей серии ----------
+async function preloadNext(left, duration) {
+  if (!P || !P.series) return;
+  const next = P.series.episodes[P.episodeIdx + 1];
+  if (!shouldPreload({ left, duration, hasNext: !!next, alreadyFor: P.preBusy, nextId: next && next.id })) return;
+  P.preBusy = next.id;
+  const root = P.root;
+  try {
+    const d = await apiGet(`/player/episode/${next.id}`);
+    const tr = pickSameVoice(d.translations, readMem(P.shikiId).authors);
+    if (!tr) return;
+    const s = await apiGet(`/player/stream/${tr.id}`);
+    if (!P || P.root !== root) return;
+    P.pre = { episodeId: next.id, trId: tr.id, translations: d.translations.filter(t => t.kind === "voice" || t.kind === "raw"), sources: s.sources, at: Date.now() };
+  } catch (_) { /* не вышло — обычная загрузка при переходе */ }
 }
 
 // ---------- следующая серия ----------
@@ -487,6 +506,7 @@ function wireControls() {
     root.querySelector("[data-ap-skip]").hidden = !(v.currentTime > OP_WINDOW[0] && v.currentTime < Math.min(OP_WINDOW[1], v.duration * 0.3));
     const left = v.duration - v.currentTime;
     if (left < NEXT_CARD_SEC && !P.nextCancelled) showNextCard();
+    preloadNext(left, v.duration);
     if (p > 0.9) markWatched(P.series.episodes[P.episodeIdx].id);
   });
   v.addEventListener("ended", () => {

@@ -17,6 +17,7 @@ import { openAdminPanel } from "./admin.js";
 import { tagLogger } from "./applog.js";
 import { midiEnabled, setMidiEnabled } from "./midi-control.js";
 import { currentTune, applyTune } from "./tune.js";
+import { cacheSummary, clearCache } from "./audio-cache.js";
 import { TUNE_DEFAULT, TUNE_LIMITS } from "./tune-core.js";
 import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints, resetTourProgress } from "./tour.js";
 
@@ -247,6 +248,7 @@ async function openSettings() {
           <div class="st-group">
             ${row(ICONS.server, "Сервер команды", "Связь с сервером и время ответа", `<span class="st-ping" id="s-ping">проверяю…</span><button type="button" class="btn" id="s-ping-again">Проверить</button>`, "сеть сервер соединение")}
             ${row(ICONS.logs, "Файловые логи приложения", "Обновления, QC звука, инструменты ffmpeg, плеер", `<button class="btn" id="s-open-logs">Открыть логи</button>`, "логи")}
+            ${row(ICONS.logs, "Кеш дорожек", "Прослушанные дорожки хранятся здесь: открываются сразу и без связи с сервером", `<span class="st-ping" id="s-cache-info"></span><button type="button" class="btn" id="s-cache-clear">Очистить</button>`, "кеш звук оффлайн")}
             ${row(ICONS.copy, "Отчёт для разработчика", "Версия, система, канал, связь с сервером — одним текстом в буфер обмена", `<button class="btn" id="s-copy-report">Скопировать</button>`, "баг ошибка")}
           </div>
         </section>
@@ -281,6 +283,12 @@ async function openSettings() {
     overlay.querySelector("#s-tune-blur").value = TUNE_DEFAULT.blur;
     overlay.querySelector("#s-tune-round").value = TUNE_DEFAULT.round;
   });
+  const cacheInfo = () => {
+    const c = cacheSummary();
+    overlay.querySelector("#s-cache-info").textContent = c.files ? `${c.files} · ${(c.bytes / 1048576).toFixed(0)} МБ` : "пусто";
+  };
+  cacheInfo();
+  overlay.querySelector("#s-cache-clear").addEventListener("click", async () => { await clearCache(); cacheInfo(); });
   overlay.querySelector("#s-midi").addEventListener("change", async e => {
     const ok = await setMidiEnabled(e.target.checked);
     if (!ok && e.target.checked) e.target.checked = false;

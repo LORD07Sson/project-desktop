@@ -30,6 +30,7 @@ module.exports = [
         document: "readonly",
         navigator: "readonly",
         localStorage: "readonly",
+        indexedDB: "readonly",
         console: "readonly",
         fetch: "readonly",
         setTimeout: "readonly",
