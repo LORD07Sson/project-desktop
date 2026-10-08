@@ -1288,3 +1288,33 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 select { color-scheme: dark; }
 :root[data-theme="light"] select { color-scheme: light; }
 select option, select optgroup { background-color: var(--surface); color: var(--ink); }
+
+/* ---------- Ленты и тексты (web-tools.js) ---------- */
+.wt-row { display: flex; gap: 10px; margin: 10px 0; }
+.wt-row .field-input { margin: 0; flex: 1; }
+.wt-split { display: grid; grid-template-columns: 280px 1fr; gap: 14px; min-height: 320px; }
+.wt-list { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; }
+.wt-list.tall { max-height: 46vh; }
+.wt-item { text-align: left; font: inherit; color: var(--ink); background: rgba(255, 255, 255, .04); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.wt-item.static { cursor: default; }
+.wt-item.on, .wt-item:hover:not(.static) { border-color: rgba(var(--fire-rgb), .5); }
+.wt-item span { font-size: 11.5px; color: var(--ink-dim); }
+.wt-item .btn { align-self: flex-start; margin-top: 4px; padding: 4px 10px; font-size: 12px; }
+.wt-text { max-height: 52vh; overflow: auto; padding: 4px 8px; }
+.wt-tools { display: flex; gap: 8px; margin-bottom: 10px; }
+.wt-line { padding: 3px 0; font-size: 14px; line-height: 1.5; }
+.wt-line i { font-style: normal; font-size: 11px; color: var(--gold); margin-right: 10px; font-variant-numeric: tabular-nums; }
+.wt-empty { color: var(--ink-dim); font-size: 13px; padding: 14px 4px; }
+.wt-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.wt-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; cursor: pointer; }
+.wt-chip.on { border-color: rgba(var(--fire-rgb), .6); background: rgba(var(--fire-rgb), .12); }
+.wt-chip button { background: none; border: 0; color: var(--ink-dim); cursor: pointer; font-size: 14px; }
+.wt-note { font-size: 11.5px; color: var(--ink-dim); margin-top: 12px; }
+.wt-rates { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
+.wt-rate { display: grid; gap: 2px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); }
+.wt-rate b { font-size: 15px; }
+.wt-rate span { font-size: 11.5px; color: var(--ink-dim); }
+.wt-rate strong { font-size: 20px; }
+.wt-rate em { font-style: normal; font-size: 12px; }
+.wt-rate em.up { color: #6fe39a; } .wt-rate em.down { color: #ff7b7b; }
+@media (max-width: 760px) { .wt-split { grid-template-columns: 1fr; } }

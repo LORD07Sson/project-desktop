@@ -32,6 +32,7 @@ import "./ui-prefs.js";
 import "./tabs.js";
 import "./qc.js";
 import "./media-tools.js";
+import "./web-tools.js";
 import { maybeAutoCheckUpdates } from "./settings.js";
 import "./notifications.js";
 import "./presence.js";

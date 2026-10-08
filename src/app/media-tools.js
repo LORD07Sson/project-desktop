@@ -19,12 +19,13 @@
 
 import {
   invoke, pickInputFiles, pickOutputFile, pickOutputDir,
-  convertFileSrc, revealInFolder, listen,
+  convertFileSrc, revealInFolder, openInSystemPlayer, listen,
 } from "./tauri.js";
 import { openSheet, toast } from "./api.js";
 import { $, esc, formatTime } from "./utils.js";
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "./media-formats.js";
 import { tagLogger } from "./applog.js";
+import { buildRpp } from "./reaper-core.js";
 
 const mpvLog = tagLogger("mpv");
 
@@ -144,7 +145,7 @@ function poolBarHtml() {
     <div class="mt-pool-bar">
       <div class="mt-pool-chips" id="mt-pool-chips">
         ${filePool.length
-          ? filePool.map((f, i) => `<span class="mt-pool-chip" title="${esc(f.path)}">${esc(baseName(f.path))}<button class="mt-pool-chip-remove" data-pool-remove="${i}" title="Убрать из пула" aria-label="Убрать из пула">${ICONS.close}</button></span>`).join("")
+          ? filePool.map((f, i) => `<span class="mt-pool-chip" title="${esc(f.path)}">${esc(baseName(f.path))}<button class="mt-pool-chip-remove" data-pool-open="${i}" title="Открыть во внешнем плеере" aria-label="Открыть во внешнем плеере">▶</button><button class="mt-pool-chip-remove" data-pool-remove="${i}" title="Убрать из пула" aria-label="Убрать из пула">${ICONS.close}</button></span>`).join("")
           : `<span class="mt-info-line">Файлов пока нет — добавьте, они станут доступны во всех вкладках.</span>`}
       </div>
       <button class="btn ghost" id="mt-pool-add">Добавить файлы</button>
@@ -156,6 +157,14 @@ function wirePoolBar(overlay) {
     await addFilesToPool(POOL_EXTENSIONS);
     renderPoolBar(overlay);
     renderActivePanel(overlay);
+  });
+  overlay.querySelectorAll("[data-pool-open]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const f = filePool[Number(btn.dataset.poolOpen)];
+      if (!f) return;
+      try { await openInSystemPlayer(f.path); }
+      catch (e) { toast(`Не удалось открыть во внешнем плеере: ${e}`, "error"); }
+    });
   });
   overlay.querySelectorAll("[data-pool-remove]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -2004,6 +2013,78 @@ function wireSubsPanel(root) {
 // html()/wire(), остальное не трогается.
 // ============================================================
 
+// ============================================================
+// Reaper — проект .rpp из звуковых файлов пула: каждый файл — своя
+// дорожка, метки — списком «минуты:секунды название» (по строке).
+// Сборка текста — reaper-core.js; сам файл пишет Rust (write_text_file)
+// строго по пути из диалога сохранения.
+// ============================================================
+
+const reaperState = { selected: new Set(), markers: "", sampleRate: "48000" };
+
+function reaperPanelHtml() {
+  const audio = filePool.map((f, i) => ({ f, i })).filter(({ f }) => f.info && f.info.audio);
+  if (!audio.length) {
+    return `<div class="mt-empty"><p>Добавьте звуковые файлы в пул выше — каждый станет дорожкой проекта Reaper.</p></div>`;
+  }
+  return `
+    <div class="mt-form-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+      ${audio.map(({ f, i }) => `<label><input type="checkbox" data-reaper-file="${i}" ${reaperState.selected.has(i) ? "checked" : ""}> ${esc(baseName(f.path))} <span class="mt-info-line">${esc(formatTime(f.info.duration))}</span></label>`).join("")}
+    </div>
+    <div class="mt-form-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+      <span>Метки <i class="mt-info-line">по строке: 1:23 вдох · 0:05.5 шум</i></span>
+      <textarea id="mt-reaper-markers" class="field-textarea" rows="4" placeholder="0:05 начало&#10;1:23 вдох">${esc(reaperState.markers)}</textarea>
+    </div>
+    <div class="mt-form-row">
+      <span>Частота</span>
+      <select id="mt-reaper-rate" class="mt-pool-select" style="max-width:130px;">
+        ${["44100", "48000", "96000"].map(r => `<option ${r === reaperState.sampleRate ? "selected" : ""}>${r}</option>`).join("")}
+      </select>
+    </div>
+    <button class="btn primary" id="mt-reaper-run">Собрать проект Reaper</button>`;
+}
+
+// «1:23 текст», «0:05.5 текст», «83 текст» — время в секундах, затем название.
+function parseReaperMarkers(text) {
+  const out = [];
+  for (const line of String(text).split(/\r?\n/)) {
+    const m = /^\s*(?:(\d+):)?(\d+(?:[.,]\d+)?)\s*(.*)$/.exec(line);
+    if (!m) continue;
+    const at = (m[1] ? Number(m[1]) * 60 : 0) + Number(m[2].replace(",", "."));
+    out.push({ at, name: m[3].trim() });
+  }
+  return out;
+}
+
+function wireReaperPanel(root) {
+  root.querySelectorAll("[data-reaper-file]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const i = Number(cb.dataset.reaperFile);
+      if (cb.checked) reaperState.selected.add(i); else reaperState.selected.delete(i);
+    });
+  });
+  const markers = root.querySelector("#mt-reaper-markers");
+  markers?.addEventListener("input", () => { reaperState.markers = markers.value; });
+  root.querySelector("#mt-reaper-rate")?.addEventListener("change", e => { reaperState.sampleRate = e.target.value; });
+  root.querySelector("#mt-reaper-run")?.addEventListener("click", async () => {
+    const tracks = [...reaperState.selected].map(i => filePool[i]).filter(Boolean)
+      .map(f => ({ name: stemOf(f.path), path: f.path, length: f.info?.duration || 0 }));
+    if (!tracks.length) { toast("Отметьте хотя бы один файл.", "error"); return; }
+    const outPath = await pickOutputFile("project.rpp", [{ name: "Reaper", extensions: ["rpp"] }]);
+    if (!outPath) return;
+    try {
+      const content = buildRpp({
+        name: stemOf(outPath), sampleRate: Number(reaperState.sampleRate) || 48000,
+        tracks, markers: parseReaperMarkers(reaperState.markers),
+      });
+      await invoke("write_text_file", { path: outPath, content });
+      toastDone("Проект Reaper сохранён.", outPath);
+    } catch (e) {
+      toast(`Не удалось сохранить проект: ${e}`, "error");
+    }
+  });
+}
+
 const OPERATIONS = {
   cut: { label: "Обрезка", html: cutPanelHtml, wire: wireCutPanel },
   convert: { label: "Конвертация", html: convertPanelHtml, wire: wireConvertPanel },
@@ -2014,6 +2095,7 @@ const OPERATIONS = {
   subs: { label: "Субтитры", html: subsPanelHtml, wire: wireSubsPanel },
   concat: { label: "Склейка", html: concatPanelHtml, wire: wireConcatPanel },
   mux: { label: "Муксинг", html: muxPanelHtml, wire: wireMuxPanel },
+  reaper: { label: "Reaper", html: reaperPanelHtml, wire: wireReaperPanel },
 };
 
 let activeOp = "cut";
