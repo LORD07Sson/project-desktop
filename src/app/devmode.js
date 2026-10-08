@@ -27,13 +27,15 @@ async function loadMetaRoles() {
 
 export function devPanelHtml(d) {
   return `
-    <div class="sec-title" style="margin-top:16px;">Служебные данные</div>
+    <div class="dev-head"><span class="kd-label">Служебные данные</span><span class="dev-tag">режим разработчика</span></div>
     <div class="dev-bento">
       <div class="dev-bcell wide">
         <div class="h">Идентификаторы</div>
-        <div class="ro-line"><span>telegram_id</span><b>${d.telegram_id}</b></div>
-        <div class="ro-line"><span>internal id</span><b>${d.internal_id != null ? d.internal_id : "—"}</b></div>
-        <div class="ro-line"><span>в базе с</span><b style="font-family:inherit; font-weight:400;">${esc(d.created_at || "—")}</b></div>
+        <div class="dev-ids">
+          <button class="dev-id" data-copy="${esc(String(d.telegram_id))}" title="Копировать"><span>telegram_id</span><b>${d.telegram_id}</b></button>
+          <button class="dev-id" data-copy="${d.internal_id != null ? d.internal_id : ""}" title="Копировать"><span>internal id</span><b>${d.internal_id != null ? d.internal_id : "—"}</b></button>
+          <div class="dev-id static"><span>в базе с</span><b class="plain">${esc(d.created_at || "—")}</b></div>
+        </div>
       </div>
       <div class="dev-bcell wide">
         <div class="h">Роль</div>
@@ -64,6 +66,11 @@ export function devPanelHtml(d) {
 }
 
 export function wireDevPanel(root, telegramId, onSaved, currentRole) {
+  root.querySelectorAll(".dev-id[data-copy]").forEach(btn => btn.addEventListener("click", async () => {
+    const v = btn.dataset.copy;
+    if (!v) return;
+    try { await navigator.clipboard.writeText(v); toast("Скопировано."); } catch (_) { toast("Не удалось скопировать.", "error"); }
+  }));
   loadMetaRoles().then(roles => {
     const sel = root.querySelector("#dev-role-select");
     if (!sel) return;

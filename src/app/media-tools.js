@@ -2027,14 +2027,16 @@ function renderActivePanel(overlay) {
 
 export function openMediaTools() {
   const overlay = openSheet(`
-    <h2>Инструменты ffmpeg</h2>
+    <div class="mt-head">
+      <div><span class="kd-label">Медиа</span><h2>Инструменты ffmpeg</h2></div>
+      <button class="icon-btn mt-head-close" data-close title="Закрыть" aria-label="Закрыть">${ICONS.close}</button>
+    </div>
     <div id="mt-pool-bar-mount"></div>
     <div class="mt-op-tabs">
       ${Object.entries(OPERATIONS).map(([key, op]) => `<button class="mt-op-tab ${key === activeOp ? "active" : ""}" data-op="${key}">${op.label}</button>`).join("")}
     </div>
     <div id="mt-body"></div>
     ${jobHtml()}
-    <div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>
   `, "wide");
   overlay.querySelector(".sheet").classList.add("mt-sheet");
 
