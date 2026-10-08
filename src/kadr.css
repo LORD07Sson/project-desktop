@@ -1282,31 +1282,6 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 :root[data-theme="light"] .mt-op-tabs, :root[data-theme="light"] .mt-pool-bar { background: rgba(80, 40, 20, .04); }
 @media (max-width: 760px) { .dev-ids { grid-template-columns: 1fr; } }
 
-/* ---------- Переводчик (translator.js) ---------- */
-.tl-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
-.tl-bar .field-input { margin: 0; flex: 1; }
-.tl-swap { width: 38px; height: 38px; padding: 0; border-radius: 12px; display: grid; place-items: center; flex: none; font-size: 16px; }
-.tl-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.tl-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; min-height: 30px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
-.tl-h .btn { padding: 4px 10px; font-size: 12px; }
-.tl-pane .field-textarea { margin: 0; height: 280px; resize: none; font-size: 14px; line-height: 1.55; }
-.tl-f { min-height: 22px; padding: 6px 4px 0; font-size: 11.5px; color: var(--ink-dim); }
-.tl-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
-.tl-note { font-size: 11.5px; color: var(--ink-dim); max-width: 460px; line-height: 1.4; }
-.tl-actions .btn small { opacity: .6; margin-left: 6px; font-weight: 500; }
-@media (max-width: 760px) { .tl-cols { grid-template-columns: 1fr; } }
-.tl-mode { width: fit-content; margin-bottom: 12px; }
-.tl-mode small { opacity: .6; margin-left: 4px; font-weight: 500; }
-.tl-smart { margin-bottom: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(var(--fire-rgb), .06); box-shadow: inset 0 0 0 1px rgba(var(--fire-rgb), .22); display: flex; flex-direction: column; gap: 10px; }
-.tl-smart[hidden] { display: none; }
-.tl-smart-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; align-items: end; }
-.tl-smart label { display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
-.tl-smart .field-input, .tl-smart .field-textarea { margin: 0; }
-.tl-smart .field-textarea { min-height: 62px; resize: vertical; font-size: 13px; }
-.tl-smart .tl-dub { flex-direction: row; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
-@media (max-width: 760px) { .tl-smart-row { grid-template-columns: 1fr; } }
-.mt-sheet > .tl-smart, .mt-sheet > .tl-bar, .mt-sheet > .tl-cols, .mt-sheet > .tl-actions, .mt-sheet > .tl-mode { flex-shrink: 0; }
-
 /* Выпадающие списки: у нативного <select> окно выбора рисуется системой с
    белым фоном, а цвет текста у <option> наследуется светлый — пункты
    становились неразличимы. Задаём и фон, и цвет. */
