@@ -18,7 +18,7 @@
 
 import { state } from "./state.js";
 import { apiGet, toast } from "./api.js";
-import { invoke } from "./tauri.js";
+import { invoke, sendNotification } from "./tauri.js";
 import { $, esc, relTime } from "./utils.js";
 import { renderManage } from "./vpn-manage.js";
 
@@ -33,12 +33,17 @@ const MAX_INBOUNDS = 8;
 // Протоколы/транспорты поверх UDP — TCP-пробой их не проверить честно.
 const UDP_PROTOCOLS = new Set(["hysteria", "hysteria2", "wireguard", "tuic"]);
 const UDP_NETWORKS = new Set(["kcp", "quic"]);
+// Контрольные наборы: «белые» сайты открываются из РФ всегда, «чёрные» —
+// заблокированы РКН. Белые открылись, а чёрные нет — вы в зоне блокировок
+// и пробы показательны; открылось всё — вы за VPN/вне РФ и пробы меряют не то.
+const ZONE_WHITE = ["yandex.ru", "gosuslugi.ru"];
+const ZONE_BLACK = ["instagram.com", "facebook.com"];
 
 let running = false;
 let autoTimer = null;
-let section = "check";
+let section = "health";
 const SECTIONS = [
-  ["check", "Проверка сети"], ["clients", "Клиенты"], ["inbounds", "Inbound'ы"],
+  ["health", "Состояние"], ["check", "Проверка сети"], ["inbounds", "Inbound'ы"],
   ["certs", "Сертификаты"], ["server", "Сервер"],
 ];
 
@@ -87,45 +92,72 @@ function classifyInbound(ib, tcp, tls, control, others) {
   if (!tcp || tcp._error) return { tone: "bad", notes: [tcp?._error || "TCP-проба не запустилась"] };
   if (!tcp.ok_count) {
     const errs = tcp.attempts.map(a => a.error);
-    if (errs.every(e => e === "refused")) return { tone: "bad", notes: ["Порт закрыт на сервере: inbound не слушает или режет фаервол VPS."] };
+    if (errs.every(e => e === "refused")) return { tone: "bad", notes: ["Порт закрыт на сервере: inbound не слушает или режет фаервол VPS."], recs: ["Проверьте, что inbound слушает этот порт и фаервол VPS (ufw/iptables) его пропускает."] };
     const otherPortsOk = others.some(t => t && t.ok_count > 0);
     return {
       tone: "bad",
       notes: [otherPortsOk
         ? `Похоже на блок порта ${ib.port}: другие порты этого сервера отвечают, а этот — ${ERR[errs[0]] || errs[0]}.`
         : `Сервер не отвечает ни на одном порту (${ERR[errs[0]] || errs[0]}) — похоже на блок по IP.`],
+      recs: [otherPortsOk
+        ? "Смените порт inbound'а в 3X-UI на 443, 8443, 2053 или 2083."
+        : "Если по SSH сервер жив, а из РФ не открывается — блокируют адрес или подсеть хостера. Смените IP или хостера, держите запасной VPS у другого провайдера."],
     };
   }
   let tone = tcp.ok_count < tcp.attempts.length ? "warn" : "ok";
   if (tone === "warn") notes.push(`TCP: ${tcp.ok_count} из ${tcp.attempts.length} попыток прошли.`);
   if (!tls) return { tone, notes };
   if (tls._error) return { tone: "warn", notes: [...notes, tls._error] };
+  const recs = [];
   if (!tls.tls_ok) {
     const controlAnswered = control && !control._error && (control.tls_ok || ["tls_alert", "tls_other"].includes(control.error));
     const what = ERR[tls.error] || tls.error;
-    if (controlAnswered) notes.push(`DPI по SNI: с «${tls.sni}» — ${what}, а без SNI сервер отвечает.`);
-    else if (["reset", "timeout", "eof"].includes(tls.error)) notes.push(`TCP проходит, а TLS-хендшейк — ${what}: похоже на DPI по TLS к этому серверу.`);
-    else notes.push(`TLS не установился: ${what}${tls.error_text ? ` (${tls.error_text})` : ""}.`);
-    return { tone: "bad", notes };
+    if (controlAnswered) {
+      notes.push(`DPI по SNI: с «${tls.sni}» — ${what}, а без SNI сервер отвечает.`);
+      recs.push("Замените serverNames (Target SNI) в настройках REALITY на менее популярный или нейтральный домен.");
+    } else if (["reset", "timeout", "eof"].includes(tls.error)) {
+      notes.push(`TCP проходит, а TLS-хендшейк — ${what}: похоже на DPI по TLS к этому серверу.`);
+      recs.push("Смените SNI/dest, а если не поможет — транспорт на gRPC, xhttp или httpupgrade. Если отвалы начинаются после серии подключений, подождите ~10 минут и переподключите мобильный интернет.");
+    } else notes.push(`TLS не установился: ${what}${tls.error_text ? ` (${tls.error_text})` : ""}.`);
+    return { tone: "bad", notes, recs };
   }
   if (ib.security === "reality") {
-    if (tls.cert_valid) notes.push(`Reality отвечает сертификатом ${ib.reality_dest || tls.sni} — маскировка выглядит правильно.`);
-    else { tone = "warn"; notes.push(`Reality: сертификат не сходится с SNI «${tls.sni}» (${tls.cert_error || "?"}). Проверьте dest и serverNames.`); }
+    const tls13 = /3/.test(String(tls.version || ""));
+    if (tls.cert_valid && (!tls13 || tls.alpn !== "h2")) {
+      tone = "warn";
+      notes.push(`Донор Reality отвечает без ${!tls13 ? "TLS 1.3" : "h2"} — такая маскировка выделяется на фоне обычных сайтов.`);
+      recs.push("Выберите dest/serverNames — сайт с TLS 1.3 и HTTP/2, лучше не за популярным CDN.");
+    } else if (tls.cert_valid) notes.push(`Reality отвечает сертификатом ${ib.reality_dest || tls.sni} (TLS 1.3, h2) — маскировка выглядит правильно.`);
+    else { tone = "warn"; notes.push(`Reality: сертификат не сходится с SNI «${tls.sni}» (${tls.cert_error || "?"}). Проверьте dest и serverNames.`); recs.push("Выберите dest/serverNames, у которого сайт отвечает по TLS 1.3 и h2."); }
   } else {
-    if (tls.cert_valid === false) { tone = "bad"; notes.push(`SSL недействителен: ${tls.cert_error}.`); }
-    else if (tls.cert_days_left != null && tls.cert_days_left < 14) { tone = worst([tone, "warn"]); notes.push(`Сертификат истекает через ${tls.cert_days_left} дн.`); }
+    if (tls.cert_valid === false) { tone = "bad"; notes.push(`SSL недействителен: ${tls.cert_error}.`); recs.push("Откройте вкладку «Сертификаты» и выпустите или назначите действующий сертификат."); }
+    else if (tls.cert_days_left != null && tls.cert_days_left < 14) { tone = worst([tone, "warn"]); notes.push(`Сертификат истекает через ${tls.cert_days_left} дн.`); recs.push("Во вкладке «Сертификаты» включите авто-продление или продлите вручную."); }
   }
-  return { tone, notes };
+  return { tone, notes, recs };
 }
 
 function classifyFreeze(http) {
   if (!http) return null;
   const kb = Math.round(http.bytes / 1024);
-  if (http.stalled && http.bytes >= 10 * 1024 && http.bytes <= 32 * 1024) return { tone: "bad", text: `Поток встал на ${kb} КБ — типичная «заморозка» ТСПУ.` };
+  if (http.stalled && http.bytes >= 10 * 1024 && http.bytes <= 32 * 1024) return { tone: "bad", text: `Поток встал на ${kb} КБ — типичная «заморозка» ТСПУ.`, rec: "Смените транспорт inbound'а на gRPC, xhttp или httpupgrade (вместо сырого TCP/WS)." };
   if (http.stalled) return { tone: "warn", text: `Поток встал на ${kb} КБ (не похоже на ТСПУ, но ответ не дочитан).` };
   if (http.error && http.error !== "timeout") return { tone: "warn", text: `Чтение оборвалось на ${kb} КБ: ${ERR[http.error] || http.error}.` };
   if (http.bytes < 20 * 1024) return { tone: "skip", text: `Ответ всего ${kb} КБ — слишком мал, чтобы проверить порог ~16 КБ.` };
   return { tone: "ok", text: `Прочитано ${kb} КБ без остановки — заморозки нет.` };
+}
+
+async function zoneCheck() {
+  const run = async host => {
+    const r = await probe("vpn_tls", { host, port: 443, sni: host, httpGet: false });
+    return !!r?.tls_ok;
+  };
+  const white = [], black = [];
+  for (const h of ZONE_WHITE) white.push(await run(h));
+  const whiteOk = white.filter(Boolean).length;
+  if (!whiteOk) return { state: "offline", whiteOk, blackOpen: 0 };
+  for (const h of ZONE_BLACK) black.push(await run(h));
+  const blackOpen = black.filter(Boolean).length;
+  return { state: blackOpen === black.length ? "open" : "ru", whiteOk, blackOpen };
 }
 
 export async function runVpnChecks({ auto = false } = {}) {
@@ -141,6 +173,8 @@ export async function runVpnChecks({ auto = false } = {}) {
     const ov = await apiGet("/dev/vpn/overview");
     if (!ov.configured) throw new Error(ov.reason || "X-UI не настроен на сервере.");
 
+    renderProgress("Контрольные сайты: где вы находитесь");
+    const zone = await zoneCheck();
     const domains = pickDomains(ov);
     const dns = [];
     for (const d of domains) {
@@ -200,11 +234,19 @@ export async function runVpnChecks({ auto = false } = {}) {
 
     // connect за ~1 мс до удалённого сервера — соединение перехватил
     // локальный VPN/прокси, пробы меряют его, а не провайдера.
-    const tunnel = (stability?.median_ms ?? stabTarget?.tcp?.median_ms ?? 99) < 2;
+    const tunnel = (stability?.median_ms ?? stabTarget?.tcp?.median_ms ?? 99) < 5;
 
-    const result = { at: Date.now(), auto, ov, serverIp, internetOk, dns, rows, freeze, stability, tunnel };
+    const result = { at: Date.now(), auto, ov, serverIp, internetOk, dns, rows, freeze, stability, tunnel, zone };
     writeJson(RESULT_KEY, stripForStorage(result));
+    const prevTone = readJson(HISTORY_KEY, [])[0]?.tone;
     pushHistory(result);
+    const nowTone = overallTone(result);
+    if (auto && prevTone === "ok" && (nowTone === "warn" || nowTone === "bad") && zone.state !== "open") {
+      const bad = result.rows.filter(x => x.tone === "bad" || x.tone === "warn");
+      try {
+        sendNotification({ title: "VPN помощник: сервер стал хуже отвечать", body: bad[0] ? `${bad[0].ib.remark || "inbound"}:${bad[0].ib.port} — ${(bad[0].notes || [])[0] || "есть проблема"}` : "Откройте «Проверка сети»." });
+      } catch (_) { /* нет уведомлений — молчим */ }
+    }
     return result;
   } catch (e) {
     toast(`VPN помощник: ${e.message}`, "error");
@@ -289,6 +331,7 @@ function headerHtml(r) {
         <label class="vpn-auto" title="Раз в 30–60 минут со случайным сдвигом, пока приложение открыто">
           <input type="checkbox" id="vpn-auto" ${auto ? "checked" : ""}> Авто-проверка
         </label>
+        <button class="btn ghost" id="vpn-report" ${r ? "" : "disabled"} title="Скопировать результат текстом — для хостера или заметок">Скопировать отчёт</button>
         <button class="btn" id="vpn-run" ${running ? "disabled" : ""}>Проверить сейчас</button>
       </div>` : ""}
     </div>
@@ -309,6 +352,7 @@ function inboundRowHtml(x) {
         <div class="svc-row-name">${esc(ib.remark || `inbound ${ib.id}`)} <span class="vpn-port">:${ib.port}</span></div>
         <div class="svc-row-desc">${esc(proto)}${sni ? ` · ${esc(sni)}` : ""}${tlsBits ? ` · ${esc(tlsBits)}` : ""}</div>
         ${(x.notes || []).map(n => `<div class="vpn-note">${esc(n)}</div>`).join("")}
+        ${(x.recs || []).map(n => `<div class="vpn-rec">→ ${esc(n)}</div>`).join("")}
       </div>
       ${pill(x.tone)}
       <div class="svc-row-latency">${fmtMs(x.tcp?.median_ms)}</div>
@@ -327,7 +371,7 @@ function dnsHtml(r) {
         <div style="min-width:0;">
           <div style="font-size:12px; font-weight:600;">${esc(d.host)}</div>
           <div class="vpn-sub">Система: ${d.system_error ? esc(d.system_error) : esc(d.system.join(", ") || "пусто")} · ${doh}</div>
-          ${d.mismatch ? `<div class="vpn-note">Провайдерский DNS отвечает не так, как DoH, — похоже на подмену DNS.</div>` : ""}
+          ${d.mismatch ? `<div class="vpn-note">Провайдерский DNS отвечает не так, как DoH, — похоже на подмену DNS.</div><div class="vpn-rec">→ Включите в клиенте шифрование DNS (DoH / DoT).</div>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -336,7 +380,8 @@ function dnsHtml(r) {
 function historyHtml() {
   const h = readJson(HISTORY_KEY, []);
   if (!h.length) return `<div class="no-assignee">Истории пока нет</div>`;
-  return h.slice(0, 10).map(x => `
+  const strip = `<div class="vpn-strip" title="Последние проверки, слева новые">${h.slice(0, 30).map(x => `<i class="${x.tone}" title="${esc(relTime(new Date(x.at).toISOString()))}"></i>`).join("")}</div>`;
+  return strip + h.slice(0, 10).map(x => `
     <div class="mini-row">
       ${dot(x.tone)}
       <div style="min-width:0; flex:1;">
@@ -373,7 +418,8 @@ function resultHtml(r) {
       <div><h2>${tone === "ok" ? "Сервер доступен, блокировок не видно" : tone === "bad" ? "Найдены проблемы" : tone === "warn" ? "Работает, но есть вопросы" : "Нечего проверять"}</h2>
         <p>${esc(r.serverIp || "адрес сервера не найден")} · проверено ${esc(relTime(new Date(r.at).toISOString()))}${r.auto ? " (авто)" : ""} · трафик ${fmtBytes(traffic)}</p></div>
     </section>
-    ${r.tunnel ? `<div class="bcell vpn-warn">Соединение с сервером устанавливается за ~1 мс — похоже, на этом компьютере включён VPN или прокси, и проверки идут через него. Для честной картины блокировок выключите его и проверьте снова.</div>` : ""}
+    ${r.zone?.state === "open" ? `<div class="bcell vpn-warn">Заблокированные в РФ сайты (instagram.com, facebook.com) открываются — похоже, вы за VPN или вне РФ. Пробы покажут доступность сервера из вашей текущей сети, а не из зоны блокировок. Выключите VPN и проверьте снова.</div>` : r.zone?.state === "offline" ? `<div class="bcell vpn-warn">Даже «белые» сайты (Яндекс, Госуслуги) не открываются — похоже, нет интернета. Результаты ниже недостоверны.</div>` : ""}
+    ${r.tunnel && r.zone?.state !== "open" ? `<div class="bcell vpn-warn">Соединение с сервером устанавливается меньше чем за 5 мс — похоже, на этом компьютере включён VPN или прокси, и проверки идут через него. Для честной картины блокировок выключите его и проверьте снова.</div>` : ""}
     ${!r.internetOk ? `<div class="bcell vpn-warn">DoH-резолверы не ответили — возможно, пропал интернет, а не сервер заблокирован.</div>` : ""}
     ${!r.serverIp ? `<div class="bcell vpn-warn">Не удалось определить IP сервера. Укажите его в XUI_PUBLIC_HOSTS на сервере.</div>` : ""}
     <div class="an-metrics">${statCards}</div>
@@ -390,7 +436,7 @@ function resultHtml(r) {
         </div>
         <div class="bcell" style="animation-delay:220ms;">
           <h3>Заморозка после ~16 КБ</h3>
-          <div class="mini-list">${r.freeze ? `<div class="mini-row">${dot(r.freeze.tone)}<div class="vpn-sub" style="color:inherit;">порт ${r.freeze.port}: ${esc(r.freeze.text)}</div></div>` : `<div class="no-assignee">Нет TLS-inbound'а, через который можно проверить</div>`}</div>
+          <div class="mini-list">${r.freeze ? `<div class="mini-row">${dot(r.freeze.tone)}<div class="vpn-sub" style="color:inherit;">порт ${r.freeze.port}: ${esc(r.freeze.text)}${r.freeze.rec ? `<div class="vpn-rec">→ ${esc(r.freeze.rec)}</div>` : ""}</div></div>` : `<div class="no-assignee">Нет TLS-inbound'а, через который можно проверить</div>`}</div>
         </div>
         <div class="bcell" style="flex-grow:1; animation-delay:240ms;">
           <h3>История проверок</h3>
@@ -398,6 +444,28 @@ function resultHtml(r) {
         </div>
       </div>
     </div>`;
+}
+
+function reportText(r) {
+  const t = TONE[overallTone(r)];
+  const L = [
+    `# VPN помощник — отчёт`,
+    `Время: ${new Date(r.at).toLocaleString("ru-RU")}${r.auto ? " (авто)" : ""}`,
+    `Сервер: ${r.serverIp || "не определён"} · итог: ${t.label}`,
+    `Где проверялось: ${r.zone?.state === "ru" ? "зона блокировок (белые сайты открываются, чёрные нет)" : r.zone?.state === "open" ? "ВНЕ зоны блокировок / через VPN (чёрные сайты открываются)" : r.zone?.state === "offline" ? "нет интернета" : "—"}`,
+    `Xray: ${r.ov.server?.xray_state || "—"} ${r.ov.server?.xray_version || ""}`,
+    ``, `## Inbound'ы`,
+  ];
+  for (const x of r.rows) {
+    L.push(`- ${x.ib.remark || x.ib.id} :${x.ib.port} (${[x.ib.protocol, x.ib.network, x.ib.security].filter(Boolean).join("/")}) — ${TONE[x.tone].label}, TCP ${fmtMs(x.tcp?.median_ms)}`);
+    for (const n of x.notes || []) L.push(`  · ${n}`);
+    for (const n of x.recs || []) L.push(`  → ${n}`);
+  }
+  L.push(``, `## DNS`);
+  for (const d of r.dns) L.push(`- ${d.host}: система ${d.system_error || (d.system || []).join(", ") || "пусто"}${d.mismatch ? " — НЕ СОВПАДАЕТ с DoH" : ""}`);
+  if (r.freeze) L.push(``, `## Заморозка после ~16 КБ`, `- порт ${r.freeze.port}: ${r.freeze.text}`);
+  if (r.stability) L.push(``, `## Стабильность`, `- медиана ${fmtMs(r.stability.median_ms)}, джиттер ${fmtMs(r.stability.jitter_ms)}, потерь ${r.stability.attempts.length - r.stability.ok_count} из ${r.stability.attempts.length}`);
+  return L.join("\n");
 }
 
 function renderFromCache() {
@@ -417,6 +485,11 @@ function wire(root) {
     renderFromCache();
   });
   root.querySelector("#vpn-run")?.addEventListener("click", () => runVpnChecks());
+  root.querySelector("#vpn-report")?.addEventListener("click", async () => {
+    const r = readJson(RESULT_KEY, null);
+    if (!r) return;
+    try { await navigator.clipboard.writeText(reportText(r)); toast("Отчёт скопирован."); } catch (_) { toast("Не удалось скопировать.", "error"); }
+  });
   root.querySelector("#vpn-auto")?.addEventListener("change", e => {
     writeJson(AUTO_KEY, e.target.checked);
     scheduleVpnAuto();
