@@ -1027,3 +1027,39 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
 .ms-info-sec h4 { font-size: 9.5px; letter-spacing: .22em; margin: 18px 0 8px; }
 .ms-mem { border-radius: 10px; }
 @media (max-width: 1080px) { .ms-layout.info-open { grid-template-columns: 260px minmax(0, 1fr); } }
+
+/* ================================================================
+   Остальные экраны (лента, аналитика, сервисы, команда, профиль,
+   настройки): те же стеклянные карточки, что и на переписанных.
+   ================================================================ */
+.bcell, .fd-sum-cell, .fd-day, .pf-card, .pf-hero, .pf-kpi, .tm-card, .tm-stat, .st-group, .vote-card, .cal-card, .fd-body,
+.pf-side .team-teaser, .pf-side .goal-card {
+  background: var(--glass-bg); border: 0; border-radius: var(--radius-lg);
+  backdrop-filter: blur(26px) saturate(1.2); -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow: 0 26px 50px -32px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.bcell:hover, .tm-card:hover { border: 0; box-shadow: 0 26px 50px -32px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(255, 255, 255, .12); }
+:root[data-theme="light"] .bcell, :root[data-theme="light"] .fd-sum-cell, :root[data-theme="light"] .fd-day, :root[data-theme="light"] .pf-card,
+:root[data-theme="light"] .pf-hero, :root[data-theme="light"] .pf-kpi, :root[data-theme="light"] .tm-card, :root[data-theme="light"] .tm-stat,
+:root[data-theme="light"] .st-group { background: rgba(255, 255, 255, .7); box-shadow: 0 20px 40px -28px rgba(60, 25, 10, .3), inset 0 0 0 1px rgba(255, 255, 255, .8); }
+.bcell h3, .pf-card h3 { font-size: 14px; font-weight: 800; letter-spacing: 0; text-transform: none; }
+.bcell .big-num { font-weight: 800; letter-spacing: -.02em; }
+.an-metrics { gap: 14px; }
+.an-bar { border-radius: 10px 10px 5px 5px; }
+.an-perf-track { height: 5px; background: rgba(255, 255, 255, .08); }
+.an-perf-fill { background: linear-gradient(90deg, var(--fire), var(--gold)); }
+.tm-grid { gap: 16px; }
+.tm-card { padding: 22px 18px 16px; text-align: center; transition: transform .35s var(--kadr-ease); }
+.tm-card:hover { transform: translateY(-3px); }
+.tm-load { height: 4px; background: rgba(255, 255, 255, .08); }
+.tm-load i { background: linear-gradient(90deg, var(--fire), var(--gold)); }
+.tm-search, .fd-search { height: 36px; border-radius: 11px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); }
+.tm-rchip, .fd-chip { border-radius: 999px; }
+.pf-card-head h3 { font-size: 14px; }
+.st-group { margin-bottom: 14px; }
+.st-nav-btn { border-radius: 12px; }
+.st-nav-btn.on { background: rgba(255, 255, 255, .07); }
+.st-nav-btn.on::before { content: none; }
+.st-nav-title { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.st-palette.on, .st-card.on { border-color: rgba(var(--gold-rgb), .5); box-shadow: 0 0 0 3px rgba(var(--gold-rgb), .1); }
+.page-header-actions .btn, .page-header-actions .icon-btn { height: 36px; }
