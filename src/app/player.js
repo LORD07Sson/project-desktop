@@ -12,6 +12,8 @@
 import { apiGet, apiPost, apiBlob, toast } from "./api.js";
 import { AUDIO_RE, MIME } from "./media-formats.js";
 import { esc, parseNoteTime, formatRange } from "./utils.js";
+import { getCached, putCached } from "./audio-cache.js";
+import { cacheKey } from "./audio-cache-core.js";
 
 const QC_LABEL = { clip: "клиппинг", noise: "шум", silence: "тишина", silence_long: "долгая тишина", no_speech: "нет речи" };
 
@@ -257,10 +259,15 @@ export function createPlayer({ publicId, onAddNote, onClose }) {
       ruler(); render();
     }).catch(() => {});
     try {
-      const blob = await apiBlob(`/report/${publicId}/files/${f.id}/download`, (got, total) => {
-        if (seq !== loadSeq) return;
-        msg.textContent = total ? `Загружаю звук… ${Math.round(got / total * 100)}%` : `Загружаю звук… ${(got / 1048576).toFixed(1)} МБ`;
-      });
+      const key = cacheKey(publicId, f.id);
+      let blob = await getCached(key);
+      if (!blob) {
+        blob = await apiBlob(`/report/${publicId}/files/${f.id}/download`, (got, total) => {
+          if (seq !== loadSeq) return;
+          msg.textContent = total ? `Загружаю звук… ${Math.round(got / total * 100)}%` : `Загружаю звук… ${(got / 1048576).toFixed(1)} МБ`;
+        });
+        putCached(key, blob);
+      }
       if (seq !== loadSeq) return;
       if (blobUrl) URL.revokeObjectURL(blobUrl);
       blobUrl = URL.createObjectURL(new Blob([blob], { type: MIME[ext] || blob.type || "audio/mpeg" }));
