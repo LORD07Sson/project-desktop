@@ -21,6 +21,8 @@ const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-onl
 const w = dom.window;
 const setGlobal = (n, v) => Object.defineProperty(globalThis, n, { value: v, writable: true, configurable: true });
 for (const n of ["window", "document", "localStorage", "navigator", "Image", "MutationObserver", "CustomEvent", "Event", "getComputedStyle"]) setGlobal(n, w[n]);
+// Соглашение о неразглашении (nda.js) для тестового пользователя уже принято — иначе его окно считалось бы лишней модалкой.
+w.localStorage.setItem("project-nda-v1-7269587205", "test");
 setGlobal("requestAnimationFrame", w.requestAnimationFrame || (cb => setTimeout(cb, 0)));
 document.elementFromPoint = () => null;
 

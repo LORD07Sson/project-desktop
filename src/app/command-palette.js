@@ -11,6 +11,7 @@ import { $, esc } from "./utils.js";
 import { switchTab } from "./tabs.js";
 import { openReportDetail } from "./report-detail.js";
 import { recentReports } from "./recent-reports.js";
+import { parseProjectLink } from "./deeplink-core.js";
 
 const ACTIONS = [
   { label: "Моя очередь", icon: "☑", sub: "мои серии и сроки", run: () => switchTab("queue") },
@@ -107,6 +108,8 @@ export function openPalette() {
       ? ACTIONS.filter(a => a.label.toLowerCase().includes(q.toLowerCase()))
       : ACTIONS;
     const base = staticMatches.map(a => ({ label: a.label, icon: a.icon, run: a.run }));
+    const plink = parseProjectLink(q);
+    if (plink) base.unshift({ label: `Открыть отчёт ${plink.id}`, icon: "🔗", sub: "ссылка project://", run: () => openReportDetail(plink.id) });
     setItems(q ? base : [...recentItems(), ...base]);
 
     clearTimeout(searchDebounce);

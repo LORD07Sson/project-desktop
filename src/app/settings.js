@@ -15,6 +15,7 @@ import { avatarHtml, loadAvatars } from "./profile.js";
 import { fetchPerson, openPauseDialog } from "./people.js";
 import { openAdminPanel } from "./admin.js";
 import { tagLogger } from "./applog.js";
+import { midiEnabled, setMidiEnabled } from "./midi-control.js";
 import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints, resetTourProgress } from "./tour.js";
 
 const updateLog = tagLogger("updates");
@@ -186,6 +187,7 @@ async function openSettings() {
           <div class="st-group">
             ${row(ICONS.power, "Запускать при старте системы", "Окно сразу уходит в трей и следит за назначениями", sw("s-autostart", autostartOn), "автозапуск windows")}
             ${row(ICONS.home, "Стартовый раздел", "Что открывать при запуске", seg("data-st-start", Object.entries(START_TABS), start), "запуск вкладка")}
+            ${row(ICONS.focus, "MIDI-контроллер для плеера", "До — пауза, Си и Ре — назад и вперёд на 5 с, ручка CC 7 — громкость, колесо CC 1 — перемотка", sw("s-midi", midiEnabled()), "midi клавиатура контроллер")}
             ${row(ICONS.focus, "Фокус-режим при открытии отчёта", "Карточка отчёта на весь экран, остальное прячется", sw("s-focus-mode", focusModePreferred()))}
             ${state.isDeveloper ? `<div class="dev-pill-toggle">${row(ICONS.dev, "Режим разработчика", "Правка чужих ролей, профиля, даты вступления и наград — на карточке коллеги", sw("s-dev-mode", isDevModeOn()))}</div>` : ""}
           </div>
@@ -263,6 +265,10 @@ async function openSettings() {
   overlay.querySelector("#s-density").addEventListener("change", e => applyDensity(e.target.value));
   overlay.querySelector("#s-focus-mode").addEventListener("change", e => setFocusModePreferred(e.target.checked));
   overlay.querySelector("#s-desktop-notify").addEventListener("change", e => setDesktopNotifyEnabled(e.target.checked));
+  overlay.querySelector("#s-midi").addEventListener("change", async e => {
+    const ok = await setMidiEnabled(e.target.checked);
+    if (!ok && e.target.checked) e.target.checked = false;
+  });
   overlay.querySelector("#s-autostart").addEventListener("change", async e => {
     try {
       await invoke("set_autostart", { enabled: e.target.checked });
