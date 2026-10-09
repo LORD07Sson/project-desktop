@@ -1903,15 +1903,13 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .fx-send:disabled { opacity: .45; cursor: default; }
 
 /* ===== навигация «жидкий металл» ===== */
-.tb-nav.liquid { position: relative; overflow: hidden; isolation: isolate;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 40%, #3a2c24), color-mix(in srgb, var(--bg) 70%, #000));
-  box-shadow: 0 12px 30px -16px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(0, 0, 0, .5); }
-.tb-nav.liquid::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .3s;
-  background: radial-gradient(180px circle at var(--nx, 50%) var(--ny, 50%), rgba(255, 255, 255, .13), transparent 70%); }
+.tb-nav.liquid { position: relative; isolation: isolate; }
+.tb-nav.liquid::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(160px circle at var(--nx, 50%) var(--ny, 50%), rgba(255, 255, 255, .09), transparent 70%); }
 .tb-nav.liquid:hover::before { opacity: 1; }
 .tb-nav.liquid > .tab-btn::before, .tb-nav.liquid .tb-more-btn::before { content: ""; position: absolute; left: 50%; bottom: 3px; height: 1px; width: 0; transform: translateX(-50%); background: #fff; transition: width .32s cubic-bezier(.2, .9, .25, 1); }
 .tb-nav.liquid > .tab-btn:hover::before, .tb-nav.liquid .tb-more-btn:hover::before { width: calc(100% - 26px); }
-.tb-nav.liquid:has(.tab-btn:hover, .tb-more-btn:hover) > .tab-btn:not(:hover):not(.active), .tb-nav.liquid:has(.tab-btn:hover, .tb-more-btn:hover) .tb-more-btn:not(:hover):not(.active) { opacity: .5; }
+.tb-nav.liquid:hover > .tab-btn:not(:hover):not(.active), .tb-nav.liquid:hover .tb-more-btn:not(:hover):not(.active) { opacity: .6; }
 .tb-nav.liquid > .tab-btn, .tb-nav.liquid .tb-more-btn { transition: color .25s, background .25s, opacity .25s; }
 #tabstrip.liquid > .tab-btn.active { background: none; box-shadow: none; }
 #tabstrip.liquid > .tab-btn.active::before { content: ""; width: calc(100% - 26px); height: 2px; background: var(--fire); box-shadow: 0 0 10px rgba(var(--fire-rgb), .8); }
