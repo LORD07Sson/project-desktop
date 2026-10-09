@@ -17,6 +17,7 @@
 // Ключ беседы: "general", "dm:<a>:<b>", "t:<topic_id>". Обновление — опрос.
 
 import { state } from "./state.js";
+import { nyaaCardsHtml } from "./nyaa-card.js";
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
 import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { $, esc, relTime } from "./utils.js";
@@ -90,13 +91,15 @@ function recountChannel(ch) {
 // Текст сообщения: экранируем, затем подсвечиваем таймкоды и @упоминания.
 function richText(text) {
   let html = esc(text);
+  const nyaaIds = [];
+  html = html.replace(/project:\/\/nyaa\/(\d{1,8})/g, (_, id) => { nyaaIds.push(id); return ""; }).trim();
   html = html.replace(/(^|[\s(])((?:\d{1,2}:)?\d{1,2}:\d{2})(?=$|[\s.,!?)])/g,
     (_, pre, tc) => `${pre}<span class="ms-tc">${tc}</span>`);
   html = html.replace(/(^|\s)@([\p{L}\d_]{2,32})/gu, (_, pre, name) => {
     const me = (state.name || "").toLowerCase() === name.toLowerCase();
     return `${pre}<span class="ms-mention${me ? " me" : ""}">@${name}</span>`;
   });
-  return html.replace(/\n/g, "<br>");
+  return html.replace(/\n/g, "<br>").replace(/(<br>)+$/, "") + (nyaaIds.length ? nyaaCardsHtml(nyaaIds) : "");
 }
 
 // ---------- список слева ----------

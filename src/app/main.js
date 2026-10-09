@@ -47,6 +47,8 @@ import "./avatar-hover.js";
 import "./feed-badge.js";
 import "./title-hover.js";
 import "./watch.js";
+import { installLiquidNav } from "./nyaa-fx.js";
+installLiquidNav();
 
 tryRestoreSession();
 setTimeout(() => appWindow.show(), 0); // DevSkim: ignore DS172411 — функция, не строка

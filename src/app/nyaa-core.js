@@ -854,3 +854,16 @@ export function libraryKeys(files) {
   }
   return keys;
 }
+
+const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+
+/** Подпись дня для группировки списка: «Сегодня», «Вчера», «9 октября», «9 октября 2025». */
+export function dayLabel(ts, now = Date.now()) {
+  if (!ts) return "Дата неизвестна";
+  const d = new Date(ts), n = new Date(now);
+  const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(n) - day(d)) / 86400000);
+  if (diff === 0) return "Сегодня";
+  if (diff === 1) return "Вчера";
+  return `${d.getDate()} ${MONTHS_GEN[d.getMonth()]}${d.getFullYear() !== n.getFullYear() ? ` ${d.getFullYear()}` : ""}`;
+}
