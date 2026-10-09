@@ -17,6 +17,7 @@ export const API_BASE = "https://minitg.shitstudent.com:8443/api";
 // зависшего интерфейса. 20с — заметно больше обычного отклика (доли
 // секунды — единицы секунд), но не бесконечность.
 const REQUEST_TIMEOUT_MS = 20_000;
+const BLOB_STALL_MS = 30_000;
 
 // Токен могли отозвать прямо во время работы (вышли с другого
 // устройства, админ снял доступ). Раньше это выглядело как бесконечные
@@ -47,6 +48,14 @@ function netEnd() {
   if (inFlight === 0) document.documentElement.classList.remove("net-busy");
 }
 
+// 401 и «доступ отозван» (403 «только для участников студии») возвращают на экран входа.
+// 403 «только для админов» — не повод выходить: так админские ручки отвечают рядовому участнику.
+// /desktop/pair — единственный запрос без токена: там 401 значит «неверный код».
+function checkSessionLost(status, detail, path) {
+  const revoked = status === 403 && /участник/i.test(String(detail));
+  if ((status === 401 || revoked) && path !== "/desktop/pair") notifySessionExpired(String(detail));
+}
+
 export async function api(method, path, body) {
   const headers = { "Content-Type": "application/json" };
   if (state.token) headers["X-Init-Data"] = state.token;
@@ -72,16 +81,7 @@ export async function api(method, path, body) {
   if (!resp.ok) {
     let detail = resp.status;
     try { detail = (await resp.json()).detail ?? detail; } catch (_) {}
-    // /desktop/pair — единственный запрос без токена: там 401 значит
-    // «неверный код», а не «сессия протухла», выкидывать со входа на
-    // вход незачем.
-    // 403 «только для админов» — не повод выкидывать: так отвечают
-    // админские ручки рядовому участнику. Выходим только при 401 и при
-    // 403 «только для участников студии» — это значит, доступ отозван.
-    const revoked = resp.status === 403 && /участник/i.test(String(detail));
-    if ((resp.status === 401 || revoked) && path !== "/desktop/pair") {
-      notifySessionExpired(String(detail));
-    }
+    checkSessionLost(resp.status, detail, path);
     throw new Error(String(detail));
   }
   const text = await resp.text();
@@ -119,33 +119,48 @@ function stripStatusEmoji(node) {
 export async function apiBlob(path, onProgress) {
   const headers = {};
   if (state.token) headers["X-Init-Data"] = state.token;
+  const controller = new AbortController();
+  // Два ограничения: ответ должен начаться за REQUEST_TIMEOUT_MS, а потом данные не должны
+  // молчать дольше BLOB_STALL_MS (долгая, но живая загрузка не обрывается).
+  let timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); // DevSkim: ignore DS172411 — функция, не строка
+  const arm = ms => { clearTimeout(timer); timer = setTimeout(() => controller.abort(), ms); }; // DevSkim: ignore DS172411 — функция, не строка
+  const stalled = "Сервер перестал отвечать — проверьте соединение и попробуйте снова.";
   netStart();
   try {
     let resp;
     try {
-      resp = await fetch(`${API_BASE}${path}`, { headers });
+      resp = await fetch(`${API_BASE}${path}`, { headers, signal: controller.signal });
     } catch (e) {
+      if (e.name === "AbortError") throw new Error(stalled);
       throw new Error(`Нет связи с сервером: ${e.message}`);
     }
     if (!resp.ok) {
       let detail = resp.status;
       try { detail = (await resp.json()).detail ?? detail; } catch (_) {}
+      checkSessionLost(resp.status, detail, path);
       throw new Error(typeof detail === "string" ? detail : `Ошибка ${detail}`);
     }
     const total = Number(resp.headers.get("Content-Length")) || 0;
-    if (!resp.body || !onProgress) return await resp.blob();
+    if (!resp.body) { arm(BLOB_STALL_MS); return await resp.blob(); }
     const reader = resp.body.getReader();
     const chunks = [];
     let got = 0;
     for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      got += value.length;
-      onProgress(got, total);
+      arm(BLOB_STALL_MS);
+      let step;
+      try { step = await reader.read(); }
+      catch (e) {
+        reader.cancel().catch(() => {});
+        throw new Error(e.name === "AbortError" ? stalled : `Загрузка прервалась: ${e.message}`);
+      }
+      if (step.done) break;
+      chunks.push(step.value);
+      got += step.value.length;
+      if (onProgress) onProgress(got, total);
     }
     return new Blob(chunks);
   } finally {
+    clearTimeout(timer);
     netEnd();
   }
 }
