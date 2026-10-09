@@ -14,7 +14,7 @@ import { state } from "./state.js";
 import { notifyDesktop } from "./desktop-notify.js";
 import {
   newHealth, record as hRecord, statsOf, cooling as hCooling, bestPath, pickMirror, shouldSwitch,
-  sparkPoints, levelOf, serialize, deserialize, SLOW_MS, ageText, durText, pushActivity, filterActivity, nextCheckIn,
+  levelOf, serialize, deserialize, SLOW_MS, ageText, durText, pushActivity, filterActivity, nextCheckIn,
 } from "./mirror-health.js";
 import { $, esc } from "./utils.js";
 import {
@@ -129,6 +129,7 @@ const ICONS = {
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 16V6a2 2 0 0 1 2-2h8"/></svg>',
   open: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"/></svg>',
+  check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4 2.4 5 5.4.7-4 3.8 1 5.4L12 16.3 7.2 18.9l1-5.4-4-3.8 5.4-.7z"/></svg>',
   comment: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H10l-5 4z"/></svg>',
   info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/></svg>',
@@ -940,7 +941,7 @@ const isDead = url => {
 };
 
 let showHidden = false;
-let sourcesLogOpen = true;
+let sourcesLogOpen = false;
 const KIND_LABEL = { ping: "проверка", load: "загрузка", switch: "переключение" };
 function evHtml(ev) {
   const time = new Date(ev.t).toLocaleTimeString("ru-RU");
@@ -954,8 +955,11 @@ function evHtml(ev) {
   return `<div class="ny-ev${ev.ok === false ? " fail" : ""}"><time>${esc(time)}</time><u>${esc(KIND_LABEL[ev.kind] || ev.kind)}</u> ${text}</div>`;
 }
 
-// Ячейка пинга: подпись «откуда», значение, возраст замера; пока идёт проверка — спиннер.
-function pingCell(url, path, label) {
+// Короткий код страны для заголовка колонки: nl2 → NL, jp → JP; «без VPN» → ПРЯМО.
+const exitShort = id => { const c = exitOf(id) || exitList.default; return c === "direct" ? "прямо" : c.replace(/\d+$/, "").toUpperCase(); };
+
+// Компактная ячейка пинга: значение; возраст замера и пояснение — во всплывающей подсказке; пока идёт проверка — спиннер.
+function pingCell(url, path, who) {
   const arr = health.m[url] ? health.m[url][path] : [];
   const last = arr.length ? arr[arr.length - 1] : null;
   const pend = isPending(url, path);
@@ -965,31 +969,26 @@ function pingCell(url, path, label) {
     if (last.ms == null) { val = "✕"; cls = "bad"; }
     else { val = esc(durText(last.ms)); cls = last.ms > SLOW_MS ? "slow" : "ok"; }
   }
-  const age = pend ? "проверяю…" : last ? ageText(Date.now(), last.t) : "не проверялось";
-  const what = path === "pc" ? "запрос с этого компьютера к сайту" : "запрос с сервера студии к сайту через выбранную страну";
-  return `<div class="ny-ping ${cls}" title="${esc(what)}"><small>${esc(label)}</small><b>${val}</b><em>${esc(age)}</em></div>`;
+  const age = pend ? "проверяю…" : last ? `замер ${ageText(Date.now(), last.t)}` : "ещё не проверялось";
+  return `<span class="ny-c ${cls}" title="${esc(`${who}: ${age}`)}">${val}</span>`;
 }
 
 function mirrorRow(sv, m) {
-  const e = health.m[m] || { pc: [], server: [] };
   const active = sv.apply && m === prefs.base;
   const custom = sv.id === "nyaa" && prefs.custom.includes(m);
   const lvl = levelOfUrl(m);
-  const path = bestPath(health, m);
-  const samples = path === "server" ? e.server : path === "pc" ? e.pc : (e.pc.length >= e.server.length ? e.pc : e.server);
-  const spark = sparkPoints(samples, 70, 22);
   const pause = ["pc", "server"].map(p => untilText(m, p)).find(Boolean);
   const own = sv.id === "server";
+  const who = `С сервера студии (${exitName(sv.id)})`;
   return `<div class="ny-mir2${active ? " act" : ""}">
     <i class="${lvl === "idle" ? "" : lvl}"></i>
     <div class="ny-mir2-t"><b>${esc(hostOf(m))}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
-    <svg class="ny-spark ${lvl}" width="70" height="22" viewBox="0 0 70 22" aria-hidden="true">${spark ? `<polyline fill="none" stroke-width="1.6" points="${spark}"/>` : ""}</svg>
-    <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
-    <div class="ny-mir2-p">${pingCell(m, "pc", "С ПК")}${own ? "" : pingCell(m, "server", `С сервера · ${exitName(sv.id)}`)}</div>
-    ${(sv.apply && !active) || custom ? `<div class="ny-mir2-a">
-      ${sv.apply && !active ? `<button type="button" class="btn ghost" data-use="${esc(m)}">Использовать</button>` : ""}
+    ${pingCell(m, "pc", "С этого компьютера")}${own ? `<span class="ny-c" title="Сервер студии проверяется только с компьютера">—</span>` : pingCell(m, "server", who)}
+    <span class="ny-mir2-a">
+      <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
+      ${sv.apply && !active ? `<button type="button" class="ny-ib ny-use" data-use="${esc(m)}" title="Использовать это зеркало" aria-label="Использовать это зеркало">${ICONS.check}</button>` : ""}
       ${custom ? `<button type="button" class="ny-ib" data-mir-del="${esc(m)}" title="Убрать зеркало" aria-label="Убрать зеркало">${ICONS.close}</button>` : ""}
-    </div>` : ""}</div>`;
+    </span></div>`;
 }
 
 // Сводка вверху: всё ли хорошо с Nyaa и каким путём она идёт.
@@ -998,7 +997,7 @@ function healthStrip() {
   const now = Date.now();
   const lvl = levelOfUrl(base);
   const path = routeOf("nyaa") === "server" ? "server" : routeOf("nyaa") === "pc" ? "pc" : bestPath(health, base);
-  const where = path === "server" ? `через сервер (${exitName("nyaa")})` : path === "pc" ? "напрямую с этого компьютера" : "путь выбирается по первым замерам";
+  const where = path === "server" ? `через сервер (${exitName("nyaa")})` : path === "pc" ? "напрямую с ПК" : "путь выбирается по замерам";
   const pcDead = health.m[base] && health.m[base].pc.length > 0 && statsOf(health.m[base].pc).median == null;
   const title = lvl === "ok" ? "Всё работает" : lvl === "slow" ? "Работает медленно" : lvl === "bad" ? "Есть проблема" : "Ещё не проверялось";
   const dot = lvl === "ok" ? "ok" : lvl === "slow" ? "slow" : lvl === "bad" ? "bad" : "";
@@ -1006,15 +1005,15 @@ function healthStrip() {
   const nextMs = nextCheckIn(now, lastSampleAt(base));
   const when = checking
     ? `Проверяю ${checkDone} из ${checkTotal}…`
-    : `Последняя проверка: ${ageText(now, lastAny)} · следующая плановая ${nextMs > 0 ? `через ~${Math.max(1, Math.ceil(nextMs / 60000))} мин` : "скоро"}`;
+    : `проверка ${ageText(now, lastAny)}, следующая ${nextMs > 0 ? `через ~${Math.max(1, Math.ceil(nextMs / 60000))} мин` : "скоро"}`;
   const pct = checkTotal ? Math.round(100 * checkDone / checkTotal) : 0;
   return `<div class="ny-top ${dot}"><i class="${dot}"></i>
-    <div><b>${title}</b><span>Nyaa идёт ${esc(where)}: ${esc(hostOf(base))}${pcDead ? " (напрямую у вас закрыт)" : ""}</span><span>${esc(when)}</span></div>
+    <div><b>${title}</b><span>Nyaa: ${esc(hostOf(base))}, ${esc(where)}${pcDead ? " (с ПК закрыт)" : ""} · ${esc(when)}</span></div>
     <span class="ny-sp"></span>
-    <button type="button" class="btn" data-heal title="Выбрать лучшее зеркало и путь по замерам">Починить / переключить</button>
-    <button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить сейчас"}</button>
+    <button type="button" class="btn" data-heal title="Выбрать лучшее зеркало и путь по замерам">Починить</button>
+    <button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить"}</button>
     ${checking ? `<div class="ny-prog"><i style="width:${pct}%"></i></div>` : ""}</div>
-    <p class="ny-legend"><b>С ПК</b> — запрос с этого компьютера к сайту. <b>С сервера</b> — запрос выполняет сервер студии через выбранную страну (в карточке). «Загрузка» — настоящий запрос данных (лента, страница), «проверка» — лёгкий пинг.</p>`;
+    <p class="ny-legend"><b>С ПК</b> — с этого компьютера · <b>С сервера</b> — через сервер студии в выбранной стране · возраст замера — во всплывающей подсказке</p>`;
 }
 
 // ---------- источники и зеркала ----------
@@ -1034,6 +1033,7 @@ function sourcesHtml() {
         ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>
         <label class="ny-exit" title="Из какой страны сервер студии ходит на эти сайты (когда запросы идут через сервер)"><span>Страна выхода сервера</span>
           <select data-exit="${sv.id}" ${routeOf(sv.id) === "pc" ? "disabled" : ""}><option value="">По умолчанию (${esc((exitList.exits.find(e => e.code === exitList.default) || { name: exitList.default }).name)})</option>${exitList.exits.map(e => `<option value="${esc(e.code)}"${exitOf(sv.id) === e.code ? " selected" : ""}>${esc(e.name)}</option>`).join("")}</select></label>`}
+        <div class="ny-cols"><span></span><span>Зеркало</span><span title="Запрос с этого компьютера">С ПК</span><span title="${esc(`Запрос с сервера студии через: ${exitName(sv.id)}`)}">${sv.id === "server" ? "" : `Сервер·${esc(exitShort(sv.id))}`}</span><span></span></div>
         ${shown.map(m => mirrorRow(sv, m)).join("")}
         ${dead.length && !showHidden ? `<p class="ny-hint">Ещё ${dead.length} ${dead.length === 1 ? "зеркало скрыто" : "зеркала скрыты"} (давно не отвечают) — <button type="button" class="ny-link" data-show-hidden>показать</button></p>` : ""}
         ${dead.length && showHidden ? `<p class="ny-hint"><button type="button" class="ny-link" data-show-hidden>скрыть неотвечающие</button></p>` : ""}
@@ -1042,7 +1042,7 @@ function sourcesHtml() {
         ${!sv.apply && sv.id !== "server" && sv.id !== "sources" ? `<p class="ny-hint">Страна выхода влияет на проверку этого сайта с сервера. Режим «Смотреть» берёт данные по настройке самого сервера.</p>` : ""}
       </div>`;
     }).join("")}</div>
-    <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал: что и откуда измерялось (${activity.length})</summary>
+    <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал проверок и загрузок (${activity.length})</summary>
       <div class="ny-log-f">${[["all", "Все"], ["ping", "Проверки"], ["load", "Загрузки"], ["switch", "Переключения"]].map(([k, l]) => `<button type="button" class="${logFilter === k ? "on" : ""}" data-log-f="${k}">${l}</button>`).join("")}</div>
       <div class="ny-log-body">${filterActivity(activity, logFilter).length ? filterActivity(activity, logFilter).map(evHtml).join("") : `<span class="ny-hint">Пока пусто: сюда пишутся проверки связи, загрузки и переключения.</span>`}</div></details>`;
 }
