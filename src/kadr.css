@@ -1919,3 +1919,15 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 @media (prefers-reduced-motion: reduce) { .fx-glow, .fx-av.pop { animation: none; } .brand-logo { transition: none; } }
 .fx-attach { display: flex; align-items: center; gap: 8px; min-width: 0; } .fx-file { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fx-unpick { border: 0; background: none; color: var(--ink); cursor: pointer; font-size: 14px; padding: 0 4px; }
+.fx-share { max-height: calc(100vh - 24px); overflow: auto; }
+.fx-modes { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+.fx-modes button { flex: 1; height: 28px; border: 0; border-radius: 6px; background: none; color: var(--ink-dim); font: inherit; cursor: pointer; }
+.fx-modes button.on { background: rgba(255, 255, 255, .1); color: var(--ink); }
+.fx-mh { color: var(--ink-dim); font-size: 11.5px; line-height: 1.4; }
+.fx-fl { display: grid; max-height: 150px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.fx-fl label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 12px; border-bottom: 1px solid var(--line); }
+.fx-fl label:last-child { border-bottom: 0; } .fx-fl label.off { opacity: .45; }
+.fx-fl span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .fx-fl em { font-style: normal; color: var(--ink-dim); font-size: 11px; }
+.fx-sum { margin-top: 4px; font-size: 11.5px; color: var(--ink-dim); }
+.fx-prog { display: grid; gap: 4px; font-size: 12px; color: var(--ink-dim); }
+.fx-pbar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .08); overflow: hidden; } .fx-pbar i { display: block; height: 100%; width: 0; background: var(--fire); transition: width .6s; }
