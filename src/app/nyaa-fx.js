@@ -94,8 +94,17 @@ export async function openShare(anchor, it, cover = "") {
   pop.innerHTML = `<div class="fx-sh-h"><b>Отправить участнику</b><span>Бот напишет ему в личные сообщения.</span></div><div class="fx-sh-load">Загружаю команду…</div>`;
   document.body.appendChild(pop);
   const r = anchor.getBoundingClientRect();
-  pop.style.top = `${Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 560))}px`;
-  pop.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - 372))}px`;
+  const place = () => {
+    if (!pop) return;
+    // нижняя граница — видимая часть экрана: окно программы может заходить под панель задач
+    const bottom = Math.min(window.innerHeight, window.screen.availHeight - (window.screenY || 0)) - 12;
+    pop.style.maxHeight = `${Math.max(240, bottom - 12)}px`;
+    const h = pop.offsetHeight;
+    pop.style.top = `${Math.max(12, Math.min(r.bottom + 6, bottom - h))}px`;
+    pop.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - pop.offsetWidth - 12))}px`;
+  };
+  place();
+  new ResizeObserver(place).observe(pop);
   let people = [];
   try { people = await loadTeam(); } catch (e) { pop.querySelector(".fx-sh-load").textContent = `Не удалось получить команду: ${(e && e.message) || e}`; return; }
   if (!pop) return;
