@@ -36,7 +36,7 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false, monEvery: 30 };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, exit: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false, monEvery: 30 };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
@@ -764,6 +764,30 @@ setInterval(() => {
   load();
 }, 5 * 60 * 1000);
 
+// ---------- страна выхода сервера ----------
+// Когда запросы идут через сервер студии, у него несколько выходов (WireGuard по странам). Для каждого
+// сервиса можно выбрать свой: пусто — по умолчанию (то, что задано на сервере), «direct» — без VPN.
+const EXIT_KEY = "project-nyaa-exits";
+let exitList = (() => { try { const c = JSON.parse(localStorage.getItem(EXIT_KEY) || "null"); return c && Date.now() - c.at < 24 * 3600e3 ? c.data : null; } catch (_) { return null; } })()
+  || { default: "nl", exits: [{ code: "nl", name: "Нидерланды" }, { code: "direct", name: "Напрямую, без VPN" }] };
+const exitOf = id => { const v = prefs.exit && prefs.exit[id]; return exitList.exits.some(e => e.code === v) ? v : ""; };
+const exitName = id => {
+  const code = exitOf(id) || exitList.default;
+  const e = exitList.exits.find(x => x.code === code);
+  return e ? e.name : code;
+};
+async function loadExits() {
+  try {
+    const data = JSON.parse(await (await apiBlob("/exits")).text());
+    if (data && Array.isArray(data.exits)) {
+      exitList = data;
+      try { localStorage.setItem(EXIT_KEY, JSON.stringify({ at: Date.now(), data })); } catch (_) { /* не запомнится */ }
+      paintSources();
+    }
+  } catch (_) { /* старый сервер без ручки — остаётся встроенный список */ }
+}
+const viaQuery = id => { const v = exitOf(id); return v ? `&via=${encodeURIComponent(v)}` : ""; };
+
 // ---------- выбор соединения для каждого сервиса ----------
 // auto — программа сама берёт лучший путь по замерам (напрямую или через сервер); pc — только этот
 // компьютер; server — всегда через сервер студии (его WireGuard).
@@ -903,7 +927,7 @@ function healthStrip() {
   const base = prefs.base;
   const lvl = levelOfUrl(base);
   const path = routeOf("nyaa") === "server" ? "server" : routeOf("nyaa") === "pc" ? "pc" : bestPath(health, base);
-  const where = path === "server" ? "через сервер" : path === "pc" ? "напрямую" : "путь выбирается по первым замерам";
+  const where = path === "server" ? `через сервер (${exitName("nyaa")})` : path === "pc" ? "напрямую" : "путь выбирается по первым замерам";
   const pcDead = health.m[base] && health.m[base].pc.length > 0 && statsOf(health.m[base].pc).median == null;
   const title = lvl === "ok" ? "Всё работает" : lvl === "slow" ? "Работает медленно" : lvl === "bad" ? "Есть проблема" : "Ещё не проверялось";
   const dot = lvl === "ok" ? "ok" : lvl === "slow" ? "slow" : lvl === "bad" ? "bad" : "";
@@ -928,13 +952,15 @@ function sourcesHtml() {
       return `
       <div class="ny-svc">
         <div class="ny-svc-h"><b>${esc(sv.name)}${autoOn ? ` <u class="ny-tag-auto">путь выбран сам</u>` : ""}</b><span>${esc(sv.note)}</span></div>
-        ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>`}
+        ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>
+        <label class="ny-exit" title="Из какой страны сервер студии ходит на эти сайты (когда запросы идут через сервер)"><span>Страна выхода сервера</span>
+          <select data-exit="${sv.id}" ${routeOf(sv.id) === "pc" ? "disabled" : ""}><option value="">По умолчанию (${esc((exitList.exits.find(e => e.code === exitList.default) || { name: exitList.default }).name)})</option>${exitList.exits.map(e => `<option value="${esc(e.code)}"${exitOf(sv.id) === e.code ? " selected" : ""}>${esc(e.name)}</option>`).join("")}</select></label>`}
         ${shown.map(m => mirrorRow(sv, m)).join("")}
         ${dead.length && !showHidden ? `<p class="ny-hint">Ещё ${dead.length} ${dead.length === 1 ? "зеркало скрыто" : "зеркала скрыты"} (давно не отвечают) — <button type="button" class="ny-link" data-show-hidden>показать</button></p>` : ""}
         ${dead.length && showHidden ? `<p class="ny-hint"><button type="button" class="ny-link" data-show-hidden>скрыть неотвечающие</button></p>` : ""}
         ${sv.id === "nyaa" ? `<div class="ny-mir-add"><input id="ny-mir-in" type="text" placeholder="Своё зеркало, например nyaa.example" spellcheck="false"><button type="button" class="btn" id="ny-mir-add">Добавить</button></div>` : ""}
         ${sv.id === "nyaa" ? `<label class="ny-auto-sw"><input type="checkbox" data-auto-mirror ${prefs.autoMirror === false ? "" : "checked"}> Переключать зеркало само, если текущее на паузе или медленное</label>` : ""}
-        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» всегда берёт эти данные через сервер студии; выбор влияет на проверку и на запросы из «Релизов».</p>` : ""}
+        ${!sv.apply && sv.id !== "server" && sv.id !== "sources" ? `<p class="ny-hint">Страна выхода влияет на проверку этого сайта с сервера. Режим «Смотреть» берёт данные по настройке самого сервера.</p>` : ""}
       </div>`;
     }).join("")}</div>
     <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал (${sourceLog.length})</summary>
@@ -958,11 +984,14 @@ async function runChecks(urls) {
   try {
     for (let i = 0; i < list.length; i += 6) {
       const part = list.slice(i, i + 6);
-      const q = new URLSearchParams(); part.forEach(u => q.append("u", u));
-      const [srv, loc] = await Promise.allSettled([
-        apiBlob(`/net/check?${q}`).then(b => b.text()).then(JSON.parse),
-        invoke("net_check", { urls: part }),
-      ]);
+      // с сервера адреса проверяются через выбранную для их сервиса страну: группируем по ней
+      const groups = new Map();
+      part.forEach(u => { const v = exitOf(serviceOfUrl(u)); (groups.get(v) || groups.set(v, []).get(v)).push(u); });
+      const serverCheck = Promise.all([...groups].map(([via, us]) => {
+        const q = new URLSearchParams(); us.forEach(u => q.append("u", u)); if (via) q.set("via", via);
+        return apiBlob(`/net/check?${q}`).then(b => b.text()).then(JSON.parse);
+      })).then(arrs => arrs.flat());
+      const [srv, loc] = await Promise.allSettled([serverCheck, invoke("net_check", { urls: part })]);
       if (loc.status === "fulfilled") loc.value.forEach(r => { localChecks[r.url] = r; note(r.url, "pc", okResult(r) ? r.ms : null); });
       if (srv.status === "fulfilled" && Array.isArray(srv.value)) {
         srv.value.forEach(r => { serverChecks[r.url] = r; if (serviceOfUrl(r.url) !== "server") note(r.url, "server", okResult(r) ? r.ms : null); });
@@ -1088,7 +1117,7 @@ const isNoConnection = e => /Не удалось загрузить|error sendin
 async function metaGet(url) {
   const mode = routeOf("sources");
   const viaRelay = async () => {
-    const wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}`)).text());
+    const wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}${viaQuery("sources")}`)).text());
     if (wrapped.status === 404) throw new Error("Сайт ответил 404");
     if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
     return String(wrapped.body || "");
@@ -1098,7 +1127,7 @@ async function metaGet(url) {
   catch (e) {
     if (mode === "pc" || isNotFound(e) || !isNoConnection(e)) throw e;
     let wrapped;
-    try { wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}`)).text()); }
+    try { wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}${viaQuery("sources")}`)).text()); }
     catch (_) { throw e; }                      // на сервере ручки нет или он недоступен — показываем исходную ошибку
     if (wrapped.status === 404) throw new Error("Сайт ответил 404");
     if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
@@ -1113,7 +1142,7 @@ async function metaGet(url) {
 let viaServer = false;
 
 async function relayJson(params) {
-  const q = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== "" && v != null)));
+  const q = new URLSearchParams(Object.fromEntries(Object.entries({ ...params, via: exitOf("nyaa") }).filter(([, v]) => v !== "" && v != null)));
   return JSON.parse(await (await apiBlob(`/nyaa/relay?${q}`)).text());
 }
 
@@ -1190,7 +1219,7 @@ function friendlyError(e) {
 async function fetchPic(url) {
   const mode = routeOf("nyaa");
   const viaRelay = async () => {
-    const w = JSON.parse(await (await apiBlob(`/nyaa/image?url=${encodeURIComponent(url)}`)).text());
+    const w = JSON.parse(await (await apiBlob(`/nyaa/image?url=${encodeURIComponent(url)}${viaQuery("nyaa")}`)).text());
     if (w.status !== 200 || !w.b64) throw new Error(`Картинка недоступна (${w.status})`);
     return `data:${w.mime};base64,${w.b64}`;
   };
@@ -1242,7 +1271,7 @@ async function loadSources(d) {
 // ---------- AnimeTosho: субтитры и кадры ----------
 const DATA_SHOT = b64 => `data:image/jpeg;base64,${b64}`;
 async function toshoRelay(params) {
-  const q = new URLSearchParams(params);
+  const q = new URLSearchParams({ ...params, ...(exitOf("sources") ? { via: exitOf("sources") } : {}) });
   try { return JSON.parse(await (await apiBlob(`/tosho/relay?${q}`)).text()); }
   catch (e) { throw new Error(/404|Not Found/i.test(String(e && e.message ? e.message : e)) ? "Нужно обновить сервер студии (нет ручки AnimeTosho)." : shortErr(e)); }
 }
@@ -1764,6 +1793,17 @@ function wire(root) {
   };
   root.addEventListener("click", onClick);
   root.querySelector("#ny-sources").addEventListener("change", e => {
+    if (e.target.matches("[data-exit]")) {
+      const id = e.target.dataset.exit;
+      prefs.exit = { ...prefs.exit, [id]: e.target.value }; savePrefs();
+      // замеры серверного пути относились к прежней стране — начинаем с чистого листа
+      allServices().find(x => x.id === id)?.mirrors.forEach(m => { const h = health.m[m]; if (h) { h.server = []; h.fail.server = 0; h.until.server = 0; } });
+      saveHealth();
+      logSrc(`${id}: страна выхода сервера — ${exitName(id)}`);
+      toast(`Страна выхода для «${id}»: ${exitName(id)}.`, "success");
+      paintSources(); runChecks(allServices().find(x => x.id === id)?.mirrors || []);
+      return;
+    }
     if (!e.target.matches("[data-auto-mirror]")) return;
     prefs.autoMirror = !!e.target.checked; savePrefs();
   });
@@ -1833,6 +1873,7 @@ export async function loadNyaa() {
     paintMonitorBadge();
   }
   if (state.token && state.isAdmin && !remoteMirrors.nyaa) loadRemoteMirrors();
+  if (state.token && state.isAdmin && !exitList.loadedAt) { exitList.loadedAt = Date.now(); loadExits(); }
   if (!lib && !libBusy) invoke("library_rescan").then(sc => { setLib(sc); paintLibLabel(); paintList(); }).catch(() => {});
   if (client === null) invoke("tc_load").then(c => { client = c || null; paintClientLabel(); }).catch(() => {});
   // Свежий список при открытии вкладки, но не чаще раза в 2 минуты.
