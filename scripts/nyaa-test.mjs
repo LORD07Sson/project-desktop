@@ -348,3 +348,13 @@ console.log("nyaa-test: ok");
   assert.equal(buildServices([], "", null).length >= 5, true);
   assert.equal(new Set(ny).size, ny.length, "без дублей");
 }
+
+{
+  const { dayLabel } = await import("../src/app/nyaa-core.js");
+  const now = new Date(2026, 9, 9, 15, 0).getTime();   // 9 октября 2026
+  assert.equal(dayLabel(new Date(2026, 9, 9, 1, 0).getTime(), now), "Сегодня");
+  assert.equal(dayLabel(new Date(2026, 9, 8, 23, 59).getTime(), now), "Вчера");
+  assert.equal(dayLabel(new Date(2026, 9, 5, 12, 0).getTime(), now), "5 октября");
+  assert.equal(dayLabel(new Date(2025, 11, 31, 12, 0).getTime(), now), "31 декабря 2025");
+  assert.equal(dayLabel(0, now), "Дата неизвестна");
+}

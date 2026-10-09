@@ -25,15 +25,19 @@ import {
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
-  groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
+  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
   seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
   parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, libraryKeys,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
 const QUICK_CATS = [["2_1", "Аудио без потерь"], ["1_2", "Аниме · англ. субтитры"], ["1_4", "Аниме · raw"], ["1_3", "Аниме · другие языки"], ["0_0", "Всё"]];
-const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["downloads", "Скачивают"], ["size", "Размер"]];
-const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
+const KIND_ICON = {
+  anime: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10.5 9.5v5l4-2.5z"/></svg>',
+  video: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10.5 9.5v5l4-2.5z"/></svg>',
+  audio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/></svg>',
+  other: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/></svg>',
+};
 
 function loadPrefs() {
   const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, exit: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false, monEvery: 30 };
@@ -129,6 +133,7 @@ const ICONS = {
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 16V6a2 2 0 0 1 2-2h8"/></svg>',
   open: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"/></svg>',
+  more: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>',
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4 2.4 5 5.4.7-4 3.8 1 5.4L12 16.3 7.2 18.9l1-5.4-4-3.8 5.4-.7z"/></svg>',
   comment: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H10l-5 4z"/></svg>',
@@ -278,7 +283,7 @@ function rowHtml(it, maxSeed, now) {
       ${kindHtml(it, kind)}
       <div class="ny-main">
         <div class="ny-title">${group ? `<em>${esc(group)}</em>` : ""}${esc(group ? it.title.replace(/^\s*\[[^\]]*\]\s*/, "") : it.title)}</div>
-        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${haveIt(it) ? `<i class="have-i" title="Эта серия уже есть в вашей медиатеке">уже есть</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
+        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${haveIt(it) ? `<i class="have-i" title="Эта серия уже есть в вашей медиатеке">уже есть</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok" title="Доверенный загрузчик">${ICONS.check}</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
       </div>
       <div class="ny-meta"><b>${esc(it.size)}</b><span title="${esc(fmtDate(it.date))}">${esc(relTime(it.date, now))}</span></div>
       <div class="ny-health" title="раздают · качают · скачали">
@@ -286,11 +291,8 @@ function rowHtml(it, maxSeed, now) {
         <div class="ny-nums"><span class="se">↑ ${it.seeders}</span><span class="le">↓ ${it.leechers}</span><span class="dl">✓ ${it.downloads}</span></div>
       </div>
       <div class="ny-act">
-        <button type="button" class="ny-ib" data-a="info" title="Страница раздачи (двойной щелчок)" aria-label="Страница раздачи">${ICONS.info}</button>
         <button type="button" class="ny-ib" data-a="send" title="Отправить в торрент-клиент" aria-label="Отправить в торрент-клиент">${ICONS.send}</button>
-        <button type="button" class="ny-ib" data-a="mag" title="Копировать magnet" aria-label="Копировать magnet">${ICONS.magnet}</button>
-        <button type="button" class="ny-ib" data-a="tor" title="Сохранить .torrent" aria-label="Сохранить .torrent">${ICONS.torrent}</button>
-        <button type="button" class="ny-ib" data-a="open" title="Открыть страницу в браузере" aria-label="Открыть в браузере">${ICONS.open}</button>
+        <button type="button" class="ny-ib" data-a="menu" title="Ещё действия" aria-label="Ещё действия" aria-haspopup="menu">${ICONS.more}</button>
       </div>
     </div>`;
 }
@@ -306,6 +308,18 @@ function groupHtml(g, maxSeed, now) {
       <button type="button" class="btn ghost" data-grp-send="${esc(g.key)}" title="Отправить в торрент-клиент лучшие раздачи неотправленных серий">${ICONS.send} Все новые</button></div>
     ${open ? `<div class="ny-grp-b">${g.episodes.map(e => `<div class="ny-ep${sentEps.has(episodeKey(e.item)) ? " done" : ""}"><span class="ny-ep-n">E${String(e.episode).padStart(2, "0")}</span>${rowHtml(e.item, maxSeed, now)}</div>`).join("")}</div>` : ""}
   </div>`;
+}
+
+// Заголовки дней между строками: «Сегодня», «Вчера», «8 октября» — только при сортировке по дате.
+function rowsByDay(list, maxSeed, now) {
+  if (prefs.sort !== "date") return list.map(i => rowHtml(i, maxSeed, now)).join("");
+  let last = "";
+  return list.map(i => {
+    const lbl = dayLabel(i.date, now);
+    const head = lbl !== last ? `<div class="ny-day">${esc(lbl)}</div>` : "";
+    last = lbl;
+    return head + rowHtml(i, maxSeed, now);
+  }).join("");
 }
 
 function skeleton() {
@@ -326,8 +340,10 @@ function listHtml() {
   }
   const maxSeed = Math.max(...list.map(i => i.seeders), 1);
   const now = Date.now();
-  const body = prefs.group ? groupReleases(list).map(g => g.kind === "item" ? rowHtml(g.item, maxSeed, now) : groupHtml(g, maxSeed, now)).join("") : list.map(i => rowHtml(i, maxSeed, now)).join("");
-  return (stale ? `<div class="ny-stale">Сайт не отвечает — показаны сохранённые данные (${esc(relTime(stale))}). <button type="button" class="ny-link" id="ny-retry">Обновить</button></div>` : "")
+  const body = prefs.group ? groupReleases(list).map(g => g.kind === "item" ? rowHtml(g.item, maxSeed, now) : groupHtml(g, maxSeed, now)).join("") : rowsByDay(list, maxSeed, now);
+  const sortBtn = (k, label, cls = "") => `<button type="button" class="ny-sorth${prefs.sort === k ? " on" : ""} ${cls}" data-sort="${k}" aria-label="Сортировать: ${label}">${label}${prefs.sort === k ? " ↓" : ""}</button>`;
+  return `<div class="ny-head"><span></span><span></span><span>Название</span><span class="r">${sortBtn("size", "Размер")}${sortBtn("date", "Дата")}</span><span class="r">${sortBtn("seeders", "Раздают")}<span class="ny-h2">Качают</span>${sortBtn("downloads", "Скачали")}</span><span></span></div>`
+    + (stale ? `<div class="ny-stale">Сайт не отвечает — показаны сохранённые данные (${esc(relTime(stale))}). <button type="button" class="ny-link" id="ny-retry">Обновить</button></div>` : "")
     + body
     + `<div class="ny-more-wrap">${hidden ? `<span class="ny-hint">фильтры скрывают ${hidden}</span>` : ""}${hasMore ? `<button type="button" class="btn" data-more>${moreBusy ? "Загружаю…" : "Показать ещё"}</button>` : `<span class="ny-hint">это всё, что отдал сайт</span>`}</div>`;
 }
@@ -348,42 +364,47 @@ function shellHtml() {
   return `
   <div class="ny">
     <header class="ny-hero">
-      <div class="ny-hero-t"><span class="kd-label">Релизы · бета</span><h2>Nyaa <span class="ny-beta">Beta</span></h2>
-        <p>Свежие раздачи из публичной ленты — не нужно заходить на сайт. Двойной щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p>
-        <button type="button" class="ny-src-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
-        <div class="ny-hero-btns">
-          <button type="button" class="ny-src-btn" data-open-client>${ICONS.send}<span id="ny-client-lbl">Торрент-клиент</span></button>
-          <button type="button" class="ny-src-btn" data-open-library>${ICONS.folder || ICONS.open}<span id="ny-lib-lbl">Медиатека</span></button>
-          <button type="button" class="ny-src-btn" data-open-monitors>${ICONS.bell}<span>Слежение</span><b id="ny-mon-n" class="ny-badge"></b></button>
-        </div></div>
+      <div class="ny-hero-t"><h2>Nyaa <span class="ny-beta">Beta</span></h2>
+        <p>Свежие раздачи из публичной ленты. Двойной щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p></div>
       <div class="ny-stats" id="ny-stats"></div>
     </header>
     <section class="ny-sources" id="ny-sources" hidden></section>
     <section class="ny-sources" id="ny-client" hidden></section>
     <section class="ny-sources" id="ny-monitors" hidden></section>
     <section class="ny-sources" id="ny-library" hidden></section>
-    <div class="ny-search">
-      <span class="ny-search-ic">${ICONS.search}</span>
-      <input id="ny-q" type="text" placeholder="Название, группа, 1080p…" value="${esc(prefs.q)}" spellcheck="false" autocomplete="off">
-      <button type="button" class="btn ghost" id="ny-save" title="Запомнить запрос и категорию">${ICONS.star} Запомнить</button>
-      <button type="button" class="btn ghost" data-watch-query title="Следить за этим запросом и сообщать о новых раздачах">${ICONS.bell} Следить</button>
-      <button type="button" class="btn primary" id="ny-go">Найти</button>
+    <div class="ny-layout">
+      <aside class="ny-side" aria-label="Категории и инструменты">
+        <div class="ny-side-g"><div class="ny-side-h">Категории</div><div class="ny-cats" id="ny-cats"></div></div>
+        <div class="ny-side-g"><div class="ny-side-h">Показывать</div><div class="ny-seg" id="ny-filter"></div></div>
+        <div class="ny-side-g ny-saved-g"><div class="ny-side-h">Мои запросы</div><div class="ny-saved" id="ny-saved"></div></div>
+        <div class="ny-side-g"><div class="ny-side-h">Инструменты</div>
+          <button type="button" class="ny-side-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
+          <button type="button" class="ny-side-btn" data-open-client>${ICONS.send}<span id="ny-client-lbl">Торрент-клиент</span></button>
+          <button type="button" class="ny-side-btn" data-open-library>${ICONS.folder || ICONS.open}<span id="ny-lib-lbl">Медиатека</span></button>
+          <button type="button" class="ny-side-btn" data-open-monitors>${ICONS.bell}<span>Слежение</span><b id="ny-mon-n" class="ny-badge"></b></button>
+        </div>
+      </aside>
+      <main class="ny-main-col">
+        <div class="ny-search">
+          <span class="ny-search-ic">${ICONS.search}</span>
+          <input id="ny-q" type="text" placeholder="Название, группа, 1080p…" value="${esc(prefs.q)}" spellcheck="false" autocomplete="off">
+          <button type="button" class="btn ghost" id="ny-save" title="Запомнить запрос и категорию">${ICONS.star} Запомнить</button>
+          <button type="button" class="btn ghost" data-watch-query title="Следить за этим запросом и сообщать о новых раздачах">${ICONS.bell} Следить</button>
+          <button type="button" class="btn primary" id="ny-go">Найти</button>
+        </div>
+        <div class="ny-ctl">
+          <div class="ny-seg" id="ny-view"></div>
+          <span class="ny-sp"></span>
+          <button type="button" class="ny-flt-btn" id="ny-flt-btn" aria-expanded="false">${ICONS.filter}<span>Фильтры</span><b id="ny-flt-n"></b></button>
+          <button type="button" class="ny-ib wide" id="ny-refresh" title="Обновить список" aria-label="Обновить список">${ICONS.refresh}</button>
+        </div>
+        <section class="ny-filters" id="ny-filters" hidden></section>
+        <div class="ny-status" id="ny-status" data-open-sources title="Нажмите, чтобы открыть «Источники и зеркала»"></div>
+        <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — диапазон</span><span class="ny-sp"></span><span id="ny-upd"></span></div>
+        <div class="ny-list" id="ny-list"></div>
+        <div class="ny-bar" id="ny-bar" hidden></div>
+      </main>
     </div>
-    <div class="ny-cats" id="ny-cats"></div>
-    <div class="ny-ctl">
-      <div class="ny-seg" id="ny-filter"></div>
-      <span class="ny-sp"></span>
-      <div class="ny-seg" id="ny-sort"></div>
-      <div class="ny-seg" id="ny-view"></div>
-      <button type="button" class="ny-flt-btn" id="ny-flt-btn" aria-expanded="false">${ICONS.filter}<span>Фильтры</span><b id="ny-flt-n"></b></button>
-      <button type="button" class="ny-ib wide" id="ny-refresh" title="Обновить список" aria-label="Обновить список">${ICONS.refresh}</button>
-    </div>
-    <section class="ny-filters" id="ny-filters" hidden></section>
-    <div class="ny-saved" id="ny-saved"></div>
-    <div class="ny-status" id="ny-status" data-open-sources title="Нажмите, чтобы открыть «Источники и зеркала»"></div>
-    <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё в списке</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — выбрать диапазон</span><span class="ny-sp"></span><span id="ny-upd"></span></div>
-    <div class="ny-list" id="ny-list"></div>
-    <div class="ny-bar" id="ny-bar" hidden></div>
   </div>`;
 }
 
@@ -395,7 +416,6 @@ function paintStatic() {
   $("#ny-cats").innerHTML = QUICK_CATS.map(([k, l]) => `<button type="button" class="ny-cat${k === prefs.cat ? " on" : ""}" data-cat="${k}">${esc(l)}</button>`).join("")
     + `<select id="ny-cat-more" aria-label="Другие категории"><option value="">Ещё категории…</option>${CATEGORIES.filter(([k]) => !QUICK_CATS.some(q => q[0] === k)).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
   $("#ny-filter").innerHTML = seg(FILTERS, prefs.filter, "data-filter");
-  $("#ny-sort").innerHTML = seg(SORTS, prefs.sort, "data-sort");
   $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.hideHave ? "on" : ""}" data-toggle="hideHave" title="Скрыть серии, которые уже есть в вашей медиатеке">Скрыть имеющееся</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы). SeaDex — курируемая база, в свежей ленте её раздач обычно мало.">${sdLabel()}</button>`;
   $("#ny-saved").innerHTML = prefs.saved.length
     ? `<span class="ny-saved-l">Мои запросы</span>` + prefs.saved.map((s, i) => `<span class="ny-chip"><button type="button" data-saved="${i}">${esc(s.q || "без слов")} <small>${esc((QUICK_CATS.concat(CATEGORIES).find(c => c[0] === s.cat) || [0, s.cat])[1])}</small></button><button type="button" class="x" data-saved-del="${i}" aria-label="Убрать">×</button></span>`).join("")
@@ -548,6 +568,42 @@ async function saveTorrent(it) {
   try { await nyaaSaveTorrent(prefs.base, it.id, out); toast("Файл .torrent сохранён.", "success"); }
   catch (e) { toast(`Не удалось сохранить: ${e}`, "error"); }
 }
+
+// Меню «Ещё действия» у строки: плавающий слой, закрывается кликом вне и Esc.
+let rowMenu = null;
+const MENU_ITEMS = [["info", "Страница раздачи"], ["mag", "Копировать magnet"], ["link", "Копировать ссылку"], ["tor", "Скачать .torrent"], ["sys", "Открыть в системном клиенте"], ["open", "Открыть в браузере"]];
+function closeRowMenu() { if (rowMenu) { rowMenu.remove(); rowMenu = null; } }
+function openRowMenu(btn, it) {
+  closeRowMenu();
+  const m = document.createElement("div");
+  m.className = "ny-menu"; m.setAttribute("role", "menu");
+  m.innerHTML = MENU_ITEMS.map(([k, l]) => `<button type="button" role="menuitem" data-m="${k}">${esc(l)}</button>`).join("");
+  m.dataset.id = it.id;
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect();
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))}px`;
+  m.style.top = `${r.bottom + h + 12 > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4}px`;
+  rowMenu = m;
+  m.querySelector("button").focus();
+}
+document.addEventListener("click", e => { if (rowMenu && !rowMenu.contains(e.target) && !e.target.closest('[data-a="menu"]')) closeRowMenu(); }, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeRowMenu(); });
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("[data-m]");
+  if (!b || !rowMenu) return;
+  const it = byId(Number(rowMenu.dataset.id));
+  closeRowMenu();
+  if (!it) return;
+  touch(it.id);
+  const k = b.dataset.m;
+  if (k === "info") openDetail(it);
+  else if (k === "mag") copy(magnetLink(it), "Magnet скопирован.");
+  else if (k === "link") copy(pageUrl(it), "Ссылка на раздачу скопирована.");
+  else if (k === "tor") saveTorrent(it);
+  else if (k === "sys") openInSystemClient([it]);
+  else if (k === "open") openExternal(pageUrl(it)).catch(() => toast("Не удалось открыть ссылку.", "error"));
+});
 
 function bulk(kind) {
   const list = view().filter(i => selected.has(i.id));
@@ -963,7 +1019,7 @@ function pingCell(url, path, who) {
   const arr = health.m[url] ? health.m[url][path] : [];
   const last = arr.length ? arr[arr.length - 1] : null;
   const pend = isPending(url, path);
-  let val = "—", cls = "";
+  let val = "", cls = "";
   if (pend) { val = `<span class="ny-spin sm"></span>`; cls = "pend"; }
   else if (last) {
     if (last.ms == null) { val = "✕"; cls = "bad"; }
@@ -983,7 +1039,7 @@ function mirrorRow(sv, m) {
   return `<div class="ny-mir2${active ? " act" : ""}">
     <i class="${lvl === "idle" ? "" : lvl}"></i>
     <div class="ny-mir2-t"><b>${esc(hostOf(m))}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
-    ${pingCell(m, "pc", "С этого компьютера")}${own ? `<span class="ny-c" title="Сервер студии проверяется только с компьютера">—</span>` : pingCell(m, "server", who)}
+    ${pingCell(m, "pc", "С этого компьютера")}${own ? `<span class="ny-c" title="Сервер студии проверяется только с компьютера"></span>` : pingCell(m, "server", who)}
     <span class="ny-mir2-a">
       <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
       ${sv.apply && !active ? `<button type="button" class="ny-ib ny-use" data-use="${esc(m)}" title="Использовать это зеркало" aria-label="Использовать это зеркало">${ICONS.check}</button>` : ""}
@@ -1629,15 +1685,19 @@ function drawerHtml() {
         <button type="button" class="ny-ib wide" data-d-close title="Закрыть (Esc)" aria-label="Закрыть">${ICONS.close}</button>
       </header>
       <div class="ny-d-acts">
-        <button type="button" class="btn primary" data-d-a="mag">${ICONS.magnet} Magnet</button>
-        <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
-        <button type="button" class="btn" data-d-a="cp">${ICONS.copy} Название</button>
-        <button type="button" class="btn" data-d-a="link" title="Копировать ссылку на страницу раздачи">${ICONS.copy} Ссылка</button>
-        <button type="button" class="btn" data-d-a="tlink" title="Копировать прямую ссылку на .torrent-файл">${ICONS.copy} Ссылка на .torrent</button>
+        <button type="button" class="btn primary" data-d-a="mag" title="Копировать magnet-ссылку">${ICONS.magnet} Magnet</button>
         <button type="button" class="btn" data-d-a="send">${ICONS.send} В торрент-клиент</button>
         <button type="button" class="btn" data-d-a="sys" title="Открыть magnet в торрент-клиенте, назначенном в системе">${ICONS.magnet} В системный клиент</button>
-        <button type="button" class="btn ghost" data-d-a="open">${ICONS.open} В браузере</button>
-        ${uploaderOf(d) ? `<button type="button" class="btn ghost" data-d-a="watch">${ICONS.bell} Следить за ${esc(uploaderOf(d))}</button>` : ""}
+        <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
+      </div>
+      <div class="ny-d-sub">
+        <span>Копировать:</span>
+        <button type="button" class="ny-link" data-d-a="cp">название</button>
+        <button type="button" class="ny-link" data-d-a="link" title="Ссылка на страницу раздачи">ссылку</button>
+        <button type="button" class="ny-link" data-d-a="tlink" title="Прямая ссылка на .torrent-файл">ссылку на .torrent</button>
+        <i></i>
+        <button type="button" class="ny-link" data-d-a="open">Открыть в браузере</button>
+        ${uploaderOf(d) ? `<button type="button" class="ny-link" data-d-a="watch">Следить за ${esc(uploaderOf(d))}</button>` : ""}
       </div>
       <div class="ny-d-links">${((d.exact && d.exact.length ? d.exact : titleLinks((v && v.title) || it.title))).concat([{ label: "NekoBT", url: titleLinks(it.title).find(x => x.label === "NekoBT")?.url || "" }].filter(x => x.url && d.exact && d.exact.length)).map(l => `<button type="button" class="ny-link" data-ext="${esc(l.url)}">${esc(l.label)} ↗</button>`).join("")}</div>
       <div class="ny-d-grid">${grid.map(([k, val]) => `<div><span>${esc(k)}</span><b>${esc(String(val))}</b></div>`).join("")}
@@ -1907,6 +1967,7 @@ function wire(root) {
     const a = t.closest("[data-a]");
     if (a) {
       touch(it.id);
+      if (a.dataset.a === "menu") { openRowMenu(a, it); return; }
       if (a.dataset.a === "send") sendToClient([it]);
       else if (a.dataset.a === "mag") copy(magnetLink(it), "Magnet скопирован.");
       else if (a.dataset.a === "tor") saveTorrent(it);
