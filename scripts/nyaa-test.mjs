@@ -343,8 +343,8 @@ console.log("nyaa-test: ok");
   const { buildServices } = await import("../src/app/nyaa-core.js");
   const sv = buildServices([], "", { nyaa: ["https://nyaa.new", "http://bad.example", "https://ok.example/path", 5], shikimori: ["https://shiki.new"] });
   const ny = sv.find(s => s.id === "nyaa").mirrors;
-  assert.ok(ny.includes("https://nyaa.new") && !ny.some(u => u.includes("bad.example") || u.includes("/path")), "зеркала с сервера: только https://хост");
-  assert.ok(sv.find(s => s.id === "shikimori").mirrors.includes("https://shiki.new"));
+  assert.ok(new Set(ny).has("https://nyaa.new") && !ny.some(u => u.includes("bad.example") || u.includes("/path")), "зеркала с сервера: только https://хост");
+  assert.ok(new Set(sv.find(s => s.id === "shikimori").mirrors).has("https://shiki.new"));
   assert.equal(buildServices([], "", null).length >= 5, true);
   assert.equal(new Set(ny).size, ny.length, "без дублей");
 }
