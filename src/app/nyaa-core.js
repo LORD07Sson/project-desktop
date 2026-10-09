@@ -303,7 +303,7 @@ export function parseView(html, Parser = globalThis.DOMParser) {
 export const NYAA_MIRRORS = ["https://nyaa.si", "https://nya.iss.one", "https://nyaa.ink", "https://nyaa.land", "https://nyaa.digital", "https://ny.iss.one"];
 
 /** Службы для проверки; apply — переключается ли зеркало в самой странице. */
-export function buildServices(nyaaCustom = [], serverOrigin = "") {
+export function buildServices(nyaaCustom = [], serverOrigin = "", extra = {}) {
   const services = [
     { id: "nyaa", name: "Nyaa", note: "список раздач и страницы", apply: true, mirrors: [...new Set([...NYAA_MIRRORS, ...nyaaCustom])] },
     { id: "shikimori", name: "Shikimori", note: "каталог и постеры в режиме «Смотреть» идут через сервер студии", apply: false, mirrors: ["https://shikimori.one", "https://shikimori.io", "https://shikimori.me"] },
@@ -311,6 +311,11 @@ export function buildServices(nyaaCustom = [], serverOrigin = "") {
     { id: "jikan", name: "MyAnimeList (Jikan)", note: "оценки и опенинги", apply: false, mirrors: ["https://api.jikan.moe"] },
     { id: "sources", name: "Источники раздачи", note: "SeaDex, AnimeTosho, nekoBT, Tsukihime на вкладке «Источники»", apply: false, mirrors: ["https://releases.moe", "https://feed.animetosho.org", "https://nekobt.to", "https://api.tsukihime.org"] },
   ];
+  // Зеркала, которые сервер добавил без релиза программы (переезд сайта): только https://хост.
+  for (const sv of services) {
+    const more = Array.isArray(extra && extra[sv.id]) ? extra[sv.id].filter(u => typeof u === "string" && /^https:\/\/[a-z0-9.-]+$/i.test(u)).slice(0, 12) : [];
+    sv.mirrors = [...new Set([...sv.mirrors, ...more])];
+  }
   if (serverOrigin) services.push({ id: "server", name: "Сервер студии", note: "задачи, файлы, чат", apply: false, mirrors: [serverOrigin] });
   return services;
 }

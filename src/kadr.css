@@ -1406,11 +1406,41 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-src-head > div:first-child { display: grid; gap: 2px; }
 .ny-src-head span { font-size: 12px; color: var(--ink-dim); }
 .ny-src-head > div:last-child { display: flex; gap: 8px; align-items: center; }
-.ny-src-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.ny-src-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
 .ny-svc { padding: 12px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); display: grid; gap: 6px; align-content: start; }
 .ny-svc-h { display: grid; gap: 1px; margin-bottom: 4px; }
 .ny-svc-h span { font-size: 11.5px; color: var(--ink-dim); }
 .ny-seg button.dim:not(.on) { opacity: .6; }
+.ny-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, .04); }
+.ny-top.ok { background: rgba(111, 227, 154, .08); }
+.ny-top.slow { background: rgba(255, 200, 87, .09); }
+.ny-top.bad { background: rgba(255, 123, 123, .09); }
+.ny-top > i { width: 10px; height: 10px; border-radius: 50%; background: #5b6275; flex: none; }
+.ny-top > i.ok { background: #6fe39a; } .ny-top > i.slow { background: #ffc857; } .ny-top > i.bad { background: #ff7b7b; }
+.ny-top > div { display: grid; gap: 1px; min-width: 0; }
+.ny-top span { font-size: 12.5px; color: var(--ink-dim); }
+.ny-top .ny-sp { flex: 1; }
+.ny-tag-auto { text-decoration: none; font-weight: 600; font-size: 10.5px; padding: 1px 8px; margin-left: 6px; border-radius: 999px; color: #6fe39a; border: 1px solid rgba(111, 227, 154, .35); }
+.ny-mir2 { display: grid; grid-template-columns: 10px minmax(0, 1fr) 70px auto auto; gap: 6px 10px; align-items: center; padding: 8px 6px; border-radius: 12px; border: 1px solid transparent; border-top: 1px solid rgba(255, 255, 255, .05); }
+.ny-mir2.act { border-color: rgba(58, 166, 255, .45); background: rgba(58, 166, 255, .08); }
+.ny-mir2 > i { width: 9px; height: 9px; border-radius: 50%; background: #5b6275; }
+.ny-mir2 > i.ok { background: #6fe39a; box-shadow: 0 0 8px #6fe39a88; } .ny-mir2 > i.slow { background: #ffc857; } .ny-mir2 > i.bad { background: #ff7b7b; }
+.ny-mir2-t { display: grid; min-width: 0; }
+.ny-mir2-t b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ny-mir2-t span { font-size: 11.5px; color: var(--ink-dim); }
+.ny-pause { text-decoration: none; font-size: 10.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); margin-left: 4px; }
+.ny-pause.o { color: #ffc065; border-color: rgba(255, 192, 101, .4); } .ny-pause.r { color: #ff7b7b; border-color: rgba(255, 123, 123, .4); }
+.ny-spark { display: block; stroke: #5b6275; } .ny-spark.ok { stroke: #6fe39a; } .ny-spark.slow { stroke: #ffc065; } .ny-spark.bad { stroke: #ff7b7b; }
+.ny-pings { display: flex; gap: 10px; font-size: 11px; color: var(--ink-dim); text-align: right; white-space: nowrap; }
+.ny-pings b { color: var(--ink); font-size: 11.5px; font-weight: 600; }
+.ny-mir2-a { grid-column: 2 / -1; display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.ny-mir2-a:empty { display: none; }
+.ny-auto-sw { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+.ny-log { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+.ny-log summary { cursor: pointer; font-size: 12.5px; color: var(--ink-soft); }
+.ny-log-body { font: 11.5px/1.6 ui-monospace, Consolas, monospace; color: var(--ink-dim); max-height: 180px; overflow: auto; padding-top: 6px; }
+.ny-log-body time { color: var(--ink-soft); }
+@media (max-width: 760px) { .ny-mir2 { grid-template-columns: 10px minmax(0, 1fr) auto; } .ny-spark, .ny-pings { display: none; } }
 .ny-row.have { opacity: .7; }
 .ny-tags i.have-i { color: #9be39a; border-color: rgba(111, 227, 154, .45); }
 .ny-mon-every { margin: 0 0 10px; font-size: 13px; color: var(--ink-soft); }
