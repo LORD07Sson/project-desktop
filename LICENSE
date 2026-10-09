@@ -1,57 +1,140 @@
-Required Notice: Copyright (c) 2026 Project
+Project Desktop Proprietary License 1.0
 
-# PolyForm Internal Use License 1.0.0
+Copyright (c) 2026 Project. All rights reserved.
+Авторские права (c) 2026 Project. Все права защищены.
 
-<https://polyformproject.org/licenses/internal-use/1.0.0>
+Русский текст приведён первым; английский перевод — ниже. При расхождениях
+применяется русский текст.
 
-## Acceptance
+======================================================================
+РУССКИЙ ТЕКСТ
+======================================================================
 
-In order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.
+1. Определения
 
-## Copyright License
+«Программа» — программа Project Desktop: её исходный код, документация,
+сборки (исполняемые файлы), а также любые изменения и дополнения к ним.
 
-The licensor grants you a copyright license for the software to do everything you might do with the software that would otherwise infringe the licensor's copyright in it for any permitted purpose.  However, you may only make changes or new works based on the software according to [Changes and New Works License](#changes-and-new-works-license), and you may not distribute the software.
+«Правообладатель» — Project (команда, владеющая правами на Программу).
 
-## Changes and New Works License
+«Участник» — человек, который в настоящий момент состоит в команде Project
+и участвует в проекте с ведома Правообладателя.
 
-The licensor grants you an additional copyright license to make changes and new works based on the software for any permitted purpose.
+2. Разрешение
 
-## Patent License
+Пока лицо является Участником, Правообладатель предоставляет ему
+непередаваемое, неисключительное, не допускающее сублицензирования
+разрешение:
 
-The licensor grants you a patent license for the software that covers patent claims the licensor can license, or becomes able to license, that you would infringe by using the software.
+а) запускать и использовать Программу для работы над проектом Project;
+б) читать исходный код Программы и изменять его исключительно для нужд
+   проекта Project.
 
-## Fair Use
+3. Ограничения
 
-You may have "fair use" rights for the software under the law. These terms do not limit them.
+Никто, включая Участника, не вправе:
 
-## Internal Business Use
+а) распространять Программу, её исходный код или сборки, публиковать их,
+   передавать лицам, не являющимся Участниками, или выкладывать в открытый
+   доступ;
+б) сублицензировать Программу или передавать права на неё;
+в) использовать Программу или её части в других продуктах, проектах или
+   в интересах третьих лиц;
+г) удалять или изменять уведомления об авторских правах и настоящую
+   лицензию.
 
-Use of the software for the internal business operations of you and your company is use for a permitted purpose.
+4. Прекращение
 
-## No Other Rights
+Разрешение, указанное в разделе 2, действует, пока лицо является
+Участником. Оно прекращается автоматически и без уведомления в момент,
+когда лицо перестаёт быть Участником, а также при нарушении любого условия
+настоящей лицензии.
 
-These terms do not allow you to sublicense or transfer any of your licenses to anyone else, or prevent the licensor from granting licenses to anyone else.  These terms do not imply any other licenses.
+После прекращения бывший Участник не вправе использовать, изменять,
+распространять Программу или её части на основании настоящей лицензии и
+обязан прекратить их использование и удалить имеющиеся у него копии
+исходного кода и сборок.
 
-## Patent Defense
+5. Авторские права
 
-If you make any written claim that the software infringes or contributes to infringement of any patent, your patent license for the software granted under these terms ends immediately. If your company makes such a claim, your patent license ends immediately for work on behalf of your company.
+Авторские права на Программу сохраняются за Правообладателем. Настоящая
+лицензия не передаёт никаких прав, кроме прямо указанных в разделе 2.
+Изменения и дополнения, внесённые в Программу для проекта Project, считаются
+частью Программы, если Правообладатель и автор изменений письменно не
+договорились об ином.
 
-## Violations
+6. Сторонние компоненты
 
-The first time you are notified in writing that you have violated any of these terms, or done anything with the software not covered by your licenses, your licenses can nonetheless continue if you come into full compliance with these terms, and take practical steps to correct past violations, within 32 days of receiving notice.  Otherwise, all your licenses end immediately.
+Программа может использовать сторонние библиотеки и инструменты (например,
+ffmpeg, mpv и другие). Они остаются под собственными лицензиями; условия
+настоящей лицензии на них не распространяются и не отменяют их условий.
 
-## No Liability
+7. Отсутствие гарантий
 
-***As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.***
+ПРОГРАММА ПРЕДОСТАВЛЯЕТСЯ «КАК ЕСТЬ», БЕЗ КАКИХ-ЛИБО ГАРАНТИЙ, ЯВНЫХ ИЛИ
+ПОДРАЗУМЕВАЕМЫХ. НИ ПРАВООБЛАДАТЕЛЬ, НИ АВТОРЫ НЕ НЕСУТ ОТВЕТСТВЕННОСТИ ЗА
+УБЫТКИ, ВОЗНИКШИЕ В СВЯЗИ С ИСПОЛЬЗОВАНИЕМ ПРОГРАММЫ, В ПРЕДЕЛАХ, ДОПУСТИМЫХ
+ПРИМЕНИМЫМ ПРАВОМ.
 
-## Definitions
+======================================================================
+ENGLISH TRANSLATION
+======================================================================
 
-The **licensor** is the individual or entity offering these terms, and the **software** is the software the licensor makes available under these terms.
+1. Definitions
 
-**You** refers to the individual or entity agreeing to these terms.
+"Program" means the Project Desktop program: its source code,
+documentation, builds (executables), and any changes or additions to them.
 
-**Your company** is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization.  **Control** means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise.  Control can be direct or indirect.
+"Licensor" means Project (the team that holds the rights to the Program).
 
-**Your licenses** are all the licenses granted to you for the software under these terms.
+"Member" means a person who currently belongs to the Project team and
+takes part in the project with the Licensor's knowledge.
 
-**Use** means anything you do with the software requiring one of your licenses.
+2. Permission
+
+For as long as a person is a Member, the Licensor grants that person a
+non-transferable, non-exclusive, non-sublicensable permission to:
+
+a) run and use the Program for work on the Project project;
+b) read the Program's source code and modify it solely for the needs of
+   the Project project.
+
+3. Restrictions
+
+No one, including a Member, may:
+
+a) distribute the Program, its source code or builds, publish them, give
+   them to anyone who is not a Member, or make them publicly available;
+b) sublicense the Program or transfer rights in it;
+c) use the Program or parts of it in other products or projects, or for the
+   benefit of third parties;
+d) remove or alter copyright notices or this license.
+
+4. Termination
+
+The permission in section 2 lasts only while the person is a Member. It
+ends automatically and without notice at the moment the person stops being
+a Member, and also upon breach of any term of this license.
+
+After termination, a former Member may not use, modify, or distribute the
+Program or parts of it under this license, and must stop using them and
+delete any copies of the source code and builds in their possession.
+
+5. Copyright
+
+Copyright in the Program remains with the Licensor. This license grants no
+rights other than those expressly stated in section 2. Changes and additions
+made to the Program for the Project project are part of the Program unless
+the Licensor and the author of the changes agree otherwise in writing.
+
+6. Third-party components
+
+The Program may use third-party libraries and tools (for example ffmpeg,
+mpv and others). They remain under their own licenses; this license does
+not apply to them and does not override their terms.
+
+7. No warranty
+
+THE PROGRAM IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. NEITHER THE LICENSOR NOR THE AUTHORS ARE LIABLE FOR ANY DAMAGES
+ARISING FROM USE OF THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE LAW.
