@@ -14,7 +14,7 @@ import { state } from "./state.js";
 import { notifyDesktop } from "./desktop-notify.js";
 import {
   newHealth, record as hRecord, statsOf, cooling as hCooling, bestPath, pickMirror, shouldSwitch,
-  sparkPoints, levelOf, serialize, deserialize,
+  sparkPoints, levelOf, serialize, deserialize, SLOW_MS, ageText, durText, pushActivity, filterActivity, nextCheckIn,
 } from "./mirror-health.js";
 import { $, esc } from "./utils.js";
 import {
@@ -379,6 +379,7 @@ function shellHtml() {
     </div>
     <section class="ny-filters" id="ny-filters" hidden></section>
     <div class="ny-saved" id="ny-saved"></div>
+    <div class="ny-status" id="ny-status" data-open-sources title="Нажмите, чтобы открыть «Источники и зеркала»"></div>
     <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё в списке</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — выбрать диапазон</span><span class="ny-sp"></span><span id="ny-upd"></span></div>
     <div class="ny-list" id="ny-list"></div>
     <div class="ny-bar" id="ny-bar" hidden></div>
@@ -402,6 +403,38 @@ function paintStatic() {
   paintFilters();
 }
 
+// ---------- строка состояния: что грузится и как отвечают ПК и сервер ----------
+const pathLabel = (path, via) => (path === "server" ? `сервер (${via || "—"})` : "этот компьютер");
+function pingInline(url, path, label) {
+  const arr = health.m[url] ? health.m[url][path] : [];
+  const last = arr.length ? arr[arr.length - 1] : null;
+  if (isPending(url, path)) return `<span class="ny-pi pend"><span class="ny-spin sm"></span>${esc(label)}: проверяю…</span>`;
+  if (!last) return `<span class="ny-pi">${esc(label)}: не проверялось</span>`;
+  const cls = last.ms == null ? "bad" : last.ms > SLOW_MS ? "slow" : "ok";
+  return `<span class="ny-pi ${cls}">${esc(label)}: <b>${last.ms == null ? "✕ нет ответа" : esc(durText(last.ms))}</b> <em>${esc(ageText(Date.now(), last.t))}</em></span>`;
+}
+function statusHtml() {
+  const now = Date.now();
+  let left;
+  if (loadNow) {
+    const sec = Math.max(0, Math.round((now - loadNow.since) / 1000));
+    const fail = loadNow.tried.length ? `${loadNow.tried.includes("pc") ? "Напрямую не получилось — " : "Через сервер не получилось — "}` : "";
+    left = `<span class="ny-spin"></span><span>${esc(fail)}Загружаю ${esc(loadNow.what)} · ${esc(pathLabel(loadNow.path, loadNow.via))} · ${sec} с</span>`;
+  } else if (lastLoad) {
+    left = lastLoad.ok
+      ? `<i class="ok"></i><span>${esc(lastLoad.what)} загружена за <b>${esc(durText(lastLoad.ms))}</b> · ${esc(pathLabel(lastLoad.path, lastLoad.via))} · ${esc(hostOf(lastLoad.url))} · ${esc(ageText(now, lastLoad.at))}</span>`
+      : `<i class="bad"></i><span>${esc(lastLoad.what)} не загрузилась · ${esc(pathLabel(lastLoad.path, lastLoad.via))} · ${esc(ageText(now, lastLoad.at))}</span>`;
+  } else {
+    left = `<i></i><span>Загрузка ещё не выполнялась</span>`;
+  }
+  const base = prefs.base;
+  return `${left}<span class="ny-sp"></span><span class="ny-pis">${pingInline(base, "pc", "ПК")}${pingInline(base, "server", `Сервер · ${exitName("nyaa")}`)}</span>`;
+}
+function paintStatus() {
+  const el = $("#ny-status");
+  if (el) el.innerHTML = statusHtml();
+}
+
 function paintSourceChip() {
   const host = $("#ny-src-host"), dot = $("#ny-src-dot");
   if (!host) return;
@@ -419,6 +452,7 @@ function paintFilterBadge() {
 
 function paintList() {
   paintFilterBadge();
+  paintStatus();
   const list = view();
   $("#ny-list").innerHTML = listHtml();
   $("#ny-stats").innerHTML = statsHtml(list);
@@ -834,11 +868,20 @@ const saveHealth = () => {
   healthTimer = setTimeout(() => { try { localStorage.setItem(HEALTH_KEY, JSON.stringify(serialize(health))); } catch (_) { /* не запомнится */ } }, 600);
 };
 const note = (url, path, ms) => { hRecord(health, url, path, ms); saveHealth(); };
-const sourceLog = [];
-function logSrc(text) {
-  sourceLog.unshift({ t: Date.now(), text });
-  if (sourceLog.length > 30) sourceLog.length = 30;
-}
+// Журнал событий: проверки связи («пинг»), реальные загрузки данных и переключения. Новые сверху.
+const activity = [];
+let logFilter = "all";
+const logAct = ev => pushActivity(activity, { t: Date.now(), ...ev });
+const logSrc = text => logAct({ kind: "switch", note: text });
+
+// Что сейчас измеряется (для спиннеров и полосы прогресса) и что грузится по-настоящему.
+const pendingPing = new Set();            // «адрес|путь»
+let checkTotal = 0, checkDone = 0;
+const isPending = (url, path) => pendingPing.has(`${url}|${path}`);
+let loadNow = null;                       // { what, path, via, since, tried[] } пока идёт загрузка
+let lastLoad = null;                      // { what, path, via, ms, ok, at, url }
+const WHAT = { rss: "ленту", view: "страницу раздачи", torrent: ".torrent" };
+const WHAT_NOM = { rss: "Лента", view: "Страница раздачи", torrent: ".torrent" };
 const nyaaMirrors = () => allServices().find(s => s.id === "nyaa").mirrors;
 let lastSwitch = 0;
 
@@ -863,7 +906,6 @@ const levelOfUrl = url => {
   return rank[a] <= rank[b] ? a : b;
 };
 
-const fmtMs = s => (s === undefined ? "—" : s === null ? "✕" : `${s} мс`);
 const untilText = (url, path) => {
   const left = (health.m[url] ? health.m[url].until[path] : 0) - Date.now();
   return left > 0 ? `пауза ${Math.max(1, Math.ceil(left / 60000))} мин` : "";
@@ -898,7 +940,35 @@ const isDead = url => {
 };
 
 let showHidden = false;
-let sourcesLogOpen = false;
+let sourcesLogOpen = true;
+const KIND_LABEL = { ping: "проверка", load: "загрузка", switch: "переключение" };
+function evHtml(ev) {
+  const time = new Date(ev.t).toLocaleTimeString("ru-RU");
+  let text;
+  if (ev.kind === "switch") text = esc(ev.note || "");
+  else {
+    const from = ev.path === "pc" ? "этот компьютер" : `сервер (${ev.via || "—"})`;
+    const res = ev.ok ? `<b>${esc(durText(ev.ms))}</b>` : `<b class="bad">нет ответа</b>`;
+    text = `${ev.kind === "load" ? `${esc(ev.what || "данные")} · ` : ""}${esc(from)} → ${esc(hostOf(ev.url))} · ${res}`;
+  }
+  return `<div class="ny-ev${ev.ok === false ? " fail" : ""}"><time>${esc(time)}</time><u>${esc(KIND_LABEL[ev.kind] || ev.kind)}</u> ${text}</div>`;
+}
+
+// Ячейка пинга: подпись «откуда», значение, возраст замера; пока идёт проверка — спиннер.
+function pingCell(url, path, label) {
+  const arr = health.m[url] ? health.m[url][path] : [];
+  const last = arr.length ? arr[arr.length - 1] : null;
+  const pend = isPending(url, path);
+  let val = "—", cls = "";
+  if (pend) { val = `<span class="ny-spin sm"></span>`; cls = "pend"; }
+  else if (last) {
+    if (last.ms == null) { val = "✕"; cls = "bad"; }
+    else { val = esc(durText(last.ms)); cls = last.ms > SLOW_MS ? "slow" : "ok"; }
+  }
+  const age = pend ? "проверяю…" : last ? ageText(Date.now(), last.t) : "не проверялось";
+  const what = path === "pc" ? "запрос с этого компьютера к сайту" : "запрос с сервера студии к сайту через выбранную страну";
+  return `<div class="ny-ping ${cls}" title="${esc(what)}"><small>${esc(label)}</small><b>${val}</b><em>${esc(age)}</em></div>`;
+}
 
 function mirrorRow(sv, m) {
   const e = health.m[m] || { pc: [], server: [] };
@@ -909,13 +979,13 @@ function mirrorRow(sv, m) {
   const samples = path === "server" ? e.server : path === "pc" ? e.pc : (e.pc.length >= e.server.length ? e.pc : e.server);
   const spark = sparkPoints(samples, 70, 22);
   const pause = ["pc", "server"].map(p => untilText(m, p)).find(Boolean);
-  const last = p => (e[p].length ? e[p][e[p].length - 1].ms : undefined);
+  const own = sv.id === "server";
   return `<div class="ny-mir2${active ? " act" : ""}">
     <i class="${lvl === "idle" ? "" : lvl}"></i>
     <div class="ny-mir2-t"><b>${esc(hostOf(m))}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
     <svg class="ny-spark ${lvl}" width="70" height="22" viewBox="0 0 70 22" aria-hidden="true">${spark ? `<polyline fill="none" stroke-width="1.6" points="${spark}"/>` : ""}</svg>
-    <div class="ny-pings"><div>ПК<br><b>${esc(fmtMs(last("pc")))}</b></div><div>сервер<br><b>${esc(fmtMs(last("server")))}</b></div></div>
     <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
+    <div class="ny-mir2-p">${pingCell(m, "pc", "С ПК")}${own ? "" : pingCell(m, "server", `С сервера · ${exitName(sv.id)}`)}</div>
     ${(sv.apply && !active) || custom ? `<div class="ny-mir2-a">
       ${sv.apply && !active ? `<button type="button" class="btn ghost" data-use="${esc(m)}">Использовать</button>` : ""}
       ${custom ? `<button type="button" class="ny-ib" data-mir-del="${esc(m)}" title="Убрать зеркало" aria-label="Убрать зеркало">${ICONS.close}</button>` : ""}
@@ -925,17 +995,26 @@ function mirrorRow(sv, m) {
 // Сводка вверху: всё ли хорошо с Nyaa и каким путём она идёт.
 function healthStrip() {
   const base = prefs.base;
+  const now = Date.now();
   const lvl = levelOfUrl(base);
   const path = routeOf("nyaa") === "server" ? "server" : routeOf("nyaa") === "pc" ? "pc" : bestPath(health, base);
-  const where = path === "server" ? `через сервер (${exitName("nyaa")})` : path === "pc" ? "напрямую" : "путь выбирается по первым замерам";
+  const where = path === "server" ? `через сервер (${exitName("nyaa")})` : path === "pc" ? "напрямую с этого компьютера" : "путь выбирается по первым замерам";
   const pcDead = health.m[base] && health.m[base].pc.length > 0 && statsOf(health.m[base].pc).median == null;
   const title = lvl === "ok" ? "Всё работает" : lvl === "slow" ? "Работает медленно" : lvl === "bad" ? "Есть проблема" : "Ещё не проверялось";
   const dot = lvl === "ok" ? "ok" : lvl === "slow" ? "slow" : lvl === "bad" ? "bad" : "";
+  const lastAny = Math.max(0, ...allMirrorUrls().map(lastSampleAt));
+  const nextMs = nextCheckIn(now, lastSampleAt(base));
+  const when = checking
+    ? `Проверяю ${checkDone} из ${checkTotal}…`
+    : `Последняя проверка: ${ageText(now, lastAny)} · следующая плановая ${nextMs > 0 ? `через ~${Math.max(1, Math.ceil(nextMs / 60000))} мин` : "скоро"}`;
+  const pct = checkTotal ? Math.round(100 * checkDone / checkTotal) : 0;
   return `<div class="ny-top ${dot}"><i class="${dot}"></i>
-    <div><b>${title}</b><span>Nyaa идёт ${where}: ${esc(hostOf(base))}${pcDead ? " напрямую у вас закрыт" : ""}${checking ? " · проверяю…" : ""}</span></div>
+    <div><b>${title}</b><span>Nyaa идёт ${esc(where)}: ${esc(hostOf(base))}${pcDead ? " (напрямую у вас закрыт)" : ""}</span><span>${esc(when)}</span></div>
     <span class="ny-sp"></span>
     <button type="button" class="btn" data-heal title="Выбрать лучшее зеркало и путь по замерам">Починить / переключить</button>
-    <button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить сейчас"}</button></div>`;
+    <button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить сейчас"}</button>
+    ${checking ? `<div class="ny-prog"><i style="width:${pct}%"></i></div>` : ""}</div>
+    <p class="ny-legend"><b>С ПК</b> — запрос с этого компьютера к сайту. <b>С сервера</b> — запрос выполняет сервер студии через выбранную страну (в карточке). «Загрузка» — настоящий запрос данных (лента, страница), «проверка» — лёгкий пинг.</p>`;
 }
 
 // ---------- источники и зеркала ----------
@@ -963,8 +1042,9 @@ function sourcesHtml() {
         ${!sv.apply && sv.id !== "server" && sv.id !== "sources" ? `<p class="ny-hint">Страна выхода влияет на проверку этого сайта с сервера. Режим «Смотреть» берёт данные по настройке самого сервера.</p>` : ""}
       </div>`;
     }).join("")}</div>
-    <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал (${sourceLog.length})</summary>
-      <div class="ny-log-body">${sourceLog.length ? sourceLog.map(l => `<div><time>${esc(new Date(l.t).toLocaleTimeString("ru-RU"))}</time> ${esc(l.text)}</div>`).join("") : `<span class="ny-hint">Пока пусто: сюда пишутся переключения зеркал и пути.</span>`}</div></details>`;
+    <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал: что и откуда измерялось (${activity.length})</summary>
+      <div class="ny-log-f">${[["all", "Все"], ["ping", "Проверки"], ["load", "Загрузки"], ["switch", "Переключения"]].map(([k, l]) => `<button type="button" class="${logFilter === k ? "on" : ""}" data-log-f="${k}">${l}</button>`).join("")}</div>
+      <div class="ny-log-body">${filterActivity(activity, logFilter).length ? filterActivity(activity, logFilter).map(evHtml).join("") : `<span class="ny-hint">Пока пусто: сюда пишутся проверки связи, загрузки и переключения.</span>`}</div></details>`;
 }
 
 function paintSources() {
@@ -979,29 +1059,45 @@ function paintSources() {
 const okResult = r => !!r && classifyCheck(r).level !== "bad";
 async function runChecks(urls) {
   if (checking) return;
-  checking = true; paintSources();
   const list = [...new Set(urls)];
+  checking = true; checkTotal = list.length; checkDone = 0;
+  paintSources(); paintStatus();
   try {
     for (let i = 0; i < list.length; i += 6) {
       const part = list.slice(i, i + 6);
       // с сервера адреса проверяются через выбранную для их сервиса страну: группируем по ней
       const groups = new Map();
       part.forEach(u => { const v = exitOf(serviceOfUrl(u)); (groups.get(v) || groups.set(v, []).get(v)).push(u); });
+      part.forEach(u => { pendingPing.add(`${u}|pc`); if (serviceOfUrl(u) !== "server") pendingPing.add(`${u}|server`); });
+      paintSources(); paintStatus();
       const serverCheck = Promise.all([...groups].map(([via, us]) => {
         const q = new URLSearchParams(); us.forEach(u => q.append("u", u)); if (via) q.set("via", via);
         return apiBlob(`/net/check?${q}`).then(b => b.text()).then(JSON.parse);
       })).then(arrs => arrs.flat());
       const [srv, loc] = await Promise.allSettled([serverCheck, invoke("net_check", { urls: part })]);
-      if (loc.status === "fulfilled") loc.value.forEach(r => { localChecks[r.url] = r; note(r.url, "pc", okResult(r) ? r.ms : null); });
+      if (loc.status === "fulfilled") loc.value.forEach(r => {
+        if (!r || typeof r.url !== "string") return;
+        localChecks[r.url] = r; const ok = okResult(r); note(r.url, "pc", ok ? r.ms : null);
+        logAct({ kind: "ping", path: "pc", url: r.url, ms: r.ms, ok });
+      });
       if (srv.status === "fulfilled" && Array.isArray(srv.value)) {
-        srv.value.forEach(r => { serverChecks[r.url] = r; if (serviceOfUrl(r.url) !== "server") note(r.url, "server", okResult(r) ? r.ms : null); });
+        srv.value.forEach(r => {
+          if (!r || typeof r.url !== "string") return;
+          serverChecks[r.url] = r;
+          if (serviceOfUrl(r.url) === "server") return;
+          const ok = okResult(r); note(r.url, "server", ok ? r.ms : null);
+          logAct({ kind: "ping", path: "server", via: exitName(serviceOfUrl(r.url)), url: r.url, ms: r.ms, ok });
+        });
       }
-      applyChecks(); paintSources();
+      part.forEach(u => { pendingPing.delete(`${u}|pc`); pendingPing.delete(`${u}|server`); });
+      checkDone = Math.min(list.length, checkDone + part.length);
+      applyChecks(); paintSources(); paintStatus();
     }
   } catch (e) { toast(`Проверка не удалась: ${e && e.message ? e.message : e}`, "error"); }
+  pendingPing.clear();
   checking = false;
   maybeAutoSwitch();
-  paintSources();
+  paintSources(); paintStatus();
 }
 
 function allMirrorUrls() {
@@ -1026,7 +1122,7 @@ async function heal() {
 const lastSampleAt = url => {
   const e = health.m[url];
   if (!e) return 0;
-  return Math.min(e.pc.length ? e.pc[e.pc.length - 1].t : 0, e.server.length ? e.server[e.server.length - 1].t : 0);
+  return Math.max(e.pc.length ? e.pc[e.pc.length - 1].t : 0, e.server.length ? e.server[e.server.length - 1].t : 0);
 };
 function startHealthLoop() {
   setInterval(() => {
@@ -1041,6 +1137,15 @@ function startHealthLoop() {
   }, 60_000);
 }
 startHealthLoop();
+
+// «Часики»: секунды загрузки идут каждую секунду, возраст замеров обновляется раз в 15 секунд.
+let tickN = 0;
+setInterval(() => {
+  if (document.hidden || !$("#ny-status")) return;
+  tickN += 1;
+  if (loadNow || tickN % 15 === 0) paintStatus();
+  if (tickN % 15 === 0) { const box = $("#ny-sources"); if (box && !box.hidden && !checking) paintSources(); }
+}, 1000);
 
 function openSources() {
   const box = $("#ny-sources");
@@ -1148,15 +1253,36 @@ async function relayJson(params) {
 
 // Запрос к Nyaa: порядок «напрямую / через сервер» в «Авто» берётся из замеров (bestPath); каждый ответ
 // становится новым замером. В режимах «Мой компьютер» и «Сервер» путь фиксирован.
+// Запрос к Nyaa: порядок «напрямую / через сервер» в «Авто» берётся из замеров (bestPath); каждый ответ
+// становится новым замером и событием в журнале («загрузка»). В режимах «Мой компьютер» и «Сервер» путь фиксирован.
 async function nyaaDirectOrRelay(direct, relayParams, pick) {
   const mode = routeOf("nyaa");
   const base = relayParams.base;
-  const viaDirect = async () => {
+  const kind = relayParams.kind;
+  const tried = [];
+  const track = async (path, fn) => {
+    const t0 = Date.now();
+    const via = path === "server" ? exitName("nyaa") : "";
+    loadNow = { what: WHAT[kind] || "данные", path, via, since: t0, tried: [...tried] };
+    paintStatus();
+    try {
+      const r = await fn();
+      const ms = Date.now() - t0;
+      lastLoad = { what: WHAT_NOM[kind] || "Данные", path, via, ms, ok: true, at: Date.now(), url: base };
+      logAct({ kind: "load", path, via, url: base, ms, ok: true, what: WHAT[kind] || "данные" });
+      return r;
+    } catch (e) {
+      tried.push(path);
+      logAct({ kind: "load", path, via, url: base, ms: Date.now() - t0, ok: false, what: WHAT[kind] || "данные" });
+      throw e;
+    }
+  };
+  const viaDirect = () => track("pc", async () => {
     const t0 = Date.now();
     try { const r = await direct(); note(base, "pc", Date.now() - t0); return r; }
     catch (e) { if (isNoConnection(e)) note(base, "pc", null); throw e; }
-  };
-  const viaServerPath = async () => {
+  });
+  const viaServerPath = () => track("server", async () => {
     const t0 = Date.now();
     try {
       const w = await relayJson(relayParams);
@@ -1165,15 +1291,19 @@ async function nyaaDirectOrRelay(direct, relayParams, pick) {
       viaServer = true; paintSourceChip();
       return pick(w);
     } catch (e) { if (!/Сайт ответил 404/.test(String(e && e.message ? e.message : e))) note(base, "server", null); throw e; }
-  };
-  if (mode === "server") return viaServerPath();
-  if (mode === "pc") return viaDirect();
-  const serverFirst = bestPath(health, base) === "server";
-  const first = serverFirst ? viaServerPath : viaDirect, second = serverFirst ? viaDirect : viaServerPath;
-  try { const r = await first(); if (!serverFirst) viaServer = false; return r; }
-  catch (e) {
-    if (isNotFound(e) || (!serverFirst && !isNoConnection(e))) throw e;
-    try { return await second(); } catch (_) { throw e; }
+  });
+  try {
+    if (mode === "server") return await viaServerPath();
+    if (mode === "pc") return await viaDirect();
+    const serverFirst = bestPath(health, base) === "server";
+    const first = serverFirst ? viaServerPath : viaDirect, second = serverFirst ? viaDirect : viaServerPath;
+    try { const r = await first(); if (!serverFirst) viaServer = false; return r; }
+    catch (e) {
+      if (isNotFound(e) || (!serverFirst && !isNoConnection(e))) throw e;
+      try { return await second(); } catch (_) { throw e; }
+    }
+  } finally {
+    loadNow = null; paintStatus(); paintSources();
   }
 }
 
@@ -1731,6 +1861,8 @@ function wire(root) {
     if (t.closest("#ny-check-all")) { runChecks(allMirrorUrls()); return; }
     if (t.closest("[data-heal]")) { heal(); return; }
     if (t.closest("[data-show-hidden]")) { showHidden = !showHidden; paintSources(); return; }
+    const lf = t.closest("[data-log-f]");
+    if (lf) { logFilter = lf.dataset.logF; paintSources(); return; }
     if (t.closest("[data-log-toggle]")) { e.preventDefault(); sourcesLogOpen = !sourcesLogOpen; paintSources(); return; }
     const chk = t.closest("[data-check]");
     if (chk) { runChecks([chk.dataset.check]); return; }
