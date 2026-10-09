@@ -23,7 +23,7 @@ import {
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
   groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
   seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
-  parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack,
+  parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, libraryKeys,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
@@ -32,7 +32,7 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false, onlySeadex: false, tabs: {} };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
@@ -54,6 +54,40 @@ const markSent = list => {
   try { localStorage.setItem(EPS_KEY, JSON.stringify([...sentEps].slice(-2000))); } catch (_) { /* не запомнится */ }
 };
 const openGroups = new Set();
+
+// Медиатека: папка с аниме на этом компьютере. Rust сканирует имена файлов, здесь они превращаются в ключи серий.
+let lib = null;              // { dir, count, truncated, keys:Set } или null
+let libBusy = false;
+const haveIt = it => { if (!lib) return false; const k = episodeKey(it); return !!k && lib.keys.has(k); };
+function setLib(scan) {
+  lib = scan ? { dir: scan.dir, count: scan.files.length, truncated: !!scan.truncated, keys: libraryKeys(scan.files) } : null;
+}
+async function libRun(cmd) {
+  libBusy = true; paintLibrary();
+  try { setLib(await invoke(cmd)); if (cmd === "library_clear") lib = null; }
+  catch (e) { toast(`Медиатека: ${shortErr(e)}`, "error"); }
+  libBusy = false; paintLibrary(); paintLibLabel(); paintList();
+}
+function libraryHtml() {
+  return `
+    <div class="ny-src-head"><div><b>Медиатека</b><span>Укажите папку с аниме: программа прочитает только имена файлов и пометит в списке серии, которые у вас уже есть.</span></div>
+      <div><button type="button" class="ny-ib wide" data-close-panel title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
+    <div class="ny-lib">
+      ${lib ? `<div class="ny-lib-info"><b>${esc(lib.dir)}</b><span>видеофайлов: ${lib.count}, серий распознано: ${lib.keys.size}${lib.truncated ? " (папка большая, прочитана часть)" : ""}</span></div>` : `<p class="ny-hint">Папка не выбрана.</p>`}
+      <div class="ny-lib-act"><button type="button" class="btn primary" data-lib="library_pick">${libBusy ? "Читаю…" : lib ? "Другая папка" : "Выбрать папку"}</button>
+        ${lib ? `<button type="button" class="btn" data-lib="library_rescan">Обновить</button><button type="button" class="btn ghost" data-lib="library_clear">Забыть папку</button>` : ""}</div>
+      <p class="ny-hint">Совпадение идёт по названию, сезону и номеру серии. Если в имени файла название другое (например, русское), пометки не будет.</p>
+    </div>`;
+}
+function paintLibrary() {
+  const box = $("#ny-library");
+  if (!box || box.hidden) return;
+  box.innerHTML = libraryHtml();
+}
+function paintLibLabel() {
+  const el = $("#ny-lib-lbl");
+  if (el) el.textContent = lib ? `Медиатека · ${lib.keys.size}` : "Медиатека";
+}
 
 // Кэш последней ленты: если сайт не отвечает, показываем её с пометкой, сколько данным минут.
 const CACHE_KEY = "project-nyaa-cache";
@@ -110,6 +144,7 @@ const view = () => {
   if (prefs.hideDone) l = l.filter(i => { const k = episodeKey(i); return !k || !sentEps.has(k); });
   // «Только SeaDex» действует, только если в списке есть такие раздачи: иначе он бы пустил всё в ноль.
   if (prefs.onlySeadex && items.some(i => i._sd)) l = l.filter(i => i._sd);
+  if (prefs.hideHave && lib) l = l.filter(i => !haveIt(i));
   return l;
 };
 const sdCount = () => items.filter(i => i._sd).length;
@@ -230,12 +265,12 @@ function rowHtml(it, maxSeed, now) {
   const kind = categoryKind(it.categoryId);
   const health = maxSeed ? Math.max(4, Math.round(it.seeders / maxSeed * 100)) : 0;
   return `
-    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}${sdOf(it) ? ` sd-${sdOf(it)}` : ""}" data-id="${it.id}">
+    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}${haveIt(it) ? " have" : ""}${sdOf(it) ? ` sd-${sdOf(it)}` : ""}" data-id="${it.id}">
       <label class="ny-ck"><input type="checkbox" ${selected.has(it.id) ? "checked" : ""} aria-label="Выбрать"></label>
       ${kindHtml(it, kind)}
       <div class="ny-main">
         <div class="ny-title">${group ? `<em>${esc(group)}</em>` : ""}${esc(group ? it.title.replace(/^\s*\[[^\]]*\]\s*/, "") : it.title)}</div>
-        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
+        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${haveIt(it) ? `<i class="have-i" title="Эта серия уже есть в вашей медиатеке">уже есть</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
       </div>
       <div class="ny-meta"><b>${esc(it.size)}</b><span title="${esc(fmtDate(it.date))}">${esc(relTime(it.date, now))}</span></div>
       <div class="ny-health" title="раздают · качают · скачали">
@@ -309,6 +344,7 @@ function shellHtml() {
         <button type="button" class="ny-src-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
         <div class="ny-hero-btns">
           <button type="button" class="ny-src-btn" data-open-client>${ICONS.send}<span id="ny-client-lbl">Торрент-клиент</span></button>
+          <button type="button" class="ny-src-btn" data-open-library>${ICONS.folder || ICONS.open}<span id="ny-lib-lbl">Медиатека</span></button>
           <button type="button" class="ny-src-btn" data-open-monitors>${ICONS.bell}<span>Слежение</span><b id="ny-mon-n" class="ny-badge"></b></button>
         </div></div>
       <div class="ny-stats" id="ny-stats"></div>
@@ -316,6 +352,7 @@ function shellHtml() {
     <section class="ny-sources" id="ny-sources" hidden></section>
     <section class="ny-sources" id="ny-client" hidden></section>
     <section class="ny-sources" id="ny-monitors" hidden></section>
+    <section class="ny-sources" id="ny-library" hidden></section>
     <div class="ny-search">
       <span class="ny-search-ic">${ICONS.search}</span>
       <input id="ny-q" type="text" placeholder="Название, группа, 1080p…" value="${esc(prefs.q)}" spellcheck="false" autocomplete="off">
@@ -349,7 +386,7 @@ function paintStatic() {
     + `<select id="ny-cat-more" aria-label="Другие категории"><option value="">Ещё категории…</option>${CATEGORIES.filter(([k]) => !QUICK_CATS.some(q => q[0] === k)).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
   $("#ny-filter").innerHTML = seg(FILTERS, prefs.filter, "data-filter");
   $("#ny-sort").innerHTML = seg(SORTS, prefs.sort, "data-sort");
-  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы). SeaDex — курируемая база, в свежей ленте её раздач обычно мало.">${sdLabel()}</button>`;
+  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.hideHave ? "on" : ""}" data-toggle="hideHave" title="Скрыть серии, которые уже есть в вашей медиатеке">Скрыть имеющееся</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы). SeaDex — курируемая база, в свежей ленте её раздач обычно мало.">${sdLabel()}</button>`;
   $("#ny-saved").innerHTML = prefs.saved.length
     ? `<span class="ny-saved-l">Мои запросы</span>` + prefs.saved.map((s, i) => `<span class="ny-chip"><button type="button" data-saved="${i}">${esc(s.q || "без слов")} <small>${esc((QUICK_CATS.concat(CATEGORIES).find(c => c[0] === s.cat) || [0, s.cat])[1])}</small></button><button type="button" class="x" data-saved-del="${i}" aria-label="Убрать">×</button></span>`).join("")
     : "";
@@ -569,7 +606,7 @@ function paintClient(msg = "") {
 }
 
 function openPanel(id) {
-  ["ny-sources", "ny-client", "ny-monitors"].forEach(x => { const el = $(`#${x}`); if (el) el.hidden = x !== id; });
+  ["ny-sources", "ny-client", "ny-monitors", "ny-library"].forEach(x => { const el = $(`#${x}`); if (el) el.hidden = x !== id; });
   const box = $(`#${id}`);
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -1307,6 +1344,9 @@ function wire(root) {
       invoke("tc_clear").then(() => { client = null; clientDraft = null; paintClientLabel(); paintClient("Клиент забыт."); });
       return;
     }
+    if (t.closest("[data-open-library]")) { openPanel("ny-library"); paintLibrary(); if (!lib) libRun("library_rescan"); return; }
+    const lb2 = t.closest("[data-lib]");
+    if (lb2) { libRun(lb2.dataset.lib); return; }
     if (t.closest("[data-open-monitors]")) { openPanel("ny-monitors"); paintMonitors(); return; }
     if (t.closest("[data-mon-check]")) { checkMonitors(true); return; }
     if (t.closest("[data-mon-add]")) {
@@ -1552,6 +1592,7 @@ export async function loadNyaa() {
     wire(body.querySelector(".ny"));
     paintMonitorBadge();
   }
+  if (!lib && !libBusy) invoke("library_rescan").then(sc => { setLib(sc); paintLibLabel(); paintList(); }).catch(() => {});
   if (client === null) invoke("tc_load").then(c => { client = c || null; paintClientLabel(); }).catch(() => {});
   // Свежий список при открытии вкладки, но не чаще раза в 2 минуты.
   if (!items.length || Date.now() - fetchedAt > 120_000) await load();

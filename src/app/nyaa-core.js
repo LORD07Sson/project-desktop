@@ -839,3 +839,13 @@ export function defaultShotTrack(subs) {
   const s = (subs || []).find(x => x.num && !x.forced && /ASS|SSA/i.test(x.codec));
   return s ? s.num : 0;
 }
+
+/** Ключи серий из имён файлов медиатеки ({ name, folder }): по ним раздачам ставится «уже есть». */
+export function libraryKeys(files) {
+  const keys = new Set();
+  for (const f of Array.isArray(files) ? files : []) {
+    const r = parseRelease(String(f.name || "").replace(/\.[A-Za-z0-9]{2,4}$/, ""), String(f.folder || ""));
+    if (r.episode != null && r.show) keys.add(`${r.key}|${r.episode}`);
+  }
+  return keys;
+}
