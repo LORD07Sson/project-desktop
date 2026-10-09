@@ -2,7 +2,6 @@
   "name": "project-desktop",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
-  "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",
