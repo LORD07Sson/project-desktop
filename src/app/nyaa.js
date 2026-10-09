@@ -1020,7 +1020,11 @@ async function fetchPic(url) {
     if (w.status !== 200 || !w.b64) throw new Error(`Картинка недоступна (${w.status})`);
     return `data:${w.mime};base64,${w.b64}`;
   };
-  if (mode === "server") return viaRelay();
+  // Серверный режим: сначала сервер, а если он не справился (например, старая версия без ручки) — напрямую.
+  if (mode === "server") {
+    try { return await viaRelay(); }
+    catch (e) { try { return await invoke("fetch_image", { url }); } catch (_) { throw e; } }
+  }
   try { return await invoke("fetch_image", { url }); }
   catch (e) {
     if (mode === "pc") throw e;
