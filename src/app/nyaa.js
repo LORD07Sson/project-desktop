@@ -194,9 +194,12 @@ const saveThumbs = () => {
   try { localStorage.setItem(THUMBS_KEY, JSON.stringify(thumbUrls)); } catch (_) { /* не запомнится */ }
 };
 
+const thumbFailAt = new Map();   // id → когда последний раз не получилось (повтор не чаще раза в минуту)
+
 async function fetchThumb(it) {
   const id = it.id;
   if (coverBusy.has(`t${id}`) || thumbData.has(id)) return;
+  if (Date.now() - (thumbFailAt.get(id) || 0) < 60_000) return;
   coverBusy.add(`t${id}`);
   try {
     let url = thumbUrls[id];
@@ -205,13 +208,13 @@ async function fetchThumb(it) {
       thumbUrls[id] = url; saveThumbs();
     }
     if (url) {
-      thumbData.set(id, await invoke("fetch_image", { url }));
+      thumbData.set(id, await fetchPic(url));
       document.querySelectorAll(".ny-kind[data-tid]").forEach(el => {
         if (el.dataset.tid !== String(id) || el.querySelector("img")) return;
         el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(thumbData.get(id))}" alt="">`;
       });
     }
-  } catch (_) { /* нет связи: попробуем позже */ }
+  } catch (_) { thumbFailAt.set(id, Date.now()); }
   coverBusy.delete(`t${id}`);
 }
 
@@ -239,7 +242,7 @@ async function fetchCover(key) {
       url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s: key } }));
       coverUrls[key] = url; saveCovers();
     }
-    if (url) { coverData.set(key, await invoke("fetch_image", { url })); paintCover(key); }
+    if (url) { coverData.set(key, await fetchPic(url)); paintCover(key); }
   } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
   coverBusy.delete(key);
 }
@@ -879,7 +882,7 @@ async function loadImages(d) {
   const worker = async () => {
     while (next < urls.length) {
       const url = urls[next++];
-      try { d.imgs[url] = await invoke("fetch_image", { url }); }
+      try { d.imgs[url] = await fetchPic(url); }
       catch (_) { d.imgs[url] = "err"; }
       if (detail === d) paintGallery();
     }
@@ -1006,6 +1009,23 @@ function friendlyError(e) {
       : "Нет связи ни напрямую, ни через сервер студии. Попробуйте другое зеркало в «Источниках».";
   }
   return m.slice(0, 160);
+}
+
+// Картинка → data-URL: напрямую с этого компьютера, а если хост закрыт (i.ibb.co и т.п.) — через сервер студии.
+// Соединение выбирается так же, как для Nyaa: «Авто» / «Мой компьютер» / «Сервер (WireGuard)».
+async function fetchPic(url) {
+  const mode = routeOf("nyaa");
+  const viaRelay = async () => {
+    const w = JSON.parse(await (await apiBlob(`/nyaa/image?url=${encodeURIComponent(url)}`)).text());
+    if (w.status !== 200 || !w.b64) throw new Error(`Картинка недоступна (${w.status})`);
+    return `data:${w.mime};base64,${w.b64}`;
+  };
+  if (mode === "server") return viaRelay();
+  try { return await invoke("fetch_image", { url }); }
+  catch (e) {
+    if (mode === "pc") throw e;
+    try { return await viaRelay(); } catch (_) { throw e; }
+  }
 }
 
 const shortErr = e => {
@@ -1202,7 +1222,7 @@ async function loadCovers(d) {
   const worker = async () => {
     while (next < urls.length) {
       const url = urls[next++];
-      try { d.sim.covers[url] = await invoke("fetch_image", { url }); } catch (_) { d.sim.covers[url] = "err"; }
+      try { d.sim.covers[url] = await fetchPic(url); } catch (_) { d.sim.covers[url] = "err"; }
       if (detail === d && d.tab === "sim") paintSimCovers(d);
     }
   };
