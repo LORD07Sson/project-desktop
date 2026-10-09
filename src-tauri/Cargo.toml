@@ -2,7 +2,7 @@
 name = "project-desktop"
 version = "0.6.0"
 description = "Project Desktop — клиент студии дубляжа"
-license = "GPL-3.0-only"
+license-file = "../LICENSE"
 edition = "2021"
 # `[T]::as_chunks` в audio_qc.rs стабилизирован в 1.88 — на более
 # старом тулчейне сборка падает с невнятной ошибкой про нестабильную фичу.
