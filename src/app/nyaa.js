@@ -575,7 +575,13 @@ let rowMenu = null;
 const MENU_ITEMS = [["info", "Страница раздачи"], ["mag", "Копировать magnet"], ["link", "Копировать ссылку"], ["tor", "Скачать .torrent"], ["sys", "Открыть в системном клиенте"], ["share", "Отправить участнику…"], ["open", "Открыть в браузере"]];
 function closeRowMenu() { if (rowMenu) { rowMenu.remove(); rowMenu = null; } }
 // Картинка для личного сообщения: обложка аниме или первая картинка из описания (https).
-const shareCover = it => { const u = (categoryKind(it.categoryId) === "audio" ? thumbUrls[it.id] : coverUrls[coverKey(it.title)]) || ""; return /^https:/.test(u) ? u : ""; };
+const shareCover = it => {
+  const audio = categoryKind(it.categoryId) === "audio";
+  const pic = audio ? thumbData.get(it.id) : coverData.get(coverKey(it.title));
+  if (typeof pic === "string" && pic.startsWith("data:image/")) return pic;
+  const u = (audio ? thumbUrls[it.id] : coverUrls[coverKey(it.title)]) || "";
+  return /^https:/.test(u) ? u : "";
+};
 
 function openRowMenu(btn, it) {
   closeRowMenu();
