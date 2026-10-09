@@ -551,23 +551,38 @@ const normShow = s => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, 
  * Разбор названия раздачи: аниме, сезон, серия, группа, качество, кодек.
  * episode = null, если это не серия (пачка, OST, неразобранное название).
  */
-export function parseRelease(title) {
-  const t = String(title || "");
+export function parseRelease(title, folder = "") {
+  let t = String(title || "");
   const group = (/^\s*\[([^\]]{1,40})\]/.exec(t) || [])[1] || "";
-  let body = t.replace(/^\s*\[[^\]]*\]\s*/, "");
+  // Несколько скобок в начале («[Группа] [Перевод] Название»): убираем все ведущие.
+  let body = t.replace(/^(?:\s*\[[^\]]*\])+\s*/, "");
   const res = (/(?:^|[^\d])(2160|1440|1080|720|576|480)\s*p\b/i.exec(t) || [])[1];
   const codec = /\b(hevc|x265|h\.?265)\b/i.test(t) ? "hevc" : /\b(avc|x264|h\.?264)\b/i.test(t) ? "avc" : /\bav1\b/i.test(t) ? "av1" : "";
-  const batch = /\b(batch|complete|bd\s*box|season\s*\d+\s*\(|\d{1,3}\s*[-~]\s*\d{1,3}\s*(?:\[|\(|$))/i.test(body) && !/\bS\d{1,2}E\d{1,3}\b/i.test(body);
-  let season = 1, episode = null, show = body;
-  let m = /^(.*?)[\s._-]*\bS(\d{1,2})\s*E(\d{1,3})\b/i.exec(body);
-  if (m) { show = m[1]; season = +m[2]; episode = +m[3]; }
-  else if ((m = /^(.*?)\s+-\s+(\d{1,3})(?:v\d)?(?=\s|\[|\(|$)/.exec(body))) { show = m[1]; episode = +m[2]; }
-  else if ((m = /^(.*?)\s+(?:E|EP|Episode)\s*(\d{1,3})\b/i.exec(body))) { show = m[1]; episode = +m[2]; }
-  const sm = /^(.*?)[\s._-]+(?:S(?:eason)?\s*(\d{1,2})|(\d{1,2})(?:st|nd|rd|th)\s+Season|Season\s*(\d{1,2}))\s*$/i.exec(show);
-  if (sm) { show = sm[1]; season = +(sm[2] || sm[3] || sm[4]); }
-  show = show.replace(/\s*[[(][^\])]*[\])]\s*/g, " ").trim();
+  const hasSE = /\bS\d{1,2}\s*E\d{1,3}\b/i.test(body);
+  // «01-12» — диапазон серий, если первое число меньше второго и перед ним не стоит слово «сезон/часть».
+  const range = [...body.matchAll(/(?<!\w)(?:(S(?:eason)?|Part|Cour)\s*)?(\d{1,3})\s*[-~]\s*(\d{1,3})\s*(?=\[|\(|$)/gi)].some(r => !r[1] && +r[2] < +r[3]);
+  const batch = !hasSE && (range || /\b(batch|complete|bd\s*box|season\s*\d+\s*\()/i.test(body));
+  let season = 1, episode = null, version = 1, show = body;
+  const ver = v => { if (v) version = +v; };
+  let m = /^(.*?)[\s._-]*\bS(\d{1,2})\s*E(\d{1,3})(?:v(\d))?\b/i.exec(body);
+  if (m) { show = m[1]; season = +m[2]; episode = +m[3]; ver(m[4]); }
+  else if ((m = /^(.*?)\s+S(\d{1,2})\s+-\s+(\d{1,3})(?:v(\d))?(?=\s|\[|\(|$)/i.exec(body))) { show = m[1]; season = +m[2]; episode = +m[3]; ver(m[4]); }
+  else if ((m = /^(.*?)\s+-\s+(\d{1,3})(?:v(\d))?(?=\s|\[|\(|$)/.exec(body))) { show = m[1]; episode = +m[2]; ver(m[3]); }
+  else if ((m = /^(.*?)\s*第\s*(\d{1,3})\s*話/.exec(body))) { show = m[1]; episode = +m[2]; }
+  else if ((m = /^(.*?)\s+(?:E|EP|Ep|Episode|#)\s*(\d{1,3})(?:v(\d))?\b/.exec(body))) { show = m[1]; episode = +m[2]; ver(m[3]); }
+  // Старый стиль без дефиса: «Название 03 [1080p]» — номер сразу перед тегами.
+  else if ((m = /^(.*?[^\d\s])\s+(\d{1,2})(?:v(\d))?\s*(?=[[(])/.exec(body)) && !/\b(S(?:eason)?|Part|Cour|Vol(?:ume)?)\s*$/i.test(m[1]) && +m[2] > 0) { show = m[1]; episode = +m[2]; ver(m[3]); }
+  const sm = /^(.*?)[\s._-]+(?:S(?:eason)?\s*(\d{1,2})|(\d{1,2})(?:st|nd|rd|th)\s+Season|Season\s*(\d{1,2})|(?:Part|Cour)\s*(\d{1,2}))\s*$/i.exec(show);
+  if (sm) { show = sm[1]; season = +(sm[2] || sm[3] || sm[4] || sm[5]); }
+  // Сезон из названия папки, если в названии файла его нет.
+  if (season === 1 && folder) {
+    const fm = /(?:\bS(?:eason)?\s*(\d{1,2})\b|(\d{1,2})(?:st|nd|rd|th)\s+Season)/i.exec(String(folder));
+    if (fm) season = +(fm[1] || fm[2]);
+  }
+  show = show.replace(/\s*[[(][^\])]*[\])]\s*/g, " ").replace(/[\s._]+$/, "").trim();
+  if (!show && folder) show = String(folder).replace(/[[(][^\])]*[\])]/g, " ").replace(/\b(Season|S)\s*\d+\b/gi, "").trim();
   if (batch) episode = null;
-  return { show, key: `${normShow(show)}|${season}`, season, episode, group, res: res ? `${res}p` : "", codec };
+  return { show, key: `${normShow(show)}|${season}`, season, episode, version, group, res: res ? `${res}p` : "", codec };
 }
 
 const RES_RANK = { "2160p": 5, "1440p": 4, "1080p": 3, "720p": 2, "576p": 1, "480p": 0 };
@@ -823,4 +838,14 @@ export function highlightSubtitle(raw) {
 export function defaultShotTrack(subs) {
   const s = (subs || []).find(x => x.num && !x.forced && /ASS|SSA/i.test(x.codec));
   return s ? s.num : 0;
+}
+
+/** Ключи серий из имён файлов медиатеки ({ name, folder }): по ним раздачам ставится «уже есть». */
+export function libraryKeys(files) {
+  const keys = new Set();
+  for (const f of Array.isArray(files) ? files : []) {
+    const r = parseRelease(String(f.name || "").replace(/\.[A-Za-z0-9]{2,4}$/, ""), String(f.folder || ""));
+    if (r.episode != null && r.show) keys.add(`${r.key}|${r.episode}`);
+  }
+  return keys;
 }

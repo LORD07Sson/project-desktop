@@ -23,7 +23,7 @@ import {
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
   groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
   seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
-  parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack,
+  parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, libraryKeys,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
@@ -32,7 +32,7 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false, onlySeadex: false, tabs: {} };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false, monEvery: 30 };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
@@ -54,6 +54,40 @@ const markSent = list => {
   try { localStorage.setItem(EPS_KEY, JSON.stringify([...sentEps].slice(-2000))); } catch (_) { /* не запомнится */ }
 };
 const openGroups = new Set();
+
+// Медиатека: папка с аниме на этом компьютере. Rust сканирует имена файлов, здесь они превращаются в ключи серий.
+let lib = null;              // { dir, count, truncated, keys:Set } или null
+let libBusy = false;
+const haveIt = it => { if (!lib) return false; const k = episodeKey(it); return !!k && lib.keys.has(k); };
+function setLib(scan) {
+  lib = scan ? { dir: scan.dir, count: scan.files.length, truncated: !!scan.truncated, keys: libraryKeys(scan.files) } : null;
+}
+async function libRun(cmd) {
+  libBusy = true; paintLibrary();
+  try { setLib(await invoke(cmd)); if (cmd === "library_clear") lib = null; }
+  catch (e) { toast(`Медиатека: ${shortErr(e)}`, "error"); }
+  libBusy = false; paintLibrary(); paintLibLabel(); paintList();
+}
+function libraryHtml() {
+  return `
+    <div class="ny-src-head"><div><b>Медиатека</b><span>Укажите папку с аниме: программа прочитает только имена файлов и пометит в списке серии, которые у вас уже есть.</span></div>
+      <div><button type="button" class="ny-ib wide" data-close-panel title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
+    <div class="ny-lib">
+      ${lib ? `<div class="ny-lib-info"><b>${esc(lib.dir)}</b><span>видеофайлов: ${lib.count}, серий распознано: ${lib.keys.size}${lib.truncated ? " (папка большая, прочитана часть)" : ""}</span></div>` : `<p class="ny-hint">Папка не выбрана.</p>`}
+      <div class="ny-lib-act"><button type="button" class="btn primary" data-lib="library_pick">${libBusy ? "Читаю…" : lib ? "Другая папка" : "Выбрать папку"}</button>
+        ${lib ? `<button type="button" class="btn" data-lib="library_rescan">Обновить</button><button type="button" class="btn ghost" data-lib="library_clear">Забыть папку</button>` : ""}</div>
+      <p class="ny-hint">Совпадение идёт по названию, сезону и номеру серии. Если в имени файла название другое (например, русское), пометки не будет.</p>
+    </div>`;
+}
+function paintLibrary() {
+  const box = $("#ny-library");
+  if (!box || box.hidden) return;
+  box.innerHTML = libraryHtml();
+}
+function paintLibLabel() {
+  const el = $("#ny-lib-lbl");
+  if (el) el.textContent = lib ? `Медиатека · ${lib.keys.size}` : "Медиатека";
+}
 
 // Кэш последней ленты: если сайт не отвечает, показываем её с пометкой, сколько данным минут.
 const CACHE_KEY = "project-nyaa-cache";
@@ -110,6 +144,7 @@ const view = () => {
   if (prefs.hideDone) l = l.filter(i => { const k = episodeKey(i); return !k || !sentEps.has(k); });
   // «Только SeaDex» действует, только если в списке есть такие раздачи: иначе он бы пустил всё в ноль.
   if (prefs.onlySeadex && items.some(i => i._sd)) l = l.filter(i => i._sd);
+  if (prefs.hideHave && lib) l = l.filter(i => !haveIt(i));
   return l;
 };
 const sdCount = () => items.filter(i => i._sd).length;
@@ -230,12 +265,12 @@ function rowHtml(it, maxSeed, now) {
   const kind = categoryKind(it.categoryId);
   const health = maxSeed ? Math.max(4, Math.round(it.seeders / maxSeed * 100)) : 0;
   return `
-    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}${sdOf(it) ? ` sd-${sdOf(it)}` : ""}" data-id="${it.id}">
+    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}${haveIt(it) ? " have" : ""}${sdOf(it) ? ` sd-${sdOf(it)}` : ""}" data-id="${it.id}">
       <label class="ny-ck"><input type="checkbox" ${selected.has(it.id) ? "checked" : ""} aria-label="Выбрать"></label>
       ${kindHtml(it, kind)}
       <div class="ny-main">
         <div class="ny-title">${group ? `<em>${esc(group)}</em>` : ""}${esc(group ? it.title.replace(/^\s*\[[^\]]*\]\s*/, "") : it.title)}</div>
-        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
+        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${haveIt(it) ? `<i class="have-i" title="Эта серия уже есть в вашей медиатеке">уже есть</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
       </div>
       <div class="ny-meta"><b>${esc(it.size)}</b><span title="${esc(fmtDate(it.date))}">${esc(relTime(it.date, now))}</span></div>
       <div class="ny-health" title="раздают · качают · скачали">
@@ -295,6 +330,7 @@ function barHtml() {
     <span class="ny-bar-count"><b>${selected.size}</b> выбрано</span>
     <button type="button" class="btn primary" data-bulk="mag">${ICONS.magnet} Копировать magnet</button>
     <button type="button" class="btn" data-bulk="send">${ICONS.send} В торрент-клиент</button>
+    <button type="button" class="btn" data-bulk="sys" title="Открыть magnet в системном торрент-клиенте">${ICONS.magnet} В системный клиент</button>
     <button type="button" class="btn" data-bulk="titles">${ICONS.copy} Названия</button>
     <button type="button" class="btn" data-bulk="links">${ICONS.open} Ссылки на страницы</button>
     <button type="button" class="btn ghost" data-bulk="clear">Сбросить</button>`;
@@ -309,6 +345,7 @@ function shellHtml() {
         <button type="button" class="ny-src-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
         <div class="ny-hero-btns">
           <button type="button" class="ny-src-btn" data-open-client>${ICONS.send}<span id="ny-client-lbl">Торрент-клиент</span></button>
+          <button type="button" class="ny-src-btn" data-open-library>${ICONS.folder || ICONS.open}<span id="ny-lib-lbl">Медиатека</span></button>
           <button type="button" class="ny-src-btn" data-open-monitors>${ICONS.bell}<span>Слежение</span><b id="ny-mon-n" class="ny-badge"></b></button>
         </div></div>
       <div class="ny-stats" id="ny-stats"></div>
@@ -316,6 +353,7 @@ function shellHtml() {
     <section class="ny-sources" id="ny-sources" hidden></section>
     <section class="ny-sources" id="ny-client" hidden></section>
     <section class="ny-sources" id="ny-monitors" hidden></section>
+    <section class="ny-sources" id="ny-library" hidden></section>
     <div class="ny-search">
       <span class="ny-search-ic">${ICONS.search}</span>
       <input id="ny-q" type="text" placeholder="Название, группа, 1080p…" value="${esc(prefs.q)}" spellcheck="false" autocomplete="off">
@@ -349,7 +387,7 @@ function paintStatic() {
     + `<select id="ny-cat-more" aria-label="Другие категории"><option value="">Ещё категории…</option>${CATEGORIES.filter(([k]) => !QUICK_CATS.some(q => q[0] === k)).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
   $("#ny-filter").innerHTML = seg(FILTERS, prefs.filter, "data-filter");
   $("#ny-sort").innerHTML = seg(SORTS, prefs.sort, "data-sort");
-  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы). SeaDex — курируемая база, в свежей ленте её раздач обычно мало.">${sdLabel()}</button>`;
+  $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.hideHave ? "on" : ""}" data-toggle="hideHave" title="Скрыть серии, которые уже есть в вашей медиатеке">Скрыть имеющееся</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы). SeaDex — курируемая база, в свежей ленте её раздач обычно мало.">${sdLabel()}</button>`;
   $("#ny-saved").innerHTML = prefs.saved.length
     ? `<span class="ny-saved-l">Мои запросы</span>` + prefs.saved.map((s, i) => `<span class="ny-chip"><button type="button" data-saved="${i}">${esc(s.q || "без слов")} <small>${esc((QUICK_CATS.concat(CATEGORIES).find(c => c[0] === s.cat) || [0, s.cat])[1])}</small></button><button type="button" class="x" data-saved-del="${i}" aria-label="Убрать">×</button></span>`).join("")
     : "";
@@ -474,6 +512,7 @@ function bulk(kind) {
   if (!list.length) return;
   list.forEach(i => touch(i.id));
   if (kind === "send") { sendToClient(list); return; }
+  if (kind === "sys") { openInSystemClient(list); return; }
   if (kind === "mag") copy(list.map(magnetLink).filter(Boolean).join("\n"), `Скопировано magnet: ${list.length}`);
   else if (kind === "titles") copy(list.map(i => i.title).join("\n"), `Скопировано названий: ${list.length}`);
   else if (kind === "links") copy(list.map(pageUrl).join("\n"), `Скопировано ссылок: ${list.length}`);
@@ -569,13 +608,29 @@ function paintClient(msg = "") {
 }
 
 function openPanel(id) {
-  ["ny-sources", "ny-client", "ny-monitors"].forEach(x => { const el = $(`#${x}`); if (el) el.hidden = x !== id; });
+  ["ny-sources", "ny-client", "ny-monitors", "ny-library"].forEach(x => { const el = $(`#${x}`); if (el) el.hidden = x !== id; });
   const box = $(`#${id}`);
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+// Magnet в торрент-клиенте, назначенном в системе по умолчанию: настраивать Web UI не нужно.
+async function openInSystemClient(list) {
+  const magnets = list.map(magnetLink).filter(Boolean).slice(0, 10);
+  if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
+  let ok = 0;
+  for (const m of magnets) {
+    try { await invoke("open_magnet", { magnet: m }); ok++; }
+    catch (e) { toast(String(e && e.message ? e.message : e), "error"); break; }
+  }
+  if (ok) { list.forEach(i => touch(i.id)); markSent(list.slice(0, ok)); paintList(); toast(`Открыто в системном клиенте: ${ok}.`, "success"); }
+  if (list.length > magnets.length) toast("За один раз открывается не больше 10 раздач.");
+}
+
 async function sendToClient(list) {
-  if (!client) { openPanel("ny-client"); clientDraft = null; paintClient("Сначала настройте клиент."); toast("Сначала настройте торрент-клиент."); return; }
+  if (!client) {
+    toast("Свой клиент не настроен — открываю в системном торрент-клиенте.");
+    openInSystemClient(list); return;
+  }
   const magnets = list.map(magnetLink).filter(Boolean);
   if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
   try {
@@ -587,7 +642,9 @@ async function sendToClient(list) {
 }
 
 // ---------- слежение ----------
-const MON_EVERY_MS = 30 * 60 * 1000;
+const MON_CHOICES = [[10, "10 минут"], [30, "30 минут"], [60, "час"], [180, "3 часа"]];
+const monEveryMs = () => (MON_CHOICES.some(c => c[0] === prefs.monEvery) ? prefs.monEvery : 30) * 60 * 1000;
+let lastMonCheck = 0;
 let monitorsBusy = false;
 
 function newTotal() { return prefs.monitors.reduce((s, m) => s + (m.new || 0), 0); }
@@ -602,8 +659,9 @@ function paintMonitorBadge() {
 function monitorsHtml() {
   const cats = CATEGORIES.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
   return `
-    <div class="ny-src-head"><div><b>Слежение</b><span>Программа раз в 30 минут (пока открыта) проверяет запросы и загрузчиков и сообщает о новых раздачах.</span></div>
+    <div class="ny-src-head"><div><b>Слежение</b><span>Программа сама проверяет запросы и загрузчиков и сообщает о новых раздачах — и в фоне, если окно закрыто в трей (но не завершена).</span></div>
       <div><button type="button" class="btn" data-mon-check>${monitorsBusy ? "Проверяю…" : "Проверить сейчас"}</button><button type="button" class="ny-ib wide" data-close-panel title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
+    <div class="ny-mon-every"><label>Проверять раз в <select id="ny-mon-every">${MON_CHOICES.map(([v, l]) => `<option value="${v}"${v === prefs.monEvery ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>
     <div class="ny-mons">${prefs.monitors.length ? prefs.monitors.map(m => `
       <div class="ny-mon${m.new ? " has-new" : ""}">
         <label class="ny-chk"><input type="checkbox" data-mon-toggle="${esc(m.id)}" ${m.on ? "checked" : ""}></label>
@@ -676,10 +734,17 @@ async function addMonitor({ type, q, cat, rule = null }) {
   paintMonitors();
 }
 
+// Окно можно закрыть: программа остаётся в трее, страница продолжает работать, и слежение идёт в фоне.
+// Раз в минуту смотрим, не прошёл ли выбранный интервал, — так смена интервала действует сразу.
 function startMonitoring() {
-  const tick = () => { if (state.token && state.isAdmin) checkMonitors(false); };
+  const tick = () => {
+    if (!state.token || !state.isAdmin) return;
+    if (lastMonCheck && Date.now() - lastMonCheck < monEveryMs()) return;
+    lastMonCheck = Date.now();
+    checkMonitors(false);
+  };
   setTimeout(tick, 25_000);
-  setInterval(tick, MON_EVERY_MS);
+  setInterval(tick, 60_000);
 }
 startMonitoring();
 
@@ -1211,6 +1276,7 @@ function drawerHtml() {
         <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
         <button type="button" class="btn" data-d-a="cp">${ICONS.copy} Название</button>
         <button type="button" class="btn" data-d-a="send">${ICONS.send} В торрент-клиент</button>
+        <button type="button" class="btn" data-d-a="sys" title="Открыть magnet в торрент-клиенте, назначенном в системе">${ICONS.magnet} В системный клиент</button>
         <button type="button" class="btn ghost" data-d-a="open">${ICONS.open} В браузере</button>
         ${uploaderOf(d) ? `<button type="button" class="btn ghost" data-d-a="watch">${ICONS.bell} Следить за ${esc(uploaderOf(d))}</button>` : ""}
       </div>
@@ -1307,6 +1373,9 @@ function wire(root) {
       invoke("tc_clear").then(() => { client = null; clientDraft = null; paintClientLabel(); paintClient("Клиент забыт."); });
       return;
     }
+    if (t.closest("[data-open-library]")) { openPanel("ny-library"); paintLibrary(); if (!lib) libRun("library_rescan"); return; }
+    const lb2 = t.closest("[data-lib]");
+    if (lb2) { libRun(lb2.dataset.lib); return; }
     if (t.closest("[data-open-monitors]")) { openPanel("ny-monitors"); paintMonitors(); return; }
     if (t.closest("[data-mon-check]")) { checkMonitors(true); return; }
     if (t.closest("[data-mon-add]")) {
@@ -1412,6 +1481,7 @@ function wire(root) {
         const a = da.dataset.dA;
         const hash = (detail.view && detail.view.fields["info hash"]) || it.hash;
         if (a === "send") { sendToClient([{ ...it, hash }]); return; }
+        if (a === "sys") { openInSystemClient([{ ...it, hash }]); return; }
         if (a === "watch") { addMonitor({ type: "user", q: uploaderOf(detail) }); return; }
         if (a === "mag") copy(detail.view && detail.view.magnet ? detail.view.magnet : magnetLink({ ...it, hash }), "Magnet скопирован.");
         else if (a === "tor") saveTorrent(it);
@@ -1492,6 +1562,11 @@ function wire(root) {
     }
   };
   root.addEventListener("click", onClick);
+  root.querySelector("#ny-monitors").addEventListener("change", e => {
+    if (e.target.id !== "ny-mon-every") return;
+    prefs.monEvery = Number(e.target.value) || 30; savePrefs();
+    toast(`Слежение: проверка раз в ${MON_CHOICES.find(c => c[0] === prefs.monEvery)[1]}.`, "success");
+  });
   root.querySelector("#ny-client").addEventListener("change", e => {
     if (e.target.dataset.c !== "kind") return;
     clientDraft = { ...readClientForm(), url: "" };
@@ -1552,6 +1627,7 @@ export async function loadNyaa() {
     wire(body.querySelector(".ny"));
     paintMonitorBadge();
   }
+  if (!lib && !libBusy) invoke("library_rescan").then(sc => { setLib(sc); paintLibLabel(); paintList(); }).catch(() => {});
   if (client === null) invoke("tc_load").then(c => { client = c || null; paintClientLabel(); }).catch(() => {});
   // Свежий список при открытии вкладки, но не чаще раза в 2 минуты.
   if (!items.length || Date.now() - fetchedAt > 120_000) await load();

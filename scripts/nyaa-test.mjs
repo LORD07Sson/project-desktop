@@ -306,3 +306,35 @@ console.log("nyaa-test: ok");
   assert.equal(defaultShotTrack(f.files[0].subs), 4, "первая не форсированная ASS-дорожка");
   assert.equal(defaultShotTrack([]), 0);
 }
+
+// ---------- разбор названий 2 ----------
+{
+  const { parseRelease } = await import("../src/app/nyaa-core.js");
+  const p = parseRelease;
+  assert.equal(p("[Group] Show Name - 05v2 [1080p]").version, 2);
+  assert.equal(p("[Group] Show Name - 05v2 [1080p]").episode, 5);
+  const a = p("[Gr1] [CN] Show Name S2 - 07 (1080p)");
+  assert.equal(a.episode, 7); assert.equal(a.season, 2); assert.equal(a.show, "Show Name"); assert.equal(a.group, "Gr1");
+  assert.equal(p("[Group] Show Name 03 [1080p][ABCD1234]").episode, 3);
+  assert.equal(p("[Group] Show Name 03 [1080p][ABCD1234]").show, "Show Name");
+  assert.equal(p("Show Name 第05話 1080p").episode, 5);
+  assert.equal(p("[G] Show Name Part 2 - 04 [720p]").season, 2);
+  assert.equal(p("[G] Show Name Cour 2 - 04 [720p]").episode, 4);
+  assert.equal(p("[G] Evangelion 3.0 [1080p]").episode, null);
+  assert.equal(p("[G] Show Name (Batch) 01-12 [1080p]").episode, null);
+  assert.equal(p("[G] Show Name - 12 END [1080p]").episode, 12);
+  assert.equal(p("[G] Show Name S02 [BD 1080p]").episode, null);
+  const f = p("[G] Show Name - 03 [1080p]", "Show Name Season 3");
+  assert.equal(f.season, 3, "сезон из названия папки");
+  assert.equal(p("[G] Show Name - 03 [1080p]").key, p("[H] Show-Name - 03 [720p]").key, "один ключ у разных групп и написаний");
+  assert.equal(p("Какой-то OST [FLAC]").episode, null);
+}
+
+{
+  const { libraryKeys, parseRelease, episodeKey } = await import("../src/app/nyaa-core.js");
+  const keys = libraryKeys([{ name: "[Erai-raws] Show Name - 03 [1080p].mkv", folder: "Show Name" }, { name: "Movie.mkv", folder: "Movies" }, { name: "[X] Show Name S2 - 01 [720p].mp4", folder: "" }]);
+  assert.equal(keys.size, 2);
+  assert.ok(keys.has(episodeKey({ title: "[SubsPlease] Show Name - 03 (1080p) [HEVC]" })), "та же серия другой группы считается имеющейся");
+  assert.ok(!keys.has(episodeKey({ title: "[SubsPlease] Show Name - 04 (1080p)" })));
+  assert.equal(libraryKeys(null).size, 0);
+}

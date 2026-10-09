@@ -12,6 +12,7 @@ mod audio_qc;
 mod board;
 mod desktop_notify;
 mod file_scope;
+mod library;
 mod nyaa;
 mod torrent_clients;
 mod media_tools;
@@ -1399,6 +1400,10 @@ fn main() {
             nyaa::net_check,
             nyaa::meta_get,
             nyaa::anilist_query,
+            nyaa::open_magnet,
+            library::library_pick,
+            library::library_rescan,
+            library::library_clear,
             torrent_clients::tc_save,
             torrent_clients::tc_load,
             torrent_clients::tc_clear,
