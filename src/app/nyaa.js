@@ -1239,6 +1239,23 @@ async function openDetail(it) {
   if (detail.state === "ok") loadImages(detail);
 }
 
+// Для карточки раздачи в чате: название, размер, обложка.
+export async function nyaaCardInfo(id) {
+  const v = parseView(await nyaaView({ base: prefs.base, id }));
+  const f = v.fields || {};
+  const meta = [f["file size"], f.submitter, f.seeders ? `раздают ${f.seeders}` : ""].filter(Boolean).join(" · ");
+  let image = "";
+  if (v.images && v.images[0]) { try { image = await fetchPic(v.images[0]); } catch (_) { /* без картинки */ } }
+  return { title: v.title || `Раздача №${id}`, meta, image };
+}
+
+// Открыть раздачу по номеру (ссылка project://nyaa/<номер> из чата).
+export function openNyaaById(id) {
+  const tab = document.querySelector('[data-tab="nyaa"]');
+  if (tab) tab.click();
+  openDetail({ id, title: `Раздача №${id}`, categoryId: "", hash: "" });
+}
+
 async function loadImages(d) {
   const urls = d.view.images.slice();
   let next = 0;
