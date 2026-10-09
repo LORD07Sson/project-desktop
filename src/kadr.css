@@ -1917,3 +1917,5 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .brand-logo { transition: transform .5s cubic-bezier(.2, .9, .25, 1); }
 .titlebar-left:hover .brand-logo { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .fx-glow, .fx-av.pop { animation: none; } .brand-logo { transition: none; } }
+.fx-attach { display: flex; align-items: center; gap: 8px; min-width: 0; } .fx-file { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-unpick { border: 0; background: none; color: var(--ink); cursor: pointer; font-size: 14px; padding: 0 4px; }

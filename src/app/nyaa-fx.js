@@ -1,6 +1,6 @@
 // Живые элементы страницы «Релизы»: кнопка с прогрессом внутри и отменой («клейкий» пузырь),
 // «Отправить участнику» (бот пишет ему в личку со ссылкой на раздачу) и навигация «жидкий металл».
-import { apiGet, apiPost, mediaUrl, toast } from "./api.js";
+import { apiGet, apiPost, apiUpload, mediaUrl, toast } from "./api.js";
 import { esc } from "./utils.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -82,7 +82,7 @@ const avatar = p => { const u = mediaUrl(`/avatar/${encodeURIComponent(p.telegra
 export function closeShare() { if (pop) { pop.remove(); pop = null; } }
 
 /** Открывает окошко «Отправить участнику» под элементом anchor. */
-export async function openShare(anchor, it) {
+export async function openShare(anchor, it, cover = "") {
   closeShare();
   pop = document.createElement("div");
   pop.className = "fx-share";
@@ -96,7 +96,7 @@ export async function openShare(anchor, it) {
   let people = [];
   try { people = await loadTeam(); } catch (e) { pop.querySelector(".fx-sh-load").textContent = `Не удалось получить команду: ${(e && e.message) || e}`; return; }
   if (!pop) return;
-  let chosen = null;
+  let chosen = null, picked = null;
   const already = () => sentTo.get(it.id) || [];
   const draw = () => {
     const q = (pop.querySelector("input.fx-q") || {}).value || "";
@@ -116,6 +116,7 @@ export async function openShare(anchor, it) {
     <label class="fx-field"><span>Кому</span><input class="fx-q" type="text" placeholder="Имя или @username" autocomplete="off" spellcheck="false"></label>
     <div class="fx-list"></div>
     <label class="fx-field"><span>Заметка</span><input class="fx-note" type="text" maxlength="300" placeholder="Необязательно" autocomplete="off"></label>
+    <div class="fx-attach"><button type="button" class="btn ghost fx-pick">Прикрепить файл или .torrent…</button><span class="fx-file"></span><input type="file" class="fx-input" hidden></div>
     <div class="fx-foot"><span class="fx-stack"></span><span class="fx-sp"></span><button type="button" class="btn ghost fx-close">Закрыть</button><button type="button" class="btn primary fx-send" disabled>Отправить</button></div>`;
   draw();
   const q = pop.querySelector("input.fx-q");
@@ -129,15 +130,22 @@ export async function openShare(anchor, it) {
     draw();
   };
   pop.querySelector(".fx-close").onclick = closeShare;
+  const input = pop.querySelector(".fx-input"), fileLbl = pop.querySelector(".fx-file");
+  const paintFile = () => { fileLbl.innerHTML = picked ? `${esc(picked.name)} <button type="button" class="fx-unpick" aria-label="Убрать файл">×</button>` : ""; };
+  pop.querySelector(".fx-pick").onclick = () => input.click();
+  input.onchange = () => { picked = input.files[0] || null; paintFile(); };
+  fileLbl.onclick = e => { if (e.target.closest(".fx-unpick")) { picked = null; input.value = ""; paintFile(); } };
   const send = pop.querySelector(".fx-send");
   send.dataset.fxIdle = "Отправить";
   send.onclick = async () => {
     if (!chosen) return;
     const to = chosen, note = pop.querySelector(".fx-note").value;
-    const ok = await liveButton(send, () => apiPost("/nyaa/share", { to: to.telegram_id, id: it.id, title: it.title, note }), { busy: "Отправляю", done: "Отправлено" });
+    const ok = await liveButton(send, () => (picked
+      ? apiUpload("/nyaa/share-file", picked, { to: to.telegram_id, title: it.title, note })
+      : apiPost("/nyaa/share", { to: to.telegram_id, id: it.id, title: it.title, note, cover })), { busy: "Отправляю", done: "Отправлено" });
     if (ok && pop) {
       sentTo.set(it.id, [to.telegram_id, ...already().filter(t => t !== to.telegram_id)]);
-      chosen = null; q.value = ""; pop.querySelector(".fx-note").value = "";
+      chosen = null; picked = null; input.value = ""; paintFile(); q.value = ""; pop.querySelector(".fx-note").value = "";
       draw();
       toast(`Отправлено: ${to.name}.`, "success");
     }

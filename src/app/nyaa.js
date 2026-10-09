@@ -574,6 +574,9 @@ async function saveTorrent(it) {
 let rowMenu = null;
 const MENU_ITEMS = [["info", "Страница раздачи"], ["mag", "Копировать magnet"], ["link", "Копировать ссылку"], ["tor", "Скачать .torrent"], ["sys", "Открыть в системном клиенте"], ["share", "Отправить участнику…"], ["open", "Открыть в браузере"]];
 function closeRowMenu() { if (rowMenu) { rowMenu.remove(); rowMenu = null; } }
+// Картинка для личного сообщения: обложка аниме или первая картинка из описания (https).
+const shareCover = it => { const u = (categoryKind(it.categoryId) === "audio" ? thumbUrls[it.id] : coverUrls[coverKey(it.title)]) || ""; return /^https:/.test(u) ? u : ""; };
+
 function openRowMenu(btn, it) {
   closeRowMenu();
   const m = document.createElement("div");
@@ -603,7 +606,7 @@ document.addEventListener("click", e => {
   else if (k === "link") copy(pageUrl(it), "Ссылка на раздачу скопирована.");
   else if (k === "tor") saveTorrent(it);
   else if (k === "sys") openInSystemClient([it]);
-  else if (k === "share") openShare(document.querySelector(`.ny-row[data-id="${it.id}"] [data-a="menu"]`) || document.querySelector("#ny-list") || document.body, it);
+  else if (k === "share") openShare(document.querySelector(`.ny-row[data-id="${it.id}"] [data-a="menu"]`) || document.querySelector("#ny-list") || document.body, it, shareCover(it));
   else if (k === "open") openExternal(pageUrl(it)).catch(() => toast("Не удалось открыть ссылку.", "error"));
 });
 
@@ -1905,7 +1908,7 @@ function wire(root) {
         const a = da.dataset.dA;
         const hash = (detail.view && detail.view.fields["info hash"]) || it.hash;
         if (a === "send") { liveButton(da, () => sendToClient([{ ...it, hash }]), { busy: "Отправляю", done: "Отправлено" }); return; }
-        if (a === "share") { openShare(da, it); return; }
+        if (a === "share") { openShare(da, it, shareCover(it)); return; }
         if (a === "sys") { openInSystemClient([{ ...it, hash }]); return; }
         if (a === "watch") { addMonitor({ type: "user", q: uploaderOf(detail) }); return; }
         if (a === "mag") copy(detail.view && detail.view.magnet ? detail.view.magnet : magnetLink({ ...it, hash }), "Magnet скопирован.");
