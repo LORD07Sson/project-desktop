@@ -31,3 +31,5 @@
 Для разработчиков — [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 © 2026 Project
+
+Лицензия: [PolyForm Internal Use 1.0.0](LICENSE) — код можно запускать и изменять для внутренних нужд компании, но нельзя распространять третьим лицам. © 2026 Project.
