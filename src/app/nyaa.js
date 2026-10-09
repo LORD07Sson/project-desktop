@@ -330,6 +330,7 @@ function barHtml() {
     <span class="ny-bar-count"><b>${selected.size}</b> выбрано</span>
     <button type="button" class="btn primary" data-bulk="mag">${ICONS.magnet} Копировать magnet</button>
     <button type="button" class="btn" data-bulk="send">${ICONS.send} В торрент-клиент</button>
+    <button type="button" class="btn" data-bulk="sys" title="Открыть magnet в системном торрент-клиенте">${ICONS.magnet} В системный клиент</button>
     <button type="button" class="btn" data-bulk="titles">${ICONS.copy} Названия</button>
     <button type="button" class="btn" data-bulk="links">${ICONS.open} Ссылки на страницы</button>
     <button type="button" class="btn ghost" data-bulk="clear">Сбросить</button>`;
@@ -511,6 +512,7 @@ function bulk(kind) {
   if (!list.length) return;
   list.forEach(i => touch(i.id));
   if (kind === "send") { sendToClient(list); return; }
+  if (kind === "sys") { openInSystemClient(list); return; }
   if (kind === "mag") copy(list.map(magnetLink).filter(Boolean).join("\n"), `Скопировано magnet: ${list.length}`);
   else if (kind === "titles") copy(list.map(i => i.title).join("\n"), `Скопировано названий: ${list.length}`);
   else if (kind === "links") copy(list.map(pageUrl).join("\n"), `Скопировано ссылок: ${list.length}`);
@@ -611,8 +613,24 @@ function openPanel(id) {
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+// Magnet в торрент-клиенте, назначенном в системе по умолчанию: настраивать Web UI не нужно.
+async function openInSystemClient(list) {
+  const magnets = list.map(magnetLink).filter(Boolean).slice(0, 10);
+  if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
+  let ok = 0;
+  for (const m of magnets) {
+    try { await invoke("open_magnet", { magnet: m }); ok++; }
+    catch (e) { toast(String(e && e.message ? e.message : e), "error"); break; }
+  }
+  if (ok) { list.forEach(i => touch(i.id)); markSent(list.slice(0, ok)); paintList(); toast(`Открыто в системном клиенте: ${ok}.`, "success"); }
+  if (list.length > magnets.length) toast("За один раз открывается не больше 10 раздач.");
+}
+
 async function sendToClient(list) {
-  if (!client) { openPanel("ny-client"); clientDraft = null; paintClient("Сначала настройте клиент."); toast("Сначала настройте торрент-клиент."); return; }
+  if (!client) {
+    toast("Свой клиент не настроен — открываю в системном торрент-клиенте.");
+    openInSystemClient(list); return;
+  }
   const magnets = list.map(magnetLink).filter(Boolean);
   if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
   try {
@@ -1258,6 +1276,7 @@ function drawerHtml() {
         <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
         <button type="button" class="btn" data-d-a="cp">${ICONS.copy} Название</button>
         <button type="button" class="btn" data-d-a="send">${ICONS.send} В торрент-клиент</button>
+        <button type="button" class="btn" data-d-a="sys" title="Открыть magnet в торрент-клиенте, назначенном в системе">${ICONS.magnet} В системный клиент</button>
         <button type="button" class="btn ghost" data-d-a="open">${ICONS.open} В браузере</button>
         ${uploaderOf(d) ? `<button type="button" class="btn ghost" data-d-a="watch">${ICONS.bell} Следить за ${esc(uploaderOf(d))}</button>` : ""}
       </div>
@@ -1462,6 +1481,7 @@ function wire(root) {
         const a = da.dataset.dA;
         const hash = (detail.view && detail.view.fields["info hash"]) || it.hash;
         if (a === "send") { sendToClient([{ ...it, hash }]); return; }
+        if (a === "sys") { openInSystemClient([{ ...it, hash }]); return; }
         if (a === "watch") { addMonitor({ type: "user", q: uploaderOf(detail) }); return; }
         if (a === "mag") copy(detail.view && detail.view.magnet ? detail.view.magnet : magnetLink({ ...it, hash }), "Magnet скопирован.");
         else if (a === "tor") saveTorrent(it);

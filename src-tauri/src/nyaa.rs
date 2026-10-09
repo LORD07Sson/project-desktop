@@ -276,6 +276,35 @@ pub async fn net_check(urls: Vec<String>) -> Vec<NetCheck> {
     out
 }
 
+/// Строгая проверка magnet-ссылки: только `magnet:?xt=urn:btih:<40 hex | 32 base32>` с обычными
+/// символами и разумной длиной. Всё остальное отвергается, чтобы через эту команду нельзя было
+/// открыть произвольный адрес или программу.
+pub fn valid_magnet(m: &str) -> bool {
+    const HEAD: &str = "magnet:?xt=urn:btih:";
+    if m.len() > 2000 || !m.starts_with(HEAD) {
+        return false;
+    }
+    if m.chars().any(|c| c.is_control() || c == ' ' || c == '"' || c == '<' || c == '>' || c == '\\' || c == '^' || c == '`') {
+        return false;
+    }
+    let hash: String = m[HEAD.len()..].chars().take_while(|c| *c != '&').collect();
+    match hash.len() {
+        40 => hash.chars().all(|c| c.is_ascii_hexdigit()),
+        32 => hash.chars().all(|c| c.is_ascii_alphanumeric()),
+        _ => false,
+    }
+}
+
+/// Открыть magnet-ссылку в торрент-клиенте, назначенном в системе по умолчанию.
+#[tauri::command(async)]
+pub fn open_magnet(app: tauri::AppHandle, magnet: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    if !valid_magnet(&magnet) {
+        return Err("Некорректная magnet-ссылка.".into());
+    }
+    app.opener().open_url(&magnet, None::<&str>).map_err(|e| format!("Не удалось открыть: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -354,5 +383,17 @@ mod tests {
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foo"), "Zm9v");
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    }
+    #[test]
+    fn magnet_validation_is_strict() {
+        let h = "a".repeat(40);
+        assert!(valid_magnet(&format!("magnet:?xt=urn:btih:{h}&dn=Show%20-%2001&tr=udp%3A%2F%2Ft.example%3A80")));
+        assert!(valid_magnet(&format!("magnet:?xt=urn:btih:{}", "A2".repeat(16))));
+        assert!(!valid_magnet("magnet:?xt=urn:btih:short"));
+        assert!(!valid_magnet(&format!("magnet:?xt=urn:btih:{h}&dn=a b")), "пробел");
+        assert!(!valid_magnet(&format!("magnet:?xt=urn:btih:{h}\"&x")), "кавычка");
+        assert!(!valid_magnet("https://evil.example/a"));
+        assert!(!valid_magnet("file:///C:/Windows/System32/calc.exe"));
+        assert!(!valid_magnet(&format!("magnet:?xt=urn:btih:{h}{}", "x".repeat(2100))));
     }
 }

@@ -1400,6 +1400,7 @@ fn main() {
             nyaa::net_check,
             nyaa::meta_get,
             nyaa::anilist_query,
+            nyaa::open_magnet,
             library::library_pick,
             library::library_rescan,
             library::library_clear,
