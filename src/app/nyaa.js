@@ -12,11 +12,15 @@ import { invoke, openExternal, pickOutputFile } from "./tauri.js";
 import { toast, API_BASE, apiBlob, openSheet } from "./api.js";
 import { state } from "./state.js";
 import { notifyDesktop } from "./desktop-notify.js";
+import {
+  newHealth, record as hRecord, statsOf, cooling as hCooling, bestPath, pickMirror, shouldSwitch,
+  sparkPoints, levelOf, serialize, deserialize,
+} from "./mirror-health.js";
 import { $, esc } from "./utils.js";
 import {
   CATEGORIES, FILTERS, parseNyaaRss, magnetLink, sortItems, relTime, fmtDate,
   splitTitle, categoryKind, summarize, fmtBytes, torrentFileName,
-  parseView, buildServices, classifyCheck, normalizeMirror, hostOf, fastestMirror, NYAA_MIRRORS,
+  parseView, buildServices, classifyCheck, normalizeMirror, hostOf, NYAA_MIRRORS,
   applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds,
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
@@ -402,7 +406,8 @@ function paintSourceChip() {
   const host = $("#ny-src-host"), dot = $("#ny-src-dot");
   if (!host) return;
   host.textContent = hostOf(prefs.base) + (viaServer ? " · через сервер" : "");
-  dot.className = classifyCheck(checks[prefs.base]).level;
+  const lv = levelOfUrl(prefs.base);
+  dot.className = lv === "idle" ? "" : lv;
 }
 
 function paintFilterBadge() {
@@ -760,19 +765,34 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // ---------- выбор соединения для каждого сервиса ----------
-// auto — сначала этот компьютер, если связи нет — сервер (WireGuard); pc — только этот компьютер;
-// server — всегда через сервер студии.
-const ROUTES = [["auto", "Авто"], ["pc", "Мой компьютер"], ["server", "Сервер (WireGuard)"]];
+// auto — программа сама берёт лучший путь по замерам (напрямую или через сервер); pc — только этот
+// компьютер; server — всегда через сервер студии (его WireGuard).
+// Зеркала, которые сервер подсказал без релиза программы (файл mirrors.json на сервере); кэш на сутки.
+const MIRRORS_KEY = "project-nyaa-mirrors";
+let remoteMirrors = (() => { try { const c = JSON.parse(localStorage.getItem(MIRRORS_KEY) || "null"); return c && Date.now() - c.at < 24 * 3600e3 ? c.data : {}; } catch (_) { return {}; } })();
+const allServices = () => buildServices(prefs.custom, serverOrigin(), remoteMirrors);
+async function loadRemoteMirrors() {
+  try {
+    const data = JSON.parse(await (await apiBlob("/mirrors")).text());
+    if (data && typeof data === "object") {
+      remoteMirrors = data;
+      try { localStorage.setItem(MIRRORS_KEY, JSON.stringify({ at: Date.now(), data })); } catch (_) { /* не запомнится */ }
+      paintSources();
+    }
+  } catch (_) { /* старый сервер без ручки — остаются встроенные зеркала */ }
+}
+
+const ROUTES = [["auto", "Авто"], ["pc", "Мой компьютер"], ["server", "Сервер"]];
 const routeOf = id => (prefs.route && ["pc", "server"].includes(prefs.route[id])) ? prefs.route[id] : "auto";
 const serviceOfUrl = url => {
   const h = hostOf(url);
-  const sv = buildServices(prefs.custom, serverOrigin()).find(s => s.mirrors.some(m => hostOf(m) === h));
+  const sv = allServices().find(s => s.mirrors.some(m => hostOf(m) === h));
   return sv ? sv.id : "";
 };
 // сам сервер студии проверяется только отсюда: его адрес для проверки «с сервера» недопустим (свой порт)
 const routeOfUrl = url => { const id = serviceOfUrl(url); return id === "server" ? "pc" : routeOf(id); };
 
-// Результат проверки по выбранному соединению сервиса.
+// Результат последней проверки по выбранному соединению сервиса (для кнопки «Источник» и подсказок).
 function applyChecks() {
   new Set([...Object.keys(serverChecks), ...Object.keys(localChecks)]).forEach(u => {
     const mode = routeOfUrl(u);
@@ -781,39 +801,144 @@ function applyChecks() {
   });
 }
 
-// ---------- источники и зеркала ----------
-function sourcesHtml() {
-  const services = buildServices(prefs.custom, serverOrigin());
-  return `
-    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>Для каждого сервиса выберите, как подключаться: с этого компьютера или через сервер студии (WireGuard). По этому выбору идёт и проверка, и сами запросы.</span></div>
-      <div><button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить всё"}</button><button type="button" class="ny-ib wide" data-close-sources title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
-    <div class="ny-src-grid">${services.map(sv => `
-      <div class="ny-svc">
-        <div class="ny-svc-h"><b>${esc(sv.name)}</b><span>${esc(sv.note)}</span></div>
-        ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>`}
-        ${sv.mirrors.map(m => {
-          const c = classifyCheck(checks[m]);
-          const active = sv.apply && m === prefs.base;
-          const custom = sv.id === "nyaa" && prefs.custom.includes(m);
-          return `<div class="ny-mir${active ? " act" : ""}"><i class="${c.level}"></i><div><b>${esc(hostOf(m))}</b><span>${esc(c.text)}${closedHere(m) ? " · у вас напрямую закрыт" : ""}</span></div>
-            ${sv.apply ? (active ? `<em>используется</em>` : `<button type="button" class="btn ghost" data-use="${esc(m)}">Использовать</button>`) : ""}
-            ${custom ? `<button type="button" class="ny-ib" data-mir-del="${esc(m)}" title="Убрать зеркало" aria-label="Убрать зеркало">${ICONS.close}</button>` : ""}
-            <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button></div>`;
-        }).join("")}
-        ${sv.id === "nyaa" ? fastHint(sv.mirrors) : ""}
-        ${sv.id === "nyaa" ? `<div class="ny-mir-add"><input id="ny-mir-in" type="text" placeholder="Своё зеркало, например nyaa.example" spellcheck="false"><button type="button" class="btn" id="ny-mir-add">Добавить</button></div>` : ""}
-        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» всегда берёт эти данные через сервер студии; выбор влияет на проверку и на запросы из «Релизов».</p>` : ""}
-      </div>`).join("")}</div>`;
+// ---------- здоровье зеркал: замеры, выбор пути, пауза ----------
+const HEALTH_KEY = "project-nyaa-health";
+let health = (() => { try { return deserialize(JSON.parse(localStorage.getItem(HEALTH_KEY) || "null")); } catch (_) { return newHealth(); } })();
+let healthTimer = 0;
+const saveHealth = () => {
+  clearTimeout(healthTimer);
+  healthTimer = setTimeout(() => { try { localStorage.setItem(HEALTH_KEY, JSON.stringify(serialize(health))); } catch (_) { /* не запомнится */ } }, 600);
+};
+const note = (url, path, ms) => { hRecord(health, url, path, ms); saveHealth(); };
+const sourceLog = [];
+function logSrc(text) {
+  sourceLog.unshift({ t: Date.now(), text });
+  if (sourceLog.length > 30) sourceLog.length = 30;
+}
+const nyaaMirrors = () => allServices().find(s => s.id === "nyaa").mirrors;
+let lastSwitch = 0;
+
+// Если текущее зеркало Nyaa на паузе или заметно медленнее другого — «Авто» переключает само и говорит об этом.
+function maybeAutoSwitch() {
+  if (routeOf("nyaa") !== "auto" || prefs.autoMirror === false) return;
+  if (Date.now() - lastSwitch < 2 * 60_000) return;
+  const target = shouldSwitch(health, prefs.base, nyaaMirrors());
+  if (!target) return;
+  lastSwitch = Date.now();
+  logSrc(`Nyaa: ${hostOf(prefs.base)} → ${hostOf(target)} (текущее на паузе или медленное)`);
+  prefs.base = target; savePrefs();
+  toast(`Nyaa: переключился на ${hostOf(target)} — так быстрее.`, "success");
+  items = []; load(); paintSources(); paintSourceChip();
 }
 
-// Подсказка «есть быстрее / текущее не отвечает» по результатам проверки.
-function fastHint(mirrors) {
-  const fast = fastestMirror(mirrors, checks);
-  const cur = checks[prefs.base];
-  if (!fast || fast === prefs.base) return "";
-  const curBad = cur && (cur.error || !cur.ok || cur.status >= 400);
-  if (!curBad && !(cur && cur.ms > checks[fast].ms * 1.6 + 100)) return "";
-  return `<div class="ny-fast">${curBad ? "Текущее зеркало не отвечает." : "Есть быстрее."} <b>${esc(hostOf(fast))}</b> · ${checks[fast].ms} мс <button type="button" class="btn" data-use="${esc(fast)}">Переключиться</button></div>`;
+const levelOfUrl = url => {
+  const e = health.m[url];
+  if (!e) return "idle";
+  const a = levelOf(e.pc, hCooling(health, url, "pc")), b = levelOf(e.server, hCooling(health, url, "server"));
+  const rank = { ok: 0, slow: 1, bad: 2, idle: 3 };
+  return rank[a] <= rank[b] ? a : b;
+};
+
+const fmtMs = s => (s === undefined ? "—" : s === null ? "✕" : `${s} мс`);
+const untilText = (url, path) => {
+  const left = (health.m[url] ? health.m[url].until[path] : 0) - Date.now();
+  return left > 0 ? `пауза ${Math.max(1, Math.ceil(left / 60000))} мин` : "";
+};
+
+// Подпись под адресом: каким путём идёт, не закрыт ли у вас, потери, пауза.
+function mirrorNote(url) {
+  const e = health.m[url];
+  if (!e || (!e.pc.length && !e.server.length)) return "ещё не проверено";
+  const pc = statsOf(e.pc), sv = statsOf(e.server);
+  const pcDead = e.pc.length > 0 && pc.median == null, svDead = e.server.length > 0 && sv.median == null;
+  const path = bestPath(health, url);
+  let main;
+  if (pcDead && svDead) main = "не отвечает ни напрямую, ни через сервер";
+  else if (pcDead && sv.median != null) main = "у вас закрыт · сервер видит";
+  else if (path === "server") main = "через сервер";
+  else if (path === "pc") main = "напрямую";
+  else main = "нет данных";
+  const loss = Math.round(Math.max(pc.loss, sv.loss) * 100);
+  const bits = [main];
+  if (!pcDead && !svDead && loss > 0) bits.push(`потерь ${loss}%`);
+  else if (!pcDead && !svDead && (e.pc.length > 1 || e.server.length > 1)) bits.push("потерь 0%");
+  return bits.join(" · ");
+}
+
+// «Давно не отвечает»: по замерам ни разу не получилось, а замеров уже достаточно.
+const isDead = url => {
+  const e = health.m[url];
+  if (!e) return false;
+  const all = [...e.pc, ...e.server];
+  return all.length >= 4 && all.every(s => s.ms === null);
+};
+
+let showHidden = false;
+let sourcesLogOpen = false;
+
+function mirrorRow(sv, m) {
+  const e = health.m[m] || { pc: [], server: [] };
+  const active = sv.apply && m === prefs.base;
+  const custom = sv.id === "nyaa" && prefs.custom.includes(m);
+  const lvl = levelOfUrl(m);
+  const path = bestPath(health, m);
+  const samples = path === "server" ? e.server : path === "pc" ? e.pc : (e.pc.length >= e.server.length ? e.pc : e.server);
+  const spark = sparkPoints(samples, 70, 22);
+  const pause = ["pc", "server"].map(p => untilText(m, p)).find(Boolean);
+  const last = p => (e[p].length ? e[p][e[p].length - 1].ms : undefined);
+  return `<div class="ny-mir2${active ? " act" : ""}">
+    <i class="${lvl === "idle" ? "" : lvl}"></i>
+    <div class="ny-mir2-t"><b>${esc(hostOf(m))}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
+    <svg class="ny-spark ${lvl}" width="70" height="22" viewBox="0 0 70 22" aria-hidden="true">${spark ? `<polyline fill="none" stroke-width="1.6" points="${spark}"/>` : ""}</svg>
+    <div class="ny-pings"><div>ПК<br><b>${esc(fmtMs(last("pc")))}</b></div><div>сервер<br><b>${esc(fmtMs(last("server")))}</b></div></div>
+    <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
+    ${(sv.apply && !active) || custom ? `<div class="ny-mir2-a">
+      ${sv.apply && !active ? `<button type="button" class="btn ghost" data-use="${esc(m)}">Использовать</button>` : ""}
+      ${custom ? `<button type="button" class="ny-ib" data-mir-del="${esc(m)}" title="Убрать зеркало" aria-label="Убрать зеркало">${ICONS.close}</button>` : ""}
+    </div>` : ""}</div>`;
+}
+
+// Сводка вверху: всё ли хорошо с Nyaa и каким путём она идёт.
+function healthStrip() {
+  const base = prefs.base;
+  const lvl = levelOfUrl(base);
+  const path = routeOf("nyaa") === "server" ? "server" : routeOf("nyaa") === "pc" ? "pc" : bestPath(health, base);
+  const where = path === "server" ? "через сервер" : path === "pc" ? "напрямую" : "путь выбирается по первым замерам";
+  const pcDead = health.m[base] && health.m[base].pc.length > 0 && statsOf(health.m[base].pc).median == null;
+  const title = lvl === "ok" ? "Всё работает" : lvl === "slow" ? "Работает медленно" : lvl === "bad" ? "Есть проблема" : "Ещё не проверялось";
+  const dot = lvl === "ok" ? "ok" : lvl === "slow" ? "slow" : lvl === "bad" ? "bad" : "";
+  return `<div class="ny-top ${dot}"><i class="${dot}"></i>
+    <div><b>${title}</b><span>Nyaa идёт ${where}: ${esc(hostOf(base))}${pcDead ? " напрямую у вас закрыт" : ""}${checking ? " · проверяю…" : ""}</span></div>
+    <span class="ny-sp"></span>
+    <button type="button" class="btn" data-heal title="Выбрать лучшее зеркало и путь по замерам">Починить / переключить</button>
+    <button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить сейчас"}</button></div>`;
+}
+
+// ---------- источники и зеркала ----------
+function sourcesHtml() {
+  const services = allServices();
+  return `
+    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>«Авто» само выбирает лучший путь и зеркало по замерам, а сбойные ставит на паузу. Свой выбор можно закрепить для каждого сервиса.</span></div>
+      <div><button type="button" class="ny-ib wide" data-close-sources title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
+    ${healthStrip()}
+    <div class="ny-src-grid">${services.map(sv => {
+      const dead = sv.mirrors.filter(m => isDead(m) && m !== prefs.base);
+      const shown = showHidden ? sv.mirrors : sv.mirrors.filter(m => !dead.includes(m));
+      const autoOn = routeOf(sv.id) === "auto" && sv.id !== "server" && sv.mirrors.some(m => health.m[m]);
+      return `
+      <div class="ny-svc">
+        <div class="ny-svc-h"><b>${esc(sv.name)}${autoOn ? ` <u class="ny-tag-auto">путь выбран сам</u>` : ""}</b><span>${esc(sv.note)}</span></div>
+        ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>`}
+        ${shown.map(m => mirrorRow(sv, m)).join("")}
+        ${dead.length && !showHidden ? `<p class="ny-hint">Ещё ${dead.length} ${dead.length === 1 ? "зеркало скрыто" : "зеркала скрыты"} (давно не отвечают) — <button type="button" class="ny-link" data-show-hidden>показать</button></p>` : ""}
+        ${dead.length && showHidden ? `<p class="ny-hint"><button type="button" class="ny-link" data-show-hidden>скрыть неотвечающие</button></p>` : ""}
+        ${sv.id === "nyaa" ? `<div class="ny-mir-add"><input id="ny-mir-in" type="text" placeholder="Своё зеркало, например nyaa.example" spellcheck="false"><button type="button" class="btn" id="ny-mir-add">Добавить</button></div>` : ""}
+        ${sv.id === "nyaa" ? `<label class="ny-auto-sw"><input type="checkbox" data-auto-mirror ${prefs.autoMirror === false ? "" : "checked"}> Переключать зеркало само, если текущее на паузе или медленное</label>` : ""}
+        ${!sv.apply && sv.id !== "server" ? `<p class="ny-hint">Режим «Смотреть» всегда берёт эти данные через сервер студии; выбор влияет на проверку и на запросы из «Релизов».</p>` : ""}
+      </div>`;
+    }).join("")}</div>
+    <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал (${sourceLog.length})</summary>
+      <div class="ny-log-body">${sourceLog.length ? sourceLog.map(l => `<div><time>${esc(new Date(l.t).toLocaleTimeString("ru-RU"))}</time> ${esc(l.text)}</div>`).join("") : `<span class="ny-hint">Пока пусто: сюда пишутся переключения зеркал и пути.</span>`}</div></details>`;
 }
 
 function paintSources() {
@@ -823,41 +948,78 @@ function paintSources() {
   paintSourceChip();
 }
 
-// Главная проверка идёт с сервера студии: «Релизы» и «Смотреть» ходят через него (у него туннель
-// WireGuard), так что важно, виден ли сайт ему. Параллельно проверяется и этот компьютер — только
-// для пометки «у вас закрыт». Если сервер недоступен, остаётся проверка с компьютера.
+// Проверка пачками: с сервера (там своя сеть и туннель WireGuard) и с этого компьютера. Каждый ответ —
+// замер для здоровья зеркала по своему пути. Для адреса самого сервера студии идёт только проверка отсюда.
+const okResult = r => !!r && classifyCheck(r).level !== "bad";
 async function runChecks(urls) {
+  if (checking) return;
   checking = true; paintSources();
-  const q = new URLSearchParams(); urls.forEach(u => q.append("u", u));
-  const [srv, loc] = await Promise.allSettled([
-    apiBlob(`/net/check?${q}`).then(b => b.text()).then(JSON.parse),
-    invoke("net_check", { urls }),
-  ]);
-  if (loc.status === "fulfilled") loc.value.forEach(r => { localChecks[r.url] = r; });
-  if (srv.status === "fulfilled" && Array.isArray(srv.value)) srv.value.forEach(r => { serverChecks[r.url] = r; });
-  else urls.forEach(u => {
-    if (routeOfUrl(u) === "server") serverChecks[u] = { url: u, ok: false, status: 0, ms: 0, error: "сервер студии недоступен" };
-  });
-  if (srv.status !== "fulfilled" && loc.status !== "fulfilled") toast(`Проверка не удалась: ${loc.reason}`, "error");
-  applyChecks();
-  checking = false; paintSources();
+  const list = [...new Set(urls)];
+  try {
+    for (let i = 0; i < list.length; i += 6) {
+      const part = list.slice(i, i + 6);
+      const q = new URLSearchParams(); part.forEach(u => q.append("u", u));
+      const [srv, loc] = await Promise.allSettled([
+        apiBlob(`/net/check?${q}`).then(b => b.text()).then(JSON.parse),
+        invoke("net_check", { urls: part }),
+      ]);
+      if (loc.status === "fulfilled") loc.value.forEach(r => { localChecks[r.url] = r; note(r.url, "pc", okResult(r) ? r.ms : null); });
+      if (srv.status === "fulfilled" && Array.isArray(srv.value)) {
+        srv.value.forEach(r => { serverChecks[r.url] = r; if (serviceOfUrl(r.url) !== "server") note(r.url, "server", okResult(r) ? r.ms : null); });
+      }
+      applyChecks(); paintSources();
+    }
+  } catch (e) { toast(`Проверка не удалась: ${e && e.message ? e.message : e}`, "error"); }
+  checking = false;
+  maybeAutoSwitch();
+  paintSources();
 }
-
-// «У вас закрыт»: серверу сайт виден, а с этого компьютера — нет.
-const closedHere = m => {
-  const s = serverChecks[m], l = localChecks[m];
-  return routeOfUrl(m) !== "pc" && s && s.ok && l && (l.error || !l.ok);
-};
 
 function allMirrorUrls() {
-  return buildServices(prefs.custom, serverOrigin()).flatMap(s => s.mirrors);
+  return allServices().flatMap(s => s.mirrors);
 }
+
+// «Починить / переключить»: берём лучшую пару «зеркало + путь» по замерам; если замеров нет — проверяем всё.
+async function heal() {
+  const best = pickMirror(health, nyaaMirrors(), Date.now(), prefs.base);
+  if (!best) { await runChecks(allMirrorUrls()); return; }
+  if (best.url !== prefs.base) {
+    logSrc(`Nyaa: вручную ${hostOf(prefs.base)} → ${hostOf(best.url)}`);
+    prefs.base = best.url; items = []; load();
+  }
+  prefs.route = { ...prefs.route, nyaa: "auto" }; savePrefs();
+  toast(`Nyaa: ${hostOf(best.url)}, ${best.path === "server" ? "через сервер" : "напрямую"} (${Math.round(best.score)} мс).`, "success");
+  paintSources(); paintSourceChip();
+}
+
+// Фоновые лёгкие проверки: активное зеркало раз в 5 минут, остальные по очереди раз в 30, по 3 за раз;
+// только когда окно видно и страница «Релизы» открывалась.
+const lastSampleAt = url => {
+  const e = health.m[url];
+  if (!e) return 0;
+  return Math.min(e.pc.length ? e.pc[e.pc.length - 1].t : 0, e.server.length ? e.server[e.server.length - 1].t : 0);
+};
+function startHealthLoop() {
+  setInterval(() => {
+    if (document.hidden || !state.token || !state.isAdmin || !$("#ny-list") || checking) return;
+    const now = Date.now();
+    const due = [];
+    if (now - lastSampleAt(prefs.base) > 5 * 60_000) due.push(prefs.base);
+    const rest = allMirrorUrls().filter(u => u !== prefs.base && now - lastSampleAt(u) > 30 * 60_000 && !(isDead(u) && now - lastSampleAt(u) < 2 * 3600_000));
+    rest.sort((a, b) => lastSampleAt(a) - lastSampleAt(b));
+    due.push(...rest.slice(0, 3));
+    if (due.length) runChecks(due);
+  }, 60_000);
+}
+startHealthLoop();
 
 function openSources() {
   const box = $("#ny-sources");
   box.hidden = false; paintSources();
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  runChecks(allMirrorUrls());
+  // свежие данные из замеров показываем сразу; проверяем только то, что давно не проверялось
+  const stale = allMirrorUrls().filter(u => Date.now() - lastSampleAt(u) > 60_000);
+  if (stale.length) runChecks(stale);
 }
 
 // ---------- страница раздачи ----------
@@ -955,22 +1117,34 @@ async function relayJson(params) {
   return JSON.parse(await (await apiBlob(`/nyaa/relay?${q}`)).text());
 }
 
+// Запрос к Nyaa: порядок «напрямую / через сервер» в «Авто» берётся из замеров (bestPath); каждый ответ
+// становится новым замером. В режимах «Мой компьютер» и «Сервер» путь фиксирован.
 async function nyaaDirectOrRelay(direct, relayParams, pick) {
   const mode = routeOf("nyaa");
-  if (mode === "server") {
-    const w = await relayJson(relayParams);
-    if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
-    viaServer = true; paintSourceChip();
-    return pick(w);
-  }
-  try { return await direct(); }
+  const base = relayParams.base;
+  const viaDirect = async () => {
+    const t0 = Date.now();
+    try { const r = await direct(); note(base, "pc", Date.now() - t0); return r; }
+    catch (e) { if (isNoConnection(e)) note(base, "pc", null); throw e; }
+  };
+  const viaServerPath = async () => {
+    const t0 = Date.now();
+    try {
+      const w = await relayJson(relayParams);
+      if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
+      note(base, "server", Date.now() - t0);
+      viaServer = true; paintSourceChip();
+      return pick(w);
+    } catch (e) { if (!/Сайт ответил 404/.test(String(e && e.message ? e.message : e))) note(base, "server", null); throw e; }
+  };
+  if (mode === "server") return viaServerPath();
+  if (mode === "pc") return viaDirect();
+  const serverFirst = bestPath(health, base) === "server";
+  const first = serverFirst ? viaServerPath : viaDirect, second = serverFirst ? viaDirect : viaServerPath;
+  try { const r = await first(); if (!serverFirst) viaServer = false; return r; }
   catch (e) {
-    if (mode === "pc" || isNotFound(e) || !isNoConnection(e)) throw e;
-    let w;
-    try { w = await relayJson(relayParams); } catch (_) { throw e; }   // ручки нет / сервер недоступен — исходная ошибка
-    if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
-    viaServer = true; paintSourceChip();
-    return pick(w);
+    if (isNotFound(e) || (!serverFirst && !isNoConnection(e))) throw e;
+    try { return await second(); } catch (_) { throw e; }
   }
 }
 
@@ -1378,7 +1552,7 @@ function wire(root) {
   const onClick = e => {
     const t = e.target;
     if (t.closest("[data-more]")) { loadMore(); return; }
-    if (t.closest("[data-close-panel]")) { ["ny-client", "ny-monitors"].forEach(x => { $(`#${x}`).hidden = true; }); return; }
+    if (t.closest("[data-close-panel]")) { ["ny-client", "ny-monitors", "ny-library"].forEach(x => { const el = $(`#${x}`); if (el) el.hidden = true; }); return; }
     if (t.closest("[data-open-client]")) { clientDraft = null; openPanel("ny-client"); paintClient(); return; }
     if (t.closest("[data-client-test]")) {
       clientDraft = readClientForm();
@@ -1526,6 +1700,9 @@ function wire(root) {
     if (t.closest("[data-open-sources]")) { openSources(); return; }
     if (t.closest("[data-close-sources]")) { $("#ny-sources").hidden = true; return; }
     if (t.closest("#ny-check-all")) { runChecks(allMirrorUrls()); return; }
+    if (t.closest("[data-heal]")) { heal(); return; }
+    if (t.closest("[data-show-hidden]")) { showHidden = !showHidden; paintSources(); return; }
+    if (t.closest("[data-log-toggle]")) { e.preventDefault(); sourcesLogOpen = !sourcesLogOpen; paintSources(); return; }
     const chk = t.closest("[data-check]");
     if (chk) { runChecks([chk.dataset.check]); return; }
     const use = t.closest("[data-use]");
@@ -1586,6 +1763,10 @@ function wire(root) {
     }
   };
   root.addEventListener("click", onClick);
+  root.querySelector("#ny-sources").addEventListener("change", e => {
+    if (!e.target.matches("[data-auto-mirror]")) return;
+    prefs.autoMirror = !!e.target.checked; savePrefs();
+  });
   root.querySelector("#ny-monitors").addEventListener("change", e => {
     if (e.target.id !== "ny-mon-every") return;
     prefs.monEvery = Number(e.target.value) || 30; savePrefs();
@@ -1651,6 +1832,7 @@ export async function loadNyaa() {
     wire(body.querySelector(".ny"));
     paintMonitorBadge();
   }
+  if (state.token && state.isAdmin && !remoteMirrors.nyaa) loadRemoteMirrors();
   if (!lib && !libBusy) invoke("library_rescan").then(sc => { setLib(sc); paintLibLabel(); paintList(); }).catch(() => {});
   if (client === null) invoke("tc_load").then(c => { client = c || null; paintClientLabel(); }).catch(() => {});
   // Свежий список при открытии вкладки, но не чаще раза в 2 минуты.
