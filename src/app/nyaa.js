@@ -32,7 +32,7 @@ const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["download
 const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
 
 function loadPrefs() {
-  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false };
+  const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false, monEvery: 30 };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
 const prefs = loadPrefs();
@@ -624,7 +624,9 @@ async function sendToClient(list) {
 }
 
 // ---------- слежение ----------
-const MON_EVERY_MS = 30 * 60 * 1000;
+const MON_CHOICES = [[10, "10 минут"], [30, "30 минут"], [60, "час"], [180, "3 часа"]];
+const monEveryMs = () => (MON_CHOICES.some(c => c[0] === prefs.monEvery) ? prefs.monEvery : 30) * 60 * 1000;
+let lastMonCheck = 0;
 let monitorsBusy = false;
 
 function newTotal() { return prefs.monitors.reduce((s, m) => s + (m.new || 0), 0); }
@@ -639,8 +641,9 @@ function paintMonitorBadge() {
 function monitorsHtml() {
   const cats = CATEGORIES.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
   return `
-    <div class="ny-src-head"><div><b>Слежение</b><span>Программа раз в 30 минут (пока открыта) проверяет запросы и загрузчиков и сообщает о новых раздачах.</span></div>
+    <div class="ny-src-head"><div><b>Слежение</b><span>Программа сама проверяет запросы и загрузчиков и сообщает о новых раздачах — и в фоне, если окно закрыто в трей (но не завершена).</span></div>
       <div><button type="button" class="btn" data-mon-check>${monitorsBusy ? "Проверяю…" : "Проверить сейчас"}</button><button type="button" class="ny-ib wide" data-close-panel title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
+    <div class="ny-mon-every"><label>Проверять раз в <select id="ny-mon-every">${MON_CHOICES.map(([v, l]) => `<option value="${v}"${v === prefs.monEvery ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>
     <div class="ny-mons">${prefs.monitors.length ? prefs.monitors.map(m => `
       <div class="ny-mon${m.new ? " has-new" : ""}">
         <label class="ny-chk"><input type="checkbox" data-mon-toggle="${esc(m.id)}" ${m.on ? "checked" : ""}></label>
@@ -713,10 +716,17 @@ async function addMonitor({ type, q, cat, rule = null }) {
   paintMonitors();
 }
 
+// Окно можно закрыть: программа остаётся в трее, страница продолжает работать, и слежение идёт в фоне.
+// Раз в минуту смотрим, не прошёл ли выбранный интервал, — так смена интервала действует сразу.
 function startMonitoring() {
-  const tick = () => { if (state.token && state.isAdmin) checkMonitors(false); };
+  const tick = () => {
+    if (!state.token || !state.isAdmin) return;
+    if (lastMonCheck && Date.now() - lastMonCheck < monEveryMs()) return;
+    lastMonCheck = Date.now();
+    checkMonitors(false);
+  };
   setTimeout(tick, 25_000);
-  setInterval(tick, MON_EVERY_MS);
+  setInterval(tick, 60_000);
 }
 startMonitoring();
 
@@ -1532,6 +1542,11 @@ function wire(root) {
     }
   };
   root.addEventListener("click", onClick);
+  root.querySelector("#ny-monitors").addEventListener("change", e => {
+    if (e.target.id !== "ny-mon-every") return;
+    prefs.monEvery = Number(e.target.value) || 30; savePrefs();
+    toast(`Слежение: проверка раз в ${MON_CHOICES.find(c => c[0] === prefs.monEvery)[1]}.`, "success");
+  });
   root.querySelector("#ny-client").addEventListener("change", e => {
     if (e.target.dataset.c !== "kind") return;
     clientDraft = { ...readClientForm(), url: "" };
