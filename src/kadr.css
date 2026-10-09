@@ -1435,6 +1435,9 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-pings b { color: var(--ink); font-size: 11.5px; font-weight: 600; }
 .ny-mir2-a { grid-column: 2 / -1; display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
 .ny-mir2-a:empty { display: none; }
+.ny-exit { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-dim); margin: 2px 0 6px; }
+.ny-exit select { flex: 1; min-width: 0; background: rgba(255,255,255,.06); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font: inherit; font-size: 12px; }
+.ny-exit select:disabled { opacity: .5; }
 .ny-auto-sw { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
 .ny-log { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
 .ny-log summary { cursor: pointer; font-size: 12.5px; color: var(--ink-soft); }
