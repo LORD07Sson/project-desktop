@@ -1864,3 +1864,58 @@ select option, select optgroup { background-color: var(--surface); color: var(--
   .ny-layout { grid-template-columns: 1fr; }
   .ny-side { position: static; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 }
+
+/* ===== кнопка с прогрессом внутри ===== */
+.fx-wrap { position: relative; display: inline-flex; align-items: center; vertical-align: middle; transition: padding .4s cubic-bezier(.2,.9,.25,1); }
+.fx-wrap.has-x { padding-right: 40px; }
+.fx-run { position: relative; overflow: hidden; }
+.fx-label { display: inline-flex; white-space: pre; }
+.fx-label span { display: inline-block; transition: filter .22s, opacity .22s, transform .22s; }
+.fx-label span.out { filter: blur(5px); opacity: 0; transform: translateY(2px); }
+.fx-glow { position: absolute; top: -6px; bottom: -6px; left: -50px; width: 90px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(var(--fire-rgb), .55), rgba(var(--fire-rgb), 0)); filter: blur(2px); animation: fxglow 1.4s cubic-bezier(.45, 0, .2, 1) infinite; }
+.fx-ok .fx-glow { display: none; }
+.fx-ok { color: #8fe0a8 !important; }
+@keyframes fxglow { from { transform: translateX(0); } to { transform: translateX(260px); } }
+.fx-x { position: absolute; right: 0; top: 0; width: 32px; height: 32px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--n-press, rgba(255, 255, 255, .08)); color: var(--ink); transform: translateX(-26px) scale(.2); opacity: 0; transition: transform .4s cubic-bezier(.2,.9,.25,1), opacity .2s; }
+.fx-wrap.has-x .fx-x { transform: none; opacity: 1; }
+.fx-x svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; }
+.fx-wrap.has-x::after { content: ""; position: absolute; right: 24px; top: 8px; width: 12px; height: 16px; background: var(--n-press, rgba(255, 255, 255, .08)); border-radius: 4px; animation: fxneck .4s ease-out forwards; z-index: -1; }
+@keyframes fxneck { from { transform: scaleX(0); opacity: 0; } 60% { opacity: 1; } to { transform: scaleX(1); opacity: .0; } }
+
+/* ===== отправить участнику ===== */
+.fx-share { position: fixed; z-index: 1200; width: 360px; padding: 14px; display: grid; gap: 10px; border-radius: 12px; background: var(--bg-2, #1a1310); border: 1px solid var(--line); box-shadow: 0 18px 48px rgba(0, 0, 0, .55); font-size: 13px; }
+.fx-sh-h { display: grid; gap: 2px; } .fx-sh-h b { font-size: 14px; } .fx-sh-h span, .fx-sh-load { color: var(--ink-dim); font-size: 12px; }
+.fx-field { display: grid; gap: 4px; } .fx-field > span { font-size: 11px; color: var(--ink-dim); }
+.fx-field input { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink); font: inherit; }
+.fx-field input:focus { outline: none; border-color: rgba(var(--fire-rgb), .6); }
+.fx-list { display: grid; gap: 1px; max-height: 210px; overflow: auto; }
+.fx-p { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.fx-p:hover { background: rgba(255, 255, 255, .05); } .fx-p.on { background: rgba(var(--fire-rgb), .14); }
+.fx-p span { display: grid; flex: 1; min-width: 0; } .fx-p small { color: var(--ink-dim); font-size: 11px; } .fx-p em { font-style: normal; font-size: 11px; color: #8fe0a8; }
+.fx-av { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; flex: none; background: rgba(255, 255, 255, .1); font-size: 12px; font-style: normal; }
+.fx-av img { width: 100%; height: 100%; object-fit: cover; }
+.fx-av.pop { margin-left: -8px; border: 2px solid var(--bg-2, #1a1310); animation: fxpop .5s cubic-bezier(.2, .9, .25, 1.2); } .fx-av.pop:first-child { margin-left: 0; }
+@keyframes fxpop { from { transform: translateY(-18px) scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+.fx-none { padding: 10px 8px; color: var(--ink-dim); }
+.fx-foot { display: flex; align-items: center; gap: 8px; } .fx-sp { flex: 1; } .fx-stack { display: inline-flex; }
+.fx-send:disabled { opacity: .45; cursor: default; }
+
+/* ===== навигация «жидкий металл» ===== */
+.tb-nav.liquid { position: relative; overflow: hidden; isolation: isolate;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 40%, #3a2c24), color-mix(in srgb, var(--bg) 70%, #000));
+  box-shadow: 0 12px 30px -16px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(0, 0, 0, .5); }
+.tb-nav.liquid::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(180px circle at var(--nx, 50%) var(--ny, 50%), rgba(255, 255, 255, .13), transparent 70%); }
+.tb-nav.liquid:hover::before { opacity: 1; }
+.tb-nav.liquid > .tab-btn::before, .tb-nav.liquid .tb-more-btn::before { content: ""; position: absolute; left: 50%; bottom: 3px; height: 1px; width: 0; transform: translateX(-50%); background: #fff; transition: width .32s cubic-bezier(.2, .9, .25, 1); }
+.tb-nav.liquid > .tab-btn:hover::before, .tb-nav.liquid .tb-more-btn:hover::before { width: calc(100% - 26px); }
+.tb-nav.liquid:has(.tab-btn:hover, .tb-more-btn:hover) > .tab-btn:not(:hover):not(.active), .tb-nav.liquid:has(.tab-btn:hover, .tb-more-btn:hover) .tb-more-btn:not(:hover):not(.active) { opacity: .5; }
+.tb-nav.liquid > .tab-btn, .tb-nav.liquid .tb-more-btn { transition: color .25s, background .25s, opacity .25s; }
+#tabstrip.liquid > .tab-btn.active { background: none; box-shadow: none; }
+#tabstrip.liquid > .tab-btn.active::before { content: ""; width: calc(100% - 26px); height: 2px; background: var(--fire); box-shadow: 0 0 10px rgba(var(--fire-rgb), .8); }
+#tabstrip.liquid > .tab-btn.active::after { content: none; }
+.brand-logo { transition: transform .5s cubic-bezier(.2, .9, .25, 1); }
+.titlebar-left:hover .brand-logo { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .fx-glow, .fx-av.pop { animation: none; } .brand-logo { transition: none; } }

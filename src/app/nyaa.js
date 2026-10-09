@@ -11,6 +11,7 @@
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
 import { toast, API_BASE, apiBlob, openSheet } from "./api.js";
 import { state } from "./state.js";
+import { liveButton, openShare } from "./nyaa-fx.js";
 import { notifyDesktop } from "./desktop-notify.js";
 import {
   newHealth, record as hRecord, statsOf, cooling as hCooling, bestPath, pickMirror, shouldSwitch,
@@ -571,7 +572,7 @@ async function saveTorrent(it) {
 
 // Меню «Ещё действия» у строки: плавающий слой, закрывается кликом вне и Esc.
 let rowMenu = null;
-const MENU_ITEMS = [["info", "Страница раздачи"], ["mag", "Копировать magnet"], ["link", "Копировать ссылку"], ["tor", "Скачать .torrent"], ["sys", "Открыть в системном клиенте"], ["open", "Открыть в браузере"]];
+const MENU_ITEMS = [["info", "Страница раздачи"], ["mag", "Копировать magnet"], ["link", "Копировать ссылку"], ["tor", "Скачать .torrent"], ["sys", "Открыть в системном клиенте"], ["share", "Отправить участнику…"], ["open", "Открыть в браузере"]];
 function closeRowMenu() { if (rowMenu) { rowMenu.remove(); rowMenu = null; } }
 function openRowMenu(btn, it) {
   closeRowMenu();
@@ -602,6 +603,7 @@ document.addEventListener("click", e => {
   else if (k === "link") copy(pageUrl(it), "Ссылка на раздачу скопирована.");
   else if (k === "tor") saveTorrent(it);
   else if (k === "sys") openInSystemClient([it]);
+  else if (k === "share") openShare(document.querySelector(`.ny-row[data-id="${it.id}"] [data-a="menu"]`) || document.querySelector("#ny-list") || document.body, it);
   else if (k === "open") openExternal(pageUrl(it)).catch(() => toast("Не удалось открыть ссылку.", "error"));
 });
 
@@ -1689,6 +1691,7 @@ function drawerHtml() {
         <button type="button" class="btn" data-d-a="send">${ICONS.send} В торрент-клиент</button>
         <button type="button" class="btn" data-d-a="sys" title="Открыть magnet в торрент-клиенте, назначенном в системе">${ICONS.magnet} В системный клиент</button>
         <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
+        <button type="button" class="btn" data-d-a="share" data-share-open title="Бот напишет участнику команды в личные сообщения">${ICONS.send} Отправить участнику</button>
       </div>
       <div class="ny-d-sub">
         <span>Копировать:</span>
@@ -1901,7 +1904,8 @@ function wire(root) {
       if (da) {
         const a = da.dataset.dA;
         const hash = (detail.view && detail.view.fields["info hash"]) || it.hash;
-        if (a === "send") { sendToClient([{ ...it, hash }]); return; }
+        if (a === "send") { liveButton(da, () => sendToClient([{ ...it, hash }]), { busy: "Отправляю", done: "Отправлено" }); return; }
+        if (a === "share") { openShare(da, it); return; }
         if (a === "sys") { openInSystemClient([{ ...it, hash }]); return; }
         if (a === "watch") { addMonitor({ type: "user", q: uploaderOf(detail) }); return; }
         if (a === "mag") copy(detail.view && detail.view.magnet ? detail.view.magnet : magnetLink({ ...it, hash }), "Magnet скопирован.");
