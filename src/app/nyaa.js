@@ -1632,6 +1632,8 @@ function drawerHtml() {
         <button type="button" class="btn primary" data-d-a="mag">${ICONS.magnet} Magnet</button>
         <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
         <button type="button" class="btn" data-d-a="cp">${ICONS.copy} Название</button>
+        <button type="button" class="btn" data-d-a="link" title="Копировать ссылку на страницу раздачи">${ICONS.copy} Ссылка</button>
+        <button type="button" class="btn" data-d-a="tlink" title="Копировать прямую ссылку на .torrent-файл">${ICONS.copy} Ссылка на .torrent</button>
         <button type="button" class="btn" data-d-a="send">${ICONS.send} В торрент-клиент</button>
         <button type="button" class="btn" data-d-a="sys" title="Открыть magnet в торрент-клиенте, назначенном в системе">${ICONS.magnet} В системный клиент</button>
         <button type="button" class="btn ghost" data-d-a="open">${ICONS.open} В браузере</button>
@@ -1639,7 +1641,7 @@ function drawerHtml() {
       </div>
       <div class="ny-d-links">${((d.exact && d.exact.length ? d.exact : titleLinks((v && v.title) || it.title))).concat([{ label: "NekoBT", url: titleLinks(it.title).find(x => x.label === "NekoBT")?.url || "" }].filter(x => x.url && d.exact && d.exact.length)).map(l => `<button type="button" class="ny-link" data-ext="${esc(l.url)}">${esc(l.label)} ↗</button>`).join("")}</div>
       <div class="ny-d-grid">${grid.map(([k, val]) => `<div><span>${esc(k)}</span><b>${esc(String(val))}</b></div>`).join("")}
-        ${hash ? `<div class="wide"><span>Info hash</span><b class="mono">${esc(hash)}</b></div>` : ""}</div>
+        ${hash ? `<div class="wide"><span>Info hash</span><b class="mono" data-copy="${esc(hash)}" title="Нажмите, чтобы скопировать" style="cursor:copy">${esc(hash)}</b></div>` : ""}</div>
       <div class="ny-d-body" id="ny-d-body">${drawerBodyHtml(d)}</div>
       ${d.lightbox != null || d.lbSrc ? lightboxHtml(d) : ""}
     </aside>`;
@@ -1741,6 +1743,8 @@ function wire(root) {
       addMonitor({ type: $("#ny-mon-type").value, q: $("#ny-mon-q").value, cat: $("#ny-mon-cat").value, rule });
       return;
     }
+    const cpy = t.closest("[data-copy]");
+    if (cpy) { copy(cpy.dataset.copy, "Скопировано."); return; }
     const tg = t.closest("[data-toggle]");
     if (tg) { prefs[tg.dataset.toggle] = !prefs[tg.dataset.toggle]; savePrefs(); paintStatic(); paintList(); return; }
     const gt = t.closest("[data-grp-toggle]");
@@ -1843,6 +1847,8 @@ function wire(root) {
         if (a === "mag") copy(detail.view && detail.view.magnet ? detail.view.magnet : magnetLink({ ...it, hash }), "Magnet скопирован.");
         else if (a === "tor") saveTorrent(it);
         else if (a === "cp") copy(it.title, "Название скопировано.");
+        else if (a === "link") copy(pageUrl(it), "Ссылка на раздачу скопирована.");
+        else if (a === "tlink") copy(`${prefs.base}/download/${it.id}.torrent`, "Ссылка на .torrent скопирована.");
         else if (a === "open") openExternal(pageUrl(it)).catch(() => toast("Не удалось открыть ссылку.", "error"));
         return;
       }
