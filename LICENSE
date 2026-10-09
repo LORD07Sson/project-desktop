@@ -1,16 +1,21 @@
 Project Desktop Proprietary License 1.0
 
-Copyright (c) 2026 Project. All rights reserved.
+Copyright (c) 2026 LORD07Sson (Project). All rights reserved.
 
 1. Definitions
 
 "Program" means the Project Desktop program: its source code,
 documentation, builds (executables), and any changes or additions to them.
 
-"Licensor" means Project (the team that holds the rights to the Program).
+"Licensor" means the owner of the GitHub account LORD07Sson, who holds the
+copyright in the Program and administers the Project team. The Licensor may
+be identified in more detail by a written notice added to this repository.
 
-"Member" means a person who currently belongs to the Project team and
-takes part in the project with the Licensor's knowledge.
+"Team" means the group of people the Licensor works with on the Project
+project.
+
+"Member" means a person whose membership in the Team has been confirmed by
+the Licensor under section 4 and has not ended.
 
 2. Permission
 
@@ -32,22 +37,48 @@ c) use the Program or parts of it in other products or projects, or for the
    benefit of third parties;
 d) remove or alter copyright notices or this license.
 
-4. Termination
+Hosting. If the Licensor keeps a copy of the Program on a hosting platform
+such as GitHub, that does not grant anyone any right beyond this license.
+The only exception is the rights that the platform's own terms of service
+give to other users of that platform (for example, viewing the repository
+and forking it within the platform). Those rights do not include running,
+modifying, or distributing the Program, or using it for any other purpose.
 
-The permission in section 2 lasts only while the person is a Member. It
-ends automatically and without notice at the moment the person stops being
-a Member, and also upon breach of any term of this license.
+4. Membership and termination
 
-After termination, a former Member may not use, modify, or distribute the
-Program or parts of it under this license, and must stop using them and
-delete any copies of the source code and builds in their possession.
+Who is a Member. A person becomes a Member when the Licensor confirms their
+membership in the Team in writing (a message in the Team's usual channel, an
+email, or an entry in a roster of Members kept by the Licensor). The
+Licensor decides in good faith who is a Member. Absent manifest error, the
+Licensor's roster and messages are conclusive evidence of membership.
 
-5. Copyright
+When membership ends. A person stops being a Member on the earliest of:
+
+a) the date stated in a written notice from the Licensor to that person
+   (sent by any channel the Licensor has used to contact them), or, if no
+   date is stated, the moment the notice is sent;
+b) the moment the person tells the Licensor in writing that they are
+   leaving the Team;
+c) 90 days without any participation in the project, unless the Licensor
+   confirms in writing that the person remains a Member.
+
+Effect. The permission in section 2 ends automatically for a person when
+they stop being a Member, and for anyone who breaches any term of this
+license. After that, the former Member may not use, modify, or distribute
+the Program or parts of it under this license, and must stop using them and
+delete all copies of the source code and builds in their possession within
+14 days.
+
+5. Copyright and contributions
 
 Copyright in the Program remains with the Licensor. This license grants no
-rights other than those expressly stated in section 2. Changes and additions
-made to the Program for the Project project are part of the Program unless
-the Licensor and the author of the changes agree otherwise in writing.
+rights other than those expressly stated in section 2. Anyone who
+contributes changes or additions to the Program for the Project project
+(a "contributor") grants the Licensor all rights needed to include those
+changes in the Program and license them under this license; the changes
+become part of the Program unless the Licensor and the contributor agree
+otherwise in writing. Nothing in this license transfers rights in code that
+a contributor did not create or has no right to license.
 
 6. Third-party components
 
