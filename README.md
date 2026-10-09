@@ -29,6 +29,5 @@
 ---
 
 Для разработчиков — [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
-Лицензия: [GNU GPL v3](LICENSE) — свободное ПО, изучать, изменять и распространять на условиях GPL-3.0.
 
 © 2026 Project
