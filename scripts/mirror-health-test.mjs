@@ -69,3 +69,23 @@ assert.equal(deserialize(null).m && Object.keys(deserialize(null).m).length, 0);
 assert.equal(Object.keys(deserialize({ m: { "http://x": { pc: [] }, [A]: { pc: [{ t: 1, ms: 5 }, "мусор"] } } }).m).join(), A, "не-https и мусор отбрасываются");
 assert.equal(Object.keys(serialize(h, T + 10 * 24 * 3600_000).m).length, 0, "старые замеры не хранятся");
 console.log("mirror-health-test: ok");
+
+// ---------- 3.0 ----------
+{
+  const { ageText, durText, pushActivity, filterActivity, nextCheckIn, ACT_MAX } = await import("../src/app/mirror-health.js");
+  const N = 10_000_000;
+  assert.equal(ageText(N, 0), "ещё не было");
+  assert.equal(ageText(N, N - 2000), "только что");
+  assert.equal(ageText(N, N - 30_000), "30 с назад");
+  assert.equal(ageText(N, N - 5 * 60_000), "5 мин назад");
+  assert.equal(ageText(N, N - 3 * 3600_000), "3 ч назад");
+  assert.equal(ageText(N, N - 2 * 86400_000), "2 дн назад");
+  assert.equal(durText(160), "160 мс"); assert.equal(durText(480), "480 мс"); assert.equal(durText(1500), "1,5 с"); assert.equal(durText(null), "—");
+  const log = [];
+  for (let i = 0; i < ACT_MAX + 20; i++) pushActivity(log, { kind: i % 2 ? "ping" : "load", n: i });
+  assert.equal(log.length, ACT_MAX); assert.equal(log[0].n, ACT_MAX + 19, "новые сверху");
+  assert.ok(filterActivity(log, "ping").every(e => e.kind === "ping"));
+  assert.equal(filterActivity(log, "all").length, ACT_MAX);
+  assert.equal(nextCheckIn(N, 0), 0); assert.equal(nextCheckIn(N, N - 60_000), 4 * 60_000); assert.equal(nextCheckIn(N, N - 10 * 60_000), 0);
+  console.log("mirror-health 3.0: ok");
+}

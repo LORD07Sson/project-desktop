@@ -133,3 +133,36 @@ export function deserialize(raw) {
   }
   return h;
 }
+
+// ---------- 3.0: понятные подписи и журнал событий ----------
+
+/** «только что», «12 с назад», «3 мин назад», «2 ч назад» — возраст замера. */
+export function ageText(now, t) {
+  if (!t) return "ещё не было";
+  const s = Math.max(0, Math.round((now - t) / 1000));
+  if (s < 5) return "только что";
+  if (s < 60) return `${s} с назад`;
+  if (s < 3600) return `${Math.floor(s / 60)} мин назад`;
+  if (s < 86400) return `${Math.floor(s / 3600)} ч назад`;
+  return `${Math.floor(s / 86400)} дн назад`;
+}
+
+/** «0,5 с» или «160 мс» — длительность. */
+export function durText(ms) {
+  if (ms == null) return "—";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1).replace(".", ",")} с` : `${Math.round(ms)} мс`;
+}
+
+export const ACT_MAX = 80;
+/** Добавить событие в начало журнала (новые сверху), журнал ограничен. */
+export function pushActivity(list, ev, max = ACT_MAX) {
+  list.unshift(ev);
+  if (list.length > max) list.length = max;
+  return list;
+}
+
+/** Фильтр журнала: all | ping | load | switch. */
+export const filterActivity = (list, kind) => (kind === "all" || !kind ? list : list.filter(e => e.kind === kind));
+
+/** Через сколько до следующей плановой проверки активного зеркала (мс), 0 — пора. */
+export const nextCheckIn = (now, lastAt, everyMs = 5 * 60_000) => (lastAt ? Math.max(0, lastAt + everyMs - now) : 0);

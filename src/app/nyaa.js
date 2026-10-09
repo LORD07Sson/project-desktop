@@ -11,10 +11,11 @@
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
 import { toast, API_BASE, apiBlob, openSheet } from "./api.js";
 import { state } from "./state.js";
+import { liveButton, openShare } from "./nyaa-fx.js";
 import { notifyDesktop } from "./desktop-notify.js";
 import {
   newHealth, record as hRecord, statsOf, cooling as hCooling, bestPath, pickMirror, shouldSwitch,
-  sparkPoints, levelOf, serialize, deserialize,
+  levelOf, serialize, deserialize, SLOW_MS, ageText, durText, pushActivity, filterActivity, nextCheckIn,
 } from "./mirror-health.js";
 import { $, esc } from "./utils.js";
 import {
@@ -25,15 +26,19 @@ import {
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
-  groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
+  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
   seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
   parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, libraryKeys,
 } from "./nyaa-core.js";
 
 const KEY = "project-nyaa";
 const QUICK_CATS = [["2_1", "Аудио без потерь"], ["1_2", "Аниме · англ. субтитры"], ["1_4", "Аниме · raw"], ["1_3", "Аниме · другие языки"], ["0_0", "Всё"]];
-const SORTS = [["date", "Новые"], ["seeders", "Раздают"], ["downloads", "Скачивают"], ["size", "Размер"]];
-const KIND_ICON = { anime: "🎬", audio: "♪", video: "▶", other: "•" };
+const KIND_ICON = {
+  anime: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10.5 9.5v5l4-2.5z"/></svg>',
+  video: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10.5 9.5v5l4-2.5z"/></svg>',
+  audio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/></svg>',
+  other: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/></svg>',
+};
 
 function loadPrefs() {
   const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, exit: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false, monEvery: 30 };
@@ -129,6 +134,8 @@ const ICONS = {
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 16V6a2 2 0 0 1 2-2h8"/></svg>',
   open: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"/></svg>',
+  more: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>',
+  check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4 2.4 5 5.4.7-4 3.8 1 5.4L12 16.3 7.2 18.9l1-5.4-4-3.8 5.4-.7z"/></svg>',
   comment: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H10l-5 4z"/></svg>',
   info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/></svg>',
@@ -277,7 +284,7 @@ function rowHtml(it, maxSeed, now) {
       ${kindHtml(it, kind)}
       <div class="ny-main">
         <div class="ny-title">${group ? `<em>${esc(group)}</em>` : ""}${esc(group ? it.title.replace(/^\s*\[[^\]]*\]\s*/, "") : it.title)}</div>
-        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${haveIt(it) ? `<i class="have-i" title="Эта серия уже есть в вашей медиатеке">уже есть</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok">доверенный</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
+        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${haveIt(it) ? `<i class="have-i" title="Эта серия уже есть в вашей медиатеке">уже есть</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok" title="Доверенный загрузчик">${ICONS.check}</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
       </div>
       <div class="ny-meta"><b>${esc(it.size)}</b><span title="${esc(fmtDate(it.date))}">${esc(relTime(it.date, now))}</span></div>
       <div class="ny-health" title="раздают · качают · скачали">
@@ -285,11 +292,8 @@ function rowHtml(it, maxSeed, now) {
         <div class="ny-nums"><span class="se">↑ ${it.seeders}</span><span class="le">↓ ${it.leechers}</span><span class="dl">✓ ${it.downloads}</span></div>
       </div>
       <div class="ny-act">
-        <button type="button" class="ny-ib" data-a="info" title="Страница раздачи (двойной щелчок)" aria-label="Страница раздачи">${ICONS.info}</button>
         <button type="button" class="ny-ib" data-a="send" title="Отправить в торрент-клиент" aria-label="Отправить в торрент-клиент">${ICONS.send}</button>
-        <button type="button" class="ny-ib" data-a="mag" title="Копировать magnet" aria-label="Копировать magnet">${ICONS.magnet}</button>
-        <button type="button" class="ny-ib" data-a="tor" title="Сохранить .torrent" aria-label="Сохранить .torrent">${ICONS.torrent}</button>
-        <button type="button" class="ny-ib" data-a="open" title="Открыть страницу в браузере" aria-label="Открыть в браузере">${ICONS.open}</button>
+        <button type="button" class="ny-ib" data-a="menu" title="Ещё действия" aria-label="Ещё действия" aria-haspopup="menu">${ICONS.more}</button>
       </div>
     </div>`;
 }
@@ -305,6 +309,18 @@ function groupHtml(g, maxSeed, now) {
       <button type="button" class="btn ghost" data-grp-send="${esc(g.key)}" title="Отправить в торрент-клиент лучшие раздачи неотправленных серий">${ICONS.send} Все новые</button></div>
     ${open ? `<div class="ny-grp-b">${g.episodes.map(e => `<div class="ny-ep${sentEps.has(episodeKey(e.item)) ? " done" : ""}"><span class="ny-ep-n">E${String(e.episode).padStart(2, "0")}</span>${rowHtml(e.item, maxSeed, now)}</div>`).join("")}</div>` : ""}
   </div>`;
+}
+
+// Заголовки дней между строками: «Сегодня», «Вчера», «8 октября» — только при сортировке по дате.
+function rowsByDay(list, maxSeed, now) {
+  if (prefs.sort !== "date") return list.map(i => rowHtml(i, maxSeed, now)).join("");
+  let last = "";
+  return list.map(i => {
+    const lbl = dayLabel(i.date, now);
+    const head = lbl !== last ? `<div class="ny-day">${esc(lbl)}</div>` : "";
+    last = lbl;
+    return head + rowHtml(i, maxSeed, now);
+  }).join("");
 }
 
 function skeleton() {
@@ -325,8 +341,10 @@ function listHtml() {
   }
   const maxSeed = Math.max(...list.map(i => i.seeders), 1);
   const now = Date.now();
-  const body = prefs.group ? groupReleases(list).map(g => g.kind === "item" ? rowHtml(g.item, maxSeed, now) : groupHtml(g, maxSeed, now)).join("") : list.map(i => rowHtml(i, maxSeed, now)).join("");
-  return (stale ? `<div class="ny-stale">Сайт не отвечает — показаны сохранённые данные (${esc(relTime(stale))}). <button type="button" class="ny-link" id="ny-retry">Обновить</button></div>` : "")
+  const body = prefs.group ? groupReleases(list).map(g => g.kind === "item" ? rowHtml(g.item, maxSeed, now) : groupHtml(g, maxSeed, now)).join("") : rowsByDay(list, maxSeed, now);
+  const sortBtn = (k, label, cls = "") => `<button type="button" class="ny-sorth${prefs.sort === k ? " on" : ""} ${cls}" data-sort="${k}" aria-label="Сортировать: ${label}">${label}${prefs.sort === k ? " ↓" : ""}</button>`;
+  return `<div class="ny-head"><span></span><span></span><span>Название</span><span class="r">${sortBtn("size", "Размер")}${sortBtn("date", "Дата")}</span><span class="r">${sortBtn("seeders", "Раздают")}<span class="ny-h2">Качают</span>${sortBtn("downloads", "Скачали")}</span><span></span></div>`
+    + (stale ? `<div class="ny-stale">Сайт не отвечает — показаны сохранённые данные (${esc(relTime(stale))}). <button type="button" class="ny-link" id="ny-retry">Обновить</button></div>` : "")
     + body
     + `<div class="ny-more-wrap">${hidden ? `<span class="ny-hint">фильтры скрывают ${hidden}</span>` : ""}${hasMore ? `<button type="button" class="btn" data-more>${moreBusy ? "Загружаю…" : "Показать ещё"}</button>` : `<span class="ny-hint">это всё, что отдал сайт</span>`}</div>`;
 }
@@ -347,41 +365,47 @@ function shellHtml() {
   return `
   <div class="ny">
     <header class="ny-hero">
-      <div class="ny-hero-t"><span class="kd-label">Релизы · бета</span><h2>Nyaa <span class="ny-beta">Beta</span></h2>
-        <p>Свежие раздачи из публичной ленты — не нужно заходить на сайт. Двойной щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p>
-        <button type="button" class="ny-src-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
-        <div class="ny-hero-btns">
-          <button type="button" class="ny-src-btn" data-open-client>${ICONS.send}<span id="ny-client-lbl">Торрент-клиент</span></button>
-          <button type="button" class="ny-src-btn" data-open-library>${ICONS.folder || ICONS.open}<span id="ny-lib-lbl">Медиатека</span></button>
-          <button type="button" class="ny-src-btn" data-open-monitors>${ICONS.bell}<span>Слежение</span><b id="ny-mon-n" class="ny-badge"></b></button>
-        </div></div>
+      <div class="ny-hero-t"><h2>Nyaa <span class="ny-beta">Beta</span></h2>
+        <p>Свежие раздачи из публичной ленты. Двойной щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p></div>
       <div class="ny-stats" id="ny-stats"></div>
     </header>
     <section class="ny-sources" id="ny-sources" hidden></section>
     <section class="ny-sources" id="ny-client" hidden></section>
     <section class="ny-sources" id="ny-monitors" hidden></section>
     <section class="ny-sources" id="ny-library" hidden></section>
-    <div class="ny-search">
-      <span class="ny-search-ic">${ICONS.search}</span>
-      <input id="ny-q" type="text" placeholder="Название, группа, 1080p…" value="${esc(prefs.q)}" spellcheck="false" autocomplete="off">
-      <button type="button" class="btn ghost" id="ny-save" title="Запомнить запрос и категорию">${ICONS.star} Запомнить</button>
-      <button type="button" class="btn ghost" data-watch-query title="Следить за этим запросом и сообщать о новых раздачах">${ICONS.bell} Следить</button>
-      <button type="button" class="btn primary" id="ny-go">Найти</button>
+    <div class="ny-layout">
+      <aside class="ny-side" aria-label="Категории и инструменты">
+        <div class="ny-side-g"><div class="ny-side-h">Категории</div><div class="ny-cats" id="ny-cats"></div></div>
+        <div class="ny-side-g"><div class="ny-side-h">Показывать</div><div class="ny-seg" id="ny-filter"></div></div>
+        <div class="ny-side-g ny-saved-g"><div class="ny-side-h">Мои запросы</div><div class="ny-saved" id="ny-saved"></div></div>
+        <div class="ny-side-g"><div class="ny-side-h">Инструменты</div>
+          <button type="button" class="ny-side-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
+          <button type="button" class="ny-side-btn" data-open-client>${ICONS.send}<span id="ny-client-lbl">Торрент-клиент</span></button>
+          <button type="button" class="ny-side-btn" data-open-library>${ICONS.folder || ICONS.open}<span id="ny-lib-lbl">Медиатека</span></button>
+          <button type="button" class="ny-side-btn" data-open-monitors>${ICONS.bell}<span>Слежение</span><b id="ny-mon-n" class="ny-badge"></b></button>
+        </div>
+      </aside>
+      <main class="ny-main-col">
+        <div class="ny-search">
+          <span class="ny-search-ic">${ICONS.search}</span>
+          <input id="ny-q" type="text" placeholder="Название, группа, 1080p…" value="${esc(prefs.q)}" spellcheck="false" autocomplete="off">
+          <button type="button" class="btn ghost" id="ny-save" title="Запомнить запрос и категорию">${ICONS.star} Запомнить</button>
+          <button type="button" class="btn ghost" data-watch-query title="Следить за этим запросом и сообщать о новых раздачах">${ICONS.bell} Следить</button>
+          <button type="button" class="btn primary" id="ny-go">Найти</button>
+        </div>
+        <div class="ny-ctl">
+          <div class="ny-seg" id="ny-view"></div>
+          <span class="ny-sp"></span>
+          <button type="button" class="ny-flt-btn" id="ny-flt-btn" aria-expanded="false">${ICONS.filter}<span>Фильтры</span><b id="ny-flt-n"></b></button>
+          <button type="button" class="ny-ib wide" id="ny-refresh" title="Обновить список" aria-label="Обновить список">${ICONS.refresh}</button>
+        </div>
+        <section class="ny-filters" id="ny-filters" hidden></section>
+        <div class="ny-status" id="ny-status" data-open-sources title="Нажмите, чтобы открыть «Источники и зеркала»"></div>
+        <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — диапазон</span><span class="ny-sp"></span><span id="ny-upd"></span></div>
+        <div class="ny-list" id="ny-list"></div>
+        <div class="ny-bar" id="ny-bar" hidden></div>
+      </main>
     </div>
-    <div class="ny-cats" id="ny-cats"></div>
-    <div class="ny-ctl">
-      <div class="ny-seg" id="ny-filter"></div>
-      <span class="ny-sp"></span>
-      <div class="ny-seg" id="ny-sort"></div>
-      <div class="ny-seg" id="ny-view"></div>
-      <button type="button" class="ny-flt-btn" id="ny-flt-btn" aria-expanded="false">${ICONS.filter}<span>Фильтры</span><b id="ny-flt-n"></b></button>
-      <button type="button" class="ny-ib wide" id="ny-refresh" title="Обновить список" aria-label="Обновить список">${ICONS.refresh}</button>
-    </div>
-    <section class="ny-filters" id="ny-filters" hidden></section>
-    <div class="ny-saved" id="ny-saved"></div>
-    <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё в списке</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — выбрать диапазон</span><span class="ny-sp"></span><span id="ny-upd"></span></div>
-    <div class="ny-list" id="ny-list"></div>
-    <div class="ny-bar" id="ny-bar" hidden></div>
   </div>`;
 }
 
@@ -393,13 +417,44 @@ function paintStatic() {
   $("#ny-cats").innerHTML = QUICK_CATS.map(([k, l]) => `<button type="button" class="ny-cat${k === prefs.cat ? " on" : ""}" data-cat="${k}">${esc(l)}</button>`).join("")
     + `<select id="ny-cat-more" aria-label="Другие категории"><option value="">Ещё категории…</option>${CATEGORIES.filter(([k]) => !QUICK_CATS.some(q => q[0] === k)).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
   $("#ny-filter").innerHTML = seg(FILTERS, prefs.filter, "data-filter");
-  $("#ny-sort").innerHTML = seg(SORTS, prefs.sort, "data-sort");
   $("#ny-view").innerHTML = `<button type="button" class="${prefs.group ? "on" : ""}" data-toggle="group" title="Серии одного аниме в одной карточке">Группировать</button><button type="button" class="${prefs.hideDone ? "on" : ""}" data-toggle="hideDone" title="Скрыть серии, которые уже отправлены в клиент">Скрыть отправленное</button><button type="button" class="${prefs.hideHave ? "on" : ""}" data-toggle="hideHave" title="Скрыть серии, которые уже есть в вашей медиатеке">Скрыть имеющееся</button><button type="button" class="${prefs.onlySeadex ? "on" : ""}" data-toggle="onlySeadex" title="Только раздачи из SeaDex (лучшие и запасные релизы). SeaDex — курируемая база, в свежей ленте её раздач обычно мало.">${sdLabel()}</button>`;
   $("#ny-saved").innerHTML = prefs.saved.length
     ? `<span class="ny-saved-l">Мои запросы</span>` + prefs.saved.map((s, i) => `<span class="ny-chip"><button type="button" data-saved="${i}">${esc(s.q || "без слов")} <small>${esc((QUICK_CATS.concat(CATEGORIES).find(c => c[0] === s.cat) || [0, s.cat])[1])}</small></button><button type="button" class="x" data-saved-del="${i}" aria-label="Убрать">×</button></span>`).join("")
     : "";
   paintSourceChip();
   paintFilters();
+}
+
+// ---------- строка состояния: что грузится и как отвечают ПК и сервер ----------
+const pathLabel = (path, via) => (path === "server" ? `сервер (${via || "—"})` : "этот компьютер");
+function pingInline(url, path, label) {
+  const arr = health.m[url] ? health.m[url][path] : [];
+  const last = arr.length ? arr[arr.length - 1] : null;
+  if (isPending(url, path)) return `<span class="ny-pi pend"><span class="ny-spin sm"></span>${esc(label)}: проверяю…</span>`;
+  if (!last) return `<span class="ny-pi">${esc(label)}: не проверялось</span>`;
+  const cls = last.ms == null ? "bad" : last.ms > SLOW_MS ? "slow" : "ok";
+  return `<span class="ny-pi ${cls}">${esc(label)}: <b>${last.ms == null ? "✕ нет ответа" : esc(durText(last.ms))}</b> <em>${esc(ageText(Date.now(), last.t))}</em></span>`;
+}
+function statusHtml() {
+  const now = Date.now();
+  let left;
+  if (loadNow) {
+    const sec = Math.max(0, Math.round((now - loadNow.since) / 1000));
+    const fail = loadNow.tried.length ? `${loadNow.tried.includes("pc") ? "Напрямую не получилось — " : "Через сервер не получилось — "}` : "";
+    left = `<span class="ny-spin"></span><span>${esc(fail)}Загружаю ${esc(loadNow.what)} · ${esc(pathLabel(loadNow.path, loadNow.via))} · ${sec} с</span>`;
+  } else if (lastLoad) {
+    left = lastLoad.ok
+      ? `<i class="ok"></i><span>${esc(lastLoad.what)} загружена за <b>${esc(durText(lastLoad.ms))}</b> · ${esc(pathLabel(lastLoad.path, lastLoad.via))} · ${esc(hostOf(lastLoad.url))} · ${esc(ageText(now, lastLoad.at))}</span>`
+      : `<i class="bad"></i><span>${esc(lastLoad.what)} не загрузилась · ${esc(pathLabel(lastLoad.path, lastLoad.via))} · ${esc(ageText(now, lastLoad.at))}</span>`;
+  } else {
+    left = `<i></i><span>Загрузка ещё не выполнялась</span>`;
+  }
+  const base = prefs.base;
+  return `${left}<span class="ny-sp"></span><span class="ny-pis">${pingInline(base, "pc", "ПК")}${pingInline(base, "server", `Сервер · ${exitName("nyaa")}`)}</span>`;
+}
+function paintStatus() {
+  const el = $("#ny-status");
+  if (el) el.innerHTML = statusHtml();
 }
 
 function paintSourceChip() {
@@ -419,6 +474,7 @@ function paintFilterBadge() {
 
 function paintList() {
   paintFilterBadge();
+  paintStatus();
   const list = view();
   $("#ny-list").innerHTML = listHtml();
   $("#ny-stats").innerHTML = statsHtml(list);
@@ -513,6 +569,52 @@ async function saveTorrent(it) {
   try { await nyaaSaveTorrent(prefs.base, it.id, out); toast("Файл .torrent сохранён.", "success"); }
   catch (e) { toast(`Не удалось сохранить: ${e}`, "error"); }
 }
+
+// Меню «Ещё действия» у строки: плавающий слой, закрывается кликом вне и Esc.
+let rowMenu = null;
+const MENU_ITEMS = [["info", "Страница раздачи"], ["mag", "Копировать magnet"], ["link", "Копировать ссылку"], ["tor", "Скачать .torrent"], ["sys", "Открыть в системном клиенте"], ["share", "Отправить участнику…"], ["open", "Открыть в браузере"]];
+function closeRowMenu() { if (rowMenu) { rowMenu.remove(); rowMenu = null; } }
+// Картинка для личного сообщения: обложка аниме или первая картинка из описания (https).
+const shareCover = it => {
+  const audio = categoryKind(it.categoryId) === "audio";
+  const pic = audio ? thumbData.get(it.id) : coverData.get(coverKey(it.title));
+  if (typeof pic === "string" && pic.startsWith("data:image/")) return pic;
+  const u = (audio ? thumbUrls[it.id] : coverUrls[coverKey(it.title)]) || "";
+  return /^https:/.test(u) ? u : "";
+};
+
+function openRowMenu(btn, it) {
+  closeRowMenu();
+  const m = document.createElement("div");
+  m.className = "ny-menu"; m.setAttribute("role", "menu");
+  m.innerHTML = MENU_ITEMS.map(([k, l]) => `<button type="button" role="menuitem" data-m="${k}">${esc(l)}</button>`).join("");
+  m.dataset.id = it.id;
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect();
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))}px`;
+  m.style.top = `${r.bottom + h + 12 > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4}px`;
+  rowMenu = m;
+  m.querySelector("button").focus();
+}
+document.addEventListener("click", e => { if (rowMenu && !rowMenu.contains(e.target) && !e.target.closest('[data-a="menu"]')) closeRowMenu(); }, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeRowMenu(); });
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("[data-m]");
+  if (!b || !rowMenu) return;
+  const it = byId(Number(rowMenu.dataset.id));
+  closeRowMenu();
+  if (!it) return;
+  touch(it.id);
+  const k = b.dataset.m;
+  if (k === "info") openDetail(it);
+  else if (k === "mag") copy(magnetLink(it), "Magnet скопирован.");
+  else if (k === "link") copy(pageUrl(it), "Ссылка на раздачу скопирована.");
+  else if (k === "tor") saveTorrent(it);
+  else if (k === "sys") openInSystemClient([it]);
+  else if (k === "share") openShare(document.querySelector(`.ny-row[data-id="${it.id}"] [data-a="menu"]`) || document.querySelector("#ny-list") || document.body, it, shareCover(it));
+  else if (k === "open") openExternal(pageUrl(it)).catch(() => toast("Не удалось открыть ссылку.", "error"));
+});
 
 function bulk(kind) {
   const list = view().filter(i => selected.has(i.id));
@@ -834,11 +936,20 @@ const saveHealth = () => {
   healthTimer = setTimeout(() => { try { localStorage.setItem(HEALTH_KEY, JSON.stringify(serialize(health))); } catch (_) { /* не запомнится */ } }, 600);
 };
 const note = (url, path, ms) => { hRecord(health, url, path, ms); saveHealth(); };
-const sourceLog = [];
-function logSrc(text) {
-  sourceLog.unshift({ t: Date.now(), text });
-  if (sourceLog.length > 30) sourceLog.length = 30;
-}
+// Журнал событий: проверки связи («пинг»), реальные загрузки данных и переключения. Новые сверху.
+const activity = [];
+let logFilter = "all";
+const logAct = ev => pushActivity(activity, { t: Date.now(), ...ev });
+const logSrc = text => logAct({ kind: "switch", note: text });
+
+// Что сейчас измеряется (для спиннеров и полосы прогресса) и что грузится по-настоящему.
+const pendingPing = new Set();            // «адрес|путь»
+let checkTotal = 0, checkDone = 0;
+const isPending = (url, path) => pendingPing.has(`${url}|${path}`);
+let loadNow = null;                       // { what, path, via, since, tried[] } пока идёт загрузка
+let lastLoad = null;                      // { what, path, via, ms, ok, at, url }
+const WHAT = { rss: "ленту", view: "страницу раздачи", torrent: ".torrent" };
+const WHAT_NOM = { rss: "Лента", view: "Страница раздачи", torrent: ".torrent" };
 const nyaaMirrors = () => allServices().find(s => s.id === "nyaa").mirrors;
 let lastSwitch = 0;
 
@@ -863,7 +974,6 @@ const levelOfUrl = url => {
   return rank[a] <= rank[b] ? a : b;
 };
 
-const fmtMs = s => (s === undefined ? "—" : s === null ? "✕" : `${s} мс`);
 const untilText = (url, path) => {
   const left = (health.m[url] ? health.m[url].until[path] : 0) - Date.now();
   return left > 0 ? `пауза ${Math.max(1, Math.ceil(left / 60000))} мин` : "";
@@ -899,43 +1009,78 @@ const isDead = url => {
 
 let showHidden = false;
 let sourcesLogOpen = false;
+const KIND_LABEL = { ping: "проверка", load: "загрузка", switch: "переключение" };
+function evHtml(ev) {
+  const time = new Date(ev.t).toLocaleTimeString("ru-RU");
+  let text;
+  if (ev.kind === "switch") text = esc(ev.note || "");
+  else {
+    const from = ev.path === "pc" ? "этот компьютер" : `сервер (${ev.via || "—"})`;
+    const res = ev.ok ? `<b>${esc(durText(ev.ms))}</b>` : `<b class="bad">нет ответа</b>`;
+    text = `${ev.kind === "load" ? `${esc(ev.what || "данные")} · ` : ""}${esc(from)} → ${esc(hostOf(ev.url))} · ${res}`;
+  }
+  return `<div class="ny-ev${ev.ok === false ? " fail" : ""}"><time>${esc(time)}</time><u>${esc(KIND_LABEL[ev.kind] || ev.kind)}</u> ${text}</div>`;
+}
+
+// Короткий код страны для заголовка колонки: nl2 → NL, jp → JP; «без VPN» → ПРЯМО.
+const exitShort = id => { const c = exitOf(id) || exitList.default; return c === "direct" ? "прямо" : c.replace(/\d+$/, "").toUpperCase(); };
+
+// Компактная ячейка пинга: значение; возраст замера и пояснение — во всплывающей подсказке; пока идёт проверка — спиннер.
+function pingCell(url, path, who) {
+  const arr = health.m[url] ? health.m[url][path] : [];
+  const last = arr.length ? arr[arr.length - 1] : null;
+  const pend = isPending(url, path);
+  let val = "", cls = "";
+  if (pend) { val = `<span class="ny-spin sm"></span>`; cls = "pend"; }
+  else if (last) {
+    if (last.ms == null) { val = "✕"; cls = "bad"; }
+    else { val = esc(durText(last.ms)); cls = last.ms > SLOW_MS ? "slow" : "ok"; }
+  }
+  const age = pend ? "проверяю…" : last ? `замер ${ageText(Date.now(), last.t)}` : "ещё не проверялось";
+  return `<span class="ny-c ${cls}" title="${esc(`${who}: ${age}`)}">${val}</span>`;
+}
 
 function mirrorRow(sv, m) {
-  const e = health.m[m] || { pc: [], server: [] };
   const active = sv.apply && m === prefs.base;
   const custom = sv.id === "nyaa" && prefs.custom.includes(m);
   const lvl = levelOfUrl(m);
-  const path = bestPath(health, m);
-  const samples = path === "server" ? e.server : path === "pc" ? e.pc : (e.pc.length >= e.server.length ? e.pc : e.server);
-  const spark = sparkPoints(samples, 70, 22);
   const pause = ["pc", "server"].map(p => untilText(m, p)).find(Boolean);
-  const last = p => (e[p].length ? e[p][e[p].length - 1].ms : undefined);
+  const own = sv.id === "server";
+  const who = `С сервера студии (${exitName(sv.id)})`;
   return `<div class="ny-mir2${active ? " act" : ""}">
     <i class="${lvl === "idle" ? "" : lvl}"></i>
     <div class="ny-mir2-t"><b>${esc(hostOf(m))}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
-    <svg class="ny-spark ${lvl}" width="70" height="22" viewBox="0 0 70 22" aria-hidden="true">${spark ? `<polyline fill="none" stroke-width="1.6" points="${spark}"/>` : ""}</svg>
-    <div class="ny-pings"><div>ПК<br><b>${esc(fmtMs(last("pc")))}</b></div><div>сервер<br><b>${esc(fmtMs(last("server")))}</b></div></div>
-    <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
-    ${(sv.apply && !active) || custom ? `<div class="ny-mir2-a">
-      ${sv.apply && !active ? `<button type="button" class="btn ghost" data-use="${esc(m)}">Использовать</button>` : ""}
+    ${pingCell(m, "pc", "С этого компьютера")}${own ? `<span class="ny-c" title="Сервер студии проверяется только с компьютера"></span>` : pingCell(m, "server", who)}
+    <span class="ny-mir2-a">
+      <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
+      ${sv.apply && !active ? `<button type="button" class="ny-ib ny-use" data-use="${esc(m)}" title="Использовать это зеркало" aria-label="Использовать это зеркало">${ICONS.check}</button>` : ""}
       ${custom ? `<button type="button" class="ny-ib" data-mir-del="${esc(m)}" title="Убрать зеркало" aria-label="Убрать зеркало">${ICONS.close}</button>` : ""}
-    </div>` : ""}</div>`;
+    </span></div>`;
 }
 
 // Сводка вверху: всё ли хорошо с Nyaa и каким путём она идёт.
 function healthStrip() {
   const base = prefs.base;
+  const now = Date.now();
   const lvl = levelOfUrl(base);
   const path = routeOf("nyaa") === "server" ? "server" : routeOf("nyaa") === "pc" ? "pc" : bestPath(health, base);
-  const where = path === "server" ? `через сервер (${exitName("nyaa")})` : path === "pc" ? "напрямую" : "путь выбирается по первым замерам";
+  const where = path === "server" ? `через сервер (${exitName("nyaa")})` : path === "pc" ? "напрямую с ПК" : "путь выбирается по замерам";
   const pcDead = health.m[base] && health.m[base].pc.length > 0 && statsOf(health.m[base].pc).median == null;
   const title = lvl === "ok" ? "Всё работает" : lvl === "slow" ? "Работает медленно" : lvl === "bad" ? "Есть проблема" : "Ещё не проверялось";
   const dot = lvl === "ok" ? "ok" : lvl === "slow" ? "slow" : lvl === "bad" ? "bad" : "";
+  const lastAny = Math.max(0, ...allMirrorUrls().map(lastSampleAt));
+  const nextMs = nextCheckIn(now, lastSampleAt(base));
+  const when = checking
+    ? `Проверяю ${checkDone} из ${checkTotal}…`
+    : `проверка ${ageText(now, lastAny)}, следующая ${nextMs > 0 ? `через ~${Math.max(1, Math.ceil(nextMs / 60000))} мин` : "скоро"}`;
+  const pct = checkTotal ? Math.round(100 * checkDone / checkTotal) : 0;
   return `<div class="ny-top ${dot}"><i class="${dot}"></i>
-    <div><b>${title}</b><span>Nyaa идёт ${where}: ${esc(hostOf(base))}${pcDead ? " напрямую у вас закрыт" : ""}${checking ? " · проверяю…" : ""}</span></div>
+    <div><b>${title}</b><span>Nyaa: ${esc(hostOf(base))}, ${esc(where)}${pcDead ? " (с ПК закрыт)" : ""} · ${esc(when)}</span></div>
     <span class="ny-sp"></span>
-    <button type="button" class="btn" data-heal title="Выбрать лучшее зеркало и путь по замерам">Починить / переключить</button>
-    <button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить сейчас"}</button></div>`;
+    <button type="button" class="btn" data-heal title="Выбрать лучшее зеркало и путь по замерам">Починить</button>
+    <button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить"}</button>
+    ${checking ? `<div class="ny-prog"><i style="width:${pct}%"></i></div>` : ""}</div>
+    <p class="ny-legend"><b>С ПК</b> — с этого компьютера · <b>С сервера</b> — через сервер студии в выбранной стране · возраст замера — во всплывающей подсказке</p>`;
 }
 
 // ---------- источники и зеркала ----------
@@ -955,6 +1100,7 @@ function sourcesHtml() {
         ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>
         <label class="ny-exit" title="Из какой страны сервер студии ходит на эти сайты (когда запросы идут через сервер)"><span>Страна выхода сервера</span>
           <select data-exit="${sv.id}" ${routeOf(sv.id) === "pc" ? "disabled" : ""}><option value="">По умолчанию (${esc((exitList.exits.find(e => e.code === exitList.default) || { name: exitList.default }).name)})</option>${exitList.exits.map(e => `<option value="${esc(e.code)}"${exitOf(sv.id) === e.code ? " selected" : ""}>${esc(e.name)}</option>`).join("")}</select></label>`}
+        <div class="ny-cols"><span></span><span>Зеркало</span><span title="Запрос с этого компьютера">С ПК</span><span title="${esc(`Запрос с сервера студии через: ${exitName(sv.id)}`)}">${sv.id === "server" ? "" : `Сервер·${esc(exitShort(sv.id))}`}</span><span></span></div>
         ${shown.map(m => mirrorRow(sv, m)).join("")}
         ${dead.length && !showHidden ? `<p class="ny-hint">Ещё ${dead.length} ${dead.length === 1 ? "зеркало скрыто" : "зеркала скрыты"} (давно не отвечают) — <button type="button" class="ny-link" data-show-hidden>показать</button></p>` : ""}
         ${dead.length && showHidden ? `<p class="ny-hint"><button type="button" class="ny-link" data-show-hidden>скрыть неотвечающие</button></p>` : ""}
@@ -963,8 +1109,9 @@ function sourcesHtml() {
         ${!sv.apply && sv.id !== "server" && sv.id !== "sources" ? `<p class="ny-hint">Страна выхода влияет на проверку этого сайта с сервера. Режим «Смотреть» берёт данные по настройке самого сервера.</p>` : ""}
       </div>`;
     }).join("")}</div>
-    <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал (${sourceLog.length})</summary>
-      <div class="ny-log-body">${sourceLog.length ? sourceLog.map(l => `<div><time>${esc(new Date(l.t).toLocaleTimeString("ru-RU"))}</time> ${esc(l.text)}</div>`).join("") : `<span class="ny-hint">Пока пусто: сюда пишутся переключения зеркал и пути.</span>`}</div></details>`;
+    <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал проверок и загрузок (${activity.length})</summary>
+      <div class="ny-log-f">${[["all", "Все"], ["ping", "Проверки"], ["load", "Загрузки"], ["switch", "Переключения"]].map(([k, l]) => `<button type="button" class="${logFilter === k ? "on" : ""}" data-log-f="${k}">${l}</button>`).join("")}</div>
+      <div class="ny-log-body">${filterActivity(activity, logFilter).length ? filterActivity(activity, logFilter).map(evHtml).join("") : `<span class="ny-hint">Пока пусто: сюда пишутся проверки связи, загрузки и переключения.</span>`}</div></details>`;
 }
 
 function paintSources() {
@@ -979,29 +1126,45 @@ function paintSources() {
 const okResult = r => !!r && classifyCheck(r).level !== "bad";
 async function runChecks(urls) {
   if (checking) return;
-  checking = true; paintSources();
   const list = [...new Set(urls)];
+  checking = true; checkTotal = list.length; checkDone = 0;
+  paintSources(); paintStatus();
   try {
     for (let i = 0; i < list.length; i += 6) {
       const part = list.slice(i, i + 6);
       // с сервера адреса проверяются через выбранную для их сервиса страну: группируем по ней
       const groups = new Map();
       part.forEach(u => { const v = exitOf(serviceOfUrl(u)); (groups.get(v) || groups.set(v, []).get(v)).push(u); });
+      part.forEach(u => { pendingPing.add(`${u}|pc`); if (serviceOfUrl(u) !== "server") pendingPing.add(`${u}|server`); });
+      paintSources(); paintStatus();
       const serverCheck = Promise.all([...groups].map(([via, us]) => {
         const q = new URLSearchParams(); us.forEach(u => q.append("u", u)); if (via) q.set("via", via);
         return apiBlob(`/net/check?${q}`).then(b => b.text()).then(JSON.parse);
       })).then(arrs => arrs.flat());
       const [srv, loc] = await Promise.allSettled([serverCheck, invoke("net_check", { urls: part })]);
-      if (loc.status === "fulfilled") loc.value.forEach(r => { localChecks[r.url] = r; note(r.url, "pc", okResult(r) ? r.ms : null); });
+      if (loc.status === "fulfilled") loc.value.forEach(r => {
+        if (!r || typeof r.url !== "string") return;
+        localChecks[r.url] = r; const ok = okResult(r); note(r.url, "pc", ok ? r.ms : null);
+        logAct({ kind: "ping", path: "pc", url: r.url, ms: r.ms, ok });
+      });
       if (srv.status === "fulfilled" && Array.isArray(srv.value)) {
-        srv.value.forEach(r => { serverChecks[r.url] = r; if (serviceOfUrl(r.url) !== "server") note(r.url, "server", okResult(r) ? r.ms : null); });
+        srv.value.forEach(r => {
+          if (!r || typeof r.url !== "string") return;
+          serverChecks[r.url] = r;
+          if (serviceOfUrl(r.url) === "server") return;
+          const ok = okResult(r); note(r.url, "server", ok ? r.ms : null);
+          logAct({ kind: "ping", path: "server", via: exitName(serviceOfUrl(r.url)), url: r.url, ms: r.ms, ok });
+        });
       }
-      applyChecks(); paintSources();
+      part.forEach(u => { pendingPing.delete(`${u}|pc`); pendingPing.delete(`${u}|server`); });
+      checkDone = Math.min(list.length, checkDone + part.length);
+      applyChecks(); paintSources(); paintStatus();
     }
   } catch (e) { toast(`Проверка не удалась: ${e && e.message ? e.message : e}`, "error"); }
+  pendingPing.clear();
   checking = false;
   maybeAutoSwitch();
-  paintSources();
+  paintSources(); paintStatus();
 }
 
 function allMirrorUrls() {
@@ -1026,7 +1189,7 @@ async function heal() {
 const lastSampleAt = url => {
   const e = health.m[url];
   if (!e) return 0;
-  return Math.min(e.pc.length ? e.pc[e.pc.length - 1].t : 0, e.server.length ? e.server[e.server.length - 1].t : 0);
+  return Math.max(e.pc.length ? e.pc[e.pc.length - 1].t : 0, e.server.length ? e.server[e.server.length - 1].t : 0);
 };
 function startHealthLoop() {
   setInterval(() => {
@@ -1041,6 +1204,15 @@ function startHealthLoop() {
   }, 60_000);
 }
 startHealthLoop();
+
+// «Часики»: секунды загрузки идут каждую секунду, возраст замеров обновляется раз в 15 секунд.
+let tickN = 0;
+setInterval(() => {
+  if (document.hidden || !$("#ny-status")) return;
+  tickN += 1;
+  if (loadNow || tickN % 15 === 0) paintStatus();
+  if (tickN % 15 === 0) { const box = $("#ny-sources"); if (box && !box.hidden && !checking) paintSources(); }
+}, 1000);
 
 function openSources() {
   const box = $("#ny-sources");
@@ -1065,6 +1237,23 @@ async function openDetail(it) {
   if (!detail || detail.item !== it) return;
   paintDrawer();
   if (detail.state === "ok") loadImages(detail);
+}
+
+// Для карточки раздачи в чате: название, размер, обложка.
+export async function nyaaCardInfo(id) {
+  const v = parseView(await nyaaView({ base: prefs.base, id }));
+  const f = v.fields || {};
+  const meta = [f["file size"], f.submitter, f.seeders ? `раздают ${f.seeders}` : ""].filter(Boolean).join(" · ");
+  let image = "";
+  if (v.images && v.images[0]) { try { image = await fetchPic(v.images[0]); } catch (_) { /* без картинки */ } }
+  return { title: v.title || `Раздача №${id}`, meta, image };
+}
+
+// Открыть раздачу по номеру (ссылка project://nyaa/<номер> из чата).
+export function openNyaaById(id) {
+  const tab = document.querySelector('[data-tab="nyaa"]');
+  if (tab) tab.click();
+  openDetail({ id, title: `Раздача №${id}`, categoryId: "", hash: "" });
 }
 
 async function loadImages(d) {
@@ -1148,15 +1337,36 @@ async function relayJson(params) {
 
 // Запрос к Nyaa: порядок «напрямую / через сервер» в «Авто» берётся из замеров (bestPath); каждый ответ
 // становится новым замером. В режимах «Мой компьютер» и «Сервер» путь фиксирован.
+// Запрос к Nyaa: порядок «напрямую / через сервер» в «Авто» берётся из замеров (bestPath); каждый ответ
+// становится новым замером и событием в журнале («загрузка»). В режимах «Мой компьютер» и «Сервер» путь фиксирован.
 async function nyaaDirectOrRelay(direct, relayParams, pick) {
   const mode = routeOf("nyaa");
   const base = relayParams.base;
-  const viaDirect = async () => {
+  const kind = relayParams.kind;
+  const tried = [];
+  const track = async (path, fn) => {
+    const t0 = Date.now();
+    const via = path === "server" ? exitName("nyaa") : "";
+    loadNow = { what: WHAT[kind] || "данные", path, via, since: t0, tried: [...tried] };
+    paintStatus();
+    try {
+      const r = await fn();
+      const ms = Date.now() - t0;
+      lastLoad = { what: WHAT_NOM[kind] || "Данные", path, via, ms, ok: true, at: Date.now(), url: base };
+      logAct({ kind: "load", path, via, url: base, ms, ok: true, what: WHAT[kind] || "данные" });
+      return r;
+    } catch (e) {
+      tried.push(path);
+      logAct({ kind: "load", path, via, url: base, ms: Date.now() - t0, ok: false, what: WHAT[kind] || "данные" });
+      throw e;
+    }
+  };
+  const viaDirect = () => track("pc", async () => {
     const t0 = Date.now();
     try { const r = await direct(); note(base, "pc", Date.now() - t0); return r; }
     catch (e) { if (isNoConnection(e)) note(base, "pc", null); throw e; }
-  };
-  const viaServerPath = async () => {
+  });
+  const viaServerPath = () => track("server", async () => {
     const t0 = Date.now();
     try {
       const w = await relayJson(relayParams);
@@ -1165,15 +1375,19 @@ async function nyaaDirectOrRelay(direct, relayParams, pick) {
       viaServer = true; paintSourceChip();
       return pick(w);
     } catch (e) { if (!/Сайт ответил 404/.test(String(e && e.message ? e.message : e))) note(base, "server", null); throw e; }
-  };
-  if (mode === "server") return viaServerPath();
-  if (mode === "pc") return viaDirect();
-  const serverFirst = bestPath(health, base) === "server";
-  const first = serverFirst ? viaServerPath : viaDirect, second = serverFirst ? viaDirect : viaServerPath;
-  try { const r = await first(); if (!serverFirst) viaServer = false; return r; }
-  catch (e) {
-    if (isNotFound(e) || (!serverFirst && !isNoConnection(e))) throw e;
-    try { return await second(); } catch (_) { throw e; }
+  });
+  try {
+    if (mode === "server") return await viaServerPath();
+    if (mode === "pc") return await viaDirect();
+    const serverFirst = bestPath(health, base) === "server";
+    const first = serverFirst ? viaServerPath : viaDirect, second = serverFirst ? viaDirect : viaServerPath;
+    try { const r = await first(); if (!serverFirst) viaServer = false; return r; }
+    catch (e) {
+      if (isNotFound(e) || (!serverFirst && !isNoConnection(e))) throw e;
+      try { return await second(); } catch (_) { throw e; }
+    }
+  } finally {
+    loadNow = null; paintStatus(); paintSources();
   }
 }
 
@@ -1499,17 +1713,24 @@ function drawerHtml() {
         <button type="button" class="ny-ib wide" data-d-close title="Закрыть (Esc)" aria-label="Закрыть">${ICONS.close}</button>
       </header>
       <div class="ny-d-acts">
-        <button type="button" class="btn primary" data-d-a="mag">${ICONS.magnet} Magnet</button>
-        <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
-        <button type="button" class="btn" data-d-a="cp">${ICONS.copy} Название</button>
+        <button type="button" class="btn primary" data-d-a="mag" title="Копировать magnet-ссылку">${ICONS.magnet} Magnet</button>
         <button type="button" class="btn" data-d-a="send">${ICONS.send} В торрент-клиент</button>
         <button type="button" class="btn" data-d-a="sys" title="Открыть magnet в торрент-клиенте, назначенном в системе">${ICONS.magnet} В системный клиент</button>
-        <button type="button" class="btn ghost" data-d-a="open">${ICONS.open} В браузере</button>
-        ${uploaderOf(d) ? `<button type="button" class="btn ghost" data-d-a="watch">${ICONS.bell} Следить за ${esc(uploaderOf(d))}</button>` : ""}
+        <button type="button" class="btn" data-d-a="tor">${ICONS.torrent} Скачать .torrent</button>
+        <button type="button" class="btn" data-d-a="share" data-share-open title="Бот напишет участнику команды в личные сообщения">${ICONS.send} Отправить участнику</button>
+      </div>
+      <div class="ny-d-sub">
+        <span>Копировать:</span>
+        <button type="button" class="ny-link" data-d-a="cp">название</button>
+        <button type="button" class="ny-link" data-d-a="link" title="Ссылка на страницу раздачи">ссылку</button>
+        <button type="button" class="ny-link" data-d-a="tlink" title="Прямая ссылка на .torrent-файл">ссылку на .torrent</button>
+        <i></i>
+        <button type="button" class="ny-link" data-d-a="open">Открыть в браузере</button>
+        ${uploaderOf(d) ? `<button type="button" class="ny-link" data-d-a="watch">Следить за ${esc(uploaderOf(d))}</button>` : ""}
       </div>
       <div class="ny-d-links">${((d.exact && d.exact.length ? d.exact : titleLinks((v && v.title) || it.title))).concat([{ label: "NekoBT", url: titleLinks(it.title).find(x => x.label === "NekoBT")?.url || "" }].filter(x => x.url && d.exact && d.exact.length)).map(l => `<button type="button" class="ny-link" data-ext="${esc(l.url)}">${esc(l.label)} ↗</button>`).join("")}</div>
       <div class="ny-d-grid">${grid.map(([k, val]) => `<div><span>${esc(k)}</span><b>${esc(String(val))}</b></div>`).join("")}
-        ${hash ? `<div class="wide"><span>Info hash</span><b class="mono">${esc(hash)}</b></div>` : ""}</div>
+        ${hash ? `<div class="wide"><span>Info hash</span><b class="mono" data-copy="${esc(hash)}" title="Нажмите, чтобы скопировать" style="cursor:copy">${esc(hash)}</b></div>` : ""}</div>
       <div class="ny-d-body" id="ny-d-body">${drawerBodyHtml(d)}</div>
       ${d.lightbox != null || d.lbSrc ? lightboxHtml(d) : ""}
     </aside>`;
@@ -1611,6 +1832,8 @@ function wire(root) {
       addMonitor({ type: $("#ny-mon-type").value, q: $("#ny-mon-q").value, cat: $("#ny-mon-cat").value, rule });
       return;
     }
+    const cpy = t.closest("[data-copy]");
+    if (cpy) { copy(cpy.dataset.copy, "Скопировано."); return; }
     const tg = t.closest("[data-toggle]");
     if (tg) { prefs[tg.dataset.toggle] = !prefs[tg.dataset.toggle]; savePrefs(); paintStatic(); paintList(); return; }
     const gt = t.closest("[data-grp-toggle]");
@@ -1707,12 +1930,15 @@ function wire(root) {
       if (da) {
         const a = da.dataset.dA;
         const hash = (detail.view && detail.view.fields["info hash"]) || it.hash;
-        if (a === "send") { sendToClient([{ ...it, hash }]); return; }
+        if (a === "send") { liveButton(da, () => sendToClient([{ ...it, hash }]), { busy: "Отправляю", done: "Отправлено" }); return; }
+        if (a === "share") { openShare(da, it, shareCover(it)); return; }
         if (a === "sys") { openInSystemClient([{ ...it, hash }]); return; }
         if (a === "watch") { addMonitor({ type: "user", q: uploaderOf(detail) }); return; }
         if (a === "mag") copy(detail.view && detail.view.magnet ? detail.view.magnet : magnetLink({ ...it, hash }), "Magnet скопирован.");
         else if (a === "tor") saveTorrent(it);
         else if (a === "cp") copy(it.title, "Название скопировано.");
+        else if (a === "link") copy(pageUrl(it), "Ссылка на раздачу скопирована.");
+        else if (a === "tlink") copy(`${prefs.base}/download/${it.id}.torrent`, "Ссылка на .torrent скопирована.");
         else if (a === "open") openExternal(pageUrl(it)).catch(() => toast("Не удалось открыть ссылку.", "error"));
         return;
       }
@@ -1731,6 +1957,8 @@ function wire(root) {
     if (t.closest("#ny-check-all")) { runChecks(allMirrorUrls()); return; }
     if (t.closest("[data-heal]")) { heal(); return; }
     if (t.closest("[data-show-hidden]")) { showHidden = !showHidden; paintSources(); return; }
+    const lf = t.closest("[data-log-f]");
+    if (lf) { logFilter = lf.dataset.logF; paintSources(); return; }
     if (t.closest("[data-log-toggle]")) { e.preventDefault(); sourcesLogOpen = !sourcesLogOpen; paintSources(); return; }
     const chk = t.closest("[data-check]");
     if (chk) { runChecks([chk.dataset.check]); return; }
@@ -1769,6 +1997,7 @@ function wire(root) {
     const a = t.closest("[data-a]");
     if (a) {
       touch(it.id);
+      if (a.dataset.a === "menu") { openRowMenu(a, it); return; }
       if (a.dataset.a === "send") sendToClient([it]);
       else if (a.dataset.a === "mag") copy(magnetLink(it), "Magnet скопирован.");
       else if (a.dataset.a === "tor") saveTorrent(it);
