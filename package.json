@@ -21,7 +21,8 @@
     "test:selfcheck": "node scripts/selfcheck-test.mjs",
     "test:nyaa": "node scripts/nyaa-test.mjs",
     "test:health": "node scripts/mirror-health-test.mjs",
-    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:midi && npm run test:link && npm run test:nda && npm run test:tune && npm run test:preload && npm run test:cache && npm run test:selfcheck && npm run test:nyaa && npm run test:health"
+    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:midi && npm run test:link && npm run test:nda && npm run test:tune && npm run test:preload && npm run test:cache && npm run test:selfcheck && npm run test:nyaa && npm run test:health && npm run test:games",
+    "test:games": "node scripts/games-test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",
