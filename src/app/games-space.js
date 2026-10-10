@@ -9,6 +9,7 @@ import { $, esc } from "./utils.js";
 import { alertText, sortWishlist, sortLibrary, badgesOf, achSummary, statLabel, friendState, xpProgress, reviewSummary, wishStatus, wishFilter, seriesChart, pointAt, fmtCompact, dayLabel, chunk, addDays, mondayOf, isoWeek, monthWeeks, rollingWeeks, monthTab, nextMonths, priceView, fmtHours, isSteamLaunchUrl, initials2, imageCandidates, hueOf, fmtNum, shortDate, deltaView, miniLine, groupByDate, untilText, pctText } from "./games-core.js";
 import { linkSteam } from "./steam-link.js";
 import { galleryHtml, mountGallery } from "./games-media.js";
+import { tabsHtml, panelHtml, STAB_SHOWN } from "./games-tabs.js";
 import { notifyDesktop, notifyKinds, setNotifyKind } from "./desktop-notify.js";
 
 const TABS = [["store", "Магазин"], ["charts", "Чарты"], ["rel", "Релизы"], ["deals", "Скидки"], ["wish", "Желаемое"], ["lib", "Библиотека"], ["profile", "Профиль"], ["set", "Настройки"]];
@@ -275,11 +276,38 @@ async function paintStore() {
     const h = storeHome;
     const sec = h.sections || [];
     const rows = sec.map(x => railSection(x.title, x.items, x.go ? `<button type="button" class="ny-link" data-gtab-go="${x.go}">все →</button>` : "")).join("");
-    body.innerHTML = `<div class="gm-sh">` + heroHtml(h.hero) + genreChips() + dealsPagerHtml(h) + `<div id="gm-cal"></div><div id="gm-foryou"></div>` + (rows || empty("Пусто", "Steam не вернул подборки.")) + `</div>`;
+    body.innerHTML = `<div class="gm-sh">` + heroHtml(h.hero) + genreChips() + dealsPagerHtml(h) + `<section class="gm-stabs" id="gm-stabs"></section><div id="gm-cal"></div><div id="gm-foryou"></div>` + (rows || empty("Пусто", "Steam не вернул подборки.")) + `</div>`;
     heroStart();
+    loadStabs();
     loadForYou();
     loadCalendar();
   } catch (e) { body.innerHTML = errBox(e); }
+}
+
+// Вкладки витрины («Популярные новинки», «Лидеры продаж», …): список слева, подробности выбранной игры справа.
+const stab = { tab: "new", cache: {}, items: [], free: true, owned: false, more: false, sel: 0 };
+const stabKey = () => `${stab.tab}|${adultOn() ? 1 : 0}|${stab.free ? 1 : 0}|${stab.owned ? 1 : 0}`;
+
+function paintStabs() {
+  const box = $("#gm-stabs");
+  if (box) box.innerHTML = tabsHtml(stab, stab.items, picHtml, img);
+}
+
+async function loadStabs() {
+  const box = $("#gm-stabs");
+  if (!box || tab !== "store" || storeBrowse) return;
+  const key = stabKey();
+  stab.items = stab.cache[key] || [];
+  if (!stab.cache[key]) {
+    box.innerHTML = tabsHtml(stab, [], picHtml, img).replace(/<div class="gm-stabs-empty">[^]*?<\/div>/, `<div class="gm-stabs-empty"><span class="ny-spin"></span> Загружаю…</div>`);
+    try {
+      const r = await apiGet("/games/store/tabs", { tab: stab.tab, adult: adultParam(), free: stab.free ? 1 : 0, owned: stab.owned ? 1 : 0 });
+      stab.cache[key] = r.items || [];
+    } catch (e) { if ($("#gm-stabs") === box) box.innerHTML = errBox(e); return; }
+    if (stabKey() !== key || $("#gm-stabs") !== box) return;     // за время запроса переключили вкладку
+    stab.items = stab.cache[key];
+  }
+  paintStabs();
 }
 
 async function loadForYou() {
@@ -1164,6 +1192,9 @@ async function onClick(e) {
   if (t.closest("[data-wl-export]")) { exportWishlist(); return; }
   if (t.closest("[data-wl-import]")) { importWishlist(); return; }
   if (t.closest("[data-rgo]")) { rel.view = "list"; rel.range = null; rel.kind = "up"; rel.week = mondayOf(relToday()); switchG("rel"); return; }
+  const stb = t.closest("[data-stab]");
+  if (stb) { stab.tab = stb.dataset.stab; stab.more = false; stab.sel = 0; loadStabs(); return; }
+  if (t.closest("[data-smore]")) { stab.more = !stab.more; paintStabs(); return; }
   const rv = t.closest("[data-rview]");
   if (rv) { rel.view = rv.dataset.rview; paintReleases(); return; }
   const rm = t.closest("[data-rmonth]");
@@ -1250,10 +1281,17 @@ document.addEventListener("change", async e => {
     try { localStorage.setItem("project-games-pers", e.target.checked ? "1" : "0"); } catch (_) { /* не критично */ }
     if (tab === "rel") paintReleases();
   }
+  if (e.target.dataset && e.target.dataset.sopt) {
+    stab[e.target.dataset.sopt] = e.target.checked;
+    stab.sel = 0;
+    loadStabs();
+    return;
+  }
   if (e.target.dataset && e.target.dataset.adult !== undefined) {
     try { localStorage.setItem("project-games-adult", e.target.checked ? "1" : "0"); } catch (_) { /* не критично */ }
     storeCal = null;
-    if (tab === "rel") paintReleases(); else if (tab === "store") { const box = $("#gm-cal"); if (box) { box.innerHTML = ""; loadCalendar(); } }
+    stab.cache = {};
+    if (tab === "rel") paintReleases(); else if (tab === "store") { const box = $("#gm-cal"); if (box) { box.innerHTML = ""; loadCalendar(); } loadStabs(); }
   }
   if (e.target.id === "gm-cyc") { try { localStorage.setItem("project-games-cycle", e.target.checked ? "1" : "0"); } catch (_) { /* не критично */ } relCycleStart(); }
   if (e.target.id === "gm-ronly") { rel.only = e.target.value; paintReleases(); }
@@ -1267,6 +1305,18 @@ document.addEventListener("change", async e => {
   }
 });
 document.addEventListener("mouseover", e => {
+  const trow = e.target.closest && e.target.closest("[data-trow]");
+  if (trow && gamesVisible()) {
+    const i = Number(trow.dataset.trow), list = trow.closest("[data-slist]"), box = $("#gm-stabs");
+    const shown = stab.more ? stab.items : stab.items.slice(0, STAB_SHOWN);
+    if (list && box && stab.sel !== i && shown[i]) {
+      stab.sel = i;
+      list.querySelectorAll(".gm-sr").forEach((b, k) => b.classList.toggle("on", k === i));
+      const panel = box.querySelector("[data-spanel]");
+      if (panel) panel.innerHTML = panelHtml(shown[i], img);
+    }
+    return;
+  }
   const pip = e.target.closest && e.target.closest("[data-pip]");
   if (pip && gamesVisible()) {
     const [d, i] = pip.dataset.pip.split(":");

@@ -2584,3 +2584,40 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .gm-gal:fullscreen { border-radius: 0; border: 0; display: flex; flex-direction: column; }
 .gm-gal:fullscreen .gm-gal-main { flex: 1; aspect-ratio: auto; }
 .gm-gal:fullscreen .gm-gal-nav { height: calc(100% - 78px); }
+
+/* вкладки витрины, как на главной Steam: список слева, подробности игры справа */
+.gm-stabs { margin: 18px 0 8px; }
+.gm-stabs-h { display: flex; flex-wrap: wrap; gap: 6px 26px; padding: 0 2px 12px; }
+.gm-stabs-h button { all: unset; cursor: pointer; font-size: 17px; font-weight: 600; color: var(--ink-soft, #9aa4b5); padding: 4px 0 8px; border-bottom: 3px solid transparent; transition: color .15s, border-color .15s; }
+.gm-stabs-h button:hover { color: var(--ink); } .gm-stabs-h button:focus-visible { outline: 2px solid var(--fire); outline-offset: 2px; }
+.gm-stabs-h button.on { color: var(--ink); border-bottom-color: var(--fire); }
+.gm-stabs-opt { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: flex-end; font-size: 12.5px; color: var(--ink-soft, #9aa4b5); margin: -4px 0 10px; }
+.gm-stabs-opt label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.gm-stabs-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+.gm-stabs-list { display: flex; flex-direction: column; gap: 6px; }
+.gm-sr { all: unset; box-sizing: border-box; display: flex; align-items: stretch; gap: 14px; cursor: pointer; border-radius: 8px; background: var(--glass-bg); border: 1px solid var(--glass-border); overflow: hidden; min-height: 78px; transition: background .12s, border-color .12s; }
+.gm-sr:hover, .gm-sr.on { background: var(--glass-bg-strong); border-color: var(--fire); }
+.gm-sr:focus-visible { outline: 2px solid var(--fire); }
+.gm-st-img { flex: 0 0 210px; width: 210px; border-radius: 0; background-size: cover; }
+.gm-st-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gm-st-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 8px 0; }
+.gm-st-body b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gm-st-body small { font-size: 12px; color: var(--ink-soft, #9aa4b5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gm-st-when { opacity: .8; }
+.gm-st-pr { align-self: flex-end; display: inline-flex; align-items: center; margin: 0 10px 8px 0; border-radius: 4px; overflow: hidden; background: rgba(0,0,0,.35); white-space: nowrap; }
+.gm-st-pr b { padding: 5px 10px; font-size: 13.5px; font-weight: 600; }
+.gm-st-pr s { padding: 5px 6px; font-size: 11.5px; color: var(--ink-soft, #9aa4b5); }
+.gm-st-disc { font-style: normal; padding: 5px 7px; font-size: 14px; font-weight: 700; color: #1c2a07; background: #a4d007; }
+.gm-sr.own { opacity: .75; }
+.gm-tp { position: sticky; top: 8px; padding: 14px; border-radius: 8px; background: var(--glass-bg); border: 1px solid var(--glass-border); overflow: hidden; }
+.gm-tp h4 { margin: 0 0 8px; font-size: 18px; font-weight: 600; line-height: 1.25; }
+.gm-tp-r > small { display: block; font-size: 12px; color: var(--ink-soft, #9aa4b5); } .gm-tp-r > div small { font-size: 12px; color: var(--ink-soft, #9aa4b5); }
+.gm-tp-rv { font-size: 13px; font-weight: 600; } .gm-tp-rv.pos { color: #66c0f4; } .gm-tp-rv.mix { color: #b9a074; } .gm-tp-rv.neg { color: #c35c2c; } .gm-tp-rv.none { color: var(--ink-soft, #9aa4b5); font-weight: 400; }
+.gm-tp-r > div { margin-bottom: 8px; }
+.gm-tp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.gm-tp-tags i { font-style: normal; font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 3px; background: rgba(103,193,245,.14); color: #a9c9de; }
+.gm-tp-shots { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: hidden; }
+.gm-tp-shots img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border-radius: 4px; background: #05070b; }
+.gm-stabs-more { display: flex; justify-content: center; margin-top: 10px; }
+.gm-stabs-empty { padding: 28px; text-align: center; color: var(--ink-soft, #9aa4b5); }
+@media (max-width: 1000px) { .gm-stabs-grid { grid-template-columns: 1fr; } .gm-tp { display: none; } .gm-st-img { flex-basis: 150px; width: 150px; } }

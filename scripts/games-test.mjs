@@ -255,4 +255,18 @@ assert.equal(rw[2][6], "2026-10-25");
 assert.equal(monthTab("2026-10"), "Окт ’26");
 assert.deepEqual(nextMonths("2026-11-15", 3), ["2026-11", "2026-12", "2027-01"]);
 
+import { reviewTone, rowPriceHtml, rowsHtml, panelHtml, tabsHtml } from "../src/app/games-tabs.js";
+assert.equal(reviewTone(90, 100), "pos");
+assert.equal(reviewTone(55, 100), "mix");
+assert.equal(reviewTone(20, 100), "neg");
+assert.equal(reviewTone(90, 0), "none");
+assert.match(rowPriceHtml({ free: true }), /Бесплатно/);
+assert.equal(rowPriceHtml({ free: false, price: null }), "");
+assert.match(rowPriceHtml({ price: { final: 704, initial: 880, discount: 20, currency: "INR" } }), /gm-st-disc/);
+const trItems = [{ appid: 1, name: "A<b>", cap: "x", tags: ["t1", "t2"], when: "Дата выпуска: 9 окт. 2026 г.", free: true, label: "Очень положительные", pct: 90, reviews: 96, shots: ["s1", "s2"] }];
+assert.ok(!rowsHtml(trItems, 0, () => "").includes("<b>A<b>"));
+assert.match(panelHtml(trItems[0], u => u), /Очень положительные/);
+assert.match(tabsHtml({ tab: "top", free: true, owned: false, more: false, sel: 0 }, trItems, () => "", u => u), /data-sopt="owned"/);
+assert.match(tabsHtml({ tab: "new" }, [], () => "", u => u), /ничего нет/);
+
 console.log("games-test: ok");
