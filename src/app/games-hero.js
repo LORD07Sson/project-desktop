@@ -1,7 +1,7 @@
 // Герой главной витрины: арт игры с логотипом, карточка цвета арта, две миниатюры и точки.
 // Чистая разметка без сети. Данные слайдов приходят с /games/store/home (hero), друзья — с /games/store/hero-friends.
 
-import { priceView, ruPlural, heroPalette, huePalette } from "./games-core.js";
+import { priceView, ruPlural, heroPalette, huePalette, logoHasTransparentEdge } from "./games-core.js";
 
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -51,7 +51,7 @@ export function heroSlideHtml(h, i, img) {
   const art = h.hero || h.capsule || h.image;
   return `<div class="gm-hx-slide${i === 0 ? " on" : ""}" data-app="${Number(h.appid)}" data-name="${esc(h.name)}" role="button" tabindex="0" aria-label="${esc(h.name)}">
     ${art ? `<img class="gm-hx-bg" src="${esc(img(art))}" data-id="${Number(h.appid)}" data-n="0" data-p="${esc(art)}" alt="">` : ""}
-    <img class="gm-hx-logo" src="${esc(img(heroLogoUrl(h.appid)))}" alt="">
+    <img class="gm-hx-logo" crossorigin="anonymous" src="${esc(img(heroLogoUrl(h.appid)))}" alt="">
     <div class="gm-hx-chips">${(h.tags || []).slice(0, 4).map(t => `<span>${esc(t)}</span>`).join("")}</div>
   </div>`;
 }
@@ -77,10 +77,21 @@ export function createHero(d) {
   const st = { list: [], i: 0, friends: {}, pal: {}, seq: 0, timer: 0 };
   const root = () => document.getElementById("gm-hero");
 
-  // у многих игр нет файла логотипа: тогда убираем пустую картинку, остаётся один арт
+  // у многих игр нет файла логотипа, а у некоторых «логотип» — обычная картинка с фоном: тогда его убираем, остаётся один арт
   document.addEventListener("error", e => {
     const im = e.target;
     if (im && im.tagName === "IMG" && im.classList.contains("gm-hx-logo")) im.remove();
+  }, true);
+  document.addEventListener("load", e => {
+    const im = e.target;
+    if (!im || im.tagName !== "IMG" || !im.classList.contains("gm-hx-logo")) return;
+    try {
+      const c = document.createElement("canvas");
+      c.width = 32; c.height = 32;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(im, 0, 0, 32, 32);
+      if (!logoHasTransparentEdge(ctx.getImageData(0, 0, 32, 32).data, 32, 32)) im.remove();
+    } catch (_) { /* пиксели недоступны — оставляем как есть */ }
   }, true);
 
   const applyPal = p => {
