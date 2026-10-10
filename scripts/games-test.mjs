@@ -269,4 +269,46 @@ assert.match(panelHtml(trItems[0], u => u), /Очень положительны
 assert.match(tabsHtml({ tab: "top", free: true, owned: false, more: false, sel: 0 }, trItems, () => "", u => u), /data-sopt="owned"/);
 assert.match(tabsHtml({ tab: "new" }, [], () => "", u => u), /ничего нет/);
 
+import { ruPlural, rgbToHsv, hsvToRgb, heroPalette, huePalette } from "../src/app/games-core.js";
+import { heroButtonLabel, heroPriceHtml, heroCardHtml, heroShotsHtml, heroFriendsHtml, heroSlideHtml, heroMarkup, heroLogoUrl } from "../src/app/games-hero.js";
+assert.equal(ruPlural(1, ["друг", "друга", "друзей"]), "друг");
+assert.equal(ruPlural(3, ["друг", "друга", "друзей"]), "друга");
+assert.equal(ruPlural(5, ["друг", "друга", "друзей"]), "друзей");
+assert.equal(ruPlural(11, ["друг", "друга", "друзей"]), "друзей");
+assert.equal(ruPlural(21, ["друг", "друга", "друзей"]), "друг");
+const rt = hsvToRgb(...rgbToHsv(200, 90, 30));
+assert.ok(Math.abs(rt[0] - 200) <= 1 && Math.abs(rt[1] - 90) <= 1 && Math.abs(rt[2] - 30) <= 1);
+// арт из оранжевых, синих и красных пятен даёт три разных оттенка, от светлого к тёмному
+const px = new Uint8ClampedArray(30 * 10 * 4);
+const paint = (from, to, r, g, b) => { for (let i = from; i < to; i++) { px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255; } };
+paint(0, 100, 240, 170, 40); paint(100, 200, 40, 90, 230); paint(200, 300, 190, 20, 30);
+const pal = heroPalette(px, 30, 10);
+for (const k of ["c1", "c2", "c3", "base"]) assert.match(pal[k], /^#[0-9a-f]{6}$/);
+assert.equal(new Set([pal.c1, pal.c2, pal.c3]).size, 3);
+// серый тёмный арт: запасная тёплая палитра
+const gray = new Uint8ClampedArray(20 * 4).fill(40);
+for (let i = 0; i < 20; i++) gray[i * 4 + 3] = 255;
+assert.match(heroPalette(gray, 20, 1).c1, /^#[0-9a-f]{6}$/);
+assert.match(huePalette(200).c2, /^#[0-9a-f]{6}$/);
+assert.notEqual(huePalette(20).c1, huePalette(200).c1);
+// разметка героя
+const hh = { appid: 1332010, name: "Stray <i>", desc: "Кот & город", tags: ["Кошки", "Приключение"], hero: "https://x/h.jpg", shots: ["a.jpg", "b.jpg", "c.jpg"], os: ["windows"], price: { final: 100, initial: 200, discount: 50, currency: "INR" } };
+assert.equal(heroButtonLabel(hh, true), "В вашей библиотеке");
+assert.match(heroButtonLabel(hh, false), /−50%/);
+assert.equal(heroButtonLabel({ ...hh, price: { final: 100, initial: 100, discount: 0 } }, false), "Подробнее");
+assert.match(heroPriceHtml({ price: { final: 0, initial: 0, discount: 0 } }), /Бесплатно/);
+assert.match(heroPriceHtml(hh), /gm-hx-off/);
+assert.ok(!heroCardHtml(hh, false).includes("<i>"));
+assert.match(heroCardHtml(hh, false), /gm-hx-os/);
+assert.ok(!heroCardHtml({ ...hh, os: [] }, false).includes("gm-hx-os"));
+assert.equal((heroShotsHtml(hh, u => u).match(/<button/g) || []).length, 2);
+assert.equal(heroFriendsHtml({ count: 0, list: [] }, u => u), "");
+assert.match(heroFriendsHtml({ count: 4, list: [{ name: "A", avatar: "a" }] }, u => u), /4 друга/);
+assert.match(heroSlideHtml(hh, 0, u => u), /gm-hx-slide on/);
+assert.ok(heroLogoUrl(1332010).endsWith("/1332010/logo.png"));
+const mk = heroMarkup([hh, { ...hh, appid: 2 }], u => u);
+assert.equal((mk.match(/gm-hx-slide/g) || []).length, 2);
+assert.equal((mk.match(/data-shero=/g) || []).length, 2);
+assert.equal(heroMarkup([], u => u), "");
+
 console.log("games-test: ok");

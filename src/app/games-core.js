@@ -438,3 +438,62 @@ export function nextMonths(d, n = 8) {
   let [y, m] = d.slice(0, 7).split("-").map(Number);
   return Array.from({ length: n }, () => { const s = `${y}-${String(m).padStart(2, "0")}`; m++; if (m > 12) { m = 1; y++; } return s; });
 }
+
+/** «1 друг», «2 друга», «5 друзей»: forms — [одна, две-четыре, много]. */
+export function ruPlural(n, forms) {
+  const a = Math.abs(Number(n)) % 100, b = a % 10;
+  if (a > 10 && a < 20) return forms[2];
+  if (b === 1) return forms[0];
+  return b >= 2 && b <= 4 ? forms[1] : forms[2];
+}
+
+export function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, mx ? d / mx : 0, mx];
+}
+
+export function hsvToRgb(h, s, v) {
+  const i = Math.floor(h * 6) % 6, f = h * 6 - Math.floor(h * 6), p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  const [r, g, b] = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i];
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+const hex = ([r, g, b]) => "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join("");
+const lumOf = ([h, s, v]) => { const [r, g, b] = hsvToRgb(h, s, v); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+
+/** Тёплая запасная палитра по оттенку (0–360): когда арт прочитать нельзя. */
+export function huePalette(hue) {
+  const h = (((Number(hue) || 0) % 360) + 360) % 360 / 360;
+  const c = [[(h + 0.05) % 1, 0.62, 0.84], [h, 0.7, 0.74], [(h + 0.95) % 1, 0.78, 0.6]];
+  return { c1: hex(hsvToRgb(...c[0])), c2: hex(hsvToRgb(...c[1])), c3: hex(hsvToRgb(...c[2])), base: hex(hsvToRgb(c[2][0], 0.72, 0.17)) };
+}
+
+/** Три главных цвета арта для карточки героя: от самого светлого (верх) к самому тёмному (низ) и тёмная основа.
+ *  px — RGBA-пиксели уменьшенной копии (например 64×22). Серые и тёмные пиксели не считаются; оттенки берутся разными. */
+export function heroPalette(px, w, h) {
+  const bins = Array.from({ length: 12 }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
+  let tot = 0;
+  for (let i = 0; i < w * h; i++) {
+    const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2];
+    if (px[i * 4 + 3] < 200) continue;
+    const [hh, s, v] = rgbToHsv(r, g, b);
+    if (v < 0.14 || s < 0.14) continue;
+    const wt = s ** 1.2 * v ** 0.9, bn = bins[Math.min(11, Math.floor(hh * 12))];
+    bn.w += wt; bn.r += r * wt; bn.g += g * wt; bn.b += b * wt; tot += wt;
+  }
+  const dist = (a, b) => { const d = Math.abs(a - b); return Math.min(d, 12 - d); };
+  const picks = [];
+  for (const x of bins.map((b, k) => ({ b, k })).filter(x => x.b.w > 0).sort((p, q) => q.b.w - p.b.w)) {
+    if (x.b.w > tot * 0.04 && picks.every(p => dist(p.k, x.k) >= 2)) picks.push(x);
+    if (picks.length === 3) break;
+  }
+  if (!picks.length) return { c1: "#d6b9a4", c2: "#9a6a54", c3: "#5a2f28", base: "#1c0e0b" };
+  const cols = picks.map(x => { const [hh, s, v] = rgbToHsv(x.b.r / x.b.w, x.b.g / x.b.w, x.b.b / x.b.w); return [hh, Math.max(s, 0.7), Math.min(0.95, Math.max(v, 0.74))]; });
+  while (cols.length < 3) { const [hh, s, v] = cols[cols.length - 1]; cols.push([(hh + (cols.length === 1 ? 0.06 : 0.94)) % 1, s, Math.max(0.7, v - 0.08)]); }
+  cols.sort((a, b) => lumOf(b) - lumOf(a));
+  [0.92, 0.82, 0.72].forEach((t, i) => { cols[i][2] = Math.max(cols[i][2], t); });   // сверху светлее, к низу глубже, как в карточке-образце
+  return { c1: hex(hsvToRgb(...cols[0])), c2: hex(hsvToRgb(...cols[1])), c3: hex(hsvToRgb(...cols[2])), base: hex(hsvToRgb(cols[2][0], 0.72, 0.17)) };
+}

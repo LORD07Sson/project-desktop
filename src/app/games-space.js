@@ -10,6 +10,7 @@ import { alertText, sortWishlist, sortLibrary, badgesOf, achSummary, statLabel, 
 import { linkSteam } from "./steam-link.js";
 import { galleryHtml, mountGallery } from "./games-media.js";
 import { tabsHtml, panelHtml, STAB_SHOWN } from "./games-tabs.js";
+import { createHero } from "./games-hero.js";
 import { notifyDesktop, notifyKinds, setNotifyKind } from "./desktop-notify.js";
 
 const TABS = [["store", "Магазин"], ["charts", "Чарты"], ["rel", "Релизы"], ["deals", "Скидки"], ["wish", "Желаемое"], ["lib", "Библиотека"], ["profile", "Профиль"], ["set", "Настройки"]];
@@ -133,7 +134,7 @@ function startAlertPolling() {
 function restartAlertPolling() { clearInterval(alertTimer); alertTimer = 0; startAlertPolling(); }
 
 export function resetGames() {
-  me = null; lib = null; tab = "store"; storeHome = null; storeBrowse = null; storeCal = null; clearInterval(heroTimer);
+  me = null; lib = null; tab = "store"; storeHome = null; storeBrowse = null; storeCal = null; heroCtl.stop();
   const b = $("#gm-body"); if (b) b.innerHTML = "";
 }
 
@@ -148,7 +149,7 @@ async function loadLibrary(force) {
 // ---------- разделы ----------
 function switchG(name) {
   tab = name;
-  clearInterval(heroTimer);
+  heroCtl.stop();
   clearInterval(relCycle);
   $("#gm-nav").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.gtab === name));
   const q = $("#gm-q");
@@ -169,56 +170,22 @@ function cardHtml(g, extra = "") {
     <div class="gm-pr">${g.price == null && g.label ? `<b>${esc(g.label)}</b>` : `${v.old ? `<s>${esc(v.old)}</s>` : ""}<b class="${v.sale ? "sale" : ""}">${esc(v.now)}</b>`}${g.pct && g.reviews >= 50 ? `<small class="gm-rv" title="${fmtNum(g.reviews)} отзывов">👍 ${g.pct}%</small>` : ""}</div>${extra}</button>`;
 }
 
-let storeHome = null, storeBrowse = null, storeCal = null, heroTimer = 0;
+let storeHome = null, storeBrowse = null, storeCal = null;
 
 function railSection(title, items, more = "") {
   if (!items || !items.length) return "";
   return `<section class="gm-sec"><h3>${esc(title)}${more}</h3><div class="gm-railw"><button type="button" class="gm-rail-b l" data-rail="-1" aria-label="Назад">‹</button><div class="gm-rail">${items.map(g => cardHtml(g)).join("")}</div><button type="button" class="gm-rail-b r" data-rail="1" aria-label="Вперёд">›</button></div></section>`;
 }
 
-const revClass = pct => (pct >= 70 ? "ok" : pct >= 40 ? "mid" : "bad");
 
-function heroHtml(list) {
-  if (!list || !list.length) return "";
-  const slides = list.map((h, i) => {
-    const v = priceView(h.price);
-    const main = img(h.capsule || h.hero || h.image);
-    return `<div class="gm-fs${i === 0 ? " on" : ""}" data-app="${h.appid}" data-name="${esc(h.name)}" data-tags="${esc((h.tags || []).join("|"))}" role="button" tabindex="0">
-      <div class="gm-fs-img" style="--h:${hueOf(h.name)}">${main ? `<img data-main src="${esc(main)}" data-id="${h.appid}" data-n="0" data-p="${esc(h.capsule || "")}" alt="">` : ""}</div>
-      <div class="gm-fs-side">
-        <div class="gm-fs-name">${esc(h.name)}</div>
-        ${h.label && h.reviews ? `<div class="gm-fs-rev"><span class="${revClass(h.pct)}">${esc(h.label)}</span> (Обзоров: ${fmtNum(h.reviews)})</div>` : ""}
-        <div class="gm-fs-shots">${(h.shots || []).map(u => `<img loading="lazy" src="${esc(img(u))}" data-shot="${esc(img(u))}" alt="">`).join("")}</div>
-        <div class="gm-fs-tags"><small>Метки игры:</small><div>${(h.tags || []).slice(0, 4).map(t => `<i>${esc(t)}</i>`).join("")}</div></div>
-        <div class="gm-fs-price">${v.badge ? `<i class="gm-badge sm">${v.badge}</i>` : ""}${v.old ? `<s>${esc(v.old)}</s>` : ""}<b class="${v.sale ? "sale" : ""}">${esc(v.now)}</b></div>
-      </div></div>`;
-  }).join("");
-  return `<section class="gm-fh" id="gm-hero"><h3 class="gm-fh-t">Популярное и рекомендуемое</h3>
-    <div class="gm-fh-main"><button type="button" class="gm-fh-nav l" data-hnav="-1" aria-label="Назад">‹</button><div class="gm-fh-slides">${slides}</div><button type="button" class="gm-fh-nav r" data-hnav="1" aria-label="Вперёд">›</button></div>
-    <div class="gm-fh-dots">${list.map((_, i) => `<button type="button" class="${i === 0 ? "on" : ""}" data-shero="${i}" aria-label="Слайд ${i + 1}"></button>`).join("")}</div></section>`;
-}
-
-function heroGo(i) {
-  const box = $("#gm-hero");
-  if (!box) return;
-  const slides = [...box.querySelectorAll(".gm-fs")];
-  const n = slides.length;
-  const k = ((i % n) + n) % n;
-  slides.forEach((el, j) => el.classList.toggle("on", j === k));
-  box.querySelectorAll("[data-shero]").forEach((el, j) => el.classList.toggle("on", j === k));
-}
-
-function heroStart() {
-  clearInterval(heroTimer);
-  const box = $("#gm-hero");
-  if (!box || box.querySelectorAll(".gm-fs").length < 2) return;
-  heroTimer = setInterval(() => { // DevSkim: ignore DS172411 — функция, не строка
-    if (tab !== "store" || !$("#gm-hero")) { clearInterval(heroTimer); return; }
-    if (box.matches(":hover")) return;
-    const cur = [...box.querySelectorAll(".gm-fs")].findIndex(el => el.classList.contains("on"));
-    heroGo(cur + 1);
-  }, 7000);
-}
+// Герой главной: арт с логотипом, карточка цвета арта, миниатюры и точки (логика — в games-hero.js).
+const heroCtl = createHero({
+  img, hueOf,
+  owned: id => !!(lib && lib.ids && lib.ids.has(Number(id))),
+  friends: async ids => (me && me.steamid ? apiGet("/games/store/hero-friends", { ids: ids.join(",") }) : { items: {} }),
+  active: () => tab === "store",
+});
+const heroHtml = list => heroCtl.html(list);
 
 // Карусели-страницы (скидки, календарь): дорожка с переключением страниц, стрелки и точки.
 const pagerIdx = {};
@@ -263,7 +230,7 @@ async function loadCalendar() {
 const genreChips = () => `<div class="gm-chips">${storeBrowse ? `<button type="button" class="gm-chip" data-sback>← Магазин</button>` : ""}${[[0, 0, "Популярное"]].filter(() => false).join("")}<button type="button" class="gm-chip${storeBrowse && storeBrowse.soon ? " on" : ""}" data-sbrowse="soon">Скоро выйдут</button><button type="button" class="gm-chip${storeBrowse && storeBrowse.discount && !storeBrowse.tag ? " on" : ""}" data-sbrowse="sale">Со скидкой</button>${(tagList || []).map(t => `<button type="button" class="gm-chip${storeBrowse && storeBrowse.tag === t.id ? " on" : ""}" data-sbrowse="${t.id}" data-sname="${esc(t.name)}">${esc(t.name)}</button>`).join("")}</div>`;
 
 async function paintStore() {
-  clearInterval(heroTimer);
+  heroCtl.stop();
   const body = $("#gm-body");
   const q = $("#gm-q").value.trim();
   if (q.length >= 2) return runSearch();
@@ -277,7 +244,7 @@ async function paintStore() {
     const sec = h.sections || [];
     const rows = sec.map(x => railSection(x.title, x.items, x.go ? `<button type="button" class="ny-link" data-gtab-go="${x.go}">все →</button>` : "")).join("");
     body.innerHTML = `<div class="gm-sh">` + heroHtml(h.hero) + genreChips() + dealsPagerHtml(h) + `<section class="gm-stabs" id="gm-stabs"></section><div id="gm-cal"></div><div id="gm-foryou"></div>` + (rows || empty("Пусто", "Steam не вернул подборки.")) + `</div>`;
-    heroStart();
+    heroCtl.start();
     loadStabs();
     loadForYou();
     loadCalendar();
@@ -316,11 +283,6 @@ async function loadForYou() {
     const r = await apiGet("/games/store/foryou");
     const box = $("#gm-foryou");
     if (!box || !r.items || !r.items.length) return;
-    document.querySelectorAll(".gm-fs").forEach(el => {                     // «Вы играли в игры с метками»: совпадения с вашими жанрами
-      const mine = (r.tags || []).filter(t => (el.dataset.tags || "").split("|").includes(t));
-      const lab = el.querySelector(".gm-fs-tags small");
-      if (lab && mine.length) lab.textContent = "Вы играли в игры с метками:";
-    });
     box.innerHTML = railSection("Для вас", r.items, `<small class="gm-because">по вашим играм: ${esc((r.because || []).join(", "))}${r.tags && r.tags.length ? ` · ${esc(r.tags.join(", "))}` : ""}</small>`);
   } catch (_) { /* подборка необязательна */ }
 }
@@ -1235,9 +1197,7 @@ async function onClick(e) {
   const rl = t.closest("[data-rail]");
   if (rl) { const rail = rl.parentElement.querySelector(".gm-rail"); if (rail) rail.scrollBy({ left: Number(rl.dataset.rail) * rail.clientWidth * 0.85, behavior: "smooth" }); return; }
   const hd = t.closest("[data-shero]");
-  if (hd) { heroGo(Number(hd.dataset.shero)); heroStart(); return; }
-  const hn = t.closest("[data-hnav]");
-  if (hn) { const box = $("#gm-hero"); const cur = [...box.querySelectorAll(".gm-fs")].findIndex(el => el.classList.contains("on")); heroGo(cur + Number(hn.dataset.hnav)); heroStart(); return; }
+  if (hd) { heroCtl.go(Number(hd.dataset.shero)); heroCtl.start(); return; }
   const pn = t.closest("[data-pgnav]");
   if (pn) { const [k, d] = pn.dataset.pgnav.split(":"); pagerGo(k, (pagerIdx[k] || 0) + Number(d)); return; }
   const pd = t.closest("[data-pgdot]");
@@ -1324,10 +1284,6 @@ document.addEventListener("mouseover", e => {
     if (cell && items && items[Number(i)] && cell.dataset.i !== i) { cell.dataset.i = i; relPaintCell(cell, items, Number(i)); }
     return;
   }
-  const sh = e.target.closest && e.target.closest("[data-shot]");
-  if (!sh || !gamesVisible()) return;
-  const main = sh.closest(".gm-fs") && sh.closest(".gm-fs").querySelector("[data-main]");
-  if (main && main.src !== sh.dataset.shot) main.src = sh.dataset.shot;
 });
 document.addEventListener("submit", e => {
   if (gamesVisible() && e.target.id === "gm-look") { e.preventDefault(); const q = $("#gm-lookq").value.trim(); if (q.length >= 2) lookupProfile(q); }
