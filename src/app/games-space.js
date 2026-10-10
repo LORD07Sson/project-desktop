@@ -8,6 +8,7 @@ import { openExternal } from "./tauri.js";
 import { $, esc } from "./utils.js";
 import { alertText, sortWishlist, sortLibrary, badgesOf, achSummary, statLabel, friendState, xpProgress, reviewSummary, wishStatus, wishFilter, seriesChart, pointAt, fmtCompact, dayLabel, chunk, addDays, mondayOf, isoWeek, monthWeeks, rollingWeeks, monthTab, nextMonths, priceView, fmtHours, isSteamLaunchUrl, initials2, imageCandidates, hueOf, fmtNum, shortDate, deltaView, miniLine, groupByDate, untilText, pctText } from "./games-core.js";
 import { linkSteam } from "./steam-link.js";
+import { galleryHtml, mountGallery } from "./games-media.js";
 import { notifyDesktop, notifyKinds, setNotifyKind } from "./desktop-notify.js";
 
 const TABS = [["store", "Магазин"], ["charts", "Чарты"], ["rel", "Релизы"], ["deals", "Скидки"], ["wish", "Желаемое"], ["lib", "Библиотека"], ["profile", "Профиль"], ["set", "Настройки"]];
@@ -659,7 +660,7 @@ async function openRelDay(date) {
   const ov = gmSheet(dialogSkeletonHtml(5), "wide");
   const lb = dayLabel(date);
   try {
-    const r = await apiGet("/games/releases", { from: date, to: date });
+    const r = await apiGet("/games/releases", { from: date, to: date, adult: adultParam() });
     ov.querySelector(".sheet").innerHTML = `<h2>Выходы ${lb.dow}, ${lb.date}: ${fmtNum(r.total)}</h2><div class="gm-list gm-impl">${r.items.map(g => `<div class="gm-row" data-rd-app="${g.appid}" data-name="${esc(g.name)}">${picHtml(g.appid, g.cap, g.name, "gm-img gm-rimg")}<div class="gm-row-t"><b>${esc(g.name)}</b><small>${esc((g.tags || []).join(" · "))}</small></div>${g.wishlisted ? `<i class="gm-star sm">★</i>` : ""}${g.price ? priceCell(g.price) : "<span></span>"}</div>`).join("")}</div><div class="gm-d-act"><button type="button" class="btn ghost" data-d-close>Закрыть</button></div>`;
   } catch (e) { ov.querySelector(".sheet").innerHTML = `${errBox(e)}<div class="gm-d-act"><button type="button" class="btn" data-d-close>Закрыть</button></div>`; }
   ov.addEventListener("click", ev => {
@@ -746,7 +747,7 @@ async function openDetail(appid, name) {
             <div class="gm-links">${d.website ? `<button type="button" class="btn sm" data-d-store="${esc(d.website)}">Сайт игры</button>` : ""}<button type="button" class="btn sm" data-d-store="${esc(`https://steamdb.info/app/${appid}/`)}">SteamDB</button><button type="button" class="btn sm" data-d-store="${esc(`https://www.protondb.com/app/${appid}`)}">ProtonDB</button></div>
           </div>
           <div class="gm-dp-right">
-            ${picHtml(appid, d.image, d.name, "gm-img gm-d-img")}
+            ${galleryHtml(d, img) || picHtml(appid, d.image, d.name, "gm-img gm-d-img")}
             <div class="gm-boxes">
               <div class="gm-box" id="gm-rate"><b>—</b><small>отзывы</small></div>
               <div class="gm-box now"><b id="gm-now">—</b><small>играют сейчас</small></div>
@@ -787,6 +788,9 @@ async function openDetail(appid, name) {
     ov.addEventListener("click", ev => { if (ev.target.closest("[data-d-close]")) dismissSheet(ov); });
     return;
   }
+  const stopGal = mountGallery(ov, ov.__d, img);                   // трейлер замолкает, когда карточку закрыли
+  const galT = setInterval(() => { if (!ov.isConnected) { stopGal(); clearInterval(galT); } }, 800); // DevSkim: ignore DS172411 — функция, не строка
+  ov.addEventListener("gm-gal-web", () => openExternal(ov.__d.store));
   paintPriceStats(ov);
   paintPriceChart(ov, 0);
   paintPriceList(ov);
