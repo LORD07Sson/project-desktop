@@ -11,6 +11,11 @@ import { linkSteam } from "./steam-link.js";
 import { galleryHtml, mountGallery } from "./games-media.js";
 import { tabsHtml, panelHtml, STAB_SHOWN } from "./games-tabs.js";
 import { createHero } from "./games-hero.js";
+import { buildHtml, lowestText } from "./games-build.js";
+import { watchBoxHtml, notifPanelHtml, unreadCount } from "./games-watch.js";
+import { sessionStatus, beginQr, pollQr, signOutSteam, steamApi } from "./steam-session.js";
+import { cardsFrom, accountPanelHtml, bannerCards, wishCategoryIndex, equippedItems } from "./steam-personal.js";
+import { sessionHtml, sessionCompactHtml, qrSheetHtml, qrExpiredHtml } from "./steam-session-ui.js";
 import { notifyDesktop, notifyKinds, setNotifyKind } from "./desktop-notify.js";
 
 const TABS = [["store", "Магазин"], ["charts", "Чарты"], ["rel", "Релизы"], ["deals", "Скидки"], ["wish", "Желаемое"], ["lib", "Библиотека"], ["profile", "Профиль"], ["set", "Настройки"]];
@@ -19,7 +24,7 @@ let me = null;                 // ответ /games/me
 let lib = null;                // { steamid, items, ids:Set }
 let tab = "store";
 let deals = { min: 10, maxprice: 0, minpct: 0, sort: "discount", tag: 0, q: "", items: [], total: 0, all: 0, seq: 0 };
-let wishMode = "all", wishQ = "";
+let wishMode = "all", wishQ = "", wishCat = "", wishCats = null;
 let searchTimer = 0, searchSeq = 0;
 let libFilter = "";
 let wishSort = "close", libSort = "recent", libUnplayed = false;
@@ -52,6 +57,7 @@ function ensureShell() {
     <header class="gm-top">
       <button type="button" class="gm-who" id="gm-who" title="Сменить профиль"></button>
       <nav class="gm-nav" id="gm-nav" aria-label="Игры">${TABS.map(([k, l]) => `<button type="button" data-gtab="${k}">${l}</button>`).join("")}</nav>
+      <button type="button" class="gm-bell" id="gm-bell" title="Уведомления игр" aria-label="Уведомления игр"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16zM10 20a2 2 0 0 0 4 0"/></svg><i id="gm-bell-n" hidden></i></button>
       <button type="button" class="gm-beta" id="gm-beta" title="Что значит Beta">Beta</button>
       <form class="gm-search" id="gm-search" autocomplete="off"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input id="gm-q" type="text" placeholder="Найти игру" spellcheck="false" list="gm-sug"><datalist id="gm-sug"></datalist></form>
     </header>
@@ -113,19 +119,80 @@ export async function enterGames(me0) {
 // Уведомления о цене: сервер проверяет желаемое раз в 30 минут и копит записи; здесь забираем новые.
 // Окно в фокусе — тост, иначе системная всплывашка (правила «не мешать» — в notifyDesktop). Прочитанное помечаем.
 let alertTimer = 0;
+const ALERTS_OPEN_KEY = "project-games-alerts-open";
+const alertsOpenAt = () => { try { return Number(localStorage.getItem(ALERTS_OPEN_KEY)) || 0; } catch (_) { return 0; } };
+let alertList = [];
+function paintBell() {
+  const n = $("#gm-bell-n");
+  if (!n) return;
+  const c = unreadCount(alertList, alertsOpenAt());
+  n.textContent = c > 99 ? "99+" : String(c);
+  n.hidden = !c;
+}
 async function pollAlerts() {
   try {
-    const r = await apiGet("/games/alerts?unseen=1");
-    const items = (r && r.items) || [];
+    const all = await apiGet("/games/alerts");
+    alertList = (all && all.items) || [];
+    paintBell();
+    const items = alertList.filter(a => !a.seen);
     if (!items.length) return;
     for (const a of items.slice(0, 5)) {
       const t = alertText(a);
-      if (document.hasFocus()) toast(`${t.title}. ${t.body}`, "success"); else notifyDesktop(t.title, t.body, "price");
+      if (document.hasFocus()) toast(`${t.title}. ${t.body}`, "success"); else notifyDesktop(t.title, t.body, a.kind === "update" || a.kind === "release" ? "gupdate" : "price");
     }
     await apiPost("/games/alerts/seen", { ids: items.map(a => a.id) });
     if (tab === "wish" && gamesVisible()) paintWish();
   } catch (_) { /* сеть или сервер недоступны — попробуем в следующий раз */ }
 }
+let watchData = null;
+async function loadWatch() {
+  try { watchData = await apiGet("/games/watch"); } catch (_) { watchData = watchData || { items: [], wishlist: [] }; }
+  return watchData;
+}
+
+async function openNotifPanel() {
+  const at = alertsOpenAt();
+  const ov = gmSheet(dialogSkeletonHtml(4));
+  try {
+    const [w] = await Promise.all([loadWatch(), pollAlerts()]);
+    if (!ov.isConnected) return;
+    ov.querySelector(".sheet").innerHTML = notifPanelHtml({ alerts: alertList, watch: w.items || [] }, at, img);
+    try { localStorage.setItem(ALERTS_OPEN_KEY, String(Math.floor(Date.now() / 1000))); } catch (_) { /* счётчик не запомнится */ }
+    paintBell();
+  } catch (e) { if (ov.isConnected) ov.querySelector(".sheet").innerHTML = errBox(e); }
+  ov.addEventListener("click", ev => {
+    const d = ev.target.closest("[data-watch-del]");
+    if (d) {
+      apiDelete(`/games/watch/${d.dataset.watchDel}`).then(() => { if (watchData) watchData.items = watchData.items.filter(x => String(x.appid) !== d.dataset.watchDel); d.closest(".gm-nw").remove(); }).catch(err => toast(err.message || "Не удалось.", "error"));
+      return;
+    }
+    if (ev.target.closest("[data-d-close]")) { dismissSheet(ov); return; }
+    const a = ev.target.closest("[data-app]");
+    if (a) { dismissSheet(ov); openDetail(Number(a.dataset.app), a.dataset.name); }
+  });
+}
+
+async function saveWatch(box) {
+  const appid = Number(box.dataset.watchApp);
+  const updates = !!box.querySelector("[data-w-upd]").checked, relEl = box.querySelector("[data-w-rel]");
+  const release = relEl ? !!relEl.checked : false;
+  try {
+    await apiPost(`/games/watch/${appid}`, { name: (box.closest(".gm-ov") && box.closest(".gm-ov").__d && box.closest(".gm-ov").__d.name) || "", updates, release });
+    await loadWatch();
+    toast(updates || release ? "Следим: сообщим в «Уведомлениях»." : "Больше не следим.", "success");
+  } catch (e) { toast(e.message || "Не удалось сохранить.", "error"); }
+}
+
+async function loadWatchBox(ov, appid) {
+  const box = ov.querySelector("#gm-watchbox");
+  if (!box) return;
+  const w = await loadWatch();
+  if (!ov.isConnected || ov.querySelector("#gm-watchbox") !== box) return;
+  const st = (w.items || []).find(x => x.appid === appid) || null;
+  const d = ov.__d || {};
+  box.innerHTML = watchBoxHtml(appid, st, { released: !d.coming_soon, inWishlist: !!d.wishlisted || (w.wishlist || []).includes(appid) });
+}
+
 function startAlertPolling() {
   if (alertTimer) return;
   pollAlerts();
@@ -255,12 +322,41 @@ async function paintStore() {
     }
     const sec = h.sections || [];
     const rows = sec.map(x => railSection(x.title, x.items, x.go ? `<button type="button" class="ny-link" data-gtab-go="${x.go}">все →</button>` : "")).join("");
-    body.innerHTML = `<div class="gm-sh">` + heroHtml(h.personalHero.length ? h.personalHero : h.hero) + genreChips() + dealsPagerHtml(h) + `<section class="gm-stabs" id="gm-stabs"></section><div id="gm-cal"></div><div id="gm-foryou"></div>` + (rows || empty("Пусто", "Steam не вернул подборки.")) + `</div>`;
+    body.innerHTML = `<div class="gm-sh">` + heroHtml(h.personalHero.length ? h.personalHero : h.hero) + genreChips() + dealsPagerHtml(h) + `<section class="gm-stabs" id="gm-stabs"></section><div id="gm-cal"></div><div id="gm-foryou"></div><div id="gm-mysteam"></div>` + (rows || empty("Пусто", "Steam не вернул подборки.")) + `</div>`;
     heroCtl.start();
     loadStabs();
     loadForYou();
+    loadMySteam();
     loadCalendar();
   } catch (e) { body.innerHTML = errBox(e); }
+}
+
+// Валюта цен региона: Steam в этих ответах код валюты не присылает, берём её из уже загруженных цен витрины.
+const spCur = () => { for (const x of (storeHome && storeHome.sections) || []) for (const g of x.items || []) if (g.price && g.price.currency) return g.price.currency; return "USD"; };
+const spCtx = cc => ({ language: "russian", country_code: cc });
+async function discoveryQueue(cc) {
+  const r = await steamApi("IStoreService", "GetDiscoveryQueue", { queue_type: 0, country_code: cc, rebuild_queue: false, context: spCtx(cc), data_request: { include_basic_info: true } });
+  return r.status === 200 ? cardsFrom(r.body, "store_items", spCur()) : [];
+}
+async function steamBanners(cc) {
+  const r = await steamApi("IMarketingMessagesService", "GetMarketingMessagesForUser", { include_seen_messages: true, country_code: cc, elanguage: 0, context: spCtx(cc), data_request: { include_basic_info: true, include_assets: true, include_all_purchase_options: true } });
+  return r.status === 200 ? bannerCards(r.body, spCur()) : [];
+}
+async function wishlistOnSale(cc) {
+  const r = await steamApi("IWishlistService", "GetWishlistItemsOnSale", { context: spCtx(cc), data_request: { include_basic_info: true } });
+  return r.status === 200 ? cardsFrom(r.body, "items", spCur()) : [];
+}
+
+// Личные подборки по токену входа (только если вход выполнен): желаемое со скидкой и очередь открытий Steam.
+async function loadMySteam() {
+  let st = null;
+  try { st = await sessionStatus(); } catch (_) { return; }
+  if (!st || !st.signed_in) return;
+  const cc = (me && me.cc) || "US";
+  const [sale, queue, banners] = await Promise.all([wishlistOnSale(cc).catch(() => []), discoveryQueue(cc).catch(() => []), steamBanners(cc).catch(() => [])]);
+  const box = $("#gm-mysteam");
+  if (!box || tab !== "store" || storeBrowse) return;
+  box.innerHTML = railSection("Steam рекомендует вам", banners) + railSection("Желаемое со скидкой", sale) + railSection("Очередь открытий Steam", queue);
 }
 
 // Вкладки витрины («Популярные новинки», «Лидеры продаж», …): список слева, подробности выбранной игры справа.
@@ -484,7 +580,8 @@ function wishRowHtml(w) {
 
 function wishListHtml() {
   const r = wishData;
-  const list = sortWishlist(wishFilter(r.items, wishMode, wishQ), wishSort);
+  let list = sortWishlist(wishFilter(r.items, wishMode, wishQ), wishSort);
+  if (wishCat && wishCats) list = list.filter(w => { const s = wishCats.map.get(w.appid); return s && s.has(wishCat); });
   return list.length ? `<div class="gm-wgrid">${list.map(wishRowHtml).join("")}</div>` : empty("Ничего не найдено", "Смените фильтр или очистите поиск.");
 }
 
@@ -497,7 +594,28 @@ function wishBarHtml() {
   const syncErr = r.sync && r.sync.error;
   return `<div class="gm-bar"><span class="gm-count">${r.items.length} в списке</span>${r.steam ? `<span class="gm-sync" title="Желаемое из Steam подтягивается автоматически раз в 30 минут">⟳ синхронизируется со Steam</span><button type="button" class="btn sm" data-wl-steam>Обновить</button>` : ""}${syncErr ? `<span class="ny-hint">${esc(syncErr)}</span>` : ""}<span class="ny-sp"></span>
     <input id="gm-wq" class="gm-lf" type="text" placeholder="Поиск по списку" value="${esc(wishQ)}" spellcheck="false"><label class="gm-sort">Сортировка <select id="gm-wsort">${sorts}</select></label></div>
-    <div class="gm-bar gm-wmodes"><div class="ny-seg">${modes}</div></div>`;
+    <div class="gm-bar gm-wmodes"><div class="ny-seg">${modes}</div></div>${wishCatsHtml()}`;
+}
+
+// Категории желаемого из Steam (только при входе): названия — из GetWishlistCategories, принадлежность игр — из GetWishlistSortedFiltered.
+function wishCatsHtml() {
+  if (!wishCats || !wishCats.cats.length) return "";
+  const chips = [["", "Все категории"], ...wishCats.cats.map(c => [c.id, c.name])].map(([id, l]) => `<button type="button" class="${wishCat === id ? "on" : ""}" data-wcat="${esc(id)}">${esc(l)}</button>`).join("");
+  return `<div class="gm-bar gm-wmodes"><div class="ny-seg">${chips}</div></div>`;
+}
+
+async function loadWishCats() {
+  wishCats = null;
+  let st = null;
+  try { st = await sessionStatus(); } catch (_) { return; }
+  if (!st || !st.signed_in || !me || !me.steamid) return;
+  const call = (i, m, p) => steamApi(i, m, p).then(r => (r.status === 200 ? r.body : null)).catch(() => null);
+  const [c, l] = await Promise.all([
+    call("IWishlistService", "GetWishlistCategories", {}),
+    call("IWishlistService", "GetWishlistSortedFiltered", { steamid: me.steamid, context: spCtx((me && me.cc) || "US"), data_request: {}, sort_order: 0, start_index: 0, page_size: 500 }),
+  ]);
+  wishCats = wishCategoryIndex(c, l);
+  if (tab === "wish" && $("#gm-wbar")) $("#gm-wbar").innerHTML = wishBarHtml();
 }
 
 async function paintWish() {
@@ -515,6 +633,7 @@ async function paintWish() {
       return;
     }
     body.innerHTML = `<div id="gm-wbar">${wishBarHtml()}</div><div id="gm-wlist">${wishListHtml()}</div>`;
+    loadWishCats();
   } catch (e) { body.innerHTML = errBox(e); }
 }
 
@@ -700,9 +819,67 @@ function paintSettings() {
       <label class="gm-sort"><input type="checkbox" id="gm-npr"${notifyKinds().price === false ? "" : " checked"}> всплывашки Windows о ценах</label>
       <label class="gm-sort">Проверять раз в <select id="gm-poll">${[[60000, "минуту"], [120000, "2 минуты"], [300000, "5 минут"], [900000, "15 минут"]].map(([v, l]) => `<option value="${v}"${pollMs() === v ? " selected" : ""}>${l}</option>`).join("")}</select></label></section>
     <section><h3>Список желаемого</h3><p class="ny-hint">Резервная копия или перенос на другой аккаунт.</p><div class="gm-d-act"><button type="button" class="btn" data-wl-export>Скопировать список</button><button type="button" class="btn" data-wl-import>Импортировать…</button></div></section>
+    <section><h3>Вход в Steam (личные подборки)</h3><div id="gm-sess-body"><small class="ny-hint">Проверяю…</small></div></section>
     <section><h3>Состояние сервера</h3><div id="gm-status"><small class="ny-hint">Загружаю…</small></div></section>
   </div>`;
   loadStatus();
+  paintSession();
+}
+
+// ---------- расширенные возможности Steam: вход по QR, токен только на этом компьютере (Rust: steam_session.rs) ----------
+async function paintSession() {
+  const box = $("#gm-sess-body");
+  if (!box) return;
+  let st = null;
+  try { st = await sessionStatus(); } catch (_) { /* не в приложении на компьютере */ }
+  const now = $("#gm-sess-body");
+  if (now) {
+    const html = now.dataset.compact ? sessionCompactHtml(st) : sessionHtml(st);
+    now.innerHTML = html;
+    if (now.parentElement && now.dataset.compact) now.parentElement.hidden = !html;     // в профиле, когда вход уже есть, блока нет
+  }
+  if (st && st.signed_in && $("#gm-acct")) loadAccountPanel();
+  else { const a = $("#gm-acct"); if (a) a.innerHTML = ""; }
+}
+
+// Сводка аккаунта по токену: уведомления, карточки и предметы оформления профиля (три запроса чтения).
+async function loadAccountPanel() {
+  const call = (i, m, p) => steamApi(i, m, p).then(r => (r.status === 200 ? r.body : null)).catch(() => null);
+  const [notes, cards, items, loyalty, equipped] = await Promise.all([
+    call("ISteamNotificationService", "GetSteamNotifications", { include_hidden: false, language: 0, include_confirmation_count: true, include_pinned_counts: true, include_read: false, count_only: true }),
+    call("IQuestService", "GetNumTradingCardsEarned", { steamid: me && me.steamid }),
+    call("IPlayerService", "GetProfileItemsOwned", { language: "russian" }),
+    call("ILoyaltyRewardsService", "GetSummary", { steamid: me && me.steamid }),
+    call("IPlayerService", "GetProfileItemsEquipped", { steamid: me && me.steamid, language: "russian" }),
+  ]);
+  const box = $("#gm-acct");
+  if (box && tab === "profile") box.innerHTML = accountPanelHtml({ notes, cards: cards && cards.num_trading_cards, items, points: loyalty && loyalty.summary && loyalty.summary.points, equipped: equippedItems(equipped) }, img);
+}
+
+async function openQrLogin() {
+  let start;
+  try { start = await beginQr(); } catch (e) { toast(`Не удалось начать вход: ${e && e.message ? e.message : e}`, "error"); return; }
+  const ov = gmSheet(qrSheetHtml(start.url, "pending"));
+  let clientId = start.client_id, url = start.url, status = "pending";
+  const sheet = () => ov.querySelector(".sheet");
+  const tick = async () => {
+    if (!ov.isConnected) return;                                   // окно закрыли — опрос заканчивается
+    try {
+      const r = await pollQr(clientId, start.request_id);
+      if (!ov.isConnected) return;
+      if (r.status === "approved") { dismissSheet(ov); toast("Расширенные возможности Steam включены.", "success"); paintSession(); return; }
+      if (r.status === "expired") { sheet().innerHTML = qrExpiredHtml(); return; }
+      if (r.client_id) clientId = r.client_id;
+      if (r.url && r.url !== url) { url = r.url; status = r.status; sheet().innerHTML = qrSheetHtml(url, status); }
+      else if (r.status !== status) { status = r.status; sheet().innerHTML = qrSheetHtml(url, status); }
+    } catch (e) { if (ov.isConnected) sheet().innerHTML = `<h2>Вход в Steam</h2>${errBox(e)}<div class="gm-d-act"><button type="button" class="btn" data-d-close>Закрыть</button></div>`; return; }
+    setTimeout(tick, start.interval * 1000); // DevSkim: ignore DS172411 — функция, не строка
+  };
+  setTimeout(tick, start.interval * 1000); // DevSkim: ignore DS172411 — функция, не строка
+  ov.addEventListener("click", ev => {
+    if (ev.target.closest("[data-d-close]")) dismissSheet(ov);
+    else if (ev.target.closest("[data-sess-in]")) { dismissSheet(ov); openQrLogin(); }
+  });
 }
 
 // ---------- карточка игры ----------
@@ -810,6 +987,8 @@ async function openDetail(appid, name) {
           <p class="ny-hint gm-hnote">Steam не хранит историю цен, поэтому мы ведём её сами: цены популярных игр записываются каждые 6 часов, а у желаемого — каждые 30 минут и при каждом просмотре.</p>
         </div>
         <div class="gm-reg" id="gm-reg"><button type="button" class="btn" data-regions="${appid}">Цены по странам</button></div></section>`}
+        <section class="gm-dp-sec"><div id="gm-watchbox"></div></section>
+        <section class="gm-dp-sec"><h3>Обновления Steam</h3><div id="gm-build"><div class="gm-reg-load"><span class="ny-spin"></span> Загружаю…</div></div></section>
         <section class="gm-dp-sec"><h3>Игроки по месяцам</h3><div id="gm-monthly"><div class="gm-reg-load"><span class="ny-spin"></span> Считаю…</div></div></section>
         <section class="gm-dp-sec gm-more"><div class="ny-seg gm-mtabs"><button type="button" data-more="reviews">Отзывы</button><button type="button" data-more="news">Анонсы</button><button type="button" data-more="patch">Патчноуты</button>${me && me.steamid ? `<button type="button" data-more="ach">Достижения</button><button type="button" data-more="stats">Статистика</button>` : ""}</div><div id="gm-more-body"></div></section>
       </div>`;
@@ -833,6 +1012,8 @@ async function openDetail(appid, name) {
   }, 60000);
   loadExtra(ov, appid);
   loadMonthly(ov, appid);
+  loadBuild(ov, appid);
+  loadWatchBox(ov, appid);
   loadMore(ov, appid, "reviews");
   ov.addEventListener("click", async e => {
     const t = e.target;
@@ -970,6 +1151,15 @@ async function loadMonthly(ov, appid) {
 }
 
 // Метки из ProtonDB и Steam Deck подгружаются отдельно: внешние источники медленнее самой карточки.
+async function loadBuild(ov, appid) {
+  const box = ov.querySelector("#gm-build");
+  if (!box) return;
+  try {
+    const b = await apiGet(`/games/app/${appid}/build`);
+    if (ov.isConnected && ov.querySelector("#gm-build") === box) box.innerHTML = buildHtml(b);
+  } catch (_) { if (ov.isConnected) box.innerHTML = buildHtml(null); }
+}
+
 async function loadExtra(ov, appid) {
   try {
     const x = await apiGet(`/games/app/${appid}/extra`);
@@ -1030,6 +1220,8 @@ async function paintProfile() {
     body.innerHTML = `<div class="gm-prof"><i class="gm-ava big">${p.avatar ? `<img src="${esc(img(p.avatar))}" alt="">` : `<span>${esc(initials2(p.name))}</span>`}</i>
       <div><h2>${esc(p.name || "Steam")}</h2><small class="ny-hint">${p.level != null ? `Уровень ${p.level}` : "Уровень скрыт"}${p.visible === false ? " · профиль закрыт" : ""}</small></div></div>
       <div class="gm-online-s gm-prof-s"><div><small>Игр</small><b>${fmtNum(t.games)}</b></div><div><small>Часов всего</small><b>${fmtNum(t.hours)}</b></div><div><small>Не запускал</small><b>${fmtNum(t.unplayed)}</b></div></div>
+      <section class="gm-sesscard" hidden><div id="gm-sess-body" data-compact="1"></div></section>
+      <div id="gm-acct"></div>
       ${xpHtml(p.badges)}
       <form class="gm-look" id="gm-look" autocomplete="off"><input id="gm-lookq" type="text" placeholder="Посмотреть другой профиль: ссылка, имя или SteamID64" spellcheck="false"><button type="submit" class="btn sm">Найти</button></form>
       <div id="gm-look-res"></div>
@@ -1037,6 +1229,7 @@ async function paintProfile() {
       ${(p.top || []).length ? `<h3 class="gm-h3">Больше всего часов</h3><div class="gm-grid">${p.top.map(row).join("")}</div>` : ""}
       <h3 class="gm-h3">Друзья</h3><div id="gm-friends"><button type="button" class="btn" data-friends>Показать друзей</button></div>
       ${!(p.recent || []).length && !(p.top || []).length ? empty("Данных нет", "Откройте «Сведения об играх» в настройках конфиденциальности Steam.") : ""}`;
+    paintSession();
   } catch (e) { body.innerHTML = errBox(e); }
 }
 
@@ -1106,7 +1299,7 @@ async function loadStatus() {
   try {
     const r = await apiGet("/games/status");
     const when = ts => (ts ? new Date(ts * 1000).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "ещё не было");
-    box.innerHTML = `<small class="ny-hint">Проверка желаемого: ${esc(when(r.last_wishlist_check))} · сбор цен: ${esc(when(r.last_crawl))} · копия базы: ${esc(r.last_backup || "ещё не было")}<br>Точек цены: ${fmtNum(r.price_points)} · точек онлайна: ${fmtNum(r.players_points)} · уведомлений отправлено: ${fmtNum(r.alerts_total)} · ключ Steam: ${r.steam_key ? "есть" : "нет"}</small>`;
+    box.innerHTML = `<small class="ny-hint">Проверка желаемого: ${esc(when(r.last_wishlist_check))} · сбор цен: ${esc(when(r.last_crawl))} · сборки игр: ${esc(when(r.last_build_check))} · цены по странам: ${esc(when(r.last_regions))} · копия базы: ${esc(r.last_backup || "ещё не было")}<br>Точек цены: ${fmtNum(r.price_points)} · точек онлайна: ${fmtNum(r.players_points)} · записей обновлений: ${fmtNum(r.builds_total)} · уведомлений отправлено: ${fmtNum(r.alerts_total)} · ключ Steam: ${r.steam_key ? "есть" : "нет"}</small>`;
   } catch (_) { box.innerHTML = ""; }
 }
 
@@ -1120,11 +1313,12 @@ async function loadRegions(ov, appid) {
     const cheapest = r.items.find(x => x.usd != null);
     box.innerHTML = `<div class="gm-regt">
       <div class="gm-regh"><b>Цены по странам</b><small class="ny-hint">${r.rates ? `в пересчёте на ${esc(r.my_currency || "вашу валюту")} по курсу` : "курсы валют недоступны — сравнение приблизительное"}</small></div>
+      <div class="gm-regr head"><span>Страна</span><span class="gm-tc">Цена</span><span class="gm-tc">В вашей валюте</span><span class="gm-tc">Минимум у нас</span><span class="gm-tc">Разница</span></div>
       ${r.items.map(x => {
         const d = pctText(x.vs_mine);
         const mine = x.cc === r.my_cc;
         const conv = x.conv != null && x.currency !== r.my_currency ? `≈ ${esc(priceView({ final: x.conv, initial: x.conv, discount: 0, currency: r.my_currency }).now)}` : "";
-        return `<div class="gm-regr${mine ? " mine" : ""}${cheapest && x.cc === cheapest.cc ? " best" : ""}"><span>${esc(x.name)}${mine ? ` <i>ваша</i>` : ""}${cheapest && x.cc === cheapest.cc ? ` <i class="b">дешевле всего</i>` : ""}</span><span class="gm-tc">${x.discount ? `<i class="gm-badge sm">−${x.discount}%</i>` : ""}<b>${esc(priceView(x).now)}</b></span><span class="gm-tc ny-hint">${conv}</span><span class="gm-tc gm-d ${d.cls}">${esc(d.text)}</span></div>`;
+        return `<div class="gm-regr${mine ? " mine" : ""}${cheapest && x.cc === cheapest.cc ? " best" : ""}"><span>${esc(x.name)}${mine ? ` <i>ваша</i>` : ""}${cheapest && x.cc === cheapest.cc ? ` <i class="b">дешевле всего</i>` : ""}</span><span class="gm-tc">${x.discount ? `<i class="gm-badge sm">−${x.discount}%</i>` : ""}<b>${esc(priceView(x).now)}</b></span><span class="gm-tc ny-hint">${conv}</span><span class="gm-tc ny-hint">${esc(lowestText(x, p => priceView(p).now))}</span><span class="gm-tc gm-d ${d.cls}">${esc(d.text)}</span></div>`;
       }).join("")}
     </div>`;
   } catch (e) { box.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить цены по странам.")}</small>`; }
@@ -1175,6 +1369,7 @@ async function onClick(e) {
   const go = t.closest("[data-gtab-go]");
   if (go) { switchG(go.dataset.gtabGo); return; }
   if (t.closest("#gm-beta")) { maybeWarnBeta(true); return; }
+  if (t.closest("#gm-bell")) { openNotifPanel(); return; }
   if (t.closest("#gm-who")) { document.dispatchEvent(new CustomEvent("project:open-chooser")); return; }
   if (t.closest("[data-gretry]")) { storeHome = null; switchG(tab); return; }
   const ct = t.closest("[data-ctab]");
@@ -1248,6 +1443,8 @@ async function onClick(e) {
   const dm = t.closest("[data-dmin]");
   if (dm) { deals.min = Number(dm.dataset.dmin); const bar = $("#gm-dbar") || document.querySelector(".gm-dbar"); if (bar) bar.querySelectorAll("[data-dmin]").forEach(b => b.classList.toggle("on", b === dm)); refreshDeals(); return; }
   if (t.closest("[data-dmore]")) { refreshDeals(true); return; }
+  const wc = t.closest("[data-wcat]");
+  if (wc) { wishCat = wc.dataset.wcat; $("#gm-wbar").innerHTML = wishBarHtml(); $("#gm-wlist").innerHTML = wishListHtml(); return; }
   const wm = t.closest("[data-wmode]");
   if (wm) { wishMode = wm.dataset.wmode; $("#gm-wbar").innerHTML = wishBarHtml(); $("#gm-wlist").innerHTML = wishListHtml(); return; }
   if (t.closest("[data-gadd]")) {
@@ -1257,6 +1454,9 @@ async function onClick(e) {
   }
   const sel = t.closest("[data-gsel]");
   if (sel) { try { await apiPost("/games/steam/select", { steamid: sel.dataset.gsel }); await refreshMe(); switchG("set"); } catch (err) { toast(err.message, "error"); } return; }
+  if (t.closest("[data-sess-in]")) { openQrLogin(); return; }
+  const sto = t.closest("[data-sess-out]");
+  if (sto) { try { await signOutSteam(); toast("Вход стёрт: токена на этом компьютере больше нет.", "success"); } catch (e) { toast(e && e.message ? e.message : String(e), "error"); } paintSession(); return; }
   const un = t.closest("[data-gunlink]");
   if (un) { try { await apiPost("/games/steam/unlink", { steamid: un.dataset.gunlink }); await refreshMe(); switchG("set"); toast("Аккаунт отвязан.", "success"); } catch (err) { toast(err.message, "error"); } return; }
   const card = t.closest("[data-app]");
@@ -1276,6 +1476,8 @@ document.addEventListener("error", e => {
 }, true);
 
 document.addEventListener("change", async e => {
+  const wb = e.target.closest && e.target.closest("[data-watch-app]");
+  if (wb) { saveWatch(wb); return; }
   if (!gamesVisible()) return;
   if (e.target.id === "gm-dsort") { deals.sort = e.target.value; refreshDeals(); }
   if (e.target.id === "gm-dtag") { deals.tag = Number(e.target.value); refreshDeals(); }

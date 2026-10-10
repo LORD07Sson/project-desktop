@@ -193,6 +193,8 @@ export function pctText(n) {
 
 /** Текст всплывашки о цене: { title, body } по записи /games/alerts. */
 export function alertText(a) {
+  if (a.kind === "release") return { title: `${a.name || "Игра"}: игра вышла`, body: a.info ? `${a.info[0].toUpperCase()}${a.info.slice(1)}.` : "Игра вышла в Steam." };
+  if (a.kind === "update") return { title: `${a.name || "Игра"}: вышло обновление`, body: a.info ? `${a.info}.` : "Новая сборка в Steam." };
   const now = fmtPrice(a.price);
   if (a.kind === "target") return { title: `${a.name || "Игра"}: цена достигла цели`, body: `Сейчас ${now}${a.price && a.price.discount > 0 ? ` (−${a.price.discount}%)` : ""}.` };
   return { title: `${a.name || "Игра"}: скидка −${(a.price && a.price.discount) || 0}%`, body: `Сейчас ${now}${a.price && a.price.discount > 0 ? `, было ${fmtPrice({ ...a.price, final: a.price.initial })}` : ""}.` };
