@@ -30,6 +30,4 @@
 
 Для разработчиков — [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-© 2026 Project
-
 Лицензия: [Project Desktop Proprietary License 1.0](LICENSE) — программой и кодом могут пользоваться только участники команды Project, пока они в ней состоят; распространять и передавать посторонним нельзя. © 2026 Project.
