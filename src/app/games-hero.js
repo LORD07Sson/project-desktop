@@ -30,7 +30,8 @@ export function heroCardHtml(h, owned) {
   return `<h2>${esc(h.name)}</h2>
     <p>${esc(h.desc || "")}</p>
     <div class="gm-hx-gap"></div>
-    ${h.rank ? `<div class="gm-hx-rank"><i aria-hidden="true"></i><span><small>Популярный товар</small>На ${Number(h.rank)}-м месте во всём мире</span></div>` : ""}
+    ${h.why ? `<div class="gm-hx-rank gm-hx-why"><i aria-hidden="true"></i><span><small>Рекомендовано вам</small>${esc(h.why)}</span></div>`
+        : h.rank ? `<div class="gm-hx-rank"><i aria-hidden="true"></i><span><small>Популярный товар</small>На ${Number(h.rank)}-м месте во всём мире</span></div>` : ""}
     <div class="gm-hx-price">${heroPriceHtml(h)}</div>
     <div class="gm-hx-row"><button type="button" class="gm-hx-buy" data-app="${Number(h.appid)}" data-name="${esc(h.name)}">${esc(heroButtonLabel(h, owned))}</button>${(h.os || []).includes("windows") ? WIN : ""}</div>`;
 }

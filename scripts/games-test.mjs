@@ -313,6 +313,11 @@ assert.match(heroSlideHtml(hh, 5, u => u), /class="gm-hx-logo" crossorigin="anon
 // подпись места в топе продаж
 assert.match(heroCardHtml({ ...hh, rank: 4 }, false), /На 4-м месте во всём мире/);
 assert.ok(!heroCardHtml({ ...hh, rank: null }, false).includes("gm-hx-rank"));
+// рекомендованный слайд: причина вместо места в топе
+assert.match(heroCardHtml({ ...hh, rank: null, why: "Похоже на игры, в которые вы играли: Sand" }, false), /Рекомендовано вам[^]*Sand/);
+assert.ok(!heroCardHtml({ ...hh, rank: null, why: "x" }, false).includes("Популярный товар"));
+assert.match(heroCardHtml({ ...hh, rank: 3, why: null }, false), /Популярный товар/);
+assert.ok(!heroCardHtml({ ...hh, rank: 3, why: "<b>x</b>" }, false).includes("<b>x</b>"));
 assert.ok(heroLogoUrl(1332010).endsWith("/1332010/logo.png"));
 const mk = heroMarkup([hh, { ...hh, appid: 2 }], u => u);
 assert.equal((mk.match(/gm-hx-slide/g) || []).length, 2);
