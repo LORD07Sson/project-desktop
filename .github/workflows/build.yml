@@ -116,16 +116,11 @@ jobs:
         shell: bash
         run: |
           set -e
-          url="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-25-15-37/ffmpeg-N-126856-ged27b2c498-win64-lgpl.zip"
-          checksums_url="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-25-15-37/checksums.sha256"
-          filename="$(basename "$url")"
+          # Зеркало в собственном релизе репозитория: BtbN хранит автосборки около двух недель, закреплённый у них адрес давал 404.
+          # Файл не менялся, сумма записана здесь и сверяется ниже. Обновлять: новый релиз tools-ffmpeg-*, URL и SHA256 — в build.yml и build-alpha.yml.
+          url="https://github.com/LORD07Sson/project-desktop/releases/download/tools-ffmpeg-N-127271/ffmpeg-N-127271-gba987fe24d-win64-lgpl.zip"
+          expected_sha256="32b374c9831ae5640e33977baa4cf04a59704f616a0c3743654697fb3c7f26de"
           curl -fL --retry 5 --retry-all-errors --retry-delay 2 --max-time 300 -o ffmpeg.zip "$url"
-          curl -fL --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -o ffmpeg-checksums.sha256 "$checksums_url"
-          expected_sha256="$(awk -v f="$filename" '$2 == f {print $1; exit}' ffmpeg-checksums.sha256)"
-          if [ -z "$expected_sha256" ]; then
-            echo "::error::В checksums.sha256 нет SHA256 для $filename"
-            exit 1
-          fi
           actual_sha256="$(sha256sum ffmpeg.zip | cut -d' ' -f1)"
           if [ "$actual_sha256" != "$expected_sha256" ]; then
             echo "::error::SHA256 не совпал — ожидали $expected_sha256, получили $actual_sha256"
