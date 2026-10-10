@@ -497,3 +497,16 @@ export function heroPalette(px, w, h) {
   [0.92, 0.82, 0.72].forEach((t, i) => { cols[i][2] = Math.max(cols[i][2], t); });   // сверху светлее, к низу глубже, как в карточке-образце
   return { c1: hex(hsvToRgb(...cols[0])), c2: hex(hsvToRgb(...cols[1])), c3: hex(hsvToRgb(...cols[2])), base: hex(hsvToRgb(cols[2][0], 0.72, 0.17)) };
 }
+
+/** Прозрачный ли логотип: средняя непрозрачность по рамке уменьшенной копии (px — RGBA, w×h). У настоящих логотипов Steam она 0–0,2,
+ *  у «логотипов» в виде обычной картинки без прозрачности — 1. Такие в герое не показываем: торчал бы прямоугольник. */
+export function logoHasTransparentEdge(px, w, h) {
+  let sum = 0, n = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x !== 0 && y !== 0 && x !== w - 1 && y !== h - 1) continue;
+      sum += px[(y * w + x) * 4 + 3]; n++;
+    }
+  }
+  return n > 0 && sum / n / 255 < 0.6;
+}

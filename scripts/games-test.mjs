@@ -269,7 +269,7 @@ assert.match(panelHtml(trItems[0], u => u), /Очень положительны
 assert.match(tabsHtml({ tab: "top", free: true, owned: false, more: false, sel: 0 }, trItems, () => "", u => u), /data-sopt="owned"/);
 assert.match(tabsHtml({ tab: "new" }, [], () => "", u => u), /ничего нет/);
 
-import { ruPlural, rgbToHsv, hsvToRgb, heroPalette, huePalette } from "../src/app/games-core.js";
+import { ruPlural, rgbToHsv, hsvToRgb, heroPalette, huePalette, logoHasTransparentEdge } from "../src/app/games-core.js";
 import { heroButtonLabel, heroPriceHtml, heroCardHtml, heroShotsHtml, heroFriendsHtml, heroSlideHtml, heroMarkup, heroLogoUrl } from "../src/app/games-hero.js";
 assert.equal(ruPlural(1, ["друг", "друга", "друзей"]), "друг");
 assert.equal(ruPlural(3, ["друг", "друга", "друзей"]), "друга");
@@ -310,5 +310,12 @@ const mk = heroMarkup([hh, { ...hh, appid: 2 }], u => u);
 assert.equal((mk.match(/gm-hx-slide/g) || []).length, 2);
 assert.equal((mk.match(/data-shero=/g) || []).length, 2);
 assert.equal(heroMarkup([], u => u), "");
+assert.match(heroSlideHtml(hh, 0, u => u), /crossorigin="anonymous"/);
+// логотип: прозрачные края — настоящий, непрозрачная рамка — картинка с фоном
+const lg = (alphaEdge, alphaMid) => { const w = 8, h = 8, a = new Uint8ClampedArray(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) a[(y * w + x) * 4 + 3] = (x === 0 || y === 0 || x === w - 1 || y === h - 1) ? alphaEdge : alphaMid; return a; };
+assert.equal(logoHasTransparentEdge(lg(0, 255), 8, 8), true);
+assert.equal(logoHasTransparentEdge(lg(40, 255), 8, 8), true);
+assert.equal(logoHasTransparentEdge(lg(255, 255), 8, 8), false);
+assert.equal(logoHasTransparentEdge(new Uint8ClampedArray(0), 0, 0), false);
 
 console.log("games-test: ok");
