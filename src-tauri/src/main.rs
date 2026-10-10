@@ -14,6 +14,7 @@ mod desktop_notify;
 mod file_scope;
 mod library;
 mod nyaa;
+mod steam_session;
 mod torrent_clients;
 mod media_tools;
 #[cfg(windows)]
@@ -860,6 +861,33 @@ fn token_clear() -> Result<(), String> {
     log_result("token_clear", token_store::clear())
 }
 
+// «Расширенные возможности Steam» (steam_session.rs): вход по QR, токен только в хранилище ОС на этом компьютере,
+// страница получает статус и ответы разрешённых методов чтения, но не сами токены.
+#[tauri::command(async)]
+async fn steam_qr_begin() -> Result<steam_session::QrStart, String> {
+    log_result("steam_qr_begin", steam_session::begin_qr().await)
+}
+
+#[tauri::command(async)]
+async fn steam_qr_poll(client_id: String, request_id: String) -> Result<steam_session::QrPoll, String> {
+    log_result("steam_qr_poll", steam_session::poll_qr(client_id, request_id).await)
+}
+
+#[tauri::command(async)]
+async fn steam_session_status() -> steam_session::Status {
+    steam_session::status().await
+}
+
+#[tauri::command(async)]
+async fn steam_sign_out() -> Result<(), String> {
+    log_result("steam_sign_out", steam_session::sign_out().await)
+}
+
+#[tauri::command(async)]
+async fn steam_api(interface: String, method: String, params: String) -> Result<String, String> {
+    log_result("steam_api", steam_session::api(&interface, &method, &params).await)
+}
+
 // Прогресс пакетного QC (runQcBatch в qc.js) — на иконке в панели
 // задач, а не только полоской внутри окна: у студии окно приложения
 // часто свёрнуто в трей во время долгого прогона по папке с
@@ -1372,6 +1400,11 @@ fn main() {
             token_save,
             token_load,
             token_clear,
+            steam_qr_begin,
+            steam_qr_poll,
+            steam_session_status,
+            steam_sign_out,
+            steam_api,
             set_autostart,
             is_autostart,
             check_for_update,

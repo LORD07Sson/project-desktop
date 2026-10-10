@@ -64,6 +64,8 @@ serde_json = "1"
 # патчи вместо полного скачивания каждый раз. См. main.rs.
 velopack = "1.2.0"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+# Разбор полезной нагрузки JWT-токенов Steam (срок действия, SteamID) в steam_session.rs.
+base64 = "0.22"
 # Загрузка файла, перетащенного из проводника, и скачивание вложений
 # (upload_report_file/download_report_file в main.rs) — HTTP на свой API
 # напрямую из Rust, минуя JS/fetch: не нужен tauri-plugin-fs, а токен
