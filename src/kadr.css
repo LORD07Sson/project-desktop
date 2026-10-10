@@ -2647,3 +2647,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .gm-hx + * { margin-top: 22px; }
 @media (max-width: 1100px) { .gm-hx { grid-template-columns: 1fr; grid-template-rows: 1fr; height: 320px; } .gm-hx-card, .gm-hx-shots { display: none; } .gm-hx-art { grid-row: 1; } }
 @media (prefers-reduced-motion: reduce) { .gm-hx-bg, .gm-hx-logo, .gm-hx-slide { transition: none !important; } .gm-hx-card::before { animation: none; } }
+
+/* герой: подпись о месте в топе продаж, как у слайдов на главной Steam */
+.gm-hx-rank { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.25; text-shadow: 0 1px 10px rgba(0, 0, 0, .4); }
+.gm-hx-rank i { flex: 0 0 26px; height: 26px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Cg fill='%23c8ec6a'%3E%3Crect x='1' y='16' width='6' height='9' rx='1'/%3E%3Crect x='10' y='11' width='6' height='14' rx='1'/%3E%3Crect x='19' y='5' width='6' height='20' rx='1'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat; }
+.gm-hx-rank small { display: block; color: #c8ec6a; font-size: 12px; font-weight: 700; }
