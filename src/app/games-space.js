@@ -248,9 +248,14 @@ async function paintStore() {
     }
     if (tab !== "store" || $("#gm-q").value.trim().length >= 2 || storeBrowse) return;
     const h = storeHome;
+    if (h.personalHero === undefined) {                       // привязан Steam: герой по кластерам вкусов и личной оценке Steam (сервер, кэш час)
+      h.personalHero = [];
+      if (me && me.steamid) { try { h.personalHero = (await apiGet("/games/store/hero")).items || []; } catch (_) { /* останется общий герой */ } }
+      if (tab !== "store" || $("#gm-q").value.trim().length >= 2 || storeBrowse) return;
+    }
     const sec = h.sections || [];
     const rows = sec.map(x => railSection(x.title, x.items, x.go ? `<button type="button" class="ny-link" data-gtab-go="${x.go}">все →</button>` : "")).join("");
-    body.innerHTML = `<div class="gm-sh">` + heroHtml(h.hero) + genreChips() + dealsPagerHtml(h) + `<section class="gm-stabs" id="gm-stabs"></section><div id="gm-cal"></div><div id="gm-foryou"></div>` + (rows || empty("Пусто", "Steam не вернул подборки.")) + `</div>`;
+    body.innerHTML = `<div class="gm-sh">` + heroHtml(h.personalHero.length ? h.personalHero : h.hero) + genreChips() + dealsPagerHtml(h) + `<section class="gm-stabs" id="gm-stabs"></section><div id="gm-cal"></div><div id="gm-foryou"></div>` + (rows || empty("Пусто", "Steam не вернул подборки.")) + `</div>`;
     heroCtl.start();
     loadStabs();
     loadForYou();

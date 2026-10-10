@@ -30,6 +30,8 @@ export function heroCardHtml(h, owned) {
   return `<h2>${esc(h.name)}</h2>
     <p>${esc(h.desc || "")}</p>
     <div class="gm-hx-gap"></div>
+    ${h.why ? `<div class="gm-hx-rank gm-hx-why"><i aria-hidden="true"></i><span><small>Рекомендовано вам</small>${esc(h.why)}</span></div>`
+        : h.rank ? `<div class="gm-hx-rank"><i aria-hidden="true"></i><span><small>Популярный товар</small>На ${Number(h.rank)}-м месте во всём мире</span></div>` : ""}
     <div class="gm-hx-price">${heroPriceHtml(h)}</div>
     <div class="gm-hx-row"><button type="button" class="gm-hx-buy" data-app="${Number(h.appid)}" data-name="${esc(h.name)}">${esc(heroButtonLabel(h, owned))}</button>${(h.os || []).includes("windows") ? WIN : ""}</div>`;
 }
@@ -49,9 +51,10 @@ export function heroFriendsHtml(info, img) {
 /** Слайд: арт, логотип (если файла нет — просто арт) и теги-чипы сверху слева. */
 export function heroSlideHtml(h, i, img) {
   const art = h.hero || h.capsule || h.image;
+  const at = i < 2 ? "src" : "data-src";                                      // первые два сразу, остальные подгружает контроллер перед показом
   return `<div class="gm-hx-slide${i === 0 ? " on" : ""}" data-app="${Number(h.appid)}" data-name="${esc(h.name)}" role="button" tabindex="0" aria-label="${esc(h.name)}">
-    ${art ? `<img class="gm-hx-bg" src="${esc(img(art))}" data-id="${Number(h.appid)}" data-n="0" data-p="${esc(art)}" alt="">` : ""}
-    <img class="gm-hx-logo" crossorigin="anonymous" src="${esc(img(heroLogoUrl(h.appid)))}" alt="">
+    ${art ? `<img class="gm-hx-bg" ${at}="${esc(img(art))}" data-id="${Number(h.appid)}" data-n="0" data-p="${esc(art)}" alt="">` : ""}
+    <img class="gm-hx-logo" crossorigin="anonymous" ${at}="${esc(img(heroLogoUrl(h.appid)))}" alt="">
     <div class="gm-hx-chips">${(h.tags || []).slice(0, 4).map(t => `<span>${esc(t)}</span>`).join("")}</div>
   </div>`;
 }
@@ -140,11 +143,23 @@ export function createHero(d) {
     } catch (_) { /* друзья необязательны */ }
   }
 
+  // Перед показом слайда подгружаем его и следующий (картинки лежат в data-src), цвета считаем только для них.
+  function reveal(k) {
+    const box = root(), n = st.list.length;
+    if (!box || !n) return;
+    box.querySelectorAll(".gm-hx-slide").forEach((el, j) => {
+      if (j !== k && j !== (k + 1) % n) return;
+      el.querySelectorAll("img[data-src]").forEach(im => { im.src = im.dataset.src; im.removeAttribute("data-src"); });
+    });
+    paletteFor(st.list[(k + 1) % n]);
+  }
+
   function go(i, instant) {
     const box = root();
     if (!box || !st.list.length) return;
     const n = st.list.length, k = ((i % n) + n) % n, h = st.list[k], my = ++st.seq;
     st.i = k;
+    reveal(k);
     box.querySelectorAll(".gm-hx-slide").forEach((el, j) => el.classList.toggle("on", j === k));
     box.querySelectorAll("[data-shero]").forEach((el, j) => el.classList.toggle("on", j === k));
     const card = document.getElementById("gm-hx-card"), shots = document.getElementById("gm-hx-shots");
@@ -166,7 +181,7 @@ export function createHero(d) {
     const box = root();
     if (!box || !st.list.length) return;
     paletteFor(st.list[st.i]).then(applyPal);
-    st.list.forEach(x => paletteFor(x));                                       // заранее: смена слайда без «скачка» цвета
+    reveal(st.i);                                                              // следующий слайд и его цвета заранее: смена без «скачка»
     loadFriends();
     if (st.list.length < 2) return;
     st.timer = setInterval(() => { // DevSkim: ignore DS172411 — функция, не строка

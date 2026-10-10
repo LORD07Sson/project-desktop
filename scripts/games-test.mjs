@@ -305,6 +305,19 @@ assert.equal((heroShotsHtml(hh, u => u).match(/<button/g) || []).length, 2);
 assert.equal(heroFriendsHtml({ count: 0, list: [] }, u => u), "");
 assert.match(heroFriendsHtml({ count: 4, list: [{ name: "A", avatar: "a" }] }, u => u), /4 друга/);
 assert.match(heroSlideHtml(hh, 0, u => u), /gm-hx-slide on/);
+// первые два слайда с картинками сразу, остальные ждут (data-src), чтобы 12 слайдов не грузили 24 файла разом
+assert.match(heroSlideHtml(hh, 1, u => u), /class="gm-hx-bg" src=/);
+assert.match(heroSlideHtml(hh, 2, u => u), /class="gm-hx-bg" data-src=/);
+assert.ok(!/class="gm-hx-bg" src=/.test(heroSlideHtml(hh, 5, u => u)));
+assert.match(heroSlideHtml(hh, 5, u => u), /class="gm-hx-logo" crossorigin="anonymous" data-src=/);
+// подпись места в топе продаж
+assert.match(heroCardHtml({ ...hh, rank: 4 }, false), /На 4-м месте во всём мире/);
+assert.ok(!heroCardHtml({ ...hh, rank: null }, false).includes("gm-hx-rank"));
+// рекомендованный слайд: причина вместо места в топе
+assert.match(heroCardHtml({ ...hh, rank: null, why: "Похоже на игры, в которые вы играли: Sand" }, false), /Рекомендовано вам[^]*Sand/);
+assert.ok(!heroCardHtml({ ...hh, rank: null, why: "x" }, false).includes("Популярный товар"));
+assert.match(heroCardHtml({ ...hh, rank: 3, why: null }, false), /Популярный товар/);
+assert.ok(!heroCardHtml({ ...hh, rank: 3, why: "<b>x</b>" }, false).includes("<b>x</b>"));
 assert.ok(heroLogoUrl(1332010).endsWith("/1332010/logo.png"));
 const mk = heroMarkup([hh, { ...hh, appid: 2 }], u => u);
 assert.equal((mk.match(/gm-hx-slide/g) || []).length, 2);
