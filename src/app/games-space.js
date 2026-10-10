@@ -171,6 +171,8 @@ function cardHtml(g, extra = "") {
 }
 
 let storeHome = null, storeBrowse = null, storeCal = null;
+const STORE_TTL = 60000;       // главная живая: при открытии вкладки данные старше минуты берём заново
+let storeAt = 0;
 
 function railSection(title, items, more = "") {
   if (!items || !items.length) return "";
@@ -238,7 +240,12 @@ async function paintStore() {
   body.innerHTML = skeleton();
   try {
     if (!tagList) { try { tagList = (await apiGet("/games/tags")).items || []; } catch (_) { tagList = []; } }
-    if (!storeHome) storeHome = await apiGet("/games/store/home");
+    if (!storeHome || Date.now() - storeAt > STORE_TTL) {
+      const had = !!storeHome;
+      storeHome = await apiGet("/games/store/home");
+      storeAt = Date.now();
+      if (had) { stab.cache = {}; storeCal = null; loadLibrary(true).catch(() => { /* отметки «в библиотеке» не критичны */ }); }
+    }
     if (tab !== "store" || $("#gm-q").value.trim().length >= 2 || storeBrowse) return;
     const h = storeHome;
     const sec = h.sections || [];
@@ -694,6 +701,35 @@ function paintSettings() {
 }
 
 // ---------- карточка игры ----------
+const priceBoxHtml = d => {
+  const v = d.free ? { now: "Бесплатно", old: "", badge: "", sale: false } : priceView(d.price);
+  return `<div class="gm-box pr"><b class="${v.sale ? "sale" : ""}">${esc(v.now)}</b><small>${v.old ? `<s>${esc(v.old)}</s> ${v.badge}` : d.at_lowest && !d.free ? "исторический минимум" : "цена"}</small></div>`;
+};
+
+// Рейтинг в рамке «отзывы»: общий для первой загрузки и для обновления.
+function paintRate(ov, r) {
+  const sm = reviewSummary(r), rate = ov.querySelector("#gm-rate");
+  if (rate && sm) { rate.className = `gm-box ${sm.pct >= 70 ? "ok" : sm.pct >= 40 ? "mid" : "bad"}`; rate.innerHTML = `<b>${sm.pct}%</b><small>${fmtNum(r.total)} отзывов</small>`; }
+  return sm;
+}
+
+// Открытая страница игры живёт: раз в минуту обновляются цена, «исторический минимум», история цены, раз в пять минут — рейтинг.
+async function refreshDetail(ov, appid, withRating) {
+  try {
+    const d = await apiGet(`/games/app/${appid}`);
+    if (!ov.isConnected) return;
+    ov.__d = { ...(ov.__d || {}), ...d };
+    const box = ov.querySelector(".gm-box.pr");
+    if (box) box.outerHTML = priceBoxHtml(ov.__d);
+    const act = ov.querySelector("[data-prange].on");
+    paintPriceStats(ov);
+    paintPriceChart(ov, act ? Number(act.dataset.prange) : 0);
+    paintPriceList(ov);
+  } catch (_) { /* следующая попытка через минуту */ }
+  if (!withRating || !ov.isConnected) return;
+  try { const r = await apiGet(`/games/app/${appid}/reviews`); if (ov.isConnected) paintRate(ov, r); } catch (_) { /* рейтинг обновится позже */ }
+}
+
 async function openDetail(appid, name) {
   const ov = gmSheet(dialogSkeletonHtml(7), "wide");
   ov.classList.add("gm-ov");
@@ -701,7 +737,6 @@ async function openDetail(appid, name) {
     const d = await apiGet(`/games/app/${appid}`);
     ov.__d = d;
     const l = lib && lib.ids.has(appid);
-    const v = d.free ? { now: "Бесплатно", old: "", badge: "", sale: false } : priceView(d.price);
     const cur = d.price && d.price.currency;
     const plat = Object.entries({ windows: "Windows", mac: "macOS", linux: "Linux" }).filter(([k]) => d.platforms && d.platforms[k]).map(([, n]) => n).join(" · ");
     const types = { game: "Игра", dlc: "DLC", demo: "Демо", mod: "Мод", music: "Саундтрек", advertising: "Реклама" };
@@ -741,7 +776,7 @@ async function openDetail(appid, name) {
             <div class="gm-boxes">
               <div class="gm-box" id="gm-rate"><b>—</b><small>отзывы</small></div>
               <div class="gm-box now"><b id="gm-now">—</b><small>играют сейчас</small></div>
-              <div class="gm-box pr"><b class="${v.sale ? "sale" : ""}">${esc(v.now)}</b><small>${v.old ? `<s>${esc(v.old)}</s> ${v.badge}` : d.at_lowest && !d.free ? "исторический минимум" : "цена"}</small></div>
+              ${priceBoxHtml(d)}
             </div>
             <div class="gm-d-badges" id="gm-badges">${badgesOf(d, null).map(b => `<i class="gm-tag ${b.cls}">${esc(b.text)}</i>`).join("")}</div>
             <p class="gm-d-desc">${esc(d.description || "")}</p>
@@ -785,7 +820,12 @@ async function openDetail(appid, name) {
   paintPriceChart(ov, 0);
   paintPriceList(ov);
   loadOnline(ov, appid, "48h");
-  ov.__ot = setInterval(() => { if (!ov.isConnected) { clearInterval(ov.__ot); return; } loadOnline(ov, appid, ov.__orange || "48h", true); }, 60000); // DevSkim: ignore DS172411 — функция, не строка
+  ov.__tick = 0;
+  ov.__ot = setInterval(() => { // DevSkim: ignore DS172411 — функция, не строка
+    if (!ov.isConnected) { clearInterval(ov.__ot); return; }
+    loadOnline(ov, appid, ov.__orange || "48h", true);
+    refreshDetail(ov, appid, ++ov.__tick % 5 === 0);
+  }, 60000);
   loadExtra(ov, appid);
   loadMonthly(ov, appid);
   loadMore(ov, appid, "reviews");
@@ -956,9 +996,7 @@ async function loadMore(ov, appid, kind) {
   try {
     if (kind === "reviews") {
       const r = await apiGet(`/games/app/${appid}/reviews`);
-      const sm = reviewSummary(r);
-      const rate = ov.querySelector("#gm-rate");
-      if (rate && sm) { rate.className = `gm-box ${sm.pct >= 70 ? "ok" : sm.pct >= 40 ? "mid" : "bad"}`; rate.innerHTML = `<b>${sm.pct}%</b><small>${fmtNum(r.total)} отзывов</small>`; }
+      const sm = paintRate(ov, r);
       box.innerHTML = (sm ? `<p class="gm-ach-s"><b>${esc(sm.text)}</b></p>` : "") + (r.items.length ? r.items.map(x => `<div class="gm-news gm-rev ${x.up ? "up" : "down"}"><b>${x.up ? "👍 Рекомендует" : "👎 Не рекомендует"}</b><small class="ny-hint">${esc(x.name || "")} · ${fmtNum(x.hours)} ч в игре · ${esc(shortDate(x.ts))}</small><p>${esc(x.text)}</p></div>`).join("") : `<small class="ny-hint">Отзывов на русском пока нет.</small>`);
     } else if (kind === "stats") {
       const r = await apiGet(`/games/app/${appid}/stats`, { steamid: me && me.steamid });
@@ -1284,6 +1322,16 @@ document.addEventListener("mouseover", e => {
     if (cell && items && items[Number(i)] && cell.dataset.i !== i) { cell.dataset.i = i; relPaintCell(cell, items, Number(i)); }
     return;
   }
+});
+let awayAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { awayAt = Date.now(); return; }
+  if (!gamesVisible() || !awayAt || Date.now() - awayAt < 5 * 60000) return;
+  awayAt = 0;
+  const ae = document.activeElement;
+  if (document.querySelector(".gm-ov") || (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) return;   // карточка игры сама живая, ввод не прерываем
+  if (tab === "store" && (storeBrowse || ($("#gm-q") && $("#gm-q").value.trim().length >= 2))) return;
+  switchG(tab);
 });
 document.addEventListener("submit", e => {
   if (gamesVisible() && e.target.id === "gm-look") { e.preventDefault(); const q = $("#gm-lookq").value.trim(); if (q.length >= 2) lookupProfile(q); }
