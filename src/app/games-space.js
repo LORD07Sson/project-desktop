@@ -984,7 +984,7 @@ async function openDetail(appid, name) {
           <div class="gm-online-h gm-ph2"><div class="gm-pstats" id="gm-pstats"></div><div class="ny-seg">${[[30, "30 дн."], [90, "3 мес."], [365, "Год"], [0, "Всё"]].map(([k, t]) => `<button type="button" data-prange="${k}">${t}</button>`).join("")}</div></div>
           <div class="gm-chartbox" id="gm-pchart"></div>
           <div class="gm-plist" id="gm-plist"></div>
-          <p class="ny-hint gm-hnote">Steam не хранит историю цен, поэтому мы ведём её сами: цены популярных игр записываются каждые 6 часов, а у желаемого — каждые 30 минут и при каждом просмотре.</p>
+          <p class="ny-hint gm-hnote">Steam не хранит историю цен, поэтому мы ведём её сами: цены популярных игр записываются каждые 2 часа, а у желаемого — каждые 30 минут и при каждом просмотре.</p>
         </div>
         <div class="gm-reg" id="gm-reg"><button type="button" class="btn" data-regions="${appid}">Цены по странам</button></div></section>`}
         <section class="gm-dp-sec"><div id="gm-watchbox"></div></section>
@@ -1113,7 +1113,7 @@ function paintPriceChart(ov, range) {
     const cut = now - range * 86400, before = hist.filter(p => p.ts < cut), keep = hist.filter(p => p.ts >= cut);
     pts = before.length ? [{ ...before[before.length - 1], ts: cut }, ...keep] : keep;
   }
-  if (!pts.length) { box.innerHTML = `<small class="ny-hint">Данных пока нет: цена записывается раз в 6 часов и при каждом просмотре.</small>`; return; }
+  if (!pts.length) { box.innerHTML = `<small class="ny-hint">Данных пока нет: цена записывается раз в 2 часа и при каждом просмотре.</small>`; return; }
   const cur = d.price && d.price.currency;
   const m = n => priceView({ final: n, initial: n, discount: 0, currency: cur }).now;
   const g = seriesChart(pts.map(p => ({ ts: p.ts, v: p.price, d: p.discount })), { step: true, now, h: 190 });
