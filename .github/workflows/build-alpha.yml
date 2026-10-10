@@ -138,9 +138,11 @@ jobs:
         shell: bash
         run: |
           set -e
-          url="https://sourceforge.net/projects/mpv-player-windows/files/64bit/mpv-x86_64-20260830-git-e8673660ab.7z/download"
+          # Зеркало на нашем релизе: сторонний SourceForge иногда обрывает загрузку (curl 56). Файл не менялся, сумма сверяется ниже.
+          # Обновлять: новый релиз tools-mpv-*, URL и SHA256 — в build.yml и build-alpha.yml.
+          url="https://github.com/LORD07Sson/project-desktop/releases/download/tools-mpv-20260830-git-e8673660ab/mpv-x86_64-20260830-git-e8673660ab.7z"
           expected_sha256="464ab69b2248e7b592f0c27a927ffd1f016f7fa2d6d8b46b1a98254c5f2b670a"
-          curl -sL --max-time 180 -o mpv.7z "$url"
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 --max-time 300 -o mpv.7z "$url"
           actual_sha256=$(sha256sum mpv.7z | cut -d' ' -f1)
           if [ "$actual_sha256" != "$expected_sha256" ]; then
             echo "::error::SHA256 не совпал — ожидали $expected_sha256, получили $actual_sha256"
