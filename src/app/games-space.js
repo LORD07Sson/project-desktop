@@ -1205,10 +1205,11 @@ async function loadBuild(ov, appid) {
 }
 
 function steamText(value) {
-  return String(value || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/p\s*>/gi, "\n")
-    .replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ")
+  return String(value || "").replace(/<br\s*\/?>/gi, "\n").replace(/<li\b[^>]*>/gi, "• ")
+    .replace(/<\/(?:p|div|li|h[1-6])\s*>/gi, "\n").replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ")
     .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"')
-    .replace(/&amp;/gi, "&").replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").trim();
+    .replace(/&#39;|&apos;/gi, "'").replace(/&amp;/gi, "&")
+    .replace(/[ \t]+/g, " ").replace(/[ \t]*\n[ \t]*/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 async function loadTechnicalSections(ov, appid) {
@@ -1255,10 +1256,18 @@ async function loadTechnicalSections(ov, appid) {
     const p = d.platforms || {};
     const systems = Object.entries({ windows: "Windows", mac: "macOS", linux: "Linux" }).filter(([k]) => p[k]).map(([, v]) => v);
     const langs = tech && tech.languages && tech.languages.length ? tech.languages : d.language_support || [];
-    const capability = value => value == null ? "н/д" : value ? "✓" : "—";
+    const languageFlags = x => {
+      const flags = [];
+      if (x.interface != null) flags.push(`<i class="${x.interface ? "yes" : "no"}">Интерфейс ${x.interface ? "✓" : "—"}</i>`);
+      if (x.audio != null) flags.push(`<i class="${x.audio ? "yes" : "no"}">Полная озвучка ${x.audio ? "✓" : "—"}</i>`);
+      if (x.subtitles != null) flags.push(`<i class="${x.subtitles ? "yes" : "no"}">Субтитры ${x.subtitles ? "✓" : "—"}</i>`);
+      return flags.length ? flags.join("") : `<small>Данные о возможностях не указаны</small>`;
+    };
+    const controller = String(tech && tech.controller || d.controller_support || "").toLowerCase();
+    const controllerLabel = ({ full: "Полная поддержка", partial: "Частичная поддержка" })[controller] || (tech && tech.controller || d.controller_support || "Не указана");
     const req = d.requirements || {};
-    configBox.innerHTML = `<div class="gm-tech-grid"><div><small>Поддерживаемые системы</small><b>${esc(systems.join(" · ") || tech && tech.os || "Не указаны")}</b></div><div><small>Поддержка контроллера</small><b>${esc(tech && tech.controller || d.controller_support || "Не указана")}</b></div><div><small>Папка установки</small><b>${esc(tech && tech.install_dir || "—")}</b></div><div><small>Минимальные требования</small><b class="gm-tech-pre">${esc(steamText(req.min) || "Не указаны")}</b></div><div><small>Рекомендуемые требования</small><b class="gm-tech-pre">${esc(steamText(req.rec) || "Не указаны")}</b></div></div>`
-      + (langs.length ? `<div class="gm-lang-list">${langs.map(x => `<span><b>${esc(x.name)}</b><small>Интерфейс ${capability(x.interface)} · озвучка ${capability(x.audio)} · субтитры ${capability(x.subtitles)}</small></span>`).join("")}</div>` : `<p class="ny-hint">Подробная таблица языков недоступна.</p>`);
+    configBox.innerHTML = `<div class="gm-tech-grid gm-config-grid"><div class="gm-config-fact"><small>Поддерживаемые системы</small><b>${esc(systems.join(" · ") || tech && tech.os || "Не указаны")}</b></div><div class="gm-config-fact"><small>Поддержка контроллера</small><b>${esc(controllerLabel)}</b></div><div class="gm-config-fact"><small>Папка установки</small><b><code>${esc(tech && tech.install_dir || "—")}</code></b></div><div class="gm-config-req"><small>Минимальные требования</small><b class="gm-tech-pre">${esc(steamText(req.min) || "Не указаны")}</b></div><div class="gm-config-req"><small>Рекомендуемые требования</small><b class="gm-tech-pre">${esc(steamText(req.rec) || "Не указаны")}</b></div></div>`
+      + (langs.length ? `<div class="gm-lang-list">${langs.map(x => `<span><b>${esc(x.name)}</b><span class="gm-lang-flags">${languageFlags(x)}</span></span>`).join("")}</div>` : `<p class="ny-hint">Подробная таблица языков недоступна.</p>`);
   }
   if (cloudBox) {
     const cloud = tech && tech.cloud;
