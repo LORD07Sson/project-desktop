@@ -3,7 +3,7 @@
 // который берёт их у официальных точек Steam. Игры запускаются из СВОЕЙ библиотеки через steam://run/<id>,
 // то есть лицензионной копией через клиент Steam.
 
-import { apiGet, apiPost, apiDelete, mediaUrl, ensureMediaToken, toast, openSheet, dismissSheet, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiDelete, mediaUrl, ensureMediaToken, forceMediaToken, toast, openSheet, dismissSheet, dialogSkeletonHtml } from "./api.js";
 import { openExternal } from "./tauri.js";
 import { $, esc } from "./utils.js";
 import { alertText, sortWishlist, sortLibrary, badgesOf, achSummary, statLabel, friendState, xpProgress, reviewSummary, wishStatus, wishFilter, seriesChart, pointAt, fmtCompact, dayLabel, chunk, addDays, mondayOf, isoWeek, monthWeeks, rollingWeeks, monthTab, nextMonths, priceView, fmtHours, isSteamLaunchUrl, initials2, imageCandidates, hueOf, fmtNum, shortDate, deltaView, miniLine, groupByDate, untilText, pctText } from "./games-core.js";
@@ -1470,11 +1470,22 @@ async function onClick(e) {
 }
 
 // Картинка не открылась → следующий запасной адрес; адреса кончились → заглушка с инициалами.
-document.addEventListener("error", e => {
+document.addEventListener("error", async e => {
   const im = e.target;
   if (!im || im.tagName !== "IMG" || !im.dataset || !im.dataset.id || !im.closest("#games-screen, .gm-ov")) return;
   const list = imageCandidates(im.dataset.id, im.dataset.p);
-  const n = Number(im.dataset.n || 0) + 1;
+  const current = Number(im.dataset.n || 0);
+  // Steam thumbnails are lazy-loaded. Their short-lived media token may
+  // expire before an off-screen image is requested, so refresh once and
+  // retry the same valid Steam asset before moving to alternate URLs.
+  if (im.dataset.mtRetry !== "1") {
+    im.dataset.mtRetry = "1";
+    await forceMediaToken();
+    if (!im.isConnected) return;
+    im.src = img(list[current]);
+    return;
+  }
+  const n = current + 1;
   if (n < list.length) { im.dataset.n = String(n); im.src = img(list[n]); return; }
   const box = im.parentElement;
   im.remove();

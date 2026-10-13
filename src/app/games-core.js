@@ -83,7 +83,10 @@ export function imageCandidates(appid, primary) {
   const list = [
     primary,
     `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/header.jpg`,
+    `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/capsule_616x353.jpg`,
     `https://cdn.akamai.steamstatic.com/steam/apps/${id}/header.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${id}/capsule_616x353.jpg`,
+    `https://shared.fastly.steamstatic.com/steam/apps/${id}/header.jpg`,
     `https://cdn.akamai.steamstatic.com/steam/apps/${id}/library_hero.jpg`,
     `https://cdn.akamai.steamstatic.com/steam/apps/${id}/library_600x900.jpg`,
   ].filter(Boolean);
