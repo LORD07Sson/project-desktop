@@ -206,13 +206,16 @@ function Hero(props) {
           const r = it.r;
           const poster = imgProxy(r.poster_url);
           const banner = titleArt(r.title_id, "banner", 1440);
+          // Не меняем classList вручную в onError: Solid пересобирает class
+          // при смене активного слайда и стирает такую правку.
+          const [bannerFailed, setBannerFailed] = createSignal(false);
           const left = daysLeft(r.deadline);
           const ep = epNum(r);
           return (
-            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner ? "" : " no-ban"}`}>
+            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner && !bannerFailed() ? "" : " no-ban"}`}>
               <div class="kd-slide-amb" style={poster ? { "background-image": `url("${poster}")` } : {}} />
               <Show when={banner}>
-                <img class="kd-slide-ban" src={banner} alt="" onError={e => e.currentTarget.closest(".kd-slide").classList.add("no-ban")} />
+                <img class="kd-slide-ban" src={banner} alt="" onLoad={() => setBannerFailed(false)} onError={() => setBannerFailed(true)} />
               </Show>
               <Show when={poster}><img class="kd-slide-art" src={poster} alt="" /></Show>
               <div class="kd-slide-fade" />
