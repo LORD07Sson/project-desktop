@@ -215,22 +215,18 @@ function renderList() {
 // ---------- лента ----------
 
 function messagesHtml(c) {
-  if (!messages.length) return `<div class="ms-empty">Здесь пока пусто — напишите первым.</div>`;
+  const visibleMessages = messages.filter(m => m.kind !== "deleted");
+  if (!visibleMessages.length) return `<div class="ms-empty">Здесь пока пусто — напишите первым.</div>`;
   const moderated = canModerate && (c.kind === "general" || c.kind === "topic");
   let html = "";
   let lastDay = null;
   let prev = null;
-  for (const m of messages) {
+  for (const m of visibleMessages) {
     const d = parseTs(m.created_at);
     if (dayKey(d) !== lastDay) {
       html += `<div class="ms-day"><span>${esc(dayLabel(d))}</span></div>`;
       lastDay = dayKey(d);
       prev = null;
-    }
-    if (m.kind === "deleted") {
-      html += `<div class="ms-msg ${m.mine ? "out" : "in"} deleted"><div class="ms-msg-col"><div class="ms-bubble ms-deleted">${m.mine ? "Вы удалили сообщение" : "Сообщение удалено"}</div></div></div>`;
-      prev = null;
-      continue;
     }
     // Подряд от одного человека в пределах 5 минут — без повторной шапки.
     const grouped = prev && prev.author_telegram_id === m.author_telegram_id && d - parseTs(prev.created_at) < 5 * 60000;

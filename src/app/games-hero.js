@@ -77,8 +77,29 @@ const palStore = () => { try { return JSON.parse(localStorage.getItem(PAL_KEY) |
  *  img(url) — адрес картинки, owned(id) — игра в библиотеке, friends(ids) — запрос друзей, hueOf(name) — запасной оттенок,
  *  active() — витрина сейчас открыта (иначе таймер сам останавливается). */
 export function createHero(d) {
-  const st = { list: [], i: 0, friends: {}, pal: {}, seq: 0, timer: 0 };
+  const st = { list: [], i: 0, friends: {}, pal: {}, seq: 0, timer: 0, bgUrl: "", bgSeq: 0, bgFront: 1 };
   const root = () => document.getElementById("gm-hero");
+
+  function paintBackdrop(h) {
+    const box = document.querySelector("#games-screen .gm-backdrop");
+    const art = h && (h.hero || h.capsule || h.image);
+    const url = art ? d.img(art) : "";
+    if (!box || !url || url === st.bgUrl) return;
+    st.bgUrl = url;
+    const seq = ++st.bgSeq;
+    const probe = new Image();
+    probe.onload = () => {
+      if (seq !== st.bgSeq || !box.isConnected) return;
+      const layers = box.querySelectorAll("i");
+      const next = st.bgFront ^ 1;
+      layers[next].style.backgroundImage = `url("${url.replace(/["\\]/g, "\\$&")}")`;
+      layers[next].classList.add("on");
+      layers[st.bgFront].classList.remove("on");
+      st.bgFront = next;
+    };
+    probe.onerror = () => { if (seq === st.bgSeq) st.bgUrl = ""; };
+    probe.src = url;
+  }
 
   // у многих игр нет файла логотипа, а у некоторых «логотип» — обычная картинка с фоном: тогда его убираем, остаётся один арт
   document.addEventListener("error", e => {
@@ -159,6 +180,7 @@ export function createHero(d) {
     if (!box || !st.list.length) return;
     const n = st.list.length, k = ((i % n) + n) % n, h = st.list[k], my = ++st.seq;
     st.i = k;
+    paintBackdrop(h);
     reveal(k);
     box.querySelectorAll(".gm-hx-slide").forEach((el, j) => el.classList.toggle("on", j === k));
     box.querySelectorAll("[data-shero]").forEach((el, j) => el.classList.toggle("on", j === k));
@@ -180,6 +202,7 @@ export function createHero(d) {
     stop();
     const box = root();
     if (!box || !st.list.length) return;
+    paintBackdrop(st.list[st.i]);
     paletteFor(st.list[st.i]).then(applyPal);
     reveal(st.i);                                                              // следующий слайд и его цвета заранее: смена без «скачка»
     loadFriends();

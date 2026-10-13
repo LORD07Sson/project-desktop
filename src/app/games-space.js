@@ -54,6 +54,7 @@ function ensureShell() {
   el.id = "games-screen";
   el.hidden = true;
   el.innerHTML = `
+    <div class="gm-backdrop" aria-hidden="true"><i></i><i></i></div>
     <header class="gm-top">
       <button type="button" class="gm-who" id="gm-who" title="Сменить профиль"></button>
       <nav class="gm-nav" id="gm-nav" aria-label="Игры">${TABS.map(([k, l]) => `<button type="button" data-gtab="${k}">${l}</button>`).join("")}</nav>

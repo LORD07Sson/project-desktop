@@ -1979,8 +1979,12 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 @keyframes sp-enter { from { opacity: 0; transform: scale(1.012); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
 
 /* игровая оболочка */
-#games-screen { --gm: var(--fire); display: flex; flex-direction: column; height: calc(100vh - var(--titlebar-h)); min-height: 0; }
+#games-screen { --gm: var(--fire); position: relative; isolation: isolate; display: flex; flex-direction: column; height: calc(100vh - var(--titlebar-h)); min-height: 0; background: linear-gradient(180deg, #18232e 0, #111922 38%, #0b1118 100%); }
 #games-screen[hidden] { display: none; }
+.gm-backdrop { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: radial-gradient(90% 75% at 50% 5%, rgba(102, 192, 244, .13), transparent 72%); }
+.gm-backdrop i { position: absolute; inset: -72px; background-size: cover; background-position: center; filter: blur(66px) saturate(1.25) brightness(.3); opacity: 0; transform: scale(1.08); transition: opacity 1s var(--ease); }
+.gm-backdrop i.on { opacity: .46; }
+.gm-backdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11, 17, 24, .34), rgba(11, 17, 24, .7) 60%, rgba(11, 17, 24, .88)); }
 .gm-top { display: flex; align-items: center; gap: 18px; padding: 10px 24px; border-bottom: 1px solid var(--line, rgba(255, 255, 255, .08)); flex: none; }
 .gm-who { display: inline-flex; align-items: center; gap: 10px; padding: 4px 12px 4px 4px; border-radius: 999px; border: 1px solid var(--line, rgba(255, 255, 255, .1)); background: rgba(255, 255, 255, .04); color: inherit; font: inherit; cursor: pointer; transition: background .15s, border-color .15s; }
 .gm-who:hover { background: rgba(var(--fire-rgb), .12); border-color: rgba(var(--fire-rgb), .5); }
