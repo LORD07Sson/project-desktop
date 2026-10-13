@@ -2214,6 +2214,11 @@ body[data-space="games"] .overlay:not(.gm-show) { display: none !important; }
 .gm-box .sale { color: var(--s-done); }
 .gm-dp-right .gm-d-desc { margin: 0; font-size: 13.5px; }
 .gm-dp-right .gm-d-badges { margin: 0; }
+.gm-d-taxonomy { display: grid; gap: 10px; margin-top: 12px; }
+.gm-d-taxonomy > div { display: grid; gap: 6px; }
+.gm-d-taxonomy > div > small { color: var(--ink-dim); font-size: 11px; }
+.gm-d-taxonomy > div > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.gm-d-taxonomy p { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.45; }
 .gm-dp-cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .gm-dp-sec h3 { margin: 0 0 8px; font-size: 16px; }
 .gm-dp-sec .gm-online { margin-bottom: 0; }
@@ -2603,7 +2608,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .gm-tech-row > span:nth-child(2) { display: grid; text-align: right; white-space: nowrap; }
 .gm-tech-row > small { color: var(--ink-dim); }
 .gm-lang-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.gm-lang-list span { padding: 4px 8px; border: 1px solid var(--line-soft); border-radius: 999px; color: var(--ink-soft); font-size: 11.5px; }
+.gm-lang-list span { display: grid; gap: 4px; min-width: 170px; padding: 7px 10px; border: 1px solid var(--line-soft); border-radius: 10px; color: var(--ink-soft); font-size: 11.5px; }
+.gm-lang-list span small { color: var(--ink-dim); font-size: 10px; }
 .gm-related-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin: 8px 0 12px; }
 .gm-related { min-width: 0; }
 .gm-related .gm-img { width: 100%; }

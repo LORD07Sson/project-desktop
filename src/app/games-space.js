@@ -931,6 +931,9 @@ async function openDetail(appid, name) {
     const cur = d.price && d.price.currency;
     const plat = Object.entries({ windows: "Windows", mac: "macOS", linux: "Linux" }).filter(([k]) => d.platforms && d.platforms[k]).map(([, n]) => n).join(" · ");
     const types = { game: "Игра", dlc: "DLC", demo: "Демо", mod: "Мод", music: "Саундтрек", advertising: "Реклама" };
+    const contentDescriptorNames = { 1: "Нагота или сексуальный контент", 2: "Частое насилие или кровь", 3: "Сексуальный контент для взрослых", 4: "Частая нагота или сексуальный контент", 5: "Другие темы для взрослых" };
+    const contentDescriptors = (d.content_descriptors && d.content_descriptors.ids || []).map(id => contentDescriptorNames[id] || `Маркер Steam ${id}`);
+    const supportUrl = /^https?:\/\//i.test(d.support && d.support.url || "") ? d.support.url : "";
     const row = (k, val) => (val ? `<tr><th>${k}</th><td>${val}</td></tr>` : "");
     ov.querySelector(".sheet").innerHTML = `
       <div class="gm-dp">
@@ -961,9 +964,10 @@ async function openDetail(appid, name) {
               ${row("Metacritic", d.metacritic ? `<b class="${d.metacritic >= 75 ? "gm-green" : ""}">${d.metacritic}</b>` : "")}
               ${row("Жанры", esc((d.genres || []).join(", ")))}
               ${row("Языки", esc(d.languages || ""))}
+              ${row("Поддержка", esc(d.support && d.support.email || ""))}
               ${row("Следят у нас", d.watchers ? fmtNum(d.watchers) : "")}
             </tbody></table>
-            <div class="gm-links">${d.website ? `<button type="button" class="btn sm" data-d-store="${esc(d.website)}">Сайт игры</button>` : ""}<button type="button" class="btn sm" data-d-store="${esc(`https://steamdb.info/app/${appid}/`)}">SteamDB</button><button type="button" class="btn sm" data-d-store="${esc(`https://www.protondb.com/app/${appid}`)}">ProtonDB</button></div>
+            <div class="gm-links">${d.website ? `<button type="button" class="btn sm" data-d-store="${esc(d.website)}">Сайт игры</button>` : ""}${supportUrl ? `<button type="button" class="btn sm" data-d-store="${esc(supportUrl)}">Поддержка</button>` : ""}<button type="button" class="btn sm" data-d-store="${esc(`https://steamdb.info/app/${appid}/`)}">SteamDB</button><button type="button" class="btn sm" data-d-store="${esc(`https://www.protondb.com/app/${appid}`)}">ProtonDB</button></div>
             <div class="gm-tech-meta" id="gm-tech-meta"><div class="gm-reg-load"><span class="ny-spin"></span> Загружаю метаданные…</div></div>
           </div>
           <div class="gm-dp-right" id="gm-sec-screenshots">
@@ -975,6 +979,11 @@ async function openDetail(appid, name) {
             </div>
             <div class="gm-d-badges" id="gm-badges">${badgesOf(d, null).map(b => `<i class="gm-tag ${b.cls}">${esc(b.text)}</i>`).join("")}</div>
             <p class="gm-d-desc">${esc(d.description || "")}</p>
+            <div class="gm-d-taxonomy">
+              ${d.categories && d.categories.length ? `<div><small>Категории Steam</small><div>${d.categories.map(x => `<i class="gm-tag t">${esc(x)}</i>`).join("")}</div></div>` : ""}
+              ${contentDescriptors.length || d.content_descriptors && d.content_descriptors.notes ? `<div><small>Контентные дескрипторы</small><div>${contentDescriptors.map(x => `<i class="gm-tag t">${esc(x)}</i>`).join("")}</div>${d.content_descriptors.notes ? `<p>${esc(d.content_descriptors.notes)}</p>` : ""}</div>` : ""}
+              <div><small>Теги Steam</small><div class="gm-d-badges" id="gm-tags"><span class="ny-hint">Загружаю теги…</span></div></div>
+            </div>
           </div>
         </div>
         <div class="gm-dp-cols">
@@ -1211,7 +1220,13 @@ async function loadTechnicalSections(ov, appid) {
   const d = ov.__d || {};
   if (packageBox) {
     packageBox.innerHTML = (d.packages || []).length
-      ? `<div class="gm-tech-list">${d.packages.map(p => `<div class="gm-tech-row"><span><b>${esc(p.name || p.group || "Пакет Steam")}</b><small>Package ID · ${p.id}</small></span><button type="button" class="btn sm" data-d-store="https://steamdb.info/sub/${p.id}/">Подробнее</button></div>`).join("")}</div>`
+      ? `<div class="gm-tech-list">${d.packages.map(p => {
+        const final = p.price_minor == null ? null : Number(p.price_minor) / 100;
+        const initial = p.initial_price_minor == null ? final : Number(p.initial_price_minor) / 100;
+        const discount = Number(p.discount_percent) || (final != null && initial > final ? Math.round((1 - final / initial) * 100) : 0);
+        const view = final == null ? null : final === 0 ? { now: "Бесплатно", old: "", badge: "" } : priceView({ final, initial: initial == null ? final : initial, discount, currency: p.currency || d.price && d.price.currency });
+        return `<div class="gm-tech-row"><span><b>${esc(p.name || p.group || "Пакет Steam")}</b><small>Package ID · ${p.id}</small></span><span class="gm-package-price">${view ? `${view.old ? `<s>${esc(view.old)}</s>` : ""}<b>${esc(view.now)}</b>${view.badge ? `<i class="gm-badge sm">${esc(view.badge)}</i>` : ""}` : `<small class="ny-hint">Цена недоступна</small>`}</span><button type="button" class="btn sm" data-d-store="https://steamdb.info/sub/${p.id}/">Подробнее</button></div>`;
+      }).join("")}</div>`
       : `<small class="ny-hint">Steam не вернул публичный список пакетов для этого приложения.</small>`;
   }
   const loading = `<div class="gm-reg-load"><span class="ny-spin"></span> Загружаю публичные данные Steam…</div>`;
@@ -1239,7 +1254,7 @@ async function loadTechnicalSections(ov, appid) {
     const langs = tech && tech.languages || [];
     const req = d.requirements || {};
     configBox.innerHTML = `<div class="gm-tech-grid"><div><small>Поддерживаемые системы</small><b>${esc(systems.join(" · ") || tech && tech.os || "Не указаны")}</b></div><div><small>Поддержка контроллера</small><b>${esc(tech && tech.controller || d.controller_support || "Не указана")}</b></div><div><small>Папка установки</small><b>${esc(tech && tech.install_dir || "—")}</b></div><div><small>Минимальные требования</small><b class="gm-tech-pre">${esc(steamText(req.min) || "Не указаны")}</b></div><div><small>Рекомендуемые требования</small><b class="gm-tech-pre">${esc(steamText(req.rec) || "Не указаны")}</b></div></div>`
-      + (langs.length ? `<div class="gm-lang-list">${langs.map(x => `<span>${esc(x.name)}${x.audio ? " · озвучка" : x.subtitles ? " · субтитры" : ""}</span>`).join("")}</div>` : `<p class="ny-hint">Подробная таблица языков недоступна.</p>`);
+      + (langs.length ? `<div class="gm-lang-list">${langs.map(x => `<span><b>${esc(x.name)}</b><small>Интерфейс ${x.interface ? "✓" : "—"} · озвучка ${x.audio ? "✓" : "—"} · субтитры ${x.subtitles ? "✓" : "—"}</small></span>`).join("")}</div>` : `<p class="ny-hint">Подробная таблица языков недоступна.</p>`);
   }
   if (cloudBox) {
     const cloud = tech && tech.cloud;
@@ -1252,7 +1267,7 @@ async function loadTechnicalSections(ov, appid) {
     if (dlcBox) dlcBox.innerHTML = related.dlcs && related.dlcs.length
       ? `<div class="gm-grid gm-related-grid">${related.dlcs.map(card).join("")}</div>${related.truncated ? `<small class="ny-hint">Показаны первые ${related.dlcs.length} из ${related.dlc_total} дополнений.</small>` : ""}`
       : `<small class="ny-hint">У Steam нет списка DLC для этой игры.</small>`;
-    if (relatedBox) relatedBox.innerHTML = `${related.parent ? `<h4>Основная игра</h4><div class="gm-grid gm-related-grid">${card(related.parent)}</div>` : ""}${related.dlcs && related.dlcs.length ? `<h4>Дополнения</h4><div class="gm-grid gm-related-grid">${related.dlcs.slice(0, 8).map(card).join("")}</div>` : ""}${!related.parent && !(related.dlcs || []).length ? `<small class="ny-hint">Связанные приложения Steam не предоставил.</small>` : ""}`;
+    if (relatedBox) relatedBox.innerHTML = `${related.parent ? `<h4>Основная игра</h4><div class="gm-grid gm-related-grid">${card(related.parent)}</div>` : ""}${related.demos && related.demos.length ? `<h4>Демо-версии</h4><div class="gm-grid gm-related-grid">${related.demos.map(card).join("")}</div>` : ""}${related.dlcs && related.dlcs.length ? `<h4>Дополнения</h4><div class="gm-grid gm-related-grid">${related.dlcs.slice(0, 8).map(card).join("")}</div>` : ""}${!related.parent && !(related.dlcs || []).length && !(related.demos || []).length ? `<small class="ny-hint">Связанные приложения Steam не предоставил.</small>` : ""}`;
   } else {
     if (dlcBox) dlcBox.innerHTML = `<small class="ny-hint">Не удалось загрузить список DLC.</small>`;
     if (relatedBox) relatedBox.innerHTML = `<small class="ny-hint">Не удалось загрузить связанные приложения.</small>`;
@@ -1264,8 +1279,11 @@ async function loadExtra(ov, appid) {
     const x = await apiGet(`/games/app/${appid}/extra`);
     const box = ov.querySelector("#gm-badges");
     if (!box) return;
-    box.innerHTML = badgesOf(ov.__d || {}, x).map(b => `<i class="gm-tag ${b.cls}">${esc(b.text)}</i>`).join("")
-      + (x.tags || []).slice(0, 8).map(n => `<i class="gm-tag t">${esc(n)}</i>`).join("");
+    box.innerHTML = badgesOf(ov.__d || {}, x).map(b => `<i class="gm-tag ${b.cls}">${esc(b.text)}</i>`).join("");
+    const tags = ov.querySelector("#gm-tags");
+    if (tags) tags.innerHTML = (x.tags || []).length
+      ? x.tags.map(n => `<i class="gm-tag t">${esc(n)}</i>`).join("")
+      : `<small class="ny-hint">Теги Steam недоступны.</small>`;
   } catch (_) { /* метки необязательны */ }
 }
 
