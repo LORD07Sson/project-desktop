@@ -336,7 +336,7 @@ async function paintStore() {
 const spCur = () => { for (const x of (storeHome && storeHome.sections) || []) for (const g of x.items || []) if (g.price && g.price.currency) return g.price.currency; return "USD"; };
 const spCtx = cc => ({ language: "russian", country_code: cc });
 async function discoveryQueue(cc) {
-  const r = await steamApi("IStoreService", "GetDiscoveryQueue", { queue_type: 0, country_code: cc, rebuild_queue: false, context: spCtx(cc), data_request: { include_basic_info: true } });
+  const r = await steamApi("IStoreService", "GetDiscoveryQueue", { queue_type: 0, country_code: cc, rebuild_queue: false, context: spCtx(cc), data_request: { include_basic_info: true, include_assets: true } });
   return r.status === 200 ? cardsFrom(r.body, "store_items", spCur()) : [];
 }
 async function steamBanners(cc) {
@@ -344,7 +344,7 @@ async function steamBanners(cc) {
   return r.status === 200 ? bannerCards(r.body, spCur()) : [];
 }
 async function wishlistOnSale(cc) {
-  const r = await steamApi("IWishlistService", "GetWishlistItemsOnSale", { context: spCtx(cc), data_request: { include_basic_info: true } });
+  const r = await steamApi("IWishlistService", "GetWishlistItemsOnSale", { context: spCtx(cc), data_request: { include_basic_info: true, include_assets: true } });
   return r.status === 200 ? cardsFrom(r.body, "items", spCur()) : [];
 }
 
