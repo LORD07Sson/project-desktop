@@ -2578,6 +2578,43 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .gm-gal:fullscreen .gm-gal-main { flex: 1; aspect-ratio: auto; }
 .gm-gal:fullscreen .gm-gal-nav { height: calc(100% - 78px); }
 
+/* Навигация по расширенной карточке Steam: быстрые якоря остаются видны при прокрутке. */
+.gm-dp-nav {
+  position: sticky; top: 65px; z-index: 4; display: flex; gap: 5px; overflow-x: auto;
+  margin: -18px -24px 0; padding: 8px 24px; background: var(--glass-bg-strong);
+  border-bottom: 1px solid var(--glass-border); backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); scrollbar-width: thin;
+}
+.gm-dp-nav button {
+  flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px;
+  background: var(--surface-2); color: var(--ink-soft); font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.gm-dp-nav button:hover, .gm-dp-nav button:focus-visible { border-color: var(--fire); color: var(--ink); outline: none; }
+.gm-dp [id^="gm-sec-"] { scroll-margin-top: 136px; }
+.gm-tech-meta { margin-top: 12px; }
+.gm-tech-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.gm-tech-grid > div { min-width: 0; display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-2); }
+.gm-tech-grid small, .gm-tech-row small { color: var(--ink-dim); font-size: 11px; }
+.gm-tech-grid b { overflow-wrap: anywhere; font-size: 13px; }
+.gm-tech-grid .gm-tech-pre { white-space: pre-line; font-weight: 500; line-height: 1.5; }
+.gm-tech-list { display: grid; gap: 6px; }
+.gm-tech-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 9px 12px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-2); }
+.gm-tech-row > span:first-child { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.gm-tech-row > span:nth-child(2) { display: grid; text-align: right; white-space: nowrap; }
+.gm-tech-row > small { color: var(--ink-dim); }
+.gm-lang-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.gm-lang-list span { padding: 4px 8px; border: 1px solid var(--line-soft); border-radius: 999px; color: var(--ink-soft); font-size: 11.5px; }
+.gm-related-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin: 8px 0 12px; }
+.gm-related { min-width: 0; }
+.gm-related .gm-img { width: 100%; }
+.gm-related h4, #gm-sec-related h4 { margin: 12px 0 6px; }
+@media (max-width: 680px) {
+  .gm-dp-nav { top: 58px; margin-left: -14px; margin-right: -14px; padding-left: 14px; padding-right: 14px; }
+  .gm-dp [id^="gm-sec-"] { scroll-margin-top: 124px; }
+  .gm-tech-row { align-items: flex-start; flex-wrap: wrap; }
+  .gm-tech-row > .btn { margin-left: auto; }
+}
+
 /* вкладки витрины, как на главной Steam: список слева, подробности игры справа */
 .gm-stabs { margin: 18px 0 8px; }
 .gm-stabs-h { display: flex; flex-wrap: wrap; gap: 6px 26px; padding: 0 2px 12px; }

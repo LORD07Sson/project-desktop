@@ -11,7 +11,7 @@ import { linkSteam } from "./steam-link.js";
 import { galleryHtml, mountGallery } from "./games-media.js";
 import { tabsHtml, panelHtml, STAB_SHOWN } from "./games-tabs.js";
 import { createHero } from "./games-hero.js";
-import { buildHtml, lowestText } from "./games-build.js";
+import { buildHtml, fmtBytes, lowestText } from "./games-build.js";
 import { watchBoxHtml, notifPanelHtml, unreadCount } from "./games-watch.js";
 import { sessionStatus, beginQr, pollQr, signOutSteam, steamApi } from "./steam-session.js";
 import { cardsFrom, accountPanelHtml, bannerCards, wishCategoryIndex, equippedItems } from "./steam-personal.js";
@@ -945,7 +945,10 @@ async function openDetail(appid, name) {
             <button type="button" class="btn ghost gm-x" data-d-close aria-label="Закрыть">✕</button>
           </div>
         </div>
-        <div class="gm-dp-top">
+        <nav class="gm-dp-nav" aria-label="Разделы страницы Steam">
+          ${[["metadata", "Метаданные"], ["price", "История цен"], ["charts", "Чарты"], ["patches", "Патчи"], ["packages", "Пакеты"], ["dlcs", "DLC"], ["depots", "Депо"], ["configuration", "Конфигурация"], ["cloud", "Steam Cloud"], ["achievements", "Достижения"], ["screenshots", "Скриншоты"], ["related", "Связанные"], ["updates", "Обновления"]].map(([k, label]) => `<button type="button" data-d-section="${k}">${label}</button>`).join("")}
+        </nav>
+        <div class="gm-dp-top" id="gm-sec-metadata">
           <div class="gm-dp-left">
             <table class="gm-info"><tbody>
               ${row("App ID", `<span class="gm-copy" data-copy="${appid}" title="Скопировать">${appid}</span>`)}
@@ -961,8 +964,9 @@ async function openDetail(appid, name) {
               ${row("Следят у нас", d.watchers ? fmtNum(d.watchers) : "")}
             </tbody></table>
             <div class="gm-links">${d.website ? `<button type="button" class="btn sm" data-d-store="${esc(d.website)}">Сайт игры</button>` : ""}<button type="button" class="btn sm" data-d-store="${esc(`https://steamdb.info/app/${appid}/`)}">SteamDB</button><button type="button" class="btn sm" data-d-store="${esc(`https://www.protondb.com/app/${appid}`)}">ProtonDB</button></div>
+            <div class="gm-tech-meta" id="gm-tech-meta"><div class="gm-reg-load"><span class="ny-spin"></span> Загружаю метаданные…</div></div>
           </div>
-          <div class="gm-dp-right">
+          <div class="gm-dp-right" id="gm-sec-screenshots">
             ${galleryHtml(d, img) || picHtml(appid, d.image, d.name, "gm-img gm-d-img")}
             <div class="gm-boxes">
               <div class="gm-box" id="gm-rate"><b>—</b><small>отзывы</small></div>
@@ -974,7 +978,7 @@ async function openDetail(appid, name) {
           </div>
         </div>
         <div class="gm-dp-cols">
-          <section class="gm-dp-sec"><h3>Онлайн</h3>
+          <section class="gm-dp-sec" id="gm-sec-charts"><h3>Онлайн и чарт игроков</h3>
             <div class="gm-online" id="gm-online">
               <div class="gm-online-h"><span class="ny-hint" id="gm-rank"></span><div class="ny-seg">${[["48h", "48 ч"], ["7d", "1 нед."], ["30d", "1 мес."], ["90d", "3 мес."], ["all", "Всё"]].map(([k, t]) => `<button type="button" data-orange="${k}">${t}</button>`).join("")}</div></div>
               <div class="gm-online-s"></div><div class="gm-chartbox gm-online-c"></div>
@@ -989,17 +993,23 @@ async function openDetail(appid, name) {
             </div>
           </section>
         </div>
-        ${d.free ? "" : `<section class="gm-dp-sec"><h3>История цены</h3><div class="gm-online gm-hist">
+        <section class="gm-dp-sec" id="gm-sec-price"><h3>История цены</h3>${d.free ? `<small class="ny-hint">Игра бесплатная; история цены для неё не ведётся.</small>` : `<div class="gm-online gm-hist">
           <div class="gm-online-h gm-ph2"><div class="gm-pstats" id="gm-pstats"></div><div class="ny-seg">${[[30, "30 дн."], [90, "3 мес."], [365, "Год"], [0, "Всё"]].map(([k, t]) => `<button type="button" data-prange="${k}">${t}</button>`).join("")}</div></div>
           <div class="gm-chartbox" id="gm-pchart"></div>
           <div class="gm-plist" id="gm-plist"></div>
           <p class="ny-hint gm-hnote">Steam не хранит историю цен, поэтому мы ведём её сами: цены популярных игр записываются каждые 2 часа, а у желаемого — каждые 30 минут и при каждом просмотре.</p>
         </div>
-        <div class="gm-reg" id="gm-reg"><button type="button" class="btn" data-regions="${appid}">Цены по странам</button></div></section>`}
+        <div class="gm-reg" id="gm-reg"><button type="button" class="btn" data-regions="${appid}">Цены по странам</button></div>`}</section>
         <section class="gm-dp-sec"><div id="gm-watchbox"></div></section>
-        <section class="gm-dp-sec"><h3>Обновления Steam</h3><div id="gm-build"><div class="gm-reg-load"><span class="ny-spin"></span> Загружаю…</div></div></section>
+        <section class="gm-dp-sec" id="gm-sec-packages"><h3>Пакеты Steam</h3><div id="gm-packages"></div></section>
+        <section class="gm-dp-sec" id="gm-sec-dlcs"><h3>DLC</h3><div id="gm-dlcs"></div></section>
+        <section class="gm-dp-sec" id="gm-sec-depots"><h3>Депо</h3><div id="gm-depots"></div></section>
+        <section class="gm-dp-sec" id="gm-sec-configuration"><h3>Конфигурация и требования</h3><div id="gm-config"></div></section>
+        <section class="gm-dp-sec" id="gm-sec-cloud"><h3>Steam Cloud</h3><div id="gm-cloud"></div></section>
+        <section class="gm-dp-sec" id="gm-sec-related"><h3>Связанные приложения</h3><div id="gm-related"></div></section>
+        <section class="gm-dp-sec" id="gm-sec-updates"><h3>История обновлений Steam</h3><div id="gm-build"><div class="gm-reg-load"><span class="ny-spin"></span> Загружаю…</div></div></section>
         <section class="gm-dp-sec"><h3>Игроки по месяцам</h3><div id="gm-monthly"><div class="gm-reg-load"><span class="ny-spin"></span> Считаю…</div></div></section>
-        <section class="gm-dp-sec gm-more"><div class="ny-seg gm-mtabs"><button type="button" data-more="reviews">Отзывы</button><button type="button" data-more="news">Анонсы</button><button type="button" data-more="patch">Патчноуты</button>${me && me.steamid ? `<button type="button" data-more="ach">Достижения</button><button type="button" data-more="stats">Статистика</button>` : ""}</div><div id="gm-more-body"></div></section>
+        <section class="gm-dp-sec gm-more" id="gm-sec-patches"><h3>Новости, патчи и достижения</h3><div class="ny-seg gm-mtabs"><button type="button" data-more="reviews">Отзывы</button><button type="button" data-more="news">Анонсы</button><button type="button" data-more="patch">Патчноуты</button>${me && me.steamid ? `<button type="button" data-more="ach">Достижения</button><button type="button" data-more="stats">Статистика</button>` : ""}</div><div id="gm-more-body"></div></section>
       </div>`;
   } catch (e) {
     ov.querySelector(".sheet").innerHTML = `${errBox(e)}<div class="gm-d-act"><button type="button" class="btn" data-d-close>Закрыть</button></div>`;
@@ -1022,10 +1032,22 @@ async function openDetail(appid, name) {
   loadExtra(ov, appid);
   loadMonthly(ov, appid);
   loadBuild(ov, appid);
+  loadTechnicalSections(ov, appid);
   loadWatchBox(ov, appid);
   loadMore(ov, appid, "reviews");
   ov.addEventListener("click", async e => {
     const t = e.target;
+    const sectionNav = t.closest("[data-d-section]");
+    if (sectionNav) {
+      const key = sectionNav.dataset.dSection;
+      if (key === "patches") await loadMore(ov, appid, "patch");
+      if (key === "achievements") await loadMore(ov, appid, "ach");
+      const targetKey = key === "patches" || key === "achievements" ? "patches" : key;
+      ov.querySelector(`#gm-sec-${targetKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const relatedApp = t.closest("[data-related-app]");
+    if (relatedApp) { const nextId = Number(relatedApp.dataset.relatedApp); const nextName = relatedApp.dataset.name || ""; dismissSheet(ov); openDetail(nextId, nextName); return; }
     const lb = t.closest("[data-launch]");
     if (lb) { e.stopPropagation(); launch(Number(lb.dataset.launch), lb); return; }
     const mb = t.closest("[data-more]");
@@ -1171,6 +1193,72 @@ async function loadBuild(ov, appid) {
   } catch (_) { if (ov.isConnected) box.innerHTML = buildHtml(null); }
 }
 
+function steamText(value) {
+  return String(value || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/p\s*>/gi, "\n")
+    .replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"')
+    .replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").trim();
+}
+
+async function loadTechnicalSections(ov, appid) {
+  const techBox = ov.querySelector("#gm-tech-meta");
+  const depotBox = ov.querySelector("#gm-depots");
+  const configBox = ov.querySelector("#gm-config");
+  const cloudBox = ov.querySelector("#gm-cloud");
+  const relatedBox = ov.querySelector("#gm-related");
+  const dlcBox = ov.querySelector("#gm-dlcs");
+  const packageBox = ov.querySelector("#gm-packages");
+  const d = ov.__d || {};
+  if (packageBox) {
+    packageBox.innerHTML = (d.packages || []).length
+      ? `<div class="gm-tech-list">${d.packages.map(p => `<div class="gm-tech-row"><span><b>${esc(p.name || p.group || "Пакет Steam")}</b><small>Package ID · ${p.id}</small></span><button type="button" class="btn sm" data-d-store="https://steamdb.info/sub/${p.id}/">Подробнее</button></div>`).join("")}</div>`
+      : `<small class="ny-hint">Steam не вернул публичный список пакетов для этого приложения.</small>`;
+  }
+  const loading = `<div class="gm-reg-load"><span class="ny-spin"></span> Загружаю публичные данные Steam…</div>`;
+  [techBox, depotBox, configBox, cloudBox, relatedBox, dlcBox].forEach(box => { if (box) box.innerHTML = loading; });
+  const [techResult, relatedResult] = await Promise.allSettled([
+    apiGet(`/games/app/${appid}/technical`), apiGet(`/games/app/${appid}/related`),
+  ]);
+  if (!ov.isConnected) return;
+  const tech = techResult.status === "fulfilled" ? techResult.value : null;
+  const related = relatedResult.status === "fulfilled" ? relatedResult.value : null;
+  if (techBox) {
+    techBox.innerHTML = tech && tech.available
+      ? `<div class="gm-tech-grid"><div><small>Последнее изменение Steam</small><b>${tech.change ? fmtNum(tech.change) : "—"}</b></div><div><small>Публичная сборка</small><b>${esc(tech.branch && tech.branch.buildid || "—")}</b></div><div><small>Обновлена</small><b>${tech.branch && tech.branch.updated ? esc(shortDate(tech.branch.updated)) : "—"}</b></div><div><small>Архитектура</small><b>${esc(tech.arch || "—")}</b></div></div>`
+      : `<small class="ny-hint">Расширенные метаданные временно недоступны. Основные сведения Steam показаны выше.</small>`;
+  }
+  if (depotBox) {
+    const depots = tech && tech.depots || [];
+    depotBox.innerHTML = depots.length
+      ? `<div class="gm-tech-list">${depots.map(x => `<div class="gm-tech-row"><span><b>Depot ${fmtNum(x.id)}</b><small>${esc(x.os || "Общедоступная ветка")}</small></span><span><b>${esc(fmtBytes(x.size))}</b><small>загрузка ${esc(fmtBytes(x.download))}</small></span><button type="button" class="btn sm" data-d-store="https://steamdb.info/depot/${x.id}/">Подробнее</button></div>`).join("")}</div><p class="ny-hint gm-hnote">Показаны только сводные размеры общедоступных депо. Файлы игры и данные манифестов не загружаются.</p>`
+      : `<small class="ny-hint">Публичные сведения о депо недоступны.</small>`;
+  }
+  if (configBox) {
+    const p = d.platforms || {};
+    const systems = Object.entries({ windows: "Windows", mac: "macOS", linux: "Linux" }).filter(([k]) => p[k]).map(([, v]) => v);
+    const langs = tech && tech.languages || [];
+    const req = d.requirements || {};
+    configBox.innerHTML = `<div class="gm-tech-grid"><div><small>Поддерживаемые системы</small><b>${esc(systems.join(" · ") || tech && tech.os || "Не указаны")}</b></div><div><small>Поддержка контроллера</small><b>${esc(tech && tech.controller || d.controller_support || "Не указана")}</b></div><div><small>Папка установки</small><b>${esc(tech && tech.install_dir || "—")}</b></div><div><small>Минимальные требования</small><b class="gm-tech-pre">${esc(steamText(req.min) || "Не указаны")}</b></div><div><small>Рекомендуемые требования</small><b class="gm-tech-pre">${esc(steamText(req.rec) || "Не указаны")}</b></div></div>`
+      + (langs.length ? `<div class="gm-lang-list">${langs.map(x => `<span>${esc(x.name)}${x.audio ? " · озвучка" : x.subtitles ? " · субтитры" : ""}</span>`).join("")}</div>` : `<p class="ny-hint">Подробная таблица языков недоступна.</p>`);
+  }
+  if (cloudBox) {
+    const cloud = tech && tech.cloud;
+    cloudBox.innerHTML = cloud && cloud.enabled
+      ? `<div class="gm-tech-grid"><div><small>Steam Cloud</small><b class="gm-green">Поддерживается</b></div><div><small>Лимит файлов</small><b>${cloud.max_files ? fmtNum(cloud.max_files) : "—"}</b></div><div><small>Квота</small><b>${cloud.quota ? esc(fmtBytes(cloud.quota)) : "—"}</b></div></div><div class="gm-tech-list">${(cloud.paths || []).map(x => `<div class="gm-tech-row"><span><b>${esc(x.path)}</b><small>${esc(x.root || "Steam Cloud")}${x.recursive ? " · включая вложенные папки" : ""}</small></span><small>${esc(x.pattern || "*")}</small></div>`).join("")}</div><p class="ny-hint gm-hnote">Это настройки синхронизации игры. Личные файлы сохранений не читаются.</p>`
+      : `<div class="gm-tech-grid"><div><small>Steam Cloud</small><b>${tech ? "Не заявлен" : "Нет данных"}</b></div></div><small class="ny-hint">Steam не предоставил настройки облачных сохранений для этой игры.</small>`;
+  }
+  const card = item => `<button type="button" class="gm-card gm-related" data-related-app="${item.appid}" data-name="${esc(item.name || "")}">${picHtml(item.appid, item.image, item.name || "Steam", "gm-img") }<div class="gm-t">${esc(item.name || `App ${item.appid}`)}</div><div class="gm-pr"><small>${esc(item.type || "Игра")}</small>${item.price ? priceCell(item.price) : item.free ? `<b>Бесплатно</b>` : ""}</div></button>`;
+  if (related) {
+    if (dlcBox) dlcBox.innerHTML = related.dlcs && related.dlcs.length
+      ? `<div class="gm-grid gm-related-grid">${related.dlcs.map(card).join("")}</div>${related.truncated ? `<small class="ny-hint">Показаны первые ${related.dlcs.length} из ${related.dlc_total} дополнений.</small>` : ""}`
+      : `<small class="ny-hint">У Steam нет списка DLC для этой игры.</small>`;
+    if (relatedBox) relatedBox.innerHTML = `${related.parent ? `<h4>Основная игра</h4><div class="gm-grid gm-related-grid">${card(related.parent)}</div>` : ""}${related.dlcs && related.dlcs.length ? `<h4>Дополнения</h4><div class="gm-grid gm-related-grid">${related.dlcs.slice(0, 8).map(card).join("")}</div>` : ""}${!related.parent && !(related.dlcs || []).length ? `<small class="ny-hint">Связанные приложения Steam не предоставил.</small>` : ""}`;
+  } else {
+    if (dlcBox) dlcBox.innerHTML = `<small class="ny-hint">Не удалось загрузить список DLC.</small>`;
+    if (relatedBox) relatedBox.innerHTML = `<small class="ny-hint">Не удалось загрузить связанные приложения.</small>`;
+  }
+}
+
 async function loadExtra(ov, appid) {
   try {
     const x = await apiGet(`/games/app/${appid}/extra`);
@@ -1213,7 +1301,7 @@ async function loadMore(ov, appid, kind) {
     } else {
       const r = await apiGet(`/games/app/${appid}/achievements`, { steamid: me && me.steamid });
       if (!r.total) { box.innerHTML = `<small class="ny-hint">У этой игры нет достижений.</small>`; return; }
-      box.innerHTML = `<p class="gm-ach-s"><b>${esc(achSummary(r))}</b>${r.available ? "" : ` <small class="ny-hint">— ваш профиль или сведения об играх закрыты, показан только процент получивших</small>`}</p>`
+      box.innerHTML = `<p class="gm-ach-s"><b>${esc(r.available ? achSummary(r) : `${fmtNum(r.total)} достижений`)}</b>${r.available ? "" : ` <small class="ny-hint">— показан общий процент игроков, получивших каждое достижение</small>`}</p>`
         + r.items.slice(0, 60).map(a => `<div class="gm-ach${a.achieved ? " on" : ""}"><i>${a.icon ? `<img loading="lazy" src="${esc(img(a.icon))}" alt="">` : ""}</i><div><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div><span class="ny-hint">${a.percent}%</span></div>`).join("");
     }
   } catch (e) { box.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить.")}</small>`; }
