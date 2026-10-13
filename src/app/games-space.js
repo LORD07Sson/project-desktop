@@ -1195,9 +1195,9 @@ async function loadBuild(ov, appid) {
 
 function steamText(value) {
   return String(value || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/p\s*>/gi, "\n")
-    .replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&")
+    .replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ")
     .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"')
-    .replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").trim();
+    .replace(/&amp;/gi, "&").replace(/[ \t]+/g, " ").replace(/\n\s+/g, "\n").trim();
 }
 
 async function loadTechnicalSections(ov, appid) {
