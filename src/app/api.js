@@ -56,6 +56,27 @@ function checkSessionLost(status, detail, path) {
   if ((status === 401 || revoked) && path !== "/desktop/pair") notifySessionExpired(String(detail));
 }
 
+function formatApiError(detail, status) {
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.map(item => {
+      if (typeof item === "string") return item;
+      if (!item || typeof item !== "object") return "";
+      const message = item.msg || item.message || item.detail;
+      if (!message) return "";
+      const location = Array.isArray(item.loc) ? item.loc.filter(part => part !== "query" && part !== "body" && part !== "path").join(" → ") : "";
+      return location ? `${message} (${location})` : String(message);
+    }).filter(Boolean);
+    if (messages.length) return messages.join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    const message = detail.message || detail.msg || detail.detail || detail.error;
+    if (typeof message === "string" && message) return message;
+    try { return JSON.stringify(detail); } catch (_) { /* ниже вернётся код ответа */ }
+  }
+  return `Ошибка ${status}`;
+}
+
 export async function api(method, path, body) {
   const headers = { "Content-Type": "application/json" };
   if (state.token) headers["X-Init-Data"] = state.token;
@@ -69,6 +90,7 @@ export async function api(method, path, body) {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      cache: path.startsWith("/games/deals?") ? "no-store" : "default",
       signal: controller.signal,
     });
   } catch (e) {
@@ -82,7 +104,7 @@ export async function api(method, path, body) {
     let detail = resp.status;
     try { detail = (await resp.json()).detail ?? detail; } catch (_) {}
     checkSessionLost(resp.status, detail, path);
-    throw new Error(String(detail));
+    throw new Error(formatApiError(detail, resp.status));
   }
   const text = await resp.text();
   return text ? stripStatusEmoji(JSON.parse(text)) : {};

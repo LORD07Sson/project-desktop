@@ -1017,6 +1017,8 @@ async function openDetail(appid, name) {
   loadMore(ov, appid, "reviews");
   ov.addEventListener("click", async e => {
     const t = e.target;
+    const lb = t.closest("[data-launch]");
+    if (lb) { e.stopPropagation(); launch(Number(lb.dataset.launch), lb); return; }
     const mb = t.closest("[data-more]");
     if (mb) { loadMore(ov, appid, mb.dataset.more); return; }
     const nm = t.closest("[data-newsmore]");
@@ -1346,13 +1348,17 @@ async function loadOnline(ov, appid, range, quiet = false) {
   } catch (e) { if (!quiet) ch.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить онлайн.")}</small>`; }
 }
 
-async function launch(appid) {
+async function launch(appid, button) {
+  if (button && button.disabled) return;
+  const label = button && button.textContent;
+  if (button) { button.disabled = true; button.textContent = "Открываю…"; }
   try {
     const r = await apiGet(`/games/launch/${appid}`, { steamid: me && me.steamid });
     if (!isSteamLaunchUrl(r.url)) throw new Error("Сервер вернул неожиданный адрес запуска.");
     await openExternal(r.url);
     toast("Запускаю через Steam…", "success");
-  } catch (e) { toast(e.message || "Не удалось запустить игру.", "error"); }
+  } catch (e) { toast(e && e.message ? e.message : String(e || "Не удалось запустить игру."), "error"); }
+  finally { if (button && button.isConnected) { button.disabled = false; button.textContent = label; } }
 }
 
 async function refreshMe() {
@@ -1375,7 +1381,7 @@ async function onClick(e) {
   const ct = t.closest("[data-ctab]");
   if (ct) { chartTab = ct.dataset.ctab; paintCharts(); return; }
   const lb = t.closest("[data-launch]");
-  if (lb) { e.stopPropagation(); launch(Number(lb.dataset.launch)); return; }
+  if (lb) { e.stopPropagation(); launch(Number(lb.dataset.launch), lb); return; }
   const del = t.closest("[data-wish-del]");
   if (del) { e.stopPropagation(); try { await apiDelete(`/games/wishlist/${del.dataset.wishDel}`); paintWish(); } catch (err) { toast(err.message, "error"); } return; }
   if (t.closest("[data-lunplayed]")) { libUnplayed = !libUnplayed; paintLib(); return; }
