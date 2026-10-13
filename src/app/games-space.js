@@ -524,7 +524,7 @@ const DEALS_PAGE = 48;
 
 function dealsBarHtml() {
   const d = deals;
-  const chips = [[10, 24, "−10–24%"], [25, 49, "−25–49%"], [50, 74, "−50–74%"], [75, 89, "−75–89%"], [90, 99, "−90% и выше"], [100, 100, "Бесплатно"]].map(([n, max, l]) => `<button type="button" class="${d.min === n ? "on" : ""}" data-dmin="${n}" data-dmax="${max}">${l}</button>`).join("");
+  const chips = [[10, 24, "−10–24%"], [25, 49, "−25–49%"], [50, 74, "−50–74%"], [75, 89, "−75–89%"], [90, 99, "−90–99%"], [100, 100, "Бесплатно"]].map(([n, max, l]) => `<button type="button" class="${d.min === n ? "on" : ""}" data-dmin="${n}" data-dmax="${max}">${l}</button>`).join("");
   const rev = [[0, "Любые отзывы"], [70, "от 70%"], [85, "от 85%"], [95, "от 95%"]].map(([n, l]) => `<option value="${n}"${d.minpct === n ? " selected" : ""}>${l}</option>`).join("");
   const sorts = [["discount", "по скидке"], ["price", "дешевле сначала"], ["price_desc", "дороже сначала"], ["reviews", "по отзывам"], ["popular", "популярные"], ["name", "по названию"]].map(([k, l]) => `<option value="${k}"${d.sort === k ? " selected" : ""}>${l}</option>`).join("");
   const tags = `<option value="0">Любой жанр</option>` + (tagList || []).map(t => `<option value="${t.id}"${d.tag === t.id ? " selected" : ""}>${esc(t.name)}</option>`).join("");
