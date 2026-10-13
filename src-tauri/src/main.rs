@@ -29,7 +29,6 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-use tauri_plugin_store::StoreExt;
 
 // Обновления — по прямым ссылкам на файлы релизов GitHub, а не через
 // GitHub API: у ссылок вида /releases/latest/download/<файл> нет лимита
@@ -40,49 +39,35 @@ use tauri_plugin_store::StoreExt;
 const UPDATE_STABLE_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/latest/download";
 const UPDATE_ALPHA_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/alpha-latest";
 
-// Канал обновлений — та же настройка Velopack, что описана в
-// docs.velopack.io/packaging/channels: сборки альфа-канала публикует
-// отдельный workflow на каждый push в main (build-alpha.yml), без
-// правки VERSION — обычный build.yml (стабильный канал `win`) остаётся
-// только на реальные релизы. Хранится через tauri-plugin-store (тот же
-// плагин уже был зарегистрирован, просто раньше ничем не пользовались).
-const SETTINGS_STORE: &str = "settings.json";
-const UPDATE_CHANNEL_KEY: &str = "update_channel";
+// Канал задаётся типом сборки в workflow, а не пользовательской настройкой.
+// Это не даёт стабильному клиенту начать получать alpha-релизы из-за старого
+// значения update_channel в общем локальном settings.json.
 const ALPHA_CHANNEL: &str = "alpha";
-
-#[tauri::command]
-fn get_update_channel(app: tauri::AppHandle) -> Result<String, String> {
-    let store = app.store(SETTINGS_STORE).map_err(|e| e.to_string())?;
-    Ok(store
-        .get(UPDATE_CHANNEL_KEY)
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_else(|| "stable".to_string()))
+fn build_update_channel() -> &'static str {
+    option_env!("PROJECT_UPDATE_CHANNEL").unwrap_or("stable")
 }
 
 #[tauri::command]
-fn set_update_channel(app: tauri::AppHandle, channel: String) -> Result<(), String> {
-    if channel != "stable" && channel != ALPHA_CHANNEL {
-        return Err(format!("Неизвестный канал обновлений: {channel}"));
+fn get_update_channel() -> String {
+    build_update_channel().to_string()
+}
+
+#[tauri::command]
+fn set_update_channel(channel: String) -> Result<(), String> {
+    if channel != build_update_channel() {
+        return Err("Канал обновлений закреплён за этой сборкой.".to_string());
     }
-    let store = app.store(SETTINGS_STORE).map_err(|e| e.to_string())?;
-    store.set(UPDATE_CHANNEL_KEY, serde_json::json!(channel));
-    // Явный save(), а не расчёт на auto-save с дебаунсом: переключили
-    // канал и тут же закрыли приложение — отложенная запись могла не
-    // успеть долететь до диска, и настройка молча терялась.
-    store.save().map_err(|e| e.to_string())
+    Ok(())
 }
 
 fn velopack_update_manager(app: &tauri::AppHandle) -> Result<velopack::UpdateManager, String> {
-    let channel = get_update_channel(app.clone())?;
-    let is_alpha = channel == ALPHA_CHANNEL;
+    let is_alpha = build_update_channel() == ALPHA_CHANNEL;
     // Альфа публикуется отдельным pre-release с постоянным тегом
     // alpha-latest (build-alpha.yml), стабильная — обычными релизами.
     let source = velopack::sources::HttpSource::new(if is_alpha { UPDATE_ALPHA_URL } else { UPDATE_STABLE_URL });
-    // Откат на более старую версию разрешён только в одном случае:
-    // стоит альфа, а выбран стабильный канал — "0.9.2-alpha.90" по SemVer
-    // старше "0.9.2", и без этого вернуться на stable можно было бы лишь
-    // переустановкой. В остальных случаях откат запрещён: иначе подменённый
-    // фид мог бы вернуть всех на старую версию с известной уязвимостью.
+    // Стабильная prerelease-сборка может принять stable-версию ниже по номеру.
+    // Alpha при этом всё равно остаётся закреплена за alpha-фидом: выбор
+    // stable здесь не меняет ни источник, ни канал обновлений.
     let on_prerelease = !app.package_info().version.pre.is_empty();
     let options = velopack::UpdateOptions {
         AllowVersionDowngrade: !is_alpha && on_prerelease,
@@ -132,10 +117,10 @@ fn update_check_cache() -> &'static Mutex<Option<CachedUpdateCheck>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
-// Кэш ключуется каналом обновлений — переключение stable/alpha в Настройках
-// должно увидеть актуальные данные немедленно, не ждать протухания TTL.
+// Канал входит в ключ кэша, чтобы результаты разных типов сборки
+// не смешивались при локальном тестировании.
 fn check_for_update_cached(app: &tauri::AppHandle) -> Result<Option<UpdateInfoOut>, String> {
-    let channel = get_update_channel(app.clone())?;
+    let channel = build_update_channel().to_string();
     let cache = update_check_cache();
     if let Some(cached) = cache.lock().unwrap().as_ref() {
         if cached.channel == channel && cached.at.elapsed() < UPDATE_CHECK_CACHE_TTL {

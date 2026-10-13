@@ -215,7 +215,7 @@ function renderList() {
 // ---------- лента ----------
 
 function messagesHtml(c) {
-  const visibleMessages = messages.filter(m => m.kind !== "deleted");
+  const visibleMessages = messages.filter(m => m.kind !== "deleted" && m.deleted !== true && m.is_deleted !== true);
   if (!visibleMessages.length) return `<div class="ms-empty">Здесь пока пусто — напишите первым.</div>`;
   const moderated = canModerate && (c.kind === "general" || c.kind === "topic");
   let html = "";

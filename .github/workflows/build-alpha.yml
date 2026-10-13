@@ -5,11 +5,8 @@ name: Build desktop client (alpha channel)
 # ожидания "настоящего" релиза (см. запрос: "чтобы не постоянно
 # приходилось обновлять релиз" для проверки свежих фич). Публикуется
 # отдельным Velopack-каналом ("alpha", см. docs.velopack.io/packaging/
-# channels) — клиент выбирает канал сам в Настройках
-# (get_update_channel/set_update_channel в main.rs), стабильный канал
-# из build.yml этими сборками не затрагивается вообще: они живут в
-# releases.alpha.json, стабильный клиент продолжает читать
-# releases.win.json и их не увидит.
+# channels). Канал зашит в тип сборки: alpha-клиент читает только
+# releases.alpha.json, стабильный клиент — только releases.win.json.
 #
 # Один rolling-релиз (тег alpha-latest), не новый релиз на каждый
 # push — старый alpha-latest удаляется перед публикацией нового.
@@ -157,6 +154,8 @@ jobs:
 
       - name: cargo build --release
         shell: bash
+        env:
+          PROJECT_UPDATE_CHANNEL: alpha
         run: cargo build --release --manifest-path src-tauri/Cargo.toml --features custom-protocol
 
       - name: Собрать альфа-канал через vpk

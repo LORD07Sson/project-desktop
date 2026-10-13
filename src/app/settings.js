@@ -216,11 +216,7 @@ async function openSettings() {
               <div class="st-text"><b>Project Desktop</b><span>версия ${esc(APP_VERSION)}</span></div>
               <button class="btn primary" id="s-check-update">Проверить обновления</button>
             </div>
-            ${row(ICONS.update, "Канал обновлений", "Альфа — сборка на каждый коммит, для проверки нового", seg("data-st-channel", [["stable", "Стабильный"], ["alpha", "Альфа"]], updateChannel), "альфа стабильный")}
-            <select id="s-update-channel" hidden>
-              <option value="stable" ${updateChannel === "stable" ? "selected" : ""}>Стабильный</option>
-              <option value="alpha" ${updateChannel === "alpha" ? "selected" : ""}>Альфа</option>
-            </select>
+            ${row(ICONS.update, "Канал обновлений", updateChannel === "alpha" ? "Альфа-сборка получает только обновления alpha" : "Стабильная сборка получает только официальные релизы", `<span class="st-ping">${updateChannel === "alpha" ? "Альфа" : "Стабильный"}</span>`, "альфа стабильный")}
             <div id="s-alpha-block" hidden>
               <div class="alpha-warn">Альфа-сборки собираются на каждый коммит в main и не являются стабильными релизами — автоматического отката нет.</div>
               <div class="st-commits">
@@ -358,16 +354,6 @@ async function openSettings() {
   }
   refreshAlphaBlock(updateChannel);
 
-  overlay.querySelector("#s-update-channel").addEventListener("change", async e => {
-    const channel = e.target.value;
-    try {
-      await invoke("set_update_channel", { channel });
-      toast(channel === "alpha" ? "Альфа-канал включён." : "Возвращено на стабильный канал.");
-      await refreshAlphaBlock(channel);
-    } catch (err) {
-      toast(`Не удалось сменить канал: ${err}`, "error");
-    }
-  });
   overlay.querySelector("#s-open-admin").addEventListener("click", openAdminPanel);
   overlay.querySelector("#s-open-logs").addEventListener("click", async () => {
     try {
@@ -385,7 +371,6 @@ async function openSettings() {
     if (sel) { const el = overlay.querySelector(sel); el.value = value; el.dispatchEvent(new window.Event("change")); }
   };
   overlay.querySelectorAll("[data-st-density]").forEach(b => b.addEventListener("click", () => pick("data-st-density", "#s-density", b.dataset.stDensity)));
-  overlay.querySelectorAll("[data-st-channel]").forEach(b => b.addEventListener("click", () => pick("data-st-channel", "#s-update-channel", b.dataset.stChannel)));
   const tile = (id, fn) => { const el = overlay.querySelector(`#${id}`); if (el) el.addEventListener("click", fn); };
   tile("s-tile-notice", () => import("./team-notice.js").then(m => m.openNoticeEditor()));
   tile("s-tile-tickets", () => import("./tickets.js").then(m => m.openTicketsSheet()));
@@ -541,7 +526,7 @@ async function openSettings() {
   overlay.querySelector("#s-copy-report").addEventListener("click", async () => {
     const lines = [
       `Project Desktop ${APP_VERSION}`,
-      `Канал: ${overlay.querySelector("#s-update-channel").value}`,
+      `Канал: ${updateChannel}`,
       `Система: ${navigator.userAgent}`,
       `Экран: ${window.screen.width}×${window.screen.height} @${window.devicePixelRatio}`,
       `Сервер: ${API_BASE} · ${lastPing == null ? "нет связи" : `${lastPing} мс`}`,

@@ -2100,6 +2100,14 @@ body[data-space="games"] .overlay:not(.gm-show) { display: none !important; }
 .gm-tn { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gm-tc { text-align: right; font-size: 14px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
 .gm-tc s { color: var(--ink-dim, #a89a92); }
+.gm-price-history { --cols: 36px 100px minmax(180px, 1fr) minmax(120px, 150px) minmax(230px, 280px) 110px; }
+.gm-price-history-current { gap: 7px; white-space: nowrap; }
+.gm-price-history-current s { font-size: 12px; }
+@media (max-width: 1000px) {
+  .gm-price-history { --cols: 28px 72px minmax(140px, 1fr) minmax(85px, 110px) minmax(190px, 230px) 88px; }
+  .gm-price-history .gm-tth { width: 72px; }
+  .gm-price-history-current { gap: 4px; }
+}
 .gm-green { color: var(--s-done); }
 .gm-d { font-weight: 700; font-size: 13px; }
 .gm-d.up { color: var(--s-done); } .gm-d.down { color: var(--s-stop); } .gm-d.same { color: var(--ink-dim, #a89a92); } .gm-d.new { color: var(--fire); }

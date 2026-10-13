@@ -494,9 +494,17 @@ async function chartUpcoming() {
 async function chartChanges() {
   const r = await apiGet("/games/charts/price-changes");
   if (!r.items.length) return empty("Пока нет изменений", "Мы фиксируем цену игр, которые вы открывали или добавили в желаемое. Когда цена изменится, она появится здесь.");
-  return `<div class="gm-tbl" style="--cols:100px minmax(0,1fr) 120px 120px 90px">${thead(["", "Игра", "Было", "Стало", "Когда"])}${r.items.map(g => {
+  return `<div class="gm-tbl gm-price-history">${thead(["#", "", "Игра", "Было", "Стало", "Когда"])}${r.items.map(g => {
     const down = g.now < g.was;
-    return trow(g, `<span class="gm-tc"><s>${esc(priceView({ final: g.was, initial: g.was, discount: 0, currency: g.currency }).now)}</s></span><span class="gm-tc gm-d ${down ? "up" : "down"}">${esc(priceView({ final: g.now, initial: g.now, discount: 0, currency: g.currency }).now)}</span><span class="gm-tc ny-hint">${esc(shortDate(g.ts))}</span>`);
+    const fallbackInitial = g.discount > 0 ? g.now * 100 / (100 - g.discount) : g.now;
+    const current = priceView({
+      final: g.now,
+      initial: g.initial != null && Number.isFinite(Number(g.initial)) ? Number(g.initial) : fallbackInitial,
+      discount: Number(g.discount) || 0,
+      currency: g.currency,
+    });
+    const changeColor = down ? "gm-green" : "gm-red";
+    return trow(g, `<span class="gm-tc ny-hint">${esc(priceView({ final: g.was, initial: g.was, discount: 0, currency: g.currency }).now)}</span><span class="gm-tc gm-price-history-current">${current.badge ? `<i class="gm-badge sm">${current.badge}</i>` : ""}<b class="${changeColor}">${esc(current.now)}</b>${current.old ? `<s>${esc(current.old)}</s>` : ""}</span><span class="gm-tc ny-hint">${esc(shortDate(g.ts))}</span>`);
   }).join("")}</div>`;
 }
 

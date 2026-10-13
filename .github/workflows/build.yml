@@ -172,6 +172,8 @@ jobs:
 
       - name: cargo build --release
         shell: bash
+        env:
+          PROJECT_UPDATE_CHANNEL: stable
         run: cargo build --release --manifest-path src-tauri/Cargo.toml --features custom-protocol
 
       # Velopack вместо tauri-action+NSIS: клиент (HttpSource) читает
