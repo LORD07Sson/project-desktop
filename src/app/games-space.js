@@ -23,7 +23,7 @@ const TABS = [["store", "Магазин"], ["charts", "Чарты"], ["rel", "Р
 let me = null;                 // ответ /games/me
 let lib = null;                // { steamid, items, ids:Set }
 let tab = "store";
-let deals = { min: 10, maxprice: 0, minpct: 0, sort: "discount", tag: 0, q: "", items: [], total: 0, all: 0, seq: 0 };
+let deals = { min: 10, max: 24, maxprice: 0, minpct: 0, sort: "discount", tag: 0, q: "", items: [], total: 0, all: 0, seq: 0 };
 let wishMode = "all", wishQ = "", wishCat = "", wishCats = null;
 let searchTimer = 0, searchSeq = 0;
 let libFilter = "";
@@ -524,7 +524,7 @@ const DEALS_PAGE = 48;
 
 function dealsBarHtml() {
   const d = deals;
-  const chips = [[10, "от −10%"], [25, "от −25%"], [50, "от −50%"], [75, "от −75%"], [90, "от −90%"], [100, "Бесплатно"]].map(([n, l]) => `<button type="button" class="${d.min === n ? "on" : ""}" data-dmin="${n}">${l}</button>`).join("");
+  const chips = [[10, 24, "−10–24%"], [25, 49, "−25–49%"], [50, 74, "−50–74%"], [75, 89, "−75–89%"], [90, 99, "−90% и выше"], [100, 100, "Бесплатно"]].map(([n, max, l]) => `<button type="button" class="${d.min === n ? "on" : ""}" data-dmin="${n}" data-dmax="${max}">${l}</button>`).join("");
   const rev = [[0, "Любые отзывы"], [70, "от 70%"], [85, "от 85%"], [95, "от 95%"]].map(([n, l]) => `<option value="${n}"${d.minpct === n ? " selected" : ""}>${l}</option>`).join("");
   const sorts = [["discount", "по скидке"], ["price", "дешевле сначала"], ["price_desc", "дороже сначала"], ["reviews", "по отзывам"], ["popular", "популярные"], ["name", "по названию"]].map(([k, l]) => `<option value="${k}"${d.sort === k ? " selected" : ""}>${l}</option>`).join("");
   const tags = `<option value="0">Любой жанр</option>` + (tagList || []).map(t => `<option value="${t.id}"${d.tag === t.id ? " selected" : ""}>${esc(t.name)}</option>`).join("");
@@ -543,7 +543,7 @@ function dealsResultHtml() {
 
 async function loadDeals(more = false) {
   const d = deals, my = ++d.seq;
-  const r = await apiGet("/games/deals", { min: d.min, maxprice: d.maxprice || "", minpct: d.minpct || "", sort: d.sort, tag: d.tag || "", q: d.q, start: more ? d.items.length : 0, limit: DEALS_PAGE });
+  const r = await apiGet("/games/deals", { min: d.min, max: d.max, maxprice: d.maxprice || "", minpct: d.minpct || "", sort: d.sort, tag: d.tag || "", q: d.q, start: more ? d.items.length : 0, limit: DEALS_PAGE });
   if (my !== d.seq) return false;
   d.items = more ? d.items.concat(r.items) : r.items;
   d.total = r.total; d.all = r.all;
@@ -1604,7 +1604,7 @@ async function onClick(e) {
   const pd = t.closest("[data-pgdot]");
   if (pd) { const [k, i] = pd.dataset.pgdot.split(":"); pagerGo(k, Number(i)); return; }
   const dm = t.closest("[data-dmin]");
-  if (dm) { deals.min = Number(dm.dataset.dmin); const bar = $("#gm-dbar") || document.querySelector(".gm-dbar"); if (bar) bar.querySelectorAll("[data-dmin]").forEach(b => b.classList.toggle("on", b === dm)); refreshDeals(); return; }
+  if (dm) { deals.min = Number(dm.dataset.dmin); deals.max = Number(dm.dataset.dmax); const bar = $("#gm-dbar") || document.querySelector(".gm-dbar"); if (bar) bar.querySelectorAll("[data-dmin]").forEach(b => b.classList.toggle("on", b === dm)); refreshDeals(); return; }
   if (t.closest("[data-dmore]")) { refreshDeals(true); return; }
   const wc = t.closest("[data-wcat]");
   if (wc) { wishCat = wc.dataset.wcat; $("#gm-wbar").innerHTML = wishBarHtml(); $("#gm-wlist").innerHTML = wishListHtml(); return; }
