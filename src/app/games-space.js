@@ -1227,7 +1227,7 @@ async function loadTechnicalSections(ov, appid) {
         const view = final == null ? null : final === 0 ? { now: "Бесплатно", old: "", badge: "" } : priceView({ final, initial: initial == null ? final : initial, discount, currency: p.currency || d.price && d.price.currency });
         return `<div class="gm-tech-row"><span><b>${esc(p.name || p.group || "Пакет Steam")}</b><small>Package ID · ${p.id}</small></span><span class="gm-package-price">${view ? `${view.old ? `<s>${esc(view.old)}</s>` : ""}<b>${esc(view.now)}</b>${view.badge ? `<i class="gm-badge sm">${esc(view.badge)}</i>` : ""}` : `<small class="ny-hint">Цена недоступна</small>`}</span><button type="button" class="btn sm" data-d-store="https://steamdb.info/sub/${p.id}/">Подробнее</button></div>`;
       }).join("")}</div>`
-      : `<small class="ny-hint">Steam не вернул публичный список пакетов для этого приложения.</small>`;
+      : `<small class="ny-hint">Steam Store не вернул варианты покупки для этого приложения.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/subs/">Все пакеты в SteamDB</button>`;
   }
   const loading = `<div class="gm-reg-load"><span class="ny-spin"></span> Загружаю публичные данные Steam…</div>`;
   [techBox, depotBox, configBox, cloudBox, relatedBox, dlcBox].forEach(box => { if (box) box.innerHTML = loading; });
@@ -1238,39 +1238,45 @@ async function loadTechnicalSections(ov, appid) {
   const tech = techResult.status === "fulfilled" ? techResult.value : null;
   const related = relatedResult.status === "fulfilled" ? relatedResult.value : null;
   if (techBox) {
+    const releaseStates = { released: "Вышла", prerelease: "Ранний доступ", prerelease_unavailable: "Предварительный доступ", coming_soon: "Скоро выйдет" };
     techBox.innerHTML = tech && tech.available
-      ? `<div class="gm-tech-grid"><div><small>Последнее изменение Steam</small><b>${tech.change ? fmtNum(tech.change) : "—"}</b></div><div><small>Публичная сборка</small><b>${esc(tech.branch && tech.branch.buildid || "—")}</b></div><div><small>Обновлена</small><b>${tech.branch && tech.branch.updated ? esc(shortDate(tech.branch.updated)) : "—"}</b></div><div><small>Архитектура</small><b>${esc(tech.arch || "—")}</b></div></div>`
+      ? `<div class="gm-tech-grid"><div><small>Последнее изменение Steam</small><b>${tech.change ? fmtNum(tech.change) : "—"}</b></div><div><small>Публичная сборка</small><b>${esc(tech.branch && tech.branch.buildid || "—")}</b></div><div><small>Обновлена</small><b>${tech.branch && tech.branch.updated ? esc(shortDate(tech.branch.updated)) : "—"}</b></div><div><small>Архитектура</small><b>${esc(tech.arch || "—")}</b></div>${tech.franchises && tech.franchises.length ? `<div><small>Франшиза</small><b>${esc(tech.franchises.join(", "))}</b></div>` : ""}${tech.release_state ? `<div><small>Статус выпуска</small><b>${esc(releaseStates[tech.release_state] || tech.release_state)}</b></div>` : ""}</div>`
       : `<small class="ny-hint">Расширенные метаданные временно недоступны. Основные сведения Steam показаны выше.</small>`;
   }
   if (depotBox) {
     const depots = tech && tech.depots || [];
     depotBox.innerHTML = depots.length
       ? `<div class="gm-tech-list">${depots.map(x => `<div class="gm-tech-row"><span><b>Depot ${fmtNum(x.id)}</b><small>${esc(x.os || "Общедоступная ветка")}</small></span><span><b>${esc(fmtBytes(x.size))}</b><small>загрузка ${esc(fmtBytes(x.download))}</small></span><button type="button" class="btn sm" data-d-store="https://steamdb.info/depot/${x.id}/">Подробнее</button></div>`).join("")}</div><p class="ny-hint gm-hnote">Показаны только сводные размеры общедоступных депо. Файлы игры и данные манифестов не загружаются.</p>`
-      : `<small class="ny-hint">Публичные сведения о депо недоступны.</small>`;
+      : `<small class="ny-hint">Steam не вернул сводные данные о публичных депо.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/depots/">Депо в SteamDB</button>`;
   }
   if (configBox) {
     const p = d.platforms || {};
     const systems = Object.entries({ windows: "Windows", mac: "macOS", linux: "Linux" }).filter(([k]) => p[k]).map(([, v]) => v);
-    const langs = tech && tech.languages || [];
+    const langs = tech && tech.languages && tech.languages.length ? tech.languages : d.language_support || [];
+    const capability = value => value == null ? "н/д" : value ? "✓" : "—";
     const req = d.requirements || {};
     configBox.innerHTML = `<div class="gm-tech-grid"><div><small>Поддерживаемые системы</small><b>${esc(systems.join(" · ") || tech && tech.os || "Не указаны")}</b></div><div><small>Поддержка контроллера</small><b>${esc(tech && tech.controller || d.controller_support || "Не указана")}</b></div><div><small>Папка установки</small><b>${esc(tech && tech.install_dir || "—")}</b></div><div><small>Минимальные требования</small><b class="gm-tech-pre">${esc(steamText(req.min) || "Не указаны")}</b></div><div><small>Рекомендуемые требования</small><b class="gm-tech-pre">${esc(steamText(req.rec) || "Не указаны")}</b></div></div>`
-      + (langs.length ? `<div class="gm-lang-list">${langs.map(x => `<span><b>${esc(x.name)}</b><small>Интерфейс ${x.interface ? "✓" : "—"} · озвучка ${x.audio ? "✓" : "—"} · субтитры ${x.subtitles ? "✓" : "—"}</small></span>`).join("")}</div>` : `<p class="ny-hint">Подробная таблица языков недоступна.</p>`);
+      + (langs.length ? `<div class="gm-lang-list">${langs.map(x => `<span><b>${esc(x.name)}</b><small>Интерфейс ${capability(x.interface)} · озвучка ${capability(x.audio)} · субтитры ${capability(x.subtitles)}</small></span>`).join("")}</div>` : `<p class="ny-hint">Подробная таблица языков недоступна.</p>`);
   }
   if (cloudBox) {
     const cloud = tech && tech.cloud;
-    cloudBox.innerHTML = cloud && cloud.enabled
+    cloudBox.innerHTML = cloud && cloud.available && cloud.enabled
       ? `<div class="gm-tech-grid"><div><small>Steam Cloud</small><b class="gm-green">Поддерживается</b></div><div><small>Лимит файлов</small><b>${cloud.max_files ? fmtNum(cloud.max_files) : "—"}</b></div><div><small>Квота</small><b>${cloud.quota ? esc(fmtBytes(cloud.quota)) : "—"}</b></div></div><div class="gm-tech-list">${(cloud.paths || []).map(x => `<div class="gm-tech-row"><span><b>${esc(x.path)}</b><small>${esc(x.root || "Steam Cloud")}${x.recursive ? " · включая вложенные папки" : ""}</small></span><small>${esc(x.pattern || "*")}</small></div>`).join("")}</div><p class="ny-hint gm-hnote">Это настройки синхронизации игры. Личные файлы сохранений не читаются.</p>`
-      : `<div class="gm-tech-grid"><div><small>Steam Cloud</small><b>${tech ? "Не заявлен" : "Нет данных"}</b></div></div><small class="ny-hint">Steam не предоставил настройки облачных сохранений для этой игры.</small>`;
+      : cloud && cloud.available
+        ? `<div class="gm-tech-grid"><div><small>Steam Cloud</small><b>Не заявлен</b></div></div><small class="ny-hint">Для этого приложения Steam не опубликовал правила облачных сохранений.</small>`
+      : `<div class="gm-tech-grid"><div><small>Steam Cloud</small><b>Нет данных</b></div></div><small class="ny-hint">Steam не предоставил настройки облачных сохранений для этой игры.</small>`;
   }
-  const card = item => `<button type="button" class="gm-card gm-related" data-related-app="${item.appid}" data-name="${esc(item.name || "")}">${picHtml(item.appid, item.image, item.name || "Steam", "gm-img") }<div class="gm-t">${esc(item.name || `App ${item.appid}`)}</div><div class="gm-pr"><small>${esc(item.type || "Игра")}</small>${item.price ? priceCell(item.price) : item.free ? `<b>Бесплатно</b>` : ""}</div></button>`;
+  const card = item => item.unavailable
+    ? `<button type="button" class="gm-card gm-related" data-d-store="https://steamdb.info/app/${item.appid}/">${picHtml(item.appid, item.image, item.name || "DLC", "gm-img")}<div class="gm-t">${esc(item.name || `App ${item.appid}`)}</div><div class="gm-pr"><small>Скрытый в Steam Store · ID ${item.appid}</small><b>Открыть SteamDB</b></div></button>`
+    : `<button type="button" class="gm-card gm-related" data-related-app="${item.appid}" data-name="${esc(item.name || "")}">${picHtml(item.appid, item.image, item.name || "Steam", "gm-img") }<div class="gm-t">${esc(item.name || `App ${item.appid}`)}</div><div class="gm-pr"><small>${esc(item.type || "Игра")}</small>${item.price ? priceCell(item.price) : item.free ? `<b>Бесплатно</b>` : ""}</div></button>`;
   if (related) {
     if (dlcBox) dlcBox.innerHTML = related.dlcs && related.dlcs.length
       ? `<div class="gm-grid gm-related-grid">${related.dlcs.map(card).join("")}</div>${related.truncated ? `<small class="ny-hint">Показаны первые ${related.dlcs.length} из ${related.dlc_total} дополнений.</small>` : ""}`
-      : `<small class="ny-hint">У Steam нет списка DLC для этой игры.</small>`;
+      : `<small class="ny-hint">Store API не вернул список DLC для этой игры.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/dlc/">Список DLC в SteamDB</button>`;
     if (relatedBox) relatedBox.innerHTML = `${related.parent ? `<h4>Основная игра</h4><div class="gm-grid gm-related-grid">${card(related.parent)}</div>` : ""}${related.demos && related.demos.length ? `<h4>Демо-версии</h4><div class="gm-grid gm-related-grid">${related.demos.map(card).join("")}</div>` : ""}${related.dlcs && related.dlcs.length ? `<h4>Дополнения</h4><div class="gm-grid gm-related-grid">${related.dlcs.slice(0, 8).map(card).join("")}</div>` : ""}${!related.parent && !(related.dlcs || []).length && !(related.demos || []).length ? `<small class="ny-hint">Связанные приложения Steam не предоставил.</small>` : ""}`;
   } else {
-    if (dlcBox) dlcBox.innerHTML = `<small class="ny-hint">Не удалось загрузить список DLC.</small>`;
-    if (relatedBox) relatedBox.innerHTML = `<small class="ny-hint">Не удалось загрузить связанные приложения.</small>`;
+    if (dlcBox) dlcBox.innerHTML = `<small class="ny-hint">Steam временно не вернул список DLC.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/dlc/">Список DLC в SteamDB</button>`;
+    if (relatedBox) relatedBox.innerHTML = `<small class="ny-hint">Steam временно не вернул связанные приложения.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/">Открыть SteamDB</button>`;
   }
 }
 
