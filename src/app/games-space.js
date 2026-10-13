@@ -991,7 +991,7 @@ async function openDetail(appid, name) {
             <div class="gm-online" id="gm-online">
               <div class="gm-online-h"><span class="ny-hint" id="gm-rank"></span><div class="ny-seg">${[["48h", "48 ч"], ["7d", "1 нед."], ["30d", "1 мес."], ["90d", "3 мес."], ["all", "Всё"]].map(([k, t]) => `<button type="button" data-orange="${k}">${t}</button>`).join("")}</div></div>
               <div class="gm-online-s"></div><div class="gm-chartbox gm-online-c"></div>
-            </div>
+            </div><p class="ny-hint gm-hnote">Онлайн и цены сохраняются в базе с отметкой времени наблюдения. Точки онлайна старше 14 дней уплотняются до одного замера в час; старше 400 дней удаляются, месячные сводки остаются.</p>
           </section>
           <section class="gm-dp-sec"><h3>Данные магазина</h3>
             <div class="gm-store" id="gm-store">
@@ -1006,7 +1006,7 @@ async function openDetail(appid, name) {
           <div class="gm-online-h gm-ph2"><div class="gm-pstats" id="gm-pstats"></div><div class="ny-seg">${[[30, "30 дн."], [90, "3 мес."], [365, "Год"], [0, "Всё"]].map(([k, t]) => `<button type="button" data-prange="${k}">${t}</button>`).join("")}</div></div>
           <div class="gm-chartbox" id="gm-pchart"></div>
           <div class="gm-plist" id="gm-plist"></div>
-          <p class="ny-hint gm-hnote">Steam не хранит историю цен, поэтому мы ведём её сами: цены популярных игр записываются каждые 2 часа, а у желаемого — каждые 30 минут и при каждом просмотре.</p>
+          <p class="ny-hint gm-hnote">Steam не отдаёт историю цен. Мы сохраняем каждое замеченное изменение: выбранный регион — обычно каждые 2 часа, желаемое — каждые 30 минут и при просмотре, другие регионы — не чаще раза в 20 часов для игр под наблюдением; при большом списке реже. Время показывает, когда сервер заметил цену, а не точный момент изменения в Steam.</p>
         </div>
         <div class="gm-reg" id="gm-reg"><button type="button" class="btn" data-regions="${appid}">Цены по странам</button></div>`}</section>
         <section class="gm-dp-sec"><div id="gm-watchbox"></div></section>
@@ -1068,6 +1068,8 @@ async function openDetail(appid, name) {
     if (cp) { navigator.clipboard.writeText(cp.dataset.copy).then(() => toast("Скопировано.", "success")).catch(() => {}); return; }
     const rb = t.closest("[data-regions]");
     if (rb) { loadRegions(ov, appid); return; }
+    const rh = t.closest("[data-rhistory]");
+    if (rh) { loadRegionHistory(ov, appid, rh.dataset.rhistory, rh.dataset.rname || ""); return; }
     const pr = t.closest("[data-prange]");
     if (pr) { paintPriceChart(ov, Number(pr.dataset.prange)); return; }
     const rg = t.closest("[data-orange]");
@@ -1441,10 +1443,35 @@ async function loadRegions(ov, appid) {
         const d = pctText(x.vs_mine);
         const mine = x.cc === r.my_cc;
         const conv = x.conv != null && x.currency !== r.my_currency ? `≈ ${esc(priceView({ final: x.conv, initial: x.conv, discount: 0, currency: r.my_currency }).now)}` : "";
-        return `<div class="gm-regr${mine ? " mine" : ""}${cheapest && x.cc === cheapest.cc ? " best" : ""}"><span>${esc(x.name)}${mine ? ` <i>ваша</i>` : ""}${cheapest && x.cc === cheapest.cc ? ` <i class="b">дешевле всего</i>` : ""}</span><span class="gm-tc">${x.discount ? `<i class="gm-badge sm">−${x.discount}%</i>` : ""}<b>${esc(priceView(x).now)}</b></span><span class="gm-tc ny-hint">${conv}</span><span class="gm-tc ny-hint">${esc(lowestText(x, p => priceView(p).now))}</span><span class="gm-tc gm-d ${d.cls}">${esc(d.text)}</span></div>`;
+        const lastChecked = x.last_checked ? `Проверено ${fmtDMHM(x.last_checked)}` : "Ещё не проверялась";
+        return `<div class="gm-regr${mine ? " mine" : ""}${cheapest && x.cc === cheapest.cc ? " best" : ""}"><span><button type="button" class="gm-rhist-btn" data-rhistory="${esc(x.cc)}" data-rname="${esc(x.name)}">${esc(x.name)} · история ${x.history_count || 0}</button>${mine ? ` <i>ваша</i>` : ""}${cheapest && x.cc === cheapest.cc ? ` <i class="b">дешевле всего</i>` : ""}<small class="gm-rchecked ny-hint">${esc(lastChecked)}</small></span><span class="gm-tc">${x.discount ? `<i class="gm-badge sm">−${x.discount}%</i>` : ""}<b>${esc(priceView(x).now)}</b></span><span class="gm-tc ny-hint">${conv}</span><span class="gm-tc ny-hint">${esc(lowestText(x, p => priceView(p).now))}</span><span class="gm-tc gm-d ${d.cls}">${esc(d.text)}</span></div>`;
       }).join("")}
-    </div>`;
+    </div><div class="gm-rhist-detail" id="gm-rhist-detail" hidden></div>`;
   } catch (e) { box.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить цены по странам.")}</small>`; }
+}
+
+async function loadRegionHistory(ov, appid, cc, country) {
+  const box = ov.querySelector("#gm-rhist-detail");
+  if (!box) return;
+  if (!box.hidden && box.dataset.cc === cc) { box.hidden = true; return; }
+  box.hidden = false;
+  box.dataset.cc = cc;
+  box.innerHTML = `<div class="gm-reg-load"><span class="ny-spin"></span> Загружаю историю ${esc(country)}…</div>`;
+  try {
+    const r = await apiGet(`/games/app/${appid}/region-history`, { cc });
+    if (!ov.isConnected || box.dataset.cc !== cc) return;
+    const when = ts => ts ? fmtDMHM(ts) : "—";
+    const rows = (r.items || []).slice().reverse();
+    const money = p => priceView({ final: p.final, initial: p.initial, discount: p.discount, currency: p.currency }).now;
+    box.innerHTML = `<div class="gm-rhist-head"><b>${esc(r.country)} · история цены</b><span class="ny-hint">Наблюдаем с ${esc(when(r.since))} · последнее изменение ${esc(when(r.last_change))} · проверено ${esc(when(r.last_checked))}</span></div><small class="ny-hint">Время изменения — когда сервер заметил новую цену; Steam не сообщает точный момент её смены.</small>${rows.length ? `<div class="gm-rhist-list">${rows.slice(0, 20).map((p, i) => {
+      const prev = rows[i + 1];
+      const down = prev && p.final < prev.final;
+      const change = prev ? (prev.final ? `${down ? "−" : "+"}${Math.abs(Math.round((p.final - prev.final) / prev.final * 100))}%` : "изменена") : "первая запись";
+      return `<div class="gm-rhist-row"><time>${esc(when(p.ts))}</time><span>${prev ? `${esc(money(prev))} → ` : ""}<b>${esc(money(p))}</b></span><span class="${prev ? (down ? "gm-green" : "gm-red") : "ny-hint"}">${change}</span>${p.discount ? `<i class="gm-badge sm">−${p.discount}%</i>` : "<i></i>"}</div>`;
+    }).join("")}</div>${r.count > 20 ? `<small class="ny-hint">Показаны последние 20 из ${fmtNum(r.count)} изменений.</small>` : ""}` : `<small class="ny-hint">Пока нет сохранённых изменений цены для этой страны. Проверки и история начнут накапливаться автоматически.</small>`}`;
+  } catch (e) {
+    if (box.dataset.cc === cc) box.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить историю страны.")}</small>`;
+  }
 }
 
 async function loadOnline(ov, appid, range, quiet = false) {

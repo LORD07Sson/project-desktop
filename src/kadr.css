@@ -2141,6 +2141,14 @@ body[data-space="games"] .overlay:not(.gm-show) { display: none !important; }
 .gm-regr i { font-style: normal; font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: rgba(255, 255, 255, .1); margin-left: 4px; }
 .gm-regr i.b { background: rgba(51, 209, 122, .2); color: var(--s-done); }
 .gm-regr.mine { background: rgba(var(--fire-rgb), .08); }
+.gm-rhist-btn { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.gm-rchecked { display: block; margin-top: 2px; font-size: 10.5px; }
+.gm-rhist-detail { margin: 8px 0 14px; padding: 10px 12px; border: 1px solid var(--line, rgba(255,255,255,.08)); border-radius: 10px; background: var(--surface-2, rgba(255,255,255,.03)); }
+.gm-rhist-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 6px; }
+.gm-rhist-list { max-height: 220px; overflow-y: auto; }
+.gm-rhist-row { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(130px, 1fr) 80px 65px; gap: 8px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line-soft, rgba(255,255,255,.06)); font-size: 12px; font-variant-numeric: tabular-nums; }
+.gm-rhist-row time { color: var(--ink-dim); }
+.gm-rhist-row i { justify-self: end; font-style: normal; }
 
 /* игры: метки, новости, достижения, профиль, распродажи */
 .gm-sale { margin: 0 0 12px; font-size: 13.5px; }
