@@ -4,7 +4,7 @@
 
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
 import { AUDIO_RE } from "./media-formats.js";
-import { attachHtml, wireAttachments, downloadAttachment, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
+import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { state } from "./state.js";
 import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow } from "./tauri.js";
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange } from "./utils.js";
@@ -148,6 +148,13 @@ export async function openReportDetail(publicId) {
     const authorName = (detail.author && (detail.author.first_name || detail.author.username)) || "?";
     const hasPipe = detail.pipeline && detail.pipeline.length;
     const doneItems = checklist.items.filter(i => i.done).length;
+    const rawFileCount = (raws.raws || []).reduce((n, r) => n + (r.files?.length || (r.present ? 1 : 0)), 0);
+    const rawFileCountTail = rawFileCount % 10 === 1 && rawFileCount % 100 !== 11
+      ? "файл"
+      : rawFileCount % 10 >= 2 && rawFileCount % 10 <= 4 && (rawFileCount % 100 < 12 || rawFileCount % 100 > 14)
+        ? "файла"
+        : "файлов";
+    const rawFileCountLabel = `${rawFileCount} ${rawFileCountTail}`;
     const steps = STATUS_PATH.map(([st, lbl], i) => {
       const curIdx = STATUS_PATH.findIndex(([s]) => s === detail.status);
       const cls = st === detail.status ? " cur" : curIdx > i ? " done" : "";
@@ -240,14 +247,23 @@ export async function openReportDetail(publicId) {
 
             ${(raws.raws || []).length ? `
             <div class="rd-sec">
-              <h3>Равки и субтитры <span class="n">${raws.raws.filter(r => r.present).length} из ${raws.raws.length}</span></h3>
-              <div class="no-assignee" style="margin-bottom:6px;">Загружаются через бота: карточка отчёта → «📥 Равка озв.» / «📥 Равка свед.» / «📥 Субтитры».</div>
-              <div class="raw-list">${raws.raws.map(r => `
-                <div class="raw-row${r.present ? " on" : ""}">
-                  <span class="raw-label">${esc(r.label)}</span>
-                  <span class="raw-name">${r.present ? esc(r.name || "загружено") : "не загружено"}</span>
-                  ${r.present ? `<button class="icon-btn" data-raw-dl="${r.kind}" data-raw-name="${esc(r.name || r.kind)}" title="Скачать">⬇️</button>` : ""}
-                </div>`).join("")}</div>
+              <h3>Равки и субтитры <span class="n">${rawFileCountLabel}</span></h3>
+              <div class="no-assignee" style="margin-bottom:6px;">Можно прикрепить несколько файлов в каждой категории. Их увидят участники, которым доступен этот отчёт.</div>
+              <div class="raw-list">${raws.raws.map(r => {
+                const entries = r.files || (r.present ? [{ id: null, legacy: true, character_id: 0, name: r.name || "файл" }] : []);
+                return `<section class="raw-kind">
+                  <div class="raw-kind-head">
+                    <span class="raw-label">${esc(r.label)}</span>
+                    <span class="raw-kind-count">${entries.length}</span>
+                    ${raws.can_upload ? `<button class="rd-add" data-raw-add="${esc(r.kind)}">+ Добавить файлы</button>` : ""}
+                  </div>
+                  ${entries.length ? entries.map(f => `
+                    <div class="raw-row on">
+                      <span class="raw-name">${esc(f.name || "файл")}${f.character_name ? ` · ${esc(f.character_name)}` : (f.character_id ? ` · персонаж #${Number(f.character_id)}` : "")}</span>
+                      <button class="icon-btn" data-raw-dl="${esc(r.kind)}" data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-legacy="${f.legacy || f.id == null ? "1" : "0"}" data-raw-character="${Number(f.character_id || 0)}" data-raw-name="${esc(f.name || r.kind)}" title="Скачать">⬇️</button>
+                    </div>`).join("") : `<div class="raw-row"><span class="raw-name">Файлов пока нет</span></div>`}
+                </section>`;
+              }).join("")}</div>
             </div>` : ""}
           </div>
           <div class="rd-panel" data-rd-panel="history" hidden></div>
@@ -464,8 +480,34 @@ export async function openReportDetail(publicId) {
       const file = pastedFile(e);
       if (file) { e.preventDefault(); setNoteFile(file); }
     });
-    sheet.querySelectorAll("[data-raw-dl]").forEach(btn => btn.addEventListener("click", () =>
-      downloadAttachment(`report/${publicId}/raws/${btn.dataset.rawDl}/file`, btn.dataset.rawName)));
+    sheet.querySelectorAll("[data-raw-dl]").forEach(btn => btn.addEventListener("click", () => {
+      const path = btn.dataset.rawId
+        ? `report/${publicId}/raws/files/${btn.dataset.rawId}/file`
+        : btn.dataset.rawLegacy === "1"
+          ? `report/${publicId}/raws/legacy/${btn.dataset.rawDl}/${btn.dataset.rawCharacter}/file`
+          : `report/${publicId}/raws/${btn.dataset.rawDl}/file`;
+      downloadAttachment(path, btn.dataset.rawName);
+    }));
+    sheet.querySelectorAll("[data-raw-add]").forEach(btn => btn.addEventListener("click", async () => {
+      const kind = btn.dataset.rawAdd;
+      const filesToAdd = await pickFiles("*/*");
+      if (!filesToAdd.length) return;
+      btn.disabled = true;
+      let uploaded = 0;
+      let failure = null;
+      for (const file of filesToAdd) {
+        try {
+          await apiUpload(`/report/${publicId}/raws/${kind}`, file);
+          uploaded += 1;
+        } catch (e) {
+          failure = `${file.name}: ${e.message}`;
+          break;
+        }
+      }
+      await render();
+      if (failure) toast(uploaded ? `Добавлено ${uploaded} из ${filesToAdd.length}. Не загрузился файл ${failure}` : `Не удалось загрузить: ${failure}`, "error");
+      else toast(`Добавлено файлов: ${uploaded}.`, "success");
+    }));
     async function addNote() {
       const ta = sheet.querySelector("#note-new");
       const timeInput = sheet.querySelector("#note-time");

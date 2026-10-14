@@ -91,6 +91,21 @@ export function pickFile(accept) {
   });
 }
 
+// Выбор нескольких файлов для равок отчёта. Обычный pickFile остаётся
+// одиночным для заметок и других вложений.
+export function pickFiles(accept) {
+  return new Promise(resolve => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    if (accept) input.accept = accept;
+    input.style.display = "none";
+    input.addEventListener("change", () => { resolve([...input.files]); input.remove(); }, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
 // Картинка из буфера обмена (Ctrl+V скриншота) — File или null.
 export function pastedFile(e) {
   const items = [...(e.clipboardData?.items || [])];

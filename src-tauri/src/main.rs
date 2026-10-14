@@ -1122,6 +1122,10 @@ fn allowed_attachment_path(api_path: &str) -> bool {
         ["report", _pid, "notes", id, "file"] => numeric(id),
         ["tickets", t, "posts", id, "file"] => numeric(t) && numeric(id),
         ["report", _pid, "raws", kind, "file"] => matches!(*kind, "voice" | "mix" | "subs"),
+        ["report", _pid, "raws", "files", id, "file"] => numeric(id),
+        ["report", _pid, "raws", "legacy", kind, character_id, "file"] => {
+            matches!(*kind, "voice" | "mix" | "subs") && numeric(character_id)
+        }
         _ => false,
     };
     ok_chars && !api_path.contains("..") && shape
