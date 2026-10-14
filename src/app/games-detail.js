@@ -78,7 +78,7 @@ export function selectDetailView(root, key) {
   root.querySelectorAll(".gd-panel").forEach(el => { el.hidden = el.id !== `gd-panel-${view}`; });
   root.querySelectorAll('.gd-nav [role="tab"]').forEach(el => { const active = el.dataset.dView === view; el.setAttribute("aria-selected", String(active)); el.tabIndex = active ? 0 : -1; });
   scroller.scrollTop = root.__detailScrolls[view] || 0;
-  if (view !== "overview") root.querySelector("[data-gal]")?.dispatchEvent(new Event("gm-gal-pause"));
+  if (view !== "overview") root.querySelector("[data-gal]")?.dispatchEvent(new CustomEvent("gm-gal-pause"));
   return true;
 }
 
