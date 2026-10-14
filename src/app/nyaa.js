@@ -872,6 +872,7 @@ setInterval(() => {
 const EXIT_KEY = "project-nyaa-exits";
 let exitList = (() => { try { const c = JSON.parse(localStorage.getItem(EXIT_KEY) || "null"); return c && Date.now() - c.at < 5 * 60e3 ? c.data : null; } catch (_) { return null; } })()
   || { default: "direct", exits: [{ code: "direct", name: "Напрямую, без VPN" }] };
+let exitRefresh = null;
 const exitOf = id => { const v = prefs.exit && prefs.exit[id]; return exitList.exits.some(e => e.code === v) ? v : ""; };
 const exitName = id => {
   const code = exitOf(id) || exitList.default;
@@ -879,21 +880,32 @@ const exitName = id => {
   return e ? e.name : code;
 };
 async function loadExits() {
-  try {
-    const data = JSON.parse(await (await apiBlob("/exits")).text());
-    if (data && Array.isArray(data.exits)) {
-      exitList = data;
-      const valid = new Set(data.exits.map(e => e.code));
-      let changed = false;
-      for (const [id, code] of Object.entries(prefs.exit || {})) {
-        if (code && !valid.has(code)) { delete prefs.exit[id]; changed = true; }
+  if (exitRefresh) return exitRefresh;
+  exitRefresh = (async () => {
+    try {
+      const data = JSON.parse(await (await apiBlob("/exits")).text());
+      if (data && Array.isArray(data.exits)) {
+        exitList = data;
+        const valid = new Set(data.exits.map(e => e.code));
+        let changed = false;
+        for (const [id, code] of Object.entries(prefs.exit || {})) {
+          if (code && !valid.has(code)) { delete prefs.exit[id]; changed = true; }
+        }
+        if (changed) savePrefs();
+        try { localStorage.setItem(EXIT_KEY, JSON.stringify({ at: Date.now(), data })); } catch (_) { /* не запомнится */ }
+        paintSources();
       }
-      if (changed) savePrefs();
-      try { localStorage.setItem(EXIT_KEY, JSON.stringify({ at: Date.now(), data })); } catch (_) { /* не запомнится */ }
-      paintSources();
-    }
-  } catch (_) { /* старый сервер без ручки — остаётся встроенный список */ }
+    } catch (_) { /* временная ошибка не затирает последний рабочий список */ }
+  })();
+  try {
+    await exitRefresh;
+  } finally {
+    exitRefresh = null;
+  }
 }
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && state.isAdmin) loadExits();
+});
 setInterval(() => {
   if (state.isAdmin && !document.hidden) loadExits();
 }, 60 * 1000);
@@ -1226,6 +1238,7 @@ setInterval(() => {
 function openSources() {
   const box = $("#ny-sources");
   box.hidden = false; paintSources();
+  if (state.isAdmin) loadExits();
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
   // свежие данные из замеров показываем сразу; проверяем только то, что давно не проверялось
   const stale = allMirrorUrls().filter(u => Date.now() - lastSampleAt(u) > 60_000);
