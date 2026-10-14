@@ -27,7 +27,7 @@ function fmt(s) {
   return (h ? `${h}:${String(m).padStart(2, "0")}` : `${m}`) + ":" + String(sec).padStart(2, "0");
 }
 
-export function createPlayer({ publicId, onAddNote, onClose }) {
+export function createPlayer({ publicId, onAddNote, onClose, readOnly = false }) {
   const el = document.createElement("section");
   el.className = "tp";
   el.tabIndex = -1;
@@ -60,6 +60,13 @@ export function createPlayer({ publicId, onAddNote, onClose }) {
       <input data-tp-input placeholder="Правка в текущий момент… Enter — добавить в заметки" maxlength="900">
     </div>
   `;
+  if (readOnly) {
+    el.querySelector(".tp-sw").hidden = true;
+    el.querySelector("[data-tp-qc]").hidden = true;
+    el.querySelectorAll("[data-tp-note]").forEach(button => { button.hidden = true; });
+    el.querySelector(".tp-keys").textContent = "Пробел — плей · ← → — перемотка 5 с";
+    el.querySelector(".tp-add").hidden = true;
+  }
   const $ = sel => el.querySelector(sel);
   const wave = $("[data-tp-wave]"), canvas = wave.querySelector("canvas"), head = wave.querySelector(".tp-head");
   const hover = wave.querySelector(".tp-hover"), msg = $("[data-tp-msg]"), playBtn = $("[data-tp-play]");

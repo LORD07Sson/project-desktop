@@ -5,7 +5,7 @@
 // (_require_owner) — фронту тут доверять нельзя.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, toast } from "./api.js";
+import { apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
 
 const DEV_MODE_KEY = "project-dev-mode";
@@ -17,13 +17,6 @@ export function setDevModeOn(on) {
   try { localStorage.setItem(DEV_MODE_KEY, on ? "1" : "0"); } catch (_) {}
 }
 export function devModeActive() { return !!state.isDeveloper && isDevModeOn(); }
-
-let META_ROLES = null;
-async function loadMetaRoles() {
-  if (META_ROLES) return META_ROLES;
-  try { META_ROLES = (await apiGet("/meta")).roles || []; } catch (_) { META_ROLES = []; }
-  return META_ROLES;
-}
 
 export function devPanelHtml(d) {
   return `
@@ -38,8 +31,8 @@ export function devPanelHtml(d) {
         </div>
       </div>
       <div class="dev-bcell wide">
-        <div class="h">Роль и профиль</div>
-        <select id="dev-role-select" class="field-input"><option value="">— загрузка…</option></select>
+        <div class="h">Профиль</div>
+        <div class="dev-hint">Специализации назначаются через «Роли» в карточке участника.</div>
         <input type="text" id="dev-status-input" class="field-input" maxlength="80" placeholder="Короткий статус" value="${esc(d.status_text || "")}">
         <textarea id="dev-bio-input" class="field-textarea" maxlength="300" placeholder="О себе">${esc(d.bio || "")}</textarea>
         <button id="dev-profile-save" class="dev-save-btn">Сохранить</button>
@@ -61,34 +54,18 @@ export function devPanelHtml(d) {
   `;
 }
 
-export function wireDevPanel(root, telegramId, onSaved, currentRole) {
+export function wireDevPanel(root, telegramId, onSaved) {
   root.querySelectorAll(".dev-id[data-copy]").forEach(btn => btn.addEventListener("click", async () => {
     const v = btn.dataset.copy;
     if (!v) return;
     try { await navigator.clipboard.writeText(v); toast("Скопировано."); } catch (_) { toast("Не удалось скопировать.", "error"); }
   }));
-  loadMetaRoles().then(roles => {
-    const sel = root.querySelector("#dev-role-select");
-    if (!sel) return;
-    sel.dataset.ready = "1";
-    // Текущая роль человека должна быть выбрана: раньше список
-    // заполнялся без selected, открывался на «— без роли —», и
-    // «Сохранить роль», нажатое не глядя, стирало роль в пустую.
-    sel.innerHTML = `<option value="">— без роли —</option>` + roles.map(r =>
-      `<option value="${esc(r)}" ${r === currentRole ? "selected" : ""}>${esc(r)}</option>`).join("");
-  });
-
   const profileBtn = root.querySelector("#dev-profile-save");
   if (profileBtn) profileBtn.addEventListener("click", async () => {
-    const sel = root.querySelector("#dev-role-select");
     const status_text = root.querySelector("#dev-status-input").value;
     const bio = root.querySelector("#dev-bio-input").value;
-    // Роль шлём только когда список загрузился и значение изменилось:
-    // иначе «— загрузка…» стёрло бы текущую роль пустой.
-    const roleChanged = sel?.dataset.ready === "1" && sel.value !== (currentRole || "");
     profileBtn.disabled = true;
     try {
-      if (roleChanged) await apiPost(`/dev/user/${telegramId}/role`, { role: sel.value });
       await apiPost(`/dev/user/${telegramId}/profile`, { status_text, bio });
       toast("Сохранено.");
       if (onSaved) await onSaved();

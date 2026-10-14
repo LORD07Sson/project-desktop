@@ -95,14 +95,15 @@ export async function openReportDetail(publicId) {
 
   async function render() {
     let detail, notes, checklist, files, roles, assignable, raws;
+    const canEdit = !!state.isAdmin;
     try {
       [detail, notes, checklist, files, roles, assignable, raws] = await Promise.all([
         apiGet(`/report/${publicId}`),
         apiGet(`/report/${publicId}/notes`),
         apiGet(`/report/${publicId}/checklist`),
         apiGet(`/report/${publicId}/files`),
-        loadRoles(),
-        loadAssignable(),
+        canEdit ? loadRoles() : Promise.resolve([]),
+        canEdit ? loadAssignable() : Promise.resolve([]),
         // Старый сервер без /raws — карточка открывается и без раздела.
         apiGet(`/report/${publicId}/raws`).catch(() => ({ raws: [] })),
       ]);
@@ -150,7 +151,7 @@ export async function openReportDetail(publicId) {
     const steps = STATUS_PATH.map(([st, lbl], i) => {
       const curIdx = STATUS_PATH.findIndex(([s]) => s === detail.status);
       const cls = st === detail.status ? " cur" : curIdx > i ? " done" : "";
-      return `<button class="rd-step${cls}" data-set-status="${st}" style="--c:var(${STATUS_COLOR_VAR[st]});"><i></i>${lbl}</button>`;
+      return `<button class="rd-step${cls}" data-set-status="${st}" style="--c:var(${STATUS_COLOR_VAR[st]});"${canEdit ? "" : " disabled title=\"Только просмотр\""}><i></i>${lbl}</button>`;
     }).join("");
     const side = detail.status === "revision" || detail.status === "cancelled" ? detail.status : "";
 
@@ -176,7 +177,7 @@ export async function openReportDetail(publicId) {
         </div>
         <div class="rd-steps">
           ${steps}
-          <button class="rd-step-side${side === "revision" ? " on" : ""}" data-set-status="revision" style="--c:var(--s-fix);">↺ На перезапись</button>
+          <button class="rd-step-side${side === "revision" ? " on" : ""}" data-set-status="revision" style="--c:var(--s-fix);"${canEdit ? "" : " disabled title=\"Только просмотр\""}>↺ На перезапись</button>
           ${side === "cancelled" ? `<span class="rd-step-side on" style="--c:var(--s-stop);">Отменено</span>` : ""}
         </div>
       </div>
@@ -185,7 +186,7 @@ export async function openReportDetail(publicId) {
         <button class="rd-tab on" data-rd-tab="main">Обзор</button>
         <button class="rd-tab" data-rd-tab="history">История</button>
         <button class="rd-tab" data-rd-tab="activity">Активность</button>
-        <button class="rd-tab" id="btn-qc-track" title="Проверить звук дорожки">QC дорожки</button>
+        ${canEdit ? `<button class="rd-tab" id="btn-qc-track" title="Проверить звук дорожки">QC дорожки</button>` : ""}
       </div>
 
       <div class="rd-body">
@@ -194,9 +195,9 @@ export async function openReportDetail(publicId) {
             <div id="rd-player-host"></div>
             <div class="rd-sec">
               <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}</span>` : ""}
-                <button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? "изменить" : ""}</button></h3>
-              ${hasPipe ? pipelineTimelineHtml(detail.pipeline) + pipelineAdvanceHtml(detail.pipeline, assignable) : `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>`}
-              <div id="pipe-editor" hidden>
+                ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? "изменить" : ""}</button>` : ""}</h3>
+              ${hasPipe ? pipelineTimelineHtml(detail.pipeline) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
+              ${canEdit ? `<div id="pipe-editor" hidden>
                 <div id="pipeline-draft-list"></div>
                 <div class="add-row">
                   <select id="pipeline-role-pick" class="field-input"><option value="">+ роль…</option>${roles.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>
@@ -207,16 +208,16 @@ export async function openReportDetail(publicId) {
                   <button class="btn primary" id="btn-pipeline-save">Сохранить пайплайн</button>
                   ${hasPipe ? `<button class="btn danger" id="btn-pipeline-clear">Снять</button>` : ""}
                 </div>
-              </div>
+              </div>` : ""}
             </div>
 
             <div class="rd-sec">
               <h3>Чек-лист ${checklist.items.length ? `<span class="n">${doneItems} из ${checklist.items.length}</span>` : ""}</h3>
-              <div id="checklist-list">${checklist.items.map(checklistItemHtml).join("")}</div>
-              <div class="add-row">
+              <div id="checklist-list">${checklist.items.map(item => checklistItemHtml(item, canEdit)).join("")}</div>
+              ${canEdit ? `<div class="add-row">
                 <input id="checklist-new" placeholder="${checklist.items.length ? "Ещё пункт…" : "+ Добавить пункт: например, «сверить имена»"}">
                 <button class="btn" id="checklist-add">+</button>
-              </div>
+              </div>` : ""}
             </div>
 
             <div class="rd-sec">
@@ -224,18 +225,17 @@ export async function openReportDetail(publicId) {
                 ${timedCount >= 2 ? `<button class="btn ghost notes-sort rd-h-act" id="notes-sort">${notesByTime ? "По времени добавления" : "По тайм-коду"}</button>` : ""}
               </h3>
               <div id="notes-list">${orderedNotes.map(noteHtml).join("")}</div>
-              <div class="add-row note-add-row">
+              ${canEdit ? `<div class="add-row note-add-row">
                 <input id="note-time" class="note-time-input" placeholder="04:12" maxlength="8" inputmode="numeric" title="Время на дорожке — необязательно">
                 <textarea id="note-new" rows="2" placeholder="Правка или комментарий… (Ctrl+Enter — отправить, Ctrl+V — вставить скриншот)"></textarea>
                 <button class="icon-btn note-attach" id="note-attach" title="Приложить картинку к заметке (или Ctrl+V скриншота)" aria-label="Приложить картинку к заметке">${CLIP_ICON}</button>
                 <button class="btn" id="note-add">Добавить</button>
-              </div>
-              <div class="note-pending" id="note-pending"></div>
+              </div><div class="note-pending" id="note-pending"></div>` : ""}
             </div>
 
             <div class="rd-sec">
               <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}</h3>
-              ${files.files.length ? `<div id="files-list">${files.files.map(fileHtml).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — их присылают боту в карточке отчёта.</div>`}
+              ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — их присылают боту в карточке отчёта.</div>`}
             </div>
 
             ${(raws.raws || []).length ? `
@@ -260,20 +260,20 @@ export async function openReportDetail(publicId) {
               ${(detail.assignees || []).map(a => `<div class="rd-person" data-assignee="${a.telegram_id}">
                 <span class="avatar-bubble" data-avatar-for="${a.telegram_id}">${esc(initials(a.first_name || a.username))}</span>
                 <span>${esc(a.first_name || a.username || `ID ${a.telegram_id}`)}</span>
-                <button class="icon-btn" data-unassign="${a.telegram_id}" title="Снять">✕</button>
+                ${canEdit ? `<button class="icon-btn" data-unassign="${a.telegram_id}" title="Снять">✕</button>` : ""}
               </div>`).join("")}
-              <button class="rd-add" id="chip-assign">+ ${detail.assignees && detail.assignees.length ? "ещё исполнитель" : "назначить"}</button>
+              ${canEdit ? `<button class="rd-add" id="chip-assign">+ ${detail.assignees && detail.assignees.length ? "ещё исполнитель" : "назначить"}</button>` : ""}
             </div>
             <div class="rd-meta-row"><span>Срок</span>
-              <button class="rd-meta-btn" id="chip-deadline">${detail.deadline ? deadlineCellHtml(detail, overdue) : `<span class="ls-dl-none">без срока — поставить</span>`}</button></div>
+              ${canEdit ? `<button class="rd-meta-btn" id="chip-deadline">${detail.deadline ? deadlineCellHtml(detail, overdue) : `<span class="ls-dl-none">без срока — поставить</span>`}</button>` : `<div class="rd-meta-btn" aria-disabled="true">${detail.deadline ? deadlineCellHtml(detail, overdue) : "без срока"}</div>`}</div>
             <div class="rd-meta-row"><span>Приоритет</span>
-              <button class="rd-meta-btn" id="chip-priority"><span class="priority-chip ${esc(detail.priority)}"><span class="dot"></span>${esc(detail.priority_label)}</span></button></div>
+              ${canEdit ? `<button class="rd-meta-btn" id="chip-priority"><span class="priority-chip ${esc(detail.priority)}"><span class="dot"></span>${esc(detail.priority_label)}</span></button>` : `<div class="rd-meta-btn" aria-disabled="true"><span class="priority-chip ${esc(detail.priority)}"><span class="dot"></span>${esc(detail.priority_label)}</span></div>`}</div>
             <div class="rd-meta-row"><span>Статус</span>
-              <button class="rd-meta-btn" id="chip-status"><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[detail.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(detail.status_label)}</span></button></div>
+              ${canEdit ? `<button class="rd-meta-btn" id="chip-status"><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[detail.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(detail.status_label)}</span></button>` : `<div class="rd-meta-btn" aria-disabled="true"><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[detail.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(detail.status_label)}</span></div>`}</div>
           </div>
           <div class="rd-side-foot">
             <button class="btn ghost" id="btn-pin-window">Открепить в окне</button>
-            <button class="btn danger" id="btn-delete-report">Удалить отчёт</button>
+            ${canEdit ? `<button class="btn danger" id="btn-delete-report">Удалить отчёт</button>` : ""}
           </div>
         </aside>
       </div>
@@ -281,7 +281,7 @@ export async function openReportDetail(publicId) {
 
     const sheet = overlay.querySelector(".sheet");
     sheet.querySelector(".rd-ban")?.addEventListener("error", e => e.currentTarget.closest(".rd-hero").classList.add("no-ban"));
-    sheet.querySelectorAll("[data-set-status]").forEach(b => b.addEventListener("click", async () => {
+    if (canEdit) sheet.querySelectorAll("[data-set-status]").forEach(b => b.addEventListener("click", async () => {
       const status = b.dataset.setStatus;
       if (status === detail.status) return;
       try {
@@ -299,9 +299,10 @@ export async function openReportDetail(publicId) {
     }));
     const pipeEditor = sheet.querySelector("#pipe-editor");
     const openPipeEditor = () => { pipeEditor.hidden = !pipeEditor.hidden; };
-    sheet.querySelector("#pipe-add-open")?.addEventListener("click", e => { e.currentTarget.remove(); pipeEditor.hidden = false; });
+    if (canEdit) sheet.querySelector("#pipe-add-open")?.addEventListener("click", e => { e.currentTarget.remove(); pipeEditor.hidden = false; });
     const pipeToggle = sheet.querySelector("#pipe-edit-toggle");
-    if (hasPipe) pipeToggle.addEventListener("click", openPipeEditor); else pipeToggle.remove();
+    if (pipeToggle && hasPipe && canEdit) pipeToggle.addEventListener("click", openPipeEditor);
+    else pipeToggle?.remove();
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
     loadAvatars(sheet);
     sheet.querySelectorAll("[data-nav]").forEach(b => b.addEventListener("click", () => {
@@ -317,12 +318,14 @@ export async function openReportDetail(publicId) {
         toast(`Не удалось открыть окно: ${e}`, "error");
       }
     });
-    sheet.querySelector("#chip-status").addEventListener("click", () => changeStatusDialog([publicId], render, detail.status));
-    sheet.querySelector("#chip-assign").addEventListener("click", () => assignDialog([publicId], render));
-    sheet.querySelector("#chip-priority").addEventListener("click", () => priorityDialog(publicId, render, detail.priority));
-    sheet.querySelector("#chip-deadline").addEventListener("click", () => deadlineDialog(publicId, detail.deadline, render));
+    if (canEdit) {
+      sheet.querySelector("#chip-status").addEventListener("click", () => changeStatusDialog([publicId], render, detail.status));
+      sheet.querySelector("#chip-assign").addEventListener("click", () => assignDialog([publicId], render));
+      sheet.querySelector("#chip-priority").addEventListener("click", () => priorityDialog(publicId, render, detail.priority));
+      sheet.querySelector("#chip-deadline").addEventListener("click", () => deadlineDialog(publicId, detail.deadline, render));
+    }
 
-    sheet.querySelectorAll(".checklist-item").forEach(el => {
+    if (canEdit) sheet.querySelectorAll(".checklist-item").forEach(el => {
       el.addEventListener("click", async () => {
         try {
           await apiPost(`/report/${publicId}/checklist/${el.dataset.id}/toggle`, {});
@@ -330,7 +333,7 @@ export async function openReportDetail(publicId) {
         } catch (e) { toast(`Не удалось изменить пункт: ${e.message}`, "error"); }
       });
     });
-    sheet.querySelectorAll("[data-checklist-del]").forEach(btn => {
+    if (canEdit) sheet.querySelectorAll("[data-checklist-del]").forEach(btn => {
       btn.addEventListener("click", async (ev) => {
         ev.stopPropagation();
         try {
@@ -339,7 +342,7 @@ export async function openReportDetail(publicId) {
         } catch (e) { toast(`Не удалось удалить пункт: ${e.message}`, "error"); }
       });
     });
-    sheet.querySelectorAll("[data-unassign]").forEach(btn => {
+    if (canEdit) sheet.querySelectorAll("[data-unassign]").forEach(btn => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
@@ -349,7 +352,7 @@ export async function openReportDetail(publicId) {
         } catch (e) { toast(`Не удалось снять исполнителя: ${e.message}`, "error"); btn.disabled = false; }
       });
     });
-    sheet.querySelector("#btn-delete-report").addEventListener("click", async () => {
+    sheet.querySelector("#btn-delete-report")?.addEventListener("click", async () => {
       if (!confirm(`Удалить отчёт ${detail.public_id} («${detail.title}»)? Действие необратимо.`)) return;
       const btn = sheet.querySelector("#btn-delete-report");
       btn.disabled = true;
@@ -390,9 +393,9 @@ export async function openReportDetail(publicId) {
         });
       });
     }
-    renderPipelineDraft();
+    if (canEdit) renderPipelineDraft();
 
-    sheet.querySelector("#pipeline-add-step").addEventListener("click", () => {
+    if (canEdit) sheet.querySelector("#pipeline-add-step").addEventListener("click", () => {
       const roleSel = sheet.querySelector("#pipeline-role-pick");
       const userSel = sheet.querySelector("#pipeline-user-pick");
       const role = roleSel.value;
@@ -404,7 +407,7 @@ export async function openReportDetail(publicId) {
       userSel.value = "";
       renderPipelineDraft();
     });
-    sheet.querySelector("#btn-pipeline-save").addEventListener("click", async () => {
+    if (canEdit) sheet.querySelector("#btn-pipeline-save").addEventListener("click", async () => {
       try {
         await apiPost(`/report/${publicId}/pipeline`, { steps: pipelineDraft.map(s => ({ role: s.role, telegram_id: s.telegram_id })) });
         toast(pipelineDraft.length ? "Пайплайн сохранён." : "Пайплайн снят.");
@@ -412,7 +415,7 @@ export async function openReportDetail(publicId) {
       } catch (e) { toast(`Не удалось сохранить пайплайн: ${e.message}`, "error"); }
     });
     const clearBtn = sheet.querySelector("#btn-pipeline-clear");
-    if (clearBtn) clearBtn.addEventListener("click", async () => {
+    if (clearBtn && canEdit) clearBtn.addEventListener("click", async () => {
       if (!confirm("Снять пайплайн с отчёта?")) return;
       try {
         await apiPost(`/report/${publicId}/pipeline`, { steps: [] });
@@ -421,7 +424,7 @@ export async function openReportDetail(publicId) {
       } catch (e) { toast(`Не удалось снять пайплайн: ${e.message}`, "error"); }
     });
     const advanceBtn = sheet.querySelector("#btn-pipeline-advance");
-    if (advanceBtn) advanceBtn.addEventListener("click", async () => {
+    if (advanceBtn && canEdit) advanceBtn.addEventListener("click", async () => {
       const userSel = sheet.querySelector("#pipeline-next-user");
       advanceBtn.disabled = true;
       try {
@@ -431,7 +434,7 @@ export async function openReportDetail(publicId) {
         else { toast(res.detail || "Не удалось передать.", "error"); advanceBtn.disabled = false; }
       } catch (e) { toast(`Не удалось передать этап: ${e.message}`, "error"); advanceBtn.disabled = false; }
     });
-    sheet.querySelector("#checklist-add").addEventListener("click", async () => {
+    sheet.querySelector("#checklist-add")?.addEventListener("click", async () => {
       const input = sheet.querySelector("#checklist-new");
       const text = input.value.trim();
       if (!text) return;
@@ -449,14 +452,15 @@ export async function openReportDetail(publicId) {
     const setNoteFile = file => {
       if (file && tooBig(file)) return;
       pendingNoteFile = file;
-      renderPending(sheet.querySelector("#note-pending"), file, () => setNoteFile(null));
+      const pending = sheet.querySelector("#note-pending");
+      if (pending) renderPending(pending, file, () => setNoteFile(null));
     };
-    renderPending(sheet.querySelector("#note-pending"), pendingNoteFile, () => setNoteFile(null));
-    sheet.querySelector("#note-attach").addEventListener("click", async () => {
+    if (canEdit) renderPending(sheet.querySelector("#note-pending"), pendingNoteFile, () => setNoteFile(null));
+    sheet.querySelector("#note-attach")?.addEventListener("click", async () => {
       const file = await pickFile("image/*");
       if (file) setNoteFile(file);
     });
-    sheet.querySelector("#note-new").addEventListener("paste", e => {
+    sheet.querySelector("#note-new")?.addEventListener("paste", e => {
       const file = pastedFile(e);
       if (file) { e.preventDefault(); setNoteFile(file); }
     });
@@ -484,18 +488,18 @@ export async function openReportDetail(publicId) {
         await render();
       } catch (e) { toast(`Не удалось добавить заметку: ${e.message}`, "error"); }
     }
-    sheet.querySelector("#note-add").addEventListener("click", addNote);
+    sheet.querySelector("#note-add")?.addEventListener("click", addNote);
     // Ctrl/Cmd+Enter из самого поля — привычка из Slack/GitHub/Linear:
     // руки уже на клавиатуре после текста заметки, тянуться к кнопке
     // мышью незачем. Обычный Enter не годится — заметки часто
     // многострочные (тайм-коды правок один за другим).
-    sheet.querySelector("#note-new").addEventListener("keydown", e => {
+    sheet.querySelector("#note-new")?.addEventListener("keydown", e => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
         addNote();
       }
     });
-    sheet.querySelector("#btn-qc-track").addEventListener("click", async () => {
+    sheet.querySelector("#btn-qc-track")?.addEventListener("click", async () => {
       const picked = await pickInputFile([{ name: "Аудио/видео", extensions: QC_EXTENSIONS }]);
       if (!picked) return;
       await runQcAnalysis(picked, { reportId: publicId });
@@ -539,6 +543,7 @@ export async function openReportDetail(publicId) {
         if (!player) {
           player = createPlayer({
             publicId,
+            readOnly: !canEdit,
             onAddNote: async (seconds, text) => {
               await apiPost(`/report/${publicId}/notes`, { text: noteTimePrefix(seconds) + text });
               await render();
@@ -553,7 +558,7 @@ export async function openReportDetail(publicId) {
         player.el.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
-    sheet.querySelectorAll("[data-qc-file]").forEach(btn => {
+    if (canEdit) sheet.querySelectorAll("[data-qc-file]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const fileId = btn.dataset.qcFile;
         btn.disabled = true;
@@ -584,11 +589,11 @@ export async function openReportDetail(publicId) {
   await render();
 }
 
-function checklistItemHtml(item) {
+function checklistItemHtml(item, editable = true) {
   return `<div class="checklist-item ${item.done ? "done" : ""}" data-id="${item.id}">
-    <input type="checkbox" ${item.done ? "checked" : ""} tabindex="-1">
+    ${editable ? `<input type="checkbox" ${item.done ? "checked" : ""} tabindex="-1">` : `<span class="rd-check-readonly" aria-label="${item.done ? "Готово" : "Не готово"}">${item.done ? "✓" : "○"}</span>`}
     <span style="flex:1;">${esc(item.text)}</span>
-    <button class="icon-btn" data-checklist-del="${item.id}" title="Удалить">✕</button>
+    ${editable ? `<button class="icon-btn" data-checklist-del="${item.id}" title="Удалить">✕</button>` : ""}
   </div>`;
 }
 
@@ -611,8 +616,9 @@ function noteHtml(n) {
 // Текущая цепочка пайплайна (только чтение) + «передать дальше», если
 // есть следующий этап — отдельно от черновика-билдера ниже (тот
 // пересобирает цепочку целиком, этот просто двигает текущий указатель).
-function pipelineAdvanceHtml(pipeline, assignable) {
+function pipelineAdvanceHtml(pipeline, assignable, canEdit = true) {
   if (!pipeline || !pipeline.length) return "";
+  if (!canEdit) return "";
   const curIdx = pipeline.findIndex(s => s.current);
   const hasNext = curIdx !== -1 && curIdx < pipeline.length - 1;
   const cur = pipeline[curIdx];
@@ -677,13 +683,13 @@ async function fillLogPanel(panel, publicId, kind) {
 // присланного документом, приходит "document" — и mp3 внутри него
 // раньше оставался без кнопки AI-проверки, потому что || до имени
 // просто не доходил.
-function fileHtml(f) {
+function fileHtml(f, canEdit = true) {
   const audioRe = AUDIO_RE;
   const isAudio = audioRe.test(f.file_type || "") || audioRe.test(f.file_name || "");
   return `<div class="file-item">
     <div>${esc(FILE_ICONS[f.file_type] || "📎")} ${esc(f.file_name || f.file_type)} <span class="meta">${esc(f.file_size_label || "")}</span></div>
     ${isAudio ? `<button class="btn primary" style="padding:4px 10px; font-size:12px;" data-play-file="${f.id}">▶ Слушать</button>` : ""}
-    ${isAudio ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-qc-file="${f.id}">AI-проверка</button>` : ""}
+    ${isAudio && canEdit ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-qc-file="${f.id}">AI-проверка</button>` : ""}
     <button class="icon-btn" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать">⬇️</button>
     <div id="qc-result-${f.id}" style="width:100%;"></div>
   </div>`;

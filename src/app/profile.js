@@ -14,6 +14,7 @@ import { switchTab } from "./tabs.js";
 import { donutHtml, donutLegendHtml, playDonutIntro } from "./charts.js";
 import { devModeActive, devPanelHtml, wireDevPanel } from "./devmode.js";
 import { openReportDetail } from "./report-detail.js";
+import { openRolesSheet } from "./roles.js";
 import { openExternal, sendNotification } from "./tauri.js";
 import { markMyReportsSeen } from "./notifications.js";
 // Тот же маскот, что на экране загрузки (index.html) — Vite отдаёт
@@ -120,6 +121,25 @@ function roleMeta(role) {
   if (r.includes("монтаж")) return { ic: "🎞", c: "var(--sakura)" };
   if (r.includes("дизайн")) return { ic: "✏️", c: "var(--gold)" };
   return { ic: "🎭", c: "var(--fire)" };
+}
+
+function profileRolesHtml(d, compact = false) {
+  const roles = (Array.isArray(d.roles) ? d.roles : (d.role ? [d.role] : []))
+    .filter(role => role && role.toLowerCase() !== "user");
+  const tags = roles.length
+    ? roles.map(role => {
+      const meta = roleMeta(role);
+      return `<span class="role-tag" style="--tag-c:${meta.c}">${meta.ic} ${esc(role)}</span>`;
+    }).join("")
+    : `<span class="role-tag" style="--tag-c:var(--fire)">🎭 Участник Project</span>`;
+  const manage = state.isAdmin
+    ? `<button class="btn ghost role-manage-btn" data-manage-roles="${esc(String(d.telegram_id))}">${compact ? "Роли" : "Назначить роли"}</button>`
+    : "";
+  return `<div class="profile-role-list${compact ? " compact" : ""}">${tags}${manage}</div>`;
+}
+
+function openProfileRoles(telegramId) {
+  openRolesSheet(telegramId);
 }
 
 function rankTagHtml(rank) {
@@ -248,8 +268,6 @@ function loadStructureHtml(me) {
 // продолжает звать без asParts и получает прежнюю плоскую разметку.
 function profileHeaderHtml(d, isSelf, asParts) {
   const tier = tenureTier(d.member_since_days);
-  const rMeta = roleMeta(d.role);
-  const roleLabel = d.role ? esc(d.role) : "Участник Project";
 
   let joinedLine = "";
   if (d.created_at) {
@@ -270,7 +288,7 @@ function profileHeaderHtml(d, isSelf, asParts) {
       </div>
       ${d.username ? `<div class="un">@${esc(d.username)}</div>` : ""}
       ${d.internal_id != null ? `<div class="id-row"><span class="id-chip">#${d.internal_id}</span>${joinedLine}${d.is_online ? ` · <span style="color:var(--s-done); font-weight:600;">в сети</span>` : ""}</div>` : ""}
-      <span class="role-tag" style="--tag-c:${rMeta.c}">${rMeta.ic} ${roleLabel}</span>
+      ${profileRolesHtml(d)}
     </div>
 
     ${tenureProgressHtml(d.member_since_days)}
@@ -443,11 +461,12 @@ export async function loadProfile() {
   if (!goalSet) suggestGoal(root).then(v => { suggested = v; });
   root.querySelector("#goal-card").addEventListener("click", () => monthlyGoalDialog(me.monthly_goal || suggested));
   root.querySelector("#btn-edit-profile").addEventListener("click", () => editProfileDialog(me));
+  root.querySelectorAll("[data-manage-roles]").forEach(button => button.addEventListener("click", () => openProfileRoles(Number(button.dataset.manageRoles))));
   root.querySelector("#activity-all").addEventListener("click", () => openMyActivitySheet());
   root.querySelectorAll("[data-open-report]").forEach(row => {
     row.addEventListener("click", () => openReportDetail(row.dataset.openReport));
   });
-  if (devModeActive()) wireDevPanel(root, me.telegram_id, () => loadProfile(), me.role);
+  if (devModeActive()) wireDevPanel(root, me.telegram_id, () => loadProfile());
   notifyGoalReachedIfNeeded(me, goalSet, goalOver, goalDone);
 }
 
@@ -455,7 +474,6 @@ export async function loadProfile() {
 // блоком — раньше статус и био жили отдельными полосами под KPI.
 function myHeroHtml(d) {
   const tier = tenureTier(d.member_since_days);
-  const rMeta = roleMeta(d.role);
   let joined = "";
   if (d.created_at) {
     const jd = new Date(d.created_at.replace(" ", "T") + "Z");
@@ -482,8 +500,8 @@ function myHeroHtml(d) {
             <span class="nm">${esc(d.display_name || d.name)}</span>
             ${d.is_developer || d.is_owner ? `<span class="dev-pill">DEV</span>` : ""}
             ${rankTagHtml(d.studio_rank)}
-            <span class="role-tag" style="--tag-c:${rMeta.c}">${rMeta.ic} ${d.role ? esc(d.role) : "Участник Project"}</span>
           </div>
+          ${profileRolesHtml(d, true)}
           <div class="pf-meta">${meta}</div>
           ${about}
         </div>
@@ -836,6 +854,7 @@ export async function openUserProfile(telegramId) {
     </div>
   `;
   wireProfileCommon(sheet, telegramId, async () => { await openUserProfile(telegramId); overlay.remove(); });
+  sheet.querySelectorAll("[data-manage-roles]").forEach(button => button.addEventListener("click", () => openProfileRoles(Number(button.dataset.manageRoles))));
   sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
   sheet.querySelectorAll("[data-open-report]").forEach(row => {
     row.addEventListener("click", () => openReportDetail(row.dataset.openReport));
@@ -850,5 +869,5 @@ export async function openUserProfile(telegramId) {
       toast(r.chats ? `Удалено переписок: ${r.chats}, сообщений: ${r.messages}.` : "Личных переписок у человека не было.");
     } catch (e) { toast(e.message, "error"); purgeBtn.disabled = false; }
   });
-  if (devModeActive()) wireDevPanel(sheet, telegramId, async () => { await openUserProfile(telegramId); overlay.remove(); }, d.role);
+  if (devModeActive()) wireDevPanel(sheet, telegramId, async () => { await openUserProfile(telegramId); overlay.remove(); });
 }

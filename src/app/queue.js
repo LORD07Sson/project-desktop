@@ -63,7 +63,7 @@ function rowHtml(it, today) {
   const pct = STATUS_PCT[it.status] ?? 0;
   const hot = left !== null && left <= 1;
   return `
-    <div class="kd-gl kd-qr${hot ? " hot" : ""}${state.isAdmin ? " q-open" : ""}" data-q-open="${esc(it.public_id)}">
+    <div class="kd-gl kd-qr${hot ? " hot" : ""} q-open" data-q-open="${esc(it.public_id)}" role="button" tabindex="0" aria-label="Открыть отчёт ${esc(it.public_id)}">
       ${src ? `<img class="kd-qr-pc" src="${src}" alt="" loading="lazy">` : `<span class="kd-qr-pc kd-qr-ph"></span>`}
       <div class="kd-qr-t">
         <small>${esc(it.public_id)}${ep ? ` · ${esc(String(ep).toUpperCase())}` : ""}</small>
@@ -75,9 +75,7 @@ function rowHtml(it, today) {
         <small>${left === 0 ? "Осталось" : "Срок"}</small>
         <b ${left === 0 ? "data-q-cd" : ""}>${left === 0 ? countdown() : dueText(left)}</b>
       </div>
-      <div class="kd-qr-ac">${state.isAdmin
-        ? `<button class="btn${left !== null && left <= 0 ? " primary" : ""}" type="button">Открыть</button>`
-        : `<span class="kd-qr-bot">сдать — в боте</span>`}</div>
+      <div class="kd-qr-ac"><button class="btn${left !== null && left <= 0 ? " primary" : ""}" type="button">Открыть отчёт</button>${state.isAdmin ? "" : `<span class="kd-qr-bot">сдать работу — в боте</span>`}</div>
     </div>`;
 }
 
@@ -110,7 +108,7 @@ export async function loadQueue() {
       <div>
         <span class="kd-label">Моё · ${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}</span>
         <h1>Моя очередь</h1>
-        ${state.isAdmin ? "" : `<div class="sub">Сдать работу — в боте: «📋 Мои задачи».</div>`}
+        ${state.isAdmin ? "" : `<div class="sub">Карточка отчёта открывается здесь; сдать работу можно в боте: «📋 Мои задачи».</div>`}
       </div>
       <div class="kd-sum">
         <div><small>Активные</small><b>${items.length}</b></div>
@@ -151,9 +149,12 @@ export async function loadQueue() {
     }, 1000);
   }
   refreshQueueBadge();
-  if (state.isAdmin) {
-    root.querySelectorAll("[data-q-open]").forEach(el => el.addEventListener("click", () => openReportDetail(el.dataset.qOpen)));
-  }
+  root.querySelectorAll("[data-q-open]").forEach(el => {
+    const open = () => openReportDetail(el.dataset.qOpen);
+    el.addEventListener("click", e => { if (!e.target.closest("button")) open(); });
+    el.addEventListener("keydown", e => { if (e.target.closest("button")) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    el.querySelector("button")?.addEventListener("click", open);
+  });
 }
 
 // Счётчик на пункте меню — сколько серий горит (просрочено, сегодня, завтра).

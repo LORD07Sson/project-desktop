@@ -11,8 +11,13 @@ import { openRolesSheet } from "./roles.js";
 import { switchTab } from "./tabs.js";
 import { openDmWith } from "./messages.js";
 
-// «user» — служебное значение по умолчанию в базе, а не роль.
-const roleOf = u => (u.role && u.role.toLowerCase() !== "user" ? u.role : "");
+// «user» — служебное значение по умолчанию, а специализаций у человека
+// может быть несколько.
+const rolesOf = u => {
+  const roles = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : []);
+  return roles.filter(role => role && role.toLowerCase() !== "user");
+};
+const roleOf = u => rolesOf(u).join(", ");
 
 const FILTERS = [
   ["all", "Все"],
@@ -30,8 +35,9 @@ let roleFilter = ""; // "" — все роли, "—" — без роли
 function roleChipsHtml(users) {
   const counts = new Map();
   for (const u of users) {
-    const k = roleOf(u) || "—";
-    counts.set(k, (counts.get(k) || 0) + 1);
+    const roles = rolesOf(u);
+    if (!roles.length) counts.set("—", (counts.get("—") || 0) + 1);
+    else for (const role of roles) counts.set(role, (counts.get(role) || 0) + 1);
   }
   const keys = [...counts.keys()].sort((a, b) => (a === "—") - (b === "—") || a.localeCompare(b, "ru"));
   return keys.map(k => `<button class="tm-rchip${k === roleFilter ? " active" : ""}${k === "—" ? " none" : ""}" data-tm-role="${esc(k)}">${k === "—" ? "без роли" : esc(k)} <span>${counts.get(k)}</span></button>`).join("");
@@ -52,7 +58,7 @@ function matches(u) {
 }
 
 function personHtml(u, maxLoad) {
-  const role = roleOf(u);
+  const roles = rolesOf(u);
   const load = maxLoad ? Math.round((u.assigned / maxLoad) * 100) : 0;
   const work = u.paused_until
     ? `<span class="tm-state paused">в отпуске до ${esc(fmtDay(u.paused_until))}</span>`
@@ -64,7 +70,7 @@ function personHtml(u, maxLoad) {
       <span class="tm-av">${avatarHtml(u.telegram_id, u.name, "xl")}${u.online ? `<i class="tm-dot" title="В сети"></i>` : ""}</span>
       <div class="tm-who">
         <div class="tm-name">${esc(u.name)}${u.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</div>
-        <div class="tm-role${role ? "" : " none"}">${role ? esc(role) : "без роли"}</div>
+        <div class="tm-role${roles.length ? "" : " none"}">${roles.length ? roles.map(esc).join(" · ") : "без роли"}</div>
       </div>
       ${work}
       <div class="tm-load" title="Серий на руках: ${u.assigned}"><i style="width:${load}%"></i></div>
@@ -96,7 +102,7 @@ function byRank(a, b) {
 }
 
 function renderPeople(root) {
-  const users = (teamData.users || []).filter(u => matches(u) && (!roleFilter || (roleOf(u) || "—") === roleFilter)).sort(byRank);
+  const users = (teamData.users || []).filter(u => matches(u) && (!roleFilter || (roleFilter === "—" ? !rolesOf(u).length : rolesOf(u).includes(roleFilter)))).sort(byRank);
   const maxLoad = Math.max(1, ...(teamData.users || []).map(u => u.assigned || 0));
   const host = root.querySelector("#tm-groups");
   const noRole = roleFilter === "—" && state.isAdmin ? `<div class="tm-hint">Роль видна на карточке и в пайплайне. <button class="pf-link" data-tm-roles>Назначить роли →</button></div>` : "";
