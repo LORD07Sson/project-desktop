@@ -8,7 +8,8 @@ import { openExternal } from "./tauri.js";
 import { $, esc } from "./utils.js";
 import { alertText, sortWishlist, sortLibrary, badgesOf, achSummary, statLabel, friendState, xpProgress, reviewSummary, wishStatus, wishFilter, seriesChart, pointAt, fmtCompact, dayLabel, chunk, addDays, mondayOf, isoWeek, monthWeeks, rollingWeeks, monthTab, nextMonths, priceView, fmtHours, isSteamLaunchUrl, initials2, imageCandidates, hueOf, fmtNum, shortDate, deltaView, miniLine, groupByDate, untilText, pctText } from "./games-core.js";
 import { linkSteam } from "./steam-link.js";
-import { galleryHtml, mountGallery } from "./games-media.js";
+import { mountGallery } from "./games-media.js";
+import { detailPageHtml, detailPriceHtml, detailMediaIndex, mountDetailNavigation, selectDetailView, requirementsHtml, languagesHtml, depotsHtml, reviewCardsHtml } from "./games-detail.js";
 import { tabsHtml, panelHtml, STAB_SHOWN } from "./games-tabs.js";
 import { createHero } from "./games-hero.js";
 import { buildHtml, fmtBytes, lowestText } from "./games-build.js";
@@ -892,10 +893,7 @@ async function openQrLogin() {
 }
 
 // ---------- карточка игры ----------
-const priceBoxHtml = d => {
-  const v = d.free ? { now: "Бесплатно", old: "", badge: "", sale: false } : priceView(d.price);
-  return `<div class="gm-box pr"><b class="${v.sale ? "sale" : ""}">${esc(v.now)}</b><small>${v.old ? `<s>${esc(v.old)}</s> ${v.badge}` : d.at_lowest && !d.free ? "исторический минимум" : "цена"}</small></div>`;
-};
+const priceBoxHtml = detailPriceHtml;
 
 // Рейтинг в рамке «отзывы»: общий для первой загрузки и для обновления.
 function paintRate(ov, r) {
@@ -921,112 +919,24 @@ async function refreshDetail(ov, appid, withRating) {
   try { const r = await apiGet(`/games/app/${appid}/reviews`); if (ov.isConnected) paintRate(ov, r); } catch (_) { /* рейтинг обновится позже */ }
 }
 
-async function openDetail(appid, name) {
+export async function openDetail(appid, name) {
+  const previousFocus = document.activeElement;
   const ov = gmSheet(dialogSkeletonHtml(7), "wide");
-  ov.classList.add("gm-ov");
+  ov.classList.add("gm-ov", "gm-detail-v5");
+  ov.addEventListener("click", e => { if (e.target.closest("[data-d-close]")) dismissSheet(ov); });
   try {
     const d = await apiGet(`/games/app/${appid}`);
+    if (!ov.isConnected) return;
     ov.__d = d;
-    const l = lib && lib.ids.has(appid);
-    const cur = d.price && d.price.currency;
-    const plat = Object.entries({ windows: "Windows", mac: "macOS", linux: "Linux" }).filter(([k]) => d.platforms && d.platforms[k]).map(([, n]) => n).join(" · ");
-    const types = { game: "Игра", dlc: "DLC", demo: "Демо", mod: "Мод", music: "Саундтрек", advertising: "Реклама" };
-    const contentDescriptorNames = { 1: "Нагота или сексуальный контент", 2: "Частое насилие или кровь", 3: "Сексуальный контент для взрослых", 4: "Частая нагота или сексуальный контент", 5: "Другие темы для взрослых" };
-    const contentDescriptors = (d.content_descriptors && d.content_descriptors.ids || []).map(id => contentDescriptorNames[id] || `Маркер Steam ${id}`);
-    const supportUrl = /^https?:\/\//i.test(d.support && d.support.url || "") ? d.support.url : "";
-    const row = (k, val) => (val ? `<tr><th>${k}</th><td>${val}</td></tr>` : "");
-    ov.querySelector(".sheet").innerHTML = `
-      <div class="gm-dp">
-        <div class="gm-dp-bar">
-          <div class="gm-dp-title"><b>${esc(d.name)}</b><small>${esc((d.developers || []).join(", "))}${d.release ? ` · ${esc(d.release)}` : ""}</small></div>
-          <div class="gm-dp-acts">
-            ${l ? `<button type="button" class="btn primary" data-launch="${appid}">Запустить</button>` : ""}
-            <button type="button" class="btn${l ? "" : " primary"}" data-d-wish="${appid}" data-name="${esc(d.name)}" data-on="${d.wishlisted ? 1 : 0}">${d.wishlisted ? "♥ В желаемом" : "♡ В желаемое"}</button>
-            <input type="number" class="gm-target" id="gm-target" min="0" step="0.01" placeholder="Цель, ${esc(cur || "цена")}" value="${d.target != null ? d.target : ""}" title="Сообщить, когда цена упадёт до…">
-            <input type="number" class="gm-target" id="gm-tdisc" min="1" max="95" step="1" placeholder="Скидка, %" value="${d.target_discount != null ? d.target_discount : ""}" title="Или когда скидка дойдёт до…">
-            <button type="button" class="btn ghost" data-d-store="${esc(d.store)}">Steam</button>
-            <button type="button" class="btn ghost gm-x" data-d-close aria-label="Закрыть">✕</button>
-          </div>
-        </div>
-        <nav class="gm-dp-nav" aria-label="Разделы страницы Steam">
-          ${[["metadata", "Метаданные"], ["price", "История цен"], ["charts", "Чарты"], ["patches", "Патчи"], ["packages", "Пакеты"], ["dlcs", "DLC"], ["depots", "Депо"], ["configuration", "Конфигурация"], ["cloud", "Steam Cloud"], ["achievements", "Достижения"], ["screenshots", "Скриншоты"], ["related", "Связанные"], ["updates", "Обновления"]].map(([k, label]) => `<button type="button" data-d-section="${k}">${label}</button>`).join("")}
-        </nav>
-        <div class="gm-dp-top" id="gm-sec-metadata">
-          <div class="gm-dp-left">
-            <table class="gm-info"><tbody>
-              ${row("App ID", `<span class="gm-copy" data-copy="${appid}" title="Скопировать">${appid}</span>`)}
-              ${row("Тип", esc(types[d.type] || d.type || ""))}
-              ${row("Разработчик", esc((d.developers || []).join(", ")))}
-              ${row("Издатель", esc((d.publishers || []).join(", ")))}
-              ${row("Системы", esc(plat))}
-              ${row("Дата выхода", esc(d.release || ""))}
-              ${row("Возраст", d.age && Number(d.age) > 0 ? `${esc(d.age)}+` : "")}
-              ${row("Metacritic", d.metacritic ? `<b class="${d.metacritic >= 75 ? "gm-green" : ""}">${d.metacritic}</b>` : "")}
-              ${row("Жанры", esc((d.genres || []).join(", ")))}
-              ${row("Языки", esc(d.languages || ""))}
-              ${row("Поддержка", esc(d.support && d.support.email || ""))}
-              ${row("Следят у нас", d.watchers ? fmtNum(d.watchers) : "")}
-            </tbody></table>
-            <div class="gm-links">${d.website ? `<button type="button" class="btn sm" data-d-store="${esc(d.website)}">Сайт игры</button>` : ""}${supportUrl ? `<button type="button" class="btn sm" data-d-store="${esc(supportUrl)}">Поддержка</button>` : ""}<button type="button" class="btn sm" data-d-store="${esc(`https://steamdb.info/app/${appid}/`)}">SteamDB</button><button type="button" class="btn sm" data-d-store="${esc(`https://www.protondb.com/app/${appid}`)}">ProtonDB</button></div>
-            <div class="gm-tech-meta" id="gm-tech-meta"><div class="gm-reg-load"><span class="ny-spin"></span> Загружаю метаданные…</div></div>
-          </div>
-          <div class="gm-dp-right" id="gm-sec-screenshots">
-            ${galleryHtml(d, img) || picHtml(appid, d.image, d.name, "gm-img gm-d-img")}
-            <div class="gm-boxes">
-              <div class="gm-box" id="gm-rate"><b>—</b><small>отзывы</small></div>
-              <div class="gm-box now"><b id="gm-now">—</b><small>играют сейчас</small></div>
-              ${priceBoxHtml(d)}
-            </div>
-            <div class="gm-d-badges" id="gm-badges">${badgesOf(d, null).map(b => `<i class="gm-tag ${b.cls}">${esc(b.text)}</i>`).join("")}</div>
-            <p class="gm-d-desc">${esc(d.description || "")}</p>
-            <div class="gm-d-taxonomy">
-              ${d.categories && d.categories.length ? `<div><small>Категории Steam</small><div>${d.categories.map(x => `<i class="gm-tag t">${esc(x)}</i>`).join("")}</div></div>` : ""}
-              ${contentDescriptors.length || d.content_descriptors && d.content_descriptors.notes ? `<div><small>Контентные дескрипторы</small><div>${contentDescriptors.map(x => `<i class="gm-tag t">${esc(x)}</i>`).join("")}</div>${d.content_descriptors.notes ? `<p>${esc(d.content_descriptors.notes)}</p>` : ""}</div>` : ""}
-              <div><small>Теги Steam</small><div class="gm-d-badges" id="gm-tags"><span class="ny-hint">Загружаю теги…</span></div></div>
-            </div>
-          </div>
-        </div>
-        <div class="gm-dp-cols">
-          <section class="gm-dp-sec" id="gm-sec-charts"><h3>Онлайн и чарт игроков</h3>
-            <div class="gm-online" id="gm-online">
-              <div class="gm-online-h"><span class="ny-hint" id="gm-rank"></span><div class="ny-seg">${[["48h", "48 ч"], ["7d", "1 нед."], ["30d", "1 мес."], ["90d", "3 мес."], ["all", "Всё"]].map(([k, t]) => `<button type="button" data-orange="${k}">${t}</button>`).join("")}</div></div>
-              <div class="gm-online-s"></div><div class="gm-chartbox gm-online-c"></div>
-            </div><p class="ny-hint gm-hnote">Онлайн и цены сохраняются в базе с отметкой времени наблюдения. Точки онлайна старше 14 дней уплотняются до одного замера в час; старше 400 дней удаляются, месячные сводки остаются.</p>
-          </section>
-          <section class="gm-dp-sec"><h3>Данные магазина</h3>
-            <div class="gm-store" id="gm-store">
-              <div><b>${d.recommendations ? fmtNum(d.recommendations) : "—"}</b><small>рекомендаций</small></div>
-              <div><b>${d.dlc ? fmtNum(d.dlc) : "0"}</b><small>DLC</small></div>
-              <div><b>${d.watchers ? fmtNum(d.watchers) : "0"}</b><small>следят у нас</small></div>
-              <div><b>${d.sales || 0}</b><small>скидок за наблюдение</small></div>
-            </div>
-          </section>
-        </div>
-        <section class="gm-dp-sec" id="gm-sec-price"><h3>История цены</h3>${d.free ? `<small class="ny-hint">Игра бесплатная; история цены для неё не ведётся.</small>` : `<div class="gm-online gm-hist">
-          <div class="gm-online-h gm-ph2"><div class="gm-pstats" id="gm-pstats"></div><div class="ny-seg">${[[30, "30 дн."], [90, "3 мес."], [365, "Год"], [0, "Всё"]].map(([k, t]) => `<button type="button" data-prange="${k}">${t}</button>`).join("")}</div></div>
-          <div class="gm-chartbox" id="gm-pchart"></div>
-          <div class="gm-plist" id="gm-plist"></div>
-          <p class="ny-hint gm-hnote">Steam не отдаёт историю цен. Мы сохраняем каждое замеченное изменение: выбранный регион — обычно каждые 2 часа, желаемое — каждые 30 минут и при просмотре, другие регионы — не чаще раза в 20 часов для игр под наблюдением; при большом списке реже. Время показывает, когда сервер заметил цену, а не точный момент изменения в Steam.</p>
-        </div>
-        <div class="gm-reg" id="gm-reg"><button type="button" class="btn" data-regions="${appid}">Цены по странам</button></div>`}</section>
-        <section class="gm-dp-sec"><div id="gm-watchbox"></div></section>
-        <section class="gm-dp-sec" id="gm-sec-packages"><h3>Пакеты Steam</h3><div id="gm-packages"></div></section>
-        <section class="gm-dp-sec" id="gm-sec-dlcs"><h3>DLC</h3><div id="gm-dlcs"></div></section>
-        <section class="gm-dp-sec" id="gm-sec-depots"><h3>Депо</h3><div id="gm-depots"></div></section>
-        <section class="gm-dp-sec" id="gm-sec-configuration"><h3>Конфигурация и требования</h3><div id="gm-config"></div></section>
-        <section class="gm-dp-sec" id="gm-sec-cloud"><h3>Steam Cloud</h3><div id="gm-cloud"></div></section>
-        <section class="gm-dp-sec" id="gm-sec-related"><h3>Связанные приложения</h3><div id="gm-related"></div></section>
-        <section class="gm-dp-sec" id="gm-sec-updates"><h3>История обновлений Steam</h3><div id="gm-build"><div class="gm-reg-load"><span class="ny-spin"></span> Загружаю…</div></div></section>
-        <section class="gm-dp-sec"><h3>Игроки по месяцам</h3><div id="gm-monthly"><div class="gm-reg-load"><span class="ny-spin"></span> Считаю…</div></div></section>
-        <section class="gm-dp-sec gm-more" id="gm-sec-patches"><h3>Новости, патчи и достижения</h3><div class="ny-seg gm-mtabs"><button type="button" data-more="reviews">Отзывы</button><button type="button" data-more="news">Анонсы</button><button type="button" data-more="patch">Патчноуты</button>${me && me.steamid ? `<button type="button" data-more="ach">Достижения</button><button type="button" data-more="stats">Статистика</button>` : ""}</div><div id="gm-more-body"></div></section>
-      </div>`;
+    ov.querySelector(".sheet").innerHTML = detailPageHtml(d, { appid, owned: !!(lib && lib.ids.has(appid)), hasSteam: !!(me && me.steamid), image: img, picture: picHtml });
   } catch (e) {
+    if (!ov.isConnected) return;
     ov.querySelector(".sheet").innerHTML = `${errBox(e)}<div class="gm-d-act"><button type="button" class="btn" data-d-close>Закрыть</button></div>`;
-    ov.addEventListener("click", ev => { if (ev.target.closest("[data-d-close]")) dismissSheet(ov); });
     return;
   }
-  const stopGal = mountGallery(ov, ov.__d, img);                   // трейлер замолкает, когда карточку закрыли
-  const galT = setInterval(() => { if (!ov.isConnected) { stopGal(); clearInterval(galT); } }, 800); // DevSkim: ignore DS172411 — функция, не строка
+  const stopGal = mountGallery(ov, ov.__d, img, { initialIndex: detailMediaIndex(ov.__d) });
+  const stopNavigation = mountDetailNavigation(ov, previousFocus);
+  ov.addEventListener("sheet-dismissed", () => { stopGal(); stopNavigation(); clearInterval(ov.__ot); }, { once: true });
   ov.addEventListener("gm-gal-web", () => openExternal(ov.__d.store));
   paintPriceStats(ov);
   paintPriceChart(ov, 0);
@@ -1051,8 +961,7 @@ async function openDetail(appid, name) {
       const key = sectionNav.dataset.dSection;
       if (key === "patches") await loadMore(ov, appid, "patch");
       if (key === "achievements") await loadMore(ov, appid, "ach");
-      const targetKey = key === "patches" || key === "achievements" ? "patches" : key;
-      ov.querySelector(`#gm-sec-${targetKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      selectDetailView(ov, key);
       return;
     }
     const relatedApp = t.closest("[data-related-app]");
@@ -1063,7 +972,7 @@ async function openDetail(appid, name) {
     if (mb) { loadMore(ov, appid, mb.dataset.more); return; }
     const nm = t.closest("[data-newsmore]");
     if (nm) { loadMoreNews(ov, appid, nm); return; }
-    if (t.closest("[data-d-close]")) { dismissSheet(ov); return; }
+    if (t.closest("[data-d-close]")) return;
     const cp = t.closest("[data-copy]");
     if (cp) { navigator.clipboard.writeText(cp.dataset.copy).then(() => toast("Скопировано.", "success")).catch(() => {}); return; }
     const rb = t.closest("[data-regions]");
@@ -1076,13 +985,37 @@ async function openDetail(appid, name) {
     if (rg) { loadOnline(ov, appid, rg.dataset.orange); return; }
     const st = t.closest("[data-d-store]");
     if (st) { openExternal(st.dataset.dStore).catch(() => toast("Не удалось открыть ссылку.", "error")); return; }
+    const saveTarget = t.closest("[data-save-target]");
+    if (saveTarget) {
+      const target = ov.querySelector("#gm-target"), discount = ov.querySelector("#gm-tdisc");
+      if (!target.reportValidity() || !discount.reportValidity()) return;
+      saveTarget.disabled = true;
+      try {
+        await apiPost("/games/wishlist", { appid, name: ov.__d.name || name, target: target.value || null, target_discount: discount.value || null });
+        ov.__d.wishlisted = true;
+        ov.__d.target = target.value ? Number(target.value) : null;
+        ov.__d.target_discount = discount.value ? Number(discount.value) : null;
+        const wish = ov.querySelector("[data-d-wish]");
+        wish.dataset.on = "1"; wish.textContent = "♥ В желаемом"; wish.setAttribute("aria-pressed", "true");
+        loadWatchBox(ov, appid);
+        toast("Цель сохранена. Игра в желаемом.", "success");
+      } catch (err) { toast(err.message, "error"); }
+      finally { if (saveTarget.isConnected) saveTarget.disabled = false; }
+      return;
+    }
     const w = t.closest("[data-d-wish]");
     if (w) {
+      if (w.disabled) return;
+      w.disabled = true;
       try {
         if (w.dataset.on === "1") { await apiDelete(`/games/wishlist/${appid}`); w.dataset.on = "0"; w.textContent = "♡ В желаемое"; toast("Убрано из желаемого.", "success"); }
-        else { await apiPost("/games/wishlist", { appid, name: w.dataset.name || name, target: ($("#gm-target") || {}).value || null, target_discount: ($("#gm-tdisc") || {}).value || null }); w.dataset.on = "1"; w.textContent = "♥ В желаемом"; toast("Добавлено в желаемое.", "success"); }
+        else { await apiPost("/games/wishlist", { appid, name: w.dataset.name || name, target: (ov.querySelector("#gm-target") || {}).value || null, target_discount: (ov.querySelector("#gm-tdisc") || {}).value || null }); w.dataset.on = "1"; w.textContent = "♥ В желаемом"; toast("Добавлено в желаемое.", "success"); }
+        ov.__d.wishlisted = w.dataset.on === "1";
+        w.setAttribute("aria-pressed", String(ov.__d.wishlisted));
+        loadWatchBox(ov, appid);
         if (tab === "wish") paintWish();
       } catch (err) { toast(err.message, "error"); }
+      finally { if (w.isConnected) w.disabled = false; }
     }
   });
 }
@@ -1160,7 +1093,7 @@ function paintPriceChart(ov, range) {
   if (!pts.length) { box.innerHTML = `<small class="ny-hint">Данных пока нет: цена записывается раз в 2 часа и при каждом просмотре.</small>`; return; }
   const cur = d.price && d.price.currency;
   const m = n => priceView({ final: n, initial: n, discount: 0, currency: cur }).now;
-  const g = seriesChart(pts.map(p => ({ ts: p.ts, v: p.price, d: p.discount })), { step: true, now, h: 190 });
+  const g = seriesChart(pts.map(p => ({ ts: p.ts, v: p.price, d: p.discount })), { step: true, now, w: 760, h: 270 });
   box.innerHTML = chartSvg(g, "price", v => fmtNum(Math.round(v)), fmtDM);
   attachHover(box, g, true, (p, ts) => `<b>${esc(m(p.v))}</b>${p.d > 0 ? ` <i class="gm-badge sm">−${p.d}%</i>` : ""}<small>${esc(fmtDM(ts))}</small>`);
   const flatMsg = new Set(pts.map(p => p.price)).size === 1 ? `<small class="ny-hint gm-flat">Цена не менялась за выбранный период.</small>` : "";
@@ -1244,30 +1177,23 @@ async function loadTechnicalSections(ov, appid) {
     const releaseStates = { released: "Вышла", prerelease: "Ранний доступ", prerelease_unavailable: "Предварительный доступ", coming_soon: "Скоро выйдет" };
     techBox.innerHTML = tech && tech.available
       ? `<div class="gm-tech-grid"><div><small>Последнее изменение Steam</small><b>${tech.change ? fmtNum(tech.change) : "—"}</b></div><div><small>Публичная сборка</small><b>${esc(tech.branch && tech.branch.buildid || "—")}</b></div><div><small>Обновлена</small><b>${tech.branch && tech.branch.updated ? esc(shortDate(tech.branch.updated)) : "—"}</b></div><div><small>Архитектура</small><b>${esc(tech.arch || "—")}</b></div>${tech.franchises && tech.franchises.length ? `<div><small>Франшиза</small><b>${esc(tech.franchises.join(", "))}</b></div>` : ""}${tech.release_state ? `<div><small>Статус выпуска</small><b>${esc(releaseStates[tech.release_state] || tech.release_state)}</b></div>` : ""}</div>`
-      : `<small class="ny-hint">Расширенные метаданные временно недоступны. Основные сведения Steam показаны выше.</small>`;
+      : `<small class="ny-hint">Расширенные метаданные временно недоступны. Основные сведения доступны в разделе «Обзор».</small>`;
   }
   if (depotBox) {
     const depots = tech && tech.depots || [];
     depotBox.innerHTML = depots.length
-      ? `<div class="gm-tech-list">${depots.map(x => `<div class="gm-tech-row"><span><b>Depot ${fmtNum(x.id)}</b><small>${esc(x.os || "Общедоступная ветка")}</small></span><span><b>${esc(fmtBytes(x.size))}</b><small>загрузка ${esc(fmtBytes(x.download))}</small></span><button type="button" class="btn sm" data-d-store="https://steamdb.info/depot/${x.id}/">Подробнее</button></div>`).join("")}</div><p class="ny-hint gm-hnote">Показаны только сводные размеры общедоступных депо. Файлы игры и данные манифестов не загружаются.</p>`
+      ? depotsHtml(depots)
       : `<small class="ny-hint">Steam не вернул сводные данные о публичных депо.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/depots/">Депо в SteamDB</button>`;
   }
   if (configBox) {
     const p = d.platforms || {};
     const systems = Object.entries({ windows: "Windows", mac: "macOS", linux: "Linux" }).filter(([k]) => p[k]).map(([, v]) => v);
     const langs = tech && tech.languages && tech.languages.length ? tech.languages : d.language_support || [];
-    const languageFlags = x => {
-      const flags = [];
-      if (x.interface != null) flags.push(`<i class="${x.interface ? "yes" : "no"}">Интерфейс ${x.interface ? "✓" : "—"}</i>`);
-      if (x.audio != null) flags.push(`<i class="${x.audio ? "yes" : "no"}">Полная озвучка ${x.audio ? "✓" : "—"}</i>`);
-      if (x.subtitles != null) flags.push(`<i class="${x.subtitles ? "yes" : "no"}">Субтитры ${x.subtitles ? "✓" : "—"}</i>`);
-      return flags.length ? flags.join("") : `<small>Данные о возможностях не указаны</small>`;
-    };
     const controller = String(tech && tech.controller || d.controller_support || "").toLowerCase();
     const controllerLabel = ({ full: "Полная поддержка", partial: "Частичная поддержка" })[controller] || (tech && tech.controller || d.controller_support || "Не указана");
     const req = d.requirements || {};
-    configBox.innerHTML = `<div class="gm-tech-grid gm-config-grid"><div class="gm-config-fact"><small>Поддерживаемые системы</small><b>${esc(systems.join(" · ") || tech && tech.os || "Не указаны")}</b></div><div class="gm-config-fact"><small>Поддержка контроллера</small><b>${esc(controllerLabel)}</b></div><div class="gm-config-fact"><small>Папка установки</small><b><code>${esc(tech && tech.install_dir || "—")}</code></b></div><div class="gm-config-req"><small>Минимальные требования</small><b class="gm-tech-pre">${esc(steamText(req.min) || "Не указаны")}</b></div><div class="gm-config-req"><small>Рекомендуемые требования</small><b class="gm-tech-pre">${esc(steamText(req.rec) || "Не указаны")}</b></div></div>`
-      + (langs.length ? `<div class="gm-lang-list">${langs.map(x => `<span><b>${esc(x.name)}</b><span class="gm-lang-flags">${languageFlags(x)}</span></span>`).join("")}</div>` : `<p class="ny-hint">Подробная таблица языков недоступна.</p>`);
+    configBox.innerHTML = `<div class="gm-tech-grid gm-config-grid"><div class="gm-config-fact"><small>Поддерживаемые системы</small><b>${esc(systems.join(" · ") || tech && tech.os || "Не указаны")}</b></div><div class="gm-config-fact"><small>Поддержка контроллера</small><b>${esc(controllerLabel)}</b></div><div class="gm-config-fact"><small>Папка установки</small><b><code>${esc(tech && tech.install_dir || "—")}</code></b></div><div class="gm-config-req"><small>Минимальные требования</small>${requirementsHtml(steamText(req.min))}</div><div class="gm-config-req"><small>Рекомендуемые требования</small>${requirementsHtml(steamText(req.rec))}</div></div>`
+      + languagesHtml(langs);
   }
   if (cloudBox) {
     const cloud = tech && tech.cloud;
@@ -1281,10 +1207,12 @@ async function loadTechnicalSections(ov, appid) {
     ? `<button type="button" class="gm-card gm-related" data-d-store="https://steamdb.info/app/${item.appid}/">${picHtml(item.appid, item.image, item.name || "DLC", "gm-img")}<div class="gm-t">${esc(item.name || `App ${item.appid}`)}</div><div class="gm-pr"><small>Скрытый в Steam Store · ID ${item.appid}</small><b>Открыть SteamDB</b></div></button>`
     : `<button type="button" class="gm-card gm-related" data-related-app="${item.appid}" data-name="${esc(item.name || "")}">${picHtml(item.appid, item.image, item.name || "Steam", "gm-img") }<div class="gm-t">${esc(item.name || `App ${item.appid}`)}</div><div class="gm-pr"><small>${esc(item.type || "Игра")}</small>${item.price ? priceCell(item.price) : item.free ? `<b>Бесплатно</b>` : ""}</div></button>`;
   if (related) {
+    const count = ov.querySelector("#gm-dlc-count");
+    if (count) count.textContent = fmtNum(related.dlc_total ?? (related.dlcs || []).length);
     if (dlcBox) dlcBox.innerHTML = related.dlcs && related.dlcs.length
       ? `<div class="gm-grid gm-related-grid">${related.dlcs.map(card).join("")}</div>${related.truncated ? `<small class="ny-hint">Показаны первые ${related.dlcs.length} из ${related.dlc_total} дополнений.</small>` : ""}`
       : `<small class="ny-hint">Store API не вернул список DLC для этой игры.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/dlc/">Список DLC в SteamDB</button>`;
-    if (relatedBox) relatedBox.innerHTML = `${related.parent ? `<h4>Основная игра</h4><div class="gm-grid gm-related-grid">${card(related.parent)}</div>` : ""}${related.demos && related.demos.length ? `<h4>Демо-версии</h4><div class="gm-grid gm-related-grid">${related.demos.map(card).join("")}</div>` : ""}${related.dlcs && related.dlcs.length ? `<h4>Дополнения</h4><div class="gm-grid gm-related-grid">${related.dlcs.slice(0, 8).map(card).join("")}</div>` : ""}${!related.parent && !(related.dlcs || []).length && !(related.demos || []).length ? `<small class="ny-hint">Связанные приложения Steam не предоставил.</small>` : ""}`;
+    if (relatedBox) relatedBox.innerHTML = `${related.parent ? `<h4>Основная игра</h4><div class="gm-grid gm-related-grid">${card(related.parent)}</div>` : ""}${related.demos && related.demos.length ? `<h4>Демо-версии</h4><div class="gm-grid gm-related-grid">${related.demos.map(card).join("")}</div>` : ""}${!related.parent && !(related.demos || []).length ? `<small class="ny-hint">Связанные приложения Steam не предоставил.</small>` : ""}`;
   } else {
     if (dlcBox) dlcBox.innerHTML = `<small class="ny-hint">Steam временно не вернул список DLC.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/dlc/">Список DLC в SteamDB</button>`;
     if (relatedBox) relatedBox.innerHTML = `<small class="ny-hint">Steam временно не вернул связанные приложения.</small><button type="button" class="btn sm" data-d-store="https://steamdb.info/app/${appid}/">Открыть SteamDB</button>`;
@@ -1301,7 +1229,10 @@ async function loadExtra(ov, appid) {
     if (tags) tags.innerHTML = (x.tags || []).length
       ? x.tags.map(n => `<i class="gm-tag t">${esc(n)}</i>`).join("")
       : `<small class="ny-hint">Теги Steam недоступны.</small>`;
-  } catch (_) { /* метки необязательны */ }
+  } catch (_) {
+    const tags = ov.querySelector("#gm-tags");
+    if (tags && ov.isConnected) tags.innerHTML = '<small class="ny-hint">Теги временно недоступны.</small>';
+  }
 }
 
 const newsHtml = items => items.map(n => `<div class="gm-news"><b>${esc(n.title)}</b><small class="ny-hint">${esc(shortDate(n.ts))}${n.label ? ` · ${esc(n.label)}` : ""}</small><p>${esc(n.text)}</p>${n.url ? `<button type="button" class="btn ghost sm" data-d-store="${esc(n.url)}">Читать</button>` : ""}</div>`).join("");
@@ -1312,12 +1243,15 @@ async function loadMoreNews(ov, appid, btn) {
   btn.disabled = true;
   try {
     const r = await apiGet(`/games/app/${appid}/news`, { kind: btn.dataset.newsmore === "patch" ? "patch" : "all", before: Number(btn.dataset.before) - 1 });
+    if (!wrap.isConnected) return;
     wrap.insertAdjacentHTML("beforebegin", newsHtml(r.items));
     if (r.more && r.items.length) { btn.dataset.before = String(r.items[r.items.length - 1].ts); btn.disabled = false; } else wrap.remove();
   } catch (e) { btn.disabled = false; toast(e.message || "Не удалось загрузить.", "error"); }
 }
 
 async function loadMore(ov, appid, kind) {
+  const seq = ov.__moreSeq = (ov.__moreSeq || 0) + 1;
+  const current = () => ov.isConnected && seq === ov.__moreSeq;
   const box = ov.querySelector("#gm-more-body");
   if (!box) return;
   ov.querySelectorAll("[data-more]").forEach(b => b.classList.toggle("on", b.dataset.more === kind));
@@ -1325,21 +1259,25 @@ async function loadMore(ov, appid, kind) {
   try {
     if (kind === "reviews") {
       const r = await apiGet(`/games/app/${appid}/reviews`);
+      if (!current()) return;
       const sm = paintRate(ov, r);
-      box.innerHTML = (sm ? `<p class="gm-ach-s"><b>${esc(sm.text)}</b></p>` : "") + (r.items.length ? r.items.map(x => `<div class="gm-news gm-rev ${x.up ? "up" : "down"}"><b>${x.up ? "👍 Рекомендует" : "👎 Не рекомендует"}</b><small class="ny-hint">${esc(x.name || "")} · ${fmtNum(x.hours)} ч в игре · ${esc(shortDate(x.ts))}</small><p>${esc(x.text)}</p></div>`).join("") : `<small class="ny-hint">Отзывов на русском пока нет.</small>`);
+      box.innerHTML = (sm ? `<div class="gd-review-summary"><div><b>${sm.pct}<span>%</span></b><small>рекомендуют</small></div><div><p>${esc(sm.text)}</p><div class="gd-rating-track" aria-hidden="true"><i style="width:${Math.min(100, Math.max(0, sm.pct))}%"></i></div><small>Отзывы игроков Steam</small></div></div>` : "") + (r.items.length ? reviewCardsHtml(r.items) : `<small class="ny-hint">Отзывов на русском пока нет.</small>`);
     } else if (kind === "stats") {
       const r = await apiGet(`/games/app/${appid}/stats`, { steamid: me && me.steamid });
+      if (!current()) return;
       box.innerHTML = r.items.length ? `<div class="gm-statg">${r.items.map(x => `<div><small>${esc(statLabel(x.name))}</small><b>${esc(fmtNum(x.value))}</b></div>`).join("")}</div>` : `<small class="ny-hint">${r.available === false ? "Статистика недоступна: у игры её нет или закрыты сведения об играх." : "Данных нет."}</small>`;
     } else if (kind === "news" || kind === "patch") {
       const r = await apiGet(`/games/app/${appid}/news`, { kind: kind === "patch" ? "patch" : "all" });
+      if (!current()) return;
       box.innerHTML = r.items.length ? newsHtml(r.items) + newsMoreBtn(r, kind) : `<small class="ny-hint">${kind === "patch" ? "Патчноутов нет." : "Новостей нет."}</small>`;
     } else {
       const r = await apiGet(`/games/app/${appid}/achievements`, { steamid: me && me.steamid });
+      if (!current()) return;
       if (!r.total) { box.innerHTML = `<small class="ny-hint">У этой игры нет достижений.</small>`; return; }
       box.innerHTML = `<p class="gm-ach-s"><b>${esc(r.available ? achSummary(r) : `${fmtNum(r.total)} достижений`)}</b>${r.available ? "" : ` <small class="ny-hint">— показан общий процент игроков, получивших каждое достижение</small>`}</p>`
         + r.items.slice(0, 60).map(a => `<div class="gm-ach${a.achieved ? " on" : ""}"><i>${a.icon ? `<img loading="lazy" src="${esc(img(a.icon))}" alt="">` : ""}</i><div><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div><span class="ny-hint">${a.percent}%</span></div>`).join("");
     }
-  } catch (e) { box.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить.")}</small>`; }
+  } catch (e) { if (!current()) return; box.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить.")}</small>`; }
 }
 
 async function paintProfile() {
@@ -1492,17 +1430,17 @@ async function loadOnline(ov, appid, range, quiet = false) {
   if (!quiet) ch.innerHTML = `<span class="ny-sk blk"></span>`;
   try {
     const r = await apiGet(`/games/app/${appid}/charts`, { range });
-    if (!ov.isConnected) return;
+    if (!ov.isConnected || ov.__orange !== range) return;
     const now = ov.querySelector("#gm-now"); if (now) now.textContent = fmtNum(r.now);
     const rk = ov.querySelector("#gm-rank"); if (rk) rk.textContent = r.rank ? `№${r.rank} по онлайну сейчас` : "";
     st.innerHTML = `<div><small>Сейчас</small><b class="gm-green">${fmtNum(r.now)}</b></div><div><small>Пик за 24 ч</small><b>${fmtNum(r.peak24)}</b></div><div><small>Среднее за 24 ч</small><b>${fmtNum(r.avg24)}</b></div><div><small>Пик у нас${r.since ? ` с ${esc(shortDate(r.since))}` : ""}</small><b>${fmtNum(r.peak_all)}</b></div>`;
     const short = range === "48h" || range === "7d";
-    const g = r.points && r.points.length ? seriesChart(r.points.map(p => ({ ts: p.ts, v: p.n })), { step: false, h: 190 }) : null;
+    const g = r.points && r.points.length ? seriesChart(r.points.map(p => ({ ts: p.ts, v: p.n })), { step: false, w: 760, h: 270 }) : null;
     if (!g) { ch.innerHTML = `<small class="ny-hint">Точек пока нет. Они записываются каждые 5 минут (у открытой игры — каждые 2), график появится сам.</small>`; return; }
     ch.innerHTML = chartSvg(g, "online", fmtCompact, ts => (range === "48h" ? fmtDMHM(ts) : short ? fmtDM(ts) : fmtDM(ts)));
     attachHover(ch, g, false, (p) => `<b>${fmtNum(p.v)}</b><small>${esc(fmtDMHM(p.ts))}</small>`);
     if (r.points.length < 3) ch.insertAdjacentHTML("beforeend", `<small class="ny-hint gm-flat">Записано точек: ${r.points.length}. Следующие появятся через 2–5 минут, график обновляется сам.</small>`);
-  } catch (e) { if (!quiet) ch.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить онлайн.")}</small>`; }
+  } catch (e) { if (!quiet && ov.isConnected && ov.__orange === range) ch.innerHTML = `<small class="ny-hint">${esc(e.message || "Не удалось загрузить онлайн.")}</small>`; }
 }
 
 async function launch(appid, button) {

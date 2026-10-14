@@ -43,7 +43,7 @@ export function buildHtml(b) {
       ${b.release ? `<div><small>Выход в Steam</small><b>${esc(shortDate(b.release))}</b></div>` : ""}
     </div>
     ${rows ? `<table class="gm-sess-t gm-btable"><thead><tr><th>Обновлена</th><th>Сборка</th><th>Размер</th><th>Изменение</th></tr></thead><tbody>${rows}</tbody></table>` : ""}
-    <p class="ny-hint gm-hnote">Steam не хранит историю сборок в открытом виде, поэтому мы записываем её сами с того дня, как игру начали смотреть. Заметки к патчам — во вкладке «Патчноуты» ниже. Данные о сборке берутся из общедоступной копии данных клиента Steam (steamcmd.net), туда уходит только номер игры.</p>`;
+    <details class="gd-disclosure gd-source-note"><summary>Откуда берётся история сборок</summary><p>История начинается с первого наблюдения в Project. Сведения о сборке получаем из публичных данных Steam через steamcmd.net. Заметки разработчиков доступны в разделе «Сообщество» → «Патчноуты».</p></details>`;
 }
 
 /** Колонка «минимум у нас» в таблице цен по странам: цена и скидка, пусто если записей нет. */
