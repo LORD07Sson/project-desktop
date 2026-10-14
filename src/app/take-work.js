@@ -12,7 +12,7 @@ import { loadUsers } from "./tabs.js";
 
 const DEADLINES = [[24, "сутки"], [48, "2 дня"], [72, "3 дня"], [120, "5 дней"], [168, "неделя"]];
 const PRIORITIES = [["normal", "Обычный"], ["high", "Высокий"], ["urgent", "Срочный"], ["low", "Низкий"]];
-const DEFAULT_ROLES = ["Даббер", "Звукорежиссёр", "Переводчик", "Тайминг"];
+const DEFAULT_ROLES = ["Даббер", "Звукорежиссёр", "Роспись", "Переводчик", "Тайминг"];
 const NYAA_QUALITIES = [["any", "Любое качество"], ["480p", "480p"], ["720p", "720p"], ["1080p", "1080p"], ["1440p", "1440p"], ["2160p", "2160p"]];
 
 function plural(n, one, few, many) {

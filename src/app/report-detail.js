@@ -265,6 +265,26 @@ export async function openReportDetail(publicId) {
                 </section>`;
               }).join("")}</div>
             </div>` : ""}
+            ${(raws.shared_sources && (raws.shared_sources.can_view || raws.shared_sources.can_upload)) ? `
+            <div class="rd-sec">
+              <h3>Исходники серии${raws.shared_sources.episode ? ` · ${esc(raws.shared_sources.episode)}` : ""}</h3>
+              <div class="no-assignee" style="margin-bottom:6px;">Равки 480p/1080p · скачивание доступно дабберам этого тайтла и назначенному звукарю${raws.shared_sources.can_upload ? " · загрузка для роли «Роспись»" : ""}</div>
+              <div class="raw-list">${(raws.shared_sources.kinds || []).map(r => {
+                const entries = r.files || [];
+                return `<section class="raw-kind">
+                  <div class="raw-kind-head">
+                    <span class="raw-label">${esc(r.label)}</span>
+                    <span class="raw-kind-count">${entries.length}</span>
+                    ${raws.shared_sources.can_upload ? `<button class="rd-add" data-source-add="${esc(r.kind)}">+ Добавить файлы</button>` : ""}
+                  </div>
+                  ${entries.length ? entries.map(f => `
+                    <div class="raw-row on">
+                      <span class="raw-name">${esc(f.name || "файл")}</span>
+                      <button class="icon-btn" data-source-dl="${esc(f.id)}" data-source-name="${esc(f.name || r.kind)}" title="Скачать">⬇️</button>
+                    </div>`).join("") : `<div class="raw-row"><span class="raw-name">${raws.shared_sources.can_view ? "Файлов пока нет" : "Добавьте сюда равки для команды"}</span></div>`}
+                </section>`;
+              }).join("")}</div>
+            </div>` : ""}
           </div>
           <div class="rd-panel" data-rd-panel="history" hidden></div>
           <div class="rd-panel" data-rd-panel="activity" hidden></div>
@@ -498,6 +518,29 @@ export async function openReportDetail(publicId) {
       for (const file of filesToAdd) {
         try {
           await apiUpload(`/report/${publicId}/raws/${kind}`, file);
+          uploaded += 1;
+        } catch (e) {
+          failure = `${file.name}: ${e.message}`;
+          break;
+        }
+      }
+      await render();
+      if (failure) toast(uploaded ? `Добавлено ${uploaded} из ${filesToAdd.length}. Не загрузился файл ${failure}` : `Не удалось загрузить: ${failure}`, "error");
+      else toast(`Добавлено файлов: ${uploaded}.`, "success");
+    }));
+    sheet.querySelectorAll("[data-source-dl]").forEach(btn => btn.addEventListener("click", () => {
+      downloadAttachment(`report/${publicId}/sources/files/${btn.dataset.sourceDl}/file`, btn.dataset.sourceName);
+    }));
+    sheet.querySelectorAll("[data-source-add]").forEach(btn => btn.addEventListener("click", async () => {
+      const kind = btn.dataset.sourceAdd;
+      const filesToAdd = await pickFiles("*/*");
+      if (!filesToAdd.length) return;
+      btn.disabled = true;
+      let uploaded = 0;
+      let failure = null;
+      for (const file of filesToAdd) {
+        try {
+          await apiUpload(`/report/${publicId}/sources/${kind}`, file);
           uploaded += 1;
         } catch (e) {
           failure = `${file.name}: ${e.message}`;
