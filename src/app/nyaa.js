@@ -870,8 +870,8 @@ setInterval(() => {
 // Когда запросы идут через сервер студии, у него несколько выходов (WireGuard по странам). Для каждого
 // сервиса можно выбрать свой: пусто — по умолчанию (то, что задано на сервере), «direct» — без VPN.
 const EXIT_KEY = "project-nyaa-exits";
-let exitList = (() => { try { const c = JSON.parse(localStorage.getItem(EXIT_KEY) || "null"); return c && Date.now() - c.at < 24 * 3600e3 ? c.data : null; } catch (_) { return null; } })()
-  || { default: "nl", exits: [{ code: "nl", name: "Нидерланды" }, { code: "direct", name: "Напрямую, без VPN" }] };
+let exitList = (() => { try { const c = JSON.parse(localStorage.getItem(EXIT_KEY) || "null"); return c && Date.now() - c.at < 5 * 60e3 ? c.data : null; } catch (_) { return null; } })()
+  || { default: "direct", exits: [{ code: "direct", name: "Напрямую, без VPN" }] };
 const exitOf = id => { const v = prefs.exit && prefs.exit[id]; return exitList.exits.some(e => e.code === v) ? v : ""; };
 const exitName = id => {
   const code = exitOf(id) || exitList.default;
@@ -883,11 +883,20 @@ async function loadExits() {
     const data = JSON.parse(await (await apiBlob("/exits")).text());
     if (data && Array.isArray(data.exits)) {
       exitList = data;
+      const valid = new Set(data.exits.map(e => e.code));
+      let changed = false;
+      for (const [id, code] of Object.entries(prefs.exit || {})) {
+        if (code && !valid.has(code)) { delete prefs.exit[id]; changed = true; }
+      }
+      if (changed) savePrefs();
       try { localStorage.setItem(EXIT_KEY, JSON.stringify({ at: Date.now(), data })); } catch (_) { /* не запомнится */ }
       paintSources();
     }
   } catch (_) { /* старый сервер без ручки — остаётся встроенный список */ }
 }
+setInterval(() => {
+  if (state.isAdmin && !document.hidden) loadExits();
+}, 60 * 1000);
 const viaQuery = id => { const v = exitOf(id); return v ? `&via=${encodeURIComponent(v)}` : ""; };
 
 // ---------- выбор соединения для каждого сервиса ----------
