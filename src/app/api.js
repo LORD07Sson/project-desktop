@@ -82,7 +82,8 @@ export async function api(method, path, body) {
   if (state.token) headers["X-Init-Data"] = state.token;
   const url = `${API_BASE}${path}`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); // DevSkim: ignore DS172411 — функция, не строка
+  const timeoutMs = /^\/titles\/\d+\/take(?:\?|$)/.test(path) ? 45_000 : REQUEST_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs); // DevSkim: ignore DS172411 — функция, не строка
   let resp;
   netStart();
   try {

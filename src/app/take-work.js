@@ -13,6 +13,7 @@ import { loadUsers } from "./tabs.js";
 const DEADLINES = [[24, "сутки"], [48, "2 дня"], [72, "3 дня"], [120, "5 дней"], [168, "неделя"]];
 const PRIORITIES = [["normal", "Обычный"], ["high", "Высокий"], ["urgent", "Срочный"], ["low", "Низкий"]];
 const DEFAULT_ROLES = ["Даббер", "Звукорежиссёр", "Переводчик", "Тайминг"];
+const NYAA_QUALITIES = [["any", "Любое качество"], ["480p", "480p"], ["720p", "720p"], ["1080p", "1080p"], ["1440p", "1440p"], ["2160p", "2160p"]];
 
 function plural(n, one, few, many) {
   const m10 = n % 10, m100 = n % 100;
@@ -78,6 +79,8 @@ export async function openTakeWork(titleId, onDone) {
   }
 
   const work = plan.work && plan.work.active ? plan.work : null;
+  let nyaaCandidates = [];
+  let selectedSource = null;
   const crew = plan.crew.length ? plan.crew : DEFAULT_ROLES.map(role => ({ role, telegram_id: null }));
   const hours = work ? work.deadline_hours : plan.deadline_hours_default;
   const priority = work ? work.priority : "high";
@@ -117,13 +120,16 @@ export async function openTakeWork(titleId, onDone) {
       <div class="tw-field tw-full tw-nyaa">
         <label class="tw-toggle">
           <input type="checkbox" data-nyaa${!work || work.nyaa_enabled ? " checked" : ""}>
-          <span><b>Раздача с nyaa — каждому из состава в личку</b><small>Как только серия появится на nyaa, бот пришлёт .torrent с кнопкой «Скачать» всем из состава, у кого назначен человек.</small></span>
+          <span><b>Автоматически отправлять раздачи с Nyaa</b><small>Когда выйдет новая серия, бот пришлёт .torrent назначенным участникам. Ссылку можно выбрать и отправить вручную ниже.</small></span>
         </label>
         <div class="tw-nyaa-q">
-          <input data-nyaa-q value="${esc((work && work.nyaa_query) || plan.nyaa_query_default || "")}" placeholder="Запрос на nyaa (ромадзи-название)" maxlength="120">
-          <button type="button" class="btn" data-nyaa-test>Проверить</button>
+          <input data-nyaa-q value="${esc((work && work.nyaa_query) || plan.nyaa_query_default || "")}" placeholder="Название или ссылка Nyaa" maxlength="240">
+          <label class="tw-nyaa-episode"><span>Серия</span><input data-nyaa-episode type="number" min="1" max="9999" step="1" value="${plan.episodes_aired || plan.next_episode || 1}"></label>
+          <button type="button" class="btn" data-nyaa-test>Найти варианты</button>
         </div>
+        <div class="tw-nyaa-options"><label>Качество для новых серий<select data-nyaa-quality>${NYAA_QUALITIES.map(([v, label]) => `<option value="${v}"${v === ((work && work.nyaa_quality) || "1080p") ? " selected" : ""}>${label}</option>`).join("")}</select></label><small>Можно вставить ссылку на страницу раздачи или файл .torrent с nyaa.si / nyaa.land.</small></div>
         <div class="tw-nyaa-res" data-nyaa-res></div>
+        <small class="tw-nyaa-send-note" data-nyaa-send-note></small>
       </div>
       <label class="tw-toggle tw-full">
         <input type="checkbox" data-backfill checked>
@@ -172,24 +178,42 @@ export async function openTakeWork(titleId, onDone) {
     summary();
   });
   sheet.querySelector("[data-backfill]").addEventListener("change", summary);
-  const nyaaBox = sheet.querySelector(".tw-nyaa-q");
-  const syncNyaa = () => { nyaaBox.classList.toggle("off", !sheet.querySelector("[data-nyaa]").checked); };
-  sheet.querySelector("[data-nyaa]").addEventListener("change", syncNyaa);
-  syncNyaa();
+  const nyaaRes = sheet.querySelector("[data-nyaa-res]");
+  const nyaaSendNote = sheet.querySelector("[data-nyaa-send-note]");
+  const clearNyaaSelection = () => {
+    selectedSource = null;
+    nyaaSendNote.textContent = "";
+    nyaaRes.querySelectorAll("[data-nyaa-pick]").forEach(b => { b.classList.remove("selected"); b.setAttribute("aria-pressed", "false"); });
+  };
+  const clearNyaaResults = () => { clearNyaaSelection(); nyaaCandidates = []; nyaaRes.replaceChildren(); };
+  sheet.querySelector("[data-nyaa-q]").addEventListener("input", clearNyaaResults);
+  sheet.querySelector("[data-nyaa-episode]").addEventListener("change", clearNyaaResults);
+  nyaaRes.addEventListener("click", e => {
+    const choice = e.target.closest("[data-nyaa-pick]");
+    if (!choice) return;
+    const index = Number(choice.dataset.nyaaPick);
+    selectedSource = nyaaCandidates[index] || null;
+    nyaaRes.querySelectorAll("[data-nyaa-pick]").forEach(b => { const active = b === choice; b.classList.toggle("selected", active); b.setAttribute("aria-pressed", String(active)); });
+    nyaaSendNote.textContent = selectedSource ? `Раздача для серии ${sheet.querySelector("[data-nyaa-episode]").value} уйдёт назначенному составу при сохранении.` : "";
+  });
   sheet.querySelector("[data-nyaa-test]").addEventListener("click", async e => {
     const btn = e.target.closest("button");
-    const res = sheet.querySelector("[data-nyaa-res]");
     btn.disabled = true;
-    res.textContent = "Ищу на nyaa…";
+    clearNyaaSelection();
+    nyaaRes.textContent = "Ищу варианты на Nyaa…";
+    nyaaRes.classList.remove("bad");
     try {
-      const r = await apiGet(`/titles/${titleId}/nyaa-test`, { q: sheet.querySelector("[data-nyaa-q]").value.trim() });
-      res.innerHTML = r.found
-        ? `Серия ${r.episode}: <b>${esc(r.found.title)}</b> · ${esc(r.found.size || "?")} · 🌱 ${r.found.seeders}${r.found.trusted ? " · trusted" : ""}`
-        : `Для серии ${r.episode} по запросу «${esc(r.query)}» ничего не нашлось — попробуйте название как у релизов (например, без «2nd Season»).`;
-      res.classList.toggle("bad", !r.found);
+      const episode = Number(sheet.querySelector("[data-nyaa-episode]").value);
+      if (!Number.isInteger(episode) || episode < 1 || episode > 9999) throw new Error("Укажите номер серии от 1 до 9999.");
+      const r = await apiGet(`/titles/${titleId}/nyaa-test`, { q: sheet.querySelector("[data-nyaa-q]").value.trim(), ep: episode, quality: sheet.querySelector("[data-nyaa-quality]").value });
+      nyaaCandidates = r.results || (r.found ? [r.found] : []);
+      nyaaRes.innerHTML = nyaaCandidates.length
+        ? `<div class="tw-nyaa-results-head">Серия ${r.episode} · ${nyaaCandidates.length} ${plural(nyaaCandidates.length, "вариант", "варианта", "вариантов")}</div><div class="tw-nyaa-results">${nyaaCandidates.map((x, i) => `<button type="button" class="tw-nyaa-candidate" data-nyaa-pick="${i}" aria-pressed="false"><span><b>${esc(x.title)}</b><small>${esc(x.size || "Размер не указан")} · 🌱 ${esc(x.seeders || 0)} сидов${x.trusted ? " · trusted" : ""}</small></span><i>${esc(x.resolution || "качество не указано")}</i></button>`).join("")}</div>`
+        : `Для серии ${r.episode} по запросу «${esc(r.query)}» вариантов нет. Проверьте название, номер серии или ссылку Nyaa.`;
+      nyaaRes.classList.toggle("bad", !nyaaCandidates.length);
     } catch (err) {
-      res.textContent = `Не удалось проверить: ${err.message}`;
-      res.classList.add("bad");
+      nyaaRes.textContent = `Не удалось проверить: ${err.message}`;
+      nyaaRes.classList.add("bad");
     } finally {
       btn.disabled = false;
     }
@@ -226,11 +250,22 @@ export async function openTakeWork(titleId, onDone) {
         backfill: sheet.querySelector("[data-backfill]").checked,
         nyaa: sheet.querySelector("[data-nyaa]").checked,
         nyaa_query: sheet.querySelector("[data-nyaa-q]").value.trim(),
+        nyaa_quality: sheet.querySelector("[data-nyaa-quality]").value,
+        manual_release: selectedSource ? { episode: Number(sheet.querySelector("[data-nyaa-episode]").value), url: selectedSource.url, title: selectedSource.title } : null,
       });
       const n = r.created_episodes.length;
-      toast(n
+      const workMessage = n
         ? `«${plan.name}» в работе: ${n} ${plural(n, "серия", "серии", "серий")}, ${r.reports} ${plural(r.reports, "задача", "задачи", "задач")}.`
-        : `«${plan.name}» в работе. Новые серии заведутся сами.`);
+        : `«${plan.name}» в работе. Новые серии заведутся сами.`;
+      const releaseMessage = r.release_requested
+        ? r.release_sent
+          ? r.release_recipients === r.release_targets
+            ? `Раздача доставлена ${r.release_recipients} участникам.`
+            : `Раздача доставлена ${r.release_recipients} из ${r.release_targets}; остальным отправить не удалось.`
+          : "Не удалось отправить раздачу в личные сообщения; задачи сохранены. Проверьте, что участники начали чат с ботом."
+        : "";
+      const releaseFailed = r.release_requested && r.release_recipients !== r.release_targets;
+      toast([workMessage, releaseMessage].filter(Boolean).join(" "), releaseFailed ? "error" : undefined);
       overlay.remove();
       onDone && onDone();
     } catch (err) {
