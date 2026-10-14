@@ -43,7 +43,7 @@ export function buildHtml(b) {
       ${b.release ? `<div><small>Выход в Steam</small><b>${esc(shortDate(b.release))}</b></div>` : ""}
     </div>
     ${rows ? `<table class="gm-sess-t gm-btable"><thead><tr><th>Обновлена</th><th>Сборка</th><th>Размер</th><th>Изменение</th></tr></thead><tbody>${rows}</tbody></table>` : ""}
-    <details class="gd-disclosure gd-source-note"><summary>Откуда берётся история сборок</summary><p>История начинается с первого наблюдения в Project. Сведения о сборке получаем из публичных данных Steam через steamcmd.net. Заметки разработчиков доступны в разделе «Сообщество» → «Патчноуты».</p></details>`;
+    <details class="gd-disclosure gd-source-note"><summary>Откуда берётся история сборок</summary><p>История начинается с первого наблюдения в Project. Сведения о сборке берём из общедоступной копии данных клиента Steam на steamcmd.net. Заметки разработчиков доступны в разделе «Сообщество» → «Патчноуты».</p></details>`;
 }
 
 /** Колонка «минимум у нас» в таблице цен по странам: цена и скидка, пусто если записей нет. */
