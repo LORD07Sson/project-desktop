@@ -6,7 +6,8 @@
 // «Тайтлы» — доступно любому админу (сервер и так перепроверяет
 // _require_admin на каждый вызов), отдельного gate на кнопку не нужно.
 
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { pickFile } from "./attachments.js";
 import { pauseSuffix } from "./people.js";
 import { esc } from "./utils.js";
 
@@ -261,9 +262,10 @@ async function openTitleAdminDetail(titleId, onClose) {
   }
 
   async function render() {
-    let d, roles, assignable;
+    let d, roles, assignable, wm;
     try {
       [d, roles, assignable] = await Promise.all([apiGet(`/titles/${titleId}`), loadRoles(), loadAssignable()]);
+      wm = await apiGet(`/titles/${titleId}/watermark`).catch(() => ({ has: false, corner: "br", opacity: 60, scale: 15 }));
     } catch (e) {
       sheet.innerHTML = `<div class="no-assignee">Не удалось загрузить: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
       sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
@@ -340,6 +342,32 @@ async function openTitleAdminDetail(titleId, onClose) {
           <input id="ep-deadline-new" type="date">
           <button class="btn" id="ep-add">Создать</button>
         </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Водяной знак</h3>
+        <div class="no-assignee" style="margin-bottom:8px;">Логотип (png, лучше с прозрачным фоном) накладывается на серию при сборке финала.</div>
+        <div class="add-row" style="align-items:center; gap:10px;">
+          ${wm.has ? `<span style="background:repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 50% / 14px 14px; border-radius:6px; padding:4px;"><img src="${mediaUrl(`/titles/${titleId}/watermark/image`, { v: Date.now() })}" alt="" style="max-height:48px; max-width:120px; display:block;"></span><span class="meta">${esc(wm.name || "logo.png")}</span>` : `<span class="meta">Логотип не загружен</span>`}
+          <button class="btn" id="wm-pick">${wm.has ? "Заменить png" : "Загрузить png"}</button>
+          ${wm.has ? `<button class="btn ghost" id="wm-clear">Убрать</button>` : ""}
+        </div>
+        <div class="add-row" id="wm-corners" style="align-items:center; gap:6px;">
+          <span class="meta" style="min-width:90px;">Положение</span>
+          ${[["tl", "↖ левый верх"], ["tr", "↗ правый верх"], ["bl", "↙ левый низ"], ["br", "↘ правый низ"], ["c", "● по центру"]].map(([k, label]) => `<button type="button" class="btn${wm.corner === k ? " primary" : " ghost"}" data-wm-corner="${k}">${label}</button>`).join("")}
+        </div>
+        <div class="add-row" style="align-items:center; gap:10px;">
+          <span class="meta" style="min-width:90px;">Прозрачность</span>
+          <input id="wm-opacity" type="range" min="5" max="100" step="5" value="${wm.opacity}" style="flex:1;">
+          <b id="wm-opacity-val" style="min-width:44px; text-align:right;">${wm.opacity}%</b>
+        </div>
+        <div class="add-row" style="align-items:center; gap:10px;">
+          <span class="meta" style="min-width:90px;">Размер</span>
+          <input id="wm-scale" type="range" min="3" max="60" step="1" value="${wm.scale}" style="flex:1;">
+          <b id="wm-scale-val" style="min-width:44px; text-align:right;">${wm.scale}%</b>
+        </div>
+        <div class="no-assignee">Размер — доля ширины видео. Настройки сохраняются кнопкой ниже.</div>
+        <div class="add-row"><button class="btn primary" id="wm-save"${wm.has ? "" : " disabled"}>Сохранить настройки знака</button></div>
       </div>
 
       <div class="sheet-actions">
@@ -443,6 +471,48 @@ async function openTitleAdminDetail(titleId, onClose) {
         toast(`Создано отчётов: ${res.created.length}.`);
         await render();
       } catch (e) { toast(`Не удалось создать серию: ${e.message}`, "error"); }
+    });
+
+    // ---- водяной знак
+    let wmCorner = wm.corner;
+    sheet.querySelectorAll("[data-wm-corner]").forEach(btn => btn.addEventListener("click", () => {
+      wmCorner = btn.dataset.wmCorner;
+      sheet.querySelectorAll("[data-wm-corner]").forEach(b => {
+        const on = b.dataset.wmCorner === wmCorner;
+        b.classList.toggle("primary", on);
+        b.classList.toggle("ghost", !on);
+      });
+    }));
+    for (const [id, valId] of [["#wm-opacity", "#wm-opacity-val"], ["#wm-scale", "#wm-scale-val"]]) {
+      sheet.querySelector(id).addEventListener("input", e => { sheet.querySelector(valId).textContent = `${e.target.value}%`; });
+    }
+    const wmFields = () => ({
+      corner: wmCorner,
+      opacity: sheet.querySelector("#wm-opacity").value,
+      scale: sheet.querySelector("#wm-scale").value,
+    });
+    sheet.querySelector("#wm-pick").addEventListener("click", async () => {
+      const file = await pickFile("image/png");
+      if (!file) return;
+      try {
+        await apiUpload(`/titles/${titleId}/watermark`, file, wmFields());
+        toast("Водяной знак загружен.", "success");
+        await render();
+      } catch (e) { toast(`Не удалось загрузить: ${e.message}`, "error"); }
+    });
+    sheet.querySelector("#wm-save").addEventListener("click", async () => {
+      const f = wmFields();
+      try {
+        await apiPost(`/titles/${titleId}/watermark/settings`, { corner: f.corner, opacity: Number(f.opacity), scale: Number(f.scale) });
+        toast("Настройки водяного знака сохранены.", "success");
+      } catch (e) { toast(`Не удалось сохранить: ${e.message}`, "error"); }
+    });
+    sheet.querySelector("#wm-clear")?.addEventListener("click", async () => {
+      if (!confirm("Убрать водяной знак у тайтла?")) return;
+      try {
+        await apiPost(`/titles/${titleId}/watermark/delete`, {});
+        await render();
+      } catch (e) { toast(`Не удалось убрать: ${e.message}`, "error"); }
     });
 
     sheet.querySelector("#btn-rename-title").addEventListener("click", async () => {
