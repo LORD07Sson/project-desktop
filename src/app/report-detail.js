@@ -655,6 +655,21 @@ export async function openReportDetail(publicId) {
         }
       });
     });
+    sheet.querySelectorAll("[data-delete-file]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const label = btn.dataset.fileName || "файл";
+        if (!confirm(`Удалить файл «${label}» из отчёта?`)) return;
+        btn.disabled = true;
+        try {
+          await apiPost(`/report/${publicId}/files/${btn.dataset.deleteFile}/delete`, {});
+          toast("Файл удалён.");
+          await render();
+        } catch (e) {
+          toast(`Не удалось удалить файл: ${e.message}`, "error");
+          btn.disabled = false;
+        }
+      });
+    });
     // Плеер: создаётся по первому «▶ Слушать» и дальше просто
     // переставляется в новую разметку после каждой перерисовки.
     const audioFiles = files.files.filter(isAudioFile);
@@ -822,6 +837,7 @@ function fileHtml(f, canEdit = true) {
     ${isAudio ? `<button class="btn primary" style="padding:4px 10px; font-size:12px;" data-play-file="${f.id}">▶ Слушать</button>` : ""}
     ${isAudio && canEdit ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-qc-file="${f.id}">AI-проверка</button>` : ""}
     <button class="icon-btn" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать">⬇️</button>
+    <button class="icon-btn" data-delete-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Удалить файл" aria-label="Удалить файл">🗑</button>
     <div id="qc-result-${f.id}" style="width:100%;"></div>
   </div>`;
 }
