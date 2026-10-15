@@ -251,7 +251,7 @@ export function parseShikimoriId(input) {
 
 // ---------- Детальная карточка тайтла (состав, персонажи, серии) ----------
 
-async function openTitleAdminDetail(titleId, onClose) {
+export async function openTitleAdminDetail(titleId, onClose) {
   const overlay = openSheet(dialogSkeletonHtml(6), "wide");
   const sheet = overlay.querySelector(".sheet");
 

@@ -10,7 +10,7 @@ import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow 
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, deadlineCellHtml, posterSrc } from "./reports.js";
-import { loadRoles, loadAssignable, userOptionsHtml } from "./titles-admin.js";
+import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from "./titles-admin.js";
 import { setDropTarget } from "./file-drop.js";
 import { recordRecentReport } from "./recent-reports.js";
 import { toggleFocusMode, syncFocusButton } from "./focus-mode.js";
@@ -246,6 +246,7 @@ export async function openReportDetail(publicId) {
               ${detail.is_sound ? `<div class="no-assignee" style="margin:8px 0;">🎚 Сдача звукаря: загрузите итоговый файл — видео с новым звуком или готовую дорожку. Админ сразу получит уведомление «Дорожка сдана».</div>` : ""}
               <button class="rd-add" id="report-file-add">${detail.is_sound ? "+ Сдать готовую дорожку" : "+ Добавить файл (дорожку)"}</button>
               ${canEdit ? `<button class="rd-add" id="report-assemble">🎬 Собрать финал</button>` : ""}
+              ${canEdit && detail.title_id ? `<button class="rd-add" id="report-watermark" title="Логотип, угол, прозрачность и размер — общие для всех серий тайтла">💧 Водяной знак тайтла</button>` : ""}
             </div>
 
             ${(raws.raws || []).length ? `
@@ -531,6 +532,7 @@ export async function openReportDetail(publicId) {
       if (failure) toast(uploaded ? `Добавлено ${uploaded} из ${filesToAdd.length}. Не загрузился файл ${failure}` : `Не удалось загрузить: ${failure}`, "error");
       else toast(`Добавлено файлов: ${uploaded}.`, "success");
     });
+    sheet.querySelector("#report-watermark")?.addEventListener("click", () => openTitleAdminDetail(detail.title_id));
     sheet.querySelector("#report-assemble")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       btn.disabled = true;
