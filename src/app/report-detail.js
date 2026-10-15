@@ -203,7 +203,7 @@ export async function openReportDetail(publicId) {
             <div class="rd-sec">
               <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? "изменить" : ""}</button>` : ""}</h3>
-              ${hasPipe ? pipelineTimelineHtml(detail.pipeline) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
+              ${hasPipe ? pipelineTimelineHtml(detail.pipeline) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
               ${canEdit ? `<div id="pipe-editor" hidden>
                 <div id="pipeline-draft-list"></div>
                 <div class="add-row">
@@ -460,7 +460,7 @@ export async function openReportDetail(publicId) {
       } catch (e) { toast(`Не удалось снять пайплайн: ${e.message}`, "error"); }
     });
     const advanceBtn = sheet.querySelector("#btn-pipeline-advance");
-    if (advanceBtn && canEdit) advanceBtn.addEventListener("click", async () => {
+    if (advanceBtn && (canEdit || detail.can_advance)) advanceBtn.addEventListener("click", async () => {
       const userSel = sheet.querySelector("#pipeline-next-user");
       advanceBtn.disabled = true;
       try {
@@ -701,20 +701,24 @@ function noteHtml(n) {
 // Текущая цепочка пайплайна (только чтение) + «передать дальше», если
 // есть следующий этап — отдельно от черновика-билдера ниже (тот
 // пересобирает цепочку целиком, этот просто двигает текущий указатель).
-function pipelineAdvanceHtml(pipeline, assignable, canEdit = true) {
+function pipelineAdvanceHtml(pipeline, assignable, canEdit = true, canAdvance = false) {
   if (!pipeline || !pipeline.length) return "";
-  if (!canEdit) return "";
-  const curIdx = pipeline.findIndex(s => s.current);
-  const hasNext = curIdx !== -1 && curIdx < pipeline.length - 1;
-  const cur = pipeline[curIdx];
-  const advanceRow = hasNext
-    ? `<div class="rd-pass">
-        <span>Сейчас — <b>${esc(cur.role)}</b>${cur.user_name ? ` у ${esc(cur.user_name)}` : ""}. Дальше — <b>${esc(pipeline[curIdx + 1].role)}</b>:</span>
-        <select id="pipeline-next-user" class="field-input">${userOptionsHtml(assignable, null)}</select>
-        <button class="btn primary" id="btn-pipeline-advance">Передать дальше</button>
-      </div>`
+  if (!canEdit && !canAdvance) return "";
+  const curIdxs = pipeline.map((s, i) => (s.current ? i : -1)).filter(i => i !== -1);
+  if (!curIdxs.length) return "";
+  const lastCur = curIdxs[curIdxs.length - 1];
+  if (lastCur >= pipeline.length - 1) return "";
+  const who = curIdxs.map(i => `<b>${esc(pipeline[i].role)}</b>${pipeline[i].user_name ? ` (${esc(pipeline[i].user_name)})` : ""}`).join(", ");
+  // Исполнитель этапа (даббер) передаёт сам, без выбора человека: следующего
+  // сервер находит по цепочке и составу тайтла. Выбор — только у админа.
+  const picker = canEdit
+    ? `<select id="pipeline-next-user" class="field-input">${userOptionsHtml(assignable, null)}</select>`
     : "";
-  return advanceRow;
+  return `<div class="rd-pass">
+      <span>Сейчас — ${who}. Дальше — <b>${esc(pipeline[lastCur + 1].role)}</b>:</span>
+      ${picker}
+      <button class="btn primary" id="btn-pipeline-advance">${curIdxs.length > 1 ? "Все сдали — передать дальше" : "Передать дальше"}</button>
+    </div>`;
 }
 
 // Основной путь статусов («ветки» отчёта) для шапки карточки;
@@ -724,7 +728,7 @@ const STATUS_PATH = [["draft", "Черновик"], ["review", "Озвучка"]
 // Пайплайн шкалой этапов: кто на каком этапе, пройденное закрашено,
 // линия доходит до текущего этапа.
 function pipelineTimelineHtml(pipeline) {
-  const cur = pipeline.findIndex(s => s.current);
+  const cur = pipeline.map((s, i) => (s.current ? i : -1)).filter(i => i !== -1).pop() ?? -1;
   const at = cur !== -1 ? cur : pipeline.filter(s => s.done).length;
   const p = pipeline.length > 1 ? Math.min(at, pipeline.length - 1) / (pipeline.length - 1) : 0;
   return `<div class="rd-timeline" style="--n:${pipeline.length};--p:${p}">${pipeline.map((s, i) => `
