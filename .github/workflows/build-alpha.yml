@@ -13,6 +13,10 @@ name: Build desktop client (alpha channel)
 on:
   push:
     branches: [main]
+    # Правки только документации не требуют новой сборки клиента.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   workflow_dispatch: {}
 
 jobs:
@@ -46,6 +50,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Кэш скомпилированных зависимостей (tauri, windows-rs, tokio…) —
+      # без него каждая альфа собирала их с нуля, это основная часть
+      # времени сборки. Тот же action и версия, что в checks.yml.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
@@ -57,6 +68,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
+          cache: npm
 
       # Версия альфа-сборки — СЛЕДУЮЩАЯ после VERSION версия (патч + 1) +
       # "-alpha.<номер запуска>+<короткий коммит>". Именно следующая: по
@@ -156,6 +168,12 @@ jobs:
         shell: bash
         env:
           PROJECT_UPDATE_CHANNEL: alpha
+          # Альфа — тестовый канал: без LTO и с параллельной кодогенерацией
+          # собирается в разы быстрее, бинарник чуть крупнее и на пару
+          # процентов медленнее. Стабильная сборка (build.yml) профиль из
+          # Cargo.toml не меняет — там LTO и codegen-units = 1.
+          CARGO_PROFILE_RELEASE_LTO: "off"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
         run: cargo build --release --manifest-path src-tauri/Cargo.toml --features custom-protocol
 
       - name: Собрать альфа-канал через vpk
