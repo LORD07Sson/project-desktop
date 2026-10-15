@@ -77,6 +77,15 @@ export async function tryRestoreSession() {
     maybeShowChooserOnStart();
     await refreshAll();
   } catch (e) {
+    // Нет сети — это не отзыв токена: токен не трогаем (иначе после запуска без интернета
+    // пришлось бы заново привязывать приложение кодом), а пробуем ещё раз через несколько секунд.
+    if (e.network) {
+      hideSplash();
+      const note = `${e.message} Пробую снова…`;
+      if ($("#auth-screen").hidden) showAuth(note); else $("#auth-error").textContent = note; // без повторного показа заставки
+      setTimeout(() => { if ($("#app-screen").hidden && state.token) tryRestoreSession(); }, 8000);
+      return;
+    }
     // токен отозван/протух — просим войти заново, а не молча виснем.
     await invoke("token_clear").catch(() => {});
     resetSessionState();

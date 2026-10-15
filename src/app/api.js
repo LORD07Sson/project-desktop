@@ -95,8 +95,12 @@ export async function api(method, path, body) {
       signal: controller.signal,
     });
   } catch (e) {
-    if (e.name === "AbortError") throw new Error("Сервер не отвечает — проверьте соединение и попробуйте снова.");
-    throw new Error(`Нет связи с сервером: ${e.message}`);
+    // network: ошибка транспорта, а не ответ сервера — токен тут ни при чём (см. tryRestoreSession).
+    const failure = e.name === "AbortError"
+      ? new Error("Сервер не отвечает — проверьте соединение и попробуйте снова.")
+      : new Error(`Нет связи с сервером: ${e.message}`);
+    failure.network = true;
+    throw failure;
   } finally {
     clearTimeout(timeout);
     netEnd();
