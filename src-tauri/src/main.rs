@@ -23,6 +23,7 @@ mod token_store;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use tauri::menu::{Menu, MenuItem};
@@ -150,6 +151,26 @@ fn check_for_update(app: tauri::AppHandle) -> Result<Option<UpdateInfoOut>, Stri
     log_result("check_for_update", check_for_update_cached(&app))
 }
 
+static UPDATE_DOWNLOADING: AtomicBool = AtomicBool::new(false);
+
+/// Флаг «обновление уже качается», снимается при любом выходе из команды.
+struct UpdateDownloadGuard;
+
+impl UpdateDownloadGuard {
+    fn acquire() -> Result<Self, String> {
+        if UPDATE_DOWNLOADING.swap(true, Ordering::SeqCst) {
+            return Err("Обновление уже скачивается — подождите, приложение перезапустится само.".into());
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for UpdateDownloadGuard {
+    fn drop(&mut self) {
+        UPDATE_DOWNLOADING.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Качает и сразу ставит обновление, перезапуская приложение —
 /// `apply_updates_and_restart` завершает текущий процесс сам, эта
 /// команда наружу успевает вернуться только в случае ошибки.
@@ -164,6 +185,11 @@ fn check_for_update(app: tauri::AppHandle) -> Result<Option<UpdateInfoOut>, Stri
 #[tauri::command(async)]
 fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
     log_result("download_and_apply_update", (|| {
+        // Одна закачка за раз. Две одновременные (автообновление при старте
+        // + кнопка «Обновить», или двойной клик) пишут в один и тот же
+        // `.partial` пакет, и вторая падает с «файл занят другим процессом»
+        // (os error 32), а первая тем временем спокойно докачивается.
+        let _guard = UpdateDownloadGuard::acquire()?;
         let um = velopack_update_manager(&app)?;
         let info = match um.check_for_updates().map_err(friendly_update_error)? {
             velopack::UpdateCheck::UpdateAvailable(info) => *info,

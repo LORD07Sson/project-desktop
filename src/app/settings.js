@@ -620,7 +620,13 @@ function confirmUpdateSheet(update) {
   });
 }
 
+let updateInstalling = false;
+
 async function installUpdate() {
+  // Повторный клик, пока уже идёт закачка, ничего не запускает: две
+  // параллельные закачки дерутся за один файл пакета.
+  if (updateInstalling) { toast("Обновление уже скачивается — подождите.", "error"); return; }
+  updateInstalling = true;
   const overlay = openSheet(`
     <h2>Устанавливаю обновление…</h2>
     <div class="update-progress-track"><div class="update-progress-fill" id="upd-fill"></div></div>
@@ -641,6 +647,7 @@ async function installUpdate() {
     await invoke("download_and_apply_update");
   } catch (e) {
     unlisten();
+    updateInstalling = false;
     statusEl.textContent = `Ошибка: ${e}`;
     statusEl.style.color = "var(--s-stop)";
   }
