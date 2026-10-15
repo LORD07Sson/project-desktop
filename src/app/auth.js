@@ -68,7 +68,7 @@ export async function tryRestoreSession() {
   try {
     const who = await api("GET", "/whoami");
     state.telegramId = who.telegram_id;
-    applyRole(!!who.is_admin);
+    applyRole(!!who.is_admin, !!who.nyaa_access);
     await ensureMediaToken();
     showApp();
     restoreLastTab();
@@ -111,9 +111,12 @@ function replayWordmark() {
 
 // Админ или рядовой участник: у участника прячем админские вкладки и
 // кнопки (CSS по data-role) и не запускаем опросы админских данных.
-export function applyRole(isAdmin) {
+export function applyRole(isAdmin, nyaaAccess = false) {
   state.isAdmin = isAdmin;
+  state.nyaaAccess = isAdmin || nyaaAccess;
   document.documentElement.dataset.role = isAdmin ? "admin" : "member";
+  // Роспись и звукари видят «Релизы» (Няшку), хотя остальное админское скрыто.
+  document.documentElement.dataset.nyaa = !isAdmin && nyaaAccess ? "1" : "0";
 }
 
 // Стена обложек на экране входа. Картинки — с нашего сервера по номеру
@@ -213,7 +216,7 @@ async function submitCode() {
     state.telegramId = result.telegram_id;
     setDisplayName(result.name);
     await invoke("token_save", { token: result.token });
-    try { applyRole(!!(await api("GET", "/whoami")).is_admin); } catch (_) { applyRole(false); }
+    try { const who = await api("GET", "/whoami"); applyRole(!!who.is_admin, !!who.nyaa_access); } catch (_) { applyRole(false); }
     await ensureMediaToken();
     showApp();
     restoreLastTab();

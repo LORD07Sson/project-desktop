@@ -9,6 +9,7 @@ import { openSeasonsAdminSheet } from "./titles-admin.js";
 import { clearTitleHoverCache } from "./title-hover.js";
 import { imgProxy, hdPosterAttrs, titleArt, titlePageHtml, wireTitlePage } from "./title-page.js";
 import { openTakeWork } from "./take-work.js";
+import { loadRospisTitles, openNewEpisodeSheet } from "./rospis.js";
 
 function voteActivity(t) { return t.likes + t.dislikes; }
 
@@ -388,6 +389,7 @@ export async function loadTitlesTab() {
     return false;
   }
   d.seasons = d.seasons || [];
+  rospisTitles = await loadRospisTitles();
   if (!d.seasons.length) {
     // Раньше тут не было ни одной кнопки: удалили последний сезон — и
     // создать новый из десктопа было негде («Управление» живёт в шапке
@@ -404,6 +406,7 @@ export async function loadTitlesTab() {
 }
 
 let currentTitles = [];
+let rospisTitles = [];
 let currentSeasonName = "";
 
 const FILTERS = {
@@ -448,6 +451,13 @@ function renderTitlesBody(wrap) {
     ? titlesTableHtml(shown)
     : `<div class="af-grid">${shown.map(t => voteCardHtml(t, rankOf.get(t.id), t.id === leader)).join("")}${addCard}</div>`);
   wrap.querySelector("[data-af-add]")?.addEventListener("click", () => openSeasonsAdminSheet(() => loadTitlesTab()));
+  if (rospisTitles.length) {
+    const bar = document.createElement("div");
+    bar.style.cssText = "margin:0 0 12px;";
+    bar.innerHTML = `<button class="btn primary" type="button">＋ Новая серия</button>`;
+    bar.querySelector("button").addEventListener("click", () => openNewEpisodeSheet(rospisTitles));
+    wrap.prepend(bar);
+  }
   wrap.querySelectorAll("[data-titles-filter]").forEach(btn => {
     btn.addEventListener("click", () => { titlesFilter = btn.dataset.titlesFilter; renderTitlesBody(wrap); });
   });

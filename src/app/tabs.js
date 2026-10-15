@@ -56,7 +56,7 @@ const LAST_TAB_KEY = "project-last-tab";
 export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
 export function switchTab(name) {
-  if (!state.isAdmin && !MEMBER_TABS.has(name)) name = "messages";
+  if (!state.isAdmin && !MEMBER_TABS.has(name) && !(name === "nyaa" && state.nyaaAccess)) name = "messages";
   state.activeTab = name;
   try { localStorage.setItem(LAST_TAB_KEY, name); } catch (_) { /* не критично */ }
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
@@ -109,7 +109,7 @@ export function restoreLastTab() {
   // Настройки → Поведение → «Стартовый раздел».
   const start = startTab();
   if (start !== "last") saved = start;
-  if (!state.isAdmin && (!saved || !MEMBER_TABS.has(saved))) saved = "messages";
+  if (!state.isAdmin && (!saved || (!MEMBER_TABS.has(saved) && !(saved === "nyaa" && state.nyaaAccess)))) saved = "messages";
   if (!saved || !LOADERS[saved]) return;
   state.activeTab = saved;
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === saved));

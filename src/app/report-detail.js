@@ -242,7 +242,8 @@ export async function openReportDetail(publicId) {
 
             <div class="rd-sec">
               <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}</h3>
-              ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — их присылают боту в карточке отчёта.</div>`}
+              ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — добавьте дорожку кнопкой ниже или перетащите файл в окно.</div>`}
+              <button class="rd-add" id="report-file-add">+ Добавить файл (дорожку)</button>
             </div>
 
             ${(raws.raws || []).length ? `
@@ -508,6 +509,26 @@ export async function openReportDetail(publicId) {
           : `report/${publicId}/raws/${btn.dataset.rawDl}/file`;
       downloadAttachment(path, btn.dataset.rawName);
     }));
+    sheet.querySelector("#report-file-add")?.addEventListener("click", async e => {
+      const btn = e.currentTarget;
+      const filesToAdd = await pickFiles("*/*");
+      if (!filesToAdd.length) return;
+      btn.disabled = true;
+      let uploaded = 0;
+      let failure = null;
+      for (const file of filesToAdd) {
+        try {
+          await apiUpload(`/report/${publicId}/files/upload`, file);
+          uploaded += 1;
+        } catch (err) {
+          failure = `${file.name}: ${err.message}`;
+          break;
+        }
+      }
+      await render();
+      if (failure) toast(uploaded ? `Добавлено ${uploaded} из ${filesToAdd.length}. Не загрузился файл ${failure}` : `Не удалось загрузить: ${failure}`, "error");
+      else toast(`Добавлено файлов: ${uploaded}.`, "success");
+    });
     sheet.querySelectorAll("[data-raw-add]").forEach(btn => btn.addEventListener("click", async () => {
       const kind = btn.dataset.rawAdd;
       const filesToAdd = await pickFiles("*/*");

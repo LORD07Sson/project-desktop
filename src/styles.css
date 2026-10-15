@@ -4733,7 +4733,8 @@ body.focus-mode .report-detail-overlay .sheet {
 
 /* Рядовой участник студии: только «Тайтлы», «Сообщения», «Команда», «Я».
    Админские кнопки и разделы — прочь (сервер их всё равно не пустит). */
-:root[data-role="member"] .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]),
+:root[data-role="member"]:not([data-nyaa="1"]) .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]),
+:root[data-role="member"][data-nyaa="1"] .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-tab="nyaa"]),
 :root[data-role="member"] #sidebar-board-sub,
 :root[data-role="member"] .sidebar-group-label:has(+ .tab-btn[data-tab="overview"]),
 :root[data-role="member"] #titles-admin-btn,
