@@ -243,7 +243,9 @@ export async function openReportDetail(publicId) {
             <div class="rd-sec">
               <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}</h3>
               ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — добавьте дорожку кнопкой ниже или перетащите файл в окно.</div>`}
-              <button class="rd-add" id="report-file-add">+ Добавить файл (дорожку)</button>
+              ${detail.is_sound ? `<div class="no-assignee" style="margin:8px 0;">🎚 Сдача звукаря: загрузите итоговый файл — видео с новым звуком или готовую дорожку. Админ сразу получит уведомление «Дорожка сдана».</div>` : ""}
+              <button class="rd-add" id="report-file-add">${detail.is_sound ? "+ Сдать готовую дорожку" : "+ Добавить файл (дорожку)"}</button>
+              ${canEdit ? `<button class="rd-add" id="report-assemble">🎬 Собрать финал</button>` : ""}
             </div>
 
             ${(raws.raws || []).length ? `
@@ -528,6 +530,25 @@ export async function openReportDetail(publicId) {
       await render();
       if (failure) toast(uploaded ? `Добавлено ${uploaded} из ${filesToAdd.length}. Не загрузился файл ${failure}` : `Не удалось загрузить: ${failure}`, "error");
       else toast(`Добавлено файлов: ${uploaded}.`, "success");
+    });
+    sheet.querySelector("#report-assemble")?.addEventListener("click", async e => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const check = await apiGet(`/report/${publicId}/assemble-check`);
+        if (!check.ready) {
+          toast(`Нельзя собрать: ${check.missing.join("; ")}.`, "error");
+          return;
+        }
+        const introText = check.intro ? `интро «${check.intro}»` : "без интро";
+        if (!confirm(`Собрать финал?\n\nВидео: ${check.video}\nСубтитры: ${check.subs}\n${introText[0].toUpperCase() + introText.slice(1)}\n\nКарточка подтверждения придёт вам в бота, сборка идёт там.`)) return;
+        await apiPost(`/report/${publicId}/assemble`, {});
+        toast("Карточка сборки отправлена в бота — подтвердите там.", "success");
+      } catch (err) {
+        toast(`Не удалось запустить сборку: ${err.message}`, "error");
+      } finally {
+        btn.disabled = false;
+      }
     });
     sheet.querySelectorAll("[data-raw-add]").forEach(btn => btn.addEventListener("click", async () => {
       const kind = btn.dataset.rawAdd;
