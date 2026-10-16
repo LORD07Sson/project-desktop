@@ -15,13 +15,14 @@
     "test:midi": "node scripts/midi-test.mjs",
     "test:link": "node scripts/deeplink-test.mjs",
     "test:nda": "node scripts/nda-test.mjs",
+    "test:icons": "node scripts/icons-test.mjs",
     "test:tune": "node scripts/tune-test.mjs",
     "test:preload": "node scripts/preload-test.mjs",
     "test:cache": "node scripts/audio-cache-test.mjs",
     "test:selfcheck": "node scripts/selfcheck-test.mjs",
     "test:nyaa": "node scripts/nyaa-test.mjs",
     "test:health": "node scripts/mirror-health-test.mjs",
-    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:midi && npm run test:link && npm run test:nda && npm run test:tune && npm run test:preload && npm run test:cache && npm run test:selfcheck && npm run test:nyaa && npm run test:health && npm run test:games",
+    "test": "npm run verify && npm run test:board && npm run test:profile && npm run test:notes && npm run test:reaper && npm run test:midi && npm run test:link && npm run test:nda && npm run test:icons && npm run test:tune && npm run test:preload && npm run test:cache && npm run test:selfcheck && npm run test:nyaa && npm run test:health && npm run test:games",
     "test:games": "node scripts/games-test.mjs"
   },
   "dependencies": {
