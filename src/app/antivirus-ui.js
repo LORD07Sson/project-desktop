@@ -131,7 +131,7 @@ export async function mountAntivirus(root) {
     host.innerHTML = `
       <div class="av-card"><span class="av-k">Базы сигнатур</span>
         <b>${st ? `v${st.version}` : "—"}</b>
-        <span>${st ? `${st.hashes.toLocaleString("ru-RU")} хешей · ${(st.ips || 0).toLocaleString("ru-RU")} C2-адресов · ${(st.domains || 0).toLocaleString("ru-RU")} доменов · ${st.rules} правил` : ""}<br>${st ? esc(st.updated || "") : ""}</span>
+        <span>${st ? `${(st.hashes + (st.full_hashes || 0)).toLocaleString("ru-RU")} хешей (полная база MalwareBazaar: ${(st.full_hashes || 0).toLocaleString("ru-RU")}) · ${(st.ips || 0).toLocaleString("ru-RU")} C2-адресов · ${(st.domains || 0).toLocaleString("ru-RU")} доменов · ${st.rules} правил` : ""}<br>${st ? esc(st.updated || "") : ""}</span>
         <button class="btn" id="av-update">Обновить базы</button></div>
       <div class="av-card"><span class="av-k">Защитник Windows</span>
         <b style="color:${def ? (defOn ? "var(--s-done)" : "var(--s-stop)") : "var(--ink-dim)"}">${def ? (defOn ? "включён" : "выключен") : "нет данных"}</b>

@@ -32,6 +32,8 @@ const MAX_SIGCHECKS_PER_CYCLE: usize = 2;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static STOP: AtomicBool = AtomicBool::new(false);
+/// Выставляется при смене настроек в интерфейсе: монитор перечитывает их на следующей же выборке, а не раз в минуту.
+static DIRTY: AtomicBool = AtomicBool::new(true);
 static ALERTS: Mutex<Vec<Alert>> = Mutex::new(Vec::new());
 
 // ------------------------------------------------------------------ модель
@@ -523,7 +525,7 @@ fn monitor(app: AppHandle) {
     while !STOP.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_secs(SAMPLE_SECS));
         tick += 1;
-        if tick % 12 == 0 {
+        if tick % 12 == 0 || DIRTY.swap(false, Ordering::Relaxed) {
             settings = load_settings(&app);
             ev.trusted = settings.trusted.iter().map(|t| lower(t)).collect();
             if !settings.enabled && !settings.realtime {
@@ -762,7 +764,8 @@ pub fn bh_set(app: AppHandle, key: String, value: bool) {
         _ => return,
     }
     save_settings(&app, &s);
-    // Монитор подхватывает настройки раз в минуту; для включённой защиты запускаем, если он остановлен.
+    DIRTY.store(true, Ordering::Relaxed);
+    // Монитор подхватывает настройки сразу; для включённой защиты запускаем, если он остановлен.
     if (s.realtime || s.enabled) && !RUNNING.load(Ordering::Relaxed) {
         start(app);
     }
@@ -773,6 +776,7 @@ pub fn bh_set_enabled(app: AppHandle, enabled: bool) {
     let mut s = load_settings(&app);
     s.enabled = enabled;
     save_settings(&app, &s);
+    DIRTY.store(true, Ordering::Relaxed);
     if enabled {
         start(app);
     } else {

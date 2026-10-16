@@ -87,6 +87,28 @@ fn av_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// Полная база хешей (MalwareBazaar + ThreatFox): сортированные первые 8 байт SHA-256. Формат: «AVH1», u32 версия, u64 число, записи.
+fn parse_full(bytes: &[u8]) -> Option<(u32, Vec<u64>)> {
+    if bytes.len() < 16 || &bytes[..4] != b"AVH1" {
+        return None;
+    }
+    let version = u32::from_be_bytes(bytes[4..8].try_into().ok()?);
+    let count = u64::from_be_bytes(bytes[8..16].try_into().ok()?) as usize;
+    if bytes.len() != 16 + count * 8 {
+        return None;
+    }
+    let data = bytes[16..].chunks_exact(8).map(|c| u64::from_be_bytes(c.try_into().unwrap_or([0; 8]))).collect();
+    Some((version, data))
+}
+
+fn load_full_in(dir: &Path) -> Vec<u64> {
+    fs::read(dir.join("bazaar_full.bin")).ok().and_then(|b| parse_full(&b)).map(|(_, d)| d).unwrap_or_default()
+}
+
+fn full_version_in(dir: &Path) -> (u32, usize) {
+    fs::read(dir.join("bazaar_full.bin")).ok().and_then(|b| parse_full(&b)).map(|(v, d)| (v, d.len())).unwrap_or((0, 0))
+}
+
 fn load_signatures_in(dir: &Path) -> Signatures {
     let baseline: Signatures = serde_json::from_str(BASELINE).unwrap_or_default();
     if let Ok(text) = fs::read_to_string(dir.join("signatures.json")) {
@@ -407,6 +429,7 @@ struct Ctx {
     total_files: u64,
     skipped_type: u64,
     all_files: bool,
+    full: Vec<u64>,
 }
 
 impl Ctx {
@@ -448,6 +471,26 @@ impl Ctx {
                     extra: json!({ "label": label }),
                 });
                 return true;
+            }
+        }
+        if let Some(h) = &sha {
+            if h.len() >= 16 {
+                if let Ok(prefix) = u64::from_str_radix(&h[..16], 16) {
+                    if self.full.binary_search(&prefix).is_ok() {
+                        self.push(Detection {
+                            id: detection_id("hash", path),
+                            kind: kind.into(),
+                            severity: "high".into(),
+                            title: "Найден вредоносный файл: образец из полной базы MalwareBazaar".into(),
+                            detail: "SHA-256 файла есть в полной базе известных вредоносных образцов (MalwareBazaar / ThreatFox).".into(),
+                            path: Some(path.into()),
+                            pid,
+                            sha256: sha.clone(),
+                            extra: json!({ "label": "MalwareBazaar" }),
+                        });
+                        return true;
+                    }
+                }
             }
         }
         let stem = file_stem_lower(path);
@@ -497,6 +540,7 @@ impl Checker {
                 total_files: 0,
                 skipped_type: 0,
                 all_files: false,
+                full: load_full_in(&dir),
             },
             dir,
             loaded: std::time::Instant::now(),
@@ -507,6 +551,7 @@ impl Checker {
         if self.loaded.elapsed().as_secs() > 300 {
             self.ctx.sigs = load_signatures_in(&self.dir);
             self.ctx.excl = load_exclusions_in(&self.dir);
+            self.ctx.full = load_full_in(&self.dir);
             self.loaded = std::time::Instant::now();
         }
         self.ctx.found.clear();
@@ -854,6 +899,7 @@ fn scan_core(env: &Env, mode: String, custom: Vec<String>, all_files: bool) -> V
         total_files: 0,
         skipped_type: 0,
         all_files,
+        full: load_full_in(&env.dir),
     };
     let pnames = scan_processes(env, &mut ctx);
     scan_network(env, &mut ctx, &pnames);
@@ -1064,6 +1110,7 @@ pub fn av_status(app: AppHandle) -> Value {
         "version": sigs.version,
         "updated": sigs.updated,
         "hashes": sigs.sha256.len(),
+        "full_hashes": full_version_in(&av_dir(&app).unwrap_or_default()).1,
         "ips": sigs.bad_ips.len(),
         "domains": sigs.bad_domains.len(),
         "rules": sigs.names.len() + sigs.cmdline.len() + sigs.pool_domains.len(),
@@ -1093,18 +1140,49 @@ pub async fn av_update_signatures(app: AppHandle) -> Result<Value, String> {
         return Err("Файл баз слишком большой — отклонён".into());
     }
     let value: Value = serde_json::from_slice(&bytes).map_err(|e| format!("Базы повреждены: {e}"))?;
+    let full = update_full(&app, &client).await;
     if value["unchanged"].as_bool() == Some(true) {
-        return Ok(json!({ "updated": false, "version": current.version, "hashes": current.sha256.len() }));
+        return Ok(json!({ "updated": full.0, "version": current.version, "hashes": current.sha256.len(), "full": full.1 }));
     }
     let fresh: Signatures = serde_json::from_value(value).map_err(|e| format!("Базы повреждены: {e}"))?;
     if fresh.version <= current.version || fresh.names.is_empty() {
-        return Ok(json!({ "updated": false, "version": current.version, "hashes": current.sha256.len() }));
+        return Ok(json!({ "updated": full.0, "version": current.version, "hashes": current.sha256.len(), "full": full.1 }));
     }
     let dir = av_dir(&app)?;
     let tmp = dir.join("signatures.json.tmp");
     fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
     fs::rename(&tmp, dir.join("signatures.json")).map_err(|e| e.to_string())?;
-    Ok(json!({ "updated": true, "version": fresh.version, "hashes": fresh.sha256.len(), "when": fresh.updated }))
+    Ok(json!({ "updated": true, "version": fresh.version, "hashes": fresh.sha256.len(), "when": fresh.updated, "full": full.1 }))
+}
+
+/// Полная база: проверяем версию на сервере и качаем (7–9 МБ), только если там новее. Возвращает (обновлено?, число записей).
+async fn update_full(app: &AppHandle, client: &reqwest::Client) -> (bool, usize) {
+    let Ok(dir) = av_dir(app) else { return (false, 0) };
+    let (local_version, local_count) = full_version_in(&dir);
+    let Ok(resp) = client.get(format!("{API_BASE}/av/full-info")).send().await else { return (false, local_count) };
+    let Ok(info) = resp.json::<Value>().await else { return (false, local_count) };
+    let server_version = info["version"].as_u64().unwrap_or(0);
+    if server_version == 0 || server_version <= local_version as u64 {
+        return (false, local_count);
+    }
+    let Ok(resp) = client.get(format!("{API_BASE}/av/full?have={local_version}")).send().await else { return (false, local_count) };
+    if !resp.status().is_success() {
+        return (false, local_count);
+    }
+    let Ok(bytes) = resp.bytes().await else { return (false, local_count) };
+    if bytes.len() > 200 * 1024 * 1024 {
+        return (false, local_count);
+    }
+    match parse_full(&bytes) {
+        Some((_, data)) if data.len() > 100_000 => {
+            let tmp = dir.join("bazaar_full.bin.tmp");
+            if fs::write(&tmp, &bytes).is_ok() && fs::rename(&tmp, dir.join("bazaar_full.bin")).is_ok() {
+                return (true, data.len());
+            }
+            (false, local_count)
+        }
+        _ => (false, local_count),
+    }
 }
 
 fn kill_pid(pid: u64) {
@@ -1334,6 +1412,26 @@ mod tests {
         assert!(match_name(&s, "chrome").is_none());
         assert!(match_name(&s, "minerva").is_none());
         assert!(match_name(&s, "app").is_none());
+    }
+
+    #[test]
+    fn full_db_format_and_lookup() {
+        let mut bytes = b"AVH1".to_vec();
+        bytes.extend_from_slice(&1234u32.to_be_bytes());
+        let list: Vec<u64> = vec![5, 99, 0xdead_beef_0000_0001, u64::MAX];
+        bytes.extend_from_slice(&(list.len() as u64).to_be_bytes());
+        for v in &list {
+            bytes.extend_from_slice(&v.to_be_bytes());
+        }
+        let (version, data) = parse_full(&bytes).expect("формат");
+        assert_eq!(version, 1234);
+        assert_eq!(data, list);
+        assert!(data.binary_search(&0xdead_beef_0000_0001).is_ok());
+        assert!(data.binary_search(&7).is_err());
+        assert!(parse_full(&bytes[..bytes.len() - 3]).is_none()); // обрезанный файл не принимаем
+        assert!(parse_full(b"XXXX").is_none());
+        // префикс из hex-строки SHA-256 берётся так же, как на сервере
+        assert_eq!(u64::from_str_radix(&"dead beef 0000 0001".replace(' ', ""), 16).unwrap(), 0xdead_beef_0000_0001);
     }
 
     #[test]
