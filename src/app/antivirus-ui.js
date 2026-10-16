@@ -65,8 +65,63 @@ export async function mountAntivirus(root) {
 
   const call = (cmd, args) => invoke(cmd, args);
 
+  const switchRow = (id, title, desc, on) => `
+    <label class="av-sw" for="${id}"><div class="av-sw-t"><b>${title}</b><span>${desc}</span></div>
+      <span class="mn-switch st-switch"><input type="checkbox" id="${id}" ${on ? "checked" : ""}><span></span></span></label>`;
+
+  async function paintDashboard(st, bh, def) {
+    const hero = root.querySelector("#av-hero");
+    const prot = root.querySelector("#av-prot");
+    if (!hero || !prot) return;
+    const alerts = await call("bh_alerts").catch(() => []);
+    const hot = alerts.filter(a => a.severity === "critical" || a.severity === "high").length;
+    const found = report ? report.detections.length : 0;
+    const age = st && st.version > 1e9 ? (Date.now() / 1000 - st.version) / 86400 : null;
+    const issues = [];
+    if (found) issues.push(`В последней проверке найдено угроз: ${found}`);
+    if (hot) issues.push(`Тревоги защиты: ${hot}`);
+    const warns = [];
+    if (bh && !bh.realtime) warns.push("защита файлов в реальном времени выключена");
+    if (bh && !bh.enabled) warns.push("поведенческая защита выключена");
+    if (age === null) warns.push("базы не обновлялись — нажмите «Обновить базы»");
+    else if (age > 3) warns.push(`базы устарели (${Math.floor(age)} дн.)`);
+    if (def && def.AntivirusEnabled === false) warns.push("Защитник Windows выключен");
+    const level = issues.length ? "bad" : (warns.length ? "warn" : "ok");
+    const title = level === "bad" ? "Найдены угрозы" : (level === "warn" ? "Требуется внимание" : "Вы защищены");
+    const last = st && st.last_scan && st.last_scan.finished ? `последняя проверка ${fmtDate(st.last_scan.finished)}` : "проверок ещё не было";
+    const dbText = st ? (age === null ? "встроенные базы" : (age < 1 ? "базы обновлены сегодня" : `базы обновлены ${Math.floor(age)} дн. назад`)) : "";
+    const icon = level === "ok"
+      ? `<svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 8 7.5 9.5 4.3-1.5 7.5-5 7.5-9.5V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>`
+      : `<svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 8 7.5 9.5 4.3-1.5 7.5-5 7.5-9.5V6z"/><path d="M12 8v5M12 16.5h.01"/></svg>`;
+    hero.className = `av-hero ${level}`;
+    hero.innerHTML = `<div class="av-shield">${icon}</div>
+      <div class="av-hero-text"><h3>${title}</h3>
+        <p>${esc([...issues, ...warns].join(" · ") || `${last} · ${dbText}`)}</p>
+        ${level !== "ok" ? `<p class="av-sub">${esc(last)} · ${esc(dbText)}</p>` : ""}</div>`;
+    prot.innerHTML = [
+      switchRow("pr-realtime", "Защита файлов в реальном времени", "Новые файлы в Загрузках, на Рабочем столе, в Temp и автозагрузке проверяются сразу", bh && bh.realtime),
+      switchRow("pr-autoq", "Угрозы — сразу в карантин", "Найденное по базе вредоносное уходит в карантин само (его можно восстановить)", bh && bh.auto_quarantine),
+      switchRow("pr-miner", "Защита от майнеров", "Программы без подписи с долгой нагрузкой на процессор и соединениями с пулами", bh && bh.miner),
+      switchRow("pr-ransom", "Защита от шифровальщиков", "Массовое переименование файлов, файлы-требования выкупа", bh && bh.ransomware),
+      switchRow("pr-scripts", "Защита от скриптовых атак", "PowerShell -enc, документы-вирусы, автозапуск из Temp, неподписанные из Загрузок", bh && bh.scripts),
+      switchRow("pr-master", "Поведенческий монитор", "Общий выключатель слежения за процессами и файлами", bh && bh.enabled),
+      switchRow("pr-update", "Автообновление баз", "Раз в сутки при запуске приложения", lsGet(LS_AUTO_UPDATE, "1") === "1"),
+      switchRow("pr-weekly", "Проверка раз в неделю", "Быстрая проверка при запуске; скажет, только если что-то найдёт", lsGet(LS_WEEKLY, "1") === "1"),
+    ].join("");
+    const bind = (id, fn) => prot.querySelector(`#${id}`).addEventListener("change", async e => { try { await fn(e.target.checked); } catch (err) { toast(String(err), "error"); } setTimeout(refreshHeader, 300); });
+    bind("pr-realtime", v => call("bh_set", { key: "realtime", value: v }));
+    bind("pr-autoq", v => call("bh_set", { key: "auto_quarantine", value: v }));
+    bind("pr-miner", v => call("bh_set", { key: "miner", value: v }));
+    bind("pr-ransom", v => call("bh_set", { key: "ransomware", value: v }));
+    bind("pr-scripts", v => call("bh_set", { key: "scripts", value: v }));
+    bind("pr-master", v => call("bh_set_enabled", { enabled: v }));
+    bind("pr-update", async v => { lsSet(LS_AUTO_UPDATE, v ? "1" : "0"); });
+    bind("pr-weekly", async v => { lsSet(LS_WEEKLY, v ? "1" : "0"); });
+  }
+
   async function refreshHeader() {
-    const [st, def] = await Promise.all([call("av_status").catch(() => null), call("av_defender", { action: "status" }).catch(() => null)]);
+    const [st, def, bh] = await Promise.all([call("av_status").catch(() => null), call("av_defender", { action: "status" }).catch(() => null), call("bh_status").catch(() => null)]);
+    paintDashboard(st, bh, def);
     const host = root.querySelector("#av-head");
     if (!host) return;
     const last = st && st.last_scan && st.last_scan.finished ? `${fmtDate(st.last_scan.finished)} · проверено ${st.last_scan.scanned}, найдено ${st.last_scan.found}` : "ещё не проверяли";
@@ -232,6 +287,15 @@ export async function mountAntivirus(root) {
           paintBody(); refreshHeader();
         } catch (e) { toast(String(e), "error"); }
       }));
+    } else if (tab === "history") {
+      const list = await call("av_history").catch(() => []);
+      const icon = { scan: "🔍", quarantine: "🛡", restore: "↩", delete: "🗑", exclude: "➕", realtime: "⚡" };
+      host.innerHTML = list.length ? list.map(h => `
+        <div class="bc-chat av-row" style="display:flex; gap:12px; align-items:baseline;">
+          <span style="width:20px;">${icon[h.kind] || "•"}</span>
+          <div style="flex:1; min-width:0;"><b>${esc(h.title)}</b>${h.detail ? `<div class="bc-hint" style="margin:2px 0 0; word-break:break-all;">${esc(h.detail)}</div>` : ""}</div>
+          <span class="bc-hint" style="margin:0; white-space:nowrap;">${fmtDate(h.at)}</span>
+        </div>`).join("") : `<div class="no-assignee">История пуста — здесь появятся проверки, карантин и срабатывания защиты.</div>`;
     } else if (tab === "behavior") {
       const [st, alerts] = await Promise.all([call("bh_status").catch(() => null), call("bh_alerts").catch(() => [])]);
       const badge = root.querySelector('[data-av-tab="behavior"] small');
@@ -281,43 +345,49 @@ ${a.path}`)) return; await call("av_quarantine", { path: a.path, pid: a.pid || n
   }
 
   root.innerHTML = `
-    <p class="bc-hint">Проверка ПК: вредоносные файлы по базе хешей (обновляется с нашего сервера), майнеры и хакерские утилиты, подозрительный автозапуск и исключения Защитника Windows.
-      Найденное можно отправить в карантин, удалить или исключить. Ничего не удаляется без вашего действия; системные файлы и сама программа защищены.
-      Это дополнение к Защитнику Windows, а не его замена.</p>
-    <div id="av-head" class="av-head"><div class="no-assignee">Загружаю…</div></div>
+    <div id="av-hero" class="av-hero"><div class="no-assignee">Загружаю…</div></div>
     <div class="av-actions">
-      <button class="btn primary" data-av-scan="quick">Быстрая проверка</button>
-      <button class="btn" data-av-scan="full">Полная проверка</button>
-      <button class="btn" data-av-scan="custom">Проверить папку…</button>
+      <button class="btn primary av-go" data-av-scan="quick">Проверить</button>
+      <div class="seg-toggle" role="group" aria-label="Тип проверки">
+        <button type="button" class="seg-btn active" data-av-mode="quick" title="Места, где оседают вирусы: загрузки, AppData, Temp, автозагрузка">Быстрая</button>
+        <button type="button" class="seg-btn" data-av-mode="full" title="Все диски целиком">Полная</button>
+        <button type="button" class="seg-btn" data-av-mode="custom" title="Выбрать папку">Папка…</button>
+      </div>
       <button class="btn danger" id="av-stop" hidden>Остановить</button>
       <label class="bc-feature" style="margin:0 0 0 6px;" title="Откроет папки, закрытые обычному пользователю: чужие профили, служебные каталоги системы. Windows спросит подтверждение (UAC)."><input type="checkbox" id="av-admin"><span>С правами администратора</span></label>
     </div>
     <div id="av-progress" class="av-progress" hidden><div class="av-bar"><i></i></div><div id="av-prog-text" class="bc-hint" style="margin:6px 0 0;"></div></div>
+    <h4 class="av-h">Защита</h4>
+    <div id="av-prot" class="av-prot"></div>
+    <h4 class="av-h">Состояние</h4>
+    <div id="av-head" class="av-head"><div class="no-assignee">Загружаю…</div></div>
     <div class="av-tabs">
       <button class="av-tab on" data-av-tab="results">Результаты</button>
       <button class="av-tab" data-av-tab="quarantine">Карантин <small></small></button>
       <button class="av-tab" data-av-tab="behavior">Поведение <small></small></button>
+      <button class="av-tab" data-av-tab="history">История</button>
       <button class="av-tab" data-av-tab="exclusions">Исключения</button>
     </div>
     <div id="av-body"></div>
-    <div class="bc-chat" style="margin-top:14px;">
-      <label class="bc-feature"><input type="checkbox" id="av-auto" ${lsGet(LS_AUTO_UPDATE, "1") === "1" ? "checked" : ""}><span>Обновлять базы автоматически (раз в сутки)</span></label>
-      <label class="bc-feature"><input type="checkbox" id="av-weekly" ${lsGet(LS_WEEKLY, "1") === "1" ? "checked" : ""}><span>Быстрая проверка раз в неделю при запуске (скажет, только если что-то найдёт)</span></label>
-    </div>`;
+`;
 
-  root.querySelectorAll("[data-av-scan]").forEach(b => b.addEventListener("click", async () => {
-    const mode = b.dataset.avScan;
-    if (mode === "full" && !confirm("Полная проверка просматривает профиль пользователя и Program Files — это может занять от нескольких минут до часа. Продолжить?")) return;
+  let mode = "quick";
+  root.querySelectorAll("[data-av-mode]").forEach(b => b.addEventListener("click", () => {
+    mode = b.dataset.avMode;
+    root.querySelectorAll("[data-av-mode]").forEach(x => x.classList.toggle("active", x === b));
+    const go = root.querySelector(".av-go");
+    go.textContent = mode === "full" ? "Полная проверка" : (mode === "custom" ? "Выбрать папку и проверить" : "Проверить");
+  }));
+  root.querySelector(".av-go").addEventListener("click", async () => {
+    if (mode === "full" && !confirm("Полная проверка просматривает все диски — это может занять от нескольких минут до часа. Продолжить?")) return;
     if (mode === "custom") {
       const dir = await pickOutputDir();
       if (!dir) return;
       scan("custom", [dir]);
     } else scan(mode);
-  }));
+  });
   root.querySelector("#av-stop").addEventListener("click", () => { call("av_cancel"); });
   root.querySelectorAll("[data-av-tab]").forEach(b => b.addEventListener("click", () => { tab = b.dataset.avTab; paintBody(); }));
-  root.querySelector("#av-auto").addEventListener("change", e => lsSet(LS_AUTO_UPDATE, e.target.checked ? "1" : "0"));
-  root.querySelector("#av-weekly").addEventListener("change", e => lsSet(LS_WEEKLY, e.target.checked ? "1" : "0"));
 
   try {
     unlisten = await listen("av-progress", ev => {

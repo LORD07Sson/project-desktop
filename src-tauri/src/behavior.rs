@@ -69,6 +69,15 @@ struct Settings {
     enabled: bool,
     #[serde(default)]
     trusted: Vec<String>, // пути и имена процессов, которым пользователь доверяет
+    /// Защита файлов в реальном времени: новые файлы в Загрузках, на Рабочем столе, в Temp и автозагрузке проверяются сразу.
+    #[serde(default = "yes")]
+    realtime: bool,
+    /// Найденный по базе вредоносный файл сразу уходит в карантин (иначе — только предупреждение).
+    #[serde(default = "yes")]
+    auto_quarantine: bool,
+    /// Правила, которые пользователь выключил (miner-cpu, ransomware, lolbin, …).
+    #[serde(default)]
+    disabled_rules: Vec<String>,
 }
 
 fn yes() -> bool {
@@ -153,6 +162,16 @@ pub fn ransom_note(name: &str) -> bool {
     ["how_to_decrypt", "how_to_recover", "decrypt_instructions", "readme_to_decrypt", "restore_files", "your_files_are", "recover_your_files", "!!!_read_me", "_readme.txt"]
         .iter()
         .any(|p| n.contains(p))
+}
+
+/// Группы защиты в интерфейсе → правила монитора.
+pub fn rules_of_group(group: &str) -> &'static [&'static str] {
+    match group {
+        "miner" => &["miner-cpu"],
+        "ransomware" => &["ransomware"],
+        "scripts" => &["lolbin", "office-spawn", "unsigned-temp", "persistence"],
+        _ => &[],
+    }
 }
 
 fn alert(rule: &str, severity: &str, title: String, detail: String, s: &Sample) -> Alert {
@@ -313,7 +332,7 @@ fn load_settings(app: &AppHandle) -> Settings {
     data_dir(app)
         .and_then(|d| fs::read_to_string(d.join("behavior.json")).ok())
         .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_else(|| Settings { enabled: true, trusted: vec![] })
+        .unwrap_or_else(|| Settings { enabled: true, trusted: vec![], realtime: true, auto_quarantine: true, disabled_rules: vec![] })
 }
 
 fn save_settings(app: &AppHandle, s: &Settings) {
@@ -433,6 +452,32 @@ fn monitor(app: AppHandle) {
             }
         }
     }
+    // Защита в реальном времени: новые исполняемые файлы там, куда обычно попадает чужое.
+    let (rt_tx, rt_rx) = std::sync::mpsc::channel::<notify::Result<notify::Event>>();
+    let mut rt_watcher = notify::recommended_watcher(rt_tx).ok();
+    if let Some(w) = rt_watcher.as_mut() {
+        use notify::{RecursiveMode, Watcher};
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        if let Ok(profile) = std::env::var("USERPROFILE") {
+            for sub in ["Downloads", "Desktop"] {
+                dirs.push(PathBuf::from(&profile).join(sub));
+            }
+        }
+        if let Ok(a) = std::env::var("APPDATA") {
+            dirs.push(PathBuf::from(&a).join("Microsoft\\Windows\\Start Menu\\Programs\\Startup"));
+        }
+        if let Ok(l) = std::env::var("LOCALAPPDATA") {
+            dirs.push(PathBuf::from(&l).join("Temp"));
+        }
+        dirs.push(PathBuf::from("C:\\Users\\Public"));
+        for d in dirs {
+            if d.exists() {
+                let _ = w.watch(&d, RecursiveMode::Recursive);
+            }
+        }
+    }
+    let mut checker = crate::antivirus::Checker::new(&app);
+    let mut pending: HashMap<String, (Instant, u64)> = HashMap::new(); // путь → (когда впервые увидели, размер)
     let mut ransom = RansomWatch::default();
     let mut last_ransom_alert = Instant::now() - Duration::from_secs(600);
 
@@ -443,7 +488,7 @@ fn monitor(app: AppHandle) {
         if tick % 12 == 0 {
             settings = load_settings(&app);
             ev.trusted = settings.trusted.iter().map(|t| lower(t)).collect();
-            if !settings.enabled {
+            if !settings.enabled && !settings.realtime {
                 break;
             }
         }
@@ -482,13 +527,15 @@ fn monitor(app: AppHandle) {
                 let signed = is_signed(&sample.exe);
                 ev.signed.insert(lower(&sample.exe), signed);
             }
-            to_emit.extend(ev.evaluate(&sample));
+            if settings.enabled {
+                to_emit.extend(ev.evaluate(&sample));
+            }
         }
         ev.forget(&alive);
         seen.retain(|p| alive.contains(p));
 
         // Новые записи автозапуска и планировщика.
-        if tick % AUTORUN_EVERY == 0 {
+        if settings.enabled && tick % AUTORUN_EVERY == 0 {
             let fresh = autorun_snapshot();
             for entry in fresh.difference(&autorun) {
                 let parts: Vec<&str> = entry.splitn(3, '|').collect();
@@ -522,7 +569,7 @@ fn monitor(app: AppHandle) {
             for path in &event.paths {
                 let p = path.to_string_lossy().to_string();
                 let is_rename_to_new = renamed && path.extension().is_some();
-                if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
+                if settings.enabled && matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
                     if let Some((sev, msg)) = ransom.push(&p, is_rename_to_new, Instant::now()) {
                         if last_ransom_alert.elapsed() > Duration::from_secs(300) {
                             last_ransom_alert = Instant::now();
@@ -543,11 +590,68 @@ fn monitor(app: AppHandle) {
             }
         }
 
+        // Защита файлов в реальном времени: собираем новые файлы, через 2 с (когда запись закончилась) проверяем по базе.
+        while let Ok(Ok(event)) = rt_rx.try_recv() {
+            if matches!(event.kind, notify::EventKind::Create(_) | notify::EventKind::Modify(_)) {
+                for path in &event.paths {
+                    if crate::antivirus::is_scan_ext(path) && path.is_file() {
+                        let key = path.to_string_lossy().to_string();
+                        let size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+                        pending.entry(key).and_modify(|e| e.1 = size).or_insert((Instant::now(), size));
+                    }
+                }
+            }
+        }
+        if settings.realtime {
+            let ready: Vec<String> = pending
+                .iter()
+                .filter(|(p, (t, sz))| t.elapsed() >= Duration::from_secs(2) && fs::metadata(p.as_str()).map(|m| m.len() == *sz).unwrap_or(false))
+                .map(|(p, _)| p.clone())
+                .collect();
+            for path in ready {
+                pending.remove(&path);
+                let Some(ch) = checker.as_mut() else { continue };
+                if let Some(det) = ch.check(&path) {
+                    let label = det.extra["label"].as_str().unwrap_or(&det.title).to_string();
+                    let mut detail = det.detail.clone();
+                    let mut moved = false;
+                    if settings.auto_quarantine && det.severity == "high" {
+                        match crate::antivirus::quarantine_path(&app, &path, None, Some(label.clone())) {
+                            Ok(_) => {
+                                moved = true;
+                                detail = format!("{detail} Файл автоматически помещён в карантин.");
+                            }
+                            Err(e) => detail = format!("{detail} В карантин убрать не удалось: {e}"),
+                        }
+                    }
+                    crate::antivirus::log_event(&app, "realtime", &format!("{} {label}", if moved { "Заблокировано:" } else { "Найдено:" }), &path);
+                    to_emit.push(Alert {
+                        id: format!("realtime:{path}"),
+                        at: now_secs(),
+                        severity: det.severity.clone(),
+                        rule: "realtime".into(),
+                        title: format!("{}: {label}", if moved { "Угроза заблокирована" } else { "Найден опасный файл" }),
+                        detail,
+                        pid: None,
+                        name: Path::new(&path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+                        path: if moved { None } else { Some(path) },
+                    });
+                }
+            }
+            pending.retain(|_, (t, _)| t.elapsed() < Duration::from_secs(120));
+        } else {
+            pending.clear();
+        }
+
         for a in to_emit {
+            if settings.disabled_rules.iter().any(|r| *r == a.rule) {
+                continue;
+            }
             record(&app, a);
         }
     }
     drop(watcher);
+    drop(rt_watcher);
     RUNNING.store(false, Ordering::Relaxed);
 }
 
@@ -572,7 +676,36 @@ fn start(app: AppHandle) {
 #[tauri::command]
 pub fn bh_status(app: AppHandle) -> Value {
     let s = load_settings(&app);
-    json!({ "enabled": s.enabled, "running": RUNNING.load(Ordering::Relaxed), "trusted": s.trusted })
+    let off = |g: &str| rules_of_group(g).iter().all(|r| s.disabled_rules.iter().any(|d| d == r));
+    json!({
+        "enabled": s.enabled, "running": RUNNING.load(Ordering::Relaxed), "trusted": s.trusted,
+        "realtime": s.realtime, "auto_quarantine": s.auto_quarantine,
+        "miner": !off("miner"), "ransomware": !off("ransomware"), "scripts": !off("scripts"),
+    })
+}
+
+/// Переключатели защиты в интерфейсе: realtime, auto_quarantine, miner, ransomware, scripts.
+#[tauri::command]
+pub fn bh_set(app: AppHandle, key: String, value: bool) {
+    let mut s = load_settings(&app);
+    match key.as_str() {
+        "realtime" => s.realtime = value,
+        "auto_quarantine" => s.auto_quarantine = value,
+        group @ ("miner" | "ransomware" | "scripts") => {
+            for r in rules_of_group(group) {
+                s.disabled_rules.retain(|d| d != r);
+                if !value {
+                    s.disabled_rules.push((*r).to_string());
+                }
+            }
+        }
+        _ => return,
+    }
+    save_settings(&app, &s);
+    // Монитор подхватывает настройки раз в минуту; для включённой защиты запускаем, если он остановлен.
+    if (s.realtime || s.enabled) && !RUNNING.load(Ordering::Relaxed) {
+        start(app);
+    }
 }
 
 #[tauri::command]
@@ -704,6 +837,15 @@ mod tests {
         let alerts = ev.evaluate(&sample);
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].rule, "unsigned-temp");
+    }
+
+    #[test]
+    fn rule_groups_cover_known_rules() {
+        assert_eq!(rules_of_group("miner"), &["miner-cpu"]);
+        assert!(rules_of_group("scripts").contains(&"lolbin"));
+        assert!(rules_of_group("nope").is_empty());
+        let s: Settings = serde_json::from_str("{}").unwrap();
+        assert!(s.enabled && s.realtime && s.auto_quarantine && s.disabled_rules.is_empty());
     }
 
     #[test]

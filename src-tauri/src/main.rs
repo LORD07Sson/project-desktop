@@ -1437,6 +1437,8 @@ fn main() {
             behavior::bh_dismiss,
             behavior::bh_trust,
             behavior::bh_untrust,
+            behavior::bh_set,
+            antivirus::av_history,
             qc_analyze,
             generate_waveform,
             export_audio_clip,

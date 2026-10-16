@@ -151,6 +151,30 @@ fn save_quarantine(app: &AppHandle, items: &[QItem]) -> Result<(), String> {
     fs::write(dir.join("quarantine.json"), serde_json::to_vec(items).unwrap_or_default()).map_err(|e| e.to_string())
 }
 
+/// Журнал: проверки, карантин, восстановление, исключения, срабатывания защиты — вкладка «История». Хранятся последние 300.
+fn log_event_in(dir: &Path, kind: &str, title: &str, detail: &str) {
+    let path = dir.join("history.json");
+    let mut list: Vec<Value> = fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    list.insert(0, json!({ "at": now_secs(), "kind": kind, "title": title, "detail": detail }));
+    list.truncate(300);
+    let _ = fs::write(&path, serde_json::to_vec(&list).unwrap_or_default());
+}
+
+pub fn log_event(app: &AppHandle, kind: &str, title: &str, detail: &str) {
+    if let Ok(dir) = av_dir(app) {
+        log_event_in(&dir, kind, title, detail);
+    }
+}
+
+#[tauri::command]
+pub fn av_history(app: AppHandle) -> Vec<Value> {
+    av_dir(&app)
+        .ok()
+        .and_then(|d| fs::read_to_string(d.join("history.json")).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
 fn now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -330,16 +354,16 @@ fn match_cmdline<'a>(sigs: &'a Signatures, cmd: &str) -> Option<&'a str> {
 }
 
 #[derive(Serialize, Clone)]
-struct Detection {
-    id: String,
-    kind: String,
-    severity: String,
-    title: String,
-    detail: String,
-    path: Option<String>,
-    pid: Option<u64>,
-    sha256: Option<String>,
-    extra: Value,
+pub struct Detection {
+    pub id: String,
+    pub kind: String,
+    pub severity: String,
+    pub title: String,
+    pub detail: String,
+    pub path: Option<String>,
+    pub pid: Option<u64>,
+    pub sha256: Option<String>,
+    pub extra: Value,
 }
 
 struct Ctx {
@@ -417,6 +441,61 @@ impl Ctx {
         }
         false
     }
+}
+
+/// Проверка одного файла «на лету» (защита в реальном времени): базы и исключения подхватываются раз в 5 минут.
+pub struct Checker {
+    ctx: Ctx,
+    dir: PathBuf,
+    loaded: std::time::Instant,
+}
+
+impl Checker {
+    pub fn new(app: &AppHandle) -> Option<Self> {
+        let dir = av_dir(app).ok()?;
+        Some(Checker {
+            ctx: Ctx {
+                sigs: load_signatures_in(&dir),
+                excl: load_exclusions_in(&dir),
+                own: own_dirs_in(Some(dir.clone())),
+                found: Vec::new(),
+                seen: HashSet::new(),
+                hashed: HashMap::new(),
+                scanned: 0,
+                files: 0,
+                procs: 0,
+                folders: 0,
+                skipped_large: 0,
+                denied_dirs: 0,
+                denied_list: Vec::new(),
+            },
+            dir,
+            loaded: std::time::Instant::now(),
+        })
+    }
+
+    pub fn check(&mut self, path: &str) -> Option<Detection> {
+        if self.loaded.elapsed().as_secs() > 300 {
+            self.ctx.sigs = load_signatures_in(&self.dir);
+            self.ctx.excl = load_exclusions_in(&self.dir);
+            self.loaded = std::time::Instant::now();
+        }
+        self.ctx.found.clear();
+        self.ctx.seen.clear();
+        self.ctx.hashed.clear(); // файл мог поменяться — хеш считаем заново
+        if is_protected(Path::new(path), &self.ctx.own) {
+            return None;
+        }
+        if self.ctx.check_file(path, "file", None) {
+            self.ctx.found.pop()
+        } else {
+            None
+        }
+    }
+}
+
+pub fn is_scan_ext(path: &Path) -> bool {
+    path.extension().map(|e| SCAN_EXTS.contains(&e.to_string_lossy().to_lowercase().as_str())).unwrap_or(false)
 }
 
 // -------------------------------------------------------------------- проверка
@@ -753,6 +832,13 @@ fn scan_core(env: &Env, mode: String, custom: Vec<String>) -> Value {
     });
     let summary = json!({ "finished": report["finished"], "mode": report["mode"], "scanned": report["scanned"], "found": ctx.found.len(), "cancelled": cancelled });
     let _ = fs::write(env.dir.join("last_scan.json"), summary.to_string());
+    let mode_name = match report["mode"].as_str().unwrap_or("") { "full" => "Полная проверка", "custom" => "Проверка папки", _ => "Быстрая проверка" };
+    log_event_in(
+        &env.dir,
+        "scan",
+        &format!("{mode_name}{}", if cancelled { " (остановлена)" } else { "" }),
+        &format!("Проверено {}, найдено угроз: {}, {} с{}", ctx.scanned, ctx.found.len(), report["seconds"], if report["coverage"]["elevated"].as_bool() == Some(true) { ", с правами администратора" } else { "" }),
+    );
     report
 }
 
@@ -961,8 +1047,15 @@ fn kill_pid(pid: u64) {
 /// Файл в карантин. Если им занят процесс (pid) — сначала завершаем его (пользователь нажал кнопку).
 #[tauri::command(async)]
 pub async fn av_quarantine(app: AppHandle, path: String, pid: Option<u64>, label: Option<String>) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || quarantine_path(&app, &path, pid, label))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+pub fn quarantine_path(app: &AppHandle, path: &str, pid: Option<u64>, label: Option<String>) -> Result<Value, String> {
+    let path = path.to_string();
     let p = PathBuf::from(&path);
-    if is_protected(&p, &own_dirs(&app)) {
+    if is_protected(&p, &own_dirs(app)) {
         return Err("Это системный файл или файл самой программы — в карантин его отправить нельзя.".into());
     }
     if !p.is_file() {
@@ -975,23 +1068,24 @@ pub async fn av_quarantine(app: AppHandle, path: String, pid: Option<u64>, label
     let sha = sha256_file(&p).unwrap_or_default();
     let size = fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
     let id = detection_id("q", &format!("{path}{}", now_secs()));
-    let dest = qdir(&app)?.join(format!("{id}.qz"));
+    let dest = qdir(app)?.join(format!("{id}.qz"));
     xor_copy(&p, &dest).map_err(|e| format!("Не удалось скопировать в карантин: {e}"))?;
     if let Err(e) = fs::remove_file(&p) {
         let _ = fs::remove_file(&dest);
         return Err(format!("Файл занят или защищён, убрать не удалось: {e}. Закройте программу и повторите."));
     }
-    let mut items = load_quarantine(&app);
+    let mut items = load_quarantine(app);
     items.push(QItem {
         id: id.clone(),
-        original: path,
+        original: path.clone(),
         name: p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
         sha256: sha,
         label: label.unwrap_or_default(),
         size,
         at: now_secs(),
     });
-    save_quarantine(&app, &items)?;
+    save_quarantine(app, &items)?;
+    log_event(app, "quarantine", &format!("В карантин: {}", p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()), &path);
     Ok(json!({ "id": id }))
 }
 
@@ -1019,6 +1113,7 @@ pub async fn av_quarantine_restore(app: AppHandle, id: String, exclude: Option<b
     let _ = fs::remove_file(&src);
     items.remove(pos);
     save_quarantine(&app, &items)?;
+    log_event(&app, "restore", &format!("Восстановлено из карантина: {}", item.name), &item.original);
     if exclude.unwrap_or(false) {
         let mut ex = load_exclusions(&app);
         if !ex.paths.contains(&item.original) {
@@ -1035,8 +1130,10 @@ pub async fn av_quarantine_restore(app: AppHandle, id: String, exclude: Option<b
 #[tauri::command]
 pub fn av_quarantine_delete(app: AppHandle, id: String) -> Result<(), String> {
     let mut items = load_quarantine(&app);
+    let name = items.iter().find(|i| i.id == id).map(|i| i.name.clone()).unwrap_or_default();
     items.retain(|i| i.id != id);
     let _ = fs::remove_file(qdir(&app)?.join(format!("{id}.qz")));
+    log_event(&app, "delete", &format!("Удалено навсегда: {name}"), "");
     save_quarantine(&app, &items)
 }
 
@@ -1046,6 +1143,7 @@ pub fn av_exclude(app: AppHandle, path: Option<String>, sha256: Option<String>) 
     let mut ex = load_exclusions(&app);
     if let Some(p) = path.filter(|p| !p.is_empty()) {
         if !ex.paths.contains(&p) {
+            log_event(&app, "exclude", "Добавлено в исключения", &p);
             ex.paths.push(p);
         }
     }
