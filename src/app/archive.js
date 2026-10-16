@@ -65,7 +65,7 @@ export async function mountArchive(root) {
         <p class="bc-hint" style="margin:10px 0 0;">Перенесено серий: <b>${d.done || 0}</b>. Одна и та же серия дважды не копируется; о сбоях бот пишет владельцам в личку.</p>
       </div>
       <h4 style="margin:16px 0 8px;">Следующая серия</h4>
-      <p class="bc-hint">Хештеги пропишите один раз — дальше бот сам ставит номера 2, 3, 4… Посты без хештегов (или без номера) он берёт как следующую серию этого тайтла и пишет вам, какой номер поставил.
+      <p class="bc-hint">Достаточно один раз выложить серию с хештегами — бот запомнит тайтл и дальше сам ставит 2, 3, 4… (можно и прописать вручную: так запомненное не сменится на другой тайтл, и оно не забывается). Посты без хештегов (или без номера) он берёт как следующую серию этого тайтла и пишет вам, какой номер поставил.
         Подпись с явными хештегами всегда главнее, а другой тайтл в подписи этот счётчик не трогает.</p>
       <form id="ar-ctx" class="bc-chat" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input class="field-input" id="ar-ctx-tag" placeholder="Название_тайтла (как в хештеге)" value="${esc(d.context ? d.context.title_tag : "")}" style="flex:3; min-width:200px;">
@@ -74,7 +74,7 @@ export async function mountArchive(root) {
         <input class="field-input" id="ar-ctx-next" type="number" min="1" placeholder="Серия" value="${d.context ? d.context.next_episode : 1}" style="width:90px;" title="Номер следующей серии">
         <button class="btn primary" type="submit">Сохранить</button>
         ${d.context ? `<button class="btn" type="button" id="ar-ctx-clear">Сбросить</button>` : ""}
-        <span class="bc-hint" style="flex-basis:100%; margin:0;">${d.context ? `Сейчас: <b>${esc(d.context.title_tag.split("_").join(" "))}</b>${d.context.season ? ` · ${d.context.season} сезон` : ""}${d.context.quality ? ` · ${esc(d.context.quality)}` : ""} — следующая серия <b>${d.context.next_episode}</b>.` : "Не задано: бот берёт тайтл и номер только из хештегов поста."}</span>
+        <span class="bc-hint" style="flex-basis:100%; margin:0;">${d.context ? `Сейчас: <b>${esc(d.context.title_tag.split("_").join(" "))}</b>${d.context.season ? ` · ${d.context.season} сезон` : ""}${d.context.quality ? ` · ${esc(d.context.quality)}` : ""} — следующая серия <b>${d.context.next_episode}</b>.${d.context.auto ? " Запомнено ботом по последней серии; забудется, если 3 дня не будет новых. Чтобы закрепить — нажмите «Сохранить»." : ""}` : "Не задано: бот берёт тайтл и номер только из хештегов поста."}</span>
       </form>
       <h4 style="margin:16px 0 8px;">Предпросмотр</h4>
       <p class="bc-hint">Вставьте подпись поста из канала — покажу, как бот её разберёт и что получится в архиве. Ничего не отправляется.</p>
