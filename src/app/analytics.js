@@ -25,14 +25,31 @@ function trendLine(text, good) {
 }
 
 
-// Плавная кривая через точки (Catmull-Rom → кубические Безье).
+// Плавная кривая через точки: монотонная кубическая интерполяция (Fritsch–Carlson). Catmull-Rom «перелетал» через
+// значения — перед пиком кривая проваливалась ниже нуля и уходила за низ графика; здесь между точками она не выходит
+// за их значения, так что 0 остаётся нулём, а пик — пиком.
 function smoothPath(P) {
+  const n = P.length;
   let d = `M${P[0][0]},${P[0][1]}`;
-  for (let i = 0; i < P.length - 1; i++) {
-    const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0]},${p2[1]}`;
+  if (n < 2) return d;
+  const dx = [], slope = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx[i] = P[i + 1][0] - P[i][0];
+    slope[i] = (P[i + 1][1] - P[i][1]) / (dx[i] || 1);
+  }
+  const m = new Array(n);
+  m[0] = slope[0];
+  m[n - 1] = slope[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = slope[i - 1] * slope[i] <= 0 ? 0 : (slope[i - 1] + slope[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (slope[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / slope[i], b = m[i + 1] / slope[i], h = Math.hypot(a, b);
+    if (h > 3) { const t = 3 / h; m[i] = t * a * slope[i]; m[i + 1] = t * b * slope[i]; }
+  }
+  for (let i = 0; i < n - 1; i++) {
+    const c1 = [P[i][0] + dx[i] / 3, P[i][1] + m[i] * dx[i] / 3];
+    const c2 = [P[i + 1][0] - dx[i] / 3, P[i + 1][1] - m[i + 1] * dx[i] / 3];
+    d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${P[i + 1][0]},${P[i + 1][1]}`;
   }
   return d;
 }
