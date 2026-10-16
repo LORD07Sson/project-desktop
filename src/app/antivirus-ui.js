@@ -103,6 +103,7 @@ export async function mountAntivirus(root) {
       switchRow("pr-autoq", "Угрозы — сразу в карантин", "Найденное по базе вредоносное уходит в карантин само (его можно восстановить)", bh && bh.auto_quarantine),
       switchRow("pr-miner", "Защита от майнеров", "Программы без подписи с долгой нагрузкой на процессор и соединениями с пулами", bh && bh.miner),
       switchRow("pr-ransom", "Защита от шифровальщиков", "Массовое переименование файлов, файлы-требования выкупа", bh && bh.ransomware),
+      switchRow("pr-network", "Защита от связи с C2-серверами", "Предупреждает, если программа соединяется с адресом из списков управляющих серверов вредоносов", bh && bh.network),
       switchRow("pr-scripts", "Защита от скриптовых атак", "PowerShell -enc, документы-вирусы, автозапуск из Temp, неподписанные из Загрузок", bh && bh.scripts),
       switchRow("pr-master", "Поведенческий монитор", "Общий выключатель слежения за процессами и файлами", bh && bh.enabled),
       switchRow("pr-update", "Автообновление баз", "Раз в сутки при запуске приложения", lsGet(LS_AUTO_UPDATE, "1") === "1"),
@@ -114,6 +115,7 @@ export async function mountAntivirus(root) {
     bind("pr-miner", v => call("bh_set", { key: "miner", value: v }));
     bind("pr-ransom", v => call("bh_set", { key: "ransomware", value: v }));
     bind("pr-scripts", v => call("bh_set", { key: "scripts", value: v }));
+    bind("pr-network", v => call("bh_set", { key: "network", value: v }));
     bind("pr-master", v => call("bh_set_enabled", { enabled: v }));
     bind("pr-update", async v => { lsSet(LS_AUTO_UPDATE, v ? "1" : "0"); });
     bind("pr-weekly", async v => { lsSet(LS_WEEKLY, v ? "1" : "0"); });
@@ -129,7 +131,7 @@ export async function mountAntivirus(root) {
     host.innerHTML = `
       <div class="av-card"><span class="av-k">Базы сигнатур</span>
         <b>${st ? `v${st.version}` : "—"}</b>
-        <span>${st ? `${st.hashes.toLocaleString("ru-RU")} хешей · ${st.rules} правил` : ""}<br>${st ? esc(st.updated || "") : ""}</span>
+        <span>${st ? `${st.hashes.toLocaleString("ru-RU")} хешей · ${(st.ips || 0).toLocaleString("ru-RU")} C2-адресов · ${(st.domains || 0).toLocaleString("ru-RU")} доменов · ${st.rules} правил` : ""}<br>${st ? esc(st.updated || "") : ""}</span>
         <button class="btn" id="av-update">Обновить базы</button></div>
       <div class="av-card"><span class="av-k">Защитник Windows</span>
         <b style="color:${def ? (defOn ? "var(--s-done)" : "var(--s-stop)") : "var(--ink-dim)"}">${def ? (defOn ? "включён" : "выключен") : "нет данных"}</b>

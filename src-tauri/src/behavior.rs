@@ -169,6 +169,7 @@ pub fn rules_of_group(group: &str) -> &'static [&'static str] {
     match group {
         "miner" => &["miner-cpu"],
         "ransomware" => &["ransomware"],
+        "network" => &["c2"],
         "scripts" => &["lolbin", "office-spawn", "unsigned-temp", "persistence"],
         _ => &[],
     }
@@ -275,6 +276,11 @@ impl Evaluator {
             }
         }
         out
+    }
+
+    /// true, если такой сигнал ещё не поднимали (чтобы одно соединение не шумело каждые 15 секунд).
+    pub fn fired_once(&mut self, id: &str) -> bool {
+        self.fired.insert(id.to_string())
     }
 
     pub fn forget(&mut self, alive: &HashSet<u64>) {
@@ -409,6 +415,36 @@ fn pool_connections() -> HashMap<u64, String> {
     map
 }
 
+/// pid → «ip:порт» для соединений с адресами из списка управляющих серверов.
+fn c2_connections(bad: &HashSet<String>) -> HashMap<u64, String> {
+    let mut map = HashMap::new();
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        if bad.is_empty() {
+            return map;
+        }
+        if let Ok(out) = Command::new("netstat").args(["-ano", "-p", "tcp"]).creation_flags(0x0800_0000).output() {
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                let cols: Vec<&str> = line.split_whitespace().collect();
+                if cols.len() >= 5 && cols[3] == "ESTABLISHED" {
+                    let remote_ip = cols[2].rsplit_once(':').map(|(ip, _)| ip).unwrap_or("");
+                    if bad.contains(remote_ip) {
+                        if let Ok(pid) = cols[4].parse::<u64>() {
+                            map.insert(pid, cols[2].to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = bad;
+    }
+    map
+}
+
 fn autorun_snapshot() -> HashSet<String> {
     let script = "$r=@(); foreach($h in 'HKCU','HKLM'){ foreach($k in 'Run','RunOnce'){ $p=\"${h}:\\Software\\Microsoft\\Windows\\CurrentVersion\\$k\"; if(Test-Path $p){ $o=Get-ItemProperty $p; foreach($n in $o.PSObject.Properties){ if($n.Name -notlike 'PS*'){ $r+=\"$h|$($n.Name)|$([string]$n.Value)\" } } } } }; try { Get-ScheduledTask -ErrorAction Stop | ForEach-Object { foreach($a in $_.Actions){ if($a.Execute){ $r+=\"TASK|$($_.TaskName)|$($a.Execute) $($a.Arguments)\" } } } } catch {}; $r | ConvertTo-Json -Compress";
     let mut set = HashSet::new();
@@ -435,6 +471,8 @@ fn monitor(app: AppHandle) {
     let started: HashSet<u64> = sys.processes().keys().map(|p| p.as_u32() as u64).collect();
     let mut seen: HashSet<u64> = started.clone();
     let mut pools: HashMap<u64, String> = HashMap::new();
+    let mut bad_ips: HashSet<String> = crate::antivirus::bad_ip_set(&app);
+    let mut c2: HashMap<u64, String> = HashMap::new();
     let mut autorun = autorun_snapshot();
     let own_pid = std::process::id() as u64;
 
@@ -495,6 +533,10 @@ fn monitor(app: AppHandle) {
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
         if tick % NET_EVERY == 0 {
             pools = pool_connections();
+            c2 = c2_connections(&bad_ips);
+        }
+        if tick % 240 == 0 {
+            bad_ips = crate::antivirus::bad_ip_set(&app); // базы могли обновиться
         }
 
         let mut alive = HashSet::new();
@@ -522,6 +564,24 @@ fn monitor(app: AppHandle) {
                 pool_conn: pools.get(&pid).cloned(),
             };
             seen.insert(pid);
+            if let Some(remote) = c2.get(&pid) {
+                if settings.enabled {
+                    let a = Alert {
+                        id: format!("c2:{pid}:{remote}"),
+                        at: now_secs(),
+                        severity: "high".into(),
+                        rule: "c2".into(),
+                        title: format!("Соединение с известным управляющим сервером: {}", sample.name),
+                        detail: format!("Адрес {remote} числится в списках серверов управления вредоносами. Завершите процесс и проверьте его файл."),
+                        pid: Some(pid),
+                        name: sample.name.clone(),
+                        path: if sample.exe.is_empty() { None } else { Some(sample.exe.clone()) },
+                    };
+                    if ev.fired_once(&a.id) {
+                        to_emit.push(a);
+                    }
+                }
+            }
             if ev.needs_signature(&sample) && checks < MAX_SIGCHECKS_PER_CYCLE {
                 checks += 1;
                 let signed = is_signed(&sample.exe);
@@ -680,7 +740,7 @@ pub fn bh_status(app: AppHandle) -> Value {
     json!({
         "enabled": s.enabled, "running": RUNNING.load(Ordering::Relaxed), "trusted": s.trusted,
         "realtime": s.realtime, "auto_quarantine": s.auto_quarantine,
-        "miner": !off("miner"), "ransomware": !off("ransomware"), "scripts": !off("scripts"),
+        "miner": !off("miner"), "ransomware": !off("ransomware"), "scripts": !off("scripts"), "network": !off("network"),
     })
 }
 
@@ -691,7 +751,7 @@ pub fn bh_set(app: AppHandle, key: String, value: bool) {
     match key.as_str() {
         "realtime" => s.realtime = value,
         "auto_quarantine" => s.auto_quarantine = value,
-        group @ ("miner" | "ransomware" | "scripts") => {
+        group @ ("miner" | "ransomware" | "scripts" | "network") => {
             for r in rules_of_group(group) {
                 s.disabled_rules.retain(|d| d != r);
                 if !value {
