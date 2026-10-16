@@ -38,7 +38,13 @@ export const state = {
 // «Обновить». Всё, что относится к конкретному человеку, сбрасываем
 // здесь одним местом (statusOptions/sort/activeTab — настройки самого
 // интерфейса, они переживают смену пользователя).
+// Права из матрицы ролей (/api/me/permissions). Пока не загружены — ведём себя как раньше: админ может всё.
+export function can(key) {
+  return state.perms ? state.perms.has(key) : !!state.isAdmin;
+}
+
 export function resetSessionState() {
+  state.perms = null;
   state.token = null;
   state.isAdmin = true;
   state.telegramId = null;

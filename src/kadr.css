@@ -2828,3 +2828,16 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .st-layout.st-mode-cards .st-tile::after { content: "›"; grid-row: 1 / 3; grid-column: 3; font-size: 22px; color: var(--ink-dim); }
 :root[data-theme="light"] .st-tile, :root[data-theme="light"] .st-modes { background: rgba(255, 255, 255, .7); }
 @media (max-width: 900px) { .st-layout.st-mode-tiles .st-nav, .st-layout.st-mode-cards .st-nav { display: flex; } }
+
+
+/* ---------- Матрица прав ролей ---------- */
+.perm-wrap { overflow: auto; max-height: 62vh; border: 1px solid var(--line); border-radius: 14px; }
+.perm-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+.perm-table th { position: sticky; top: 0; z-index: 2; background: var(--surface-2, #12171f); padding: 8px 6px; font-size: 11px; font-weight: 700; text-align: center; border-bottom: 1px solid var(--line); }
+.perm-table th:first-child { text-align: left; padding-left: 14px; left: 0; z-index: 3; min-width: 240px; }
+.perm-table td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--line-soft, rgba(255,255,255,.05)); }
+.perm-table td.perm-name { text-align: left; padding-left: 14px; position: sticky; left: 0; background: var(--surface, #0e131a); }
+.perm-name b { display: block; font-weight: 600; }
+.perm-name span { display: block; font-size: 11.5px; color: var(--ink-dim); line-height: 1.3; max-width: 320px; }
+.perm-group td { text-align: left; padding: 12px 14px 6px; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); background: transparent; border-bottom: 0; }
+.perm-table input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--gold, #ff7a3d); cursor: pointer; }

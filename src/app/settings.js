@@ -83,6 +83,7 @@ async function openSettings() {
     density: '<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>',
     logs: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/>',
     bot: '<path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5"/>',
+    perms: '<path d="M12 3 4.5 6v5.5c0 4.5 3.2 8 7.5 9.5 4.3-1.5 7.5-5 7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/>',
     archive: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7zM12 11v5M9.5 13.5 12 16l2.5-2.5"/>',
     learn: '<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11M21.5 9v5"/>',
     hint: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4M12 17h.01"/>',
@@ -115,7 +116,7 @@ async function openSettings() {
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc, "Профиль и выход"], ["st-look", "Внешний вид", ICONS.look, "Тема, акцент, масштаб"], ["st-notif", "Уведомления", ICONS.bell, "Что и когда присылать"], ["st-behave", "Поведение", ICONS.behave, "Автозапуск, старт, фокус"], ["st-keys", "Горячие клавиши", ICONS.keys, "Все сочетания"]]],
     ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"]]],
-    ...(state.isAdmin || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot, "Где работает бот"], ["st-archive", "Архив серий", ICONS.archive, "Перенос серий в архив"]] : [])]]] : []),
+    ...(state.isAdmin || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot, "Где работает бот"], ["st-archive", "Архив серий", ICONS.archive, "Перенос серий в архив"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`
@@ -277,6 +278,10 @@ async function openSettings() {
         <section class="st-sec" id="st-archive">
           <h3>Архив серий</h3>
           <div id="st-archive-root"></div>
+        </section>
+        <section class="st-sec" id="st-perms">
+          <h3>Права ролей</h3>
+          <div id="st-perms-root"></div>
         </section>` : ""}
       </div>
     </div>
@@ -426,6 +431,8 @@ async function openSettings() {
   if (botRoot) import("./bot-chats.js").then(m => m.mountBotChats(botRoot));
   const archiveRoot = overlay.querySelector("#st-archive-root");
   if (archiveRoot) import("./archive.js").then(m => m.mountArchive(archiveRoot));
+  const permsRoot = overlay.querySelector("#st-perms-root");
+  if (permsRoot) import("./permissions-ui.js").then(m => m.mountPermissions(permsRoot));
 
   // ---------- Настройки 2.0: разделы по одному, поиск, новые пункты ----------
   const body = overlay.querySelector("#st-body");

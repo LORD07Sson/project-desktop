@@ -5,7 +5,7 @@
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
-import { state } from "./state.js";
+import { state, can } from "./state.js";
 import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow } from "./tauri.js";
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
@@ -110,15 +110,15 @@ export async function openReportDetail(publicId) {
 
   async function render() {
     let detail, notes, checklist, files, roles, assignable, raws;
-    const canEdit = !!state.isAdmin;
+    const canEdit = can("reports.manage");
     try {
       [detail, notes, checklist, files, roles, assignable, raws] = await Promise.all([
         apiGet(`/report/${publicId}`),
         apiGet(`/report/${publicId}/notes`),
         apiGet(`/report/${publicId}/checklist`),
         apiGet(`/report/${publicId}/files`),
-        canEdit ? loadRoles() : Promise.resolve([]),
-        canEdit ? loadAssignable() : Promise.resolve([]),
+        canEdit ? loadRoles().catch(() => []) : Promise.resolve([]),
+        canEdit ? loadAssignable().catch(() => []) : Promise.resolve([]),
         // Старый сервер без /raws — карточка открывается и без раздела.
         apiGet(`/report/${publicId}/raws`).catch(() => ({ raws: [] })),
       ]);
@@ -260,8 +260,8 @@ export async function openReportDetail(publicId) {
               ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — добавьте дорожку кнопкой ниже или перетащите файл в окно.</div>`}
               ${detail.is_sound ? `<div class="no-assignee" style="margin:8px 0;">🎚 Сдача звукаря: загрузите итоговый файл — видео с новым звуком или готовую дорожку. Админ сразу получит уведомление «Дорожка сдана».</div>` : ""}
               <button class="rd-add" id="report-file-add">${detail.is_sound ? "+ Сдать готовую дорожку" : "+ Добавить файл (дорожку)"}</button>
-              ${canEdit ? `<button class="rd-add" id="report-assemble">🎬 Собрать финал</button>` : ""}
-              ${canEdit && detail.title_id ? `<button class="rd-add" id="report-watermark" title="Логотип, угол, прозрачность и размер — общие для всех серий тайтла">💧 Водяной знак тайтла</button>` : ""}
+              ${can("reports.assemble") ? `<button class="rd-add" id="report-assemble">🎬 Собрать финал</button>` : ""}
+              ${can("titles.edit") && detail.title_id ? `<button class="rd-add" id="report-watermark" title="Логотип, угол, прозрачность и размер — общие для всех серий тайтла">💧 Водяной знак тайтла</button>` : ""}
             </div>
 
             ${(raws.raws || []).length ? `
@@ -328,7 +328,7 @@ export async function openReportDetail(publicId) {
           </div>
           <div class="rd-side-foot">
             <button class="btn ghost" id="btn-pin-window">Открепить в окне</button>
-            ${canEdit ? `<button class="btn danger" id="btn-delete-report">Удалить отчёт</button>` : ""}
+            ${can("reports.delete") ? `<button class="btn danger" id="btn-delete-report">Удалить отчёт</button>` : ""}
           </div>
         </aside>
       </div>
@@ -561,7 +561,7 @@ export async function openReportDetail(publicId) {
         if (!confirm(`Собрать финал?\n\nВидео: ${check.video}\nСубтитры: ${check.subs}\n${introText[0].toUpperCase() + introText.slice(1)}\n\nКарточка подтверждения придёт вам в бота, сборка идёт там.`)) return;
         await apiPost(`/report/${publicId}/assemble`, {});
         toast("Карточка сборки отправлена в бота — подтвердите там.", "success");
-        if (state.isAdmin || state.isDeveloper) offerPublishPost();
+        if (can("posts.manage")) offerPublishPost();
       } catch (err) {
         toast(`Не удалось запустить сборку: ${err.message}`, "error");
       } finally {

@@ -118,10 +118,22 @@ function replayWordmark() {
   word.querySelectorAll(".aw-part i").forEach(i => { i.style.animation = "none"; void i.offsetWidth; i.style.animation = ""; });
 }
 
+// Права роли (владелец настраивает матрицу в Настройках); сервер всё равно проверяет каждый запрос.
+async function loadPermissions() {
+  try {
+    const r = await api("GET", "/me/permissions");
+    state.perms = new Set(r.permissions || []);
+    state.isOwner = !!r.is_owner;
+  } catch (_) {
+    state.perms = null;
+  }
+}
+
 // Админ или рядовой участник: у участника прячем админские вкладки и
 // кнопки (CSS по data-role) и не запускаем опросы админских данных.
 export function applyRole(isAdmin, nyaaAccess = false) {
   state.isAdmin = isAdmin;
+  loadPermissions();
   state.nyaaAccess = isAdmin || nyaaAccess;
   document.documentElement.dataset.role = isAdmin ? "admin" : "member";
   // Роспись и звукари видят «Релизы» (Няшку), хотя остальное админское скрыто.
