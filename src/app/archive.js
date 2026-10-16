@@ -32,13 +32,14 @@ function previewHtml(r) {
     ? `Тайтл студии: <b>${esc(r.title_match.name)}</b> — ${r.title_match.taken ? `взят в работу: заведутся отчёты «${esc(r.episode_label || "")}» на каждую роль, видео станет равкой серии` : "не взят в работу: отчётов не будет, видео приложится к серии"}`
     : "Тайтл студии не найден — серия ляжет только в архив, вам придёт сообщение.";
   const autoNote = r.auto && r.auto.includes("episode") ? " Номер серии подставлен автоматически из «Следующей серии»." : "";
+  const waits = r.waits_for ? ` <b>Серия ${r.waits_for} ещё не в архиве — эта серия встанет в очередь и перенесётся после неё.</b>` : "";
   const topic = r.topic.new ? "Тема тайтла будет создана заново, в ней закрепится превью с постером." : `Серия ляжет в существующую тему № ${r.topic.id}.`;
   return `
     <div style="display:grid; gap:10px;">
       <div><span class="bc-hint">Файл в архиве</span><div style="font-family:ui-monospace,Consolas,monospace; font-size:12.5px;">${esc(r.filename)}</div></div>
       <div><span class="bc-hint">Подпись под видео</span>
         <div style="border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--surface-2); line-height:1.5;">${String(r.caption_html).split(String.fromCharCode(10)).join("<br>")}</div></div>
-      <div class="bc-hint" style="margin:0;">Разобрано: <b>${esc(i.title)}</b>${facts ? ` · ${esc(facts)}` : ""}<br>${match}<br>${topic}${autoNote}</div>
+      <div class="bc-hint" style="margin:0;">Разобрано: <b>${esc(i.title)}</b>${facts ? ` · ${esc(facts)}` : ""}<br>${match}<br>${topic}${autoNote}${waits}</div>
     </div>`;
 }
 
@@ -76,6 +77,14 @@ export async function mountArchive(root) {
         ${d.context ? `<button class="btn" type="button" id="ar-ctx-clear">Сбросить</button>` : ""}
         <span class="bc-hint" style="flex-basis:100%; margin:0;">${d.context ? `Сейчас: <b>${esc(d.context.title_tag.split("_").join(" "))}</b>${d.context.season ? ` · ${d.context.season} сезон` : ""}${d.context.quality ? ` · ${esc(d.context.quality)}` : ""} — следующая серия <b>${d.context.next_episode}</b>.${d.context.auto ? " Запомнено ботом по последней серии; забудется, если 3 дня не будет новых. Чтобы закрепить — нажмите «Сохранить»." : ""}` : "Не задано: бот берёт тайтл и номер только из хештегов поста."}</span>
       </form>
+      <h4 style="margin:16px 0 8px;">Очередь по порядку <small>${(d.held || []).length}</small></h4>
+      <p class="bc-hint">Серия, пришедшая раньше предыдущей (например, 2-я без 1-й), ждёт здесь и переносится сама, как только предыдущая ляжет в архив. Если предыдущей не будет, отправьте серию без ожидания.</p>
+      ${(d.held || []).length ? (d.held || []).map(h => `
+        <div class="bc-chat" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div class="bc-title" style="flex:1; min-width:200px;"><b>${esc(h.title)}</b><span>${h.season} сезон · серия ${h.episode} — ждёт серию ${h.waits_for}${h.forced ? " · отправится в течение 30 секунд" : ""}</span></div>
+          <button class="btn" data-hold-release="${esc(h.key)}"${h.forced ? " disabled" : ""}>Отправить без ожидания</button>
+          <button class="btn" data-hold-drop="${esc(h.key)}">Убрать</button>
+        </div>`).join("") : `<div class="no-assignee">Очередь пуста.</div>`}
       <h4 style="margin:16px 0 8px;">Предпросмотр</h4>
       <p class="bc-hint">Вставьте подпись поста из канала — покажу, как бот её разберёт и что получится в архиве. Ничего не отправляется.</p>
       <div class="bc-chat">
@@ -117,6 +126,8 @@ export async function mountArchive(root) {
       target: root.querySelector("#ar-target").value,
       enabled: root.querySelector("#ar-enabled").checked,
     }, "Сохранено."));
+    root.querySelectorAll("[data-hold-release]").forEach(b => b.addEventListener("click", () => apply("/archive/hold/release", { key: b.dataset.holdRelease }, "Серия будет отправлена.")));
+    root.querySelectorAll("[data-hold-drop]").forEach(b => b.addEventListener("click", () => apply("/archive/hold/drop", { key: b.dataset.holdDrop }, "Убрано из очереди.")));
     root.querySelector("#ar-refresh")?.addEventListener("click", load);
     root.querySelectorAll("[data-topic-use]").forEach(box => box.addEventListener("change", () => {
       const id = Number(box.dataset.topicUse);
