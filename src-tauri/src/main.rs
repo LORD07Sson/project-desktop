@@ -1348,6 +1348,12 @@ fn main() {
     // остальной код приложения вообще успеет пойти.
     velopack::VelopackApp::build().run();
 
+    // Отдельный процесс антивируса с правами администратора: проверка закрытых папок без окна (см. antivirus::headless).
+    let cli_args: Vec<String> = std::env::args().collect();
+    if cli_args.iter().any(|a| a == "--av-scan") {
+        std::process::exit(antivirus::headless(&cli_args));
+    }
+
     tauri::Builder::default()
         // Второй запуск (ярлык, автозапуск + ручной старт и т.п.) не должен
         // плодить второй процесс — вместо этого просто разворачиваем уже

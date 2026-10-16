@@ -60,24 +60,39 @@ struct Signatures {
     pool_ports: Vec<u16>,
 }
 
+/// Окружение проверки: каталог данных антивируса и приёмник прогресса. Не привязано к окну Tauri, поэтому та же проверка
+/// запускается и в отдельном процессе с правами администратора (headless).
+pub struct Env {
+    dir: PathBuf,
+    sink: Box<dyn Fn(Value) + Send + Sync>,
+}
+
+fn env_for_app(app: &AppHandle) -> Result<Env, String> {
+    let dir = av_dir(app)?;
+    let handle = app.clone();
+    Ok(Env { dir, sink: Box::new(move |v| { let _ = handle.emit("av-progress", v); }) })
+}
+
 fn av_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("av");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
 
-fn load_signatures(app: &AppHandle) -> Signatures {
+fn load_signatures_in(dir: &Path) -> Signatures {
     let baseline: Signatures = serde_json::from_str(BASELINE).unwrap_or_default();
-    if let Ok(dir) = av_dir(app) {
-        if let Ok(text) = fs::read_to_string(dir.join("signatures.json")) {
-            if let Ok(local) = serde_json::from_str::<Signatures>(&text) {
-                if local.version >= baseline.version {
-                    return local;
-                }
+    if let Ok(text) = fs::read_to_string(dir.join("signatures.json")) {
+        if let Ok(local) = serde_json::from_str::<Signatures>(&text) {
+            if local.version >= baseline.version {
+                return local;
             }
         }
     }
     baseline
+}
+
+fn load_signatures(app: &AppHandle) -> Signatures {
+    av_dir(app).map(|d| load_signatures_in(&d)).unwrap_or_else(|_| serde_json::from_str(BASELINE).unwrap_or_default())
 }
 
 // ------------------------------------------------------ исключения и карантин
@@ -90,12 +105,15 @@ struct Exclusions {
     hashes: Vec<String>,
 }
 
-fn load_exclusions(app: &AppHandle) -> Exclusions {
-    av_dir(app)
+fn load_exclusions_in(dir: &Path) -> Exclusions {
+    fs::read_to_string(dir.join("exclusions.json"))
         .ok()
-        .and_then(|d| fs::read_to_string(d.join("exclusions.json")).ok())
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default()
+}
+
+fn load_exclusions(app: &AppHandle) -> Exclusions {
+    av_dir(app).map(|d| load_exclusions_in(&d)).unwrap_or_default()
 }
 
 fn save_exclusions(app: &AppHandle, ex: &Exclusions) -> Result<(), String> {
@@ -187,6 +205,10 @@ fn is_own(path: &Path, own_dirs: &[PathBuf]) -> bool {
 }
 
 fn own_dirs(app: &AppHandle) -> Vec<PathBuf> {
+    own_dirs_in(av_dir(app).ok())
+}
+
+fn own_dirs_in(av: Option<PathBuf>) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
@@ -199,7 +221,7 @@ fn own_dirs(app: &AppHandle) -> Vec<PathBuf> {
             }
         }
     }
-    if let Ok(d) = av_dir(app) {
+    if let Some(d) = av {
         dirs.push(d);
     }
     dirs
@@ -334,6 +356,7 @@ struct Ctx {
     folders: u64,
     skipped_large: u64,
     denied_dirs: u64,
+    denied_list: Vec<String>,
 }
 
 impl Ctx {
@@ -398,8 +421,8 @@ impl Ctx {
 
 // -------------------------------------------------------------------- проверка
 
-fn emit(app: &AppHandle, stage: &str, scanned: u64, found: usize, current: &str) {
-    let _ = app.emit("av-progress", json!({ "stage": stage, "scanned": scanned, "found": found, "current": current }));
+fn emit(env: &Env, stage: &str, scanned: u64, found: usize, current: &str) {
+    (env.sink)(json!({ "stage": stage, "scanned": scanned, "found": found, "current": current }));
 }
 
 /// Все фиксированные диски (C:, D:…): полная проверка идёт по ним целиком, а не только по профилю пользователя.
@@ -466,7 +489,7 @@ fn roots_for(mode: &str, custom: &[String]) -> Vec<(PathBuf, usize)> {
     roots
 }
 
-fn walk(app: &AppHandle, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
+fn walk(env: &Env, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
     if depth == 0 || CANCEL.load(Ordering::Relaxed) {
         return;
     }
@@ -474,6 +497,9 @@ fn walk(app: &AppHandle, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
         Ok(rd) => rd,
         Err(_) => {
             ctx.denied_dirs += 1;
+            if ctx.denied_list.len() < 40 {
+                ctx.denied_list.push(dir.to_string_lossy().to_string());
+            }
             return;
         }
     };
@@ -496,7 +522,7 @@ fn walk(app: &AppHandle, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
             if name == "$recycle.bin" || name == "node_modules" || name == "system volume information" || name == "winsxs" {
                 continue;
             }
-            walk(app, ctx, &path, depth - 1, stage);
+            walk(env, ctx, &path, depth - 1, stage);
         } else if ft.is_file() {
             let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
             if !SCAN_EXTS.contains(&ext.as_str()) {
@@ -510,15 +536,15 @@ fn walk(app: &AppHandle, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
             }
             ctx.check_file(&s, "file", None);
             if last.elapsed().as_millis() > 250 {
-                emit(app, stage, ctx.scanned, ctx.found.len(), &s);
+                emit(env, stage, ctx.scanned, ctx.found.len(), &s);
                 last = std::time::Instant::now();
             }
         }
     }
 }
 
-fn scan_processes(app: &AppHandle, ctx: &mut Ctx) -> HashMap<u64, String> {
-    emit(app, "Процессы", ctx.scanned, ctx.found.len(), "");
+fn scan_processes(env: &Env, ctx: &mut Ctx) -> HashMap<u64, String> {
+    emit(env, "Процессы", ctx.scanned, ctx.found.len(), "");
     let mut names = HashMap::new();
     let script = "Get-CimInstance Win32_Process | Select-Object ProcessId,Name,ExecutablePath,CommandLine | ConvertTo-Json -Compress";
     let Ok(text) = powershell(script) else { return names };
@@ -558,8 +584,8 @@ fn scan_processes(app: &AppHandle, ctx: &mut Ctx) -> HashMap<u64, String> {
     names
 }
 
-fn scan_network(app: &AppHandle, ctx: &mut Ctx, pnames: &HashMap<u64, String>) {
-    emit(app, "Сеть", ctx.scanned, ctx.found.len(), "");
+fn scan_network(env: &Env, ctx: &mut Ctx, pnames: &HashMap<u64, String>) {
+    emit(env, "Сеть", ctx.scanned, ctx.found.len(), "");
     let script = "Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Select-Object OwningProcess,RemoteAddress,RemotePort | ConvertTo-Json -Compress";
     let Ok(text) = powershell(script) else { return };
     // Эти программы часто ходят на «пуловые» порты по своим причинам — не считаем их подозрительными.
@@ -590,8 +616,8 @@ fn scan_network(app: &AppHandle, ctx: &mut Ctx, pnames: &HashMap<u64, String>) {
     }
 }
 
-fn scan_autorun(app: &AppHandle, ctx: &mut Ctx) {
-    emit(app, "Автозапуск", ctx.scanned, ctx.found.len(), "");
+fn scan_autorun(env: &Env, ctx: &mut Ctx) {
+    emit(env, "Автозапуск", ctx.scanned, ctx.found.len(), "");
     let script = "$r=@(); foreach($h in 'HKCU','HKLM'){ foreach($k in 'Run','RunOnce'){ $p=\"${h}:\\Software\\Microsoft\\Windows\\CurrentVersion\\$k\"; if(Test-Path $p){ $o=Get-ItemProperty $p; foreach($n in $o.PSObject.Properties){ if($n.Name -notlike 'PS*'){ $r+=[pscustomobject]@{Hive=$h;Key=$k;Name=$n.Name;Data=[string]$n.Value} } } } } }; $r | ConvertTo-Json -Compress";
     let Ok(text) = powershell(script) else { return };
     for item in json_items(&text) {
@@ -629,8 +655,8 @@ fn scan_autorun(app: &AppHandle, ctx: &mut Ctx) {
     }
 }
 
-fn scan_defender_exclusions(app: &AppHandle, ctx: &mut Ctx) {
-    emit(app, "Защитник Windows", ctx.scanned, ctx.found.len(), "");
+fn scan_defender_exclusions(env: &Env, ctx: &mut Ctx) {
+    emit(env, "Защитник Windows", ctx.scanned, ctx.found.len(), "");
     let script = "$p=Get-MpPreference -ErrorAction SilentlyContinue; if($p){ [pscustomobject]@{Paths=@($p.ExclusionPath);Procs=@($p.ExclusionProcess)} | ConvertTo-Json -Compress }";
     let Ok(text) = powershell(script) else { return };
     let Ok(v) = serde_json::from_str::<Value>(text.trim()) else { return };
@@ -662,13 +688,19 @@ fn scan_defender_exclusions(app: &AppHandle, ctx: &mut Ctx) {
     }
 }
 
-fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
+fn is_elevated() -> bool {
+    powershell("([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)")
+        .map(|t| t.trim().eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn scan_core(env: &Env, mode: String, custom: Vec<String>) -> Value {
     CANCEL.store(false, Ordering::Relaxed);
     let started = now_secs();
     let mut ctx = Ctx {
-        sigs: load_signatures(&app),
-        excl: load_exclusions(&app),
-        own: own_dirs(&app),
+        sigs: load_signatures_in(&env.dir),
+        excl: load_exclusions_in(&env.dir),
+        own: own_dirs_in(Some(env.dir.clone())),
         found: Vec::new(),
         seen: HashSet::new(),
         hashed: HashMap::new(),
@@ -678,11 +710,12 @@ fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
         folders: 0,
         skipped_large: 0,
         denied_dirs: 0,
+        denied_list: Vec::new(),
     };
-    let pnames = scan_processes(&app, &mut ctx);
-    scan_network(&app, &mut ctx, &pnames);
-    scan_autorun(&app, &mut ctx);
-    scan_defender_exclusions(&app, &mut ctx);
+    let pnames = scan_processes(env, &mut ctx);
+    scan_network(env, &mut ctx, &pnames);
+    scan_autorun(env, &mut ctx);
+    scan_defender_exclusions(env, &mut ctx);
     let roots = roots_for(&mode, &custom);
     for (root, depth) in roots.iter().cloned() {
         if CANCEL.load(Ordering::Relaxed) {
@@ -695,7 +728,7 @@ fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
             continue;
         }
         let label = format!("Файлы: {}", root.to_string_lossy());
-        walk(&app, &mut ctx, &root, depth, &label);
+        walk(env, &mut ctx, &root, depth, &label);
     }
     let cancelled = CANCEL.load(Ordering::Relaxed);
     let report = json!({
@@ -709,6 +742,8 @@ fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
             "folders": ctx.folders,
             "skipped_large": ctx.skipped_large,
             "denied_dirs": ctx.denied_dirs,
+            "denied_list": ctx.denied_list,
+            "elevated": is_elevated(),
             "roots": roots.iter().map(|(p, _)| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
             "types": SCAN_EXTS,
         },
@@ -716,26 +751,146 @@ fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
         "db_version": ctx.sigs.version,
         "detections": ctx.found,
     });
-    if let Ok(dir) = av_dir(&app) {
-        let summary = json!({ "finished": report["finished"], "mode": report["mode"], "scanned": report["scanned"], "found": ctx.found.len(), "cancelled": cancelled });
-        let _ = fs::write(dir.join("last_scan.json"), summary.to_string());
-    }
+    let summary = json!({ "finished": report["finished"], "mode": report["mode"], "scanned": report["scanned"], "found": ctx.found.len(), "cancelled": cancelled });
+    let _ = fs::write(env.dir.join("last_scan.json"), summary.to_string());
     report
+}
+
+/// Точка входа отдельного процесса с правами администратора: `project-desktop.exe --av-scan <mode> --data-dir <dir> [--path <p>]…`.
+/// Окна нет: прогресс и итог пишутся в файлы каталога данных, а отмена — файлом cancel.flag.
+pub fn headless(args: &[String]) -> i32 {
+    let mut mode = "quick".to_string();
+    let mut dir: Option<PathBuf> = None;
+    let mut custom: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--av-scan" => {
+                if let Some(m) = args.get(i + 1) {
+                    mode = m.clone();
+                }
+                i += 1;
+            }
+            "--data-dir" => {
+                dir = args.get(i + 1).map(|d| PathBuf::from(d.trim_matches('"')));
+                i += 1;
+            }
+            "--path" => {
+                if let Some(p) = args.get(i + 1) {
+                    custom.push(p.trim_matches('"').to_string());
+                }
+                i += 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    let Some(dir) = dir else { return 2 };
+    let progress_path = dir.join("scan_progress.json");
+    let sink_path = progress_path.clone();
+    let env = Env { dir: dir.clone(), sink: Box::new(move |v| { let _ = fs::write(&sink_path, v.to_string()); }) };
+    let cancel_dir = dir.clone();
+    let done = std::sync::Arc::new(AtomicBool::new(false));
+    let done_flag = done.clone();
+    std::thread::spawn(move || {
+        while !done_flag.load(Ordering::Relaxed) {
+            if cancel_dir.join("cancel.flag").exists() {
+                CANCEL.store(true, Ordering::Relaxed);
+                let _ = fs::remove_file(cancel_dir.join("cancel.flag"));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+    });
+    let report = scan_core(&env, mode, custom);
+    let _ = fs::write(dir.join("scan_report.json"), report.to_string());
+    done.store(true, Ordering::Relaxed);
+    0
+}
+
+fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
+    match env_for_app(&app) {
+        Ok(env) => scan_core(&env, mode, custom),
+        Err(e) => json!({ "error": e, "detections": [], "scanned": 0 }),
+    }
+}
+
+/// Проверка в отдельном процессе с правами администратора (запрос UAC): так открываются папки, закрытые обычному пользователю.
+fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String]) -> Result<Value, String> {
+    let dir = av_dir(app)?;
+    for f in ["scan_report.json", "scan_progress.json", "cancel.flag"] {
+        let _ = fs::remove_file(dir.join(f));
+    }
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let q = |v: &str| v.replace('\'', "''");
+    let mut args = vec![
+        "'--av-scan'".to_string(),
+        format!("'{}'", q(mode)),
+        "'--data-dir'".to_string(),
+        format!("'\"{}\"'", q(&dir.to_string_lossy())),
+    ];
+    for p in custom {
+        args.push("'--path'".into());
+        args.push(format!("'\"{}\"'", q(p)));
+    }
+    let script = format!(
+        "try {{ Start-Process -FilePath '{}' -ArgumentList {} -Verb RunAs -WindowStyle Hidden -Wait -ErrorAction Stop; 'DONE' }} catch {{ 'FAIL:' + $_.Exception.Message }}",
+        q(&exe.to_string_lossy()),
+        args.join(",")
+    );
+    // Пока администраторский процесс работает, пересылаем его прогресс в окно.
+    let stop = std::sync::Arc::new(AtomicBool::new(false));
+    let stop_flag = stop.clone();
+    let progress_file = dir.join("scan_progress.json");
+    let handle = app.clone();
+    let poller = std::thread::spawn(move || {
+        let mut last = String::new();
+        while !stop_flag.load(Ordering::Relaxed) {
+            if let Ok(text) = fs::read_to_string(&progress_file) {
+                if text != last {
+                    if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                        let _ = handle.emit("av-progress", v);
+                    }
+                    last = text;
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(400));
+        }
+    });
+    let out = powershell(&script);
+    stop.store(true, Ordering::Relaxed);
+    let _ = poller.join();
+    let out = out?;
+    if out.contains("FAIL:") {
+        return Err("Запрос прав администратора отклонён или не удался. Проверьте «Да» в окне Windows и повторите.".into());
+    }
+    fs::read_to_string(dir.join("scan_report.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .ok_or_else(|| "Проверка с правами администратора не вернула результат.".to_string())
 }
 
 // ------------------------------------------------------------------ команды
 
 #[tauri::command(async)]
-pub async fn av_scan(app: AppHandle, mode: String, paths: Option<Vec<String>>) -> Result<Value, String> {
+pub async fn av_scan(app: AppHandle, mode: String, paths: Option<Vec<String>>, elevated: Option<bool>) -> Result<Value, String> {
     let custom = paths.unwrap_or_default();
+    if elevated.unwrap_or(false) {
+        return tauri::async_runtime::spawn_blocking(move || scan_elevated(&app, &mode, &custom))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
     tauri::async_runtime::spawn_blocking(move || scan_blocking(app, mode, custom))
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn av_cancel() {
+pub fn av_cancel(app: AppHandle) {
     CANCEL.store(true, Ordering::Relaxed);
+    // Проверка с правами администратора идёт в другом процессе — просим её остановиться файлом.
+    if let Ok(dir) = av_dir(&app) {
+        let _ = fs::write(dir.join("cancel.flag"), b"1");
+    }
 }
 
 #[tauri::command]
@@ -967,6 +1122,10 @@ pub async fn av_defender(action: String) -> Result<Value, String> {
             "update" => {
                 let out = powershell("try { Update-MpSignature -ErrorAction Stop; 'ok' } catch { $_.Exception.Message }")?;
                 Ok(json!({ "ok": out.trim().ends_with("ok"), "message": out.trim() }))
+            }
+            "fullscan" => {
+                let out = powershell("try { Start-MpScan -ScanType FullScan -ErrorAction Stop; $t=@(Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending | Select-Object -First 5 ThreatID,InitialDetectionTime,Resources); @{ok=$true;threats=$t} | ConvertTo-Json -Compress -Depth 4 } catch { @{ok=$false;message=$_.Exception.Message} | ConvertTo-Json -Compress }")?;
+                Ok(serde_json::from_str(out.trim()).unwrap_or(Value::Null))
             }
             "quickscan" => {
                 let out = powershell("try { Start-MpScan -ScanType QuickScan -ErrorAction Stop; $t=@(Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending | Select-Object -First 5 ThreatID,InitialDetectionTime,Resources); @{ok=$true;threats=$t} | ConvertTo-Json -Compress -Depth 4 } catch { @{ok=$false;message=$_.Exception.Message} | ConvertTo-Json -Compress }")?;

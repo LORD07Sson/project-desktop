@@ -59,6 +59,7 @@ export async function mountAntivirus(root) {
   if (!root) return;
   let tab = "results";
   let report = null;
+  let lastScan = { mode: "quick", paths: null };
   let busy = false;
   let unlisten = null;
 
@@ -78,12 +79,13 @@ export async function mountAntivirus(root) {
       <div class="av-card"><span class="av-k">Защитник Windows</span>
         <b style="color:${def ? (defOn ? "var(--s-done)" : "var(--s-stop)") : "var(--ink-dim)"}">${def ? (defOn ? "включён" : "выключен") : "нет данных"}</b>
         <span>${def ? `защита в реальном времени: ${def.RealTimeProtectionEnabled ? "да" : "нет"}` : "доступен только в Windows"}</span>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;"><button class="btn" id="av-def-update">Обновить</button><button class="btn" id="av-def-scan">Проверить</button></div></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;"><button class="btn" id="av-def-update">Обновить</button><button class="btn" id="av-def-scan">Быстрая</button><button class="btn" id="av-def-full" title="Работает от имени системы и открывает даже закрытые папки; идёт долго">Полная</button></div></div>
       <div class="av-card"><span class="av-k">Последняя проверка</span><b>${st && st.last_scan ? "готово" : "—"}</b><span>${esc(last)}</span>
         <span>Карантин: ${st ? st.quarantine : 0}</span></div>`;
     root.querySelector("#av-update").addEventListener("click", updateDb);
     root.querySelector("#av-def-update").addEventListener("click", () => defender("update"));
     root.querySelector("#av-def-scan").addEventListener("click", () => defender("quickscan"));
+    root.querySelector("#av-def-full").addEventListener("click", () => { if (confirm("Полная проверка Защитником Windows идёт долго (от десятков минут). Продолжить?")) defender("fullscan"); });
     const q = root.querySelector('[data-av-tab="quarantine"] small');
     if (q && st) q.textContent = st.quarantine;
   }
@@ -100,7 +102,7 @@ export async function mountAntivirus(root) {
   }
 
   async function defender(action) {
-    const btn = root.querySelector(action === "update" ? "#av-def-update" : "#av-def-scan");
+    const btn = root.querySelector(action === "update" ? "#av-def-update" : (action === "fullscan" ? "#av-def-full" : "#av-def-scan"));
     btn.disabled = true; btn.textContent = action === "update" ? "Обновляю…" : "Проверяет…";
     try {
       const r = await call("av_defender", { action });
@@ -119,13 +121,16 @@ export async function mountAntivirus(root) {
     root.querySelector("#av-progress").hidden = !on;
   }
 
-  async function scan(mode, paths) {
+  async function scan(mode, paths, elevated) {
     if (busy) return;
+    if (elevated === undefined) elevated = !!root.querySelector("#av-admin")?.checked;
+    lastScan = { mode, paths: paths || null };
     setBusy(true);
     report = null;
     paintBody();
+    if (elevated) toast("Подтвердите запрос Windows (UAC) — проверка пойдёт с правами администратора.", "success");
     try {
-      report = await call("av_scan", { mode, paths: paths || null });
+      report = await call("av_scan", { mode, paths: paths || null, elevated });
       if (report.cancelled) toast("Проверка остановлена.", "success");
       else toast(report.detections.length ? `Проверка завершена: найдено ${report.detections.length}.` : "Проверка завершена: угроз не найдено.", report.detections.length ? "error" : "success");
     } catch (e) { toast(String(e), "error"); }
@@ -194,15 +199,20 @@ export async function mountAntivirus(root) {
       if (!report) { host.innerHTML = `<div class="no-assignee">${busy ? "Идёт проверка…" : "Запустите проверку — результаты появятся здесь."}</div>`; return; }
       host.innerHTML = `
         <div class="bc-hint" style="margin:0 0 8px;">Проверено объектов: <b>${report.scanned.toLocaleString("ru-RU")}</b> за ${fmtDur(report.seconds)} · база v${report.db_version}${report.cancelled ? " · <b>остановлено</b>" : ""}</div>
+        ${report.coverage && report.coverage.denied_dirs > 0 && !report.coverage.elevated ? `<div class="bc-warn" style="margin:0 0 10px;">Закрытых системой папок: <b>${report.coverage.denied_dirs}</b> — обычному пользователю они недоступны, поэтому их содержимое не проверено.
+          <div style="margin-top:8px;"><button class="btn primary" id="av-rescan-admin">Проверить с правами администратора</button></div></div>` : ""}
+        ${report.coverage && report.coverage.elevated ? `<div class="bc-hint" style="margin:0 0 8px;">Проверка выполнена <b>с правами администратора</b>.${report.coverage.denied_dirs ? ` Всё равно закрыто: ${report.coverage.denied_dirs} папок (служебные каталоги, защищённые самой системой) — для них запустите проверку Защитником Windows (он работает от имени системы).` : ""}</div>` : ""}
         ${report.coverage ? `<details class="av-cover"><summary>Что именно проверено</summary>
           <div class="bc-hint" style="margin:6px 0;">Файлов: <b>${report.coverage.files.toLocaleString("ru-RU")}</b> · процессов: <b>${report.coverage.processes}</b> · папок: <b>${report.coverage.folders.toLocaleString("ru-RU")}</b>.
             Пропущено: файлов больше 300 МБ — ${report.coverage.skipped_large} (проверены только по имени), папок без доступа — ${report.coverage.denied_dirs}.<br>
             Типы файлов: ${report.coverage.types.map(t => `.${esc(t)}`).join(" ")}. Проверяются также запущенные процессы, сетевые соединения, автозапуск и исключения Защитника.</div>
           <div class="av-path">${report.coverage.roots.map(esc).join("<br>")}</div>
+          ${report.coverage.denied_list && report.coverage.denied_list.length ? `<div class="bc-hint" style="margin:8px 0 2px;">Недоступные папки${report.coverage.denied_dirs > report.coverage.denied_list.length ? ` (первые ${report.coverage.denied_list.length} из ${report.coverage.denied_dirs})` : ""}:</div><div class="av-path">${report.coverage.denied_list.map(esc).join("<br>")}</div>` : ""}
           ${report.mode === "quick" ? `<div class="bc-hint" style="margin:6px 0 0;">Быстрая проверка смотрит места, где оседают вирусы. Чтобы пройти все диски целиком, запустите «Полную проверку».</div>` : ""}
         </details>` : ""}
         ${report.detections.length ? report.detections.map(detectionRow).join("") : `<div class="av-clean">Угроз не найдено</div>`}`;
       host.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", () => onAction(b)));
+      host.querySelector("#av-rescan-admin")?.addEventListener("click", () => scan(lastScan.mode, lastScan.paths, true));
     } else if (tab === "quarantine") {
       const items = await call("av_quarantine_list").catch(() => []);
       host.innerHTML = items.length ? `<p class="bc-hint">Файлы в карантине не запускаются. «Восстановить» вернёт файл на место, «Удалить» сотрёт навсегда.</p>` + items.map(q => `
@@ -280,6 +290,7 @@ ${a.path}`)) return; await call("av_quarantine", { path: a.path, pid: a.pid || n
       <button class="btn" data-av-scan="full">Полная проверка</button>
       <button class="btn" data-av-scan="custom">Проверить папку…</button>
       <button class="btn danger" id="av-stop" hidden>Остановить</button>
+      <label class="bc-feature" style="margin:0 0 0 6px;" title="Откроет папки, закрытые обычному пользователю: чужие профили, служебные каталоги системы. Windows спросит подтверждение (UAC)."><input type="checkbox" id="av-admin"><span>С правами администратора</span></label>
     </div>
     <div id="av-progress" class="av-progress" hidden><div class="av-bar"><i></i></div><div id="av-prog-text" class="bc-hint" style="margin:6px 0 0;"></div></div>
     <div class="av-tabs">
