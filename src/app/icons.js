@@ -159,6 +159,8 @@ function iconize(root) {
 
 /** Заменяет эмодзи на иконки во всём окне и следит за новыми узлами (экраны перерисовываются постоянно). */
 export function startEmojiIcons(root = document.body) {
+  // Проверка сборки (verify-modules.mjs) выполняет бандл в Node с урезанным document — без DOM-API делать нечего.
+  if (!root || typeof NodeFilter === "undefined" || typeof MutationObserver === "undefined" || typeof requestAnimationFrame === "undefined") return;
   const queue = new Set();
   let frame = 0;
   const flush = () => {
