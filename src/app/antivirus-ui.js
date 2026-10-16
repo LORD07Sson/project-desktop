@@ -194,6 +194,13 @@ export async function mountAntivirus(root) {
       if (!report) { host.innerHTML = `<div class="no-assignee">${busy ? "Идёт проверка…" : "Запустите проверку — результаты появятся здесь."}</div>`; return; }
       host.innerHTML = `
         <div class="bc-hint" style="margin:0 0 8px;">Проверено объектов: <b>${report.scanned.toLocaleString("ru-RU")}</b> за ${fmtDur(report.seconds)} · база v${report.db_version}${report.cancelled ? " · <b>остановлено</b>" : ""}</div>
+        ${report.coverage ? `<details class="av-cover"><summary>Что именно проверено</summary>
+          <div class="bc-hint" style="margin:6px 0;">Файлов: <b>${report.coverage.files.toLocaleString("ru-RU")}</b> · процессов: <b>${report.coverage.processes}</b> · папок: <b>${report.coverage.folders.toLocaleString("ru-RU")}</b>.
+            Пропущено: файлов больше 300 МБ — ${report.coverage.skipped_large} (проверены только по имени), папок без доступа — ${report.coverage.denied_dirs}.<br>
+            Типы файлов: ${report.coverage.types.map(t => `.${esc(t)}`).join(" ")}. Проверяются также запущенные процессы, сетевые соединения, автозапуск и исключения Защитника.</div>
+          <div class="av-path">${report.coverage.roots.map(esc).join("<br>")}</div>
+          ${report.mode === "quick" ? `<div class="bc-hint" style="margin:6px 0 0;">Быстрая проверка смотрит места, где оседают вирусы. Чтобы пройти все диски целиком, запустите «Полную проверку».</div>` : ""}
+        </details>` : ""}
         ${report.detections.length ? report.detections.map(detectionRow).join("") : `<div class="av-clean">Угроз не найдено</div>`}`;
       host.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", () => onAction(b)));
     } else if (tab === "quarantine") {

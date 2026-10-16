@@ -27,7 +27,7 @@ const API_BASE: &str = "https://minitg.shitstudent.com:8443/api";
 const MAX_HASH_BYTES: u64 = 300 * 1024 * 1024;
 const XOR_KEY: u8 = 0x5A;
 const SCAN_EXTS: &[&str] = &[
-    "exe", "dll", "scr", "bat", "cmd", "ps1", "vbs", "jse", "wsf", "msi", "jar", "com", "hta",
+    "exe", "dll", "scr", "bat", "cmd", "ps1", "vbs", "vbe", "jse", "js", "wsf", "msi", "jar", "com", "hta", "cpl", "ocx", "sys", "pif", "reg",
 ];
 
 static CANCEL: AtomicBool = AtomicBool::new(false);
@@ -178,6 +178,14 @@ fn is_protected(path: &Path, own_dirs: &[PathBuf]) -> bool {
     })
 }
 
+fn is_own(path: &Path, own_dirs: &[PathBuf]) -> bool {
+    let lower = path.to_string_lossy().to_lowercase().replace('/', "\\");
+    own_dirs.iter().any(|d| {
+        let o = d.to_string_lossy().to_lowercase().replace('/', "\\");
+        !o.is_empty() && (lower == o || lower.starts_with(&format!("{o}\\")))
+    })
+}
+
 fn own_dirs(app: &AppHandle) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
@@ -320,6 +328,12 @@ struct Ctx {
     seen: HashSet<String>,
     hashed: HashMap<String, Option<String>>,
     scanned: u64,
+    /// Сколько реально проверено и что пропущено — чтобы отчёт честно показывал охват.
+    files: u64,
+    procs: u64,
+    folders: u64,
+    skipped_large: u64,
+    denied_dirs: u64,
 }
 
 impl Ctx {
@@ -388,38 +402,64 @@ fn emit(app: &AppHandle, stage: &str, scanned: u64, found: usize, current: &str)
     let _ = app.emit("av-progress", json!({ "stage": stage, "scanned": scanned, "found": found, "current": current }));
 }
 
+/// Все фиксированные диски (C:, D:…): полная проверка идёт по ним целиком, а не только по профилю пользователя.
+fn fixed_drives() -> Vec<PathBuf> {
+    let mut drives = Vec::new();
+    if let Ok(text) = powershell("Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object -ExpandProperty DeviceID | ConvertTo-Json -Compress") {
+        match serde_json::from_str::<Value>(text.trim()) {
+            Ok(Value::Array(a)) => drives.extend(a.iter().filter_map(|v| v.as_str()).map(|d| PathBuf::from(format!("{d}\\")))),
+            Ok(Value::String(d)) => drives.push(PathBuf::from(format!("{d}\\"))),
+            _ => {}
+        }
+    }
+    if drives.is_empty() {
+        if let Ok(sd) = std::env::var("SystemDrive") {
+            drives.push(PathBuf::from(format!("{sd}\\")));
+        }
+    }
+    drives
+}
+
 fn roots_for(mode: &str, custom: &[String]) -> Vec<(PathBuf, usize)> {
     let var = |n: &str| std::env::var(n).ok().map(PathBuf::from);
     let mut roots: Vec<(PathBuf, usize)> = Vec::new();
     match mode {
         "custom" => roots.extend(custom.iter().map(|p| (PathBuf::from(p), 12))),
         "full" => {
-            if let Some(u) = var("USERPROFILE") {
-                roots.push((u, 12));
-            }
-            for n in ["ProgramData", "ProgramFiles", "ProgramFiles(x86)"] {
-                if let Some(p) = var(n) {
-                    roots.push((p, 8));
-                }
+            // Все фиксированные диски целиком (в том числе Windows и Program Files); глубина — практически без ограничения.
+            for d in fixed_drives() {
+                roots.push((d, 24));
             }
         }
         _ => {
+            // Быстрая: места, где чаще всего оседают вирусы — пользовательские папки, AppData, Temp, автозагрузка, общие папки
+            // и «критичные» каталоги Windows. Для полного охвата (все диски) есть «Полная проверка».
             if let Some(u) = var("USERPROFILE") {
-                for sub in ["Downloads", "Desktop", "Documents"] {
-                    roots.push((u.join(sub), 4));
+                for sub in ["Downloads", "Desktop", "Documents", "Pictures", "Videos", "Music"] {
+                    roots.push((u.join(sub), 5));
                 }
             }
             if let Some(a) = var("APPDATA") {
                 roots.push((a.join("Microsoft\\Windows\\Start Menu\\Programs\\Startup"), 2));
-                roots.push((a, 4));
+                roots.push((a, 8));
             }
             if let Some(l) = var("LOCALAPPDATA") {
-                roots.push((l.join("Temp"), 4));
-                roots.push((l.join("Programs"), 4));
-                roots.push((l, 2));
+                roots.push((l, 8));
             }
             if let Some(p) = var("ProgramData") {
-                roots.push((p, 3));
+                roots.push((p, 6));
+            }
+            roots.push((PathBuf::from("C:\\Users\\Public"), 5));
+            if let Some(w) = var("WINDIR") {
+                roots.push((w.join("Temp"), 4));
+                roots.push((w.join("Tasks"), 3));
+                roots.push((w.join("System32\\Tasks"), 3));
+                roots.push((w.join("System32\\drivers"), 2));
+            }
+            for n in ["ProgramFiles", "ProgramFiles(x86)"] {
+                if let Some(p) = var(n) {
+                    roots.push((p, 3));
+                }
             }
         }
     }
@@ -430,7 +470,14 @@ fn walk(app: &AppHandle, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
     if depth == 0 || CANCEL.load(Ordering::Relaxed) {
         return;
     }
-    let Ok(rd) = fs::read_dir(dir) else { return };
+    let rd = match fs::read_dir(dir) {
+        Ok(rd) => rd,
+        Err(_) => {
+            ctx.denied_dirs += 1;
+            return;
+        }
+    };
+    ctx.folders += 1;
     let mut last = std::time::Instant::now();
     for entry in rd.flatten() {
         if CANCEL.load(Ordering::Relaxed) {
@@ -442,8 +489,8 @@ fn walk(app: &AppHandle, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
             continue; // не ходим по ссылкам: петли и выход за пределы проверяемой области
         }
         if ft.is_dir() {
-            if is_protected(&path, &ctx.own) {
-                continue;
+            if is_own(&path, &ctx.own) {
+                continue; // свою папку и карантин не проверяем
             }
             let name = entry.file_name().to_string_lossy().to_lowercase();
             if name == "$recycle.bin" || name == "node_modules" || name == "system volume information" || name == "winsxs" {
@@ -457,6 +504,10 @@ fn walk(app: &AppHandle, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
             }
             let s = path.to_string_lossy().to_string();
             ctx.scanned += 1;
+            ctx.files += 1;
+            if entry.metadata().map(|m| m.len() > MAX_HASH_BYTES).unwrap_or(false) {
+                ctx.skipped_large += 1;
+            }
             ctx.check_file(&s, "file", None);
             if last.elapsed().as_millis() > 250 {
                 emit(app, stage, ctx.scanned, ctx.found.len(), &s);
@@ -475,6 +526,7 @@ fn scan_processes(app: &AppHandle, ctx: &mut Ctx) -> HashMap<u64, String> {
         let pid = item["ProcessId"].as_u64().unwrap_or(0);
         let name = item["Name"].as_str().unwrap_or("").to_string();
         names.insert(pid, name.to_lowercase());
+        ctx.procs += 1;
         let path = item["ExecutablePath"].as_str().unwrap_or("");
         let cmd = item["CommandLine"].as_str().unwrap_or("");
         ctx.scanned += 1;
@@ -621,12 +673,18 @@ fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
         seen: HashSet::new(),
         hashed: HashMap::new(),
         scanned: 0,
+        files: 0,
+        procs: 0,
+        folders: 0,
+        skipped_large: 0,
+        denied_dirs: 0,
     };
     let pnames = scan_processes(&app, &mut ctx);
     scan_network(&app, &mut ctx, &pnames);
     scan_autorun(&app, &mut ctx);
     scan_defender_exclusions(&app, &mut ctx);
-    for (root, depth) in roots_for(&mode, &custom) {
+    let roots = roots_for(&mode, &custom);
+    for (root, depth) in roots.iter().cloned() {
         if CANCEL.load(Ordering::Relaxed) {
             break;
         }
@@ -645,6 +703,15 @@ fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
         "finished": now_secs(),
         "seconds": now_secs().saturating_sub(started),
         "scanned": ctx.scanned,
+        "coverage": {
+            "files": ctx.files,
+            "processes": ctx.procs,
+            "folders": ctx.folders,
+            "skipped_large": ctx.skipped_large,
+            "denied_dirs": ctx.denied_dirs,
+            "roots": roots.iter().map(|(p, _)| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
+            "types": SCAN_EXTS,
+        },
         "cancelled": cancelled,
         "db_version": ctx.sigs.version,
         "detections": ctx.found,
