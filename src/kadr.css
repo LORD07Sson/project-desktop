@@ -2881,3 +2881,18 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .av-sev { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; padding: 2px 9px; border-radius: 99px; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
 .av-path { margin-top: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--ink-dim); word-break: break-all; }
 .av-clean { padding: 22px; text-align: center; border-radius: 16px; font-weight: 700; color: var(--s-done); background: color-mix(in srgb, var(--s-done) 10%, transparent); }
+
+/* График «Завершено по дням»: отметки лежат в одной пластине с кривой, подсказка — по наведению на день */
+.an-chart { height: 250px; }
+.an-plot { position: absolute; inset: 0 0 46px 0; }
+.an-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.an-dot { position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 3px rgba(var(--gold-rgb), .18); pointer-events: none; }
+.an-dot.hov { opacity: 0; transition: opacity .12s; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; }
+.an-col { position: absolute; top: 0; bottom: 0; }
+.an-col:hover .an-dot.hov { opacity: 1; }
+.an-tip2 { position: absolute; left: 50%; transform: translate(-50%, calc(-100% - 12px)); padding: 6px 10px; border-radius: 10px; background: var(--glass-bg-strong); border: 1px solid var(--glass-border); font-size: 12px; white-space: nowrap; box-shadow: 0 14px 30px -16px #000; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 3; }
+.an-col:hover .an-tip2 { opacity: 1; }
+.an-tip2 b { display: block; font-size: 14px; font-weight: 800; }
+.an-tip2 span { color: var(--ink-dim); }
+.an-xl { bottom: 22px; }
+.an-sum { position: absolute; left: 0; right: 0; bottom: 0; font-size: 11.5px; color: var(--ink-dim); }

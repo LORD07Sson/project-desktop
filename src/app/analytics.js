@@ -25,61 +25,45 @@ function trendLine(text, good) {
 }
 
 
-// Плавная кривая через точки: монотонная кубическая интерполяция (Fritsch–Carlson). Catmull-Rom «перелетал» через
-// значения — перед пиком кривая проваливалась ниже нуля и уходила за низ графика; здесь между точками она не выходит
-// за их значения, так что 0 остаётся нулём, а пик — пиком.
-function smoothPath(P) {
-  const n = P.length;
-  let d = `M${P[0][0]},${P[0][1]}`;
-  if (n < 2) return d;
-  const dx = [], slope = [];
-  for (let i = 0; i < n - 1; i++) {
-    dx[i] = P[i + 1][0] - P[i][0];
-    slope[i] = (P[i + 1][1] - P[i][1]) / (dx[i] || 1);
-  }
-  const m = new Array(n);
-  m[0] = slope[0];
-  m[n - 1] = slope[n - 2];
-  for (let i = 1; i < n - 1; i++) m[i] = slope[i - 1] * slope[i] <= 0 ? 0 : (slope[i - 1] + slope[i]) / 2;
-  for (let i = 0; i < n - 1; i++) {
-    if (slope[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
-    const a = m[i] / slope[i], b = m[i + 1] / slope[i], h = Math.hypot(a, b);
-    if (h > 3) { const t = 3 / h; m[i] = t * a * slope[i]; m[i + 1] = t * b * slope[i]; }
-  }
-  for (let i = 0; i < n - 1; i++) {
-    const c1 = [P[i][0] + dx[i] / 3, P[i][1] + m[i] * dx[i] / 3];
-    const c2 = [P[i + 1][0] - dx[i] / 3, P[i + 1][1] - m[i + 1] * dx[i] / 3];
-    d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${P[i + 1][0]},${P[i + 1][1]}`;
-  }
-  return d;
-}
-
-// Завершено по дням — площадная кривая с отметкой на последней точке.
+// Завершено по дням — площадь под ломаной по дням. Точки ставятся там, где были завершённые серии; подсказка с датой и числом
+// появляется при наведении на день. Все отметки лежат в одной «пластине» с графиком (раньше они считались от высоты вместе
+// с подписями дат и съезжали вниз, а плавная кривая размывала один день в холм на несколько).
 function trendChartHtml(days) {
   if (!days || days.length < 2) return `<div class="no-assignee">Данных для графика пока нет</div>`;
   const vals = days.map(x => x.completed || 0);
   const max = Math.max(3, ...vals);
+  const n = vals.length;
   const W = 600, H = 200;
-  const P = vals.map((v, i) => [+(i / (vals.length - 1) * W).toFixed(1), +(H - 10 - (v / max) * (H - 30)).toFixed(1)]);
-  const line = smoothPath(P);
-  const last = P[P.length - 1];
+  const xPct = i => (i / (n - 1)) * 100;
+  const yPct = v => ((H - 10 - (v / max) * (H - 30)) / H) * 100;
+  const P = vals.map((v, i) => [+(xPct(i) / 100 * W).toFixed(1), +(yPct(v) / 100 * H).toFixed(1)]);
+  const line = "M" + P.map(p => p.join(",")).join(" L");
   const total = vals.reduce((a, b) => a + b, 0);
   const pk = Math.max(...vals);
-  const lbl = i => { const dt = String(days[i].date || "").slice(5).split("-").reverse().join("."); return dt; };
+  const label = i => String(days[i].date || "").slice(5).split("-").reverse().join(".");
+  const word = v => (v % 10 === 1 && v % 100 !== 11 ? "серия" : (v % 10 >= 2 && v % 10 <= 4 && (v % 100 < 12 || v % 100 > 14) ? "серии" : "серий"));
+  const colW = 100 / (n - 1);
   return `
     <div class="an-chart">
-      ${[0, 1, 2, 3].map(i => `<div class="an-gl" style="top:${(i / 4) * 100 * (H - 6) / H}%"></div>`).join("")}
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="an-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--fire)" stop-opacity=".38"/><stop offset="1" stop-color="var(--fire)" stop-opacity="0"/></linearGradient>
-          <linearGradient id="an-stroke" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--fire)"/><stop offset="1" stop-color="var(--gold)"/></linearGradient>
-        </defs>
-        <path d="${line} L${W},${H} L0,${H} Z" fill="url(#an-fill)"/>
-        <path d="${line}" fill="none" stroke="url(#an-stroke)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
-      </svg>
-      <span class="an-mk" style="left:100%;top:${(last[1] / H) * 100}%"></span>
-      <div class="an-tip" style="top:${(last[1] / H) * 100}%"><b>${vals[vals.length - 1]} ${vals[vals.length - 1] === 1 ? "серия" : "серий"}</b><span>за последний день · всего ${total}, пик ${pk}</span></div>
-      <div class="an-xl"><span>${lbl(0)}</span><span>${lbl(Math.floor(days.length / 2))}</span><span>${lbl(days.length - 1)}</span></div>
+      <div class="an-plot">
+        ${[0, 1, 2, 3].map(i => `<div class="an-gl" style="top:${(i / 4) * 100}%"></div>`).join("")}
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="an-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--fire)" stop-opacity=".38"/><stop offset="1" stop-color="var(--fire)" stop-opacity="0"/></linearGradient>
+            <linearGradient id="an-stroke" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--fire)"/><stop offset="1" stop-color="var(--gold)"/></linearGradient>
+          </defs>
+          <path d="${line} L${W},${H} L0,${H} Z" fill="url(#an-fill)"/>
+          <path d="${line}" fill="none" stroke="url(#an-stroke)" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+        </svg>
+        ${vals.map((v, i) => v > 0 ? `<span class="an-dot" style="left:${xPct(i)}%;top:${yPct(v)}%"></span>` : "").join("")}
+        ${vals.map((v, i) => `
+          <div class="an-col" style="left:${xPct(i) - colW / 2}%;width:${colW}%">
+            <span class="an-dot hov" style="left:50%;top:${yPct(v)}%"></span>
+            <div class="an-tip2" style="top:${yPct(v)}%"><b>${v} ${word(v)}</b><span>${esc(label(i))}</span></div>
+          </div>`).join("")}
+      </div>
+      <div class="an-xl"><span>${esc(label(0))}</span><span>${esc(label(Math.floor(n / 2)))}</span><span>${esc(label(n - 1))}</span></div>
+      <div class="an-sum">всего ${total} · пик ${pk} · за последний день ${vals[n - 1]}</div>
     </div>`;
 }
 
