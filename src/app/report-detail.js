@@ -219,7 +219,7 @@ export async function openReportDetail(publicId) {
             <div class="rd-sec">
               <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди" : `${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}`}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? "изменить" : ""}</button>` : ""}</h3>
-              ${hasPipe ? pipelineTimelineHtml(detail.pipeline) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
+              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
               ${canEdit ? `<div id="pipe-editor" hidden>
                 <div id="pipeline-draft-list"></div>
                 <div class="add-row">
@@ -804,16 +804,34 @@ const STATUS_PATH = [["draft", "Черновик"], ["review", "Озвучка"]
 
 // Пайплайн шкалой этапов: кто на каком этапе, пройденное закрашено,
 // линия доходит до текущего этапа.
-function pipelineTimelineHtml(pipeline) {
-  const cur = pipeline.map((s, i) => (s.current ? i : -1)).filter(i => i !== -1).pop() ?? -1;
-  const at = cur !== -1 ? cur : pipeline.filter(s => s.done).length;
-  const p = pipeline.length > 1 ? Math.min(at, pipeline.length - 1) / (pipeline.length - 1) : 0;
-  return `<div class="rd-timeline" style="--n:${pipeline.length};--p:${p}">${pipeline.map((s, i) => `
-    <div class="rd-tl${s.done ? " done" : ""}${s.current ? " cur" : ""}">
-      <span class="rd-tl-dot">${s.done ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : i + 1}</span>
-      <div class="rd-tl-t">${esc(s.role)}</div>
-      <div class="rd-tl-p">${s.user_name ? esc(s.user_name) : "не выбран"}</div>
-    </div>`).join("")}</div>`;
+// Одинаковые роли подряд (Даббер → Даббер → Даббер) и весь пайплайн «без очереди» — один общий этап: работают одновременно.
+// Группировка та же, что на сервере (database.pipeline_stage_bounds).
+function pipelineGroups(pipeline, parallel) {
+  const key = role => { const k = String(role || "").trim().toLowerCase().split("ё").join("е"); return k.startsWith("даббер") ? "даббер" : k; };
+  const groups = [];
+  pipeline.forEach((s, i) => {
+    const last = groups[groups.length - 1];
+    if (last && (parallel || key(pipeline[last[0]].role) === key(s.role))) last.push(i);
+    else groups.push([i]);
+  });
+  return groups;
+}
+
+function pipelineTimelineHtml(pipeline, parallel = false) {
+  const groups = pipelineGroups(pipeline, parallel);
+  const curGroup = groups.findIndex(g => g.some(i => pipeline[i].current));
+  const at = curGroup !== -1 ? curGroup : groups.filter(g => g.every(i => pipeline[i].done)).length;
+  const p = groups.length > 1 ? Math.min(at, groups.length - 1) / (groups.length - 1) : 0;
+  return `<div class="rd-timeline" style="--n:${groups.length};--p:${p}">${groups.map((g, gi) => {
+    const done = g.every(i => pipeline[i].done);
+    const cur = g.some(i => pipeline[i].current);
+    return `
+    <div class="rd-tl${done ? " done" : ""}${cur ? " cur" : ""}">
+      <span class="rd-tl-dot">${done ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : gi + 1}</span>
+      ${g.map(i => `<div class="rd-tl-ent"><div class="rd-tl-t">${esc(pipeline[i].role)}</div><div class="rd-tl-p">${pipeline[i].user_name ? esc(pipeline[i].user_name) : "не выбран"}</div></div>`).join("")}
+      ${g.length > 1 ? `<div class="rd-tl-par">одновременно</div>` : ""}
+    </div>`;
+  }).join("")}</div>`;
 }
 
 // История и активность — прямо во вкладке карточки: первые 20 событий,

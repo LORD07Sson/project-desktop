@@ -2844,3 +2844,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 
 /* Недоступное по правам роли — убрано совсем (perm-visibility.js) */
 [data-perm-hidden="1"] { display: none !important; }
+
+/* Пайплайн: несколько человек в одном этапе (Даббер → Даббер → Даббер) стоят друг под другом — «одновременно» */
+.rd-tl-ent { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
+.rd-tl-ent + .rd-tl-ent { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, .12); width: 100%; }
+.rd-tl-par { margin-top: 8px; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--gold); background: rgba(var(--gold-rgb), .12); }
