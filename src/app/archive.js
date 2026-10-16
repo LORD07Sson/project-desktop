@@ -22,8 +22,28 @@ function pickerHtml(id, label, chats, selected, hint) {
     <p class="bc-hint" style="margin-top:4px;">${hint}</p>`;
 }
 
+const SAMPLE = "#Младшая_сестра_моего_друга_досаждает #1_сезон #4K #7";
+
+function previewHtml(r) {
+  if (!r.ok) return `<div class="bc-warn">${esc(r.error)}</div>`;
+  const i = r.info;
+  const facts = [i.season ? `${i.season} сезон` : "", i.episode != null ? `${i.episode} серия` : "", i.quality || ""].filter(Boolean).join(" · ");
+  const match = r.title_match
+    ? `Тайтл студии: <b>${esc(r.title_match.name)}</b> — ${r.title_match.taken ? `взят в работу: заведутся отчёты «${esc(r.episode_label || "")}» на каждую роль, видео станет равкой серии` : "не взят в работу: отчётов не будет, видео приложится к серии"}`
+    : "Тайтл студии не найден — серия ляжет только в архив, вам придёт сообщение.";
+  const topic = r.topic.new ? "Тема тайтла будет создана заново, в ней закрепится превью с постером." : `Серия ляжет в существующую тему № ${r.topic.id}.`;
+  return `
+    <div style="display:grid; gap:10px;">
+      <div><span class="bc-hint">Файл в архиве</span><div style="font-family:ui-monospace,Consolas,monospace; font-size:12.5px;">${esc(r.filename)}</div></div>
+      <div><span class="bc-hint">Подпись под видео</span>
+        <div style="border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--surface-2); line-height:1.5;">${String(r.caption_html).split(String.fromCharCode(10)).join("<br>")}</div></div>
+      <div class="bc-hint" style="margin:0;">Разобрано: <b>${esc(i.title)}</b>${facts ? ` · ${esc(facts)}` : ""}<br>${match}<br>${topic}</div>
+    </div>`;
+}
+
 export async function mountArchive(root) {
   if (!root) return;
+  let sampleCaption = SAMPLE;
 
   function paint(d) {
     const channels = (d.chats || []).filter(c => c.type === "channel");
@@ -41,6 +61,13 @@ export async function mountArchive(root) {
         <label class="bc-feature" style="margin-top:12px;"><input type="checkbox" id="ar-enabled" ${d.enabled ? "checked" : ""}><span>Автоперенос включён</span></label>
         <div class="sheet-actions" style="justify-content:flex-start; margin-top:10px;"><button class="btn primary" id="ar-save">Сохранить</button></div>
         <p class="bc-hint" style="margin:10px 0 0;">Перенесено серий: <b>${d.done || 0}</b>. Одна и та же серия дважды не копируется; о сбоях бот пишет владельцам в личку.</p>
+      </div>
+      <h4 style="margin:16px 0 8px;">Предпросмотр</h4>
+      <p class="bc-hint">Вставьте подпись поста из канала — покажу, как бот её разберёт и что получится в архиве. Ничего не отправляется.</p>
+      <div class="bc-chat">
+        <textarea class="field-input" id="ar-sample" rows="2" style="width:100%; resize:vertical;">${esc(sampleCaption)}</textarea>
+        <div class="sheet-actions" style="justify-content:flex-start; margin-top:8px;"><button class="btn" id="ar-preview">Показать, что получится</button></div>
+        <div id="ar-preview-out" style="margin-top:10px;"></div>
       </div>
       <h4 style="margin:16px 0 8px;">Темы тайтлов <small>${(d.known_topics || []).length}</small></h4>
       <p class="bc-hint">Создайте тему в архивной группе — она появится здесь сама (бот должен быть админом группы), и серия с похожим названием ляжет в неё.
@@ -71,6 +98,16 @@ export async function mountArchive(root) {
       enabled: root.querySelector("#ar-enabled").checked,
     }, "Сохранено."));
     root.querySelectorAll("[data-forget-topic]").forEach(b => b.addEventListener("click", () => apply("/archive/topic/forget", { topic_id: Number(b.dataset.forgetTopic) }, "Тема убрана из списка.")));
+    const out = root.querySelector("#ar-preview-out");
+    const runPreview = async () => {
+      sampleCaption = root.querySelector("#ar-sample").value;
+      out.innerHTML = `<div class="no-assignee">Разбираю…</div>`;
+      try {
+        out.innerHTML = previewHtml(await apiPost("/archive/preview", { caption: sampleCaption }));
+      } catch (e) { out.innerHTML = `<div class="bc-warn">${esc(e.message)}</div>`; }
+    };
+    root.querySelector("#ar-preview").addEventListener("click", runPreview);
+    runPreview();
     root.querySelector("#ar-bind").addEventListener("submit", e => {
       e.preventDefault();
       apply("/archive/topic", { title_tag: root.querySelector("#ar-tag").value, topic_id: root.querySelector("#ar-topic").value }, "Тема привязана.");
