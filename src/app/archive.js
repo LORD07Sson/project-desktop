@@ -141,9 +141,7 @@ export async function mountArchive(root) {
     root.querySelector("#ar-refresh")?.addEventListener("click", load);
     root.querySelector("#ar-queue-refresh")?.addEventListener("click", load);
     root.querySelector("#ar-requeue")?.addEventListener("click", async () => {
-      if (!confirm("Вернуть в очередь ВСЕ перенесённые серии и залить заново?
-
-Старая копия каждой серии удаляется только после того, как новая успешно залита. Заливка идёт по одной с лимитом сети — на сотню серий уйдёт несколько часов.")) return;
+      if (!confirm("Вернуть в очередь ВСЕ перенесённые серии и залить заново? Старая копия каждой серии удаляется только после того, как новая успешно залита. Заливка идёт по одной с лимитом сети — на сотню серий уйдёт несколько часов.")) return;
       try { await apiPost("/archive/requeue", {}); toast("Серии возвращены в очередь — бот начнёт в течение 30 секунд.", "success"); setTimeout(load, 4000); }
       catch (e) { toast(e.message, "error"); }
     });
