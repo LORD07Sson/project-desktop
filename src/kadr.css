@@ -2849,3 +2849,15 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-tl-ent { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
 .rd-tl-ent + .rd-tl-ent { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, .12); width: 100%; }
 .rd-tl-par { margin-top: 8px; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--gold); background: rgba(var(--gold-rgb), .12); }
+
+/* Тайтлы: карточка не «дрожит» под курсором.
+   1) Кнопка «Взять в работу» раньше появлялась через display:none → flex и растягивала карточку, сетка перестраивалась
+      и курсор попадал то на карточку, то мимо. Теперь она лежит поверх постера и только проявляется.
+   2) Подъём на 5px сдвигал нижнюю кромку выше курсора — край карточки мигал. Запас снизу не даёт курсору «выпасть». */
+.af-card { container-type: inline-size; padding-bottom: 8px; margin-bottom: -8px; }
+.af-card .tl-take:not(.on) {
+  display: flex; position: absolute; left: 10px; right: 10px; width: auto; z-index: 3;
+  top: calc(100cqw * 1.3833 - 48px);
+  opacity: 0; pointer-events: none; transition: opacity .18s ease;
+}
+.af-card:hover .tl-take:not(.on) { opacity: 1; pointer-events: auto; }
