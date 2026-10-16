@@ -58,6 +58,7 @@ export async function mountArchive(root) {
         ${pickerHtml("ar-source", "Откуда (канал)", channels, d.source, "Бот должен быть админом канала — тогда он видит каждый новый пост.")}
         <div style="height:10px;"></div>
         ${pickerHtml("ar-target", "Куда (архивная группа)", groups, d.target, "Группа с включёнными «Темами»; у бота права «Управлять темами», «Публиковать» и «Закреплять».")}
+        ${d.target && target && target.status && target.status !== "administrator" ? `<div class="bc-warn">Бот в этой группе не админ — темы он не увидит и создать не сможет. Сделайте его админом (управление темами, публикация, закрепление).</div>` : ""}
         ${d.target && target && !target.is_forum ? `<div class="bc-warn">В этой группе не включены темы — серии пойдут в общую ленту.</div>` : ""}
         <label class="bc-feature" style="margin-top:12px;"><input type="checkbox" id="ar-enabled" ${d.enabled ? "checked" : ""}><span>Автоперенос включён</span></label>
         <div class="sheet-actions" style="justify-content:flex-start; margin-top:10px;"><button class="btn primary" id="ar-save">Сохранить</button></div>
