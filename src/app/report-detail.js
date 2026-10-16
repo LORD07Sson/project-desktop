@@ -26,6 +26,21 @@ import { titleArt } from "./title-page.js";
 const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silence_long: "Долгая тишина", no_speech: "Речь не найдена" };
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
 
+// После запуска сборки финала предлагаем сразу перейти к посту в канал (тот же конструктор, что в админ-панели).
+function offerPublishPost() {
+  const overlay = openSheet(`
+    <h2>Опубликовать пост?</h2>
+    <p class="bc-hint">Финал собирается в боте. Пока он готовится, можно подготовить пост для канала: заголовок, блоки с людьми, обложка и кнопки.</p>
+    <div class="sheet-actions">
+      <button class="btn" data-close>Позже</button>
+      <button class="btn primary" id="offer-post-open">Открыть «Пост в канал»</button>
+    </div>`);
+  overlay.querySelector("#offer-post-open").addEventListener("click", () => {
+    overlay.remove();
+    import("./channel-post.js").then(m => m.openChannelPostSheet());
+  });
+}
+
 export async function openReportDetail(publicId) {
   const overlay = openSheet(`
     <h2 class="skeleton-row" style="width:60%; height:22px;"></h2>
@@ -546,6 +561,7 @@ export async function openReportDetail(publicId) {
         if (!confirm(`Собрать финал?\n\nВидео: ${check.video}\nСубтитры: ${check.subs}\n${introText[0].toUpperCase() + introText.slice(1)}\n\nКарточка подтверждения придёт вам в бота, сборка идёт там.`)) return;
         await apiPost(`/report/${publicId}/assemble`, {});
         toast("Карточка сборки отправлена в бота — подтвердите там.", "success");
+        if (state.isAdmin || state.isDeveloper) offerPublishPost();
       } catch (err) {
         toast(`Не удалось запустить сборку: ${err.message}`, "error");
       } finally {
