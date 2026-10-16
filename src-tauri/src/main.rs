@@ -8,6 +8,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod antivirus;
 mod audio_qc;
 mod board;
 mod desktop_notify;
@@ -1408,6 +1409,21 @@ fn main() {
         .manage(file_scope::FileScope::default())
         .invoke_handler(tauri::generate_handler![
             desktop_notify::notify_desktop,
+            antivirus::av_scan,
+            antivirus::av_cancel,
+            antivirus::av_status,
+            antivirus::av_update_signatures,
+            antivirus::av_quarantine,
+            antivirus::av_quarantine_list,
+            antivirus::av_quarantine_restore,
+            antivirus::av_quarantine_delete,
+            antivirus::av_exclude,
+            antivirus::av_exclusions,
+            antivirus::av_exclusion_remove,
+            antivirus::av_kill,
+            antivirus::av_remove_autorun,
+            antivirus::av_remove_defender_exclusion,
+            antivirus::av_defender,
             qc_analyze,
             generate_waveform,
             export_audio_clip,

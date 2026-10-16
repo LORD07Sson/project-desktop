@@ -1,0 +1,172 @@
+{
+ "names": [
+  {
+   "p": "xmrig",
+   "n": "XMRig (майнер Monero)",
+   "s": "high"
+  },
+  {
+   "p": "xmr-stak",
+   "n": "XMR-Stak (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "nbminer",
+   "n": "NBMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "t-rex",
+   "n": "T-Rex (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "lolminer",
+   "n": "lolMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "gminer",
+   "n": "GMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "phoenixminer",
+   "n": "PhoenixMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "ethminer",
+   "n": "Ethminer (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "claymore",
+   "n": "Claymore (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "cgminer",
+   "n": "CGMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "bfgminer",
+   "n": "BFGMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "cpuminer",
+   "n": "CPUMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "minerd",
+   "n": "minerd (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "kawpowminer",
+   "n": "KawPowMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "teamredminer",
+   "n": "TeamRedMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "srbminer",
+   "n": "SRBMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "wildrig",
+   "n": "WildRig (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "bzminer",
+   "n": "BzMiner (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "nanominer",
+   "n": "Nanominer (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "minergate",
+   "n": "MinerGate (майнер)",
+   "s": "high"
+  },
+  {
+   "p": "mimikatz",
+   "n": "Mimikatz (кража паролей)",
+   "s": "high"
+  },
+  {
+   "p": "lazagne",
+   "n": "LaZagne (кража паролей)",
+   "s": "high"
+  }
+ ],
+ "cmdline": [
+  "stratum+tcp://",
+  "stratum+ssl://",
+  "stratum2+tcp://",
+  "stratum+tls://",
+  "--donate-level",
+  "--rig-id",
+  "--tls-fingerprint",
+  "cryptonight",
+  "--algo=rx",
+  "-a rx/0",
+  "randomx",
+  "--coin=xmr",
+  "--cpu-priority"
+ ],
+ "pool_domains": [
+  "nanopool.org",
+  "2miners.com",
+  "f2pool.com",
+  "ethermine.org",
+  "hiveon.net",
+  "supportxmr.com",
+  "minexmr.com",
+  "moneroocean.stream",
+  "herominers.com",
+  "unmineable.com",
+  "nicehash.com",
+  "miningpoolhub.com",
+  "poolin.com",
+  "antpool.com",
+  "viabtc.com",
+  "ezil.me",
+  "flexpool.io",
+  "hashvault.pro",
+  "crazypool.org",
+  "c3pool.com",
+  "minergate.com",
+  "dwarfpool.com",
+  "slushpool.com",
+  "pool.braiins.com",
+  "xmrpool.eu",
+  "monerohash.com",
+  "mineXMR.com"
+ ],
+ "pool_ports": [
+  3333,
+  4444,
+  5555,
+  7777,
+  14433,
+  14444,
+  45560
+ ],
+ "version": 1,
+ "updated": "встроенная база",
+ "sha256": {
+  "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f": "EICAR-Test-File (тестовый файл)"
+ }
+}

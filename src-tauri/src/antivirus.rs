@@ -1,0 +1,985 @@
+//! Антивирус: проверка ПК, карантин, обновляемые базы сигнатур.
+//!
+//! Что делает:
+//!   • сверяет SHA-256 исполняемых файлов с базой хешей (свежие образцы MalwareBazaar, база обновляется с нашего сервера);
+//!   • ищет майнеры и хакерские утилиты по имени файла, командной строке процесса, доменам и портам майнинг-пулов;
+//!   • смотрит автозапуск и исключения Защитника Windows (там майнеры любят прятаться);
+//!   • подозрительное уходит в карантин (файл перекладывается и «портится» XOR, запустить его нельзя): восстановить, удалить
+//!     совсем или добавить в исключения.
+//!
+//! Чего НЕ делает: не заменяет Защитник Windows (поведенческий анализ, драйверы, облачная защита) — он остаётся основным; здесь
+//! сигнатуры и эвристики поверх него, плюс кнопки для запуска проверки и обновления самого Защитника. Ничего не удаляется
+//! без явного действия пользователя, системные папки и сама программа защищены от карантина.
+
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, Emitter, Manager};
+
+const BASELINE: &str = include_str!("../av-baseline.json");
+const API_BASE: &str = "https://minitg.shitstudent.com:8443/api";
+const MAX_HASH_BYTES: u64 = 300 * 1024 * 1024;
+const XOR_KEY: u8 = 0x5A;
+const SCAN_EXTS: &[&str] = &[
+    "exe", "dll", "scr", "bat", "cmd", "ps1", "vbs", "jse", "wsf", "msi", "jar", "com", "hta",
+];
+
+static CANCEL: AtomicBool = AtomicBool::new(false);
+
+// ---------------------------------------------------------------- базы
+
+#[derive(Deserialize, Serialize, Clone, Default)]
+struct NameSig {
+    p: String,
+    n: String,
+    #[serde(default)]
+    s: String,
+}
+
+#[derive(Deserialize, Serialize, Clone, Default)]
+struct Signatures {
+    #[serde(default)]
+    version: u64,
+    #[serde(default)]
+    updated: String,
+    #[serde(default)]
+    sha256: HashMap<String, String>,
+    #[serde(default)]
+    names: Vec<NameSig>,
+    #[serde(default)]
+    cmdline: Vec<String>,
+    #[serde(default)]
+    pool_domains: Vec<String>,
+    #[serde(default)]
+    pool_ports: Vec<u16>,
+}
+
+fn av_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("av");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+fn load_signatures(app: &AppHandle) -> Signatures {
+    let baseline: Signatures = serde_json::from_str(BASELINE).unwrap_or_default();
+    if let Ok(dir) = av_dir(app) {
+        if let Ok(text) = fs::read_to_string(dir.join("signatures.json")) {
+            if let Ok(local) = serde_json::from_str::<Signatures>(&text) {
+                if local.version >= baseline.version {
+                    return local;
+                }
+            }
+        }
+    }
+    baseline
+}
+
+// ------------------------------------------------------ исключения и карантин
+
+#[derive(Deserialize, Serialize, Default, Clone)]
+struct Exclusions {
+    #[serde(default)]
+    paths: Vec<String>,
+    #[serde(default)]
+    hashes: Vec<String>,
+}
+
+fn load_exclusions(app: &AppHandle) -> Exclusions {
+    av_dir(app)
+        .ok()
+        .and_then(|d| fs::read_to_string(d.join("exclusions.json")).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn save_exclusions(app: &AppHandle, ex: &Exclusions) -> Result<(), String> {
+    let dir = av_dir(app)?;
+    fs::write(dir.join("exclusions.json"), serde_json::to_vec(ex).unwrap_or_default()).map_err(|e| e.to_string())
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+struct QItem {
+    id: String,
+    original: String,
+    name: String,
+    sha256: String,
+    label: String,
+    size: u64,
+    at: u64,
+}
+
+fn qdir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = av_dir(app)?.join("quarantine");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+fn load_quarantine(app: &AppHandle) -> Vec<QItem> {
+    av_dir(app)
+        .ok()
+        .and_then(|d| fs::read_to_string(d.join("quarantine.json")).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn save_quarantine(app: &AppHandle, items: &[QItem]) -> Result<(), String> {
+    let dir = av_dir(app)?;
+    fs::write(dir.join("quarantine.json"), serde_json::to_vec(items).unwrap_or_default()).map_err(|e| e.to_string())
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Копирует файл через XOR: «карантинный» файл невозможно запустить, и сигнатурные сканеры его не узнают.
+fn xor_copy(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut src = fs::File::open(from)?;
+    let mut dst = fs::File::create(to)?;
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = src.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        for b in &mut buf[..n] {
+            *b ^= XOR_KEY;
+        }
+        dst.write_all(&buf[..n])?;
+    }
+    dst.flush()
+}
+
+// ------------------------------------------------------------ защита системы
+
+/// Пути, которые нельзя трогать никогда: Windows, сама программа, каталог карантина.
+fn is_protected(path: &Path, own_dirs: &[PathBuf]) -> bool {
+    let lower = path.to_string_lossy().to_lowercase().replace('/', "\\");
+    if let Ok(windir) = std::env::var("WINDIR") {
+        let w = windir.to_lowercase();
+        if lower.starts_with(&format!("{w}\\")) || lower == w {
+            return true;
+        }
+    }
+    if lower.contains("\\windows\\system32\\") || lower.contains("\\windows\\syswow64\\") || lower.contains("\\windows\\winsxs\\") {
+        return true;
+    }
+    own_dirs.iter().any(|d| {
+        let o = d.to_string_lossy().to_lowercase().replace('/', "\\");
+        !o.is_empty() && (lower == o || lower.starts_with(&format!("{o}\\")))
+    })
+}
+
+fn own_dirs(app: &AppHandle) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            dirs.push(parent.to_path_buf());
+            // Velopack кладёт текущую версию в <корень>\current; корень содержит Update.exe и пакеты.
+            if let Some(root) = parent.parent() {
+                if root.join("Update.exe").exists() {
+                    dirs.push(root.to_path_buf());
+                }
+            }
+        }
+    }
+    if let Ok(d) = av_dir(app) {
+        dirs.push(d);
+    }
+    dirs
+}
+
+// -------------------------------------------------------------------- утилиты
+
+fn sha256_file(path: &Path) -> Option<String> {
+    let meta = fs::metadata(path).ok()?;
+    if !meta.is_file() || meta.len() > MAX_HASH_BYTES {
+        return None;
+    }
+    let mut file = fs::File::open(path).ok()?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = file.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Some(hex(&hasher.finalize()))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn detection_id(kind: &str, key: &str) -> String {
+    let mut h = Sha256::new();
+    h.update(kind.as_bytes());
+    h.update(b"|");
+    h.update(key.as_bytes());
+    hex(&h.finalize())[..16].to_string()
+}
+
+/// PowerShell без окна, вывод в UTF-8. На не-Windows возвращает ошибку (проверка процессов и реестра только для Windows).
+fn powershell(script: &str) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let full = format!("[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); $ProgressPreference='SilentlyContinue'; {script}");
+        let out = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &full])
+            .creation_flags(0x0800_0000)
+            .output()
+            .map_err(|e| e.to_string())?;
+        Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = script;
+        Err("Проверка процессов и реестра доступна только в Windows".into())
+    }
+}
+
+/// PowerShell отдаёт один объект без массива — приводим к списку.
+fn json_items(text: &str) -> Vec<Value> {
+    match serde_json::from_str::<Value>(text.trim()) {
+        Ok(Value::Array(a)) => a,
+        Ok(v @ Value::Object(_)) => vec![v],
+        _ => Vec::new(),
+    }
+}
+
+/// Путь к exe из значения автозапуска: `"C:\x\a.exe" -arg` или `C:\x\a.exe /arg`.
+fn extract_exe(data: &str) -> Option<String> {
+    let t = data.trim();
+    if let Some(rest) = t.strip_prefix('"') {
+        return rest.split('"').next().map(|s| s.to_string());
+    }
+    let lower = t.to_lowercase();
+    for ext in [".exe", ".bat", ".cmd", ".ps1", ".vbs", ".scr", ".com", ".jar"] {
+        if let Some(i) = lower.find(ext) {
+            return Some(t[..i + ext.len()].to_string());
+        }
+    }
+    None
+}
+
+fn file_stem_lower(path: &str) -> String {
+    Path::new(path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default()
+}
+
+fn match_name<'a>(sigs: &'a Signatures, stem: &str) -> Option<&'a NameSig> {
+    if stem.len() < 4 {
+        return None;
+    }
+    sigs.names.iter().find(|n| {
+        let p = n.p.to_lowercase();
+        stem == p || stem.starts_with(&format!("{p}-")) || stem.starts_with(&format!("{p}_")) || stem.starts_with(&format!("{p}.")) || (p.len() >= 6 && stem.contains(&p))
+    })
+}
+
+fn match_cmdline<'a>(sigs: &'a Signatures, cmd: &str) -> Option<&'a str> {
+    let lower = cmd.to_lowercase();
+    sigs.cmdline
+        .iter()
+        .map(|s| s.as_str())
+        .find(|s| lower.contains(&s.to_lowercase()))
+        .or_else(|| sigs.pool_domains.iter().map(|s| s.as_str()).find(|d| lower.contains(&d.to_lowercase())))
+}
+
+#[derive(Serialize, Clone)]
+struct Detection {
+    id: String,
+    kind: String,
+    severity: String,
+    title: String,
+    detail: String,
+    path: Option<String>,
+    pid: Option<u64>,
+    sha256: Option<String>,
+    extra: Value,
+}
+
+struct Ctx {
+    sigs: Signatures,
+    excl: Exclusions,
+    own: Vec<PathBuf>,
+    found: Vec<Detection>,
+    seen: HashSet<String>,
+    hashed: HashMap<String, Option<String>>,
+    scanned: u64,
+}
+
+impl Ctx {
+    fn push(&mut self, d: Detection) {
+        if self.seen.insert(d.id.clone()) {
+            self.found.push(d);
+        }
+    }
+
+    fn excluded(&self, path: &str, sha: Option<&str>) -> bool {
+        let lower = path.to_lowercase();
+        self.excl.paths.iter().any(|p| p.to_lowercase() == lower) || sha.map(|h| self.excl.hashes.iter().any(|x| x == h)).unwrap_or(false)
+    }
+
+    /// Проверка одного файла: хеш по базе, затем имя. Возвращает true, если что-то нашли.
+    fn check_file(&mut self, path: &str, kind: &str, pid: Option<u64>) -> bool {
+        let p = Path::new(path);
+        let sha = if let Some(c) = self.hashed.get(path) {
+            c.clone()
+        } else {
+            let h = sha256_file(p);
+            self.hashed.insert(path.to_string(), h.clone());
+            h
+        };
+        if self.excluded(path, sha.as_deref()) {
+            return false;
+        }
+        if let Some(h) = &sha {
+            if let Some(label) = self.sigs.sha256.get(h).cloned() {
+                self.push(Detection {
+                    id: detection_id("hash", path),
+                    kind: kind.into(),
+                    severity: "high".into(),
+                    title: format!("Найден вредоносный файл: {label}"),
+                    detail: "SHA-256 файла есть в базе вредоносных образцов.".into(),
+                    path: Some(path.into()),
+                    pid,
+                    sha256: sha.clone(),
+                    extra: json!({ "label": label }),
+                });
+                return true;
+            }
+        }
+        let stem = file_stem_lower(path);
+        if let Some(n) = match_name(&self.sigs, &stem).cloned() {
+            self.push(Detection {
+                id: detection_id("name", path),
+                kind: kind.into(),
+                severity: if n.s.is_empty() { "medium".into() } else { n.s.clone() },
+                title: format!("Подозрительная программа: {}", n.n),
+                detail: "Имя файла совпадает с известным майнером или хакерской утилитой.".into(),
+                path: Some(path.into()),
+                pid,
+                sha256: sha,
+                extra: json!({ "label": n.n }),
+            });
+            return true;
+        }
+        false
+    }
+}
+
+// -------------------------------------------------------------------- проверка
+
+fn emit(app: &AppHandle, stage: &str, scanned: u64, found: usize, current: &str) {
+    let _ = app.emit("av-progress", json!({ "stage": stage, "scanned": scanned, "found": found, "current": current }));
+}
+
+fn roots_for(mode: &str, custom: &[String]) -> Vec<(PathBuf, usize)> {
+    let var = |n: &str| std::env::var(n).ok().map(PathBuf::from);
+    let mut roots: Vec<(PathBuf, usize)> = Vec::new();
+    match mode {
+        "custom" => roots.extend(custom.iter().map(|p| (PathBuf::from(p), 12))),
+        "full" => {
+            if let Some(u) = var("USERPROFILE") {
+                roots.push((u, 12));
+            }
+            for n in ["ProgramData", "ProgramFiles", "ProgramFiles(x86)"] {
+                if let Some(p) = var(n) {
+                    roots.push((p, 8));
+                }
+            }
+        }
+        _ => {
+            if let Some(u) = var("USERPROFILE") {
+                for sub in ["Downloads", "Desktop", "Documents"] {
+                    roots.push((u.join(sub), 4));
+                }
+            }
+            if let Some(a) = var("APPDATA") {
+                roots.push((a.join("Microsoft\\Windows\\Start Menu\\Programs\\Startup"), 2));
+                roots.push((a, 4));
+            }
+            if let Some(l) = var("LOCALAPPDATA") {
+                roots.push((l.join("Temp"), 4));
+                roots.push((l.join("Programs"), 4));
+                roots.push((l, 2));
+            }
+            if let Some(p) = var("ProgramData") {
+                roots.push((p, 3));
+            }
+        }
+    }
+    roots
+}
+
+fn walk(app: &AppHandle, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
+    if depth == 0 || CANCEL.load(Ordering::Relaxed) {
+        return;
+    }
+    let Ok(rd) = fs::read_dir(dir) else { return };
+    let mut last = std::time::Instant::now();
+    for entry in rd.flatten() {
+        if CANCEL.load(Ordering::Relaxed) {
+            return;
+        }
+        let path = entry.path();
+        let Ok(ft) = entry.file_type() else { continue };
+        if ft.is_symlink() {
+            continue; // не ходим по ссылкам: петли и выход за пределы проверяемой области
+        }
+        if ft.is_dir() {
+            if is_protected(&path, &ctx.own) {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name == "$recycle.bin" || name == "node_modules" || name == "system volume information" || name == "winsxs" {
+                continue;
+            }
+            walk(app, ctx, &path, depth - 1, stage);
+        } else if ft.is_file() {
+            let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            if !SCAN_EXTS.contains(&ext.as_str()) {
+                continue;
+            }
+            let s = path.to_string_lossy().to_string();
+            ctx.scanned += 1;
+            ctx.check_file(&s, "file", None);
+            if last.elapsed().as_millis() > 250 {
+                emit(app, stage, ctx.scanned, ctx.found.len(), &s);
+                last = std::time::Instant::now();
+            }
+        }
+    }
+}
+
+fn scan_processes(app: &AppHandle, ctx: &mut Ctx) -> HashMap<u64, String> {
+    emit(app, "Процессы", ctx.scanned, ctx.found.len(), "");
+    let mut names = HashMap::new();
+    let script = "Get-CimInstance Win32_Process | Select-Object ProcessId,Name,ExecutablePath,CommandLine | ConvertTo-Json -Compress";
+    let Ok(text) = powershell(script) else { return names };
+    for item in json_items(&text) {
+        let pid = item["ProcessId"].as_u64().unwrap_or(0);
+        let name = item["Name"].as_str().unwrap_or("").to_string();
+        names.insert(pid, name.to_lowercase());
+        let path = item["ExecutablePath"].as_str().unwrap_or("");
+        let cmd = item["CommandLine"].as_str().unwrap_or("");
+        ctx.scanned += 1;
+        if pid == 0 || pid == std::process::id() as u64 {
+            continue;
+        }
+        let mut hit = false;
+        if !path.is_empty() && !is_protected(Path::new(path), &ctx.own) {
+            hit = ctx.check_file(path, "process", Some(pid));
+        }
+        if !hit {
+            if let Some(sig) = match_cmdline(&ctx.sigs, cmd).map(|s| s.to_string()) {
+                if !ctx.excluded(path, None) && !is_protected(Path::new(path), &ctx.own) && !cmd.is_empty() {
+                    ctx.push(Detection {
+                        id: detection_id("cmd", &format!("{pid}:{path}")),
+                        kind: "process".into(),
+                        severity: "high".into(),
+                        title: format!("Процесс похож на майнер: {name}"),
+                        detail: format!("В командной строке найдено «{sig}» — так запускают майнеры."),
+                        path: if path.is_empty() { None } else { Some(path.into()) },
+                        pid: Some(pid),
+                        sha256: None,
+                        extra: json!({ "label": name }),
+                    });
+                }
+            }
+        }
+    }
+    names
+}
+
+fn scan_network(app: &AppHandle, ctx: &mut Ctx, pnames: &HashMap<u64, String>) {
+    emit(app, "Сеть", ctx.scanned, ctx.found.len(), "");
+    let script = "Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Select-Object OwningProcess,RemoteAddress,RemotePort | ConvertTo-Json -Compress";
+    let Ok(text) = powershell(script) else { return };
+    // Эти программы часто ходят на «пуловые» порты по своим причинам — не считаем их подозрительными.
+    let calm = ["chrome", "msedge", "firefox", "brave", "opera", "steam", "discord", "telegram", "adb", "system", "svchost", "code", "java", "javaw"];
+    for item in json_items(&text) {
+        let pid = item["OwningProcess"].as_u64().unwrap_or(0);
+        let port = item["RemotePort"].as_u64().unwrap_or(0) as u16;
+        let addr = item["RemoteAddress"].as_str().unwrap_or("");
+        if pid == 0 || !ctx.sigs.pool_ports.contains(&port) || addr.starts_with("127.") || addr == "::1" {
+            continue;
+        }
+        let name = pnames.get(&pid).cloned().unwrap_or_default();
+        let stem = name.trim_end_matches(".exe");
+        if calm.iter().any(|c| stem == *c) {
+            continue;
+        }
+        ctx.push(Detection {
+            id: detection_id("net", &format!("{pid}:{addr}:{port}")),
+            kind: "connection".into(),
+            severity: "low".into(),
+            title: format!("Подозрительное соединение: {}", if name.is_empty() { "неизвестный процесс" } else { &name }),
+            detail: format!("Соединение с {addr}:{port} — порт часто используют майнинг-пулы. Проверьте, что это за программа."),
+            path: None,
+            pid: Some(pid),
+            sha256: None,
+            extra: json!({ "remote": format!("{addr}:{port}") }),
+        });
+    }
+}
+
+fn scan_autorun(app: &AppHandle, ctx: &mut Ctx) {
+    emit(app, "Автозапуск", ctx.scanned, ctx.found.len(), "");
+    let script = "$r=@(); foreach($h in 'HKCU','HKLM'){ foreach($k in 'Run','RunOnce'){ $p=\"${h}:\\Software\\Microsoft\\Windows\\CurrentVersion\\$k\"; if(Test-Path $p){ $o=Get-ItemProperty $p; foreach($n in $o.PSObject.Properties){ if($n.Name -notlike 'PS*'){ $r+=[pscustomobject]@{Hive=$h;Key=$k;Name=$n.Name;Data=[string]$n.Value} } } } } }; $r | ConvertTo-Json -Compress";
+    let Ok(text) = powershell(script) else { return };
+    for item in json_items(&text) {
+        let data = item["Data"].as_str().unwrap_or("");
+        let name = item["Name"].as_str().unwrap_or("");
+        let hive = item["Hive"].as_str().unwrap_or("");
+        let Some(exe) = extract_exe(data) else { continue };
+        let lower = exe.to_lowercase();
+        ctx.scanned += 1;
+        let mut flagged = false;
+        let before = ctx.found.len();
+        ctx.check_file(&exe, "autorun", None);
+        if ctx.found.len() > before {
+            flagged = true;
+        }
+        let in_temp = lower.contains("\\temp\\") || lower.contains("\\appdata\\local\\temp");
+        if !flagged && in_temp && !ctx.excluded(&exe, None) {
+            ctx.push(Detection {
+                id: detection_id("autorun", &format!("{hive}:{name}")),
+                kind: "autorun".into(),
+                severity: "medium".into(),
+                title: format!("Автозапуск из временной папки: {name}"),
+                detail: "Нормальные программы так не запускаются: из Temp стартуют вирусы и загрузчики.".into(),
+                path: Some(exe),
+                pid: None,
+                sha256: None,
+                extra: json!({ "hive": hive, "value": name }),
+            });
+        } else if flagged {
+            // к найденному файлу добавляем, откуда он стартует — чтобы можно было убрать запись
+            if let Some(d) = ctx.found.last_mut() {
+                d.extra = json!({ "hive": hive, "value": name, "label": d.extra["label"].clone() });
+            }
+        }
+    }
+}
+
+fn scan_defender_exclusions(app: &AppHandle, ctx: &mut Ctx) {
+    emit(app, "Защитник Windows", ctx.scanned, ctx.found.len(), "");
+    let script = "$p=Get-MpPreference -ErrorAction SilentlyContinue; if($p){ [pscustomobject]@{Paths=@($p.ExclusionPath);Procs=@($p.ExclusionProcess)} | ConvertTo-Json -Compress }";
+    let Ok(text) = powershell(script) else { return };
+    let Ok(v) = serde_json::from_str::<Value>(text.trim()) else { return };
+    let risky = ["\\temp", "\\appdata", "\\downloads", "\\users\\public", "\\programdata"];
+    let mut paths: Vec<String> = Vec::new();
+    for key in ["Paths", "Procs"] {
+        match &v[key] {
+            Value::Array(a) => paths.extend(a.iter().filter_map(|x| x.as_str()).map(String::from)),
+            Value::String(s) => paths.push(s.clone()),
+            _ => {}
+        }
+    }
+    for p in paths {
+        let lower = p.to_lowercase();
+        let root_drive = lower.len() <= 3 && lower.contains(':');
+        if root_drive || risky.iter().any(|r| lower.contains(r)) {
+            ctx.push(Detection {
+                id: detection_id("defex", &lower),
+                kind: "defender-exclusion".into(),
+                severity: "medium".into(),
+                title: "Подозрительное исключение в Защитнике Windows".into(),
+                detail: format!("Защитник не проверяет «{p}». Так часто прячут майнеры. Если вы это не настраивали — уберите."),
+                path: Some(p.clone()),
+                pid: None,
+                sha256: None,
+                extra: json!({ "exclusion": p }),
+            });
+        }
+    }
+}
+
+fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
+    CANCEL.store(false, Ordering::Relaxed);
+    let started = now_secs();
+    let mut ctx = Ctx {
+        sigs: load_signatures(&app),
+        excl: load_exclusions(&app),
+        own: own_dirs(&app),
+        found: Vec::new(),
+        seen: HashSet::new(),
+        hashed: HashMap::new(),
+        scanned: 0,
+    };
+    let pnames = scan_processes(&app, &mut ctx);
+    scan_network(&app, &mut ctx, &pnames);
+    scan_autorun(&app, &mut ctx);
+    scan_defender_exclusions(&app, &mut ctx);
+    for (root, depth) in roots_for(&mode, &custom) {
+        if CANCEL.load(Ordering::Relaxed) {
+            break;
+        }
+        if root.is_file() {
+            ctx.scanned += 1;
+            let s = root.to_string_lossy().to_string();
+            ctx.check_file(&s, "file", None);
+            continue;
+        }
+        let label = format!("Файлы: {}", root.to_string_lossy());
+        walk(&app, &mut ctx, &root, depth, &label);
+    }
+    let cancelled = CANCEL.load(Ordering::Relaxed);
+    let report = json!({
+        "mode": mode,
+        "finished": now_secs(),
+        "seconds": now_secs().saturating_sub(started),
+        "scanned": ctx.scanned,
+        "cancelled": cancelled,
+        "db_version": ctx.sigs.version,
+        "detections": ctx.found,
+    });
+    if let Ok(dir) = av_dir(&app) {
+        let summary = json!({ "finished": report["finished"], "mode": report["mode"], "scanned": report["scanned"], "found": ctx.found.len(), "cancelled": cancelled });
+        let _ = fs::write(dir.join("last_scan.json"), summary.to_string());
+    }
+    report
+}
+
+// ------------------------------------------------------------------ команды
+
+#[tauri::command(async)]
+pub async fn av_scan(app: AppHandle, mode: String, paths: Option<Vec<String>>) -> Result<Value, String> {
+    let custom = paths.unwrap_or_default();
+    tauri::async_runtime::spawn_blocking(move || scan_blocking(app, mode, custom))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn av_cancel() {
+    CANCEL.store(true, Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn av_status(app: AppHandle) -> Value {
+    let sigs = load_signatures(&app);
+    let last: Value = av_dir(&app)
+        .ok()
+        .and_then(|d| fs::read_to_string(d.join("last_scan.json")).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or(Value::Null);
+    json!({
+        "version": sigs.version,
+        "updated": sigs.updated,
+        "hashes": sigs.sha256.len(),
+        "rules": sigs.names.len() + sigs.cmdline.len() + sigs.pool_domains.len(),
+        "quarantine": load_quarantine(&app).len(),
+        "exclusions": { "paths": load_exclusions(&app).paths.len(), "hashes": load_exclusions(&app).hashes.len() },
+        "last_scan": last,
+    })
+}
+
+#[tauri::command(async)]
+pub async fn av_update_signatures(app: AppHandle) -> Result<Value, String> {
+    let current = load_signatures(&app);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get(format!("{API_BASE}/av/signatures?have={}", current.version))
+        .send()
+        .await
+        .map_err(|e| format!("Сервер баз недоступен: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("Сервер баз ответил {}", resp.status()));
+    }
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    if bytes.len() > 40 * 1024 * 1024 {
+        return Err("Файл баз слишком большой — отклонён".into());
+    }
+    let value: Value = serde_json::from_slice(&bytes).map_err(|e| format!("Базы повреждены: {e}"))?;
+    if value["unchanged"].as_bool() == Some(true) {
+        return Ok(json!({ "updated": false, "version": current.version, "hashes": current.sha256.len() }));
+    }
+    let fresh: Signatures = serde_json::from_value(value).map_err(|e| format!("Базы повреждены: {e}"))?;
+    if fresh.version <= current.version || fresh.names.is_empty() {
+        return Ok(json!({ "updated": false, "version": current.version, "hashes": current.sha256.len() }));
+    }
+    let dir = av_dir(&app)?;
+    let tmp = dir.join("signatures.json.tmp");
+    fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, dir.join("signatures.json")).map_err(|e| e.to_string())?;
+    Ok(json!({ "updated": true, "version": fresh.version, "hashes": fresh.sha256.len(), "when": fresh.updated }))
+}
+
+fn kill_pid(pid: u64) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill").args(["/PID", &pid.to_string(), "/F"]).creation_flags(0x0800_0000).output();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+    }
+}
+
+/// Файл в карантин. Если им занят процесс (pid) — сначала завершаем его (пользователь нажал кнопку).
+#[tauri::command(async)]
+pub async fn av_quarantine(app: AppHandle, path: String, pid: Option<u64>, label: Option<String>) -> Result<Value, String> {
+    let p = PathBuf::from(&path);
+    if is_protected(&p, &own_dirs(&app)) {
+        return Err("Это системный файл или файл самой программы — в карантин его отправить нельзя.".into());
+    }
+    if !p.is_file() {
+        return Err("Файл не найден — возможно, уже удалён.".into());
+    }
+    if let Some(pid) = pid {
+        kill_pid(pid);
+        std::thread::sleep(std::time::Duration::from_millis(600));
+    }
+    let sha = sha256_file(&p).unwrap_or_default();
+    let size = fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+    let id = detection_id("q", &format!("{path}{}", now_secs()));
+    let dest = qdir(&app)?.join(format!("{id}.qz"));
+    xor_copy(&p, &dest).map_err(|e| format!("Не удалось скопировать в карантин: {e}"))?;
+    if let Err(e) = fs::remove_file(&p) {
+        let _ = fs::remove_file(&dest);
+        return Err(format!("Файл занят или защищён, убрать не удалось: {e}. Закройте программу и повторите."));
+    }
+    let mut items = load_quarantine(&app);
+    items.push(QItem {
+        id: id.clone(),
+        original: path,
+        name: p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+        sha256: sha,
+        label: label.unwrap_or_default(),
+        size,
+        at: now_secs(),
+    });
+    save_quarantine(&app, &items)?;
+    Ok(json!({ "id": id }))
+}
+
+#[tauri::command]
+pub fn av_quarantine_list(app: AppHandle) -> Vec<Value> {
+    let mut items = load_quarantine(&app);
+    items.sort_by(|a, b| b.at.cmp(&a.at));
+    items.iter().map(|i| serde_json::to_value(i).unwrap_or(Value::Null)).collect()
+}
+
+#[tauri::command(async)]
+pub async fn av_quarantine_restore(app: AppHandle, id: String, exclude: Option<bool>) -> Result<(), String> {
+    let mut items = load_quarantine(&app);
+    let pos = items.iter().position(|i| i.id == id).ok_or("Записи нет в карантине")?;
+    let item = items[pos].clone();
+    let target = PathBuf::from(&item.original);
+    if target.exists() {
+        return Err("На прежнем месте уже лежит другой файл — освободите путь и повторите.".into());
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let src = qdir(&app)?.join(format!("{}.qz", item.id));
+    xor_copy(&src, &target).map_err(|e| format!("Не удалось восстановить: {e}"))?;
+    let _ = fs::remove_file(&src);
+    items.remove(pos);
+    save_quarantine(&app, &items)?;
+    if exclude.unwrap_or(false) {
+        let mut ex = load_exclusions(&app);
+        if !ex.paths.contains(&item.original) {
+            ex.paths.push(item.original.clone());
+        }
+        if !item.sha256.is_empty() && !ex.hashes.contains(&item.sha256) {
+            ex.hashes.push(item.sha256.clone());
+        }
+        save_exclusions(&app, &ex)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn av_quarantine_delete(app: AppHandle, id: String) -> Result<(), String> {
+    let mut items = load_quarantine(&app);
+    items.retain(|i| i.id != id);
+    let _ = fs::remove_file(qdir(&app)?.join(format!("{id}.qz")));
+    save_quarantine(&app, &items)
+}
+
+/// Исключить: путь и/или хеш больше не считаются угрозой при проверках.
+#[tauri::command]
+pub fn av_exclude(app: AppHandle, path: Option<String>, sha256: Option<String>) -> Result<(), String> {
+    let mut ex = load_exclusions(&app);
+    if let Some(p) = path.filter(|p| !p.is_empty()) {
+        if !ex.paths.contains(&p) {
+            ex.paths.push(p);
+        }
+    }
+    if let Some(h) = sha256.filter(|h| !h.is_empty()) {
+        if !ex.hashes.contains(&h) {
+            ex.hashes.push(h);
+        }
+    }
+    save_exclusions(&app, &ex)
+}
+
+#[tauri::command]
+pub fn av_exclusions(app: AppHandle) -> Value {
+    let ex = load_exclusions(&app);
+    json!({ "paths": ex.paths, "hashes": ex.hashes })
+}
+
+#[tauri::command]
+pub fn av_exclusion_remove(app: AppHandle, value: String) -> Result<(), String> {
+    let mut ex = load_exclusions(&app);
+    ex.paths.retain(|p| *p != value);
+    ex.hashes.retain(|h| *h != value);
+    save_exclusions(&app, &ex)
+}
+
+#[tauri::command]
+pub fn av_kill(pid: u64) {
+    if pid != std::process::id() as u64 && pid > 4 {
+        kill_pid(pid);
+    }
+}
+
+/// Убрать запись автозапуска (HKCU без прав администратора; HKLM — только из-под администратора).
+#[tauri::command(async)]
+pub async fn av_remove_autorun(hive: String, value: String) -> Result<(), String> {
+    if hive != "HKCU" && hive != "HKLM" {
+        return Err("Неизвестный раздел реестра".into());
+    }
+    let name = value.replace('\'', "''");
+    let script = format!(
+        "foreach($k in 'Run','RunOnce'){{ $p='{hive}:\\Software\\Microsoft\\Windows\\CurrentVersion\\'+$k; if(Get-ItemProperty -Path $p -Name '{name}' -ErrorAction SilentlyContinue){{ Remove-ItemProperty -Path $p -Name '{name}' -ErrorAction Stop; 'ok' }} }}"
+    );
+    let out = powershell(&script)?;
+    if out.contains("ok") {
+        Ok(())
+    } else {
+        Err("Запись не удалена: нужны права администратора или её уже нет.".into())
+    }
+}
+
+/// Убрать исключение Защитника Windows (нужны права администратора).
+#[tauri::command(async)]
+pub async fn av_remove_defender_exclusion(path: String) -> Result<(), String> {
+    let p = path.replace('\'', "''");
+    let out = powershell(&format!(
+        "try {{ Remove-MpPreference -ExclusionPath '{p}' -ErrorAction Stop; Remove-MpPreference -ExclusionProcess '{p}' -ErrorAction SilentlyContinue; 'ok' }} catch {{ 'fail' }}"
+    ))?;
+    if out.contains("ok") {
+        Ok(())
+    } else {
+        Err("Не удалось: запустите программу от имени администратора или уберите исключение в «Безопасность Windows».".into())
+    }
+}
+
+/// Защитник Windows: состояние, обновление его баз, быстрая проверка. Основной антивирус системы — не заменяем, а запускаем.
+#[tauri::command(async)]
+pub async fn av_defender(action: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Value, String> {
+        match action.as_str() {
+            "status" => {
+                let out = powershell("Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureLastUpdated,AntivirusSignatureVersion | ConvertTo-Json -Compress")?;
+                Ok(serde_json::from_str(out.trim()).unwrap_or(Value::Null))
+            }
+            "update" => {
+                let out = powershell("try { Update-MpSignature -ErrorAction Stop; 'ok' } catch { $_.Exception.Message }")?;
+                Ok(json!({ "ok": out.trim().ends_with("ok"), "message": out.trim() }))
+            }
+            "quickscan" => {
+                let out = powershell("try { Start-MpScan -ScanType QuickScan -ErrorAction Stop; $t=@(Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending | Select-Object -First 5 ThreatID,InitialDetectionTime,Resources); @{ok=$true;threats=$t} | ConvertTo-Json -Compress -Depth 4 } catch { @{ok=$false;message=$_.Exception.Message} | ConvertTo-Json -Compress }")?;
+                Ok(serde_json::from_str(out.trim()).unwrap_or(Value::Null))
+            }
+            _ => Err("Неизвестное действие".into()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sigs() -> Signatures {
+        serde_json::from_str(BASELINE).expect("baseline должен разбираться")
+    }
+
+    #[test]
+    fn baseline_has_rules() {
+        let s = sigs();
+        assert!(!s.names.is_empty() && !s.cmdline.is_empty() && !s.pool_domains.is_empty() && !s.pool_ports.is_empty());
+    }
+
+    #[test]
+    fn name_matching_is_strict() {
+        let s = sigs();
+        assert!(match_name(&s, "xmrig").is_some());
+        assert!(match_name(&s, "xmrig-6.21.0").is_some());
+        assert!(match_name(&s, "nbminer_win").is_some());
+        assert!(match_name(&s, "chrome").is_none());
+        assert!(match_name(&s, "minerva").is_none());
+        assert!(match_name(&s, "app").is_none());
+    }
+
+    #[test]
+    fn cmdline_matching() {
+        let s = sigs();
+        assert!(match_cmdline(&s, "xmr.exe -o stratum+tcp://pool.example:3333 -u wallet").is_some());
+        assert!(match_cmdline(&s, "miner.exe --url pool.supportxmr.com:443").is_some());
+        assert!(match_cmdline(&s, "C:\\Program Files\\Chrome\\chrome.exe --type=renderer").is_none());
+    }
+
+    #[test]
+    fn autorun_exe_extraction() {
+        assert_eq!(extract_exe("\"C:\\Users\\a\\x y\\app.exe\" --silent").as_deref(), Some("C:\\Users\\a\\x y\\app.exe"));
+        assert_eq!(extract_exe("C:\\tools\\run.exe /min").as_deref(), Some("C:\\tools\\run.exe"));
+        assert_eq!(extract_exe("rundll32 something"), None);
+    }
+
+    #[test]
+    fn xor_roundtrip_and_hash() {
+        let dir = std::env::temp_dir().join(format!("av_test_{}", now_secs()));
+        fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("a.bin");
+        let q = dir.join("a.qz");
+        let b = dir.join("b.bin");
+        fs::write(&a, b"hello world").unwrap();
+        xor_copy(&a, &q).unwrap();
+        assert_ne!(fs::read(&q).unwrap(), b"hello world");
+        xor_copy(&q, &b).unwrap();
+        assert_eq!(fs::read(&b).unwrap(), b"hello world");
+        assert_eq!(sha256_file(&a).unwrap(), "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn protected_paths() {
+        let own = vec![PathBuf::from("C:\\Users\\a\\AppData\\Local\\Project")];
+        assert!(is_protected(Path::new("C:\\Windows\\System32\\cmd.exe"), &own));
+        assert!(is_protected(Path::new("C:\\Users\\a\\AppData\\Local\\Project\\current\\app.exe"), &own));
+        assert!(!is_protected(Path::new("C:\\Users\\a\\Downloads\\x.exe"), &own));
+    }
+
+    #[test]
+    fn json_items_accepts_object_and_array() {
+        assert_eq!(json_items("{\"a\":1}").len(), 1);
+        assert_eq!(json_items("[{\"a\":1},{\"a\":2}]").len(), 2);
+        assert!(json_items("").is_empty());
+    }
+}

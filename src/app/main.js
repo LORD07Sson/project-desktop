@@ -49,9 +49,11 @@ import "./title-hover.js";
 import "./watch.js";
 import { installLiquidNav } from "./nyaa-fx.js";
 import { startEmojiIcons } from "./icons.js";
+import { startAntivirusAuto } from "./antivirus-ui.js";
 installLiquidNav();
 // Эмодзи в тексте интерфейса → линейные значки в стиле остальных иконок (см. icons.js).
 startEmojiIcons();
+startAntivirusAuto();
 
 tryRestoreSession();
 setTimeout(() => appWindow.show(), 0); // DevSkim: ignore DS172411 — функция, не строка

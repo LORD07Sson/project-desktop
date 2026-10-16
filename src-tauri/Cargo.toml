@@ -66,6 +66,8 @@ velopack = "1.2.0"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 # Разбор полезной нагрузки JWT-токенов Steam (срок действия, SteamID) в steam_session.rs.
 base64 = "0.22"
+# SHA-256 файлов для антивируса (antivirus.rs): сверка с базой хешей вредоносных образцов.
+sha2 = "0.10"
 # Загрузка файла, перетащенного из проводника, и скачивание вложений
 # (upload_report_file/download_report_file в main.rs) — HTTP на свой API
 # напрямую из Rust, минуя JS/fetch: не нужен tauri-plugin-fs, а токен
