@@ -2,7 +2,7 @@
 // Портировано из мини-аппа: loadVote/renderVoteTitles/voteBentoHtml/
 // voteCardHtml/castVote/openTitleDetailPublic (miniapp/static/index.html).
 
-import { state } from "./state.js";
+import { state, can } from "./state.js";
 import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
 import { $, esc } from "./utils.js";
 import { openSeasonsAdminSheet } from "./titles-admin.js";
@@ -156,7 +156,7 @@ function heroTitle(titles) {
 // «Взять в работу» — только админам; у взятого тайтла та же кнопка
 // открывает его настройки (состав, дедлайн, остановить автосерии).
 function takeButtonHtml(t) {
-  if (!state.isAdmin) return "";
+  if (!can("titles.work")) return "";
   return t.in_work
     ? `<button class="btn tl-take on" data-take-title="${t.id}" title="Состав, дедлайн, автосерии">● В работе</button>`
     : `<button class="btn tl-take" data-take-title="${t.id}">⚑ Взять в работу</button>`;
@@ -395,7 +395,7 @@ export async function loadTitlesTab() {
     // создать новый из десктопа было негде («Управление» живёт в шапке
     // renderTitlesForSeason, которая без сезонов не рисуется).
     root.innerHTML = `<div class="empty-state"><div style="font-size:34px; margin-bottom:8px;">📅</div>Эфир-сезонов пока нет.
-      ${state.isAdmin ? `<div style="margin-top:14px;"><button class="btn primary" id="titles-admin-btn">+ Создать сезон</button></div>` : ""}</div>`;
+      ${can("titles.create") ? `<div style="margin-top:14px;"><button class="btn primary" id="titles-admin-btn">+ Создать сезон</button></div>` : ""}</div>`;
     root.querySelector("#titles-admin-btn")?.addEventListener("click", () => openSeasonsAdminSheet(() => loadTitlesTab()));
     return;
   }
@@ -445,7 +445,7 @@ function renderTitlesBody(wrap) {
   const ranked = currentTitles.slice().sort(TABLE_SORTS.rank);
   const rankOf = new Map(ranked.map((t, i) => [t.id, i + 1]));
   const leader = leaderOf(currentTitles);
-  const addCard = state.isAdmin
+  const addCard = can("titles.create")
     ? `<button type="button" class="af-add" data-af-add><b>＋</b><span>Добавить тайтл</span><em>сезоны и тайтлы — в «Управлении»</em></button>` : "";
   wrap.innerHTML = voteHeroHtml(currentTitles, currentSeasonName) + toolbarHtml() + (!shown.length ? empty : view === "table"
     ? titlesTableHtml(shown)
@@ -510,7 +510,7 @@ function renderTitlesForSeason(seasons) {
           <button type="button" class="seg-btn${getView() === "cards" ? " active" : ""}" data-titles-view="cards" aria-pressed="${getView() === "cards"}">Карточки</button>
           <button type="button" class="seg-btn${getView() === "table" ? " active" : ""}" data-titles-view="table" aria-pressed="${getView() === "table"}">Таблица</button>
         </div>
-        <button class="btn" id="titles-admin-btn"${state.isAdmin ? "" : " hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14 3h-4l-.6 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.3-1a7 7 0 0 0 2 1.2L10 21h4l.6-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg>Управление</button>
+        <button class="btn" id="titles-admin-btn"${can("titles.create") || can("titles.edit") || can("titles.delete") ? "" : " hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14 3h-4l-.6 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.3-1a7 7 0 0 0 2 1.2L10 21h4l.6-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg>Управление</button>
       </div>
     </div>
     <div class="chip-row" style="padding:0 0 14px;">

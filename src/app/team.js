@@ -4,7 +4,7 @@
 // показываются, когда он их отдаёт; без них карточка просто короче.
 
 import { apiGet } from "./api.js";
-import { state } from "./state.js";
+import { can } from "./state.js";
 import { $, esc } from "./utils.js";
 import { avatarHtml, loadAvatars, openUserProfile } from "./profile.js";
 import { openRolesSheet } from "./roles.js";
@@ -105,7 +105,7 @@ function renderPeople(root) {
   const users = (teamData.users || []).filter(u => matches(u) && (!roleFilter || (roleFilter === "—" ? !rolesOf(u).length : rolesOf(u).includes(roleFilter)))).sort(byRank);
   const maxLoad = Math.max(1, ...(teamData.users || []).map(u => u.assigned || 0));
   const host = root.querySelector("#tm-groups");
-  const noRole = roleFilter === "—" && state.isAdmin ? `<div class="tm-hint">Роль видна на карточке и в пайплайне. <button class="pf-link" data-tm-roles>Назначить роли →</button></div>` : "";
+  const noRole = roleFilter === "—" && can("roles.manage") ? `<div class="tm-hint">Роль видна на карточке и в пайплайне. <button class="pf-link" data-tm-roles>Назначить роли →</button></div>` : "";
   host.innerHTML = users.length
     ? `${noRole}<div class="tm-grid">${users.map(u => personHtml(u, maxLoad)).join("")}</div>`
     : `<div class="bento-empty">Никого не нашлось — попробуйте другой фильтр.</div>`;
@@ -170,7 +170,7 @@ export async function loadTeam() {
   root.innerHTML = teamHtml(teamData);
   renderPeople(root);
   const rolesBtn = root.querySelector("#team-roles-btn");
-  if (state.isAdmin) rolesBtn.addEventListener("click", openRolesSheet); else rolesBtn.remove();
+  if (can("roles.manage")) rolesBtn.addEventListener("click", openRolesSheet); else rolesBtn.remove();
   root.querySelectorAll("[data-tm-filter]").forEach(b => b.addEventListener("click", () => {
     filter = b.dataset.tmFilter;
     root.querySelectorAll("[data-tm-filter]").forEach(x => x.classList.toggle("active", x === b));

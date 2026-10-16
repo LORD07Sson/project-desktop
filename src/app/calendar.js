@@ -8,7 +8,7 @@
 //    «Весь день» сверху;
 //  • дни рождения из /overview — тоже «Весь день».
 
-import { state } from "./state.js";
+import { state, can } from "./state.js";
 import { fetchReminders, openRemindersSheet } from "./reminders.js";
 import { apiGet, dialogSkeletonHtml, mediaUrl } from "./api.js";
 import { $, esc, STATUS_COLOR_VAR } from "./utils.js";
@@ -82,7 +82,7 @@ async function fetchAirings() {
 // Ход нашей работы по сериям взятых тайтлов (/work/episodes, только
 // админам): {title_id: {номер: {total, completed, overdue}}}.
 async function fetchWork() {
-  if (!state.isAdmin) return {};
+  if (!can("reports.view")) return {};
   try { return (await apiGet("/work/episodes")).titles || {}; } catch (_) { return {}; }
 }
 

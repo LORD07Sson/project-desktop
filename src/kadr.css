@@ -2841,3 +2841,6 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .perm-name span { display: block; font-size: 11.5px; color: var(--ink-dim); line-height: 1.3; max-width: 320px; }
 .perm-group td { text-align: left; padding: 12px 14px 6px; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); background: transparent; border-bottom: 0; }
 .perm-table input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--gold, #ff7a3d); cursor: pointer; }
+
+/* Недоступное по правам роли — убрано совсем (perm-visibility.js) */
+[data-perm-hidden="1"] { display: none !important; }

@@ -1,7 +1,7 @@
 // Диалог «Настройки» (автозапуск, тема, режим разработчика, автообновление).
 
 import { invoke, listen } from "./tauri.js";
-import { state } from "./state.js";
+import { state, can } from "./state.js";
 import { apiGet, openSheet, toast, dismissSheet, API_BASE } from "./api.js";
 import { $, esc } from "./utils.js";
 import { applyTheme, applyLook } from "./theme.js";
@@ -99,7 +99,16 @@ async function openSettings() {
     ["s-tile-lockdown", "Аварийный режим", "«Саботаж»: заморозить удаление", '<path d="M12 3 2 20h20L12 3zM12 10v4M12 17h.01"/>'],
     ...(state.isDeveloper ? [["s-tile-trash", "Корзина", "Вернуть удалённое за 7 дней", '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>']] : []),
     ...(state.isDeveloper ? [["s-tile-log", "Журнал действий", "Надзор за админами", '<path d="M6 3h9l4 4v14H6zM9 12h7M9 16h5"/>']] : []),
-  ];
+  ].filter(([id]) => ({
+    "s-open-admin": can("access.requests") || state.isDeveloper,
+    "s-tile-notice": can("notice.manage"),
+    "s-tile-tickets": can("tickets.manage"),
+    "s-tile-roles": can("roles.manage"),
+    "s-tile-bdays": can("birthdays.manage"),
+    "s-tile-post": can("posts.manage"),
+    "s-tile-mentions": can("posts.manage"),
+    "s-tile-lockdown": state.isDeveloper || state.isAdmin,
+  }[id] ?? true));
   const theme = document.documentElement.dataset.theme || "dark";
   const look = document.documentElement.dataset.look || "glow";
   const themeCard = theme === "light" ? "light" : look;
@@ -116,7 +125,7 @@ async function openSettings() {
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc, "Профиль и выход"], ["st-look", "Внешний вид", ICONS.look, "Тема, акцент, масштаб"], ["st-notif", "Уведомления", ICONS.bell, "Что и когда присылать"], ["st-behave", "Поведение", ICONS.behave, "Автозапуск, старт, фокус"], ["st-keys", "Горячие клавиши", ICONS.keys, "Все сочетания"]]],
     ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"]]],
-    ...(state.isAdmin || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot, "Где работает бот"], ["st-archive", "Архив серий", ICONS.archive, "Перенос серий в архив"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
+    ...((state.isAdmin && TILES.length) || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot, "Где работает бот"], ["st-archive", "Архив серий", ICONS.archive, "Перенос серий в архив"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`

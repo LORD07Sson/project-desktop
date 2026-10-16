@@ -122,8 +122,10 @@ function replayWordmark() {
 async function loadPermissions() {
   try {
     const r = await api("GET", "/me/permissions");
-    state.perms = new Set(r.permissions || []);
+    // Ответ без списка (старый сервер) — не считаем, что прав нет: ведём себя как раньше.
+    state.perms = Array.isArray(r.permissions) ? new Set(r.permissions) : null;
     state.isOwner = !!r.is_owner;
+    import("./perm-visibility.js").then(m => m.startPermVisibility());
   } catch (_) {
     state.perms = null;
   }

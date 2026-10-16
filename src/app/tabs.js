@@ -1,6 +1,6 @@
 // Переключение вкладок + первичная/повторная загрузка данных активной.
 
-import { state } from "./state.js";
+import { state, can } from "./state.js";
 import { apiGet, toast } from "./api.js";
 import { $, $all } from "./utils.js";
 import { loadOverview } from "./Overview.jsx";
@@ -55,8 +55,18 @@ const LAST_TAB_KEY = "project-last-tab";
 // Вкладки, которые видит рядовой участник студии.
 export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
+// Какое право открывает админскую вкладку; остальные (Сервисы, Релизы) — только для админа.
+const TAB_PERMS = { overview: "reports.view", list: "reports.view", board: "reports.view", calendar: "reports.view", feed: "reports.view", analytics: "reports.view" };
+
+export function tabAllowed(name) {
+  if (MEMBER_TABS.has(name)) return true;
+  if (name === "nyaa" && state.nyaaAccess) return true;
+  if (!state.isAdmin) return false;
+  return TAB_PERMS[name] ? can(TAB_PERMS[name]) : true;
+}
+
 export function switchTab(name) {
-  if (!state.isAdmin && !MEMBER_TABS.has(name) && !(name === "nyaa" && state.nyaaAccess)) name = "messages";
+  if (!tabAllowed(name)) name = "messages";
   state.activeTab = name;
   try { localStorage.setItem(LAST_TAB_KEY, name); } catch (_) { /* не критично */ }
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
@@ -109,7 +119,7 @@ export function restoreLastTab() {
   // Настройки → Поведение → «Стартовый раздел».
   const start = startTab();
   if (start !== "last") saved = start;
-  if (!state.isAdmin && (!saved || (!MEMBER_TABS.has(saved) && !(saved === "nyaa" && state.nyaaAccess)))) saved = "messages";
+  if (!saved || !tabAllowed(saved)) saved = "messages";
   if (!saved || !LOADERS[saved]) return;
   state.activeTab = saved;
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === saved));
