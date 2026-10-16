@@ -42,12 +42,17 @@ export async function mountArchive(root) {
         <div class="sheet-actions" style="justify-content:flex-start; margin-top:10px;"><button class="btn primary" id="ar-save">Сохранить</button></div>
         <p class="bc-hint" style="margin:10px 0 0;">Перенесено серий: <b>${d.done || 0}</b>. Одна и та же серия дважды не копируется; о сбоях бот пишет владельцам в личку.</p>
       </div>
-      <h4 style="margin:16px 0 8px;">Темы тайтлов <small>${(d.topics || []).length}</small></h4>
-      ${(d.topics || []).length ? (d.topics || []).map(t => `
+      <h4 style="margin:16px 0 8px;">Темы тайтлов <small>${(d.known_topics || []).length}</small></h4>
+      <p class="bc-hint">Создайте тему в архивной группе — она появится здесь сама (бот должен быть админом группы), и серия с похожим названием ляжет в неё.
+        Для тем, созданных до подключения бота, укажите номер ниже.</p>
+      ${(d.known_topics || []).length ? (d.known_topics || []).map(t => `
         <div class="bc-chat" style="display:flex; align-items:center; gap:10px;">
-          <div class="bc-title" style="flex:1;"><b>#${esc(t.title_tag)}</b><span>тема № ${t.topic_id}</span></div>
-          <button class="btn" data-unbind="${esc(t.title_tag)}">Отвязать</button>
-        </div>`).join("") : `<div class="no-assignee">Тем пока нет — они появятся, когда придёт первая серия.</div>`}
+          <div class="bc-title" style="flex:1;">
+            <b>${esc(t.name)}</b>
+            <span>тема № ${t.topic_id} · ${(t.tags || []).length ? (t.tags || []).map(x => `#${esc(x)}`).join(" ") : "ждёт серию — привяжется по названию"}</span>
+          </div>
+          <button class="btn" data-forget-topic="${t.topic_id}" title="Убрать из списка и снять привязки (сама тема в Telegram останется)">Убрать</button>
+        </div>`).join("") : `<div class="no-assignee">Тем пока нет — они появятся, когда вы создадите тему в группе или придёт первая серия.</div>`}
       <form id="ar-bind" class="bc-chat" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input class="field-input" id="ar-tag" placeholder="Название_тайтла (как в хештеге)" style="flex:2; min-width:180px;">
         <input class="field-input" id="ar-topic" type="number" min="1" placeholder="№ темы" style="flex:1; min-width:90px;">
@@ -65,7 +70,7 @@ export async function mountArchive(root) {
       target: root.querySelector("#ar-target").value,
       enabled: root.querySelector("#ar-enabled").checked,
     }, "Сохранено."));
-    root.querySelectorAll("[data-unbind]").forEach(b => b.addEventListener("click", () => apply("/archive/topic/delete", { title_tag: b.dataset.unbind }, "Тема отвязана.")));
+    root.querySelectorAll("[data-forget-topic]").forEach(b => b.addEventListener("click", () => apply("/archive/topic/forget", { topic_id: Number(b.dataset.forgetTopic) }, "Тема убрана из списка.")));
     root.querySelector("#ar-bind").addEventListener("submit", e => {
       e.preventDefault();
       apply("/archive/topic", { title_tag: root.querySelector("#ar-tag").value, topic_id: root.querySelector("#ar-topic").value }, "Тема привязана.");
