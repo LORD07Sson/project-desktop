@@ -77,7 +77,7 @@ export async function mountArchive(root) {
         ${d.context ? `<button class="btn" type="button" id="ar-ctx-clear">Сбросить</button>` : ""}
         <span class="bc-hint" style="flex-basis:100%; margin:0;">${d.context ? `Сейчас: <b>${esc(d.context.title_tag.split("_").join(" "))}</b>${d.context.season ? ` · ${d.context.season} сезон` : ""}${d.context.quality ? ` · ${esc(d.context.quality)}` : ""} — следующая серия <b>${d.context.next_episode}</b>.${d.context.auto ? " Запомнено ботом по последней серии; забудется, если 3 дня не будет новых. Чтобы закрепить — нажмите «Сохранить»." : ""}` : "Не задано: бот берёт тайтл и номер только из хештегов поста."}</span>
       </form>
-      <h4 style="margin:16px 0 8px;">Очередь заливки <small>${d.queue ? d.queue.total : 0}</small> <button class="btn" id="ar-queue-refresh" style="margin-left:8px;">Обновить</button></h4>
+      <h4 style="margin:16px 0 8px;">Очередь заливки <small>${d.queue ? d.queue.total : 0}</small> <button class="btn" id="ar-queue-refresh" style="margin-left:8px;">Обновить</button> <button class="btn danger" id="ar-requeue" style="margin-left:6px;" title="Все перенесённые серии зальются заново (например, чтобы получили обложку); старая копия удаляется после успешной заливки новой">Перезалить всё заново</button></h4>
       <p class="bc-hint">${d.queue && d.queue.total
         ? `В очереди <b>${d.queue.total}</b> ${d.queue.total % 10 === 1 && d.queue.total % 100 !== 11 ? "пост" : "постов"}${d.queue.eta_min ? ` — при лимите ${d.queue.limit_mbit} Мбит/с это примерно <b>${d.queue.eta_min >= 90 ? `${(d.queue.eta_min / 60).toFixed(1)} ч` : `${d.queue.eta_min} мин`}</b>` : ""}. Заливка идёт по одной, по порядку номеров постов.`
         : "Очередь пуста — бот ничего не ждёт."}</p>
@@ -140,6 +140,13 @@ export async function mountArchive(root) {
     root.querySelectorAll("[data-hold-drop]").forEach(b => b.addEventListener("click", () => apply("/archive/hold/drop", { key: b.dataset.holdDrop }, "Убрано из очереди.")));
     root.querySelector("#ar-refresh")?.addEventListener("click", load);
     root.querySelector("#ar-queue-refresh")?.addEventListener("click", load);
+    root.querySelector("#ar-requeue")?.addEventListener("click", async () => {
+      if (!confirm("Вернуть в очередь ВСЕ перенесённые серии и залить заново?
+
+Старая копия каждой серии удаляется только после того, как новая успешно залита. Заливка идёт по одной с лимитом сети — на сотню серий уйдёт несколько часов.")) return;
+      try { await apiPost("/archive/requeue", {}); toast("Серии возвращены в очередь — бот начнёт в течение 30 секунд.", "success"); setTimeout(load, 4000); }
+      catch (e) { toast(e.message, "error"); }
+    });
     root.querySelectorAll("[data-topic-use]").forEach(box => box.addEventListener("change", () => {
       const id = Number(box.dataset.topicUse);
       const input = root.querySelector(`[data-topic-tag="${id}"]`);
