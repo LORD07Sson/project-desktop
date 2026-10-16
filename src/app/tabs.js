@@ -61,8 +61,8 @@ const TAB_PERMS = { overview: "reports.view", list: "reports.view", board: "repo
 export function tabAllowed(name) {
   if (MEMBER_TABS.has(name)) return true;
   if (name === "nyaa" && state.nyaaAccess) return true;
-  if (!state.isAdmin) return false;
-  return TAB_PERMS[name] ? can(TAB_PERMS[name]) : true;
+  if (TAB_PERMS[name]) return can(TAB_PERMS[name]);
+  return !!state.isAdmin;
 }
 
 export function switchTab(name) {

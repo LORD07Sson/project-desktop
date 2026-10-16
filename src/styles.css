@@ -4733,13 +4733,14 @@ body.focus-mode .report-detail-overlay .sheet {
 
 /* Рядовой участник студии: только «Тайтлы», «Сообщения», «Команда», «Я».
    Админские кнопки и разделы — прочь (сервер их всё равно не пустит). */
-:root[data-role="member"]:not([data-nyaa="1"]) .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]),
-:root[data-role="member"][data-nyaa="1"] .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-tab="nyaa"]),
-:root[data-role="member"] #sidebar-board-sub,
-:root[data-role="member"] .sidebar-group-label:has(+ .tab-btn[data-tab="overview"]),
-:root[data-role="member"] #titles-admin-btn,
-:root[data-role="member"] #team-roles-btn,
-:root[data-role="member"] #tn-edit,
+/* data-perm-show / data-perm-reports ставит perm-visibility.js: роль без звания админа, которой владелец выдал право. */
+:root[data-role="member"]:not([data-nyaa="1"]) .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-perm-show="1"]),
+:root[data-role="member"][data-nyaa="1"] .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-tab="nyaa"]):not([data-perm-show="1"]),
+:root[data-role="member"]:not([data-perm-reports="1"]) #sidebar-board-sub,
+:root[data-role="member"]:not([data-perm-reports="1"]) .sidebar-group-label:has(+ .tab-btn[data-tab="overview"]),
+:root[data-role="member"] #titles-admin-btn:not([data-perm-show="1"]),
+:root[data-role="member"] #team-roles-btn:not([data-perm-show="1"]),
+:root[data-role="member"] #tn-edit:not([data-perm-show="1"]),
 :root[data-role="member"] #st-studio,
 :root[data-role="member"] [data-st-go="st-studio"],
 :root[data-role="member"] #idle-slot { display: none !important; }

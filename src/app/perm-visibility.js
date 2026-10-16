@@ -19,8 +19,11 @@ export function applyPermVisibility() {
     const allowed = can(perm);
     document.querySelectorAll(selector).forEach(el => {
       if (allowed) el.removeAttribute("data-perm-hidden"); else el.setAttribute("data-perm-hidden", "1");
+      // Роль без звания админа: CSS прячет админские кнопки у «участника» — для выданного права снимаем это.
+      if (allowed && !state.isAdmin) el.setAttribute("data-perm-show", "1"); else el.removeAttribute("data-perm-show");
     });
   }
+  document.documentElement.dataset.permReports = can("reports.view") && !state.isAdmin ? "1" : "0";
 }
 
 let observer = null;
