@@ -51,7 +51,7 @@ export async function mountArchive(root) {
     const groups = (d.chats || []).filter(c => c.type !== "channel");
     const target = groups.find(c => String(c.chat_id) === String(d.target));
     root.innerHTML = `
-      <p class="bc-hint">Бот следит за каналом-источником: каждое новое видео он переименовывает («Название S01E07 [4K].mp4»), оформляет
+      <p class="bc-hint">Бот следит за каналом-источником: каждое новое видео он переименовывает («[DreamyVoice] Romaji Title TV (7).mp4»), оформляет
         подпись и кладёт в архивную группу — в тему этого тайтла. Тему он создаёт сам и закрепляет в ней превью с постером.
         Тайтл, сезон, качество и серия берутся из хештегов поста: <code>#Название_тайтла #1_сезон #4K #7</code>.<br>Бот видит только новые посты — историю канала Telegram ему не отдаёт. Старые серии <b>перешлите боту в личку</b> (можно пачкой, выделив много постов): он обработает их так же, уже перенесённые пропустит.</p>
       <div class="bc-chat${d.enabled ? " target" : ""}">
@@ -82,17 +82,23 @@ export async function mountArchive(root) {
         <div class="sheet-actions" style="justify-content:flex-start; margin-top:8px;"><button class="btn" id="ar-preview">Показать, что получится</button></div>
         <div id="ar-preview-out" style="margin-top:10px;"></div>
       </div>
-      <h4 style="margin:16px 0 8px;">Темы тайтлов <small>${(d.known_topics || []).length}</small></h4>
+      <h4 style="margin:16px 0 8px;">Темы тайтлов <small>${(d.known_topics || []).length}</small> <button class="btn" id="ar-refresh" style="margin-left:8px;">Обновить</button></h4>
       <p class="bc-hint">Создайте тему в архивной группе — она появится здесь сама (бот должен быть админом группы), и серия с похожим названием ляжет в неё.
         Для тем, созданных до подключения бота, укажите номер ниже.</p>
-      ${(d.known_topics || []).length ? (d.known_topics || []).map(t => `
-        <div class="bc-chat" style="display:flex; align-items:center; gap:10px;">
-          <div class="bc-title" style="flex:1;">
+      ${(d.known_topics || []).length ? (d.known_topics || []).map(t => {
+        const bound = (t.tags || []).length > 0;
+        const tag = bound ? t.tags[0] : (t.suggest || "");
+        return `
+        <div class="bc-chat" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;" data-topic-row="${t.topic_id}">
+          <label class="bc-feature" style="margin:0;" title="Включено — серии этого тайтла ложатся в эту тему"><input type="checkbox" data-topic-use="${t.topic_id}" ${bound ? "checked" : ""}><span></span></label>
+          <div class="bc-title" style="flex:1; min-width:160px;">
             <b>${esc(t.name)}</b>
-            <span>тема № ${t.topic_id} · ${(t.tags || []).length ? (t.tags || []).map(x => `#${esc(x)}`).join(" ") : "ждёт серию — привяжется по названию"}</span>
+            <span>тема № ${t.topic_id}${bound ? " · подключена" : " · отметьте галочку, чтобы бот клал сюда серии"}</span>
           </div>
+          <input class="field-input" data-topic-tag="${t.topic_id}" value="${esc(tag)}" placeholder="Название_тайтла (как в хештеге)" style="flex:1; min-width:180px;" title="Хештег тайтла — по нему бот находит тему">
           <button class="btn" data-forget-topic="${t.topic_id}" title="Убрать из списка и снять привязки (сама тема в Telegram останется)">Убрать</button>
-        </div>`).join("") : `<div class="no-assignee">Тем пока нет — они появятся, когда вы создадите тему в группе или придёт первая серия.</div>`}
+        </div>`;
+      }).join("") : `<div class="no-assignee">Тем пока нет — они появятся, когда вы создадите тему в группе (бот должен быть её админом) или придёт первая серия.</div>`}
       <form id="ar-bind" class="bc-chat" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input class="field-input" id="ar-tag" placeholder="Название_тайтла (как в хештеге)" style="flex:2; min-width:180px;">
         <input class="field-input" id="ar-topic" type="number" min="1" placeholder="№ темы" style="flex:1; min-width:90px;">
@@ -110,6 +116,25 @@ export async function mountArchive(root) {
       target: root.querySelector("#ar-target").value,
       enabled: root.querySelector("#ar-enabled").checked,
     }, "Сохранено."));
+    root.querySelector("#ar-refresh")?.addEventListener("click", load);
+    root.querySelectorAll("[data-topic-use]").forEach(box => box.addEventListener("change", () => {
+      const id = Number(box.dataset.topicUse);
+      const input = root.querySelector(`[data-topic-tag="${id}"]`);
+      const topic = (d.known_topics || []).find(t => t.topic_id === id);
+      if (box.checked) {
+        if (!input.value.trim()) { box.checked = false; toast("Впишите название тайтла как в хештеге.", "error"); return; }
+        apply("/archive/topic", { title_tag: input.value, topic_id: id }, "Тема подключена.");
+      } else {
+        (async () => {
+          try {
+            let last = d;
+            for (const tag of (topic ? topic.tags : [])) last = await apiPost("/archive/topic/delete", { title_tag: tag });
+            paint(last);
+            toast("Тема отключена.", "success");
+          } catch (e) { toast(e.message, "error"); await load(); }
+        })();
+      }
+    }));
     root.querySelectorAll("[data-forget-topic]").forEach(b => b.addEventListener("click", () => apply("/archive/topic/forget", { topic_id: Number(b.dataset.forgetTopic) }, "Тема убрана из списка.")));
     root.querySelector("#ar-ctx").addEventListener("submit", e => {
       e.preventDefault();
@@ -126,7 +151,24 @@ export async function mountArchive(root) {
       sampleCaption = root.querySelector("#ar-sample").value;
       out.innerHTML = `<div class="no-assignee">Разбираю…</div>`;
       try {
-        out.innerHTML = previewHtml(await apiPost("/archive/preview", { caption: sampleCaption }));
+        const r = await apiPost("/archive/preview", { caption: sampleCaption });
+        out.innerHTML = previewHtml(r);
+        if (r.ok) {
+          out.insertAdjacentHTML("beforeend", `
+            <form id="ar-name" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+              <input class="field-input" id="ar-name-input" value="${esc(r.file_title || "")}" style="flex:1; min-width:240px;" placeholder="Название в имени файла (ромадзи или английское)">
+              <button class="btn" type="submit">Своё название для тайтла</button>
+              <span class="bc-hint" style="flex-basis:100%; margin:0;">Бот сам берёт латинское название из Shikimori/AniList («[DreamyVoice] Название TV (1)»). Если подобрал не то — впишите нужное, оно запомнится для этого тайтла. Пусто — снова автоматически.</span>
+            </form>`);
+          out.querySelector("#ar-name").addEventListener("submit", async e => {
+            e.preventDefault();
+            try {
+              await apiPost("/archive/name", { title_tag: r.info.title_tag, name: out.querySelector("#ar-name-input").value });
+              toast("Сохранено.", "success");
+              runPreview();
+            } catch (err) { toast(err.message, "error"); }
+          });
+        }
       } catch (e) { out.innerHTML = `<div class="bc-warn">${esc(e.message)}</div>`; }
     };
     root.querySelector("#ar-preview").addEventListener("click", runPreview);
