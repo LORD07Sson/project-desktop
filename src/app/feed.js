@@ -57,7 +57,8 @@ function parseAction(ev) {
   if (t.includes("заметк")) return pick("note", "заметка", "var(--gold)");
   if (t.includes("файл")) return pick("file", "файл", "var(--s-review)");
   if (t.includes("пайплайн")) return pick("pipeline", "следующий этап", "var(--ember)");
-  if (t.includes("дедлайн") || t.includes("срок")) return pick("deadline", "новый срок", "var(--s-fix)");
+  if (t.includes("напоминан")) return pick("deadline", "напоминание о сроке", "var(--s-fix)");
+  if (t.includes("дедлайн") || t.includes("срок")) return pick("deadline", "изменён срок", "var(--s-fix)");
   if (t.includes("изменён") || t.includes("изменен")) return pick("edit", "правка отчёта", "var(--ink-soft)");
   return pick("dot", text.charAt(0).toLowerCase() + text.slice(1), "var(--ink-dim)");
 }
