@@ -27,7 +27,10 @@ const API_BASE: &str = "https://minitg.shitstudent.com:8443/api";
 const MAX_HASH_BYTES: u64 = 300 * 1024 * 1024;
 const XOR_KEY: u8 = 0x5A;
 const SCAN_EXTS: &[&str] = &[
-    "exe", "dll", "scr", "bat", "cmd", "ps1", "vbs", "vbe", "jse", "js", "wsf", "msi", "jar", "com", "hta", "cpl", "ocx", "sys", "pif", "reg",
+    // исполняемые и скрипты
+    "exe", "dll", "scr", "bat", "cmd", "ps1", "vbs", "vbe", "jse", "js", "wsf", "msi", "jar", "com", "hta", "cpl", "ocx", "sys", "pif", "reg", "lnk",
+    // документы (макросы, эксплойты) и контейнеры, в которых прячут вирусы
+    "doc", "docm", "dot", "dotm", "xls", "xlsm", "xlsb", "xlam", "ppt", "pptm", "rtf", "pdf", "iso", "img", "zip", "rar", "7z", "cab",
 ];
 
 static CANCEL: AtomicBool = AtomicBool::new(false);
@@ -381,6 +384,10 @@ struct Ctx {
     skipped_large: u64,
     denied_dirs: u64,
     denied_list: Vec<String>,
+    /// Все файлы, которые прошёл обход, и сколько из них пропущено как «не тот тип» (картинки, видео, текст…).
+    total_files: u64,
+    skipped_type: u64,
+    all_files: bool,
 }
 
 impl Ctx {
@@ -468,6 +475,9 @@ impl Checker {
                 skipped_large: 0,
                 denied_dirs: 0,
                 denied_list: Vec::new(),
+                total_files: 0,
+                skipped_type: 0,
+                all_files: false,
             },
             dir,
             loaded: std::time::Instant::now(),
@@ -604,7 +614,9 @@ fn walk(env: &Env, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
             walk(env, ctx, &path, depth - 1, stage);
         } else if ft.is_file() {
             let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-            if !SCAN_EXTS.contains(&ext.as_str()) {
+            ctx.total_files += 1;
+            if !ctx.all_files && !SCAN_EXTS.contains(&ext.as_str()) {
+                ctx.skipped_type += 1;
                 continue;
             }
             let s = path.to_string_lossy().to_string();
@@ -773,7 +785,7 @@ fn is_elevated() -> bool {
         .unwrap_or(false)
 }
 
-fn scan_core(env: &Env, mode: String, custom: Vec<String>) -> Value {
+fn scan_core(env: &Env, mode: String, custom: Vec<String>, all_files: bool) -> Value {
     CANCEL.store(false, Ordering::Relaxed);
     let started = now_secs();
     let mut ctx = Ctx {
@@ -790,6 +802,9 @@ fn scan_core(env: &Env, mode: String, custom: Vec<String>) -> Value {
         skipped_large: 0,
         denied_dirs: 0,
         denied_list: Vec::new(),
+        total_files: 0,
+        skipped_type: 0,
+        all_files,
     };
     let pnames = scan_processes(env, &mut ctx);
     scan_network(env, &mut ctx, &pnames);
@@ -817,6 +832,9 @@ fn scan_core(env: &Env, mode: String, custom: Vec<String>) -> Value {
         "scanned": ctx.scanned,
         "coverage": {
             "files": ctx.files,
+            "total_files": ctx.total_files,
+            "skipped_type": ctx.skipped_type,
+            "all_files": ctx.all_files,
             "processes": ctx.procs,
             "folders": ctx.folders,
             "skipped_large": ctx.skipped_large,
@@ -848,6 +866,7 @@ pub fn headless(args: &[String]) -> i32 {
     let mut mode = "quick".to_string();
     let mut dir: Option<PathBuf> = None;
     let mut custom: Vec<String> = Vec::new();
+    let mut all_files = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -861,6 +880,7 @@ pub fn headless(args: &[String]) -> i32 {
                 dir = args.get(i + 1).map(|d| PathBuf::from(d.trim_matches('"')));
                 i += 1;
             }
+            "--all-files" => all_files = true,
             "--path" => {
                 if let Some(p) = args.get(i + 1) {
                     custom.push(p.trim_matches('"').to_string());
@@ -887,21 +907,21 @@ pub fn headless(args: &[String]) -> i32 {
             std::thread::sleep(std::time::Duration::from_millis(300));
         }
     });
-    let report = scan_core(&env, mode, custom);
+    let report = scan_core(&env, mode, custom, all_files);
     let _ = fs::write(dir.join("scan_report.json"), report.to_string());
     done.store(true, Ordering::Relaxed);
     0
 }
 
-fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>) -> Value {
+fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>, all_files: bool) -> Value {
     match env_for_app(&app) {
-        Ok(env) => scan_core(&env, mode, custom),
+        Ok(env) => scan_core(&env, mode, custom, all_files),
         Err(e) => json!({ "error": e, "detections": [], "scanned": 0 }),
     }
 }
 
 /// Проверка в отдельном процессе с правами администратора (запрос UAC): так открываются папки, закрытые обычному пользователю.
-fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String]) -> Result<Value, String> {
+fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String], all_files: bool) -> Result<Value, String> {
     let dir = av_dir(app)?;
     for f in ["scan_report.json", "scan_progress.json", "cancel.flag"] {
         let _ = fs::remove_file(dir.join(f));
@@ -914,6 +934,9 @@ fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String]) -> Result<Value
         "'--data-dir'".to_string(),
         format!("'\"{}\"'", q(&dir.to_string_lossy())),
     ];
+    if all_files {
+        args.push("'--all-files'".into());
+    }
     for p in custom {
         args.push("'--path'".into());
         args.push(format!("'\"{}\"'", q(p)));
@@ -958,14 +981,15 @@ fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String]) -> Result<Value
 // ------------------------------------------------------------------ команды
 
 #[tauri::command(async)]
-pub async fn av_scan(app: AppHandle, mode: String, paths: Option<Vec<String>>, elevated: Option<bool>) -> Result<Value, String> {
+pub async fn av_scan(app: AppHandle, mode: String, paths: Option<Vec<String>>, elevated: Option<bool>, all_files: Option<bool>) -> Result<Value, String> {
+    let all_files = all_files.unwrap_or(false);
     let custom = paths.unwrap_or_default();
     if elevated.unwrap_or(false) {
-        return tauri::async_runtime::spawn_blocking(move || scan_elevated(&app, &mode, &custom))
+        return tauri::async_runtime::spawn_blocking(move || scan_elevated(&app, &mode, &custom, all_files))
             .await
             .map_err(|e| e.to_string())?;
     }
-    tauri::async_runtime::spawn_blocking(move || scan_blocking(app, mode, custom))
+    tauri::async_runtime::spawn_blocking(move || scan_blocking(app, mode, custom, all_files))
         .await
         .map_err(|e| e.to_string())
 }

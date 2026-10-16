@@ -179,13 +179,14 @@ export async function mountAntivirus(root) {
   async function scan(mode, paths, elevated) {
     if (busy) return;
     if (elevated === undefined) elevated = !!root.querySelector("#av-admin")?.checked;
-    lastScan = { mode, paths: paths || null };
+    const allFiles = !!root.querySelector("#av-allfiles")?.checked;
+    lastScan = { mode, paths: paths || null, allFiles };
     setBusy(true);
     report = null;
     paintBody();
     if (elevated) toast("Подтвердите запрос Windows (UAC) — проверка пойдёт с правами администратора.", "success");
     try {
-      report = await call("av_scan", { mode, paths: paths || null, elevated });
+      report = await call("av_scan", { mode, paths: paths || null, elevated, allFiles });
       if (report.cancelled) toast("Проверка остановлена.", "success");
       else toast(report.detections.length ? `Проверка завершена: найдено ${report.detections.length}.` : "Проверка завершена: угроз не найдено.", report.detections.length ? "error" : "success");
     } catch (e) { toast(String(e), "error"); }
@@ -258,8 +259,9 @@ export async function mountAntivirus(root) {
           <div style="margin-top:8px;"><button class="btn primary" id="av-rescan-admin">Проверить с правами администратора</button></div></div>` : ""}
         ${report.coverage && report.coverage.elevated ? `<div class="bc-hint" style="margin:0 0 8px;">Проверка выполнена <b>с правами администратора</b>.${report.coverage.denied_dirs ? ` Всё равно закрыто: ${report.coverage.denied_dirs} папок (служебные каталоги, защищённые самой системой) — для них запустите проверку Защитником Windows (он работает от имени системы).` : ""}</div>` : ""}
         ${report.coverage ? `<details class="av-cover"><summary>Что именно проверено</summary>
-          <div class="bc-hint" style="margin:6px 0;">Файлов: <b>${report.coverage.files.toLocaleString("ru-RU")}</b> · процессов: <b>${report.coverage.processes}</b> · папок: <b>${report.coverage.folders.toLocaleString("ru-RU")}</b>.
-            Пропущено: файлов больше 300 МБ — ${report.coverage.skipped_large} (проверены только по имени), папок без доступа — ${report.coverage.denied_dirs}.<br>
+          <div class="bc-hint" style="margin:6px 0;">Просмотрено файлов: <b>${(report.coverage.total_files || report.coverage.files).toLocaleString("ru-RU")}</b>, из них проверено по базе: <b>${report.coverage.files.toLocaleString("ru-RU")}</b>.
+            Процессов: <b>${report.coverage.processes}</b> · папок: <b>${report.coverage.folders.toLocaleString("ru-RU")}</b>.<br>
+            Не проверялось: файлов других типов (картинки, видео, текст, данные программ) — <b>${(report.coverage.skipped_type || 0).toLocaleString("ru-RU")}</b>${report.coverage.all_files ? "" : " — вредоносный код они сами не запускают; чтобы проверить и их, включите «Все файлы» (дольше)"}; файлов больше 300 МБ — ${report.coverage.skipped_large} (только по имени); папок без доступа — ${report.coverage.denied_dirs}.<br>
             Типы файлов: ${report.coverage.types.map(t => `.${esc(t)}`).join(" ")}. Проверяются также запущенные процессы, сетевые соединения, автозапуск и исключения Защитника.</div>
           <div class="av-path">${report.coverage.roots.map(esc).join("<br>")}</div>
           ${report.coverage.denied_list && report.coverage.denied_list.length ? `<div class="bc-hint" style="margin:8px 0 2px;">Недоступные папки${report.coverage.denied_dirs > report.coverage.denied_list.length ? ` (первые ${report.coverage.denied_list.length} из ${report.coverage.denied_dirs})` : ""}:</div><div class="av-path">${report.coverage.denied_list.map(esc).join("<br>")}</div>` : ""}
@@ -354,6 +356,7 @@ ${a.path}`)) return; await call("av_quarantine", { path: a.path, pid: a.pid || n
         <button type="button" class="seg-btn" data-av-mode="custom" title="Выбрать папку">Папка…</button>
       </div>
       <button class="btn danger" id="av-stop" hidden>Остановить</button>
+      <label class="bc-feature" style="margin:0 0 0 6px;" title="По умолчанию проверяются программы, скрипты, документы с макросами, архивы и ярлыки. Со всеми файлами проверка идёт заметно дольше."><input type="checkbox" id="av-allfiles"><span>Все файлы</span></label>
       <label class="bc-feature" style="margin:0 0 0 6px;" title="Откроет папки, закрытые обычному пользователю: чужие профили, служебные каталоги системы. Windows спросит подтверждение (UAC)."><input type="checkbox" id="av-admin"><span>С правами администратора</span></label>
     </div>
     <div id="av-progress" class="av-progress" hidden><div class="av-bar"><i></i></div><div id="av-prog-text" class="bc-hint" style="margin:6px 0 0;"></div></div>
