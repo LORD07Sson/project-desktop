@@ -113,20 +113,29 @@ async function openSettings() {
   const seg = (attr, items, cur) => `<div class="seg-toggle" role="group">${items.map(([v, l]) => `<button type="button" class="seg-btn${String(v) === String(cur) ? " active" : ""}" ${attr}="${v}">${l}</button>`).join("")}</div>`;
   const row = (icon, title, sub, control, keywords = "") => `<div class="st-row" data-st-find="${esc(`${title} ${sub} ${keywords}`.toLowerCase())}">${ic(icon)}<div class="st-text"><b>${title}</b>${sub ? `<span>${sub}</span>` : ""}</div>${control}</div>`;
   const NAV = [
-    ["Личное", [["st-acc", "Аккаунт", ICONS.acc], ["st-look", "Внешний вид", ICONS.look], ["st-notif", "Уведомления", ICONS.bell], ["st-behave", "Поведение", ICONS.behave], ["st-keys", "Горячие клавиши", ICONS.keys]]],
-    ["Приложение", [["st-update", "Обновления", ICONS.update], ["st-learn", "Обучение", ICONS.learn], ["st-diag", "Диагностика", ICONS.diag]]],
-    ...(state.isAdmin || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot], ["st-archive", "Архив серий", ICONS.archive]] : [])]]] : []),
+    ["Личное", [["st-acc", "Аккаунт", ICONS.acc, "Профиль и выход"], ["st-look", "Внешний вид", ICONS.look, "Тема, акцент, масштаб"], ["st-notif", "Уведомления", ICONS.bell, "Что и когда присылать"], ["st-behave", "Поведение", ICONS.behave, "Автозапуск, старт, фокус"], ["st-keys", "Горячие клавиши", ICONS.keys, "Все сочетания"]]],
+    ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"]]],
+    ...(state.isAdmin || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot, "Где работает бот"], ["st-archive", "Архив серий", ICONS.archive, "Перенос серий в архив"]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`
     <div class="st-layout">
       <nav class="st-nav" aria-label="Разделы настроек">
         <div class="st-nav-title">Настройки</div>
+        <div class="st-modes" role="group" aria-label="Вид настроек">
+          <button type="button" data-st-mode="list" title="Список слева">Список</button>
+          <button type="button" data-st-mode="tiles" title="Плитки">Плитки</button>
+          <button type="button" data-st-mode="cards" title="Карточки">Карточки</button>
+        </div>
         <label class="st-find">${ic(ICONS.search)}<input type="search" id="st-find" placeholder="Найти настройку…" autocomplete="off"></label>
         ${NAV.map(([group, items]) => `<div class="st-nav-grp">${group}</div>` + items.map(([id, label, i], n) => `<button type="button" class="st-nav-btn${id === "st-acc" && n === 0 ? " on" : ""}" data-st-go="${id}">${ic(i)}<span>${label}</span></button>`).join("")).join("")}
       </nav>
       <div class="st-body" id="st-body">
         <button type="button" class="icon-btn st-close" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <div class="st-home" id="st-home">
+          ${NAV.map(([group, items]) => `<div class="st-home-grp">${group}</div><div class="st-tiles">${items.map(([id, label, i, desc]) => `<button type="button" class="st-tile" data-st-go="${id}">${ic(i)}<b>${label}</b><span>${desc}</span></button>`).join("")}</div>`).join("")}
+        </div>
+        <button type="button" class="st-back" id="st-back">← Все настройки</button>
         <div class="st-empty" id="st-find-empty" hidden>Ничего не нашлось — попробуйте другое слово.</div>
 
         <section class="st-sec on" id="st-acc">
@@ -420,11 +429,34 @@ async function openSettings() {
 
   // ---------- Настройки 2.0: разделы по одному, поиск, новые пункты ----------
   const body = overlay.querySelector("#st-body");
-  const showSection = id => {
-    overlay.querySelectorAll(".st-sec").forEach(sec => sec.classList.toggle("on", sec.id === id));
-    overlay.querySelectorAll("[data-st-go]").forEach(b => b.classList.toggle("on", b.dataset.stGo === id));
+  const layout = overlay.querySelector(".st-layout");
+  const MODE_KEY = "st-layout";
+  let mode = "list";
+  try { const saved = localStorage.getItem(MODE_KEY); if (saved === "tiles" || saved === "cards") mode = saved; } catch (_) {}
+  const goHome = () => {
+    layout.classList.add("st-at-home");
     body.scrollTop = 0;
   };
+  const showSection = id => {
+    layout.classList.remove("st-at-home");
+    overlay.querySelectorAll(".st-sec").forEach(sec => sec.classList.toggle("on", sec.id === id));
+    overlay.querySelectorAll(".st-nav-btn[data-st-go]").forEach(b => b.classList.toggle("on", b.dataset.stGo === id));
+    body.scrollTop = 0;
+  };
+  // Вид настроек по выбору: список слева, плитки или карточки (запоминается).
+  const applyMode = (next, save = true) => {
+    mode = next;
+    layout.classList.remove("st-mode-list", "st-mode-tiles", "st-mode-cards");
+    layout.classList.add(`st-mode-${mode}`);
+    overlay.querySelectorAll("[data-st-mode]").forEach(b => b.classList.toggle("on", b.dataset.stMode === mode));
+    if (save) { try { localStorage.setItem(MODE_KEY, mode); } catch (_) {} }
+    if (mode === "list") {
+      layout.classList.remove("st-at-home");
+      if (!overlay.querySelector(".st-sec.on")) showSection("st-acc");
+    } else goHome();
+  };
+  overlay.querySelectorAll("[data-st-mode]").forEach(b => b.addEventListener("click", () => applyMode(b.dataset.stMode)));
+  overlay.querySelector("#st-back").addEventListener("click", goHome);
   overlay.querySelectorAll("[data-st-go]").forEach(b => b.addEventListener("click", () => {
     const find = overlay.querySelector("#st-find");
     if (find.value) { find.value = ""; applyFind(""); }
@@ -435,6 +467,7 @@ async function openSettings() {
   const applyFind = q => {
     q = q.trim().toLowerCase();
     overlay.classList.toggle("st-finding", !!q);
+    layout.classList.toggle("st-searching", !!q);
     let any = false;
     overlay.querySelectorAll(".st-sec").forEach(sec => {
       if (!q) { sec.querySelectorAll("[data-st-find]").forEach(el => { el.hidden = false; }); return; }
@@ -449,9 +482,13 @@ async function openSettings() {
       if (hit) any = true;
     });
     overlay.querySelector("#st-find-empty").hidden = !q || any;
-    if (!q) showSection(overlay.querySelector("[data-st-go].on")?.dataset.stGo || "st-acc");
+    if (!q) {
+      if (mode !== "list") goHome();
+      else showSection(overlay.querySelector(".st-nav-btn[data-st-go].on")?.dataset.stGo || "st-acc");
+    }
   };
   overlay.querySelector("#st-find").addEventListener("input", e => applyFind(e.target.value));
+  applyMode(mode, false);
 
   // Аккаунт
   overlay.querySelector("#s-acc-profile").addEventListener("click", () => {
