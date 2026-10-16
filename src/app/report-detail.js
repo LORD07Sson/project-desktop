@@ -137,6 +137,7 @@ export async function openReportDetail(publicId) {
     // шагов уходит на /pipeline разом, PATCH одного шага сервер не
     // умеет. Сбрасывается при каждом render() (в т.ч. после сохранения
     // заметки/чек-листа отчёта) — то же поведение, что и там.
+    let pipelineParallel = !!detail.pipeline_parallel;
     let pipelineDraft = (detail.pipeline || []).map(s => ({ role: s.role, telegram_id: s.telegram_id || null, name: s.user_name || null }));
 
     const dotClass = STATUS_DOT_CLASS[detail.status] || "draft";
@@ -216,7 +217,7 @@ export async function openReportDetail(publicId) {
           <div class="rd-panel" data-rd-panel="main">
             <div id="rd-player-host"></div>
             <div class="rd-sec">
-              <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}</span>` : ""}
+              <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди" : `${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}`}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? "изменить" : ""}</button>` : ""}</h3>
               ${hasPipe ? pipelineTimelineHtml(detail.pipeline) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
               ${canEdit ? `<div id="pipe-editor" hidden>
@@ -226,6 +227,7 @@ export async function openReportDetail(publicId) {
                   <select id="pipeline-user-pick" class="field-input">${userOptionsHtml(assignable, null)}</select>
                   <button class="btn" id="pipeline-add-step">+</button>
                 </div>
+                <label class="bc-feature" style="margin-top:10px;" title="Все этапы открыты сразу: даббер, звукарь, тайминг и остальные работают одновременно, никто никого не ждёт"><input type="checkbox" id="pipeline-parallel" ${pipelineParallel ? "checked" : ""}><span><b>Без очереди</b> — все этапы одновременно, не нужно ждать предыдущего</span></label>
                 <div class="sheet-actions" style="margin-top:8px;">
                   <button class="btn primary" id="btn-pipeline-save">Сохранить пайплайн</button>
                   ${hasPipe ? `<button class="btn danger" id="btn-pipeline-clear">Снять</button>` : ""}
@@ -464,7 +466,7 @@ export async function openReportDetail(publicId) {
     });
     if (canEdit) sheet.querySelector("#btn-pipeline-save").addEventListener("click", async () => {
       try {
-        await apiPost(`/report/${publicId}/pipeline`, { steps: pipelineDraft.map(s => ({ role: s.role, telegram_id: s.telegram_id })) });
+        await apiPost(`/report/${publicId}/pipeline`, { steps: pipelineDraft.map(s => ({ role: s.role, telegram_id: s.telegram_id })), parallel: !!sheet.querySelector("#pipeline-parallel")?.checked });
         toast(pipelineDraft.length ? "Пайплайн сохранён." : "Пайплайн снят.");
         await render();
       } catch (e) { toast(`Не удалось сохранить пайплайн: ${e.message}`, "error"); }
