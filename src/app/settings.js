@@ -83,6 +83,7 @@ async function openSettings() {
     density: '<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>',
     logs: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/>',
     bot: '<path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5"/>',
+    archive: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7zM12 11v5M9.5 13.5 12 16l2.5-2.5"/>',
     learn: '<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11M21.5 9v5"/>',
     hint: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4M12 17h.01"/>',
   };
@@ -114,7 +115,7 @@ async function openSettings() {
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc], ["st-look", "Внешний вид", ICONS.look], ["st-notif", "Уведомления", ICONS.bell], ["st-behave", "Поведение", ICONS.behave], ["st-keys", "Горячие клавиши", ICONS.keys]]],
     ["Приложение", [["st-update", "Обновления", ICONS.update], ["st-learn", "Обучение", ICONS.learn], ["st-diag", "Диагностика", ICONS.diag]]],
-    ...(state.isAdmin || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot]] : [])]]] : []),
+    ...(state.isAdmin || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot], ["st-archive", "Архив серий", ICONS.archive]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`
@@ -263,6 +264,10 @@ async function openSettings() {
         <section class="st-sec" id="st-bot">
           <h3>Чаты бота</h3>
           <div id="st-bot-chats"></div>
+        </section>
+        <section class="st-sec" id="st-archive">
+          <h3>Архив серий</h3>
+          <div id="st-archive-root"></div>
         </section>` : ""}
       </div>
     </div>
@@ -410,6 +415,8 @@ async function openSettings() {
 
   const botRoot = overlay.querySelector("#st-bot-chats");
   if (botRoot) import("./bot-chats.js").then(m => m.mountBotChats(botRoot));
+  const archiveRoot = overlay.querySelector("#st-archive-root");
+  if (archiveRoot) import("./archive.js").then(m => m.mountArchive(archiveRoot));
 
   // ---------- Настройки 2.0: разделы по одному, поиск, новые пункты ----------
   const body = overlay.querySelector("#st-body");
