@@ -77,6 +77,16 @@ export async function mountArchive(root) {
         ${d.context ? `<button class="btn" type="button" id="ar-ctx-clear">Сбросить</button>` : ""}
         <span class="bc-hint" style="flex-basis:100%; margin:0;">${d.context ? `Сейчас: <b>${esc(d.context.title_tag.split("_").join(" "))}</b>${d.context.season ? ` · ${d.context.season} сезон` : ""}${d.context.quality ? ` · ${esc(d.context.quality)}` : ""} — следующая серия <b>${d.context.next_episode}</b>.${d.context.auto ? " Запомнено ботом по последней серии; забудется, если 3 дня не будет новых. Чтобы закрепить — нажмите «Сохранить»." : ""}` : "Не задано: бот берёт тайтл и номер только из хештегов поста."}</span>
       </form>
+      <h4 style="margin:16px 0 8px;">Очередь заливки <small>${d.queue ? d.queue.total : 0}</small> <button class="btn" id="ar-queue-refresh" style="margin-left:8px;">Обновить</button></h4>
+      <p class="bc-hint">${d.queue && d.queue.total
+        ? `В очереди <b>${d.queue.total}</b> ${d.queue.total % 10 === 1 && d.queue.total % 100 !== 11 ? "пост" : "постов"}${d.queue.eta_min ? ` — при лимите ${d.queue.limit_mbit} Мбит/с это примерно <b>${d.queue.eta_min >= 90 ? `${(d.queue.eta_min / 60).toFixed(1)} ч` : `${d.queue.eta_min} мин`}</b>` : ""}. Заливка идёт по одной, по порядку номеров постов.`
+        : "Очередь пуста — бот ничего не ждёт."}</p>
+      ${d.queue && d.queue.items.length ? `<div class="bc-chat" style="max-height:260px; overflow:auto; padding:6px 12px;">${d.queue.items.map(q => `
+        <div style="display:flex; gap:10px; align-items:baseline; padding:5px 0; border-top:1px solid var(--line);">
+          <span class="bc-hint" style="margin:0; width:58px;">пост ${q.post}</span>
+          <b style="flex:1;">${esc(q.title)}</b>
+          <span class="bc-hint" style="margin:0;">${q.season ? `${q.season} сезон · ` : ""}${q.episode != null ? `серия ${q.episode}` : "номер по счётчику"}${q.size_mb ? ` · ${q.size_mb} МБ` : ""}${q.active ? " · <b>заливается</b>" : ""}</span>
+        </div>`).join("")}${d.queue.more ? `<div class="bc-hint" style="margin:6px 0 0;">…и ещё ${d.queue.more}</div>` : ""}</div>` : ""}
       <h4 style="margin:16px 0 8px;">Очередь по порядку <small>${(d.held || []).length}</small></h4>
       <p class="bc-hint">Серия, пришедшая раньше предыдущей (например, 2-я без 1-й), ждёт здесь и переносится сама, как только предыдущая ляжет в архив. Если предыдущей не будет, отправьте серию без ожидания.</p>
       ${(d.held || []).length ? (d.held || []).map(h => `
@@ -129,6 +139,7 @@ export async function mountArchive(root) {
     root.querySelectorAll("[data-hold-release]").forEach(b => b.addEventListener("click", () => apply("/archive/hold/release", { key: b.dataset.holdRelease }, "Серия будет отправлена.")));
     root.querySelectorAll("[data-hold-drop]").forEach(b => b.addEventListener("click", () => apply("/archive/hold/drop", { key: b.dataset.holdDrop }, "Убрано из очереди.")));
     root.querySelector("#ar-refresh")?.addEventListener("click", load);
+    root.querySelector("#ar-queue-refresh")?.addEventListener("click", load);
     root.querySelectorAll("[data-topic-use]").forEach(box => box.addEventListener("change", () => {
       const id = Number(box.dataset.topicUse);
       const input = root.querySelector(`[data-topic-tag="${id}"]`);
