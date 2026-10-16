@@ -31,13 +31,14 @@ function previewHtml(r) {
   const match = r.title_match
     ? `Тайтл студии: <b>${esc(r.title_match.name)}</b> — ${r.title_match.taken ? `взят в работу: заведутся отчёты «${esc(r.episode_label || "")}» на каждую роль, видео станет равкой серии` : "не взят в работу: отчётов не будет, видео приложится к серии"}`
     : "Тайтл студии не найден — серия ляжет только в архив, вам придёт сообщение.";
+  const autoNote = r.auto && r.auto.includes("episode") ? " Номер серии подставлен автоматически из «Следующей серии»." : "";
   const topic = r.topic.new ? "Тема тайтла будет создана заново, в ней закрепится превью с постером." : `Серия ляжет в существующую тему № ${r.topic.id}.`;
   return `
     <div style="display:grid; gap:10px;">
       <div><span class="bc-hint">Файл в архиве</span><div style="font-family:ui-monospace,Consolas,monospace; font-size:12.5px;">${esc(r.filename)}</div></div>
       <div><span class="bc-hint">Подпись под видео</span>
         <div style="border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--surface-2); line-height:1.5;">${String(r.caption_html).split(String.fromCharCode(10)).join("<br>")}</div></div>
-      <div class="bc-hint" style="margin:0;">Разобрано: <b>${esc(i.title)}</b>${facts ? ` · ${esc(facts)}` : ""}<br>${match}<br>${topic}</div>
+      <div class="bc-hint" style="margin:0;">Разобрано: <b>${esc(i.title)}</b>${facts ? ` · ${esc(facts)}` : ""}<br>${match}<br>${topic}${autoNote}</div>
     </div>`;
 }
 
@@ -62,6 +63,18 @@ export async function mountArchive(root) {
         <div class="sheet-actions" style="justify-content:flex-start; margin-top:10px;"><button class="btn primary" id="ar-save">Сохранить</button></div>
         <p class="bc-hint" style="margin:10px 0 0;">Перенесено серий: <b>${d.done || 0}</b>. Одна и та же серия дважды не копируется; о сбоях бот пишет владельцам в личку.</p>
       </div>
+      <h4 style="margin:16px 0 8px;">Следующая серия</h4>
+      <p class="bc-hint">Хештеги пропишите один раз — дальше бот сам ставит номера 2, 3, 4… Посты без хештегов (или без номера) он берёт как следующую серию этого тайтла и пишет вам, какой номер поставил.
+        Подпись с явными хештегами всегда главнее, а другой тайтл в подписи этот счётчик не трогает.</p>
+      <form id="ar-ctx" class="bc-chat" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input class="field-input" id="ar-ctx-tag" placeholder="Название_тайтла (как в хештеге)" value="${esc(d.context ? d.context.title_tag : "")}" style="flex:3; min-width:200px;">
+        <input class="field-input" id="ar-ctx-season" type="number" min="1" placeholder="Сезон" value="${d.context && d.context.season ? d.context.season : ""}" style="width:84px;">
+        <input class="field-input" id="ar-ctx-quality" placeholder="4K" value="${esc(d.context && d.context.quality ? d.context.quality : "")}" style="width:84px;">
+        <input class="field-input" id="ar-ctx-next" type="number" min="1" placeholder="Серия" value="${d.context ? d.context.next_episode : 1}" style="width:90px;" title="Номер следующей серии">
+        <button class="btn primary" type="submit">Сохранить</button>
+        ${d.context ? `<button class="btn" type="button" id="ar-ctx-clear">Сбросить</button>` : ""}
+        <span class="bc-hint" style="flex-basis:100%; margin:0;">${d.context ? `Сейчас: <b>${esc(d.context.title_tag.split("_").join(" "))}</b>${d.context.season ? ` · ${d.context.season} сезон` : ""}${d.context.quality ? ` · ${esc(d.context.quality)}` : ""} — следующая серия <b>${d.context.next_episode}</b>.` : "Не задано: бот берёт тайтл и номер только из хештегов поста."}</span>
+      </form>
       <h4 style="margin:16px 0 8px;">Предпросмотр</h4>
       <p class="bc-hint">Вставьте подпись поста из канала — покажу, как бот её разберёт и что получится в архиве. Ничего не отправляется.</p>
       <div class="bc-chat">
@@ -98,6 +111,16 @@ export async function mountArchive(root) {
       enabled: root.querySelector("#ar-enabled").checked,
     }, "Сохранено."));
     root.querySelectorAll("[data-forget-topic]").forEach(b => b.addEventListener("click", () => apply("/archive/topic/forget", { topic_id: Number(b.dataset.forgetTopic) }, "Тема убрана из списка.")));
+    root.querySelector("#ar-ctx").addEventListener("submit", e => {
+      e.preventDefault();
+      apply("/archive/context", {
+        title_tag: root.querySelector("#ar-ctx-tag").value,
+        season: root.querySelector("#ar-ctx-season").value,
+        quality: root.querySelector("#ar-ctx-quality").value,
+        next_episode: root.querySelector("#ar-ctx-next").value,
+      }, "Сохранено.");
+    });
+    root.querySelector("#ar-ctx-clear")?.addEventListener("click", () => apply("/archive/context", { clear: true }, "Сброшено."));
     const out = root.querySelector("#ar-preview-out");
     const runPreview = async () => {
       sampleCaption = root.querySelector("#ar-sample").value;
