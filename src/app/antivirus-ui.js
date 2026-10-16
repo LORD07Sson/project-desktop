@@ -24,6 +24,14 @@ const fmtDur = s => s >= 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s
 // ---------- фоновые задачи при запуске приложения ----------
 export function startAntivirusAuto() {
   if (typeof window === "undefined" || !window.__TAURI_INTERNALS__) return;
+  // Поведенческий монитор (Rust) шлёт bh-alert, пока приложение работает: серьёзное — уведомлением и тостом.
+  listen("bh-alert", ev => {
+    const a = ev.payload || {};
+    if (a.severity === "critical" || a.severity === "high") {
+      sendNotification({ title: `Антивирус: ${a.title || "подозрительное поведение"}`, body: a.detail || "" });
+      toast(`Антивирус: ${a.title}. Откройте Настройки → Антивирус → Поведение.`, "error");
+    }
+  }).catch(() => {});
   setTimeout(async () => {
     try {
       if (lsGet(LS_AUTO_UPDATE, "1") === "1" && Date.now() - Number(lsGet(LS_LAST_UPDATE, "0")) > DAY) {
@@ -207,6 +215,45 @@ export async function mountAntivirus(root) {
           paintBody(); refreshHeader();
         } catch (e) { toast(String(e), "error"); }
       }));
+    } else if (tab === "behavior") {
+      const [st, alerts] = await Promise.all([call("bh_status").catch(() => null), call("bh_alerts").catch(() => [])]);
+      const badge = root.querySelector('[data-av-tab="behavior"] small');
+      if (badge) badge.textContent = alerts.length || "";
+      host.innerHTML = `
+        <div class="bc-chat">
+          <label class="bc-feature"><input type="checkbox" id="bh-on" ${st && st.enabled ? "checked" : ""}><span><b>Поведенческая защита</b> — следит за запущенными программами, пока работает приложение</span></label>
+          <p class="bc-hint" style="margin:6px 0 0;">Предупреждает о майнерах (долгая нагрузка у программы без подписи, соединения на порты пулов), запуске неподписанных программ из временных папок, приёмах вирусов (PowerShell -enc, certutil, mshta), вредоносных документах, новых записях автозапуска и признаках шифровальщика.
+            Ничего не блокирует сама: решение — за вами. ${st && st.running ? "Сейчас работает." : "Сейчас выключена."}</p>
+        </div>
+        ${alerts.length ? `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn" id="bh-clear">Очистить список</button></div>` + alerts.map((a, i) => {
+          const [sevText, sevColor] = a.severity === "critical" ? ["Критично", "var(--s-stop)"] : (SEV[a.severity] || SEV.low);
+          return `<div class="bc-chat av-row">
+            <div style="display:flex; gap:10px; align-items:baseline; flex-wrap:wrap;"><span class="av-sev" style="--c:${sevColor}">${sevText}</span><b style="flex:1; min-width:200px;">${esc(a.title)}</b><span class="bc-hint" style="margin:0;">${fmtDate(a.at)}${a.pid ? ` · PID ${a.pid}` : ""}</span></div>
+            <div class="bc-hint" style="margin:4px 0 0;">${esc(a.detail)}</div>
+            ${a.path ? `<div class="av-path">${esc(a.path)}</div>` : ""}
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+              ${a.pid ? `<button class="btn danger" data-bh="kill" data-i="${i}">Завершить процесс</button>` : ""}
+              ${a.path && a.rule !== "ransomware" ? `<button class="btn" data-bh="quarantine" data-i="${i}">В карантин</button>` : ""}
+              ${(a.path || a.name) && a.rule !== "ransomware" ? `<button class="btn" data-bh="trust" data-i="${i}">Доверять</button>` : ""}
+              <button class="btn" data-bh="dismiss" data-i="${i}">Скрыть</button>
+            </div></div>`;
+        }).join("") : `<div class="av-clean" style="margin-top:10px;">Подозрительного поведения не замечено</div>`}
+        ${st && st.trusted && st.trusted.length ? `<h4 style="margin:16px 0 6px;">Доверенные</h4>` + st.trusted.map(t => `<div class="bc-chat av-row" style="display:flex; gap:10px; align-items:center;"><span class="av-path" style="flex:1; margin:0;">${esc(t)}</span><button class="btn" data-bh-untrust="${esc(t)}">Убрать</button></div>`).join("") : ""}`;
+      host.querySelector("#bh-on").addEventListener("change", async e => { await call("bh_set_enabled", { enabled: e.target.checked }); setTimeout(paintBody, 400); });
+      host.querySelector("#bh-clear")?.addEventListener("click", async () => { await call("bh_dismiss", { id: null }); paintBody(); });
+      host.querySelectorAll("[data-bh-untrust]").forEach(b => b.addEventListener("click", async () => { await call("bh_untrust", { value: b.dataset.bhUntrust }); paintBody(); }));
+      host.querySelectorAll("[data-bh]").forEach(b => b.addEventListener("click", async () => {
+        const a = alerts[Number(b.dataset.i)];
+        try {
+          if (b.dataset.bh === "kill") { if (!confirm(`Завершить процесс «${a.name}» (PID ${a.pid})?`)) return; await call("av_kill", { pid: a.pid }); toast("Процесс завершён.", "success"); }
+          else if (b.dataset.bh === "quarantine") { if (!confirm(`Отправить в карантин?
+
+${a.path}`)) return; await call("av_quarantine", { path: a.path, pid: a.pid || null, label: a.title }); toast("Файл в карантине.", "success"); }
+          else if (b.dataset.bh === "trust") { if (!confirm("Доверять этой программе? Поведенческая защита перестанет следить за ней.")) return; await call("bh_trust", { path: a.path || null, name: a.name || null }); toast("Добавлено в доверенные.", "success"); }
+          await call("bh_dismiss", { id: a.id });
+          paintBody(); refreshHeader();
+        } catch (e) { toast(String(e), "error"); }
+      }));
     } else {
       const ex = await call("av_exclusions").catch(() => ({ paths: [], hashes: [] }));
       const all = [...ex.paths.map(v => ["Путь", v]), ...ex.hashes.map(v => ["Хеш", v])];
@@ -231,6 +278,7 @@ export async function mountAntivirus(root) {
     <div class="av-tabs">
       <button class="av-tab on" data-av-tab="results">Результаты</button>
       <button class="av-tab" data-av-tab="quarantine">Карантин <small></small></button>
+      <button class="av-tab" data-av-tab="behavior">Поведение <small></small></button>
       <button class="av-tab" data-av-tab="exclusions">Исключения</button>
     </div>
     <div id="av-body"></div>

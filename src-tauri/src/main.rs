@@ -10,6 +10,7 @@
 
 mod antivirus;
 mod audio_qc;
+mod behavior;
 mod board;
 mod desktop_notify;
 mod file_scope;
@@ -1424,6 +1425,12 @@ fn main() {
             antivirus::av_remove_autorun,
             antivirus::av_remove_defender_exclusion,
             antivirus::av_defender,
+            behavior::bh_status,
+            behavior::bh_set_enabled,
+            behavior::bh_alerts,
+            behavior::bh_dismiss,
+            behavior::bh_trust,
+            behavior::bh_untrust,
             qc_analyze,
             generate_waveform,
             export_audio_clip,
@@ -1505,6 +1512,9 @@ fn main() {
             // сборки — иначе непонятно, к какому коммиту относится баг-
             // репорт присланного файла).
             log::info!("Project Desktop {} запускается", app.package_info().version);
+
+            // Поведенческая защита (если включена): фоновый монитор процессов и файловой активности.
+            behavior::start_if_enabled(app.handle().clone());
 
             // Пакет уже установленной версии в packages/ больше не нужен.
             std::thread::spawn(drop_installed_package);

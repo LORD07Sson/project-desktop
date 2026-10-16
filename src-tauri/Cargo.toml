@@ -68,6 +68,9 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 base64 = "0.22"
 # SHA-256 файлов для антивируса (antivirus.rs): сверка с базой хешей вредоносных образцов.
 sha2 = "0.10"
+# Поведенческий монитор (behavior.rs): процессы с нагрузкой/командными строками и наблюдатель за файлами пользователя (признаки шифровальщика).
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+notify = "6"
 # Загрузка файла, перетащенного из проводника, и скачивание вложений
 # (upload_report_file/download_report_file в main.rs) — HTTP на свой API
 # напрямую из Rust, минуя JS/fetch: не нужен tauri-plugin-fs, а токен
