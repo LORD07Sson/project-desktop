@@ -18,7 +18,7 @@ import { tagLogger } from "./applog.js";
 import { midiEnabled, setMidiEnabled } from "./midi-control.js";
 import { currentTune, applyTune } from "./tune.js";
 import { cacheSummary, clearCache } from "./audio-cache.js";
-import { checkTool, checkServer, checkMic, checkStorage, checkNotify, summarize } from "./selfcheck-core.js";
+import { checkTool, checkServer, checkStorage, checkNotify, summarize } from "./selfcheck-core.js";
 import { TUNE_DEFAULT, TUNE_LIMITS } from "./tune-core.js";
 import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints, resetTourProgress } from "./tour.js";
 
@@ -270,9 +270,9 @@ async function openSettings() {
           <h3>Диагностика</h3><p class="st-lead">Если что-то сломалось — отсюда проще всего рассказать, что именно.</p>
           <div class="st-group">
             ${row(ICONS.server, "Сервер команды", "Связь с сервером и время ответа", `<span class="st-ping" id="s-ping">проверяю…</span><button type="button" class="btn" id="s-ping-again">Проверить</button>`, "сеть сервер соединение")}
-            ${row(ICONS.logs, "Файловые логи приложения", "Обновления, QC звука, инструменты ffmpeg, плеер", `<button class="btn" id="s-open-logs">Открыть логи</button>`, "логи")}
+            ${row(ICONS.logs, "Файловые логи приложения", "Обновления, сборка у себя, скачивание файлов", `<button class="btn" id="s-open-logs">Открыть логи</button>`, "логи")}
             ${row(ICONS.shield, "Антивирус", "Проверка ПК на вирусы и майнеры, карантин, обновление баз", `<button type="button" class="btn primary" id="s-open-av">Открыть</button>`, "антивирус вирус майнер карантин проверка защита")}
-            ${row(ICONS.server, "Проверить компьютер", "ffmpeg, микрофон, связь с сервером, уведомления, место", `<button type="button" class="btn" id="s-selfcheck">Проверить</button>`, "диагностика проверка ffmpeg микрофон")}
+            ${row(ICONS.server, "Проверить компьютер", "ffmpeg, связь с сервером, уведомления, место", `<button type="button" class="btn" id="s-selfcheck">Проверить</button>`, "диагностика проверка ffmpeg микрофон")}
             <div class="st-selfcheck" id="s-selfcheck-out" hidden></div>
             ${row(ICONS.logs, "Кеш дорожек", "Прослушанные дорожки хранятся здесь: открываются сразу и без связи с сервером", `<span class="st-ping" id="s-cache-info"></span><button type="button" class="btn" id="s-cache-clear">Очистить</button>`, "кеш звук оффлайн")}
             ${row(ICONS.copy, "Отчёт для разработчика", "Версия, система, канал, связь с сервером — одним текстом в буфер обмена", `<button class="btn" id="s-copy-report">Скопировать</button>`, "баг ошибка")}
@@ -323,11 +323,10 @@ async function openSettings() {
     const btn = e.currentTarget, out = overlay.querySelector("#s-selfcheck-out");
     btn.disabled = true; btn.textContent = "Проверяю…";
     const tools = await invoke("mt_tool_status").catch(() => ({}));
-    const devices = await (navigator.mediaDevices?.enumerateDevices?.() ?? Promise.resolve([])).catch(() => []);
     const estimate = await (navigator.storage?.estimate?.() ?? Promise.resolve(null)).catch(() => null);
     const results = [
       checkServer(lastPing), checkTool("ffmpeg", tools.ffmpeg), checkTool("ffprobe", tools.ffprobe),
-      checkMic(devices), checkNotify(window.Notification ? window.Notification.permission : "default"), checkStorage(estimate),
+      checkNotify(window.Notification ? window.Notification.permission : "default"), checkStorage(estimate),
     ];
     out.hidden = false;
     out.innerHTML = `<b>${esc(summarize(results))}</b>` + results.map(r => `<div class="sc-row ${r.status}"><i></i><span>${esc(r.label)}</span><em>${esc(r.detail)}</em></div>`).join("");

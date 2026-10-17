@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { checkTool, checkServer, checkMic, checkStorage, checkNotify, summarize, shortVersion, OK, WARN, BAD } from "../src/app/selfcheck-core.js";
+import { checkTool, checkServer, checkStorage, checkNotify, summarize, shortVersion, OK, WARN, BAD } from "../src/app/selfcheck-core.js";
 
 assert.equal(shortVersion("ffmpeg version 6.1-essentials_build Copyright"), "6.1-essentials_build");
 assert.equal(checkTool("ffmpeg", "ffmpeg version 7.0 x").status, OK);
@@ -7,8 +7,6 @@ assert.equal(checkTool("ffprobe", null).status, BAD);
 assert.equal(checkServer(null).status, BAD);
 assert.equal(checkServer(80).status, OK);
 assert.equal(checkServer(3000).status, WARN);
-assert.equal(checkMic([{ kind: "audiooutput" }]).status, WARN);
-assert.equal(checkMic([{ kind: "audioinput" }, { kind: "audioinput" }]).detail, "найдено: 2");
 assert.equal(checkStorage({ quota: 10 * 1073741824, usage: 1073741824 }).status, OK);
 assert.equal(checkStorage({ quota: 1073741824, usage: 900000000 }).status, WARN);
 assert.equal(checkStorage(null).status, WARN);

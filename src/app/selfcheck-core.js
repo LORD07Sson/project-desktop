@@ -12,19 +12,12 @@ export function shortVersion(line) {
 export function checkTool(name, version) {
   return version
     ? { label: name, status: OK, detail: shortVersion(version) }
-    : { label: name, status: BAD, detail: "не найден — инструменты звука и видео не заработают" };
+    : { label: name, status: BAD, detail: "не найден — сборка финала у себя не заработает" };
 }
 
 export function checkServer(pingMs) {
   if (pingMs == null) return { label: "Сервер команды", status: BAD, detail: "нет связи — проверьте интернет и VPN" };
   return { label: "Сервер команды", status: pingMs > 1500 ? WARN : OK, detail: `${pingMs} мс${pingMs > 1500 ? " — медленно" : ""}` };
-}
-
-export function checkMic(devices) {
-  const mics = (devices || []).filter(d => d.kind === "audioinput");
-  return mics.length
-    ? { label: "Микрофон", status: OK, detail: `найдено: ${mics.length}` }
-    : { label: "Микрофон", status: WARN, detail: "не найден — запись из программы не получится" };
 }
 
 export function checkStorage(estimate) {
