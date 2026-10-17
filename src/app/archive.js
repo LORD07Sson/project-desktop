@@ -62,6 +62,11 @@ export async function mountArchive(root) {
         ${d.target && target && target.status && target.status !== "administrator" ? `<div class="bc-warn">Бот в этой группе не админ — темы он не увидит и создать не сможет. Сделайте его админом (управление темами, публикация, закрепление).</div>` : ""}
         ${d.target && target && !target.is_forum ? `<div class="bc-warn">В этой группе не включены темы — серии пойдут в общую ленту.</div>` : ""}
         <label class="bc-feature" style="margin-top:12px;"><input type="checkbox" id="ar-enabled" ${d.enabled ? "checked" : ""}><span>Автоперенос включён</span></label>
+        <label class="bc-hint" style="display:flex; gap:10px; align-items:center; margin:10px 0 0;">Латинское название в имени файла и теме:
+          <select class="field-input" id="ar-name-pref" style="max-width:260px;">
+            <option value="romaji" ${d.name_pref !== "english" ? "selected" : ""}>Ромадзи (Kimi ni Todoke)</option>
+            <option value="english" ${d.name_pref === "english" ? "selected" : ""}>Английское, если есть (Your Name)</option>
+          </select></label>
         <div class="sheet-actions" style="justify-content:flex-start; margin-top:10px;"><button class="btn primary" id="ar-save">Сохранить</button></div>
         <p class="bc-hint" style="margin:10px 0 0;">Перенесено серий: <b>${d.done || 0}</b>. Одна и та же серия дважды не копируется; о сбоях бот пишет владельцам в личку.</p>
       </div>
@@ -174,6 +179,7 @@ export async function mountArchive(root) {
         next_episode: root.querySelector("#ar-ctx-next").value,
       }, "Сохранено.");
     });
+    root.querySelector("#ar-name-pref")?.addEventListener("change", e => apply("/archive", { name_pref: e.target.value }, "Сохранено — для новых серий."));
     root.querySelector("#ar-ctx-clear")?.addEventListener("click", () => apply("/archive/context", { clear: true }, "Сброшено."));
     const out = root.querySelector("#ar-preview-out");
     const runPreview = async () => {
