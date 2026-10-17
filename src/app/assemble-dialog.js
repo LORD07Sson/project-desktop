@@ -121,14 +121,18 @@ export async function openAssembleDialog(publicId) {
       const srcInfo = `исходник ${fmtSize(estimate.source_size)} · ${fmtDur(estimate.duration)} · ${estimate.width}×${estimate.height} · ${estimate.video_kbps} кбит/с`;
       if (!e || e.low == null) { estBox.className = "ad-est"; estBox.innerHTML = `<span>Размер для этого профиля не посчитать.</span><small>${esc(srcInfo)}</small>`; return; }
       estBox.className = `ad-est${e.over_limit ? " bad" : ""}`;
+      const mins = x => (x >= 3600 ? `${(x / 3600).toFixed(1)} ч` : `${Math.max(1, Math.round(x / 60))} мин`);
+      const renderTxt = e.render_low != null ? `Рендер на сервере ≈ ${mins(e.render_low)} – ${mins(e.render_high)} (если нужна перекодировка: субтитры, надпись, логотип, масштаб).` : "";
       estBox.innerHTML = `<b>≈ ${fmtSize(e.low)} – ${fmtSize(e.high)}</b>
+        <span>${renderTxt}</span>
         <span>${e.over_limit ? "Может не поместиться в Telegram (лимит 2 ГБ) — выберите профиль полегче." : "Помещается в Telegram (лимит 2 ГБ)."}</span>
         <small>${esc(srcInfo)}. Интро и склейка добавят своё; точность ±30% для режима CRF, ±8% для заданного битрейта.</small>`;
       // подписи профилей в списке — тоже с размером
       [...profileSel.options].forEach(o => {
         const x = estimate.estimates.find(y => String(y.index) === o.value);
         const base = (opts.profiles.find(p => String(p.index) === o.value) || {}).name || o.textContent;
-        o.textContent = x && x.low != null ? `${base} · ≈ ${fmtSize(Math.round((x.low + x.high) / 2))}` : base;
+        const mid = x && x.render_low != null ? Math.round((x.render_low + x.render_high) / 2 / 60) : null;
+        o.textContent = x && x.low != null ? `${base} · ≈ ${fmtSize(Math.round((x.low + x.high) / 2))}${mid ? ` · ~${mid} мин` : ""}` : base;
       });
     }
     async function loadEstimate() {
