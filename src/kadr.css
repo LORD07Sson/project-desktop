@@ -3194,3 +3194,13 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .cp-pv-video { position: relative; display: grid; place-items: center; overflow: hidden; }
 .cp-pv-video img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(.8); }
 .cp-pv-video svg { position: relative; z-index: 1; }
+
+/* «Опасная зона» (Видео с Nyaa) */
+.rd-add.danger-zone { border-color: color-mix(in srgb, var(--s-stop) 70%, transparent); color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 10%, transparent); font-weight: 700; letter-spacing: .02em; }
+.rd-add.danger-zone:hover { background: color-mix(in srgb, var(--s-stop) 20%, transparent); }
+.dz-title { color: var(--s-stop); }
+.dz-text { margin: 0 0 10px; line-height: 1.45; }
+.dz-strong { font-weight: 700; color: var(--s-stop); }
+.dz-ack { display: flex; gap: 8px; align-items: center; margin: 12px 0; font-size: 13px; cursor: pointer; }
+.btn.dz-go { background: var(--s-stop); border-color: var(--s-stop); color: #fff; }
+.btn.dz-go:disabled { opacity: .4; cursor: not-allowed; }

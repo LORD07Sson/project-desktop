@@ -192,6 +192,25 @@ async function openSendFileSheet(publicId, fileId, fileName, ref = "") {
   });
 }
 
+// «Опасная зона»: тяжёлое действие (сервер качает видео целиком) — сначала предупреждение, дальше только осознанно.
+function dangerZoneWarning(onConfirm) {
+  const overlay = openSheet(`
+    <h2 class="dz-title">⚠ Опасная зона</h2>
+    <p class="dz-text">Пожалуйста, не нагружайте сервер просто так — вы должны это понимать.</p>
+    <p class="dz-text">Делайте это только тогда, когда <b>все звуки, субтитры, надписи и название собраны</b>. Тогда можете смело скачивать видео.</p>
+    <p class="dz-text dz-strong">Иначе я вас побью, и вы будете за это отвечать.</p>
+    <label class="dz-ack"><input type="checkbox" id="dz-ack"> Всё готово, я понимаю, что нагружаю сервер</label>
+    <div class="sheet-actions">
+      <button class="btn" data-close>Отмена</button>
+      <button class="btn dz-go" id="dz-go" disabled>Продолжить</button>
+    </div>`);
+  const ack = overlay.querySelector("#dz-ack");
+  const go = overlay.querySelector("#dz-go");
+  ack.addEventListener("change", () => { go.disabled = !ack.checked; });
+  overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
+  go.addEventListener("click", () => { dismissSheet(overlay); onConfirm(); });
+}
+
 export async function openReportDetail(publicId) {
   const overlay = openSheet(`
     <h2 class="skeleton-row" style="width:60%; height:22px;"></h2>
@@ -687,7 +706,7 @@ export async function openReportDetail(publicId) {
     sheet.querySelector("#report-watermark")?.addEventListener("click", () => openTitleAdminDetail(detail.title_id));
     // Сборка уже идёт (запущена раньше или с другого устройства) — карточка хода появится сама.
     if (sheet.querySelector("#report-assemble")) startAssemblyWatch(publicId, overlay, false);
-    sheet.querySelector("#report-nyaa")?.addEventListener("click", async () => {
+    const startNyaa = async () => {
       // Запрос для Nyaa: латинское название тайтла (как у релизеров) и номер серии; не вышло — просто название отчёта.
       let query = String(detail.title || "").split(/\s[—–-]\s/)[0].trim();
       const episode = (String(detail.title || "").match(/(?:Серия|серия|Episode|EP)\s*(\d+)/) || [])[1];
@@ -701,7 +720,8 @@ export async function openReportDetail(publicId) {
       const { openNyaaForReport } = await import("./nyaa.js");
       overlay.remove();
       openNyaaForReport(publicId, query);
-    });
+    };
+    sheet.querySelector("#report-nyaa")?.addEventListener("click", () => dangerZoneWarning(startNyaa));
     sheet.querySelector("#report-assemble")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       btn.disabled = true;
@@ -1058,7 +1078,7 @@ function productionHtml(detail, fileList) {
     </div>`;
   const sendFile = [...list].reverse().find(f => /_final\./i.test(f.file_name || "")) || [...list].reverse().find(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
-  const nyaa = can("reports.files") ? `<button class="rd-add" id="report-nyaa" title="Найти раздачу на Nyaa, сервер скачает видео и прикрепит к отчёту">🌐 Видео с Nyaa</button>` : "";
+  const nyaa = can("reports.files") ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск">⚠ ОПАСНАЯ ЗОНА · Видео с Nyaa</button>` : "";
   const assemble = can("reports.assemble") ? `<button class="rd-add primary" id="report-assemble">🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
   return `
