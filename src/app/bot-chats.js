@@ -12,22 +12,21 @@ const TYPE_LABEL = { group: "группа", supergroup: "группа", channel:
 
 function chatHtml(c, features) {
   const off = !c.active;
+  const kind = `${TYPE_LABEL[c.type] || c.type || "чат"}${c.is_forum ? " · с темами" : ""}${c.username ? ` · @${c.username}` : ""}`;
   return `
-    <div class="bc-chat${off ? " off" : ""}${c.mention ? " target" : ""}" data-chat="${c.chat_id}">
-      <div class="bc-head">
-        <div class="bc-title">
-          <b>${esc(c.title)}</b>
-          <span>${esc(TYPE_LABEL[c.type] || c.type || "чат")}${c.is_forum ? " · с темами" : ""}${c.username ? ` · @${esc(c.username)}` : ""}</span>
-        </div>
-        ${off ? `<span class="bc-badge gone">бот удалён</span><button class="btn" data-forget="${c.chat_id}">Убрать из списка</button>` : `<span class="bc-badge">активен</span>`}
+    <div class="bcn${off ? " off" : ""}${c.mention ? " work" : ""}" data-chat="${c.chat_id}">
+      <div class="bcn-head">
+        <div class="bcn-title"><b>${esc(c.title)}</b><span>${esc(kind)}</span></div>
+        ${off ? `<span class="bcn-badge gone">бот удалён</span>` : c.mention ? `<span class="bcn-badge work">рабочий чат</span>` : `<span class="bcn-badge">активен</span>`}
       </div>
-      ${off ? "" : `
-      <div class="bc-features">
-        ${features.map(f => `<label class="bc-feature"><input type="checkbox" data-feature="${f.key}" ${c.features[f.key] ? "checked" : ""}><span>${esc(f.label)}</span></label>`).join("")}
+      ${off ? `<div class="ar-actions"><button class="btn" data-forget="${c.chat_id}">Убрать из списка</button></div>` : `
+      <div class="bcn-features">
+        ${features.map(f => `
+        <label class="bcn-feature"><span>${esc(f.label)}</span><span class="ar-switch sm"><input type="checkbox" data-feature="${f.key}" ${c.features[f.key] ? "checked" : ""}><i></i></span></label>`).join("")}
       </div>
-      <div class="bc-mention">
-        <label class="bc-feature"><input type="radio" name="bc-mention" data-mention ${c.mention ? "checked" : ""}><span>📣 Сюда — упоминания по расписанию</span></label>
-        ${c.mention && c.is_forum ? `<label class="bc-thread">тема №<input type="number" min="0" data-thread value="${c.mention_thread_id || ""}" placeholder="общая"></label>` : ""}
+      <div class="bcn-mention">
+        <label class="bcn-feature"><span>📣 Упоминания по расписанию — сюда</span><span class="ar-switch sm"><input type="radio" name="bc-mention" data-mention ${c.mention ? "checked" : ""}><i></i></span></label>
+        ${c.mention && c.is_forum ? `<label class="bcn-thread">Тема №<input class="field-input" type="number" min="0" data-thread value="${c.mention_thread_id || ""}" placeholder="общая"></label>` : ""}
       </div>`}
     </div>`;
 }
@@ -40,9 +39,11 @@ export async function mountBotChats(root) {
   function paint(d) {
     const chats = d.chats || [];
     root.innerHTML = `
-      <p class="bc-hint">Группы и каналы, где состоит бот. Добавьте бота в группу и напишите там любое сообщение — она появится здесь. В новой группе всё включено.</p>
-      ${chats.some(c => c.active) && !chats.some(c => c.mention && c.active) ? `<div class="bc-warn">Рабочий чат для упоминаний не выбран — рассылка по расписанию сейчас никуда не уходит.</div>` : ""}
-      ${chats.length ? chats.map(c => chatHtml(c, d.features || [])).join("") : `<div class="no-assignee">Бот пока ни в одной группе.</div>`}`;
+      <div class="ar">
+        <p class="ar-hint" style="margin:0;">Группы и каналы, где состоит бот. Добавьте бота в группу и напишите там любое сообщение — она появится здесь. В новой группе всё включено.</p>
+        ${chats.some(c => c.active) && !chats.some(c => c.mention && c.active) ? `<div class="bc-warn">Рабочий чат для упоминаний не выбран — рассылка по расписанию сейчас никуда не уходит.</div>` : ""}
+        ${chats.length ? `<div class="bcn-grid">${chats.map(c => chatHtml(c, d.features || [])).join("")}</div>` : `<div class="ar-empty">Бот пока ни в одной группе.</div>`}
+      </div>`;
 
     const save = async (chatId, body) => {
       try {
@@ -50,7 +51,7 @@ export async function mountBotChats(root) {
         toast("Сохранено.", "success");
       } catch (e) { toast(e.message, "error"); await load(); }
     };
-    root.querySelectorAll(".bc-chat").forEach(card => {
+    root.querySelectorAll(".bcn").forEach(card => {
       const chatId = card.dataset.chat;
       card.querySelectorAll("[data-feature]").forEach(cb => cb.addEventListener("change", () => {
         const features = {};

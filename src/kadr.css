@@ -3029,3 +3029,21 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
   .pm-roles { position: static; display: flex; max-height: none; overflow-x: auto; padding-bottom: 6px; }
   .pm-role { flex: 0 0 auto; min-width: 130px; }
 }
+
+/* «Чаты бота» */
+.bcn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.bcn { padding: 16px 18px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--line); display: grid; gap: 12px; align-content: start; }
+.bcn.work { border-color: rgba(var(--fire-rgb), .4); background: linear-gradient(135deg, rgba(var(--fire-rgb), .1), var(--surface-2) 55%); }
+.bcn.off { opacity: .65; }
+.bcn-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.bcn-title b { display: block; font-size: 15px; font-weight: 750; line-height: 1.3; }
+.bcn-title span { font-size: 12px; color: var(--ink-dim); }
+.bcn-badge { flex: none; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: rgba(255, 255, 255, .06); color: var(--ink-soft); }
+.bcn-badge.work { background: var(--accent-soft); color: var(--ember); }
+.bcn-badge.gone { background: color-mix(in srgb, var(--s-stop) 16%, transparent); color: var(--s-stop); }
+.bcn-features { display: grid; border-radius: 14px; background: rgba(0, 0, 0, .18); }
+.bcn-feature { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 14px; font-size: 13px; cursor: pointer; }
+.bcn-features .bcn-feature + .bcn-feature { border-top: 1px solid var(--line-soft); }
+.bcn-mention { display: grid; gap: 8px; border-radius: 14px; background: rgba(0, 0, 0, .18); }
+.bcn-thread { display: flex; align-items: center; gap: 10px; padding: 0 14px 10px; font-size: 12.5px; color: var(--ink-dim); }
+.bcn-thread .field-input { width: 110px; }
