@@ -3135,3 +3135,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .pm-add { border-style: dashed !important; color: var(--ink-dim); text-align: center; font-weight: 700; }
 .pm-new { display: grid; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid rgba(var(--fire-rgb), .35); background: rgba(255, 255, 255, .03); }
 .pm-new small { color: var(--ink-dim); font-size: 11px; } .pm-new-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* кнопка «Ещё/Команда» в активном состоянии — как остальные вкладки (без чёрной плашки), в любой теме */
+.tb-nav.liquid .tb-more-btn.active, :root[data-theme="light"] .tb-nav.liquid .tb-more-btn.active { background: none; box-shadow: none; }
+.tb-nav.liquid .tb-more-btn.active::before { content: ""; width: calc(100% - 26px); height: 2px; background: var(--fire); box-shadow: 0 0 10px rgba(var(--fire-rgb), .8); }
+.tb-nav.liquid .tb-more-btn.active::after { content: none; }
