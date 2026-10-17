@@ -2831,16 +2831,6 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 
 
 /* ---------- Матрица прав ролей ---------- */
-.perm-wrap { overflow: auto; max-height: 62vh; border: 1px solid var(--line); border-radius: 14px; }
-.perm-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
-.perm-table th { position: sticky; top: 0; z-index: 2; background: var(--surface-2, #12171f); padding: 8px 6px; font-size: 11px; font-weight: 700; text-align: center; border-bottom: 1px solid var(--line); }
-.perm-table th:first-child { text-align: left; padding-left: 14px; left: 0; z-index: 3; min-width: 240px; }
-.perm-table td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--line-soft, rgba(255,255,255,.05)); }
-.perm-table td.perm-name { text-align: left; padding-left: 14px; position: sticky; left: 0; background: var(--surface, #0e131a); }
-.perm-name b { display: block; font-weight: 600; }
-.perm-name span { display: block; font-size: 11.5px; color: var(--ink-dim); line-height: 1.3; max-width: 320px; }
-.perm-group td { text-align: left; padding: 12px 14px 6px; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); background: transparent; border-bottom: 0; }
-.perm-table input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--gold, #ff7a3d); cursor: pointer; }
 
 /* Недоступное по правам роли — убрано совсем (perm-visibility.js) */
 [data-perm-hidden="1"] { display: none !important; }
@@ -2999,3 +2989,43 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .ar-chipbtn { border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink-soft); font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 99px; cursor: pointer; }
 .ar-chipbtn:hover { border-color: rgba(var(--fire-rgb), .4); color: var(--ink); }
 @media (max-width: 640px) { .ar-stats { grid-template-columns: repeat(2, 1fr); } }
+
+/* «Права ролей»: роли слева, права справа */
+.pm { display: grid; gap: 14px; }
+.pm-lead { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink-dim); max-width: 760px; }
+.pm-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+.pm-roles { display: grid; gap: 6px; position: sticky; top: 8px; max-height: 78vh; overflow-y: auto; padding: 2px; }
+.pm-role { position: relative; display: grid; gap: 2px; text-align: left; border: 1px solid var(--line-soft); background: var(--surface-2); color: var(--ink-soft); font: inherit; padding: 10px 12px 14px; border-radius: 14px; cursor: pointer; overflow: hidden; transition: border-color .15s, background .15s; }
+.pm-role:hover { border-color: var(--line); background: var(--surface-3); }
+.pm-role.on { border-color: rgba(var(--fire-rgb), .45); background: linear-gradient(135deg, rgba(var(--fire-rgb), .14), var(--surface-2)); color: var(--ink); }
+.pm-role-name { font-size: 14px; font-weight: 700; }
+.pm-role-count { font-size: 11.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.pm-role i { position: absolute; left: 12px; right: 12px; bottom: 6px; height: 3px; border-radius: 99px; background: rgba(255, 255, 255, .07); }
+.pm-role i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: 99px; background: var(--accent-grad); }
+.pm-main { display: grid; gap: 12px; min-width: 0; }
+.pm-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 16px 18px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface-2); }
+.pm-head h3 { margin: 0 0 2px; font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+.pm-head span { font-size: 12.5px; color: var(--ink-dim); }
+.pm-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pm-tools .field-input { width: 190px; }
+.pm-group { border-radius: 20px; border: 1px solid var(--line); background: var(--surface-2); overflow: hidden; }
+.pm-group header { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); background: rgba(255, 255, 255, .02); }
+.pm-group header b { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.pm-group header span { font-size: 12px; color: var(--ink-dim); flex: 1; }
+.pm-link { border: 0; background: transparent; color: var(--ember); font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.pm-link:hover { background: var(--accent-soft); }
+.pm-item { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 18px; cursor: pointer; transition: background .12s; }
+.pm-item + .pm-item { border-top: 1px solid var(--line-soft); }
+.pm-item:hover { background: rgba(255, 255, 255, .03); }
+.pm-item-text { display: grid; gap: 2px; min-width: 0; }
+.pm-item-text b { font-size: 14px; font-weight: 650; }
+.pm-item-text small { font-size: 12px; color: var(--ink-dim); line-height: 1.4; }
+.pm-owner { padding: 14px 18px; border-radius: 18px; border: 1px dashed var(--line); display: grid; gap: 6px; font-size: 12.5px; color: var(--ink-dim); }
+.pm-owner b { color: var(--ink-soft); font-size: 13px; }
+.pm-owner div { display: flex; flex-wrap: wrap; gap: 6px; }
+.pm-owner em { font-style: normal; font-size: 12px; padding: 3px 10px; border-radius: 99px; background: rgba(255, 255, 255, .05); color: var(--ink-soft); }
+@media (max-width: 760px) {
+  .pm-layout { grid-template-columns: 1fr; }
+  .pm-roles { position: static; display: flex; max-height: none; overflow-x: auto; padding-bottom: 6px; }
+  .pm-role { flex: 0 0 auto; min-width: 130px; }
+}
