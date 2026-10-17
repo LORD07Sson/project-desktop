@@ -10,6 +10,7 @@ export async function mountPermissions(root) {
   let data = null;
   let current = null;   // ключ выбранной роли
   let query = "";
+  let creating = false; // открыта форма «Новая роль»
 
   const granted = key => new Set(data.grants[key] || []);
 
@@ -52,6 +53,16 @@ export async function mountPermissions(root) {
               <i style="--w:${total ? Math.round(n / total * 100) : 0}%"></i>
             </button>`;
           }).join("")}
+          ${creating ? `
+          <form class="pm-new" id="pm-new-form">
+            <input class="field-input" id="pm-new-name" maxlength="40" placeholder="Название роли" autocomplete="off">
+            <select class="field-input" id="pm-new-copy" title="Взять за основу права другой роли">
+              <option value="">Без прав (настрою сам)</option>
+              ${roles.map(r => `<option value="${esc(r.key)}">Права как у «${esc(r.name)}»</option>`).join("")}
+            </select>
+            <div class="pm-new-actions"><button type="submit" class="btn primary">Создать роль</button><button type="button" class="btn" id="pm-new-cancel">Отмена</button></div>
+            <small>Не используйте «,» и «:». Роль потом можно выдать людям в Команда → Роли.</small>
+          </form>` : `<button type="button" class="pm-role pm-add" id="pm-new-open">+ Новая роль</button>`}
         </nav>
         <div class="pm-main">
           ${role ? `
@@ -68,6 +79,7 @@ export async function mountPermissions(root) {
               </select>
               <button class="btn" id="pm-all">Включить всё</button>
               <button class="btn" id="pm-none">Снять всё</button>
+              ${role.kind === "role" ? `<button class="btn" id="pm-delete" title="${role.members ? `Роль назначена людям: ${role.members}` : "Удалить роль"}">Удалить роль</button>` : ""}
             </div>
           </div>
           ${groups.length ? groups.map(g => {
@@ -118,6 +130,30 @@ export async function mountPermissions(root) {
       }
       save(role.key, next);
     }));
+    root.querySelector("#pm-new-open")?.addEventListener("click", () => { creating = true; paint(); root.querySelector("#pm-new-name")?.focus(); });
+    root.querySelector("#pm-new-cancel")?.addEventListener("click", () => { creating = false; paint(); });
+    root.querySelector("#pm-new-form")?.addEventListener("submit", async e => {
+      e.preventDefault();
+      const name = root.querySelector("#pm-new-name").value.trim();
+      if (!name) { toast("Введите название роли.", "error"); return; }
+      try {
+        data = await apiPost("/permissions/role", { name, copy_from: root.querySelector("#pm-new-copy").value || "" });
+        creating = false;
+        const made = data.roles.find(r => r.name === name);
+        if (made) current = made.key;
+        toast(`Роль «${name}» создана — отметьте её права.`, "success");
+      } catch (err) { toast(err.message, "error"); }
+      paint();
+    });
+    root.querySelector("#pm-delete")?.addEventListener("click", async () => {
+      if (role.members) { toast(`Роль «${role.name}» назначена людям (${role.members}) — сначала снимите её в Команда → Роли.`, "error"); return; }
+      if (!window.confirm(`Удалить роль «${role.name}»? Её права тоже пропадут.`)) return;
+      try {
+        data = await apiPost("/permissions/role/delete", { name: role.name });
+        toast(`Роль «${role.name}» удалена.`, "success");
+      } catch (err) { toast(err.message, "error"); }
+      paint();
+    });
     root.querySelector("#pm-all")?.addEventListener("click", () => save(role.key, data.permissions.map(p => p.key), "Все права включены."));
     root.querySelector("#pm-none")?.addEventListener("click", () => save(role.key, [], "Права сняты."));
     root.querySelector("#pm-copy")?.addEventListener("change", e => {

@@ -3130,3 +3130,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .fc-belt { flex: 0 0 22px; }
 @keyframes fcitem { from { left: -14px; } to { left: 24px; } }
 .fc-trunk { padding: 10px 14px; gap: 6px; }
+
+/* «Права ролей»: создание роли */
+.pm-add { border-style: dashed !important; color: var(--ink-dim); text-align: center; font-weight: 700; }
+.pm-new { display: grid; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid rgba(var(--fire-rgb), .35); background: rgba(255, 255, 255, .03); }
+.pm-new small { color: var(--ink-dim); font-size: 11px; } .pm-new-actions { display: flex; gap: 8px; flex-wrap: wrap; }
