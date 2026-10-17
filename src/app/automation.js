@@ -220,6 +220,129 @@ async function mountSpeed(root) {
 const STATE = { done: "отправлен", failed: "ошибка", retry: "повтор", dup: "дубль — пропущен", skipped: "исключён" };
 const CAT_ICON = { video: "🎞", torrent: "🧲", sub: "💬", audio: "🎙", inscr: "🏷", zip: "📦", other: "📄", photo: "🖼" };
 
+// «Маршруты» архива документов: какой файл куда уезжает. Первый подошедший маршрут по порядку, иначе маршрут по умолчанию.
+function wireDocsRoutes(box, d, saveAll) {
+  const st = { routes: d.routes.map(r => ({ ...r })), def: { scheme: d.default_route.scheme, prefix: d.default_route.prefix } };
+  const chatOpts = sel => `<option value=""${sel ? "" : " selected"}>— группа по умолчанию —</option>${d.chats.map(c => `<option value="${c.chat_id}"${String(c.chat_id) === String(sel) ? " selected" : ""}>${esc(c.title)}${c.is_forum ? " · с темами" : ""}</option>`).join("")}`;
+  const schemeOpts = sel => Object.entries(d.schemes).map(([k, l]) => `<option value="${k}"${k === sel ? " selected" : ""}>${esc(l)}</option>`).join("");
+  const titleName = id => (d.titles.find(t => t.id === id) || {}).name || `№${id}`;
+
+  const paint = () => {
+    box.innerHTML = `
+    <div class="ar-card">
+      <h4>Маршруты <em>${st.routes.length}</em></h4>
+      <p class="ar-hint" style="margin:0 0 10px;">Маршрут решает, в какую группу и тему уедет файл. Файл проверяется по маршрутам сверху вниз, срабатывает первый подошедший; если не подошёл ни один — маршрут «По умолчанию». Пустое условие значит «любой»: маршрут без видов берёт любые виды, без тайтлов — любые тайтлы. Порядок меняйте стрелками: чем выше, тем важнее.</p>
+      ${st.routes.map((r, i) => `
+      <div class="ar-result" data-rt="${i}" style="display:grid; gap:8px; margin-bottom:10px;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input class="field-input" data-f="name" value="${esc(r.name)}" style="max-width:220px;" title="Название маршрута — только для вас">
+          <span class="ar-meta">отправлено <b>${r.sent || 0}</b></span>
+          <span style="flex:1;"></span>
+          <button class="btn" data-up title="Выше — приоритетнее">↑</button><button class="btn" data-down title="Ниже">↓</button>
+          <button class="btn danger" data-del>Удалить</button>
+          <span class="ar-switch sm" title="Выключенный маршрут не участвует"><input type="checkbox" data-f="on" ${r.on ? "checked" : ""}><i></i></span>
+        </div>
+        <div>
+          <span class="ar-label">Какие виды файлов <small>— пусто: любые</small></span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">${Object.entries(d.cat_labels).map(([k, l]) => `
+            <label class="ar-row ad-pick" style="padding:4px 10px;"><input type="checkbox" data-cat="${k}" ${r.cats.includes(k) ? "checked" : ""}><span>${esc(String(l).split(" (")[0])}</span></label>`).join("")}</div>
+        </div>
+        <div>
+          <span class="ar-label">Только эти тайтлы <small>— пусто: любые</small></span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            ${r.titles.map(id => `<button type="button" class="btn" data-untitle="${id}">${esc(titleName(id))} ✕</button>`).join("")}
+            <select class="field-input ar-select" data-addtitle style="max-width:240px;"><option value="">+ тайтл…</option>${d.titles.filter(t => !r.titles.includes(t.id)).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+          <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Размер от, МБ</span><input class="field-input" type="number" min="0" data-f="min_mb" value="${r.min_mb || 0}" style="max-width:100px;"></label>
+          <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">до, МБ (0 — без предела)</span><input class="field-input" type="number" min="0" data-f="max_mb" value="${r.max_mb || 0}" style="max-width:100px;"></label>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+          <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Куда слать</span><select class="field-input ar-select" data-f="target">${chatOpts(r.target)}</select></label>
+          <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Схема тем</span><select class="field-input ar-select" data-f="scheme">${schemeOpts(r.scheme)}</select></label>
+          <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Префикс названия темы</span><input class="field-input" data-f="prefix" value="${esc(r.prefix)}" style="max-width:200px;"></label>
+        </div>
+      </div>`).join("") || `<p class="ar-hint">Своих маршрутов нет — всё уезжает по маршруту «По умолчанию».</p>`}
+      <button class="btn" id="rt-add">+ Добавить маршрут</button>
+      <button class="btn primary" id="rt-save" style="margin-left:6px;">Сохранить маршруты</button>
+    </div>
+
+    <div class="ar-card" style="margin-top:14px;">
+      <div class="ar-card-head"><h4>Маршрут по умолчанию</h4><span class="ar-meta">отправлено <b>${d.default_route.sent}</b></span></div>
+      <p class="ar-hint" style="margin:0 0 8px;">Сюда попадает всё, что не подошло ни одному маршруту. Группа — «Архивная группа» из верхней карточки. «Тема на тайтл» — по теме на каждый тайтл, «на вид файлов» — по теме на субтитры, звук и т. д., «одна общая» — одна тема на всё, «без тем» — общая лента группы (для групп без тем).</p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+        <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Схема тем</span><select class="field-input ar-select" id="rt-def-scheme">${schemeOpts(st.def.scheme)}</select></label>
+        <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Префикс названия темы</span><input class="field-input" id="rt-def-prefix" value="${esc(st.def.prefix)}" style="max-width:200px;"></label>
+        <button class="btn" id="rt-def-save">Сохранить</button>
+      </div>
+    </div>
+
+    <div class="ar-card" style="margin-top:14px;">
+      <h4>Проверить на файле</h4>
+      <p class="ar-hint" style="margin:0 0 8px;">Выберите вид, размер и тайтл — покажу, по какому маршруту, в какую группу и тему уедет такой файл. Ничего не отправляется. Проверяются сохранённые маршруты.</p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+        <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Вид</span><select class="field-input ar-select" id="rt-t-cat">${Object.entries(d.cat_labels).map(([k, l]) => `<option value="${k}">${esc(String(l).split(" (")[0])}</option>`).join("")}</select></label>
+        <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Размер, МБ</span><input class="field-input" type="number" min="0" id="rt-t-size" value="5" style="max-width:100px;"></label>
+        <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Тайтл</span><select class="field-input ar-select" id="rt-t-title"><option value="">— любой —</option>${d.titles.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select></label>
+        <button class="btn" id="rt-test">Проверить</button>
+      </div>
+      <div id="rt-test-out" class="ar-hint" style="margin-top:8px;"></div>
+    </div>`;
+
+    const row = el => st.routes[Number(el.closest("[data-rt]").dataset.rt)];
+    const pull = () => box.querySelectorAll("[data-rt]").forEach(el => {
+      const r = st.routes[Number(el.dataset.rt)];
+      el.querySelectorAll("[data-f]").forEach(f => {
+        const k = f.dataset.f;
+        r[k] = f.type === "checkbox" ? f.checked : (f.type === "number" ? Number(f.value || 0) : f.value);
+      });
+      r.cats = [...el.querySelectorAll("[data-cat]:checked")].map(c => c.dataset.cat);
+    });
+    box.querySelectorAll("[data-up]").forEach(b => b.addEventListener("click", () => {
+      pull(); const i = Number(b.closest("[data-rt]").dataset.rt);
+      if (i > 0) { [st.routes[i - 1], st.routes[i]] = [st.routes[i], st.routes[i - 1]]; paint(); }
+    }));
+    box.querySelectorAll("[data-down]").forEach(b => b.addEventListener("click", () => {
+      pull(); const i = Number(b.closest("[data-rt]").dataset.rt);
+      if (i < st.routes.length - 1) { [st.routes[i + 1], st.routes[i]] = [st.routes[i], st.routes[i + 1]]; paint(); }
+    }));
+    box.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => { pull(); st.routes.splice(Number(b.closest("[data-rt]").dataset.rt), 1); paint(); }));
+    box.querySelectorAll("[data-untitle]").forEach(b => b.addEventListener("click", () => {
+      pull(); const r = row(b); r.titles = r.titles.filter(id => id !== Number(b.dataset.untitle)); paint();
+    }));
+    box.querySelectorAll("[data-addtitle]").forEach(sel => sel.addEventListener("change", () => {
+      if (!sel.value) return;
+      pull(); row(sel).titles.push(Number(sel.value)); paint();
+    }));
+    box.querySelector("#rt-add").addEventListener("click", () => {
+      pull();
+      st.routes.push({ id: "r" + Date.now().toString(36), name: `Маршрут ${st.routes.length + 1}`, on: true, cats: [], titles: [], min_mb: 0, max_mb: 0, target: "", scheme: "title", prefix: "Документы", sent: 0 });
+      paint();
+    });
+    box.querySelector("#rt-save").addEventListener("click", () => {
+      pull();
+      saveAll({ routes: st.routes.map(({ sent, ...r }) => r) });
+    });
+    box.querySelector("#rt-def-save").addEventListener("click", () =>
+      saveAll({ default_scheme: box.querySelector("#rt-def-scheme").value, default_prefix: box.querySelector("#rt-def-prefix").value }));
+    box.querySelector("#rt-test").addEventListener("click", async () => {
+      const out = box.querySelector("#rt-test-out");
+      try {
+        const r = await apiPost("/docs-archive/test", {
+          cat: box.querySelector("#rt-t-cat").value, size_mb: Number(box.querySelector("#rt-t-size").value || 0),
+          title_id: Number(box.querySelector("#rt-t-title").value || 0) || null,
+        });
+        const chat = (d.chats.find(c => String(c.chat_id) === String(r.target)) || {}).title || r.target || "— группа не выбрана —";
+        out.innerHTML = r.skipped
+          ? `Файл будет <b>пропущен</b>: ${esc(r.skipped)}.`
+          : `Маршрут <b>${esc(r.route)}</b> → группа <b>${esc(chat)}</b> → тема <b>${esc(r.topic)}</b>${r.reply ? ". Торрент отправится ответом на видео этого отчёта, если оно уже в той же группе" : ""}.`;
+      } catch (e) { out.textContent = e.message; }
+    });
+  };
+  paint();
+}
+
 async function mountDocs(root) {
   const load = async () => {
     let d;
@@ -260,6 +383,8 @@ async function mountDocs(root) {
         </div>`).join("")}
         <button class="btn" id="dc-rules-save" style="margin-top:8px;">Сохранить размеры</button>
       </div>
+
+      <div id="dc-routes"></div>
 
       <div class="ar-card">
         <h4>Подача</h4>
@@ -317,6 +442,7 @@ async function mountDocs(root) {
       catch (e) { toast(e.message, "error"); }
       load();
     };
+    wireDocsRoutes(root.querySelector("#dc-routes"), d, body => save(body));
     root.querySelector("#dc-enabled").addEventListener("change", e => save({ enabled: e.target.checked }));
     root.querySelector("#dc-target").addEventListener("change", e => save({ target: e.target.value }));
     root.querySelector("#dc-backfill").addEventListener("change", e => save({ backfill: e.target.checked }));
