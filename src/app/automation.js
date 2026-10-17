@@ -171,7 +171,7 @@ async function mountSpeed(root) {
       ${field("social", "Скачивание видео по ссылкам", "Видео с YouTube и других сайтов, которые бот качает по ссылке из чата. Действует на новые скачивания.", d.social_mbit)}
       <div class="ar-card">
         <div class="ar-card-head"><h4>Ночной режим</h4>
-          <span class="ar-switch sm"><input type="checkbox" id="sp-night-on" ${d.night_on ? "checked" : ""}><i></i></span></div>
+          <label class="ar-switch sm"><input type="checkbox" id="sp-night-on" ${d.night_on ? "checked" : ""}><i></i></label></div>
         <p class="ar-hint" style="margin:0 0 10px;">В заданные часы по Москве действуют свои лимиты, например ночью, когда студия не работает, можно качать быстрее.
           Сейчас: <b>${d.night_now ? "ночной режим включён" : "обычный режим"}</b>; действующие лимиты — архив ${d.effective_archive || "без ограничения"}, торренты ${d.effective_torrent || "без ограничения"}${d.effective_archive || d.effective_torrent ? " Мбит/с" : ""}.</p>
         <div class="ar-fields" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -240,7 +240,7 @@ function wireDocsRoutes(box, d, saveAll) {
           <span style="flex:1;"></span>
           <button class="btn" data-up title="Выше — приоритетнее">↑</button><button class="btn" data-down title="Ниже">↓</button>
           <button class="btn danger" data-del>Удалить</button>
-          <span class="ar-switch sm" title="Выключенный маршрут не участвует"><input type="checkbox" data-f="on" ${r.on ? "checked" : ""}><i></i></span>
+          <label class="ar-switch sm" title="Выключенный маршрут не участвует"><input type="checkbox" data-f="on" ${r.on ? "checked" : ""}><i></i></label>
         </div>
         <div>
           <span class="ar-label">Какие виды файлов <small>— пусто: любые</small></span>
@@ -379,7 +379,7 @@ async function mountDocs(root) {
           <span style="flex:1;">${CAT_ICON[r.cat] || ""} ${esc(r.label)}</span>
           <input class="field-input" type="number" min="0" step="1" value="${r.max_mb}" data-dc-max style="max-width:90px;" title="Максимум, МБ">
           <span class="ar-meta">МБ</span>
-          <span class="ar-switch sm"><input type="checkbox" data-dc-on ${r.on ? "checked" : ""}><i></i></span>
+          <label class="ar-switch sm"><input type="checkbox" data-dc-on ${r.on ? "checked" : ""}><i></i></label>
         </div>`).join("")}
         <button class="btn" id="dc-rules-save" style="margin-top:8px;">Сохранить размеры</button>
       </div>
