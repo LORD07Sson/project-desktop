@@ -1,7 +1,8 @@
 // «Собрать у себя»: рендер финала на ПК (видеокарта NVIDIA, NVENC) вместо слабого сервера.
 // Ход: сервер присылает план шагов ffmpeg (POST /report/{id}/local-render/plan) → Rust (local_render_run) скачивает файлы,
-// рендерит и отдаёт путь → готовое видео загружается в отчёт обычным upload_report_file → сервер убирает свой исходник
-// (POST …/local-render/done). Прогресс — событие localrender-progress, отмена — local_render_cancel.
+// рендерит и отдаёт путь → готовый файл уходит на сервер (local_render_upload), где бот делает с ним то же, что после серверной
+// сборки: обложка и превью, отправка в Telegram, прикрепление к отчёту, уборка исходника, пересылка выбранным, черновик поста.
+// Прогресс рендера — событие localrender-progress, отмена — local_render_cancel; дальше ход ведёт карточка сборки отчёта.
 
 import { invoke, listen } from "./tauri.js";
 import { apiPost, toast } from "./api.js";
@@ -44,7 +45,7 @@ function paint(el, { title, label, fraction, cancel }) {
 }
 
 /** selection — тело, как у /assemble/start (video, sub, audios, mode, profile, inscription). */
-export async function runLocalRender(publicId, selection, overlay) {
+export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   if (running) { toast("Сборка у себя уже идёт — дождитесь или отмените её.", "error"); return false; }
   running = publicId;
   const el = card(overlay);
@@ -58,13 +59,12 @@ export async function runLocalRender(publicId, selection, overlay) {
     plan = await apiPost(`/report/${publicId}/local-render/plan`, selection);
     paint(el, { title: "🖥 Сборка у себя", label: "Скачиваю файлы…", fraction: 0, cancel: true });
     const done = await invoke("local_render_run", { plan, initData: state.token || "" });
-    paint(el, { title: "⬆ Загружаю готовое видео в отчёт", label: `${done.out_name} · ${(done.size / 1048576).toFixed(0)} МБ · ${done.encoder}`, fraction: 1, cancel: false });
-    await invoke("upload_report_file", { reportId: publicId, filePath: done.path, initData: state.token || "" });
-    try { await apiPost(`/report/${publicId}/local-render/done`, { source: plan.source_video }); } catch (_) { /* исходник уберётся позже */ }
+    paint(el, { title: "⬆ Отправляю готовое видео на сервер", label: `${done.out_name} · ${(done.size / 1048576).toFixed(0)} МБ · ${done.encoder}`, fraction: 1, cancel: false });
+    await invoke("local_render_upload", { publicId, path: done.path, initData: state.token || "" });
     const mins = Math.max(1, Math.round(done.seconds / 60));
-    toast(`Финал собран у вас (${done.encoder}) за ~${mins} мин и загружен в отчёт.`, "success");
-    document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
+    toast(`Рендер у вас готов (${done.encoder}, ~${mins} мин). Бот отправляет видео в Telegram и прикрепляет к отчёту.`, "success");
     el.remove();
+    if (typeof onUploaded === "function") onUploaded();
     return true;
   } catch (e) {
     const text = String((e && e.message) || e);

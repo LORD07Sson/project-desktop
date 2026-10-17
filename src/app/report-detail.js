@@ -669,7 +669,7 @@ export async function openReportDetail(publicId) {
         if (started.local) {
           // Сборка у себя: файлы качаются сюда, рендер идёт на видеокарте, результат уходит в отчёт — без бота.
           const { runLocalRender } = await import("./local-render.js");
-          runLocalRender(publicId, started.selection, overlay);
+          runLocalRender(publicId, started.selection, overlay, () => startAssemblyWatch(publicId, overlay, true, "", !!started.post));
           return;
         }
         toast(started === "post" ? "Сборка запущена — по готовности откроется редактор поста." : "Сборка запущена — ход виден в карточке ниже.", "success");

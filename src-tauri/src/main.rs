@@ -655,6 +655,17 @@ async fn local_render_run(
     log_result("local_render_run", result)
 }
 
+/// Загрузка готового файла на сервер (дальше им занимается бот). Путь должен быть тем, что вернул local_render_run.
+#[tauri::command]
+async fn local_render_upload(app: tauri::AppHandle, public_id: String, path: String, init_data: String) -> Result<(), String> {
+    let result = async {
+        let allowed = app.state::<file_scope::FileScope>().check_read(&path)?;
+        local_render::upload_final(http(), API_BASE, &public_id, &allowed.to_string_lossy(), &init_data).await
+    }
+    .await;
+    log_result("local_render_upload", result)
+}
+
 #[tauri::command(async)]
 fn local_render_cancel() -> Result<(), String> {
     local_render::request_cancel();
@@ -1455,6 +1466,7 @@ fn main() {
             desktop_notify::notify_desktop,
             local_render_encoders,
             local_render_run,
+            local_render_upload,
             local_render_cancel,
             local_render_cleanup,
             antivirus::av_scan,

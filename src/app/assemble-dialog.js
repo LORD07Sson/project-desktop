@@ -208,19 +208,11 @@ export async function openAssembleDialog(publicId) {
     const whereHint = sheet.querySelector("#ad-where-hint");
     const localBtn = sheet.querySelector("#ad-where-local");
     const syncWhere = () => {
-      const archivesPicked = [...sheet.querySelectorAll("[data-ad-audio]:checked")].some(c => (opts.audios.find(a => String(a.id) === c.dataset.adAudio) || {}).archive);
-      const blocked = opts.intro ? "У тайтла есть интро — оно пока собирается только на сервере."
-        : coverImage ? "Картинка-склейка пока собирается только на сервере."
-        : archivesPicked ? "Архивы с дорожками пока распаковывает только сервер."
-        : "";
-      localBtn.disabled = !localInfo.ok || !!blocked;
+      localBtn.disabled = !localInfo.ok;
       if (where === "local" && localBtn.disabled) where = "server";
       sheet.querySelectorAll("#ad-where button").forEach(b => b.classList.toggle("on", b.dataset.where === where));
-      const postBtn = sheet.querySelector("#ad-start-post");
-      if (postBtn) postBtn.hidden = where === "local";
       whereHint.textContent = !localInfo.ok ? "Сборка у себя недоступна: в приложении не нашёлся кодировщик (нужна видеокарта NVIDIA)."
-        : blocked ? blocked
-        : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Файлы скачаются с сервера, результат загрузится в отчёт.`
+        : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Всё то же, что на сервере: интро, склейка, озвучка, надпись, логотип. Файлы скачаются с сервера, готовое видео бот отправит в Telegram и прикрепит к отчёту.`
         : "Рендер пойдёт на сервере (2 ядра процессора).";
     };
     sheet.querySelectorAll("#ad-where button").forEach(b => b.addEventListener("click", () => { if (!b.disabled) { where = b.dataset.where; syncWhere(); } }));
@@ -253,7 +245,7 @@ export async function openAssembleDialog(publicId) {
           profile: Number(profileSel.value),
           send_to: [...sheet.querySelectorAll("[data-ad-to]:checked")].map(c => Number(c.dataset.adTo)),
         };
-        if (where === "local") { finish({ local: true, selection: body }); return; }
+        if (where === "local") { finish({ local: true, selection: body, post: withPost }); return; }
         await apiPost(`/report/${publicId}/assemble/start`, body);
         finish(withPost ? "post" : "final");
       } catch (err) {
