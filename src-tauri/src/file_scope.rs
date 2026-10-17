@@ -116,20 +116,6 @@ impl FileScope {
             Err(DENIED_WRITE.into())
         }
     }
-
-    pub fn check_write_dir(&self, path: &str) -> Result<PathBuf, String> {
-        let p = normalize(Path::new(path));
-        let ok = self
-            .writable_dirs
-            .lock()
-            .map(|dirs| dirs.iter().any(|d| p.starts_with(d)))
-            .unwrap_or(false);
-        if ok {
-            Ok(p)
-        } else {
-            Err(DENIED_WRITE.into())
-        }
-    }
 }
 
 // Текст один на все отказы и намеренно не называет путь: сообщение
@@ -240,14 +226,6 @@ mod tests {
     }
 
     #[test]
-    fn unknown_path_is_denied_for_both_read_and_write() {
-        let scope = FileScope::default();
-        assert!(scope.check_read("/etc/shadow").is_err());
-        assert!(scope.check_write("/etc/cron.d/evil").is_err());
-        assert!(scope.check_write_dir("/etc").is_err());
-    }
-
-    #[test]
     fn explicitly_picked_file_is_readable_but_not_writable() {
         let dir = tmp();
         let file = dir.join("input.wav");
@@ -260,23 +238,6 @@ mod tests {
         // разрешённым на перезапись.
         assert!(scope.check_write(&file.to_string_lossy()).is_err());
         let _ = std::fs::remove_file(&file);
-    }
-
-    #[test]
-    fn picked_output_dir_allows_files_inside_it_only() {
-        let dir = tmp();
-        let out_dir = dir.join("out");
-        std::fs::create_dir_all(&out_dir).unwrap();
-        let scope = FileScope::default();
-        scope.allow_write_dir(&out_dir);
-
-        assert!(scope.check_write(&out_dir.join("a_cut1.mp4").to_string_lossy()).is_ok());
-        assert!(scope.check_write_dir(&out_dir.to_string_lossy()).is_ok());
-        // Выход за пределы каталога через .. не должен проходить —
-        // normalize() схлопывает путь до канонического.
-        let escape = out_dir.join("..").join("escaped.mp4");
-        assert!(scope.check_write(&escape.to_string_lossy()).is_err());
-        let _ = std::fs::remove_dir_all(&out_dir);
     }
 
     // ---------- сценарии атаки ----------

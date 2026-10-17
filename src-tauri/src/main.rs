@@ -20,8 +20,6 @@ mod nyaa;
 mod steam_session;
 mod torrent_clients;
 mod media_tools;
-#[cfg(windows)]
-mod mpv_embed;
 mod token_store;
 
 use std::collections::HashSet;
@@ -366,14 +364,6 @@ fn mt_probe_media(app: tauri::AppHandle, path: String) -> Result<media_tools::Me
     })())
 }
 
-#[tauri::command(async)]
-fn mt_probe_keyframes(app: tauri::AppHandle, path: String) -> Result<Vec<f64>, String> {
-    log_result("mt_probe_keyframes", (|| {
-        let path = app.state::<file_scope::FileScope>().check_read(&path)?;
-        media_tools::probe_keyframes(&path.to_string_lossy())
-    })())
-}
-
 // Не (async): сам вызов — просто регистрация пути в скоупе asset-протокола
 // (запись в память), никакого ffmpeg-субпроцесса здесь нет.
 //
@@ -385,33 +375,6 @@ fn mt_register_media_file(app: tauri::AppHandle, path: String) -> Result<(), Str
     log_result("mt_register_media_file", (|| {
         let path = app.state::<file_scope::FileScope>().check_read(&path)?;
         media_tools::register_media_file(&app, &path.to_string_lossy())
-    })())
-}
-
-#[tauri::command(async)]
-fn mt_cut_media(
-    app: tauri::AppHandle,
-    path: String,
-    segments: Vec<media_tools::CutSegment>,
-    out_dir: String,
-    keep_separate: bool,
-    merge: bool,
-    precise: bool,
-) -> Result<media_tools::CutResult, String> {
-    log_result("mt_cut_media", (|| {
-        let scope = app.state::<file_scope::FileScope>();
-        let path = scope.check_read(&path)?;
-        let out_dir = scope.check_write_dir(&out_dir)?;
-        let sink = progress_to_webview(&app);
-        media_tools::cut_media(
-            &media_tools::Progress(&sink),
-            &path.to_string_lossy(),
-            &segments,
-            &out_dir.to_string_lossy(),
-            keep_separate,
-            merge,
-            precise,
-        )
     })())
 }
 
@@ -692,203 +655,6 @@ fn local_render_cleanup(public_id: String) -> Result<(), String> {
 #[tauri::command(async)]
 fn mt_cancel() -> Result<(), String> {
     media_tools::cancel_current_job()
-}
-
-// ---------- встроенный mpv-плеер (mpv_embed.rs, только Windows) ----------
-// Один текст на все ветки cfg(not(windows)) — раньше та же строка была
-// продублирована в каждой команде по отдельности.
-#[cfg(not(windows))]
-const MPV_WINDOWS_ONLY: &str = "Встроенный плеер поддерживается только на Windows.";
-
-// Тела команд ветвятся по платформе, а не сами команды — иначе
-// `generate_handler!` ниже пришлось бы собирать двумя разными списками
-// под cfg(windows)/cfg(not(windows)), а этот проект и так никогда не
-// собирается не под Windows (ffmpeg.exe/ffprobe.exe/mpv.exe — не
-// кросс-платформенные бинарники); так хотя бы `cargo check` на другой ОС
-// не ломается на отсутствующих Win32-символах.
-
-#[tauri::command(async)]
-async fn mpv_create(app: tauri::AppHandle, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_create(&app, mpv_embed::MpvBounds { x, y, width, height }).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = (app, x, y, width, height);
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_create", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_set_bounds(app: tauri::AppHandle, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_set_bounds(&app, mpv_embed::MpvBounds { x, y, width, height }).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = (app, x, y, width, height);
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_set_bounds", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_load(app: tauri::AppHandle, path: String) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = {
-        match app.state::<file_scope::FileScope>().check_read(&path) {
-            Ok(checked) => mpv_embed::mpv_load(&checked.to_string_lossy()).await,
-            Err(e) => Err(e),
-        }
-    };
-    #[cfg(not(windows))]
-    let result = {
-        let _ = (app, path);
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_load", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_play() -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_play().await;
-    #[cfg(not(windows))]
-    let result = Err(MPV_WINDOWS_ONLY.to_string());
-    log_result("mpv_play", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_pause() -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_pause().await;
-    #[cfg(not(windows))]
-    let result = Err(MPV_WINDOWS_ONLY.to_string());
-    log_result("mpv_pause", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_seek(seconds: f64) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_seek(seconds).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = seconds;
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_seek", result)
-}
-
-// Громкость/скорость/покадровый шаг — то, без чего «плеер» остаётся
-// картинкой с кнопкой play: на укладке дубляжа границу реплики ставят
-// покадрово, а тихую дорожку проверяют на слух с поднятой громкостью.
-#[tauri::command(async)]
-async fn mpv_set_volume(volume: f64) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_set_volume(volume).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = volume;
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_set_volume", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_set_mute(mute: bool) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_set_mute(mute).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = mute;
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_set_mute", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_set_speed(speed: f64) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_set_speed(speed).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = speed;
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_set_speed", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_frame_step(forward: bool) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_frame_step(forward).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = forward;
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_frame_step", result)
-}
-
-// Петля A-B, выбор дорожки и стоп-кадр — то, без чего встроенный плеер
-// остаётся «картинкой с кнопкой play»: укладка реплики идёт по кругу
-// между метками, у многоязычного релиза несколько звуковых дорожек, а
-// кадр из плеера регулярно нужен как референс в переписке.
-#[tauri::command(async)]
-async fn mpv_set_ab_loop(start: Option<f64>, end: Option<f64>) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_set_ab_loop(start, end).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = (start, end);
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_set_ab_loop", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_set_track(kind: String, id: i64) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_set_track(&kind, id).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = (kind, id);
-        Err(MPV_WINDOWS_ONLY.to_string())
-    };
-    log_result("mpv_set_track", result)
-}
-
-/// Путь сохранения проверяется скоупом ровно как у любой другой записи
-/// на диск: команду зовёт вебвью, значит путь — не доверенные данные.
-#[tauri::command(async)]
-async fn mpv_screenshot(app: tauri::AppHandle, save_path: String) -> Result<(), String> {
-    let checked = app.state::<file_scope::FileScope>().check_write(&save_path);
-    let result = match checked {
-        Ok(path) => {
-            #[cfg(windows)]
-            {
-                mpv_embed::mpv_screenshot(&path.to_string_lossy()).await
-            }
-            #[cfg(not(windows))]
-            {
-                let _ = path;
-                Err(MPV_WINDOWS_ONLY.to_string())
-            }
-        }
-        Err(e) => Err(e),
-    };
-    log_result("mpv_screenshot", result)
-}
-
-#[tauri::command(async)]
-async fn mpv_close(app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(windows)]
-    let result = mpv_embed::mpv_close(&app).await;
-    #[cfg(not(windows))]
-    let result = {
-        let _ = app;
-        Ok(())
-    };
-    log_result("mpv_close", result)
 }
 
 // Открыть папку с файловыми логами (tauri-plugin-log, см. run()) —
@@ -1551,27 +1317,11 @@ fn main() {
             nyaa::nyaa_save_torrent,
             mt_tool_status,
             mt_probe_media,
-            mt_probe_keyframes,
             mt_register_media_file,
-            mt_cut_media,
             mt_transcode_media,
             mt_extract_audio,
             mt_concat_media,
             mt_mux_media,
-            mpv_create,
-            mpv_set_bounds,
-            mpv_load,
-            mpv_play,
-            mpv_pause,
-            mpv_seek,
-            mpv_set_volume,
-            mpv_set_mute,
-            mpv_set_speed,
-            mpv_frame_step,
-            mpv_set_ab_loop,
-            mpv_set_track,
-            mpv_screenshot,
-            mpv_close,
             open_log_folder,
         ])
         .setup(|app| {
@@ -1668,21 +1418,6 @@ fn main() {
                     for p in paths {
                         scope.allow_read(p);
                     }
-                }
-                // mpv-плеер (mpv_embed.rs) сидит в отдельном owned-окне,
-                // не в дочернем, поэтому не переезжает и не ресайзится
-                // вместе с главным окном сам по себе — а ResizeObserver
-                // на JS-стороне здесь не поможет: прямоугольник
-                // плейсхолдера ОТНОСИТЕЛЬНО страницы не меняется, когда
-                // двигают/снапают само окно приложения. Досинхронизируем
-                // явно на каждое такое событие; если плеер сейчас не
-                // создан, mpv_resync_bounds тихо ничего не делает.
-                #[cfg(windows)]
-                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
-                    let handle = handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        mpv_embed::mpv_resync_bounds(&handle).await;
-                    });
                 }
                 _ => {}
             });
