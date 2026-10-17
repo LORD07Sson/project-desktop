@@ -42,7 +42,27 @@ export async function openAssembleDialog(publicId) {
       <h2>Собрать финал</h2>
       <div class="ad-body">
         ${radios("ad-video", opts.videos, "Видео")}
-        ${radios("ad-sub", opts.subs, "Субтитры")}
+        <span class="ar-label">Субтитры <small>— вшиваются в картинку</small></span>
+        <div class="ar-list">
+          ${opts.subs.map((f, i) => `
+          <label class="ar-row ad-pick"><input type="radio" name="ad-sub" value="${f.id}" ${i === 0 ? "checked" : ""}>
+            <b>${esc(f.name)}</b>${f.version ? `<span class="ar-meta">v${f.version}</span>` : ""}</label>`).join("")}
+          <label class="ar-row ad-pick"><input type="radio" name="ad-sub" value="0" ${opts.subs.length ? "" : "checked"}><b>Без субтитров</b>
+            <span class="ar-meta">${opts.subs.length ? "только чистка, звук и надпись" : "файла субтитров в отчёте нет"}</span></label>
+        </div>
+        <span class="ar-label">Надпись поверх видео <small>— вместо субтитров или вместе с ними (необязательно)</small></span>
+        <input class="field-input" id="ad-ins-text" placeholder="например: Озвучка DreamyVoice · серия 12">
+        <div class="ar-fields" id="ad-ins-opts" hidden>
+          <select class="field-input" id="ad-ins-pos" style="max-width:190px;">
+            <option value="bottom">Снизу по центру</option><option value="top">Сверху по центру</option><option value="center">По центру</option>
+            <option value="tl">Левый верх</option><option value="tr">Правый верх</option><option value="bl">Левый низ</option><option value="br">Правый низ</option>
+          </select>
+          <select class="field-input" id="ad-ins-size" style="max-width:150px;"><option value="3.5">Мелкая</option><option value="5" selected>Средняя</option><option value="8">Крупная</option></select>
+          <select class="field-input" id="ad-ins-dur" style="max-width:200px;">
+            <option value="0">Всё видео</option><option value="5">Первые 5 секунд</option><option value="10">Первые 10 секунд</option><option value="30">Первые 30 секунд</option>
+          </select>
+        </div>
+        <p class="ar-hint">Из оригинала всегда убираются встроенные субтитры, шрифты, главы и названия дорожек: остаётся одна видео- и одна аудиодорожка. Надписи, уже «прожжённые» в саму картинку, убрать нельзя.</p>
         ${opts.audios.length ? `
         <span class="ar-label">Дорожки даббера <small>— отметьте нужные, звучат вместе</small></span>
         <div class="ar-list">${opts.audios.map(a => `
@@ -74,6 +94,7 @@ export async function openAssembleDialog(publicId) {
         <button class="btn primary" id="ad-start">▶️ Собрать</button>
       </div>`;
 
+    sheet.querySelector("#ad-ins-text").addEventListener("input", e => { sheet.querySelector("#ad-ins-opts").hidden = !e.target.value.trim(); });
     const descEl = sheet.querySelector("#ad-profile-desc");
     const profileSel = sheet.querySelector("#ad-profile");
     const refreshDesc = () => { descEl.textContent = (opts.profiles.find(p => String(p.index) === profileSel.value) || {}).desc || ""; };
@@ -134,7 +155,14 @@ export async function openAssembleDialog(publicId) {
             position: sheet.querySelector("#ad-splice-pos") ? sheet.querySelector("#ad-splice-pos").value : "start",
           } : null,
           video: Number(sheet.querySelector('input[name="ad-video"]:checked').value),
-          sub: Number(sheet.querySelector('input[name="ad-sub"]:checked').value),
+          sub: Number(sheet.querySelector('input[name="ad-sub"]:checked').value) || null,
+          inscription: sheet.querySelector("#ad-ins-text").value.trim() ? {
+            text: sheet.querySelector("#ad-ins-text").value.trim(),
+            position: sheet.querySelector("#ad-ins-pos").value,
+            size: Number(sheet.querySelector("#ad-ins-size").value),
+            start: 0,
+            duration: Number(sheet.querySelector("#ad-ins-dur").value),
+          } : null,
           audios: [...sheet.querySelectorAll("[data-ad-audio]:checked")].map(c => Number(c.dataset.adAudio)),
           mode,
           profile: Number(profileSel.value),
