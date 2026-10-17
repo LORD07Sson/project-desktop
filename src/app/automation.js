@@ -5,6 +5,7 @@ import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
 
 const TABS = [
+  ["factory", "Завод", '<path d="M3 20V9l6 4V9l6 4V5h3v15zM7 20v-3M12 20v-3"/>'],
   ["overview", "Обзор", '<path d="M4 5h7v7H4zM13 5h7v4h-7zM13 11h7v8h-7zM4 14h7v5H4z"/>'],
   ["archive", "Архив серий", '<path d="M4 7h16M6 7v11h12V7M10 11h4"/>'],
   ["chats", "Чаты бота", '<path d="M4 5h16v11H9l-5 4z"/>'],
@@ -320,7 +321,8 @@ export function mountAutomation(root) {
     const host = document.createElement("div");
     host.dataset.auPane = name;
     pane.appendChild(host);
-    if (name === "overview") mountOverview(host, show);
+    if (name === "factory") import("./automation-factory.js").then(m => m.mountFactory(host, show));
+    else if (name === "overview") mountOverview(host, show);
     else if (name === "archive") import("./archive.js").then(m => m.mountArchive(host));
     else if (name === "chats") import("./bot-chats.js").then(m => m.mountBotChats(host));
     else if (name === "reports") import("./reports-archive.js").then(m => m.mountReportsArchive(host));
@@ -329,5 +331,5 @@ export function mountAutomation(root) {
     else mountSpeed(host);
   };
   root.querySelectorAll("[data-au-tab]").forEach(b => b.addEventListener("click", () => show(b.dataset.auTab)));
-  show("overview");
+  show("factory");
 }
