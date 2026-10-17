@@ -15,6 +15,7 @@ mod board;
 mod desktop_notify;
 mod file_scope;
 mod library;
+mod local_render;
 mod nyaa;
 mod steam_session;
 mod torrent_clients;
@@ -629,6 +630,42 @@ fn mt_extract_subtitles(
             track,
         )
     })())
+}
+
+// ---------- «Собрать финал у себя» (local_render.rs): рендер на видеокарте ПК по плану сервера ----------
+
+/// Какие кодировщики реально работают на этом компьютере (NVENC — видеокарта NVIDIA).
+#[tauri::command(async)]
+fn local_render_encoders() -> local_render::EncoderStatus {
+    local_render::encoder_status()
+}
+
+/// Выполняет план сборки: скачивает файлы, рендерит, возвращает путь к готовому файлу. Путь сразу попадает в скоуп
+/// чтения, чтобы существующая `upload_report_file` могла его загрузить в отчёт.
+#[tauri::command]
+async fn local_render_run(
+    app: tauri::AppHandle,
+    plan: local_render::Plan,
+    init_data: String,
+) -> Result<local_render::RenderResult, String> {
+    let result = local_render::run(&app, http(), API_BASE, plan, &init_data).await;
+    if let Ok(done) = &result {
+        app.state::<file_scope::FileScope>().allow_read(Path::new(&done.path));
+    }
+    log_result("local_render_run", result)
+}
+
+#[tauri::command(async)]
+fn local_render_cancel() -> Result<(), String> {
+    local_render::request_cancel();
+    // Если идёт ffmpeg — останавливаем и его; «нечего отменять» здесь не ошибка (мог идти этап скачивания).
+    let _ = media_tools::cancel_current_job();
+    Ok(())
+}
+
+#[tauri::command(async)]
+fn local_render_cleanup(public_id: String) -> Result<(), String> {
+    log_result("local_render_cleanup", local_render::cleanup(&public_id))
 }
 
 /// Прервать текущую операцию ffmpeg («Отмена» в панели инструментов).
@@ -1416,6 +1453,10 @@ fn main() {
         .manage(file_scope::FileScope::default())
         .invoke_handler(tauri::generate_handler![
             desktop_notify::notify_desktop,
+            local_render_encoders,
+            local_render_run,
+            local_render_cancel,
+            local_render_cleanup,
             antivirus::av_scan,
             antivirus::av_cancel,
             antivirus::av_status,

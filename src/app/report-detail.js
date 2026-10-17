@@ -666,6 +666,12 @@ export async function openReportDetail(publicId) {
         const { openAssembleDialog } = await import("./assemble-dialog.js");
         const started = await openAssembleDialog(publicId);
         if (!started) return;
+        if (started.local) {
+          // Сборка у себя: файлы качаются сюда, рендер идёт на видеокарте, результат уходит в отчёт — без бота.
+          const { runLocalRender } = await import("./local-render.js");
+          runLocalRender(publicId, started.selection, overlay);
+          return;
+        }
         toast(started === "post" ? "Сборка запущена — по готовности откроется редактор поста." : "Сборка запущена — ход виден в карточке ниже.", "success");
         startAssemblyWatch(publicId, overlay, true, "", started === "post");
       } catch (err) {

@@ -5,6 +5,7 @@
 import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
 import { can } from "./state.js";
+import { localRenderSupport } from "./local-render.js";
 
 export async function openAssembleDialog(publicId) {
   const overlay = openSheet(`<h2>Собрать финал</h2><div class="no-assignee">Загружаю файлы отчёта…</div>`);
@@ -89,6 +90,12 @@ export async function openAssembleDialog(publicId) {
           <div class="ar-row ad-pick" style="opacity:.85;"><b>Мне</b><span class="ar-meta">всегда</span></div>
           ${(opts.people || []).map(p => `<label class="ar-row ad-pick"><input type="checkbox" data-ad-to="${p.telegram_id}"><b>${esc(p.name)}</b></label>`).join("") || `<p class="ar-hint" style="margin:6px 0 0;">Других участников нет.</p>`}
         </div>
+        <span class="ar-label">Где собирать <small>— у себя быстрее: рендер на вашей видеокарте, а не на сервере</small></span>
+        <div class="ar-seg" id="ad-where">
+          <button type="button" class="on" data-where="server">На сервере</button>
+          <button type="button" data-where="local" id="ad-where-local" disabled title="Проверяю видеокарту…">У себя (видеокарта)</button>
+        </div>
+        <p class="ar-hint" id="ad-where-hint"></p>
         <span class="ar-label">Качество и формат</span>
         <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}">${esc(p.name)}</option>`).join("")}</select>
         <p class="ar-hint" id="ad-profile-desc"></p>
@@ -176,6 +183,7 @@ export async function openAssembleDialog(publicId) {
           if (blobUrl.startsWith("blob:")) { img.src = blobUrl; img.hidden = false; } else img.hidden = true;
           sheet.querySelector("#ad-cover-clear").hidden = false;
           sheet.querySelector("#ad-splice-opts").hidden = false;
+          if (typeof syncWhere === "function") syncWhere();
         } catch (e) {
           coverImage = null;
           label.textContent = "не выбрана — без склейки";
@@ -191,13 +199,40 @@ export async function openAssembleDialog(publicId) {
       sheet.querySelector("#ad-cover-thumb").hidden = true;
       sheet.querySelector("#ad-cover-clear").hidden = true;
       sheet.querySelector("#ad-splice-opts").hidden = true;
+      if (typeof syncWhere === "function") syncWhere();
     });
     sheet.querySelector("[data-close]").addEventListener("click", () => finish(false));
+    // «У себя»: только в приложении, где нашёлся кодировщик; интро, склейка и архивы с дорожками пока только на сервере.
+    let where = "server";
+    let localInfo = { ok: false, nvenc: false };
+    const whereHint = sheet.querySelector("#ad-where-hint");
+    const localBtn = sheet.querySelector("#ad-where-local");
+    const syncWhere = () => {
+      const archivesPicked = [...sheet.querySelectorAll("[data-ad-audio]:checked")].some(c => (opts.audios.find(a => String(a.id) === c.dataset.adAudio) || {}).archive);
+      const blocked = opts.intro ? "У тайтла есть интро — оно пока собирается только на сервере."
+        : coverImage ? "Картинка-склейка пока собирается только на сервере."
+        : archivesPicked ? "Архивы с дорожками пока распаковывает только сервер."
+        : "";
+      localBtn.disabled = !localInfo.ok || !!blocked;
+      if (where === "local" && localBtn.disabled) where = "server";
+      sheet.querySelectorAll("#ad-where button").forEach(b => b.classList.toggle("on", b.dataset.where === where));
+      const postBtn = sheet.querySelector("#ad-start-post");
+      if (postBtn) postBtn.hidden = where === "local";
+      whereHint.textContent = !localInfo.ok ? "Сборка у себя недоступна: в приложении не нашёлся кодировщик (нужна видеокарта NVIDIA)."
+        : blocked ? blocked
+        : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Файлы скачаются с сервера, результат загрузится в отчёт.`
+        : "Рендер пойдёт на сервере (2 ядра процессора).";
+    };
+    sheet.querySelectorAll("#ad-where button").forEach(b => b.addEventListener("click", () => { if (!b.disabled) { where = b.dataset.where; syncWhere(); } }));
+    sheet.querySelectorAll("[data-ad-audio]").forEach(c => c.addEventListener("change", syncWhere));
+    syncWhere();
+    localRenderSupport().then(info => { localInfo = info; localBtn.title = info.ok ? "" : "Видеокарта NVIDIA не найдена"; syncWhere(); });
+
     const startBtns = () => sheet.querySelectorAll("#ad-start, #ad-start-post");
     const start = async (withPost) => {
       startBtns().forEach(b => { b.disabled = true; });
       try {
-        await apiPost(`/report/${publicId}/assemble/start`, {
+        const body = {
           post: withPost,
           splice: coverImage ? {
             image: coverImage.file_id,
@@ -217,7 +252,9 @@ export async function openAssembleDialog(publicId) {
           mode,
           profile: Number(profileSel.value),
           send_to: [...sheet.querySelectorAll("[data-ad-to]:checked")].map(c => Number(c.dataset.adTo)),
-        });
+        };
+        if (where === "local") { finish({ local: true, selection: body }); return; }
+        await apiPost(`/report/${publicId}/assemble/start`, body);
         finish(withPost ? "post" : "final");
       } catch (err) {
         toast(`Не удалось запустить: ${err.message}`, "error");

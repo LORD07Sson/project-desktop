@@ -1568,6 +1568,18 @@ pub(crate) fn run_ffmpeg(
     out_path: &Path,
     stage: Stage,
 ) -> Result<(), String> {
+    run_ffmpeg_in(progress, args, out_path, stage, None)
+}
+
+/// То же, но ffmpeg запускается в рабочей папке `cwd` (если задана): так входные файлы можно называть короткими
+/// именами, и в строках фильтров (subtitles=…) нет путей с двоеточием. `out_path` — всегда абсолютный.
+pub(crate) fn run_ffmpeg_in(
+    progress: &Progress,
+    args: &[String],
+    out_path: &Path,
+    stage: Stage,
+    cwd: Option<&Path>,
+) -> Result<(), String> {
     let ffmpeg = resolve_ffmpeg();
     // Существовал ли файл ДО запуска: если да, удалять его при ошибке
     // нельзя — это чужой файл, который пользователь выбрал сам (ffmpeg
@@ -1575,12 +1587,17 @@ pub(crate) fn run_ffmpeg(
     // делать хуже).
     let existed_before = out_path.exists();
 
-    let mut child = hidden_command(ffmpeg)
+    let mut command = hidden_command(ffmpeg);
+    command
         .args(args)
         .args(["-progress", "pipe:2", "-nostats"])
         .arg(out_path)
         .stderr(Stdio::piped())
-        .stdout(Stdio::null())
+        .stdout(Stdio::null());
+    if let Some(dir) = cwd {
+        command.current_dir(dir);
+    }
+    let mut child = command
         .spawn()
         .map_err(|e| format!("ffmpeg не найден или не запустился ({ffmpeg}): {e}."))?;
 
