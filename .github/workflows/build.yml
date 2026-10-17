@@ -59,6 +59,20 @@ jobs:
         shell: bash
         run: echo "PKG_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
 
+      # Обновления (Velopack) сравнивают версии по semver: 1.0.6 МЕНЬШЕ 1.0.54 (6 < 54), хотя «десятичная» запись кажется
+      # больше. Релиз с меньшим номером выходит как «Latest», но клиенты его не предложат, а альфа-сборки (патч + 1)
+      # отстанут ещё сильнее. Поэтому сборка останавливается, если VERSION не новее уже выпущенных релизов.
+      - name: Проверка версии — должна быть новее всех выпущенных
+        shell: bash
+        run: |
+          git fetch --tags --quiet
+          current="$(cat VERSION)"
+          latest="$(git tag -l 'v[0-9]*' | sed 's/^v//' | grep -v "^${current}$" | sort -V | tail -1)"
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" "$current" | sort -V | tail -1)" != "$current" ]; then
+            echo "::error::VERSION ${current} не новее уже выпущенной ${latest}: версии сравниваются по semver, 1.0.6 меньше 1.0.54. Укажите номер больше ${latest}, например 1.1.0."
+            exit 1
+          fi
+
       # VERSION — единственный источник версии. tauri.conf.json/Cargo.toml
       # подставляются отсюда прямо перед сборкой, чтобы номер в именах
       # файлов установщиков не расходился с тегом релиза (однажды уже
