@@ -82,7 +82,10 @@ export async function api(method, path, body) {
   if (state.token) headers["X-Init-Data"] = state.token;
   const url = `${API_BASE}${path}`;
   const controller = new AbortController();
-  const timeoutMs = /^\/titles\/\d+\/take(?:\?|$)/.test(path) ? 45_000 : REQUEST_TIMEOUT_MS;
+  // Долгие серверные операции: «взять в работу» (опрос nyaa) и AI-проверка звука — гигабайтные WAV разбираются десятки секунд.
+  const timeoutMs = /^\/titles\/\d+\/take(?:\?|$)/.test(path) ? 45_000
+    : /^\/report\/[^/]+\/files\/\d+\/qc(?:\?|$)/.test(path) ? 300_000
+    : REQUEST_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs); // DevSkim: ignore DS172411 — функция, не строка
   let resp;
   netStart();
