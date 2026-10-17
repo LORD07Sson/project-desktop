@@ -79,6 +79,9 @@ pub struct EncoderStatus {
 
 /// Закреплённая сборка ffmpeg (LGPL, с NVENC) в нашем же релизе на GitHub — тот же файл и та же сумма, что в CI.
 const FFMPEG_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/tools-ffmpeg-N-127271/ffmpeg-N-127271-gba987fe24d-win64-lgpl.zip";
+/// Официальная сборка (ссылка на неё — на ffmpeg.org/download.html): GPL-версия с libx264/libx265 и NVENC.
+const OFFICIAL_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+const OFFICIAL_SHA_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256";
 const FFMPEG_SHA256: &str = "32b374c9831ae5640e33977baa4cf04a59704f616a0c3743654697fb3c7f26de";
 
 #[derive(Serialize)]
@@ -126,17 +129,56 @@ fn gpu_names() -> String {
 
 /// Скачивает ffmpeg в папку приложения (если рядом с .exe его нет и в PATH тоже), проверяет сумму и распаковывает.
 async fn download_ffmpeg(app: &tauri::AppHandle, client: &reqwest::Client) -> Result<(), String> {
+    // Источники по порядку: наш закреплённый релиз на GitHub (сумма зашита в приложение), затем официальная сборка
+    // gyan.dev (ссылка на ffmpeg.org/download; её сумма берётся из файла .sha256 рядом). Первая удавшаяся — используется.
+    let mut errors: Vec<String> = Vec::new();
+    match download_from(app, client, FFMPEG_URL, Some(FFMPEG_SHA256), None).await {
+        Ok(()) => return Ok(()),
+        Err(e) => errors.push(format!("GitHub: {e}")),
+    }
+    match download_from(app, client, OFFICIAL_URL, None, Some(OFFICIAL_SHA_URL)).await {
+        Ok(()) => return Ok(()),
+        Err(e) => errors.push(format!("официальная сборка: {e}")),
+    }
+    Err(format!("Не удалось скачать ffmpeg ни с GitHub, ни с официального сайта ({}).", errors.join("; ")))
+}
+
+async fn download_from(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    fixed_sha: Option<&str>,
+    sha_url: Option<&str>,
+) -> Result<(), String> {
     use tauri::Emitter;
+    let expected_sha: String = match (fixed_sha, sha_url) {
+        (Some(sha), _) => sha.to_string(),
+        (None, Some(sha_url)) => {
+            let text = client
+                .get(sha_url)
+                .send()
+                .await
+                .map_err(|e| format!("не получилось получить контрольную сумму: {e}"))?
+                .text()
+                .await
+                .map_err(|e| format!("не получилось прочитать контрольную сумму: {e}"))?;
+            text.split_whitespace().next().unwrap_or("").to_lowercase()
+        }
+        _ => return Err("нет контрольной суммы".into()),
+    };
+    if expected_sha.len() != 64 {
+        return Err("контрольная сумма в неожиданном виде".into());
+    }
     let tools = downloaded_tools_dir().ok_or("Не найдена папка пользователя для загрузки ffmpeg.")?;
     std::fs::create_dir_all(&tools).map_err(|e| format!("Не удалось создать папку {tools:?}: {e}"))?;
     let zip_path = tools.join("ffmpeg.zip");
     let mut resp = client
-        .get(FFMPEG_URL)
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("Не удалось скачать ffmpeg: {e}"))?;
     if !resp.status().is_success() {
-        return Err(format!("Не удалось скачать ffmpeg: GitHub ответил {}", resp.status()));
+        return Err(format!("сервер ответил {}", resp.status()));
     }
     let total = resp.content_length().unwrap_or(0);
     let mut file = std::fs::File::create(&zip_path).map_err(|e| format!("Не удалось создать файл загрузки: {e}"))?;
@@ -157,6 +199,7 @@ async fn download_ffmpeg(app: &tauri::AppHandle, client: &reqwest::Client) -> Re
     drop(file);
 
     let zip_for_check = zip_path.clone();
+    let expected_for_check = expected_sha.clone();
     let tools_for_extract = tools.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         // сумма — через PowerShell (отдельный крейт под одно действие не тянем)
@@ -165,7 +208,7 @@ async fn download_ffmpeg(app: &tauri::AppHandle, client: &reqwest::Client) -> Re
             .output()
             .map_err(|e| format!("Не удалось проверить сумму ffmpeg: {e}"))?;
         let hash = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
-        if hash != FFMPEG_SHA256 {
+        if hash != expected_for_check {
             let _ = std::fs::remove_file(&zip_for_check);
             return Err(format!("Сумма SHA256 скачанного ffmpeg не совпала (получено {hash}) — файл удалён."));
         }
