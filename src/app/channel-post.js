@@ -102,7 +102,10 @@ export async function openChannelPostSheet(openId = null) {
   // Пока человек печатает, сервер отдаёт нормализованную копию; ссылки
   // в полях оставляем как ввели, а медиа — как на сервере.
   function mergeClean(local, server) {
-    return { ...local, media: server.media };
+    // Тот же объект, а не копия: обработчики полей редактора держат ссылку на data() и пишут в неё; копия после первого
+    // автосохранения «отрывалась» от них, и дальнейшие правки заголовка и блоков на сервер не уходили (превью оставалось пустым).
+    local.media = server.media;
+    return local;
   }
   function setSaveState(t) {
     const el = sheet.querySelector("#cp-save");
