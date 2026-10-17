@@ -26,6 +26,81 @@ import { titleArt } from "./title-page.js";
 const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silence_long: "Долгая тишина", no_speech: "Речь не найдена" };
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
 
+// Экран хода сборки финала. Сборку ведёт бот и пишет состояние на сервер (/assemble-progress) — здесь оно опрашивается
+// раз в 3 секунды: шаг, полоса, кадры, сколько прошло и осталось. Карточка встаёт под кнопкой «Собрать финал»
+// и переживает перерисовку шторки (при каждом опросе, если её не стало, возвращается на место).
+const assemblyWatchers = new Set();
+
+function startAssemblyWatch(publicId, overlay, waitForStart) {
+  if (assemblyWatchers.has(publicId)) return;
+  assemblyWatchers.add(publicId);
+  const startedAt = Date.now();
+  let card = null;
+  let seenActive = false;
+  let timer = null;
+
+  const clock = sec => {
+    sec = Math.max(0, Math.round(sec || 0));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+  };
+  const num = n => Number(n).toLocaleString("ru-RU");
+  const stop = () => { clearTimeout(timer); assemblyWatchers.delete(publicId); card?.remove(); };
+
+  const paint = st => {
+    const btn = overlay.querySelector("#report-assemble");
+    if (!btn) return;
+    if (!card) { card = document.createElement("div"); card.className = "rd-asm"; }
+    if (!card.isConnected) btn.insertAdjacentElement("afterend", card);
+    if (!st) {
+      card.innerHTML = `<b>🎬 Сборка финала</b><span class="rd-asm-step">Жду подтверждения в боте — откройте карточку и нажмите «Собрать».</span>`;
+      return;
+    }
+    const pct = Math.round((st.fraction || 0) * 100);
+    const lines = [];
+    if (st.frame) lines.push(`Кадры: ${num(st.frame)}${st.total_frames ? ` из ≈ ${num(st.total_frames)}` : ""}`);
+    const t = [];
+    if (st.elapsed != null) t.push(`рендер идёт ${clock(st.elapsed)}`);
+    if (st.eta != null) t.push(`осталось ≈ ${clock(st.eta)}`);
+    if (st.speed) t.push(`скорость ${Number(st.speed).toFixed(1)}×`);
+    if (t.length) lines.push(t.join(" · "));
+    if (st.started && st.now) lines.push(`Всего с начала: ${clock(st.now - st.started)}`);
+    const failed = st.stage === "error";
+    card.className = `rd-asm${failed ? " bad" : st.stage === "done" ? " ok" : ""}`;
+    card.innerHTML = `
+      <b>${failed ? "❌ Сборка не удалась" : st.stage === "done" ? "✅ Финал собран" : "🎬 Сборка финала"}</b>
+      <span class="rd-asm-step">${esc(st.message || "")}</span>
+      ${failed || st.stage === "done" ? "" : `<div class="rd-asm-bar"><i style="width:${pct}%"></i><em>${pct}%</em></div>`}
+      ${lines.map(l => `<span class="rd-asm-meta">${esc(l)}</span>`).join("")}`;
+  };
+
+  const tick = async () => {
+    if (!overlay.isConnected) { stop(); return; }
+    let st = null;
+    try { st = await apiGet(`/report/${publicId}/assemble-progress`); } catch (_) { /* повторим на следующем тике */ }
+    if (st && st.stage && (st.active || st.stage === "done" || st.stage === "error")) {
+      seenActive = true;
+      paint(st);
+      if (st.stage === "done") {
+        toast("Финал собран и прикреплён к отчёту.", "success");
+        document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
+        timer = setTimeout(stop, 6000);
+        return;
+      }
+      if (st.stage === "error") { timer = setTimeout(stop, 20000); return; }
+    } else if (!seenActive) {
+      // Сборка ещё не началась: после нажатия кнопки ждём подтверждения в боте, при простом открытии карточки — молчим.
+      if (!waitForStart || Date.now() - startedAt > 10 * 60 * 1000) { stop(); return; }
+      paint(null);
+    } else {
+      stop();
+      return;
+    }
+    timer = setTimeout(tick, 3000);
+  };
+  tick();
+}
+
 // После запуска сборки финала предлагаем сразу перейти к посту в канал (тот же конструктор, что в админ-панели).
 function offerPublishPost() {
   const overlay = openSheet(`
@@ -551,6 +626,8 @@ export async function openReportDetail(publicId) {
       else toast(`Добавлено файлов: ${uploaded}.`, "success");
     });
     sheet.querySelector("#report-watermark")?.addEventListener("click", () => openTitleAdminDetail(detail.title_id));
+    // Сборка уже идёт (запущена раньше или с другого устройства) — карточка хода появится сама.
+    if (sheet.querySelector("#report-assemble")) startAssemblyWatch(publicId, overlay, false);
     sheet.querySelector("#report-assemble")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       btn.disabled = true;
@@ -569,6 +646,7 @@ export async function openReportDetail(publicId) {
         if (!confirm(`Собрать финал?\n\nВидео: ${check.video}\nСубтитры: ${check.subs}\n${introText[0].toUpperCase() + introText.slice(1)}${audioNote}${chooseNote}\n\nКарточка подтверждения придёт вам в бота, сборка идёт там.`)) return;
         await apiPost(`/report/${publicId}/assemble`, {});
         toast("Карточка сборки отправлена в бота — подтвердите там.", "success");
+        startAssemblyWatch(publicId, overlay, true);
         if (can("posts.manage")) offerPublishPost();
       } catch (err) {
         toast(`Не удалось запустить сборку: ${err.message}`, "error");
