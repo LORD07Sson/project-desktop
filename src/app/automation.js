@@ -14,6 +14,47 @@ const TABS = [
   ["speed", "Скорость", '<path d="M12 14l4-5M4 17a8 8 0 1 1 16 0"/>'],
   ["logs", "Логи", '<path d="M5 4h14v16H5zM8 9h8M8 13h8M8 17h5"/>'],
 ];
+// Справка по вкладкам: как это работает (алгоритм простыми словами) и что менялось последним.
+const HELP = {
+  factory: {
+    how: ["Схема показывает четыре линии: серии, отчёты, документы и производство финала. Зелёный огонёк — машина работает, синий — ждёт работу, жёлтый — пауза, красный — ошибки.",
+      "Кнопки «Пуск/Стоп» включают и выключают машину сразу; ⚙ открывает её настройки. Конвейер бежит, когда есть что везти."],
+    news: ["Новая вкладка: все автоматизации на одной схеме, с живыми счётчиками."],
+  },
+  overview: {
+    how: ["Сводка: что включено, сколько в очередях, сколько уже перенесено и что сломалось.", "Блок «Нужно внимание» собирает всё, что требует действия: невыбранная группа, ошибки, мало места на диске."],
+    news: ["Сводка и список проблем в одном месте."],
+  },
+  archive: {
+    how: ["Бот ловит новые серии в канале-источнике, определяет тайтл и номер серии, создаёт тему тайтла в архивной группе и заливает серию строго по порядку.",
+      "Если серия не распознана или не тот номер, она ждёт вашего решения, а не уходит наугад. Лимит скорости и отдых между пачками защищают канал от ограничений хостинга."],
+    news: ["Подписи, названия и номера определяются точнее; лимит скорости теперь настраивается во вкладке «Скорость»."],
+  },
+  chats: {
+    how: ["Список чатов, где состоит бот. Для каждого можно включить или выключить его функции и выбрать рабочий чат для упоминаний."],
+    news: [],
+  },
+  reports: {
+    how: ["Завершённые отчёты по расписанию уезжают в архивную группу: бот берёт самый давний подходящий, создаёт тему тайтла и кладёт в неё карточку (номер, автор, даты, заметки, список файлов).",
+      "Фильтры решают, что переносить; окно времени и размер пачки — когда и сколько. Сами отчёты в студии не меняются."],
+    news: ["Фильтры, окно времени, предпросмотр очереди, журнал переносов; готовятся маршруты по направлениям."],
+  },
+  docs: {
+    how: ["Файлы отчётов (видео, торренты, субтитры, звук, надписи, архивы) копируются в архивную группу. Если файл уже в Telegram, он пересылается по id без закачки; если лежит на диске сервера, заливается по-настоящему с учётом лимита скорости.",
+      "После заливки видео с диска подменяется ссылкой на Telegram-файл, а копия на диске стирается."],
+    news: ["Правила по видам файлов и размеру, дедупликация, предпросмотр очереди; готовятся маршруты по направлениям."],
+  },
+  speed: {
+    how: ["Каждый вид загрузки имеет свой потолок скорости, чтобы хостинг не включал ограничение канала (оно приходит выше ~50 Мбит/с надолго).",
+      "Ночной режим меняет лимиты по часам, а общий потолок делит канал между архивом и торрентами, когда они идут вместе."],
+    news: ["Ночной режим и общий потолок."],
+  },
+  logs: {
+    how: ["Здесь все логи сервера: журнал служб, bot.log, системные логи и записи в базе. Автоочистка раз в сутки оставляет последние N дней.", "Журнал действий админов не очищается: это след безопасности."],
+    news: ["Вкладка добавлена: размеры, очистка вручную и автоочистка."],
+  },
+};
+
 const svg = d => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 
 const fmtBytes = n => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : n >= 1048576 ? `${(n / 1048576).toFixed(1)} МБ` : `${Math.round(n / 1024)} КБ`);
@@ -321,14 +362,30 @@ export function mountAutomation(root) {
     const host = document.createElement("div");
     host.dataset.auPane = name;
     pane.appendChild(host);
-    if (name === "factory") import("./automation-factory.js").then(m => m.mountFactory(host, show));
-    else if (name === "overview") mountOverview(host, show);
-    else if (name === "archive") import("./archive.js").then(m => m.mountArchive(host));
-    else if (name === "chats") import("./bot-chats.js").then(m => m.mountBotChats(host));
-    else if (name === "reports") import("./reports-archive.js").then(m => m.mountReportsArchive(host));
-    else if (name === "docs") mountDocs(host);
-    else if (name === "logs") mountLogs(host);
-    else mountSpeed(host);
+    const help = HELP[name];
+    if (help) {
+      const info = document.createElement("details");
+      info.className = "au-help";
+      let open = false;
+      try { open = localStorage.getItem(`au-help-${name}`) === "1"; } catch (_) { /* без хранилища — свернуто */ }
+      info.open = open;
+      info.innerHTML = `<summary>Как это работает${help.news.length ? " · что нового" : ""}</summary>
+        <div>${help.how.map(t => `<p>${esc(t)}</p>`).join("")}${help.news.length ? `<p class="au-news"><b>Что нового:</b></p><ul>${help.news.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}</div>`;
+      info.addEventListener("toggle", () => { try { localStorage.setItem(`au-help-${name}`, info.open ? "1" : "0"); } catch (_) { /* не критично */ } });
+      host.appendChild(info);
+      const body = document.createElement("div");
+      host.appendChild(body);
+      host.__body = body;
+    }
+    const target = host.__body || host;
+    if (name === "factory") import("./automation-factory.js").then(m => m.mountFactory(target, show));
+    else if (name === "overview") mountOverview(target, show);
+    else if (name === "archive") import("./archive.js").then(m => m.mountArchive(target));
+    else if (name === "chats") import("./bot-chats.js").then(m => m.mountBotChats(target));
+    else if (name === "reports") import("./reports-archive.js").then(m => m.mountReportsArchive(target));
+    else if (name === "docs") mountDocs(target);
+    else if (name === "logs") mountLogs(target);
+    else mountSpeed(target);
   };
   root.querySelectorAll("[data-au-tab]").forEach(b => b.addEventListener("click", () => show(b.dataset.auTab)));
   show("factory");

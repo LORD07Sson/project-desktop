@@ -3113,3 +3113,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 @keyframes fcitem { from { left: -14px; } to { left: 56px; } }
 @keyframes fcpulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .fc-belt.on, .fc-belt.on span, [data-led="run"] .fc-led { animation: none; } }
+
+/* справка вкладок Автоматизации */
+.au-help { margin-bottom: 12px; border: 1px solid var(--line-soft); border-radius: 14px; background: rgba(255, 255, 255, .03); padding: 0 14px; }
+.au-help summary { cursor: pointer; padding: 10px 0; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.au-help div { padding-bottom: 10px; font-size: 12.5px; color: var(--ink-dim); } .au-help p { margin: 0 0 6px; } .au-help ul { margin: 0; padding-left: 18px; }
