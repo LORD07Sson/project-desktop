@@ -43,15 +43,15 @@ export async function openAssembleDialog(publicId) {
       <h2>Собрать финал</h2>
       <div class="ad-body">
         ${radios("ad-video", opts.videos, "Видео")}
-        <span class="ar-label">Субтитры <small>— вшиваются в картинку</small></span>
+        <span class="ar-label">Субтитры <small>— вшиваются в картинку, будут видны всегда</small></span>
         <div class="ar-list">
           ${opts.subs.map((f, i) => `
           <label class="ar-row ad-pick"><input type="radio" name="ad-sub" value="${f.id}" ${i === 0 ? "checked" : ""}>
             <b>${esc(f.name)}</b>${f.version ? `<span class="ar-meta">v${f.version}</span>` : ""}</label>`).join("")}
           <label class="ar-row ad-pick"><input type="radio" name="ad-sub" value="0" ${opts.subs.length ? "" : "checked"}><b>Без субтитров</b>
-            <span class="ar-meta">${opts.subs.length ? "только чистка, звук и надпись" : "файла субтитров в отчёте нет"}</span></label>
+            <span class="ar-meta">${opts.subs.length ? "видео без субтитров" : "файла субтитров в отчёте нет — видео будет без них"}</span></label>
         </div>
-        <span class="ar-label">Надпись поверх видео <small>— вместо субтитров или вместе с ними (необязательно)</small></span>
+        <span class="ar-label">Надпись поверх видео <small>— необязательно: можно без субтитров или вместе с ними</small></span>
         <input class="field-input" id="ad-ins-text" placeholder="например: Озвучка DreamyVoice · серия 12">
         <div class="ar-fields" id="ad-ins-opts" hidden>
           <select class="field-input" id="ad-ins-pos" style="max-width:190px;">
@@ -63,7 +63,7 @@ export async function openAssembleDialog(publicId) {
             <option value="0">Всё видео</option><option value="5">Первые 5 секунд</option><option value="10">Первые 10 секунд</option><option value="30">Первые 30 секунд</option>
           </select>
         </div>
-        <p class="ar-hint">Из оригинала всегда убираются встроенные субтитры, шрифты, главы и названия дорожек: остаётся одна видео- и одна аудиодорожка. Надписи, уже «прожжённые» в саму картинку, убрать нельзя.</p>
+        <p class="ar-hint">Что будет с оригиналом: из mkv всегда убираются его встроенные субтитры, шрифты, главы и названия дорожек — остаётся одна видеодорожка и одна звуковая. Потом в картинку вшиваются выбранные вами субтитры и/или надпись (или ничего, если не выбрали). Субтитры и надписи, которые уже «выжжены» в само изображение оригинала, убрать нельзя.</p>
         ${opts.audios.length ? `
         <span class="ar-label">Дорожки даббера <small>— отметьте нужные, звучат вместе</small></span>
         <div class="ar-list">${opts.audios.map(a => `
@@ -71,7 +71,7 @@ export async function openAssembleDialog(publicId) {
         <div class="ar-seg" id="ad-mode" hidden>
           <button type="button" data-v="replace" class="on">Заменить оригинал<small>слышна только дорожка</small></button>
           <button type="button" data-v="mix">Смешать с оригиналом<small>оба звука вместе</small></button>
-        </div>` : `<p class="ar-hint" style="margin:10px 0 0;">Дорожек в отчёте нет — звук останется из видео. Загрузите WAV, MP3 или архив с дорожками в «Файлы», и они появятся здесь.</p>`}
+        </div>` : `<p class="ar-hint" style="margin:10px 0 0;">Своей озвучки в отчёте нет — звук останется из видео. Чтобы заменить его, прикрепите к отчёту WAV, MP3 или архив с дорожками (раздел «Файлы») — они появятся здесь.</p>`}
         <span class="ar-label">Склейка — картинка в начале видео <small>— как карточка с титрами у студии; её кадр станет и превью в Telegram</small></span>
         <div class="ar-fields" id="ad-cover-img">
           <button type="button" class="btn" id="ad-cover-pick">Выбрать картинку…</button>
