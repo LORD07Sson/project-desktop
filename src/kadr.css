@@ -3059,3 +3059,9 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-asm-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent-grad); border-radius: 99px; transition: width .6s ease; min-width: 2%; }
 .rd-asm-bar em { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .55); }
 .rd-asm-cancel { justify-self: start; margin-top: 4px; }
+
+/* Окно «Собрать финал» */
+.ad-body { display: grid; gap: 2px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+.ad-pick { cursor: pointer; }
+.ad-pick input { accent-color: var(--fire); width: 16px; height: 16px; flex: none; }
+.ad-pick b { flex: 1; font-weight: 600; word-break: break-word; }

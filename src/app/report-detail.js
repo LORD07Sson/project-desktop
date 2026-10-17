@@ -652,21 +652,11 @@ export async function openReportDetail(publicId) {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const check = await apiGet(`/report/${publicId}/assemble-check`);
-        if (!check.ready) {
-          toast(`Нельзя собрать: ${check.missing.join("; ")}.`, "error");
-          return;
-        }
-        const introText = check.intro ? `интро «${check.intro}»` : "без интро";
-        const choose = [];
-        if (check.videos > 1) choose.push(`видео (${check.videos})`);
-        if (check.subtitles > 1) choose.push(`субтитры (${check.subtitles})`);
-        const audioNote = check.audios && check.audios.length ? `\nДорожки в отчёте: ${check.audios.slice(0, 4).join(", ")}${check.audios.length > 4 ? " …" : ""} — в боте можно подставить дорожку даббера (заменить звук или смешать).` : "";
-        const chooseNote = choose.length ? `\nВ боте можно выбрать другой файл: ${choose.join(", ")}.` : "";
-        if (!confirm(`Собрать финал?\n\nВидео: ${check.video}\nСубтитры: ${check.subs}\n${introText[0].toUpperCase() + introText.slice(1)}${audioNote}${chooseNote}\n\nКарточка подтверждения придёт вам в бота, сборка идёт там.`)) return;
-        const started = await apiPost(`/report/${publicId}/assemble`, {});
-        toast("Карточка сборки отправлена в бота — подтвердите там.", "success");
-        startAssemblyWatch(publicId, overlay, true, started && started.bot ? started.bot : "");
+        // Окно выбора (видео, субтитры, дорожки, качество) — прямо в приложении; сборку ведёт бот, ход виден ниже, отменить можно там же.
+        const { openAssembleDialog } = await import("./assemble-dialog.js");
+        if (!(await openAssembleDialog(publicId))) return;
+        toast("Сборка запущена — ход виден в карточке ниже.", "success");
+        startAssemblyWatch(publicId, overlay, true, "");
         if (can("posts.manage")) offerPublishPost();
       } catch (err) {
         toast(`Не удалось запустить сборку: ${err.message}`, "error");
