@@ -54,7 +54,10 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
     const btn = overlay.querySelector("#report-assemble");
     if (!btn) return;
     if (!card) { card = document.createElement("div"); card.className = "rd-asm"; }
-    if (!card.isConnected) btn.insertAdjacentElement("afterend", card);
+    if (!card.isConnected) {
+      const slot = overlay.querySelector("#rd-prod-asm");
+      if (slot) slot.appendChild(card); else btn.insertAdjacentElement("afterend", card);
+    }
     if (!st) {
       if (card.dataset.state === "waiting") return;  // не перерисовываем, чтобы не мигала кнопка
       card.dataset.state = "waiting";
@@ -323,6 +326,7 @@ export async function openReportDetail(publicId) {
         <div class="rd-main">
           <div class="rd-panel" data-rd-panel="main">
             <div id="rd-player-host"></div>
+            ${productionHtml(detail, files.files)}
             <div class="rd-sec">
               <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди" : `${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}`}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? "изменить" : ""}</button>` : ""}</h3>
@@ -364,62 +368,38 @@ export async function openReportDetail(publicId) {
               </div><div class="note-pending" id="note-pending"></div>` : ""}
             </div>
 
-            <div class="rd-sec">
-              <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}</h3>
-              ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — добавьте дорожку кнопкой ниже или перетащите файл в окно.</div>`}
+            <div class="rd-sec rd-files">
+              <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}
+                <span class="rd-h-act rd-h-tools">
+                  <button class="rd-add" id="report-file-add">${detail.is_sound ? "+ Сдать готовую дорожку" : "+ Добавить файл"}</button>
+                  ${can("titles.edit") && detail.title_id ? `<button class="rd-add" id="report-watermark" title="Логотип, угол, прозрачность и размер — общие для всех серий тайтла">💧 Водяной знак</button>` : ""}
+                </span>
+              </h3>
+              ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="rd-empty">Файлов пока нет — добавьте кнопкой выше или перетащите файл в окно.</div>`}
               ${detail.is_sound ? `<div class="no-assignee" style="margin:8px 0;">🎚 Сдача звукаря: загрузите итоговый файл — видео с новым звуком или готовую дорожку. Админ сразу получит уведомление «Дорожка сдана».</div>` : ""}
-              <button class="rd-add" id="report-file-add">${detail.is_sound ? "+ Сдать готовую дорожку" : "+ Добавить файл (дорожку)"}</button>
-              ${can("reports.files") ? `<button class="rd-add" id="report-nyaa" title="Найти раздачу на Nyaa, скачать в торрент-клиент и прикрепить видео к этому отчёту">🌐 Видео с Nyaa</button>` : ""}
-              ${can("reports.assemble") ? `<button class="rd-add" id="report-assemble">🎬 Собрать финал</button>` : ""}
-              ${can("titles.edit") && detail.title_id ? `<button class="rd-add" id="report-watermark" title="Логотип, угол, прозрачность и размер — общие для всех серий тайтла">💧 Водяной знак тайтла</button>` : ""}
-            </div>
 
-            ${(raws.raws || []).length ? `
-            <div class="rd-sec">
-              <h3>Равки и субтитры <span class="n">${rawFileCountLabel}</span></h3>
-              <div class="no-assignee" style="margin-bottom:6px;">Можно прикрепить несколько файлов в каждой категории. Их увидят участники, которым доступен этот отчёт.</div>
-              <div class="raw-list">${raws.raws.map(r => {
-                const entries = r.files || (r.present ? [{ id: null, legacy: true, character_id: 0, name: r.name || "файл" }] : []);
-                return `<section class="raw-kind">
-                  <div class="raw-kind-head">
-                    <span class="raw-label">${esc(r.label)}</span>
-                    <span class="raw-kind-count">${entries.length}</span>
-                    ${raws.can_upload ? `<button class="rd-add" data-raw-add="${esc(r.kind)}">+ Добавить файлы</button>` : ""}
-                  </div>
-                  ${entries.length ? entries.map(f => `
-                    <div class="raw-row on">
-                      <span class="raw-name">${esc(f.name || "файл")}${f.character_name ? ` · ${esc(f.character_name)}` : (f.character_id ? ` · персонаж #${Number(f.character_id)}` : "")}</span>
-                      <button class="icon-btn" data-raw-dl="${esc(r.kind)}" data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-legacy="${f.legacy || f.id == null ? "1" : "0"}" data-raw-character="${Number(f.character_id || 0)}" data-raw-name="${esc(f.name || r.kind)}" title="Скачать">⬇️</button>
-                    </div>`).join("") : `<div class="raw-row"><span class="raw-name">Файлов пока нет</span></div>`}
-                </section>`;
-              }).join("")}</div>
-            </div>` : ""}
-            ${(raws.shared_sources && (raws.shared_sources.can_view || raws.shared_sources.can_upload)) ? `
-            <div class="rd-sec">
-              <h3>Исходники серии${raws.shared_sources.episode ? ` · ${esc(raws.shared_sources.episode)}` : ""}</h3>
-              <div class="no-assignee" style="margin-bottom:6px;">Равки 480p/1080p · скачивание доступно дабберам этого тайтла и назначенному звукарю${raws.shared_sources.can_upload ? " · загрузка для роли «Роспись»" : ""}</div>
-              <div class="raw-list">${(raws.shared_sources.kinds || []).map(r => {
-                const entries = r.files || [];
-                return `<section class="raw-kind">
-                  <div class="raw-kind-head">
-                    <span class="raw-label">${esc(r.label)}</span>
-                    <span class="raw-kind-count">${entries.length}</span>
-                    ${raws.shared_sources.can_upload ? `<button class="rd-add" data-source-add="${esc(r.kind)}">+ Добавить файлы</button>` : ""}
-                  </div>
-                  ${entries.length ? entries.map(f => `
-                    <div class="raw-row on">
-                      <span class="raw-name">${esc(f.name || "файл")}</span>
-                      <button class="icon-btn" data-source-dl="${esc(f.id)}" data-source-name="${esc(f.name || r.kind)}" title="Скачать">⬇️</button>
-                    </div>`).join("") : `<div class="raw-row"><span class="raw-name">${raws.shared_sources.can_view ? "Файлов пока нет" : "Добавьте сюда равки для команды"}</span></div>`}
-                </section>`;
-              }).join("")}</div>
-            </div>` : ""}
+              ${(raws.raws || []).length ? `
+              <div class="rd-subhead" title="Можно прикрепить несколько файлов в каждой категории. Их увидят участники, которым доступен этот отчёт.">Равки и субтитры <span class="n">${rawFileCountLabel}</span></div>
+              ${rawKindsHtml((raws.raws || []).map(r => ({
+                kind: r.kind, label: r.label,
+                entries: r.files || (r.present ? [{ id: null, legacy: true, character_id: 0, name: r.name || "файл" }] : []),
+              })), { canAdd: raws.can_upload, addAttr: "data-raw-add", dlAttr: "raw" })}` : ""}
+
+              ${(raws.shared_sources && (raws.shared_sources.can_view || raws.shared_sources.can_upload)) ? `
+              <div class="rd-subhead" title="Равки 480p/1080p · скачивание доступно дабберам этого тайтла и назначенному звукарю${raws.shared_sources.can_upload ? " · загрузка для роли «Роспись»" : ""}">Исходники серии${raws.shared_sources.episode ? ` · ${esc(raws.shared_sources.episode)}` : ""}</div>
+              ${rawKindsHtml((raws.shared_sources.kinds || []).map(r => ({ kind: r.kind, label: r.label, entries: r.files || [] })), { canAdd: raws.shared_sources.can_upload, addAttr: "data-source-add", dlAttr: "source" })}` : ""}
+            </div>
           </div>
           <div class="rd-panel" data-rd-panel="history" hidden></div>
           <div class="rd-panel" data-rd-panel="activity" hidden></div>
         </div>
 
         <aside class="rd-side">
+          <div class="rd-summary">
+            <div><b>${doneItems}/${checklist.items.length}</b><span>пунктов чек-листа</span></div>
+            <div><b>${files.files.length}</b><span>файлов</span></div>
+            <div><b>${notes.notes.length}</b><span>заметок</span></div>
+          </div>
           <div class="rd-meta">
             <div class="rd-meta-row"><span>Исполнители / кого уведомить</span>
               ${(detail.assignees || []).map(a => `<div class="rd-person" data-assignee="${a.telegram_id}">
@@ -438,7 +418,7 @@ export async function openReportDetail(publicId) {
           </div>
           <div class="rd-side-foot">
             <button class="btn ghost" id="btn-pin-window">Открепить в окне</button>
-            ${can("reports.delete") ? `<button class="btn danger" id="btn-delete-report">Удалить отчёт</button>` : ""}
+            ${can("reports.delete") ? `<details class="rd-more"><summary>⋯ Ещё</summary><button class="btn danger" id="btn-delete-report">Удалить отчёт</button></details>` : ""}
           </div>
         </aside>
       </div>
@@ -656,6 +636,9 @@ export async function openReportDetail(publicId) {
       await render();
       if (failure) toast(uploaded ? `Добавлено ${uploaded} из ${filesToAdd.length}. Не загрузился файл ${failure}` : `Не удалось загрузить: ${failure}`, "error");
       else toast(`Добавлено файлов: ${uploaded}.`, "success");
+    });
+    sheet.querySelector("#report-post")?.addEventListener("click", () => {
+      import("./channel-post.js").then(m => m.openChannelPostSheet());
     });
     sheet.querySelector("#report-watermark")?.addEventListener("click", () => openTitleAdminDetail(detail.title_id));
     // Сборка уже идёт (запущена раньше или с другого устройства) — карточка хода появится сама.
@@ -988,6 +971,68 @@ async function fillLogPanel(panel, publicId, kind) {
 // присланного документом, приходит "document" — и mp3 внутри него
 // раньше оставался без кнопки AI-проверки, потому что || до имени
 // просто не доходил.
+const VIDEO_NAME_RE = /\.(mkv|mp4|mov|avi|webm|m4v|ts)$/i;
+
+// «Производство финала»: четыре шага со статусом и одной кнопкой на шаг. Кнопки сохраняют прежние id —
+// их обработчики (Nyaa, сборка, добавление файла) остались как были.
+function productionHtml(detail, fileList) {
+  if (!can("reports.assemble") && !can("reports.files")) return "";
+  const list = fileList || [];
+  const hasFinal = list.some(f => /_final\./i.test(f.file_name || ""));
+  const hasVideo = hasFinal || list.some(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
+  const hasSubs = list.some(f => /\.(ass|ssa|srt)$/i.test(f.file_name || ""));
+  const hasAudio = list.some(f => AUDIO_RE.test(f.file_type || "") || AUDIO_RE.test(f.file_name || ""));
+  const step = (n, title, state, label, body) => `
+    <div class="rd-fs ${state}">
+      <span class="rd-fs-n">${state === "done" ? "✓" : n}</span>
+      <b>${title}</b>
+      <small>${label}</small>
+      <div class="rd-fs-act">${body}</div>
+    </div>`;
+  const nyaa = can("reports.files") ? `<button class="rd-add" id="report-nyaa" title="Найти раздачу на Nyaa, сервер скачает видео и прикрепит к отчёту">🌐 Видео с Nyaa</button>` : "";
+  const assemble = can("reports.assemble") ? `<button class="rd-add primary" id="report-assemble">🎬 Собрать финал</button>` : "";
+  const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
+  return `
+  <div class="rd-sec rd-prod" id="rd-prod">
+    <h3>Производство финала</h3>
+    <div class="rd-flow">
+      ${step(1, "Видео", hasVideo ? "done" : "todo", hasFinal ? "финал есть" : hasVideo ? "прикреплено" : "нужно", nyaa || "")}
+      ${step(2, "Субтитры и звук", hasSubs || hasAudio ? "done" : "opt", [hasSubs ? "субтитры" : "", hasAudio ? "озвучка" : ""].filter(Boolean).join(" · ") || "необязательно", "")}
+      ${step(3, "Сборка", hasFinal ? "done" : hasVideo ? "todo" : "wait", hasFinal ? "готово" : hasVideo ? "можно собирать" : "ждёт видео", assemble)}
+      ${step(4, "Пост", hasFinal ? "todo" : "wait", hasFinal ? "можно готовить" : "после сборки", post)}
+    </div>
+    <div id="rd-prod-asm"></div>
+  </div>`;
+}
+
+// Категории файлов одной сеткой: с файлами — списком, пустые — компактной кнопкой «+ название».
+function rawKindsHtml(kinds, { canAdd, addAttr, dlAttr }) {
+  const filled = kinds.filter(k => k.entries.length);
+  const empty = kinds.filter(k => !k.entries.length);
+  const row = (k, f) => dlAttr === "raw"
+    ? `<div class="raw-row on">
+        <span class="raw-name">${esc(f.name || "файл")}${f.character_name ? ` · ${esc(f.character_name)}` : (f.character_id ? ` · персонаж #${Number(f.character_id)}` : "")}</span>
+        <button class="icon-btn" data-raw-dl="${esc(k.kind)}" data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-legacy="${f.legacy || f.id == null ? "1" : "0"}" data-raw-character="${Number(f.character_id || 0)}" data-raw-name="${esc(f.name || k.kind)}" title="Скачать">⬇️</button>
+      </div>`
+    : `<div class="raw-row on">
+        <span class="raw-name">${esc(f.name || "файл")}</span>
+        <button class="icon-btn" data-source-dl="${esc(f.id)}" data-source-name="${esc(f.name || k.kind)}" title="Скачать">⬇️</button>
+      </div>`;
+  return `
+  <div class="raw-list">${filled.map(k => `
+    <section class="raw-kind">
+      <div class="raw-kind-head">
+        <span class="raw-label">${esc(k.label)}</span>
+        <span class="raw-kind-count">${k.entries.length}</span>
+        ${canAdd ? `<button class="rd-add" ${addAttr}="${esc(k.kind)}">+ Добавить файлы</button>` : ""}
+      </div>
+      ${k.entries.map(f => row(k, f)).join("")}
+    </section>`).join("")}</div>
+  ${empty.length ? `<div class="rd-chips">${empty.map(k => canAdd
+    ? `<button class="rd-chip" ${addAttr}="${esc(k.kind)}" title="Добавить файлы: ${esc(k.label)}">+ ${esc(k.label)}</button>`
+    : `<span class="rd-chip off">${esc(k.label)}</span>`).join("")}</div>` : ""}`;
+}
+
 function fileHtml(f, canEdit = true) {
   const audioRe = AUDIO_RE;
   const isAudio = audioRe.test(f.file_type || "") || audioRe.test(f.file_name || "");
