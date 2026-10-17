@@ -19,7 +19,7 @@ export async function openAssembleDialog(publicId) {
 
   return new Promise(resolve => {
     let mode = "replace";
-    const coverMode = () => (coverImage ? "image" : "auto");
+    
     let coverImage = null;  // {file_id, name, url} после загрузки своей картинки
     const finish = started => { resolve(started); dismissSheet(overlay); };  // сначала ответ: закрытие шлёт «sheet-dismissed» → false
     overlay.addEventListener("sheet-dismissed", () => resolve(false));
@@ -51,12 +51,17 @@ export async function openAssembleDialog(publicId) {
           <button type="button" data-v="replace" class="on">Заменить оригинал<small>слышна только дорожка</small></button>
           <button type="button" data-v="mix">Смешать с оригиналом<small>оба звука вместе</small></button>
         </div>` : `<p class="ar-hint" style="margin:10px 0 0;">Дорожек в отчёте нет — звук останется из видео. Загрузите WAV, MP3 или архив с дорожками в «Файлы», и они появятся здесь.</p>`}
-        <span class="ar-label">Превью видео <small>— картинка, которую вы выберете (как склейка у студии)</small></span>
+        <span class="ar-label">Склейка — картинка в начале видео <small>— как карточка с титрами у студии; её кадр станет и превью в Telegram</small></span>
         <div class="ar-fields" id="ad-cover-img">
           <button type="button" class="btn" id="ad-cover-pick">Выбрать картинку…</button>
           <button type="button" class="btn ghost" id="ad-cover-clear" hidden>Убрать</button>
-          <span class="ar-hint" id="ad-cover-name" style="margin:0;">не выбрана — превью выберет Telegram</span>
+          <span class="ar-hint" id="ad-cover-name" style="margin:0;">не выбрана — без склейки</span>
           <img id="ad-cover-thumb" alt="" hidden style="max-height:72px; border-radius:8px;">
+        </div>
+        <div class="ar-fields" id="ad-splice-opts" hidden>
+          <label class="ar-hint" style="margin:0; display:flex; gap:8px; align-items:center;">Показывать
+            <input class="field-input" id="ad-splice-sec" type="number" min="1" max="30" step="1" value="4" style="max-width:80px;"> сек.</label>
+          ${opts.intro ? `<select class="field-input" id="ad-splice-pos" style="max-width:260px;"><option value="start">В самом начале, до интро</option><option value="after_intro">После интро</option></select>` : ""}
         </div>
         <span class="ar-label">Качество и формат</span>
         <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}">${esc(p.name)}</option>`).join("")}</select>
@@ -100,9 +105,10 @@ export async function openAssembleDialog(publicId) {
           img.src = URL.createObjectURL(file);
           img.hidden = false;
           sheet.querySelector("#ad-cover-clear").hidden = false;
+          sheet.querySelector("#ad-splice-opts").hidden = false;
         } catch (e) {
           coverImage = null;
-          label.textContent = "не выбрана — превью выберет Telegram";
+          label.textContent = "не выбрана — без склейки";
           toast(`Не удалось загрузить картинку: ${e.message}`, "error");
         }
       });
@@ -111,9 +117,10 @@ export async function openAssembleDialog(publicId) {
 
     sheet.querySelector("#ad-cover-clear").addEventListener("click", () => {
       coverImage = null;
-      sheet.querySelector("#ad-cover-name").textContent = "не выбрана — превью выберет Telegram";
+      sheet.querySelector("#ad-cover-name").textContent = "не выбрана — без склейки";
       sheet.querySelector("#ad-cover-thumb").hidden = true;
       sheet.querySelector("#ad-cover-clear").hidden = true;
+      sheet.querySelector("#ad-splice-opts").hidden = true;
     });
     sheet.querySelector("[data-close]").addEventListener("click", () => finish(false));
     sheet.querySelector("#ad-start").addEventListener("click", async e => {
@@ -121,7 +128,11 @@ export async function openAssembleDialog(publicId) {
       btn.disabled = true;
       try {
         await apiPost(`/report/${publicId}/assemble/start`, {
-          cover: { mode: coverMode(), image: coverImage ? coverImage.file_id : null },
+          splice: coverImage ? {
+            image: coverImage.file_id,
+            seconds: Number(sheet.querySelector("#ad-splice-sec").value || 4),
+            position: sheet.querySelector("#ad-splice-pos") ? sheet.querySelector("#ad-splice-pos").value : "start",
+          } : null,
           video: Number(sheet.querySelector('input[name="ad-video"]:checked').value),
           sub: Number(sheet.querySelector('input[name="ad-sub"]:checked').value),
           audios: [...sheet.querySelectorAll("[data-ad-audio]:checked")].map(c => Number(c.dataset.adAudio)),
