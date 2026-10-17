@@ -10,8 +10,66 @@ const TABS = [
   ["reports", "Отчёты", '<path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/>'],
   ["docs", "Документы", '<path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/>'],
   ["speed", "Скорость", '<path d="M12 14l4-5M4 17a8 8 0 1 1 16 0"/>'],
+  ["logs", "Логи", '<path d="M5 4h14v16H5zM8 9h8M8 13h8M8 17h5"/>'],
 ];
 const svg = d => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+
+const fmtBytes = n => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : n >= 1048576 ? `${(n / 1048576).toFixed(1)} МБ` : `${Math.round(n / 1024)} КБ`);
+
+async function mountLogs(root) {
+  let d;
+  const load = async () => { d = await apiGet("/logs"); };
+  try { await load(); }
+  catch (e) { root.innerHTML = `<div class="bc-warn">Не удалось загрузить: ${esc(e.message)}</div>`; return; }
+
+  const paint = () => {
+    const total = d.sources.reduce((a, x) => a + (x.bytes || 0), 0);
+    root.innerHTML = `
+    <div class="ar" style="display:grid; gap:14px;">
+      <div class="ar-card">
+        <div class="ar-card-head"><h4>Хранение логов</h4></div>
+        <p class="ar-hint" style="margin:0 0 10px;">Раз в сутки сервер сам оставляет только последние дни во всех логах ниже. Журнал действий админов (кто что менял) не очищается: это след безопасности.</p>
+        <div class="ar-fields" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <label class="bcn-feature" style="gap:10px;"><span>Автоочистка</span><span class="ar-switch sm"><input type="checkbox" id="lg-auto" ${d.auto ? "checked" : ""}><i></i></span></label>
+          <input class="field-input" type="number" min="1" max="365" id="lg-days" value="${d.keep_days}" style="max-width:100px;">
+          <span class="ar-meta">дней хранить</span>
+          <button type="button" class="btn primary" id="lg-save">Сохранить</button>
+        </div>
+      </div>
+      <div class="ar-card">
+        <div class="ar-card-head"><h4>Все логи${total ? ` · ${fmtBytes(total)} на диске` : ""}</h4>
+          <button type="button" class="btn" data-lg-clean="all">Очистить всё (по сроку)</button></div>
+        <div style="display:grid; gap:10px; margin-top:8px;">
+          ${d.sources.map(x => `
+          <div class="ar-row" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:200px;"><b>${esc(x.title)}</b><div class="ar-hint" style="margin:2px 0 0;">${esc(x.sub)}</div></div>
+            <span class="ar-meta">${x.bytes != null ? fmtBytes(x.bytes) : `${Number(x.rows).toLocaleString("ru-RU")} записей`}</span>
+            <button type="button" class="btn" data-lg-clean="${x.key}">Очистить</button>
+          </div>`).join("")}
+        </div>
+      </div>
+    </div>`;
+    root.querySelector("#lg-save").addEventListener("click", async e => {
+      e.currentTarget.disabled = true;
+      try {
+        d = await apiPost("/logs", { auto: root.querySelector("#lg-auto").checked, keep_days: Number(root.querySelector("#lg-days").value) });
+        toast("Настройки логов сохранены.", "success");
+        paint();
+      } catch (err) { toast(`Не сохранилось: ${err.message}`, "error"); e.currentTarget.disabled = false; }
+    });
+    root.querySelectorAll("[data-lg-clean]").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        const r = await apiPost("/logs/clean", { source: b.dataset.lgClean });
+        d = r;
+        const freed = Object.entries(r.freed || {}).reduce((a, [k, v]) => a + (["snapshots", "messages"].includes(k) ? 0 : v), 0);
+        toast(freed ? `Освобождено ${fmtBytes(freed)}.` : "Очищено: старше срока хранения ничего не было.", "success");
+        paint();
+      } catch (err) { toast(`Не получилось очистить: ${err.message}`, "error"); b.disabled = false; }
+    }));
+  };
+  paint();
+}
 
 async function mountSpeed(root) {
   let d;
@@ -134,6 +192,7 @@ export function mountAutomation(root) {
     else if (name === "chats") import("./bot-chats.js").then(m => m.mountBotChats(host));
     else if (name === "reports") import("./reports-archive.js").then(m => m.mountReportsArchive(host));
     else if (name === "docs") mountDocs(host);
+    else if (name === "logs") mountLogs(host);
     else mountSpeed(host);
   };
   root.querySelectorAll("[data-au-tab]").forEach(b => b.addEventListener("click", () => show(b.dataset.auTab)));
