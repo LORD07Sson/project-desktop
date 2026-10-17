@@ -711,6 +711,10 @@ async function installUpdate() {
     fill.style.width = pct + "%";
     statusEl.textContent = pct < 100 ? `Скачано ${pct}%` : "Устанавливаю…";
   });
+  const unlistenRetry = await listen("update-retry", event => {
+    fill.style.width = "0%";
+    statusEl.textContent = `Релиз как раз обновляется на GitHub — жду и пробую снова (${event.payload}/6)…`;
+  });
   try {
     // При успехе download_and_apply_update завершает процесс изнутри
     // (apply_updates_and_restart) — этот await просто никогда не
@@ -719,6 +723,7 @@ async function installUpdate() {
     await invoke("download_and_apply_update");
   } catch (e) {
     unlisten();
+    unlistenRetry();
     updateInstalling = false;
     statusEl.textContent = `Ошибка: ${e}`;
     statusEl.style.color = "var(--s-stop)";

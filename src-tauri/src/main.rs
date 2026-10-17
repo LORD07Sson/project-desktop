@@ -114,6 +114,18 @@ struct CachedUpdateCheck {
     result: Result<Option<UpdateInfoOut>, String>,
 }
 
+// Альфа-релиз alpha-latest на каждую сборку удаляется и публикуется заново — на минуту фид и пакет дают 404, а клиент,
+// успевший увидеть старый фид, получает 404 на скачивании. Это временный сбой: ждём и пробуем снова с новым фидом.
+fn is_transient_update_error(text: &str) -> bool {
+    text.contains("404") || text.contains("502") || text.contains("503") || text.contains("504") || text.contains("timed out") || text.contains("Network error")
+}
+
+const UPDATE_RETRIES: u32 = 6;
+
+fn update_retry_pause(attempt: u32) {
+    std::thread::sleep(std::time::Duration::from_secs(5 * attempt as u64));
+}
+
 fn update_check_cache() -> &'static Mutex<Option<CachedUpdateCheck>> {
     static CACHE: OnceLock<Mutex<Option<CachedUpdateCheck>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(None))
@@ -131,15 +143,29 @@ fn check_for_update_cached(app: &tauri::AppHandle) -> Result<Option<UpdateInfoOu
     }
 
     let um = velopack_update_manager(app)?;
-    let result = match um.check_for_updates().map_err(friendly_update_error) {
-        Ok(velopack::UpdateCheck::UpdateAvailable(info)) => Ok(Some(UpdateInfoOut {
-            version: info.TargetFullRelease.Version.clone(),
-            notes: info.TargetFullRelease.NotesMarkdown.clone(),
-        })),
-        Ok(_) => Ok(None),
-        Err(e) => Err(e),
+    let mut attempt = 0;
+    let result = loop {
+        let one = match um.check_for_updates().map_err(friendly_update_error) {
+            Ok(velopack::UpdateCheck::UpdateAvailable(info)) => Ok(Some(UpdateInfoOut {
+                version: info.TargetFullRelease.Version.clone(),
+                notes: info.TargetFullRelease.NotesMarkdown.clone(),
+            })),
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
+        };
+        match &one {
+            Err(e) if is_transient_update_error(e) && attempt < UPDATE_RETRIES => {
+                attempt += 1;
+                log::info!("check_for_update: фид недоступен ({e}), повтор {attempt}/{UPDATE_RETRIES}");
+                update_retry_pause(attempt);
+            }
+            _ => break one,
+        }
     };
-    *cache.lock().unwrap() = Some(CachedUpdateCheck { at: std::time::Instant::now(), channel, result: result.clone() });
+    // Ошибку не запоминаем: иначе следующая проверка в течение пяти минут снова покажет тот же сбой.
+    if result.is_ok() {
+        *cache.lock().unwrap() = Some(CachedUpdateCheck { at: std::time::Instant::now(), channel, result: result.clone() });
+    }
     result
 }
 
@@ -192,25 +218,46 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
         // (os error 32), а первая тем временем спокойно докачивается.
         let _guard = UpdateDownloadGuard::acquire()?;
         let um = velopack_update_manager(&app)?;
-        let info = match um.check_for_updates().map_err(friendly_update_error)? {
-            velopack::UpdateCheck::UpdateAvailable(info) => *info,
-            _ => return Err("Обновление больше не доступно — кто-то уже обновился раньше вас?".into()),
-        };
-        log::info!("download_and_apply_update: качаем {}", info.TargetFullRelease.Version);
+        let mut attempt = 0;
+        loop {
+            let info = match um.check_for_updates().map_err(friendly_update_error) {
+                Ok(velopack::UpdateCheck::UpdateAvailable(info)) => *info,
+                Ok(_) => return Err("Обновление больше не доступно — кто-то уже обновился раньше вас?".into()),
+                Err(e) if is_transient_update_error(&e) && attempt < UPDATE_RETRIES => {
+                    attempt += 1;
+                    log::info!("download_and_apply_update: фид недоступен ({e}), повтор {attempt}/{UPDATE_RETRIES}");
+                    let _ = app.emit("update-retry", attempt);
+                    update_retry_pause(attempt);
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            log::info!("download_and_apply_update: качаем {}", info.TargetFullRelease.Version);
 
-        let (tx, rx) = std::sync::mpsc::channel::<i16>();
-        let progress_app = app.clone();
-        std::thread::spawn(move || {
-            for pct in rx {
-                let _ = progress_app.emit("update-progress", pct);
+            let (tx, rx) = std::sync::mpsc::channel::<i16>();
+            let progress_app = app.clone();
+            std::thread::spawn(move || {
+                for pct in rx {
+                    let _ = progress_app.emit("update-progress", pct);
+                }
+            });
+
+            if let Err(e) = um.download_updates(&info, Some(tx)) {
+                let text = e.to_string();
+                if is_transient_update_error(&text) && attempt < UPDATE_RETRIES {
+                    attempt += 1;
+                    log::info!("download_and_apply_update: пакет недоступен ({text}), повтор {attempt}/{UPDATE_RETRIES}");
+                    let _ = app.emit("update-retry", attempt);
+                    update_retry_pause(attempt);
+                    continue;
+                }
+                return Err(text);
             }
-        });
-
-        um.download_updates(&info, Some(tx)).map_err(|e| e.to_string())?;
-        // apply_updates_and_restart сама завершает процесс — строка ниже
-        // в норме никогда не выполняется до конца, но если она вообще
-        // вернула управление, это уже само по себе ошибка на стороне ОС.
-        um.apply_updates_and_restart(&info.TargetFullRelease).map_err(|e| e.to_string())
+            // apply_updates_and_restart сама завершает процесс — строка ниже
+            // в норме никогда не выполняется до конца, но если она вообще
+            // вернула управление, это уже само по себе ошибка на стороне ОС.
+            return um.apply_updates_and_restart(&info.TargetFullRelease).map_err(|e| e.to_string());
+        }
     })())
 }
 
