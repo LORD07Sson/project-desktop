@@ -148,6 +148,48 @@ function offerPublishPost() {
   });
 }
 
+// «Кому прислать?»: файл отчёта (видео, дорожка, субтитры) бот пересылает выбранным людям в личку — по тому же file_id,
+// без повторной заливки; видео с диска сервера уходит с диска.
+async function openSendFileSheet(publicId, fileId, fileName) {
+  const overlay = openSheet(`<h2>Кому прислать?</h2><p class="bc-hint">${esc(fileName || "файл")} есть в отчёте — бот перешлёт его выбранным людям.</p>${dialogSkeletonHtml(3)}`);
+  let people = [];
+  try {
+    ({ people } = await apiGet(`/report/${publicId}/send-targets`));
+  } catch (e) {
+    overlay.remove();
+    toast(`Не удалось получить список людей: ${e.message}`, "error");
+    return;
+  }
+  const sheet = overlay.querySelector(".sheet");
+  sheet.innerHTML = `
+    <h2>Кому прислать?</h2>
+    <p class="bc-hint">${esc(fileName || "файл")} есть в отчёте — бот перешлёт его выбранным людям в личку.</p>
+    <div class="ar-list">
+      <label class="ar-row ad-pick"><input type="checkbox" data-send-to="me" checked><b>Мне</b></label>
+      ${people.map(p => `<label class="ar-row ad-pick"><input type="checkbox" data-send-to="${Number(p.telegram_id)}"><b>${esc(p.name)}</b></label>`).join("") || `<p class="bc-hint">Других участников нет.</p>`}
+    </div>
+    <div class="sheet-actions">
+      <button class="btn" data-close>Отмена</button>
+      <button class="btn primary" id="send-file-go">Прислать</button>
+    </div>`;
+  sheet.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
+  sheet.querySelector("#send-file-go").addEventListener("click", async e => {
+    const boxes = [...sheet.querySelectorAll("[data-send-to]:checked")];
+    const to = boxes.map(b => b.dataset.sendTo === "me" ? "me" : Number(b.dataset.sendTo));
+    if (!to.length) { toast("Выберите, кому прислать.", "error"); return; }
+    e.currentTarget.disabled = true;
+    try {
+      const res = await apiPost(`/report/${publicId}/files/${fileId}/send`, { to });
+      const bad = (res.failed || []).length;
+      toast(bad ? `Отправлено: ${res.sent.length}, не получилось: ${bad} (${res.failed.map(f => f.name).join(", ")})` : `Отправлено: ${res.sent.length}`, bad ? "error" : "success");
+      dismissSheet(overlay);
+    } catch (err) {
+      toast(`Не удалось отправить: ${err.message}`, "error");
+      e.currentTarget.disabled = false;
+    }
+  });
+}
+
 export async function openReportDetail(publicId) {
   const overlay = openSheet(`
     <h2 class="skeleton-row" style="width:60%; height:22px;"></h2>
@@ -761,6 +803,9 @@ export async function openReportDetail(publicId) {
       if (!picked) return;
       await runQcAnalysis(picked, { reportId: publicId });
     });
+    sheet.querySelectorAll("[data-send-file]").forEach(btn => {
+      btn.addEventListener("click", () => openSendFileSheet(publicId, btn.dataset.sendFile, btn.dataset.fileName));
+    });
     sheet.querySelectorAll("[data-download-file]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const fileId = btn.dataset.downloadFile;
@@ -995,6 +1040,8 @@ function productionHtml(detail, fileList) {
       <small>${label}</small>
       <div class="rd-fs-act">${body}</div>
     </div>`;
+  const sendFile = [...list].reverse().find(f => /_final\./i.test(f.file_name || "")) || [...list].reverse().find(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
+  const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
   const nyaa = can("reports.files") ? `<button class="rd-add" id="report-nyaa" title="Найти раздачу на Nyaa, сервер скачает видео и прикрепит к отчёту">🌐 Видео с Nyaa</button>` : "";
   const assemble = can("reports.assemble") ? `<button class="rd-add primary" id="report-assemble">🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
@@ -1002,7 +1049,7 @@ function productionHtml(detail, fileList) {
   <div class="rd-sec rd-prod" id="rd-prod">
     <h3>Производство финала</h3>
     <div class="rd-flow">
-      ${step(1, "Видео", hasVideo ? "done" : "todo", hasFinal ? "финал есть" : hasVideo ? "прикреплено" : "нужно", nyaa || "")}
+      ${step(1, "Видео", hasVideo ? "done" : "todo", hasFinal ? "финал есть" : hasVideo ? "прикреплено" : "нужно", `${sendBtn}${nyaa}`)}
       ${step(2, "Субтитры и звук", hasSubs || hasAudio ? "done" : "opt", [hasSubs ? "субтитры" : "", hasAudio ? "озвучка" : ""].filter(Boolean).join(" · ") || "необязательно", "")}
       ${step(3, "Сборка", hasFinal ? "done" : hasVideo ? "todo" : "wait", hasFinal ? "готово" : hasVideo ? "можно собирать" : "ждёт видео", assemble)}
       ${step(4, "Пост", hasFinal ? "todo" : "wait", hasFinal ? "можно готовить" : "после сборки", post)}
@@ -1046,6 +1093,7 @@ function fileHtml(f, canEdit = true) {
     <div>${esc(FILE_ICONS[f.file_type] || "📎")} ${esc(f.file_name || f.file_type)} <span class="meta">${esc(f.file_size_label || "")}</span></div>
     ${isAudio ? `<button class="btn primary" style="padding:4px 10px; font-size:12px;" data-play-file="${f.id}">▶ Слушать</button>` : ""}
     ${isAudio && canEdit ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-qc-file="${f.id}">AI-проверка</button>` : ""}
+    <button class="icon-btn" data-send-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Прислать кому-то">📤</button>
     <button class="icon-btn" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать">⬇️</button>
     <button class="icon-btn" data-delete-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Удалить файл" aria-label="Удалить файл">🗑</button>
     <div id="qc-result-${f.id}" style="width:100%;"></div>
