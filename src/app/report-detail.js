@@ -825,6 +825,17 @@ export async function openReportDetail(publicId) {
           });
         } catch (e) {
           toast(`Не удалось скачать: ${e}`, "error");
+          // Файл мог уйти в архив Telegram и пропасть из кэша сервера — бот достанет его оттуда и пришлёт сам.
+          if (confirm(`Не удалось скачать «${btn.dataset.fileName || "файл"}» на компьютер.
+
+Прислать его через бота в Telegram? Бот возьмёт файл из архива.`)) {
+            try {
+              const res = await apiPost(`/report/${publicId}/files/${fileId}/send`, { to: ["me"] });
+              toast(res.sent?.length ? "Бот прислал файл вам в Telegram." : "Бот не смог прислать файл — напишите боту /start.", res.sent?.length ? "success" : "error");
+            } catch (err) {
+              toast(`Бот не смог прислать файл: ${err.message}`, "error");
+            }
+          }
         } finally {
           btn.disabled = false;
         }
