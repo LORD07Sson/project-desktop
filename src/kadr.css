@@ -3074,3 +3074,9 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .ny-rb-bar { position: relative; height: 10px; border-radius: 99px; background: rgba(0,0,0,.3); overflow: hidden; }
 .ny-rb-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent-grad); border-radius: 99px; transition: width .6s ease; }
 .ny-srv { font-size: 15px; }
+
+/* «Отправить участнику»: не вылезает за окно, длинные имена файлов обрезаются, а не растягивают окошко */
+.fx-share { width: min(360px, calc(100vw - 24px)); grid-template-columns: minmax(0, 1fr); overflow-x: hidden; }
+.fx-share > * { min-width: 0; }
+.fx-modes button { min-width: 0; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-foot .btn { flex: none; }
