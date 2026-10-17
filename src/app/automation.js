@@ -175,7 +175,8 @@ async function mountSpeed(root) {
   }));
 }
 
-const STATE = { done: "отправлен", failed: "ошибка", retry: "повтор" };
+const STATE = { done: "отправлен", failed: "ошибка", retry: "повтор", dup: "дубль — пропущен", skipped: "исключён" };
+const CAT_ICON = { video: "🎞", torrent: "🧲", sub: "💬", audio: "🎙", inscr: "🏷", zip: "📦", other: "📄", photo: "🖼" };
 
 async function mountDocs(root) {
   const load = async () => {
@@ -183,49 +184,119 @@ async function mountDocs(root) {
     try { d = await apiGet("/docs-archive"); }
     catch (e) { root.innerHTML = `<div class="bc-warn">Не удалось загрузить: ${esc(e.message)}</div>`; return; }
     const target = d.chats.find(c => String(c.chat_id) === String(d.target));
+    const excludedIds = new Set(d.excluded_titles.map(t => t.id));
     root.innerHTML = `
     <div class="ar" style="display:grid; gap:14px;">
       <div class="ar-card">
         <div class="ar-card-head"><h4>Архив документов</h4>
           <label class="ar-switch"><input type="checkbox" id="dc-enabled" ${d.enabled ? "checked" : ""}><i></i></label></div>
-        <p class="ar-hint" style="margin:0;">Файлы отчётов — озвучка, субтитры, надписи, торренты, архивы — бот копирует в архивную группу, по теме на тайтл. Файлы уже в Telegram, поэтому копирование мгновенное и не нагружает канал; файлы с диска сервера заливаются с лимитом скорости (${d.limit_mbit ? `${d.limit_mbit} Мбит/с` : "без ограничения"}, вкладка «Скорость»).</p>
+        <p class="ar-hint" style="margin:0;">Файлы отчётов бот копирует в архивную группу, по теме на тайтл. Файлы уже в Telegram, поэтому копирование мгновенное и без нагрузки на канал. Видео с диска сервера заливается с лимитом скорости (${d.limit_mbit ? `${d.limit_mbit} Мбит/с` : "без ограничения"}), после чего в отчёте подменяется на файл из Telegram и место на диске освобождается.</p>
         <label class="ar-label" for="dc-target">Архивная группа</label>
         <select id="dc-target" class="field-input ar-select">
           <option value=""${d.target ? "" : " selected"}>— не выбрана —</option>
           ${d.chats.map(c => `<option value="${c.chat_id}"${String(c.chat_id) === String(d.target) ? " selected" : ""}>${esc(c.title)}${c.is_forum ? " · с темами" : ""} (${c.chat_id})</option>`).join("")}
         </select>
         ${target && !target.is_forum ? `<div class="bc-warn">В группе не включены темы — всё пойдёт в общую ленту.</div>` : ""}
+        <div class="ar-actions" style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <span class="ar-meta">Отправлено <b>${d.done}</b></span>
+          ${d.dup ? `<span class="ar-meta">дублей пропущено <b>${d.dup}</b></span>` : ""}
+          ${d.skipped ? `<span class="ar-meta">по правилам пропущено <b>${d.skipped}</b></span>` : ""}
+          ${d.failed ? `<span class="ar-meta" style="color:#ff8f8f;">ошибок <b>${d.failed}</b></span>` : ""}
+          <span class="ar-meta">освобождено на диске сервера <b>${fmtBytes(d.freed_bytes)}</b></span>
+        </div>
       </div>
+
       <div class="ar-card">
-        <h4>Что архивировать</h4>
-        ${Object.entries(d.kind_labels).map(([k, label]) => `
-        <label class="bcn-feature"><span>${esc(label)}</span><span class="ar-switch sm"><input type="checkbox" data-dc-kind="${k}" ${d.kinds.includes(k) ? "checked" : ""}><i></i></span></label>`).join("")}
+        <h4>Правила по видам файлов</h4>
+        <p class="ar-hint" style="margin:0 0 8px;">Что отправлять и какого размера максимум (0 — без ограничения). Файлы, не подошедшие по правилам, пропускаются и при смене правил рассматриваются заново.</p>
+        ${d.rules.map(r => `
+        <div class="bcn-feature" data-dc-rule="${r.cat}" style="gap:10px; align-items:center;">
+          <span style="flex:1;">${CAT_ICON[r.cat] || ""} ${esc(r.label)}</span>
+          <input class="field-input" type="number" min="0" step="1" value="${r.max_mb}" data-dc-max style="max-width:90px;" title="Максимум, МБ">
+          <span class="ar-meta">МБ</span>
+          <span class="ar-switch sm"><input type="checkbox" data-dc-on ${r.on ? "checked" : ""}><i></i></span>
+        </div>`).join("")}
+        <button class="btn" id="dc-rules-save" style="margin-top:8px;">Сохранить размеры</button>
+      </div>
+
+      <div class="ar-card">
+        <h4>Подача</h4>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
+          <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Файлов за проход (раз в минуту)</span>
+            <input class="field-input" type="number" min="1" max="50" id="dc-batch" value="${d.batch}" style="max-width:110px;"></label>
+          <label style="display:grid; gap:4px;"><span class="ar-label" style="margin:0;">Окно работы по Москве (например 02:00-08:00; пусто — всегда)</span>
+            <input class="field-input" id="dc-window" value="${esc(d.window)}" placeholder="круглосуточно" style="max-width:180px;"></label>
+          <button class="btn" id="dc-feed-save">Сохранить</button>
+        </div>
+        ${d.window && !d.in_window ? `<p class="ar-hint" style="margin:8px 0 0;">Сейчас вне окна — бот ждёт.</p>` : ""}
+        <span class="ar-label">Порядок</span>
+        <div class="ar-seg" id="dc-order">
+          <button data-order="new" class="${d.order === "new" ? "on" : ""}">Новые первыми<small>свежие версии раньше накопившихся</small></button>
+          <button data-order="old" class="${d.order === "old" ? "on" : ""}">По порядку<small>от самых старых</small></button>
+        </div>
         <label class="bcn-feature"><span>Включая файлы, накопившиеся раньше (иначе только новые)</span><span class="ar-switch sm"><input type="checkbox" id="dc-backfill" ${d.backfill ? "checked" : ""}><i></i></span></label>
+        <p class="ar-hint" style="margin:6px 0 0;">Файлы одного отчёта идут подряд: видео, под ним торрент (ответом на видео), потом субтитры, звук, надписи. Одинаковые файлы (то же имя и размер) второй раз не отправляются; zip подписывается списком содержимого.</p>
       </div>
+
       <div class="ar-card">
-        <div class="ar-card-head"><h4>Очередь <em>${d.pending}</em></h4>
+        <h4>Исключённые тайтлы <em>${d.excluded_titles.length}</em></h4>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+          ${d.excluded_titles.map(t => `<button type="button" class="btn" data-dc-unex="${t.id}" title="Вернуть в архив">${esc(t.name)} ✕</button>`).join("") || `<span class="ar-hint" style="margin:0;">Все тайтлы архивируются.</span>`}
+        </div>
+        <select id="dc-ex-add" class="field-input ar-select"><option value="">+ Исключить тайтл…</option>
+          ${d.titles.filter(t => !excludedIds.has(t.id)).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
+      </div>
+
+      <div class="ar-card">
+        <div class="ar-card-head"><h4>Ближайшие файлы <em>${d.pending}</em></h4>
           <div class="ar-actions">
             <button class="btn" id="dc-pause">${d.paused ? "▶ Снять паузу" : "⏸ Пауза"}</button>
             ${d.failed ? `<button class="btn" id="dc-retry">Повторить ошибки (${d.failed})</button>` : ""}
             <button class="btn" id="dc-refresh">Обновить</button>
           </div>
         </div>
-        <p class="ar-hint" style="margin:0 0 8px;">Отправлено: <b>${d.done}</b>${d.failed ? ` · ошибок: <b>${d.failed}</b>` : ""}${d.paused ? " · <b>на паузе</b>" : ""}. Бот отправляет по одному файлу раз в несколько секунд, порциями.</p>
+        ${d.paused ? `<p class="ar-hint" style="margin:0 0 8px;"><b>На паузе.</b></p>` : ""}
+        ${d.upcoming.length ? `<div class="ar-list">${d.upcoming.map(r => `
+          <div class="ar-row"><b>${CAT_ICON[r.cat] || ""} ${esc(r.public_id || "")} · ${esc(r.name || r.type || "файл")}</b>
+            <span class="ar-meta">${fmtBytes(r.size)}${r.version > 1 ? ` · v${r.version}` : ""}</span>
+            <button class="btn" data-dc-ex="${r.file}">Исключить</button></div>`).join("")}</div>` : `<p class="ar-hint">${d.enabled ? "Очередь пуста." : "Архив выключен — очередь не считается."}</p>`}
+      </div>
+
+      <div class="ar-card">
+        <h4>Журнал</h4>
         ${d.recent.length ? `<div class="ar-list">${d.recent.map(r => `
-          <div class="ar-row"><b>${esc(r.public_id || "")} · ${esc(r.name || r.type || "файл")}</b><span class="ar-meta">${esc(STATE[r.state] || r.state)}${r.error ? ` — ${esc(r.error)}` : ""}</span></div>`).join("")}</div>` : `<p class="ar-hint">Пока ничего не отправлено.</p>`}
+          <div class="ar-row"><b>${esc(r.public_id || "")} · ${esc(r.name || r.type || "файл")}</b>
+            <span class="ar-meta"${r.state === "failed" ? ' style="color:#ff8f8f;"' : ""}>${esc(STATE[r.state] || r.state)}${r.error && r.state !== "dup" ? ` — ${esc(r.error)}` : ""}</span>
+            ${r.state === "skipped" ? `<button class="btn" data-dc-restore="${r.file}">Вернуть</button>` : ""}</div>`).join("")}</div>` : `<p class="ar-hint">Пока ничего не отправлено.</p>`}
       </div>
     </div>`;
-    const save = async body => {
-      try { await apiPost("/docs-archive", body); toast("Сохранено.", "success"); }
+    const save = async (body, quiet) => {
+      try { await apiPost("/docs-archive", body); if (!quiet) toast("Сохранено.", "success"); }
       catch (e) { toast(e.message, "error"); }
       load();
     };
     root.querySelector("#dc-enabled").addEventListener("change", e => save({ enabled: e.target.checked }));
     root.querySelector("#dc-target").addEventListener("change", e => save({ target: e.target.value }));
     root.querySelector("#dc-backfill").addEventListener("change", e => save({ backfill: e.target.checked }));
-    root.querySelectorAll("[data-dc-kind]").forEach(c => c.addEventListener("change", () =>
-      save({ kinds: [...root.querySelectorAll("[data-dc-kind]:checked")].map(x => x.dataset.dcKind) })));
-    root.querySelector("#dc-pause").addEventListener("click", () => save({ paused: !d.paused }));
+    root.querySelector("#dc-rules-save").addEventListener("click", () => {
+      const rules = {};
+      root.querySelectorAll("[data-dc-rule]").forEach(row => {
+        rules[row.dataset.dcRule] = { on: row.querySelector("[data-dc-on]").checked, max_mb: Number(row.querySelector("[data-dc-max]").value || 0) };
+      });
+      save({ rules });
+    });
+    root.querySelectorAll("[data-dc-on]").forEach(c => c.addEventListener("change", () => root.querySelector("#dc-rules-save").click()));
+    root.querySelector("#dc-feed-save").addEventListener("click", () =>
+      save({ batch: Number(root.querySelector("#dc-batch").value), window: root.querySelector("#dc-window").value.trim() }));
+    root.querySelectorAll("[data-order]").forEach(b => b.addEventListener("click", () => save({ order: b.dataset.order }, true)));
+    root.querySelector("#dc-ex-add").addEventListener("change", e => {
+      if (e.target.value) save({ excluded_titles: [...excludedIds, Number(e.target.value)] });
+    });
+    root.querySelectorAll("[data-dc-unex]").forEach(b => b.addEventListener("click", () =>
+      save({ excluded_titles: [...excludedIds].filter(id => id !== Number(b.dataset.dcUnex)) })));
+    root.querySelectorAll("[data-dc-ex]").forEach(b => b.addEventListener("click", () => save({ exclude_file: Number(b.dataset.dcEx) }, true)));
+    root.querySelectorAll("[data-dc-restore]").forEach(b => b.addEventListener("click", () => save({ restore_file: Number(b.dataset.dcRestore) }, true)));
+    root.querySelector("#dc-pause").addEventListener("click", () => save({ paused: !d.paused }, true));
     root.querySelector("#dc-retry")?.addEventListener("click", () => save({ retry: true }));
     root.querySelector("#dc-refresh").addEventListener("click", load);
   };
