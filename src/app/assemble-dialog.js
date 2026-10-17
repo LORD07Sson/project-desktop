@@ -4,6 +4,7 @@
 
 import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
+import { can } from "./state.js";
 
 export async function openAssembleDialog(publicId) {
   const overlay = openSheet(`<h2>Собрать финал</h2><div class="no-assignee">Загружаю файлы отчёта…</div>`);
@@ -91,7 +92,8 @@ export async function openAssembleDialog(publicId) {
       </div>
       <div class="sheet-actions">
         <button class="btn" data-close>Отмена</button>
-        <button class="btn primary" id="ad-start">▶️ Собрать</button>
+        ${can("posts.manage") ? `<button class="btn" id="ad-start-post" title="Соберёт видео и откроет редактор поста для канала — сразу ничего не публикуется">📣 Собрать и сделать пост</button>` : ""}
+        <button class="btn primary" id="ad-start">🎬 Собрать финал</button>
       </div>`;
 
     sheet.querySelector("#ad-ins-text").addEventListener("input", e => { sheet.querySelector("#ad-ins-opts").hidden = !e.target.value.trim(); });
@@ -145,11 +147,12 @@ export async function openAssembleDialog(publicId) {
       sheet.querySelector("#ad-splice-opts").hidden = true;
     });
     sheet.querySelector("[data-close]").addEventListener("click", () => finish(false));
-    sheet.querySelector("#ad-start").addEventListener("click", async e => {
-      const btn = e.currentTarget;
-      btn.disabled = true;
+    const startBtns = () => sheet.querySelectorAll("#ad-start, #ad-start-post");
+    const start = async (withPost) => {
+      startBtns().forEach(b => { b.disabled = true; });
       try {
         await apiPost(`/report/${publicId}/assemble/start`, {
+          post: withPost,
           splice: coverImage ? {
             image: coverImage.file_id,
             seconds: Number(sheet.querySelector("#ad-splice-sec").value || 4),
@@ -168,11 +171,13 @@ export async function openAssembleDialog(publicId) {
           mode,
           profile: Number(profileSel.value),
         });
-        finish(true);
+        finish(withPost ? "post" : "final");
       } catch (err) {
         toast(`Не удалось запустить: ${err.message}`, "error");
-        btn.disabled = false;
+        startBtns().forEach(b => { b.disabled = false; });
       }
-    });
+    };
+    sheet.querySelector("#ad-start").addEventListener("click", () => start(false));
+    sheet.querySelector("#ad-start-post")?.addEventListener("click", () => start(true));
   });
 }

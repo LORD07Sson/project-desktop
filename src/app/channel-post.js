@@ -50,7 +50,7 @@ function sanitize(html) {
   return root.innerHTML.replace(/\n/g, "<br>");
 }
 
-export async function openChannelPostSheet() {
+export async function openChannelPostSheet(openId = null) {
   const overlay = openSheet(`<h2>Пост в канал</h2>${dialogSkeletonHtml(6)}`, "wide");
   const sheet = overlay.querySelector(".sheet");
   sheet.classList.add("cp-sheet");
@@ -393,7 +393,8 @@ export async function openChannelPostSheet() {
         await apiPost(`/posts/${post.id}/delete`, {});
         meta = await apiGet("/posts");
         post = null;
-        if (meta.posts.length) await openPost(meta.posts[0].id);
+        if (openId) await openPost(openId);
+  else if (meta.posts.length) await openPost(meta.posts[0].id);
         else { shell(); renderEmpty(); }
       } catch (err) { toast(err.message, "error"); }
     });

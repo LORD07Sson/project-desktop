@@ -30,10 +30,13 @@ const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙",
 // раз в 3 секунды: шаг, полоса, кадры, сколько прошло и осталось. Карточка встаёт под кнопкой «Собрать финал»
 // и переживает перерисовку шторки (при каждом опросе, если её не стало, возвращается на место).
 const assemblyWatchers = new Set();
+const postWanted = new Set(); // отчёты, для которых по готовности финала надо открыть редактор поста
 
-function startAssemblyWatch(publicId, overlay, waitForStart, botName = "") {
+function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openPostWhenDone = false) {
+  if (openPostWhenDone) postWanted.add(publicId);
   if (assemblyWatchers.has(publicId)) return;
   assemblyWatchers.add(publicId);
+  let postOpened = false;
   const startedAt = Date.now();
   let card = null;
   let seenActive = false;
@@ -101,7 +104,12 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "") {
       seenActive = true;
       paint(st);
       if (st.stage === "done") {
-        toast("Финал собран и прикреплён к отчёту.", "success");
+        toast(postWanted.has(publicId) && st.post_id ? "Финал собран — открываю редактор поста. Публикуете вы сами." : "Финал собран и прикреплён к отчёту.", "success");
+        if (postWanted.has(publicId) && st.post_id && !postOpened) {
+          postWanted.delete(publicId);
+          postOpened = true;
+          import("./channel-post.js").then(m => m.openChannelPostSheet(st.post_id));
+        }
         document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
         timer = setTimeout(stop, 6000);
         return;
@@ -670,10 +678,10 @@ export async function openReportDetail(publicId) {
       try {
         // Окно выбора (видео, субтитры, дорожки, качество) — прямо в приложении; сборку ведёт бот, ход виден ниже, отменить можно там же.
         const { openAssembleDialog } = await import("./assemble-dialog.js");
-        if (!(await openAssembleDialog(publicId))) return;
-        toast("Сборка запущена — ход виден в карточке ниже.", "success");
-        startAssemblyWatch(publicId, overlay, true, "");
-        if (can("posts.manage")) offerPublishPost();
+        const started = await openAssembleDialog(publicId);
+        if (!started) return;
+        toast(started === "post" ? "Сборка запущена — по готовности откроется редактор поста." : "Сборка запущена — ход виден в карточке ниже.", "success");
+        startAssemblyWatch(publicId, overlay, true, "", started === "post");
       } catch (err) {
         toast(`Не удалось запустить сборку: ${err.message}`, "error");
       } finally {
