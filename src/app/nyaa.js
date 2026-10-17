@@ -454,7 +454,7 @@ function showServerProgress(st) {
   const pct = st.total ? Math.min(100, Math.round(st.done / st.total * 100)) : 0;
   box.querySelector("i").style.width = `${pct}%`;
   const eta = st.speed > 0 && st.total > st.done ? ` · осталось ≈ ${fmtMin((st.total - st.done) / st.speed)}` : "";
-  const label = { queued: "В очереди на сервере", downloading: "Сервер качает", sending: "Загружаю видео в Telegram и прикрепляю к отчёту" }[st.state] || st.state;
+  const label = { queued: "В очереди на сервере", downloading: "Сервер качает", sending: "Сохраняю видео в отчёт" }[st.state] || st.state;
   box.querySelector("span").textContent = `${label}: ${pct}% · ${fmtSize(st.done)} из ${fmtSize(st.total)}${st.speed > 0 ? ` · ${fmtSize(st.speed)}/с` : ""}${eta}`;
   box.querySelector("[data-rb-cancel]").hidden = st.state === "sending";
 }
