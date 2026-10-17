@@ -371,6 +371,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
             <button type="button" class="btn ghost" id="wm-zoom-fit" title="Весь кадр">Весь кадр</button>
             <button type="button" class="btn ghost" id="wm-zoom-logo" title="Приблизить к знаку">🔍 К знаку</button>
             <button type="button" class="btn ghost" id="wm-bg" title="Сменить фон макета, чтобы знак было лучше видно">Фон: тёмный</button>
+            <label class="cp-check" style="margin:0;" title="Знак слегка притягивается к краям и центру кадра"><input type="checkbox" id="wm-snap"> Прилипать к краям</label>
           </div>
           <div class="wm-view" id="wm-view">
           <div class="wm-stage" id="wm-stage" title="Перетащите знак мышью — где поставите, там он и будет в видео. Колесо мыши — приближение">
@@ -506,6 +507,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
     const CORNER_POS = { tl: [0, 0], tr: [1, 0], bl: [0, 1], br: [1, 1], c: [.5, .5] };
     const startPos = wm.x != null && wm.y != null ? [wm.x, wm.y] : (CORNER_POS[wm.corner] || [1, 1]);
     let wmX = startPos[0], wmY = startPos[1];
+    let wmSnap = false; // прилипание к краям и центру — по желанию, по умолчанию знак двигается свободно
     const stage = sheet.querySelector("#wm-stage");
     const logo = sheet.querySelector("#wm-logo");
     const MARGIN = 0.02; // как в сборке: поле 2% ширины со всех сторон
@@ -523,7 +525,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
       if (label) label.textContent = `Слева ${Math.round(wmX * 100)}% · сверху ${Math.round(wmY * 100)}%`;
     };
     const setPos = (x, y, snap = true) => {
-      const near = v => (snap ? ([0, .5, 1].find(t => Math.abs(v - t) < 0.025) ?? v) : v);
+      const near = v => (snap && wmSnap ? ([0, .5, 1].find(t => Math.abs(v - t) < 0.012) ?? v) : v);
       wmX = Math.max(0, Math.min(1, near(x)));
       wmY = Math.max(0, Math.min(1, near(y)));
       layoutLogo();
@@ -562,6 +564,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
         view.scrollLeft = cx - view.clientWidth / 2;
         view.scrollTop = cy - view.clientHeight / 2;
       });
+      sheet.querySelector("#wm-snap").addEventListener("change", e => { wmSnap = e.target.checked; });
       const BGS = [["dark", "тёмный"], ["light", "светлый"], ["check", "шашка"], ["green", "зелёный"]];
       let bgIndex = 0;
       sheet.querySelector("#wm-bg").addEventListener("click", e => {
