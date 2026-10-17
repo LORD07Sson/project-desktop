@@ -158,19 +158,20 @@ export async function openChannelPostSheet(openId = null) {
     el.innerHTML = `Канал: <b>${meta.channel ? esc(meta.channel) : "не задан"}</b>${meta.is_owner ? ` <button type="button" class="cp-link" id="cp-chan-edit">изменить</button>` : ""}`;
     const btn = el.querySelector("#cp-chan-edit");
     if (btn) btn.addEventListener("click", () => {
-      el.innerHTML = `<input id="cp-chan-in" value="${esc(meta.channel || "")}" placeholder="@канал или -100…" aria-label="Канал"><button type="button" class="btn" id="cp-chan-ok">OK</button>`;
+      el.innerHTML = `<input id="cp-chan-in" value="${esc(meta.channel || "")}" placeholder="@канал или -100…" aria-label="Канал"><button type="button" class="btn" id="cp-chan-ok">OK</button>${meta.channel ? `<button type="button" class="btn" id="cp-chan-clear" title="Убрать канал из настроек">Убрать</button>` : ""}`;
       const inp = el.querySelector("#cp-chan-in");
       inp.focus();
       const ok = async () => {
         try {
           const r = await apiPost("/posts/channel", { channel: inp.value.trim() });
           meta.channel = r.channel;
-          toast(`Канал: ${r.channel}`);
+          toast(r.channel ? `Канал: ${r.channel}` : "Канал отвязан.");
           renderChannel();
           renderPublish();
         } catch (e) { toast(e.message, "error"); }
       };
       el.querySelector("#cp-chan-ok").addEventListener("click", ok);
+      el.querySelector("#cp-chan-clear")?.addEventListener("click", () => { inp.value = ""; ok(); });
       inp.addEventListener("keydown", e => { if (e.key === "Enter") ok(); if (e.key === "Escape") renderChannel(); });
     });
   }
