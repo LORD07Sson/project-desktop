@@ -515,4 +515,15 @@ export function mountAutomation(root) {
   };
   root.querySelectorAll("[data-au-tab]").forEach(b => b.addEventListener("click", () => show(b.dataset.auTab)));
   show("factory");
+  // F5 / «Обновить»: перечитать открытую вкладку Автоматизации.
+  const onRefresh = () => {
+    if (!root.isConnected) { document.removeEventListener("app:refresh", onRefresh); return; }
+    const active = root.querySelector("[data-au-tab].on");
+    if (!active) return;
+    const name = active.dataset.auTab;
+    pane.querySelector(`[data-au-pane="${name}"]`)?.remove();
+    mounted[name] = false;
+    show(name);
+  };
+  document.addEventListener("app:refresh", onRefresh);
 }

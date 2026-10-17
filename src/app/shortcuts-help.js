@@ -10,7 +10,7 @@
 
 import { $, $all } from "./utils.js";
 import { openSheet } from "./api.js";
-import { switchTab } from "./tabs.js";
+import { switchTab, refreshAll } from "./tabs.js";
 
 export const GROUPS = [
   {
@@ -93,6 +93,14 @@ document.addEventListener("keydown", e => {
   if (!btn) return;
   e.preventDefault();
   switchTab(btn.dataset.tab);
+});
+
+// F5 / Ctrl+R — обновить данные (то же, что кнопка «Обновить»), не перезапуская приложение: открытые окна обновятся тоже.
+document.addEventListener("keydown", e => {
+  const isReload = e.key === "F5" || ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "r");
+  if (!isReload) return;
+  e.preventDefault();
+  refreshAll().catch(() => {});
 });
 
 // Значок "?" в шапке — не у всех есть привычка искать шорткаты

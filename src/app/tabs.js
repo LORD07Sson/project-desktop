@@ -183,6 +183,8 @@ export async function refreshAll() {
     refreshLockdown();
     if (state.isAdmin) await loadUsers();
     await loadActiveTab(true);
+    // Открытые окна (карточка отчёта, Автоматизация) тоже перечитывают свои данные.
+    document.dispatchEvent(new CustomEvent("app:refresh"));
   } finally {
     refreshInFlight = false;
     btn.disabled = false;

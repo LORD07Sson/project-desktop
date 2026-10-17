@@ -168,6 +168,8 @@ export async function openReportDetail(publicId) {
   setDropTarget(publicId);
   const onFileUploaded = e => { if (e.detail.publicId === publicId) render(); };
   document.addEventListener("report-file-uploaded", onFileUploaded);
+  const onAppRefresh = () => { if (overlay.isConnected) render(); };
+  document.addEventListener("app:refresh", onAppRefresh);
   // Находки QC, уехавшие в заметки, должны появиться в открытой карточке
   // сразу, а не после ручного обновления.
   document.addEventListener("report-notes-added", onFileUploaded);
@@ -203,6 +205,7 @@ export async function openReportDetail(publicId) {
       if (player) { player.destroy(); player = null; }
       setDropTarget(null);
       document.removeEventListener("report-file-uploaded", onFileUploaded);
+      document.removeEventListener("app:refresh", onAppRefresh);
       document.removeEventListener("report-notes-added", onFileUploaded);
       document.removeEventListener("keydown", onNavKey, true);
       document.dispatchEvent(new CustomEvent("report-detail-closed", { detail: { publicId } }));
