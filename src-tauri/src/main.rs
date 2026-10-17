@@ -983,18 +983,25 @@ async fn download_report_file(
         // бы положить файл с содержимым от сервера куда угодно — в папку
         // автозагрузки, поверх чужого документа и т.п.
         let save_path = app.state::<file_scope::FileScope>().check_write(&save_path)?;
-        let resp = http()
-            .get(format!(
-                "{API_BASE}/report/{report_id}/files/{file_id}/download"
-            ))
-            .header("X-Init-Data", init_data)
-            .send()
-            .await
-            .map_err(|e| format!("Не удалось скачать файл: {e}"))?;
-
-        if !resp.status().is_success() {
-            return Err(error_detail(resp, "сервер отказал в скачивании").await);
-        }
+        // Файла может не быть в кэше сервера (ушёл в архив Telegram): сервер достаёт его оттуда, и пока это идёт,
+        // отвечает 502–504 или рвёт соединение. Это временно — повторяем, а не сдаёмся с первой попытки.
+        let mut attempt = 0u32;
+        let resp = loop {
+            let sent = http()
+                .get(format!("{API_BASE}/report/{report_id}/files/{file_id}/download"))
+                .header("X-Init-Data", init_data.clone())
+                .send()
+                .await;
+            match sent {
+                Ok(r) if r.status().is_success() => break r,
+                Ok(r) if matches!(r.status().as_u16(), 502 | 503 | 504) && attempt < 3 => {}
+                Ok(r) => return Err(error_detail(r, "сервер отказал в скачивании").await),
+                Err(_) if attempt < 3 => {}
+                Err(e) => return Err(format!("Не удалось скачать файл: {e}")),
+            }
+            attempt += 1;
+            tokio::time::sleep(std::time::Duration::from_secs(5 * attempt as u64)).await;
+        };
 
         save_response_to_file(resp, &save_path).await
     }
