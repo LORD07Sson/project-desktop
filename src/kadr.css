@@ -3118,3 +3118,15 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .au-help { margin-bottom: 12px; border: 1px solid var(--line-soft); border-radius: 14px; background: rgba(255, 255, 255, .03); padding: 0 14px; }
 .au-help summary { cursor: pointer; padding: 10px 0; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
 .au-help div { padding-bottom: 10px; font-size: 12.5px; color: var(--ink-dim); } .au-help p { margin: 0 0 6px; } .au-help ul { margin: 0; padding-left: 18px; }
+
+/* «Завод» компактнее: четыре машины в линии помещаются без прокрутки */
+.fc { gap: 12px; } .fc-line { padding: 12px 14px 14px; gap: 8px; }
+.fc-row { overflow: visible; padding: 2px 0; }
+.fc-machine { flex: 1 1 0; min-width: 0; padding: 9px 10px; gap: 5px; border-radius: 12px; }
+.fc-m-head { font-size: 12px; min-height: 30px; } .fc-m-head b { line-height: 1.15; }
+.fc-count { font-size: 19px; } .fc-sub { font-size: 10.5px; line-height: 1.1; }
+.fc-m-lines { min-height: 0; font-size: 10.5px; } .fc-state { font-size: 10.5px; }
+.fc-btn { padding: 3px 8px; font-size: 11px; }
+.fc-belt { flex: 0 0 22px; }
+@keyframes fcitem { from { left: -14px; } to { left: 24px; } }
+.fc-trunk { padding: 10px 14px; gap: 6px; }

@@ -60,7 +60,7 @@ export function mountFactory(root, go) {
     const lineSeries = [
       { title: "Канал-источник", count: "TG", unit: "новые серии", lines: ["Бот ловит посты сам"], led: a.enabled ? "run" : "off", tab: "archive" },
       { title: "Очередь серий", count: a.queue, unit: "ждёт заливки", lines: [a.held ? `Ждут решения: ${a.held}` : "Порядок по сериям"], led: led(a.enabled, a.paused, a.queue, 0), tab: "archive" },
-      { title: "Заливка в архив", count: fmtLimit(a.limit).replace(" Мбит/с", ""), unit: a.limit ? "Мбит/с лимит" : "без лимита", lines: [s.night_now ? "Ночной режим" : "Обычный режим"], led: led(a.enabled, a.paused, a.queue, 0), toggle: "archive", on: a.enabled, tab: "speed" },
+      { title: "Заливка в архив", count: a.limit || "∞", unit: a.limit ? "Мбит/с" : "без лимита", lines: [s.night_now ? "Ночной режим" : "Обычный режим"], led: led(a.enabled, a.paused, a.queue, 0), toggle: "archive", on: a.enabled, tab: "speed" },
       { title: "Архивная группа", count: f.topics.archive || 0, unit: "тем тайтлов", lines: ["Тема на каждый тайтл"], led: a.enabled ? "idle" : "off", tab: "archive" },
     ];
     const lineReports = [
