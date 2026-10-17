@@ -361,7 +361,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
         <div class="add-row" style="align-items:center; gap:10px;">
           ${wm.has ? `<span style="background:repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 50% / 14px 14px; border-radius:6px; padding:4px;"><img src="${mediaUrl(`/titles/${titleId}/watermark/image`, { v: Date.now() })}" alt="" style="max-height:48px; max-width:120px; display:block;"></span><span class="meta">${esc(wm.name || "logo.png")}</span>` : `<span class="meta">Логотип не загружен</span>`}
           <button class="btn" id="wm-pick">${wm.has ? "Заменить png" : "Загрузить png"}</button>
-          ${wm.has ? `<button class="btn ghost" id="wm-clear">Убрать</button>` : ""}
+          ${wm.has ? `<button class="btn ghost" id="wm-trim" title="Если в png вокруг знака большой прозрачный кадр, двигать можно только весь кадр. Обрезка оставляет только рисунок — на видео он останется на том же месте и того же размера.">✂ Обрезать пустые поля</button><button class="btn ghost" id="wm-clear">Убрать</button>` : ""}
         </div>
         ${wm.has ? `<div class="wm-edit">
           <div class="wm-zoombar">
@@ -392,7 +392,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
         </div>
         <div class="add-row" style="align-items:center; gap:10px;">
           <span class="meta" style="min-width:90px;">Размер</span>
-          <input id="wm-scale" type="range" min="3" max="100" step="1" value="${wm.scale}" style="flex:1;">
+          <input id="wm-scale" type="range" min="1" max="100" step="1" value="${wm.scale}" style="flex:1;">
           <b id="wm-scale-val" style="min-width:44px; text-align:right;">${wm.scale}%</b>
         </div>
         <div class="no-assignee">Размер — доля ширины видео. Настройки сохраняются кнопкой ниже.</div>
@@ -656,8 +656,8 @@ export async function openTitleAdminDetail(titleId, onClose) {
       const file = await pickFile("image/png");
       if (!file) return;
       try {
-        await apiUpload(`/titles/${titleId}/watermark`, file, wmFields());
-        toast("Водяной знак загружен.", "success");
+        const saved = await apiUpload(`/titles/${titleId}/watermark`, file, wmFields());
+        toast(saved && saved.trimmed ? "Водяной знак загружен, пустые поля обрезаны — теперь знак двигается свободно." : "Водяной знак загружен.", "success");
         await render();
       } catch (e) { toast(`Не удалось загрузить: ${e.message}`, "error"); }
     });
@@ -667,6 +667,18 @@ export async function openTitleAdminDetail(titleId, onClose) {
         await apiPost(`/titles/${titleId}/watermark/settings`, { x: Number(f.x), y: Number(f.y), opacity: Number(f.opacity), scale: Number(f.scale) });
         toast("Настройки водяного знака сохранены.", "success");
       } catch (e) { toast(`Не удалось сохранить: ${e.message}`, "error"); }
+    });
+    sheet.querySelector("#wm-trim")?.addEventListener("click", async e => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const r = await apiPost(`/titles/${titleId}/watermark/trim`, {});
+        toast(r.trimmed ? "Пустые поля обрезаны: на видео знак остался на месте и того же размера, теперь его можно двигать." : "Обрезать нечего — знак уже без пустых полей.", "success");
+        await render();
+      } catch (err) {
+        toast(`Не удалось обрезать: ${err.message}`, "error");
+        btn.disabled = false;
+      }
     });
     sheet.querySelector("#wm-clear")?.addEventListener("click", async () => {
       if (!confirm("Убрать водяной знак у тайтла?")) return;
