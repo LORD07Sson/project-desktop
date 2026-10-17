@@ -2917,3 +2917,14 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .av-sw-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .av-sw-t b { font-size: 13.5px; }
 .av-sw-t span { font-size: 11.5px; color: var(--ink-dim); line-height: 1.35; }
+
+/* «Архив серий»: сводка и вкладки */
+.ar-sum { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 10px; }
+.ar-chip { font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 99px; background: rgba(255, 255, 255, .045); color: var(--ink-dim); }
+.ar-chip b { color: var(--ink); }
+.ar-chip.ok { color: var(--s-done); background: color-mix(in srgb, var(--s-done) 14%, transparent); }
+.ar-chip.off { color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 14%, transparent); }
+.ar-how { margin: 0 0 10px; }
+.ar-how summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); padding: 4px 0; }
+.ar-how[open] summary { color: var(--ink); }
+[data-ar-pane][hidden] { display: none; }

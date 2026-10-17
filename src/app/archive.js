@@ -46,15 +46,33 @@ function previewHtml(r) {
 export async function mountArchive(root) {
   if (!root) return;
   let sampleCaption = SAMPLE;
+  let tab = "settings";
 
   function paint(d) {
     const channels = (d.chats || []).filter(c => c.type === "channel");
     const groups = (d.chats || []).filter(c => c.type !== "channel");
     const target = groups.find(c => String(c.chat_id) === String(d.target));
     root.innerHTML = `
-      <p class="bc-hint">Бот следит за каналом-источником: каждое новое видео он переименовывает («[DreamyVoice] Romaji Title TV (7).mp4»), оформляет
+      <div class="ar-sum">
+        <span class="ar-chip ${d.enabled ? "ok" : "off"}">${d.enabled ? "Автоперенос включён" : "Автоперенос выключен"}</span>
+        <span class="ar-chip">Перенесено <b>${d.done || 0}</b></span>
+        <span class="ar-chip">В очереди <b>${d.queue ? d.queue.total : 0}</b></span>
+        <span class="ar-chip">Ждут предыдущую <b>${(d.held || []).length}</b></span>
+        <span class="ar-chip">Тем <b>${(d.known_topics || []).length}</b></span>
+      </div>
+      <div class="av-tabs">
+        <button class="av-tab" data-ar-tab="settings">Настройки</button>
+        <button class="av-tab" data-ar-tab="queue">Очередь <small>${(d.queue ? d.queue.total : 0) + (d.held || []).length || ""}</small></button>
+        <button class="av-tab" data-ar-tab="topics">Темы <small>${(d.known_topics || []).length || ""}</small></button>
+        <button class="av-tab" data-ar-tab="next">Следующая серия</button>
+        <button class="av-tab" data-ar-tab="check">Проверка подписи</button>
+      </div>
+      <section data-ar-pane="settings">
+      <details class="ar-how"><summary>Как это работает</summary>
+        <p class="bc-hint">Бот следит за каналом-источником: каждое новое видео он переименовывает («[DreamyVoice] Romaji Title TV (7).mp4»), оформляет
         подпись и кладёт в архивную группу — в тему этого тайтла. Тему он создаёт сам и закрепляет в ней превью с постером.
         Тайтл, сезон, качество и серия берутся из хештегов поста: <code>#Название_тайтла #1_сезон #4K #7</code>.<br>Бот видит только новые посты — историю канала Telegram ему не отдаёт. Старые серии <b>перешлите боту в личку</b> (можно пачкой, выделив много постов): он обработает их так же, уже перенесённые пропустит.</p>
+      </details>
       <div class="bc-chat${d.enabled ? " target" : ""}">
         ${pickerHtml("ar-source", "Откуда (канал)", channels, d.source, "Бот должен быть админом канала — тогда он видит каждый новый пост.")}
         <div style="height:10px;"></div>
@@ -70,7 +88,9 @@ export async function mountArchive(root) {
         <div class="sheet-actions" style="justify-content:flex-start; margin-top:10px;"><button class="btn primary" id="ar-save">Сохранить</button></div>
         <p class="bc-hint" style="margin:10px 0 0;">Перенесено серий: <b>${d.done || 0}</b>. Одна и та же серия дважды не копируется; о сбоях бот пишет владельцам в личку.</p>
       </div>
-      <h4 style="margin:16px 0 8px;">Следующая серия</h4>
+      </section>
+      <section data-ar-pane="next" hidden>
+      <h4 style="margin:6px 0 8px;">Следующая серия</h4>
       <p class="bc-hint">Достаточно один раз выложить серию с хештегами — бот запомнит тайтл и дальше сам ставит 2, 3, 4… (можно и прописать вручную: так запомненное не сменится на другой тайтл, и оно не забывается). Посты без хештегов (или без номера) он берёт как следующую серию этого тайтла и пишет вам, какой номер поставил.
         Подпись с явными хештегами всегда главнее, а другой тайтл в подписи этот счётчик не трогает.</p>
       <form id="ar-ctx" class="bc-chat" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -82,7 +102,9 @@ export async function mountArchive(root) {
         ${d.context ? `<button class="btn" type="button" id="ar-ctx-clear">Сбросить</button>` : ""}
         <span class="bc-hint" style="flex-basis:100%; margin:0;">${d.context ? `Сейчас: <b>${esc(d.context.title_tag.split("_").join(" "))}</b>${d.context.season ? ` · ${d.context.season} сезон` : ""}${d.context.quality ? ` · ${esc(d.context.quality)}` : ""} — следующая серия <b>${d.context.next_episode}</b>.${d.context.auto ? " Запомнено ботом по последней серии; забудется, если 3 дня не будет новых. Чтобы закрепить — нажмите «Сохранить»." : ""}` : "Не задано: бот берёт тайтл и номер только из хештегов поста."}</span>
       </form>
-      <h4 style="margin:16px 0 8px;">Очередь заливки <small>${d.queue ? d.queue.total : 0}</small> <button class="btn" id="ar-queue-refresh" style="margin-left:8px;">Обновить</button> <button class="btn danger" id="ar-requeue" style="margin-left:6px;" title="Все перенесённые серии зальются заново (например, чтобы получили обложку); старая копия удаляется после успешной заливки новой">Перезалить всё заново</button></h4>
+      </section>
+      <section data-ar-pane="queue" hidden>
+      <h4 style="margin:6px 0 8px;">Очередь заливки <small>${d.queue ? d.queue.total : 0}</small> <button class="btn" id="ar-queue-refresh" style="margin-left:8px;">Обновить</button> <button class="btn danger" id="ar-requeue" style="margin-left:6px;" title="Все перенесённые серии зальются заново (например, чтобы получили обложку); старая копия удаляется после успешной заливки новой">Перезалить всё заново</button></h4>
       <p class="bc-hint">${d.queue && d.queue.total
         ? `В очереди <b>${d.queue.total}</b> ${d.queue.total % 10 === 1 && d.queue.total % 100 !== 11 ? "пост" : "постов"}${d.queue.eta_min ? ` — при лимите ${d.queue.limit_mbit} Мбит/с это примерно <b>${d.queue.eta_min >= 90 ? `${(d.queue.eta_min / 60).toFixed(1)} ч` : `${d.queue.eta_min} мин`}</b>` : ""}. Заливка идёт по одной, по порядку номеров постов.`
         : "Очередь пуста — бот ничего не ждёт."}</p>
@@ -100,16 +122,21 @@ export async function mountArchive(root) {
           <button class="btn" data-hold-release="${esc(h.key)}"${h.forced ? " disabled" : ""}>Отправить без ожидания</button>
           <button class="btn" data-hold-drop="${esc(h.key)}">Убрать</button>
         </div>`).join("") : `<div class="no-assignee">Очередь пуста.</div>`}
-      <h4 style="margin:16px 0 8px;">Предпросмотр</h4>
+      </section>
+      <section data-ar-pane="check" hidden>
+      <h4 style="margin:6px 0 8px;">Проверка подписи</h4>
       <p class="bc-hint">Вставьте подпись поста из канала — покажу, как бот её разберёт и что получится в архиве. Ничего не отправляется.</p>
       <div class="bc-chat">
         <textarea class="field-input" id="ar-sample" rows="2" style="width:100%; resize:vertical;">${esc(sampleCaption)}</textarea>
         <div class="sheet-actions" style="justify-content:flex-start; margin-top:8px;"><button class="btn" id="ar-preview">Показать, что получится</button></div>
         <div id="ar-preview-out" style="margin-top:10px;"></div>
       </div>
-      <h4 style="margin:16px 0 8px;">Темы тайтлов <small>${(d.known_topics || []).length}</small> <button class="btn" id="ar-refresh" style="margin-left:8px;">Обновить</button></h4>
+      </section>
+      <section data-ar-pane="topics" hidden>
+      <h4 style="margin:6px 0 8px;">Темы тайтлов <small>${(d.known_topics || []).length}</small> <button class="btn" id="ar-refresh" style="margin-left:8px;">Обновить</button></h4>
       <p class="bc-hint">Создайте тему в архивной группе — она появится здесь сама (бот должен быть админом группы), и серия с похожим названием ляжет в неё.
         Для тем, созданных до подключения бота, укажите номер ниже.</p>
+      ${(d.known_topics || []).length > 4 ? `<input class="field-input" id="ar-topic-search" placeholder="Найти тему по названию или хештегу…" style="margin-bottom:8px;">` : ""}
       ${(d.known_topics || []).length ? (d.known_topics || []).map(t => {
         const bound = (t.tags || []).length > 0;
         const raw = bound ? t.tags[0] : (t.suggest || "");
@@ -129,7 +156,23 @@ export async function mountArchive(root) {
         <input class="field-input" id="ar-tag" placeholder="Название_тайтла (как в хештеге)" style="flex:2; min-width:180px;">
         <input class="field-input" id="ar-topic" type="number" min="1" placeholder="№ темы" style="flex:1; min-width:90px;">
         <button class="btn" type="submit">Привязать к существующей теме</button>
-      </form>`;
+      </form>
+      </section>`;
+
+    const showTab = name => {
+      tab = name;
+      root.querySelectorAll("[data-ar-tab]").forEach(b => b.classList.toggle("on", b.dataset.arTab === name));
+      root.querySelectorAll("[data-ar-pane]").forEach(p => { p.hidden = p.dataset.arPane !== name; });
+    };
+    root.querySelectorAll("[data-ar-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.arTab)));
+    showTab(tab);
+    root.querySelector("#ar-topic-search")?.addEventListener("input", e => {
+      const q = e.target.value.trim().toLowerCase();
+      root.querySelectorAll("[data-topic-row]").forEach(row => {
+        const text = (row.textContent + " " + [...row.querySelectorAll("input[data-topic-tag]")].map(i => i.value).join(" ")).toLowerCase();
+        row.style.display = !q || text.includes(q) ? "" : "none";
+      });
+    });
 
     const apply = async (path, body, okText) => {
       try {
