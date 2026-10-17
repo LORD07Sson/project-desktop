@@ -232,10 +232,20 @@ export async function openChannelPostSheet(openId = null) {
             const src = mediaUrl(`/posts/${post.id}/media/${i}`);
             const video = m.kind === "video";
             return `<div class="cp-thumb">${src ? `<img src="${src}" alt="" ${video ? `data-cp-poster="1"` : ""}>` : ""}${video ? `<span class="cp-thumb-video${src ? " over" : ""}">${I.play}<span>${esc(m.name || "видео")}</span></span>` : ""}
+              ${video ? `<button type="button" class="cp-thumb-cover" data-cp-cover="${i}" title="Выбрать обложку из кадров видео">🖼 Обложка${m.cover ? " ✓" : ""}</button>` : ""}
               <button type="button" class="cp-thumb-del" data-cp-mdel="${i}" aria-label="Убрать">${I.x}</button></div>`;
           }).join("")}
           ${d.media.length < meta.limits.media ? `<label class="cp-thumb cp-thumb-add">${I.plus}<span>Добавить</span><input type="file" id="cp-file" accept="image/*,video/*" multiple hidden></label>` : ""}
         </div>
+      </section>
+
+      <section class="cp-sec">
+        <div class="cp-label">Вид и подпись</div>
+        <label class="cp-check"><input type="checkbox" id="cp-inline"${d.inline ? " checked" : ""}> Люди в строку, как в постах канала: «🎙 Роли озвучивали: Имя, Имя»</label>
+        <label class="cp-label cp-sub" for="cp-footer">Подпись под блоками</label>
+        <textarea id="cp-footer" rows="2" placeholder="Например: Всем приятного просмотра!">${esc(d.footer || "")}</textarea>
+        <label class="cp-label cp-sub" for="cp-tags">Хештеги</label>
+        <input class="cp-in" id="cp-tags" value="${esc(d.tags || "")}" placeholder="#Название_тайтла #DreamyVoice">
       </section>
 
       <section class="cp-sec">
@@ -316,6 +326,10 @@ export async function openChannelPostSheet(openId = null) {
       (b.dataset.cpAddlink ? urls[urls.length - 1] : texts[texts.length - 1])?.focus();
     }));
     ed.querySelectorAll("[data-cp-kdel]").forEach(b => b.addEventListener("click", () => structural(x => x.links.splice(+b.dataset.cpKdel, 1))));
+    ed.querySelector("#cp-inline")?.addEventListener("change", e => { d.inline = e.target.checked; scheduleSave(); });
+    ed.querySelector("#cp-footer")?.addEventListener("input", e => { d.footer = e.target.value; scheduleSave(); });
+    ed.querySelector("#cp-tags")?.addEventListener("input", e => { d.tags = e.target.value; scheduleSave(); });
+    ed.querySelectorAll("[data-cp-cover]").forEach(b => b.addEventListener("click", () => openCoverPicker(+b.dataset.cpCover)));
     ed.querySelectorAll("[data-cp-mdel]").forEach(b => b.addEventListener("click", () => structural(x => x.media.splice(+b.dataset.cpMdel, 1))));
     const file = ed.querySelector("#cp-file");
     if (file) file.addEventListener("change", () => uploadFiles([...file.files]));
@@ -340,6 +354,55 @@ export async function openChannelPostSheet(openId = null) {
     setSaveState("Сохранено");
     renderEditor();
     renderPreview();
+  }
+
+  // Выбор обложки видео: сервер вырезает кадры по всей длине ролика, человек кликает нужный; он уйдёт в cover при публикации.
+  async function openCoverPicker(index) {
+    await flush();
+    const pid = post.id;
+    const picker = openSheet(`<h2>Обложка видео</h2><p class="cp-hint">Сервер вырезает кадры из видео — выберите, какой станет превью в канале.</p>${dialogSkeletonHtml(4)}`, "wide");
+    let info;
+    try {
+      info = await apiGet(`/posts/${pid}/media/${index}/frames`);
+    } catch (e) {
+      picker.remove();
+      toast(`Не удалось получить кадры: ${e.message}`, "error");
+      return;
+    }
+    const box = picker.querySelector(".sheet");
+    const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+    const paint = chosen => {
+      box.innerHTML = `
+        <h2>Обложка видео</h2>
+        <p class="cp-hint">Кадры из видео (${fmt(info.duration)}). Нажмите на нужный — он станет превью в канале.${chosen == null ? " Сейчас обложка выбирается Telegram автоматически." : ""}</p>
+        <div class="cp-frames">${info.frames.map(f => `
+          <button type="button" class="cp-frame${f.n === chosen ? " on" : ""}" data-cp-frame="${f.n}">
+            <img src="${mediaUrl(`/posts/${pid}/media/${index}/frame/${f.n}`)}" alt="">
+            <span>${fmt(f.t)}</span>
+          </button>`).join("")}</div>
+        <div class="sheet-actions">
+          <button type="button" class="btn" data-cp-frame="-1">Сбросить (автоматически)</button>
+          <button type="button" class="btn primary" data-close>Готово</button>
+        </div>`;
+      box.querySelector("[data-close]").addEventListener("click", () => picker.remove());
+      box.querySelectorAll("[data-cp-frame]").forEach(b => b.addEventListener("click", async () => {
+        box.querySelectorAll("button").forEach(x => { x.disabled = true; });
+        try {
+          const r = await apiPost(`/posts/${pid}/media/${index}/cover`, { n: Number(b.dataset.cpFrame) });
+          if (post && post.id === pid) {
+            post = { ...r, data: mergeClean(post.data, r.data) };
+            renderEditor();
+            renderPreview();
+          }
+          info.chosen = Number(b.dataset.cpFrame) >= 0 ? Number(b.dataset.cpFrame) : null;
+          paint(info.chosen);
+        } catch (err) {
+          toast(`Не удалось выбрать обложку: ${err.message}`, "error");
+          paint(info.chosen);
+        }
+      }));
+    };
+    paint(info.chosen);
   }
 
   function renderPreview() {
