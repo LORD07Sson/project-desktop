@@ -7,6 +7,7 @@ import { esc } from "./utils.js";
 const TABS = [
   ["archive", "Архив серий", '<path d="M4 7h16M6 7v11h12V7M10 11h4"/>'],
   ["chats", "Чаты бота", '<path d="M4 5h16v11H9l-5 4z"/>'],
+  ["reports", "Отчёты", '<path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/>'],
   ["docs", "Документы", '<path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/>'],
   ["speed", "Скорость", '<path d="M12 14l4-5M4 17a8 8 0 1 1 16 0"/>'],
 ];
@@ -131,6 +132,7 @@ export function mountAutomation(root) {
     pane.appendChild(host);
     if (name === "archive") import("./archive.js").then(m => m.mountArchive(host));
     else if (name === "chats") import("./bot-chats.js").then(m => m.mountBotChats(host));
+    else if (name === "reports") import("./reports-archive.js").then(m => m.mountReportsArchive(host));
     else if (name === "docs") mountDocs(host);
     else mountSpeed(host);
   };
