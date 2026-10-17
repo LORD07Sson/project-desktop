@@ -2,7 +2,7 @@
 // серверная AI-проверка звука. Открывается из Списка/Доски/Ленты/
 // профиля коллеги.
 
-import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast, dialogSkeletonHtml } from "./api.js";
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { state, can } from "./state.js";
@@ -35,6 +35,7 @@ function offerPublishPost() {
       <button class="btn" data-close>Позже</button>
       <button class="btn primary" id="offer-post-open">Открыть «Пост в канал»</button>
     </div>`);
+  overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
   overlay.querySelector("#offer-post-open").addEventListener("click", () => {
     overlay.remove();
     import("./channel-post.js").then(m => m.openChannelPostSheet());
