@@ -150,7 +150,7 @@ function offerPublishPost() {
 
 // «Кому прислать?»: файл отчёта (видео, дорожка, субтитры) бот пересылает выбранным людям в личку — по тому же file_id,
 // без повторной заливки; видео с диска сервера уходит с диска.
-async function openSendFileSheet(publicId, fileId, fileName) {
+async function openSendFileSheet(publicId, fileId, fileName, ref = "") {
   const overlay = openSheet(`<h2>Кому прислать?</h2><p class="bc-hint">${esc(fileName || "файл")} есть в отчёте — бот перешлёт его выбранным людям.</p>${dialogSkeletonHtml(3)}`);
   let people = [];
   try {
@@ -179,7 +179,9 @@ async function openSendFileSheet(publicId, fileId, fileName) {
     if (!to.length) { toast("Выберите, кому прислать.", "error"); return; }
     e.currentTarget.disabled = true;
     try {
-      const res = await apiPost(`/report/${publicId}/files/${fileId}/send`, { to });
+      const res = ref
+        ? await apiPost(`/report/${publicId}/files/send-media`, { ref, to })
+        : await apiPost(`/report/${publicId}/files/${fileId}/send`, { to });
       const bad = (res.failed || []).length;
       toast(bad ? `Отправлено: ${res.sent.length}, не получилось: ${bad} (${res.failed.map(f => f.name).join(", ")})` : `Отправлено: ${res.sent.length}`, bad ? "error" : "success");
       dismissSheet(overlay);
@@ -803,6 +805,9 @@ export async function openReportDetail(publicId) {
       if (!picked) return;
       await runQcAnalysis(picked, { reportId: publicId });
     });
+    sheet.querySelectorAll("[data-media-send]").forEach(btn => {
+      btn.addEventListener("click", () => openSendFileSheet(publicId, "", btn.dataset.fileName, btn.dataset.mediaSend));
+    });
     sheet.querySelectorAll("[data-send-file]").forEach(btn => {
       btn.addEventListener("click", () => openSendFileSheet(publicId, btn.dataset.sendFile, btn.dataset.fileName));
     });
@@ -1077,10 +1082,12 @@ function rawKindsHtml(kinds, { canAdd, addAttr, dlAttr }) {
     ? `<div class="raw-row on">
         <span class="raw-name">${esc(f.name || "файл")}${f.character_name ? ` · ${esc(f.character_name)}` : (f.character_id ? ` · персонаж #${Number(f.character_id)}` : "")}</span>
         <button class="icon-btn" data-raw-dl="${esc(k.kind)}" data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-legacy="${f.legacy || f.id == null ? "1" : "0"}" data-raw-character="${Number(f.character_id || 0)}" data-raw-name="${esc(f.name || k.kind)}" title="Скачать">⬇️</button>
+        <button class="icon-btn" data-media-send="${f.id == null ? (f.legacy || f.id == null ? `raws/legacy/${esc(k.kind)}/${Number(f.character_id || 0)}` : `raws/${esc(k.kind)}`) : `raws/files/${esc(f.id)}`}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">📤</button>
       </div>`
     : `<div class="raw-row on">
         <span class="raw-name">${esc(f.name || "файл")}</span>
         <button class="icon-btn" data-source-dl="${esc(f.id)}" data-source-name="${esc(f.name || k.kind)}" title="Скачать">⬇️</button>
+        <button class="icon-btn" data-media-send="sources/files/${esc(f.id)}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">📤</button>
       </div>`;
   return `
   <div class="raw-list">${filled.map(k => `
