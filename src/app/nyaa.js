@@ -9,7 +9,7 @@
 // Вкладка только для админов, как и Nyaa в боте.
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
-import { toast, API_BASE, apiBlob, apiUpload, openSheet } from "./api.js";
+import { toast, API_BASE, apiBlob, apiUpload, apiGet, apiPost, openSheet, dismissSheet } from "./api.js";
 import { pickFiles } from "./attachments.js";
 import { state } from "./state.js";
 import { liveButton, openShare } from "./nyaa-fx.js";
@@ -294,6 +294,7 @@ function rowHtml(it, maxSeed, now) {
       </div>
       <div class="ny-act">
         <button type="button" class="ny-ib" data-a="send" title="Отправить в торрент-клиент" aria-label="Отправить в торрент-клиент">${ICONS.send}</button>
+        ${reportTarget ? `<button type="button" class="ny-ib ny-srv" data-a="srv" title="Скачать на сервер и прикрепить к отчёту ${esc(reportTarget.publicId)}" aria-label="Скачать на сервер">☁</button>` : ""}
         <button type="button" class="ny-ib" data-a="menu" title="Ещё действия" aria-label="Ещё действия" aria-haspopup="menu">${ICONS.more}</button>
       </div>
     </div>`;
@@ -428,12 +429,100 @@ function paintReportBar() {
   const bar = document.createElement("div");
   bar.id = "ny-report-bar";
   bar.className = "ny-report-bar";
-  bar.innerHTML = `<div><b>Видео для отчёта ${esc(reportTarget.publicId)}</b><span>Найдите раздачу и отправьте в торрент-клиент. Когда видео скачается — нажмите «Прикрепить видео», выберите файл, и откройте «Собрать финал» в отчёте.</span></div>
+  bar.innerHTML = `<div><b>Видео для отчёта ${esc(reportTarget.publicId)}</b><span>Найдите раздачу: кнопка ☁ в строке — сервер скачает видео и прикрепит к отчёту сам; кнопка со стрелкой — в ваш торрент-клиент (тогда после скачивания нажмите «Прикрепить видео»). Потом откройте «Собрать финал» в отчёте.</span></div>
     <button type="button" class="btn primary" data-rb-attach>Прикрепить видео</button>
-    <button type="button" class="btn ghost" data-rb-close>Закрыть</button>`;
+    <button type="button" class="btn ghost" data-rb-close>Закрыть</button>
+    <div class="ny-rb-prog" id="ny-rb-prog" hidden><div class="ny-rb-bar"><i></i></div><span></span><button type="button" class="btn ghost" data-rb-cancel>Отменить скачивание</button></div>`;
   shell.insertAdjacentElement("beforebegin", bar);
   bar.querySelector("[data-rb-attach]").addEventListener("click", attachVideoToReport);
+  bar.querySelector("[data-rb-cancel]").addEventListener("click", cancelServerDownload);
+  if (serverJob) showServerProgress(serverJob.last);
   bar.querySelector("[data-rb-close]").addEventListener("click", () => { reportTarget = null; paintReportBar(); });
+}
+
+// ---- скачивание на сервере: серверный aria2 качает раздачу и прикрепляет видео к отчёту ----
+let serverJob = null; // { id, publicId, timer, last }
+
+const fmtSize = n => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : `${Math.round(n / 1048576)} МБ`);
+const fmtMin = s => (s >= 3600 ? `${Math.floor(s / 3600)} ч ${Math.round((s % 3600) / 60)} мин` : s >= 60 ? `${Math.round(s / 60)} мин` : `${Math.max(1, Math.round(s))} с`);
+
+function showServerProgress(st) {
+  const box = $("#ny-rb-prog");
+  if (!box) return;
+  if (!st) { box.hidden = true; return; }
+  box.hidden = false;
+  const pct = st.total ? Math.min(100, Math.round(st.done / st.total * 100)) : 0;
+  box.querySelector("i").style.width = `${pct}%`;
+  const eta = st.speed > 0 && st.total > st.done ? ` · осталось ≈ ${fmtMin((st.total - st.done) / st.speed)}` : "";
+  const label = { queued: "В очереди на сервере", downloading: "Сервер качает", sending: "Загружаю видео в Telegram и прикрепляю к отчёту" }[st.state] || st.state;
+  box.querySelector("span").textContent = `${label}: ${pct}% · ${fmtSize(st.done)} из ${fmtSize(st.total)}${st.speed > 0 ? ` · ${fmtSize(st.speed)}/с` : ""}${eta}`;
+  box.querySelector("[data-rb-cancel]").hidden = st.state === "sending";
+}
+
+async function cancelServerDownload() {
+  if (!serverJob) return;
+  try { await apiPost("/nyaa/share-cancel", { job: serverJob.id }); toast("Отменяю скачивание…", "info"); }
+  catch (e) { toast(`Не удалось отменить: ${e.message}`, "error"); }
+}
+
+function watchServerDownload(job, publicId, names) {
+  if (serverJob && serverJob.timer) clearInterval(serverJob.timer);
+  serverJob = { id: job.job, publicId, timer: null, last: { state: "queued", done: 0, total: job.total, speed: 0 } };
+  showServerProgress(serverJob.last);
+  const finish = () => { clearInterval(serverJob.timer); serverJob = null; showServerProgress(null); };
+  serverJob.timer = setInterval(async () => {
+    let st;
+    try { st = await apiGet("/nyaa/share-status", { job: serverJob.id }); } catch (_) { return; }
+    serverJob.last = st;
+    if (st.state === "done") {
+      finish();
+      toast(`Видео скачано и прикреплено к отчёту ${publicId}${names && names[0] ? ` («${names[0]}»)` : ""}. Откройте отчёт и нажмите «Собрать финал».`, "success");
+      document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
+      if (reportTarget && reportTarget.publicId === publicId) { reportTarget = null; paintReportBar(); paintList(); }
+    } else if (st.state === "error") { finish(); toast(st.err || "Не удалось скачать на сервере.", "error"); }
+    else if (st.state === "cancelled") { finish(); toast("Скачивание на сервере отменено.", "info"); }
+    else showServerProgress(st);
+  }, 2000);
+}
+
+function pickTorrentFile(videos, limit) {
+  return new Promise(resolve => {
+    const overlay = openSheet(`
+      <h2>Какое видео скачать?</h2>
+      <p class="ar-hint" style="margin-top:0;">В раздаче несколько видеофайлов. Сервер скачает выбранный и прикрепит к отчёту (файл не больше 2 ГБ).</p>
+      <div class="ar-list" style="max-height:50vh; overflow-y:auto;">${videos.map((f, i) => `
+        <label class="ar-row ad-pick"><input type="radio" name="tp" value="${f.i}" ${i === 0 ? "checked" : ""} ${f.size > limit ? "disabled" : ""}>
+          <b>${esc(String(f.path).split("/").pop())}</b><span class="ar-meta">${fmtSize(f.size)}${f.size > limit ? " · больше 2 ГБ" : ""}</span></label>`).join("")}</div>
+      <div class="sheet-actions"><button class="btn" data-close>Отмена</button><button class="btn primary" id="tp-ok">Скачать на сервер</button></div>`);
+    overlay.addEventListener("sheet-dismissed", () => resolve(null));
+    overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
+    overlay.querySelector("#tp-ok").addEventListener("click", () => {
+      const v = overlay.querySelector('input[name="tp"]:checked');
+      resolve(v ? Number(v.value) : null);
+      overlay.remove();
+    });
+  });
+}
+
+async function serverDownload(it) {
+  if (!reportTarget) return;
+  if (serverJob) { toast("Одно скачивание на сервере уже идёт — дождитесь или отмените его.", "error"); return; }
+  const { publicId } = reportTarget;
+  let info;
+  try { info = await apiGet("/nyaa/files", { id: it.id }); }
+  catch (e) { toast(`Не удалось получить список файлов раздачи: ${e.message}`, "error"); return; }
+  const videos = (info.files || []).filter(f => /\.(mkv|mp4|avi|mov|webm|m4v|ts|m2ts)$/i.test(f.path));
+  if (!videos.length) { toast("В этой раздаче нет видеофайлов.", "error"); return; }
+  let chosen = null;
+  if (videos.length > 1) {
+    chosen = await pickTorrentFile(videos, info.limit);
+    if (chosen === null) return;
+  }
+  try {
+    const r = await apiPost(`/report/${publicId}/torrent/start`, { id: it.id, files: chosen === null ? undefined : [chosen], title: it.title });
+    toast(`Сервер начал скачивать: ${r.names && r.names[0] ? r.names[0] : "видео"}. Ход виден вверху.`, "success");
+    watchServerDownload(r, publicId, r.names);
+  } catch (e) { toast(`Не удалось запустить скачивание: ${e.message}`, "error"); }
 }
 
 async function attachVideoToReport() {
@@ -2081,6 +2170,7 @@ function wire(root) {
       touch(it.id);
       if (a.dataset.a === "menu") { openRowMenu(a, it); return; }
       if (a.dataset.a === "send") sendToClient([it]);
+      else if (a.dataset.a === "srv") serverDownload(it);
       else if (a.dataset.a === "mag") copy(magnetLink(it), "Magnet скопирован.");
       else if (a.dataset.a === "tor") saveTorrent(it);
       else if (a.dataset.a === "info") openDetail(it);
