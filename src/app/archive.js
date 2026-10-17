@@ -187,8 +187,12 @@ export async function mountArchive(root) {
             <form id="ar-name" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px;">
               <input class="field-input" id="ar-name-input" value="${esc(r.file_title || "")}" style="flex:1; min-width:240px;" placeholder="Название в имени файла (ромадзи или английское)">
               <button class="btn" type="submit">Своё название для тайтла</button>
+              ${["romaji", "english"].filter(k => r.name_options && r.name_options[k]).map(k => `<button class="btn" type="button" data-name-opt="${esc(r.name_options[k])}" title="Подставить в поле — потом нажмите «Своё название для тайтла»">${k === "romaji" ? "Ромадзи" : "English"}: ${esc(r.name_options[k])}</button>`).join("")}
               <span class="bc-hint" style="flex-basis:100%; margin:0;">Бот сам берёт латинское название из Shikimori/AniList («[DreamyVoice] Название TV (1)»). Если подобрал не то — впишите нужное, оно запомнится для этого тайтла. Пусто — снова автоматически.</span>
             </form>`);
+          out.querySelectorAll("[data-name-opt]").forEach(btn => btn.addEventListener("click", () => {
+            out.querySelector("#ar-name-input").value = `${btn.dataset.nameOpt} ${(r.file_title || "").match(/(TV|Movie|OVA|ONA|Special)$/i)?.[1] || "TV"}`;
+          }));
           out.querySelector("#ar-name").addEventListener("submit", async e => {
             e.preventDefault();
             try {
