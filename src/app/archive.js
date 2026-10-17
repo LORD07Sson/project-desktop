@@ -107,7 +107,8 @@ export async function mountArchive(root) {
         Для тем, созданных до подключения бота, укажите номер ниже.</p>
       ${(d.known_topics || []).length ? (d.known_topics || []).map(t => {
         const bound = (t.tags || []).length > 0;
-        const tag = bound ? t.tags[0] : (t.suggest || "");
+        const raw = bound ? t.tags[0] : (t.suggest || "");
+        const tag = raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";  // бот хранит хештег строчными — показываем с заглавной
         return `
         <div class="bc-chat" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;" data-topic-row="${t.topic_id}">
           <label class="bc-feature" style="margin:0;" title="Включено — серии этого тайтла ложатся в эту тему"><input type="checkbox" data-topic-use="${t.topic_id}" ${bound ? "checked" : ""}><span></span></label>
