@@ -67,7 +67,7 @@ export async function openLockdownSheet() {
     <p class="ld-hint">Включил: <b>${esc(current.by || "?")}</b>${current.at ? `, ${esc(current.at)}` : ""}.${current.reason ? `<br>Причина: ${esc(current.reason)}` : ""}</p>
     <p class="ld-hint">Удаление, смена доступов и публикации заблокированы для всех, кроме владельца.</p>
     <div class="sheet-actions">
-      ${current.can_disable ? `<button class="btn" id="ld-open-trash">Корзина и кто удалял</button><span style="flex:1"></span><button class="btn primary" id="ld-disable">Снять режим</button>` : `<span style="flex:1"></span>`}
+      ${current.can_disable ? `${state.isOwner ? `<button class="btn" id="ld-open-trash">Корзина и кто удалял</button>` : ""}<span style="flex:1"></span><button class="btn primary" id="ld-disable">Снять режим</button>` : `<span style="flex:1"></span>`}
       <button class="btn" data-close>Закрыть</button>
     </div>` : `
     <h2>🚨 Аварийный режим («Саботаж»)</h2>
