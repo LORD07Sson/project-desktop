@@ -5,7 +5,7 @@
 import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
 import { can } from "./state.js";
-import { localRenderSupport } from "./local-render.js";
+import { localRenderSupport, prepareLocalRender, describeTools } from "./local-render.js";
 
 export async function openAssembleDialog(publicId) {
   const overlay = openSheet(`<h2>Собрать финал</h2><div class="no-assignee">Загружаю файлы отчёта…</div>`);
@@ -96,6 +96,7 @@ export async function openAssembleDialog(publicId) {
           <button type="button" data-where="local" id="ad-where-local" disabled title="Проверяю видеокарту…">У себя (видеокарта)</button>
         </div>
         <p class="ar-hint" id="ad-where-hint"></p>
+        <p class="ar-hint" id="ad-tools-status">Проверяю ffmpeg и видеокарту…</p>
         <span class="ar-label">Качество и формат</span>
         <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}">${esc(p.name)}</option>`).join("")}</select>
         <p class="ar-hint" id="ad-profile-desc"></p>
@@ -204,21 +205,42 @@ export async function openAssembleDialog(publicId) {
     sheet.querySelector("[data-close]").addEventListener("click", () => finish(false));
     // «У себя»: только в приложении, где нашёлся кодировщик; интро, склейка и архивы с дорожками пока только на сервере.
     let where = "server";
-    let localInfo = { ok: false, nvenc: false };
+    let localInfo = { ok: false, nvenc: false, pending: true };
     const whereHint = sheet.querySelector("#ad-where-hint");
     const localBtn = sheet.querySelector("#ad-where-local");
     const syncWhere = () => {
       localBtn.disabled = !localInfo.ok;
       if (where === "local" && localBtn.disabled) where = "server";
       sheet.querySelectorAll("#ad-where button").forEach(b => b.classList.toggle("on", b.dataset.where === where));
-      whereHint.textContent = !localInfo.ok ? "Сборка у себя недоступна: в приложении не нашёлся кодировщик (нужна видеокарта NVIDIA)."
+      whereHint.textContent = localInfo.pending ? "Проверяю, можно ли собрать у себя…"
+        : !localInfo.ok ? "Сборка у себя недоступна: не нашёлся ffmpeg или рабочий кодировщик (нужна видеокарта NVIDIA). Детали — строкой ниже."
         : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Всё то же, что на сервере: интро, склейка, озвучка, надпись, логотип. Файлы скачаются с сервера, готовое видео бот отправит в Telegram и прикрепит к отчёту.`
         : "Рендер пойдёт на сервере (2 ядра процессора).";
     };
     sheet.querySelectorAll("#ad-where button").forEach(b => b.addEventListener("click", () => { if (!b.disabled) { where = b.dataset.where; syncWhere(); } }));
     sheet.querySelectorAll("[data-ad-audio]").forEach(c => c.addEventListener("change", syncWhere));
     syncWhere();
-    localRenderSupport().then(info => { localInfo = info; localBtn.title = info.ok ? "" : "Видеокарта NVIDIA не найдена"; syncWhere(); });
+    const toolsLine = sheet.querySelector("#ad-tools-status");
+    const checkTools = (force = false) => {
+      toolsLine.innerHTML = "Проверяю ffmpeg и видеокарту…";
+      localInfo = { ok: false, nvenc: false, pending: true };
+      syncWhere();
+      const run = force ? prepareLocalRender(p => { toolsLine.textContent = p.label || "Скачиваю ffmpeg…"; }, true).then(st => ({ status: st, ok: !!st.ffmpeg_ok && !!(st.nvenc_h264 || st.nvenc_h265 || st.soft_h264 || st.soft_h265), nvenc: !!(st.nvenc_h264 || st.nvenc_h265) }))
+        : localRenderSupport(p => { toolsLine.textContent = p.label || "Скачиваю ffmpeg…"; });
+      run.then(info => {
+        localInfo = info;
+        localBtn.title = info.ok ? "" : "Не найден рабочий кодировщик";
+        toolsLine.textContent = describeTools(info.status);
+        if (!info.ok) {
+          const retry = document.createElement("button");
+          retry.type = "button"; retry.className = "btn"; retry.style.marginLeft = "8px"; retry.textContent = "Проверить снова";
+          retry.addEventListener("click", () => checkTools(true));
+          toolsLine.appendChild(retry);
+        }
+        syncWhere();
+      });
+    };
+    checkTools();
 
     const startBtns = () => sheet.querySelectorAll("#ad-start, #ad-start-post");
     const start = async (withPost) => {

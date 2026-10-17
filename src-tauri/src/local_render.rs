@@ -14,7 +14,7 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
-use crate::audio_qc::{hidden_command, resolve_ffmpeg};
+use crate::audio_qc::{binary_runs, downloaded_tools_dir, hidden_command, resolve_ffmpeg};
 use crate::media_tools::{run_ffmpeg_in, Progress, Stage};
 
 /// Отмена скачивания: ffmpeg отменяется своим механизмом (media_tools::cancel_current_job), загрузка — этим флагом.
@@ -75,6 +75,184 @@ pub struct EncoderStatus {
     pub nvenc_h265: bool,
     pub soft_h264: bool,
     pub soft_h265: bool,
+}
+
+/// Закреплённая сборка ffmpeg (LGPL, с NVENC) в нашем же релизе на GitHub — тот же файл и та же сумма, что в CI.
+const FFMPEG_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/tools-ffmpeg-N-127271/ffmpeg-N-127271-gba987fe24d-win64-lgpl.zip";
+const FFMPEG_SHA256: &str = "32b374c9831ae5640e33977baa4cf04a59704f616a0c3743654697fb3c7f26de";
+
+#[derive(Serialize)]
+pub struct ToolsStatus {
+    pub ffmpeg_ok: bool,
+    pub ffprobe_ok: bool,
+    /// bundled | downloaded | path | none
+    pub source: String,
+    pub path: String,
+    pub downloaded_now: bool,
+    pub gpu: String,
+    pub nvenc_h264: bool,
+    pub nvenc_h265: bool,
+    pub soft_h264: bool,
+    pub soft_h265: bool,
+    pub error: Option<String>,
+}
+
+fn tools_source(path: &str) -> &'static str {
+    let p = std::path::Path::new(path);
+    if let Some(dir) = downloaded_tools_dir() {
+        if p.starts_with(&dir) {
+            return "downloaded";
+        }
+    }
+    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.to_path_buf())) {
+        if p.starts_with(&exe_dir) {
+            return "bundled";
+        }
+    }
+    "path"
+}
+
+fn gpu_names() -> String {
+    hidden_command("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "(Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join ', '",
+        ])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Скачивает ffmpeg в папку приложения (если рядом с .exe его нет и в PATH тоже), проверяет сумму и распаковывает.
+async fn download_ffmpeg(app: &tauri::AppHandle, client: &reqwest::Client) -> Result<(), String> {
+    use tauri::Emitter;
+    let tools = downloaded_tools_dir().ok_or("Не найдена папка пользователя для загрузки ffmpeg.")?;
+    std::fs::create_dir_all(&tools).map_err(|e| format!("Не удалось создать папку {tools:?}: {e}"))?;
+    let zip_path = tools.join("ffmpeg.zip");
+    let mut resp = client
+        .get(FFMPEG_URL)
+        .send()
+        .await
+        .map_err(|e| format!("Не удалось скачать ffmpeg: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("Не удалось скачать ffmpeg: GitHub ответил {}", resp.status()));
+    }
+    let total = resp.content_length().unwrap_or(0);
+    let mut file = std::fs::File::create(&zip_path).map_err(|e| format!("Не удалось создать файл загрузки: {e}"))?;
+    let mut done: u64 = 0;
+    let mut last = Instant::now();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Обрыв при скачивании ffmpeg: {e}"))? {
+        file.write_all(&chunk).map_err(|e| format!("Не удалось записать ffmpeg: {e}"))?;
+        done += chunk.len() as u64;
+        if last.elapsed().as_millis() > 400 {
+            last = Instant::now();
+            let frac = if total > 0 { done as f64 / total as f64 } else { 0.0 };
+            let _ = app.emit(
+                "ffmpeg-fetch-progress",
+                serde_json::json!({ "fraction": frac, "label": format!("Скачиваю ffmpeg: {} из {}", fmt_mb(done), if total > 0 { fmt_mb(total) } else { "?".into() }) }),
+            );
+        }
+    }
+    drop(file);
+
+    let zip_for_check = zip_path.clone();
+    let tools_for_extract = tools.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        // сумма — через PowerShell (отдельный крейт под одно действие не тянем)
+        let out = hidden_command("powershell")
+            .args(["-NoProfile", "-Command", &format!("(Get-FileHash -Algorithm SHA256 -LiteralPath '{}').Hash", zip_for_check.display())])
+            .output()
+            .map_err(|e| format!("Не удалось проверить сумму ffmpeg: {e}"))?;
+        let hash = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
+        if hash != FFMPEG_SHA256 {
+            let _ = std::fs::remove_file(&zip_for_check);
+            return Err(format!("Сумма SHA256 скачанного ffmpeg не совпала (получено {hash}) — файл удалён."));
+        }
+        let ex = hidden_command("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "Expand-Archive -LiteralPath '{}' -DestinationPath '{}' -Force",
+                    zip_for_check.display(),
+                    tools_for_extract.join("x").display()
+                ),
+            ])
+            .output()
+            .map_err(|e| format!("Не удалось распаковать ffmpeg: {e}"))?;
+        if !ex.status.success() {
+            return Err(format!("Не удалось распаковать ffmpeg: {}", String::from_utf8_lossy(&ex.stderr).trim()));
+        }
+        // в архиве бинарники лежат в bin/ — достаём ffmpeg.exe и ffprobe.exe в корень папки инструментов
+        let mut found = 0;
+        for entry in walk(&tools_for_extract.join("x")) {
+            let name = entry.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+            if name == "ffmpeg.exe" || name == "ffprobe.exe" {
+                std::fs::copy(&entry, tools_for_extract.join(&name)).map_err(|e| format!("Не удалось скопировать {name}: {e}"))?;
+                found += 1;
+            }
+        }
+        let _ = std::fs::remove_dir_all(tools_for_extract.join("x"));
+        let _ = std::fs::remove_file(&zip_for_check);
+        if found < 2 {
+            return Err("В скачанном архиве нет ffmpeg.exe и ffprobe.exe.".into());
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Распаковка ffmpeg не завершилась: {e}"))??;
+    Ok(())
+}
+
+fn walk(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                out.extend(walk(&p));
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+/// Автоматическая проверка инструментов: находит ffmpeg (рядом с .exe → докачанный → PATH); если нет — докачивает из
+/// нашего релиза на GitHub; затем определяет видеокарту и рабочие кодировщики. Всегда возвращает понятный статус.
+pub async fn prepare(app: &tauri::AppHandle, client: &reqwest::Client) -> ToolsStatus {
+    let mut error: Option<String> = None;
+    let mut downloaded_now = false;
+    if !binary_runs(std::path::Path::new(resolve_ffmpeg())) {
+        match download_ffmpeg(app, client).await {
+            Ok(()) => downloaded_now = true,
+            Err(e) => error = Some(e),
+        }
+    }
+    let path = resolve_ffmpeg().to_string();
+    let ffmpeg_ok = binary_runs(std::path::Path::new(&path));
+    let ffprobe_ok = binary_runs(std::path::Path::new(crate::media_tools::resolve_ffprobe()));
+    if !ffmpeg_ok && error.is_none() {
+        error = Some("ffmpeg не найден и не скачался.".into());
+    }
+    let (enc, gpu) = tauri::async_runtime::spawn_blocking(|| (encoder_status(), gpu_names()))
+        .await
+        .unwrap_or_else(|_| (EncoderStatus { nvenc_h264: false, nvenc_h265: false, soft_h264: false, soft_h265: false }, String::new()));
+    ToolsStatus {
+        ffmpeg_ok,
+        ffprobe_ok,
+        source: if ffmpeg_ok { tools_source(&path).to_string() } else { "none".into() },
+        path,
+        downloaded_now,
+        gpu,
+        nvenc_h264: enc.nvenc_h264,
+        nvenc_h265: enc.nvenc_h265,
+        soft_h264: enc.soft_h264,
+        soft_h265: enc.soft_h265,
+        error,
+    }
 }
 
 pub fn request_cancel() {

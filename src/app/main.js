@@ -58,3 +58,8 @@ startAntivirusAuto();
 tryRestoreSession();
 setTimeout(() => appWindow.show(), 0); // DevSkim: ignore DS172411 — функция, не строка
 setTimeout(maybeAutoCheckUpdates, 3000); // DevSkim: ignore DS172411 — функция, не строка
+
+// Автопроверка ffmpeg и видеокарты для «Собрать у себя»: если ffmpeg нет, приложение само докачает его из релиза на GitHub.
+setTimeout(() => {
+  import("./local-render.js").then(m => m.prepareLocalRender()).catch(() => { /* не в Tauri или нет сети — окно сборки проверит сам */ });
+}, 8000);

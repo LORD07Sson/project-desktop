@@ -11,13 +11,49 @@ import { esc } from "./utils.js";
 
 let running = null; // publicId идущей сборки
 
-export async function localRenderSupport() {
-  try {
-    const e = await invoke("local_render_encoders");
-    return { ok: !!(e.nvenc_h264 || e.nvenc_h265 || e.soft_h264 || e.soft_h265), nvenc: !!(e.nvenc_h264 || e.nvenc_h265), soft: !!(e.soft_h264 || e.soft_h265), raw: e };
-  } catch (_) {
-    return { ok: false, nvenc: false, soft: false, raw: null };
-  }
+let preparing = null; // идущая проверка (одна на приложение)
+let lastStatus = null;
+
+/** Автопроверка: находит ffmpeg (рядом с приложением → докачанный → PATH), при отсутствии докачивает из релиза на GitHub,
+ *  определяет видеокарту и рабочие кодировщики. onProgress({fraction,label}) — ход докачки. Всегда возвращает статус. */
+export function prepareLocalRender(onProgress, force = false) {
+  if (preparing && !force) return preparing;
+  const run = async () => {
+    let unlisten = null;
+    if (typeof onProgress === "function") {
+      try { unlisten = await listen("ffmpeg-fetch-progress", ev => onProgress(ev.payload || {})); } catch (_) { /* не критично */ }
+    }
+    try {
+      lastStatus = await invoke("local_render_prepare");
+    } catch (e) {
+      lastStatus = { ffmpeg_ok: false, ffprobe_ok: false, source: "none", gpu: "", nvenc_h264: false, nvenc_h265: false, soft_h264: false, soft_h265: false, error: String((e && e.message) || e) };
+    } finally {
+      if (unlisten) unlisten();
+    }
+    return lastStatus;
+  };
+  preparing = run().finally(() => { if (!lastStatus || !lastStatus.ffmpeg_ok) preparing = null; });
+  return preparing;
+}
+
+export async function localRenderSupport(onProgress) {
+  const st = await prepareLocalRender(onProgress);
+  const nvenc = !!(st.nvenc_h264 || st.nvenc_h265);
+  const soft = !!(st.soft_h264 || st.soft_h265);
+  return { ok: !!st.ffmpeg_ok && (nvenc || soft), nvenc, soft, status: st };
+}
+
+const SOURCE_LABEL = { bundled: "встроенный", downloaded: "скачан приложением", path: "из системы (PATH)", none: "не найден" };
+
+/** Человеческое описание состояния инструментов — чтобы в окне никогда не было пусто. */
+export function describeTools(st) {
+  if (!st) return "Проверяю ffmpeg и видеокарту…";
+  const parts = [];
+  parts.push(st.ffmpeg_ok ? `ffmpeg: ${SOURCE_LABEL[st.source] || st.source}${st.downloaded_now ? " (только что скачан)" : ""} ✓` : `ffmpeg: ${st.error || "не найден"}`);
+  const gpu = st.gpu ? st.gpu : "видеокарта не определена";
+  const nv = st.nvenc_h264 || st.nvenc_h265;
+  parts.push(`Видеокарта: ${gpu} — ${nv ? "NVENC доступен ✓" : "NVENC не найден" + (st.soft_h264 || st.soft_h265 ? " (будет процессор)" : "")}`);
+  return parts.join(" · ");
 }
 
 function card(overlay) {

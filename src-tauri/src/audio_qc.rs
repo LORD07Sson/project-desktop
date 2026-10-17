@@ -14,7 +14,6 @@
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::OnceLock;
 
 /// Приложение собрано как GUI (windows_subsystem = "windows"), но у
 /// запускаемого из него процесса своя консоль — и Windows показывает её
@@ -198,8 +197,33 @@ pub(crate) fn binary_runs(exe: &std::path::Path) -> bool {
 /// Результат кэшируется на процесс: проверка `-version` — это ещё один
 /// запуск процесса, делать его перед КАЖДЫМ анализом файла незачем.
 pub(crate) fn resolve_ffmpeg() -> &'static str {
-    static RESOLVED: OnceLock<String> = OnceLock::new();
-    RESOLVED.get_or_init(|| resolve_binary_uncached("ffmpeg", "ffmpeg.exe")).as_str()
+    static RESOLVED: std::sync::Mutex<Option<&'static str>> = std::sync::Mutex::new(None);
+    cached_resolve(&RESOLVED, "ffmpeg", "ffmpeg.exe")
+}
+
+/// Папка, куда приложение само докачивает ffmpeg, если рядом с .exe его нет (см. local_render::prepare).
+pub(crate) fn downloaded_tools_dir() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|l| PathBuf::from(l).join("Project Desktop").join("tools").join("ffmpeg"))
+}
+
+/// Кэшируем только УДАЧНЫЙ резолв: если ffmpeg пока не запускается (его ещё не докачали), следующий вызов ищет заново —
+/// после докачки приложению не нужен перезапуск.
+pub(crate) fn cached_resolve(
+    slot: &'static std::sync::Mutex<Option<&'static str>>,
+    unix_name: &str,
+    windows_name: &str,
+) -> &'static str {
+    let mut guard = slot.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(found) = *guard {
+        return found;
+    }
+    let found = resolve_binary_uncached(unix_name, windows_name);
+    let ok = binary_runs(std::path::Path::new(&found));
+    let leaked: &'static str = Box::leak(found.into_boxed_str());
+    if ok {
+        *guard = Some(leaked);
+    }
+    leaked
 }
 
 /// Тот же приём резолва, что у resolve_ffmpeg(), но для имени бинарника
@@ -213,9 +237,17 @@ pub(crate) fn resolve_binary_uncached(unix_name: &str, windows_name: &str) -> St
         }
         // Лежит рядом, но не запускается (например, собран не под ту
         // архитектуру) — не тихо молчим, а пробуем PATH дальше.
-        log::warn!("bundled {windows_name:?} найден по пути {bundled:?}, но не запустился — используем PATH");
+        log::warn!("bundled {windows_name:?} найден по пути {bundled:?}, но не запустился — ищем дальше");
     } else {
-        log::warn!("{windows_name}: bundled-копия не найдена рядом с .exe — используем PATH ({unix_name})");
+        log::warn!("{windows_name}: bundled-копия не найдена рядом с .exe — ищем докачанную или PATH ({unix_name})");
+    }
+    // Докачанная приложением копия (если рядом с .exe ffmpeg нет)
+    if let Some(dir) = downloaded_tools_dir() {
+        let candidate = dir.join(if cfg!(windows) { windows_name } else { unix_name });
+        if candidate.is_file() && binary_runs(&candidate) {
+            log::info!("{windows_name}: используем докачанную версию {candidate:?}");
+            return candidate.to_string_lossy().into_owned();
+        }
     }
     unix_name.to_string()
 }

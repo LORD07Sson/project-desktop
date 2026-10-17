@@ -10,7 +10,7 @@
 //! resolve_binary_uncached/ffmpeg_command), дублировать эту логику здесь
 //! незачем — она не специфична для QC.
 
-use crate::audio_qc::{ffmpeg_command, hidden_command, resolve_binary_uncached, resolve_ffmpeg};
+use crate::audio_qc::{ffmpeg_command, hidden_command, resolve_ffmpeg};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -19,8 +19,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 pub(crate) fn resolve_ffprobe() -> &'static str {
-    static RESOLVED: OnceLock<String> = OnceLock::new();
-    RESOLVED.get_or_init(|| resolve_binary_uncached("ffprobe", "ffprobe.exe")).as_str()
+    static RESOLVED: std::sync::Mutex<Option<&'static str>> = std::sync::Mutex::new(None);
+    crate::audio_qc::cached_resolve(&RESOLVED, "ffprobe", "ffprobe.exe")
 }
 
 /// Версия программы (первая строка `-version`) или None, если не запускается.

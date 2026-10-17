@@ -634,6 +634,12 @@ fn mt_extract_subtitles(
 
 // ---------- «Собрать финал у себя» (local_render.rs): рендер на видеокарте ПК по плану сервера ----------
 
+/// Автопроверка инструментов: ffmpeg (докачивает из релиза на GitHub, если нет), видеокарта и кодировщики.
+#[tauri::command]
+async fn local_render_prepare(app: tauri::AppHandle) -> local_render::ToolsStatus {
+    local_render::prepare(&app, http()).await
+}
+
 /// Какие кодировщики реально работают на этом компьютере (NVENC — видеокарта NVIDIA).
 #[tauri::command(async)]
 fn local_render_encoders() -> local_render::EncoderStatus {
@@ -1464,6 +1470,7 @@ fn main() {
         .manage(file_scope::FileScope::default())
         .invoke_handler(tauri::generate_handler![
             desktop_notify::notify_desktop,
+            local_render_prepare,
             local_render_encoders,
             local_render_run,
             local_render_upload,
