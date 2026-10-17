@@ -462,7 +462,17 @@ function showServerProgress(st) {
 async function cancelServerDownload() {
   if (!serverJob) return;
   try { await apiPost("/nyaa/share-cancel", { job: serverJob.id }); toast("Отменяю скачивание…", "info"); }
-  catch (e) { toast(`Не удалось отменить: ${e.message}`, "error"); }
+  catch (e) {
+    if (/не найден/i.test(String(e.message))) { clearServerJob("Задача на сервере уже закончилась или сервер перезапускался — скачивание остановлено."); return; }
+    toast(`Не удалось отменить: ${e.message}`, "error");
+  }
+}
+
+function clearServerJob(msg) {
+  if (serverJob && serverJob.timer) clearInterval(serverJob.timer);
+  serverJob = null;
+  showServerProgress(null);
+  if (msg) toast(msg, "info");
 }
 
 function watchServerDownload(job, publicId, names) {
@@ -472,7 +482,12 @@ function watchServerDownload(job, publicId, names) {
   const finish = () => { clearInterval(serverJob.timer); serverJob = null; showServerProgress(null); };
   serverJob.timer = setInterval(async () => {
     let st;
-    try { st = await apiGet("/nyaa/share-status", { job: serverJob.id }); } catch (_) { return; }
+    try { st = await apiGet("/nyaa/share-status", { job: serverJob.id }); }
+    catch (e) {
+      // сервер перезапустился — задача в памяти пропала: не держим плашку вечно
+      if (/не найден/i.test(String(e.message))) clearServerJob("Скачивание на сервере прервалось (сервер перезапускался). Запустите его ещё раз кнопкой ☁.");
+      return;
+    }
     serverJob.last = st;
     if (st.state === "done") {
       finish();
