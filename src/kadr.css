@@ -3058,3 +3058,4 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-asm-bar { position: relative; height: 22px; border-radius: 99px; background: rgba(0, 0, 0, .3); overflow: hidden; margin: 4px 0; }
 .rd-asm-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent-grad); border-radius: 99px; transition: width .6s ease; min-width: 2%; }
 .rd-asm-bar em { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .55); }
+.rd-asm-cancel { justify-self: start; margin-top: 4px; }

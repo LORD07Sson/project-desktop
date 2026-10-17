@@ -68,17 +68,29 @@ function startAssemblyWatch(publicId, overlay, waitForStart) {
     const failed = st.stage === "error";
     card.className = `rd-asm${failed ? " bad" : st.stage === "done" ? " ok" : ""}`;
     card.innerHTML = `
-      <b>${failed ? "❌ Сборка не удалась" : st.stage === "done" ? "✅ Финал собран" : st.stage === "queued" ? "⏳ Сборка в очереди" : "🎬 Сборка финала"}</b>
+      <b>${failed ? "❌ Сборка не удалась" : st.stage === "cancelled" ? "🛑 Сборка отменена" : st.stage === "done" ? "✅ Финал собран" : st.stage === "queued" ? "⏳ Сборка в очереди" : "🎬 Сборка финала"}</b>
       <span class="rd-asm-step">${esc(st.message || "")}</span>
-      ${failed || st.stage === "done" || st.stage === "queued" ? "" : `<div class="rd-asm-bar"><i style="width:${pct}%"></i><em>${pct}%</em></div>`}
-      ${lines.map(l => `<span class="rd-asm-meta">${esc(l)}</span>`).join("")}`;
+      ${failed || st.stage === "done" || st.stage === "queued" || st.stage === "cancelled" ? "" : `<div class="rd-asm-bar"><i style="width:${pct}%"></i><em>${pct}%</em></div>`}
+      ${lines.map(l => `<span class="rd-asm-meta">${esc(l)}</span>`).join("")}
+      ${failed || st.stage === "done" || st.stage === "cancelled" ? "" : `<button type="button" class="btn rd-asm-cancel" data-asm-cancel>⏹ Отменить сборку</button>`}`;
+    card.querySelector("[data-asm-cancel]")?.addEventListener("click", async e => {
+      const b = e.currentTarget;
+      b.disabled = true;
+      try {
+        await apiPost(`/report/${publicId}/assemble-cancel`, {});
+        toast("Отменяю сборку…", "info");
+      } catch (err) {
+        toast(`Не удалось отменить: ${err.message}`, "error");
+        b.disabled = false;
+      }
+    });
   };
 
   const tick = async () => {
     if (!overlay.isConnected) { stop(); return; }
     let st = null;
     try { st = await apiGet(`/report/${publicId}/assemble-progress`); } catch (_) { /* повторим на следующем тике */ }
-    if (st && st.stage && (st.active || st.stage === "done" || st.stage === "error")) {
+    if (st && st.stage && (st.active || st.stage === "done" || st.stage === "error" || st.stage === "cancelled")) {
       seenActive = true;
       paint(st);
       if (st.stage === "done") {
@@ -88,6 +100,7 @@ function startAssemblyWatch(publicId, overlay, waitForStart) {
         return;
       }
       if (st.stage === "error") { timer = setTimeout(stop, 20000); return; }
+      if (st.stage === "cancelled") { toast("Сборка отменена.", "info"); timer = setTimeout(stop, 5000); return; }
     } else if (!seenActive) {
       // Сборка ещё не началась: после нажатия кнопки ждём подтверждения в боте, при простом открытии карточки — молчим.
       if (!waitForStart || Date.now() - startedAt > 10 * 60 * 1000) { stop(); return; }
