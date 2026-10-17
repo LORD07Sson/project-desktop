@@ -364,16 +364,26 @@ export async function openTitleAdminDetail(titleId, onClose) {
           ${wm.has ? `<button class="btn ghost" id="wm-clear">Убрать</button>` : ""}
         </div>
         ${wm.has ? `<div class="wm-edit">
-          <div class="wm-stage" id="wm-stage" title="Перетащите знак мышью — где поставите, там он и будет в видео">
+          <div class="wm-zoombar">
+            <button type="button" class="btn ghost" id="wm-zoom-out" title="Отдалить">−</button>
+            <span class="meta" id="wm-zoom-val">100%</span>
+            <button type="button" class="btn ghost" id="wm-zoom-in" title="Приблизить">＋</button>
+            <button type="button" class="btn ghost" id="wm-zoom-fit" title="Весь кадр">Весь кадр</button>
+            <button type="button" class="btn ghost" id="wm-zoom-logo" title="Приблизить к знаку">🔍 К знаку</button>
+            <button type="button" class="btn ghost" id="wm-bg" title="Сменить фон макета, чтобы знак было лучше видно">Фон: тёмный</button>
+          </div>
+          <div class="wm-view" id="wm-view">
+          <div class="wm-stage" id="wm-stage" title="Перетащите знак мышью — где поставите, там он и будет в видео. Колесо мыши — приближение">
             <i class="wm-g wm-g-v1"></i><i class="wm-g wm-g-v2"></i><i class="wm-g wm-g-h1"></i><i class="wm-g wm-g-h2"></i><i class="wm-g wm-safe"></i>
             <img class="wm-logo" id="wm-logo" tabindex="0" draggable="false" src="${mediaUrl(`/titles/${titleId}/watermark/image`, { v: Date.now() })}" alt="Водяной знак">
             <span class="wm-stage-note">кадр видео 16:9</span>
+          </div>
           </div>
           <div class="wm-pos-row">
             <span class="meta" id="wm-pos-label"></span>
             <span class="wm-presets">${[["tl", "↖", 0, 0], ["tr", "↗", 1, 0], ["bl", "↙", 0, 1], ["br", "↘", 1, 1], ["c", "●", .5, .5]].map(([k, label, x, y]) => `<button type="button" class="btn ghost" data-wm-preset="${x}:${y}" title="Поставить в угол или по центру">${label}</button>`).join("")}</span>
           </div>
-          <div class="no-assignee">Перетащите знак мышью или кликните в нужную точку. Стрелки на клавиатуре двигают на 1%, с Shift — на 5%. Кнопки справа — быстрая постановка в угол.</div>
+          <div class="no-assignee">Перетащите знак мышью или кликните в нужную точку. Колесо мыши приближает (как лупа), приблизенный кадр двигается полосами прокрутки или средней кнопкой мыши. Стрелки на клавиатуре двигают знак на 1%, с Shift — на 5%.</div>
         </div>` : ""}
         <div class="add-row" style="align-items:center; gap:10px;">
           <span class="meta" style="min-width:90px;">Прозрачность</span>
@@ -521,6 +531,58 @@ export async function openTitleAdminDetail(titleId, onClose) {
     if (stage && logo) {
       logo.addEventListener("load", layoutLogo);
       new ResizeObserver(layoutLogo).observe(stage);
+      const view = sheet.querySelector("#wm-view");
+      let zoom = 1;
+      const ZOOM_MIN = 1, ZOOM_MAX = 8;
+      const applyZoom = (z, anchorX = 0.5, anchorY = 0.5) => {
+        // anchor — точка внутри видимой области (0..1), которая остаётся на месте при изменении масштаба.
+        const oldW = stage.clientWidth, oldH = stage.clientHeight;
+        const ax = (view.scrollLeft + view.clientWidth * anchorX) / oldW;
+        const ay = (view.scrollTop + view.clientHeight * anchorY) / oldH;
+        zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+        stage.style.width = `${zoom * 100}%`;
+        layoutLogo();
+        view.scrollLeft = ax * stage.clientWidth - view.clientWidth * anchorX;
+        view.scrollTop = ay * stage.clientHeight - view.clientHeight * anchorY;
+        const val = sheet.querySelector("#wm-zoom-val");
+        if (val) val.textContent = `${Math.round(zoom * 100)}%`;
+      };
+      view.addEventListener("wheel", e => {
+        e.preventDefault();
+        const r = view.getBoundingClientRect();
+        applyZoom(zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+      }, { passive: false });
+      sheet.querySelector("#wm-zoom-in").addEventListener("click", () => applyZoom(zoom * 1.5));
+      sheet.querySelector("#wm-zoom-out").addEventListener("click", () => applyZoom(zoom / 1.5));
+      sheet.querySelector("#wm-zoom-fit").addEventListener("click", () => applyZoom(1));
+      sheet.querySelector("#wm-zoom-logo").addEventListener("click", () => {
+        applyZoom(5);
+        // Знак — в центр видимой области.
+        const cx = logo.offsetLeft + logo.offsetWidth / 2, cy = logo.offsetTop + logo.offsetHeight / 2;
+        view.scrollLeft = cx - view.clientWidth / 2;
+        view.scrollTop = cy - view.clientHeight / 2;
+      });
+      const BGS = [["dark", "тёмный"], ["light", "светлый"], ["check", "шашка"], ["green", "зелёный"]];
+      let bgIndex = 0;
+      sheet.querySelector("#wm-bg").addEventListener("click", e => {
+        bgIndex = (bgIndex + 1) % BGS.length;
+        stage.dataset.bg = BGS[bgIndex][0];
+        e.currentTarget.textContent = `Фон: ${BGS[bgIndex][1]}`;
+      });
+      // Перемещение приблизенного кадра средней кнопкой мыши.
+      let pan = null;
+      view.addEventListener("pointerdown", e => {
+        if (e.button !== 1) return;
+        pan = { x: e.clientX, y: e.clientY, sl: view.scrollLeft, st: view.scrollTop };
+        view.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      view.addEventListener("pointermove", e => {
+        if (!pan) return;
+        view.scrollLeft = pan.sl - (e.clientX - pan.x);
+        view.scrollTop = pan.st - (e.clientY - pan.y);
+      });
+      view.addEventListener("pointerup", () => { pan = null; });
       const toFraction = (clientX, clientY, grabX, grabY) => {
         const r = stage.getBoundingClientRect();
         const w = logo.offsetWidth, h = logo.offsetHeight, m = r.width * MARGIN;
@@ -529,6 +591,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
       };
       let drag = null;
       stage.addEventListener("pointerdown", e => {
+        if (e.button !== 0) return;
         const lr = logo.getBoundingClientRect();
         // Клик мимо знака ставит его центром в эту точку, потом его можно подвигать дальше.
         drag = e.target === logo ? { gx: e.clientX - lr.left, gy: e.clientY - lr.top } : { gx: lr.width / 2, gy: lr.height / 2 };

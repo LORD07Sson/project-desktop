@@ -3251,3 +3251,11 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .wm-stage-note { position: absolute; left: 8px; bottom: 6px; font-size: 10px; color: rgba(255, 255, 255, .35); pointer-events: none; }
 .wm-pos-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wm-presets { display: inline-flex; gap: 6px; }
+
+/* Водяной знак: лупа и фон макета */
+.wm-zoombar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wm-view { width: 100%; max-width: 760px; max-height: 420px; overflow: auto; border-radius: 12px; border: 1px solid var(--line); background: #0d121b; }
+.wm-view .wm-stage { max-width: none; border: 0; border-radius: 0; }
+.wm-stage[data-bg="light"] { background: linear-gradient(135deg, #e8ecf2, #cfd6e2); }
+.wm-stage[data-bg="check"] { background: repeating-conic-gradient(#8a93a3 0 25%, #c9cfda 0 50%) 0 0 / 24px 24px; }
+.wm-stage[data-bg="green"] { background: linear-gradient(135deg, #1f4d33, #2a6b46); }
