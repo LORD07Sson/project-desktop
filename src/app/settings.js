@@ -75,6 +75,7 @@ async function openSettings() {
     behave: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
     update: '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>',
     studio: '<path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/>',
+    film: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 10h4M3 14h4M17 10h4M17 14h4"/>',
     diag: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
     power: '<path d="M12 3v8M6.3 7.3a8 8 0 1 0 11.4 0"/>',
     bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/>',
@@ -126,7 +127,7 @@ async function openSettings() {
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc, "Профиль и выход"], ["st-look", "Внешний вид", ICONS.look, "Тема, акцент, масштаб"], ["st-notif", "Уведомления", ICONS.bell, "Что и когда присылать"], ["st-behave", "Поведение", ICONS.behave, "Автозапуск, старт, фокус"], ["st-keys", "Горячие клавиши", ICONS.keys, "Все сочетания"]]],
     ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"], ["st-av", "Антивирус", ICONS.shield, "Проверка ПК, карантин, базы"]]],
-    ...((state.isAdmin && TILES.length) || state.isDeveloper ? [["Команда", [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"], ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot, "Где работает бот"], ["st-archive", "Архив серий", ICONS.archive, "Перенос серий в архив"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
+    ...((state.isAdmin && TILES.length) || state.isDeveloper || can("reports.assemble") ? [["Команда", [...(((state.isAdmin && TILES.length) || state.isDeveloper) ? [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"]] : []), ...(can("reports.assemble") ? [["st-assemble", "Сборка финала", ICONS.film, "Кодирование: формат, битрейт, кодек"]] : []), ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot, "Где работает бот"], ["st-archive", "Архив серий", ICONS.archive, "Перенос серий в архив"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`
@@ -277,6 +278,12 @@ async function openSettings() {
             ${row(ICONS.copy, "Отчёт для разработчика", "Версия, система, канал, связь с сервером — одним текстом в буфер обмена", `<button class="btn" id="s-copy-report">Скопировать</button>`, "баг ошибка")}
           </div>
         </section>
+
+        ${can("reports.assemble") ? `
+        <section class="st-sec" id="st-assemble">
+          <h3>Сборка финала</h3>
+          <div id="st-assemble-root"></div>
+        </section>` : ""}
 
         <section class="st-sec" id="st-studio">
           <h3>Команда</h3><p class="st-lead">Инструменты администратора.</p>
@@ -444,6 +451,8 @@ async function openSettings() {
 
   const botRoot = overlay.querySelector("#st-bot-chats");
   if (botRoot) import("./bot-chats.js").then(m => m.mountBotChats(botRoot));
+  const assembleRoot = overlay.querySelector("#st-assemble-root");
+  if (assembleRoot) import("./assemble-settings.js").then(m => m.mountAssembleSettings(assembleRoot));
   const archiveRoot = overlay.querySelector("#st-archive-root");
   if (archiveRoot) import("./archive.js").then(m => m.mountArchive(archiveRoot));
   const avRoot = overlay.querySelector("#st-av-root");
