@@ -410,12 +410,7 @@ pub async fn run(
             .await
             .map_err(|e| format!("Не удалось скачать «{label}»: {e}"))?;
         if !resp.status().is_success() {
-            let detail = resp
-                .json::<serde_json::Value>()
-                .await
-                .ok()
-                .and_then(|v| v.get("detail").and_then(|d| d.as_str()).map(str::to_string))
-                .unwrap_or_else(|| "сервер отказал".to_string());
+            let detail = response_detail(resp).await;
             return Err(format!("Не удалось скачать «{label}»: {detail}"));
         }
         let total = resp.content_length().unwrap_or(0);
@@ -557,6 +552,24 @@ async fn run_step(
     .map_err(|e| format!("Рендер не завершился: {e}"))?
 }
 
+/// Причина отказа сервера: текст из `detail`, а если ответ не от бота (например, от nginx) — по коду статуса.
+async fn response_detail(resp: reqwest::Response) -> String {
+    let status = resp.status();
+    let detail = resp
+        .json::<serde_json::Value>()
+        .await
+        .ok()
+        .and_then(|v| v.get("detail").and_then(|d| d.as_str()).map(str::to_string));
+    if let Some(d) = detail {
+        return d;
+    }
+    match status.as_u16() {
+        413 => "файл больше лимита сервера (413)".to_string(),
+        502 | 503 | 504 => format!("сервер недоступен или перезапускается ({})", status.as_u16()),
+        code => format!("сервер ответил {code}"),
+    }
+}
+
 fn urlencode(text: &str) -> String {
     text.bytes()
         .map(|b| match b {
@@ -599,12 +612,7 @@ pub async fn upload_final(
         .await
         .map_err(|e| format!("Не удалось отправить готовый файл: {e}"))?;
     if !resp.status().is_success() {
-        let detail = resp
-            .json::<serde_json::Value>()
-            .await
-            .ok()
-            .and_then(|v| v.get("detail").and_then(|d| d.as_str()).map(str::to_string))
-            .unwrap_or_else(|| "сервер отказал".to_string());
+        let detail = response_detail(resp).await;
         return Err(format!("Сервер не принял готовый файл: {detail}"));
     }
     Ok(())
