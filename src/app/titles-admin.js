@@ -265,7 +265,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
     let d, roles, assignable, wm, intro;
     try {
       [d, roles, assignable] = await Promise.all([apiGet(`/titles/${titleId}`), loadRoles(), loadAssignable()]);
-      wm = await apiGet(`/titles/${titleId}/watermark`).catch(() => ({ has: false, corner: "br", opacity: 60, scale: 15 }));
+      wm = await apiGet(`/titles/${titleId}/watermark`).catch(() => ({ has: false, corner: "br", opacity: 60, scale: 15, x: null, y: null }));
       intro = await apiGet(`/titles/${titleId}/intro`).catch(() => ({ has: false, name: null }));
     } catch (e) {
       sheet.innerHTML = `<div class="no-assignee">Не удалось загрузить: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
@@ -363,10 +363,18 @@ export async function openTitleAdminDetail(titleId, onClose) {
           <button class="btn" id="wm-pick">${wm.has ? "Заменить png" : "Загрузить png"}</button>
           ${wm.has ? `<button class="btn ghost" id="wm-clear">Убрать</button>` : ""}
         </div>
-        <div class="add-row" id="wm-corners" style="align-items:center; gap:6px;">
-          <span class="meta" style="min-width:90px;">Положение</span>
-          ${[["tl", "↖ левый верх"], ["tr", "↗ правый верх"], ["bl", "↙ левый низ"], ["br", "↘ правый низ"], ["c", "● по центру"]].map(([k, label]) => `<button type="button" class="btn${wm.corner === k ? " primary" : " ghost"}" data-wm-corner="${k}">${label}</button>`).join("")}
-        </div>
+        ${wm.has ? `<div class="wm-edit">
+          <div class="wm-stage" id="wm-stage" title="Перетащите знак мышью — где поставите, там он и будет в видео">
+            <i class="wm-g wm-g-v1"></i><i class="wm-g wm-g-v2"></i><i class="wm-g wm-g-h1"></i><i class="wm-g wm-g-h2"></i><i class="wm-g wm-safe"></i>
+            <img class="wm-logo" id="wm-logo" tabindex="0" draggable="false" src="${mediaUrl(`/titles/${titleId}/watermark/image`, { v: Date.now() })}" alt="Водяной знак">
+            <span class="wm-stage-note">кадр видео 16:9</span>
+          </div>
+          <div class="wm-pos-row">
+            <span class="meta" id="wm-pos-label"></span>
+            <span class="wm-presets">${[["tl", "↖", 0, 0], ["tr", "↗", 1, 0], ["bl", "↙", 0, 1], ["br", "↘", 1, 1], ["c", "●", .5, .5]].map(([k, label, x, y]) => `<button type="button" class="btn ghost" data-wm-preset="${x}:${y}" title="Поставить в угол или по центру">${label}</button>`).join("")}</span>
+          </div>
+          <div class="no-assignee">Перетащите знак мышью или кликните в нужную точку. Стрелки на клавиатуре двигают на 1%, с Shift — на 5%. Кнопки справа — быстрая постановка в угол.</div>
+        </div>` : ""}
         <div class="add-row" style="align-items:center; gap:10px;">
           <span class="meta" style="min-width:90px;">Прозрачность</span>
           <input id="wm-opacity" type="range" min="5" max="100" step="5" value="${wm.opacity}" style="flex:1;">
@@ -374,7 +382,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
         </div>
         <div class="add-row" style="align-items:center; gap:10px;">
           <span class="meta" style="min-width:90px;">Размер</span>
-          <input id="wm-scale" type="range" min="3" max="60" step="1" value="${wm.scale}" style="flex:1;">
+          <input id="wm-scale" type="range" min="3" max="100" step="1" value="${wm.scale}" style="flex:1;">
           <b id="wm-scale-val" style="min-width:44px; text-align:right;">${wm.scale}%</b>
         </div>
         <div class="no-assignee">Размер — доля ширины видео. Настройки сохраняются кнопкой ниже.</div>
@@ -485,20 +493,76 @@ export async function openTitleAdminDetail(titleId, onClose) {
     });
 
     // ---- водяной знак
-    let wmCorner = wm.corner;
-    sheet.querySelectorAll("[data-wm-corner]").forEach(btn => btn.addEventListener("click", () => {
-      wmCorner = btn.dataset.wmCorner;
-      sheet.querySelectorAll("[data-wm-corner]").forEach(b => {
-        const on = b.dataset.wmCorner === wmCorner;
-        b.classList.toggle("primary", on);
-        b.classList.toggle("ghost", !on);
+    const CORNER_POS = { tl: [0, 0], tr: [1, 0], bl: [0, 1], br: [1, 1], c: [.5, .5] };
+    const startPos = wm.x != null && wm.y != null ? [wm.x, wm.y] : (CORNER_POS[wm.corner] || [1, 1]);
+    let wmX = startPos[0], wmY = startPos[1];
+    const stage = sheet.querySelector("#wm-stage");
+    const logo = sheet.querySelector("#wm-logo");
+    const MARGIN = 0.02; // как в сборке: поле 2% ширины со всех сторон
+    const layoutLogo = () => {
+      if (!stage || !logo) return;
+      const sw = stage.clientWidth;
+      const w = sw * Number(sheet.querySelector("#wm-scale").value) / 100;
+      logo.style.width = `${w}px`;
+      const h = logo.offsetHeight || w * 0.4;
+      const m = sw * MARGIN;
+      logo.style.left = `${m + Math.max(0, sw - w - 2 * m) * wmX}px`;
+      logo.style.top = `${m + Math.max(0, stage.clientHeight - h - 2 * m) * wmY}px`;
+      logo.style.opacity = String(Number(sheet.querySelector("#wm-opacity").value) / 100);
+      const label = sheet.querySelector("#wm-pos-label");
+      if (label) label.textContent = `Слева ${Math.round(wmX * 100)}% · сверху ${Math.round(wmY * 100)}%`;
+    };
+    const setPos = (x, y, snap = true) => {
+      const near = v => (snap ? ([0, .5, 1].find(t => Math.abs(v - t) < 0.025) ?? v) : v);
+      wmX = Math.max(0, Math.min(1, near(x)));
+      wmY = Math.max(0, Math.min(1, near(y)));
+      layoutLogo();
+    };
+    if (stage && logo) {
+      logo.addEventListener("load", layoutLogo);
+      new ResizeObserver(layoutLogo).observe(stage);
+      const toFraction = (clientX, clientY, grabX, grabY) => {
+        const r = stage.getBoundingClientRect();
+        const w = logo.offsetWidth, h = logo.offsetHeight, m = r.width * MARGIN;
+        const left = clientX - r.left - grabX, top = clientY - r.top - grabY;
+        return [(left - m) / Math.max(1, r.width - w - 2 * m), (top - m) / Math.max(1, r.height - h - 2 * m)];
+      };
+      let drag = null;
+      stage.addEventListener("pointerdown", e => {
+        const lr = logo.getBoundingClientRect();
+        // Клик мимо знака ставит его центром в эту точку, потом его можно подвигать дальше.
+        drag = e.target === logo ? { gx: e.clientX - lr.left, gy: e.clientY - lr.top } : { gx: lr.width / 2, gy: lr.height / 2 };
+        stage.setPointerCapture(e.pointerId);
+        const [x, y] = toFraction(e.clientX, e.clientY, drag.gx, drag.gy);
+        setPos(x, y);
+        e.preventDefault();
       });
-    }));
+      stage.addEventListener("pointermove", e => {
+        if (!drag) return;
+        const [x, y] = toFraction(e.clientX, e.clientY, drag.gx, drag.gy);
+        setPos(x, y);
+      });
+      const stop = () => { drag = null; };
+      stage.addEventListener("pointerup", stop);
+      stage.addEventListener("pointercancel", stop);
+      logo.addEventListener("keydown", e => {
+        const step = e.shiftKey ? 0.05 : 0.01;
+        const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+        if (!d) return;
+        e.preventDefault();
+        setPos(wmX + d[0], wmY + d[1], false);
+      });
+      sheet.querySelectorAll("[data-wm-preset]").forEach(btn => btn.addEventListener("click", () => {
+        const [x, y] = btn.dataset.wmPreset.split(":").map(Number);
+        setPos(x, y, false);
+      }));
+      layoutLogo();
+    }
     for (const [id, valId] of [["#wm-opacity", "#wm-opacity-val"], ["#wm-scale", "#wm-scale-val"]]) {
-      sheet.querySelector(id).addEventListener("input", e => { sheet.querySelector(valId).textContent = `${e.target.value}%`; });
+      sheet.querySelector(id).addEventListener("input", e => { sheet.querySelector(valId).textContent = `${e.target.value}%`; layoutLogo(); });
     }
     const wmFields = () => ({
-      corner: wmCorner,
+      x: String(wmX), y: String(wmY),
       opacity: sheet.querySelector("#wm-opacity").value,
       scale: sheet.querySelector("#wm-scale").value,
     });
@@ -537,7 +601,7 @@ export async function openTitleAdminDetail(titleId, onClose) {
     sheet.querySelector("#wm-save").addEventListener("click", async () => {
       const f = wmFields();
       try {
-        await apiPost(`/titles/${titleId}/watermark/settings`, { corner: f.corner, opacity: Number(f.opacity), scale: Number(f.scale) });
+        await apiPost(`/titles/${titleId}/watermark/settings`, { x: Number(f.x), y: Number(f.y), opacity: Number(f.opacity), scale: Number(f.scale) });
         toast("Настройки водяного знака сохранены.", "success");
       } catch (e) { toast(`Не удалось сохранить: ${e.message}`, "error"); }
     });

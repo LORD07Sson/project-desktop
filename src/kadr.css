@@ -3238,3 +3238,16 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .cp-frame img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .cp-frame span { position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, .7); color: #fff; font-size: 11px; }
 .cp-frame:hover { border-color: var(--line); } .cp-frame.on { border-color: var(--fire, #f97316); }
+
+/* Водяной знак: свободная расстановка на макете кадра */
+.wm-edit { display: grid; gap: 8px; margin: 6px 0 10px; }
+.wm-stage { position: relative; width: 100%; max-width: 560px; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg, #1b2330, #2a3447 55%, #1e2736); border: 1px solid var(--line); cursor: crosshair; touch-action: none; user-select: none; }
+.wm-g { position: absolute; pointer-events: none; background: rgba(255, 255, 255, .14); }
+.wm-g-v1 { left: 33.33%; top: 0; bottom: 0; width: 1px; } .wm-g-v2 { left: 66.66%; top: 0; bottom: 0; width: 1px; }
+.wm-g-h1 { top: 33.33%; left: 0; right: 0; height: 1px; } .wm-g-h2 { top: 66.66%; left: 0; right: 0; height: 1px; }
+.wm-safe { inset: 2%; background: none; border: 1px dashed rgba(255, 255, 255, .28); border-radius: 6px; }
+.wm-logo { position: absolute; max-width: none; cursor: grab; outline: none; filter: drop-shadow(0 0 1px rgba(0, 0, 0, .6)); }
+.wm-logo:active { cursor: grabbing; } .wm-logo:focus-visible { outline: 2px dashed var(--fire, #f97316); outline-offset: 2px; }
+.wm-stage-note { position: absolute; left: 8px; bottom: 6px; font-size: 10px; color: rgba(255, 255, 255, .35); pointer-events: none; }
+.wm-pos-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wm-presets { display: inline-flex; gap: 6px; }
