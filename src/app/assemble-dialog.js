@@ -123,8 +123,9 @@ export async function openAssembleDialog(publicId) {
           coverImage = { file_id: up.file_id, name: up.name };
           label.textContent = up.name || file.name;
           const img = sheet.querySelector("#ad-cover-thumb");
-          img.src = URL.createObjectURL(file);
-          img.hidden = false;
+          // Превью только для разрешённых типов картинок и только по blob-ссылке.
+          const blobUrl = /^image\/(png|jpeg|webp)$/.test(file.type) ? URL.createObjectURL(file) : "";
+          if (blobUrl.startsWith("blob:")) { img.src = blobUrl; img.hidden = false; } else img.hidden = true;
           sheet.querySelector("#ad-cover-clear").hidden = false;
           sheet.querySelector("#ad-splice-opts").hidden = false;
         } catch (e) {
