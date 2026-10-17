@@ -401,6 +401,7 @@ async function mountDocs(root) {
           <button data-order="new" class="${d.order === "new" ? "on" : ""}">Новые первыми<small>свежие версии раньше накопившихся</small></button>
           <button data-order="old" class="${d.order === "old" ? "on" : ""}">По порядку<small>от самых старых</small></button>
         </div>
+        <label class="bcn-feature"><span>Когда все файлы отчёта в архиве — освобождать их кэш на сервере (Telegram помнит, при сборке скачается снова)</span><span class="ar-switch sm"><input type="checkbox" id="dc-free-cache" ${d.free_cache ? "checked" : ""}><i></i></span></label>
         <label class="bcn-feature"><span>Включая файлы, накопившиеся раньше (иначе только новые)</span><span class="ar-switch sm"><input type="checkbox" id="dc-backfill" ${d.backfill ? "checked" : ""}><i></i></span></label>
         <p class="ar-hint" style="margin:6px 0 0;">Файлы одного отчёта идут подряд: видео, под ним торрент (ответом на видео), потом субтитры, звук, надписи. Одинаковые файлы (то же имя и размер) второй раз не отправляются; zip подписывается списком содержимого.</p>
       </div>
@@ -445,6 +446,7 @@ async function mountDocs(root) {
     wireDocsRoutes(root.querySelector("#dc-routes"), d, body => save(body));
     root.querySelector("#dc-enabled").addEventListener("change", e => save({ enabled: e.target.checked }));
     root.querySelector("#dc-target").addEventListener("change", e => save({ target: e.target.value }));
+    root.querySelector("#dc-free-cache").addEventListener("change", e => save({ free_cache: e.target.checked }));
     root.querySelector("#dc-backfill").addEventListener("change", e => save({ backfill: e.target.checked }));
     root.querySelector("#dc-rules-save").addEventListener("click", () => {
       const rules = {};
