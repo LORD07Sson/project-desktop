@@ -9,7 +9,8 @@
 // Вкладка только для админов, как и Nyaa в боте.
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
-import { toast, API_BASE, apiBlob, openSheet } from "./api.js";
+import { toast, API_BASE, apiBlob, apiUpload, openSheet } from "./api.js";
+import { pickFiles } from "./attachments.js";
 import { state } from "./state.js";
 import { liveButton, openShare } from "./nyaa-fx.js";
 import { notifyDesktop } from "./desktop-notify.js";
@@ -413,6 +414,64 @@ function seg(items2, current, attr) {
   return items2.map(([k, l]) => `<button type="button" class="${k === current ? "on" : ""}" ${attr}="${esc(k)}">${esc(l)}</button>`).join("");
 }
 
+// ---------- «Видео с Nyaa» из карточки отчёта ----------
+// Из отчёта сюда приходят с готовым запросом: находим раздачу, отправляем в торрент-клиент (скачивание идёт на этом
+// компьютере), а когда видео скачалось — «Прикрепить видео» кладёт файл в отчёт. Дальше «Собрать финал» там же.
+let reportTarget = null; // { publicId, query }
+
+function paintReportBar() {
+  const body = $("#nyaa-body");
+  const shell = body && body.querySelector(".ny");
+  if (!body) return;
+  body.querySelector("#ny-report-bar")?.remove();
+  if (!reportTarget || !shell) return;
+  const bar = document.createElement("div");
+  bar.id = "ny-report-bar";
+  bar.className = "ny-report-bar";
+  bar.innerHTML = `<div><b>Видео для отчёта ${esc(reportTarget.publicId)}</b><span>Найдите раздачу и отправьте в торрент-клиент. Когда видео скачается — нажмите «Прикрепить видео», выберите файл, и откройте «Собрать финал» в отчёте.</span></div>
+    <button type="button" class="btn primary" data-rb-attach>Прикрепить видео</button>
+    <button type="button" class="btn ghost" data-rb-close>Закрыть</button>`;
+  shell.insertAdjacentElement("beforebegin", bar);
+  bar.querySelector("[data-rb-attach]").addEventListener("click", attachVideoToReport);
+  bar.querySelector("[data-rb-close]").addEventListener("click", () => { reportTarget = null; paintReportBar(); });
+}
+
+async function attachVideoToReport() {
+  if (!reportTarget) return;
+  const files = await pickFiles("video/*,.mkv,.mp4,.avi,.mov,.webm,.m4v");
+  if (!files.length) return;
+  const { publicId } = reportTarget;
+  let ok = 0;
+  for (const file of files) {
+    try { await apiUpload(`/report/${publicId}/files/upload`, file); ok += 1; }
+    catch (e) { toast(`Не загрузился файл ${file.name}: ${e.message}`, "error"); break; }
+  }
+  if (!ok) return;
+  toast(`Видео прикреплено к отчёту ${publicId}. Откройте отчёт и нажмите «Собрать финал».`, "success");
+  document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
+  reportTarget = null;
+  paintReportBar();
+}
+
+export function openNyaaForReport(publicId, query) {
+  reportTarget = { publicId, query };
+  document.querySelector('[data-tab="nyaa"]')?.click();
+  // Вкладка может ещё строиться — ждём оболочку и подставляем запрос.
+  let tries = 0;
+  const timer = setInterval(() => {
+    const qi = $("#ny-q");
+    if (qi) {
+      clearInterval(timer);
+      prefs.q = query;
+      qi.value = query;
+      savePrefs();
+      paintStatic();
+      paintReportBar();
+      load();
+    } else if (++tries > 40) clearInterval(timer);
+  }, 150);
+}
+
 function paintStatic() {
   $("#ny-cats").innerHTML = QUICK_CATS.map(([k, l]) => `<button type="button" class="ny-cat${k === prefs.cat ? " on" : ""}" data-cat="${k}">${esc(l)}</button>`).join("")
     + `<select id="ny-cat-more" aria-label="Другие категории"><option value="">Ещё категории…</option>${CATEGORIES.filter(([k]) => !QUICK_CATS.some(q => q[0] === k)).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
@@ -747,7 +806,8 @@ async function sendToClient(list) {
     const n = await invoke("tc_add", { magnets });
     list.forEach(i => touch(i.id));
     markSent(list); paintList();
-    toast(`Отправлено в ${CLIENT_NAMES[client.kind]}: ${n}.`, "success");
+    toast(`Отправлено в ${CLIENT_NAMES[client.kind]}: ${n}.`, "success",
+      reportTarget ? { label: "Прикрепить видео к отчёту", onClick: attachVideoToReport } : null);
   } catch (e) { toast(`Не удалось отправить: ${e}`, "error"); }
 }
 
@@ -2123,6 +2183,7 @@ export async function loadNyaa() {
     wire(body.querySelector(".ny"));
     paintMonitorBadge();
   }
+  paintReportBar();
   if (state.token && state.isAdmin && !remoteMirrors.nyaa) loadRemoteMirrors();
   if (state.token && state.isAdmin && !exitList.loadedAt) { exitList.loadedAt = Date.now(); loadExits(); }
   if (!lib && !libBusy) invoke("library_rescan").then(sc => { setLib(sc); paintLibLabel(); paintList(); }).catch(() => {});

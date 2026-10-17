@@ -358,6 +358,7 @@ export async function openReportDetail(publicId) {
               ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="no-assignee">Файлов пока нет — добавьте дорожку кнопкой ниже или перетащите файл в окно.</div>`}
               ${detail.is_sound ? `<div class="no-assignee" style="margin:8px 0;">🎚 Сдача звукаря: загрузите итоговый файл — видео с новым звуком или готовую дорожку. Админ сразу получит уведомление «Дорожка сдана».</div>` : ""}
               <button class="rd-add" id="report-file-add">${detail.is_sound ? "+ Сдать готовую дорожку" : "+ Добавить файл (дорожку)"}</button>
+              ${can("reports.files") ? `<button class="rd-add" id="report-nyaa" title="Найти раздачу на Nyaa, скачать в торрент-клиент и прикрепить видео к этому отчёту">🌐 Видео с Nyaa</button>` : ""}
               ${can("reports.assemble") ? `<button class="rd-add" id="report-assemble">🎬 Собрать финал</button>` : ""}
               ${can("titles.edit") && detail.title_id ? `<button class="rd-add" id="report-watermark" title="Логотип, угол, прозрачность и размер — общие для всех серий тайтла">💧 Водяной знак тайтла</button>` : ""}
             </div>
@@ -648,6 +649,21 @@ export async function openReportDetail(publicId) {
     sheet.querySelector("#report-watermark")?.addEventListener("click", () => openTitleAdminDetail(detail.title_id));
     // Сборка уже идёт (запущена раньше или с другого устройства) — карточка хода появится сама.
     if (sheet.querySelector("#report-assemble")) startAssemblyWatch(publicId, overlay, false);
+    sheet.querySelector("#report-nyaa")?.addEventListener("click", async () => {
+      // Запрос для Nyaa: латинское название тайтла (как у релизеров) и номер серии; не вышло — просто название отчёта.
+      let query = String(detail.title || "").split(/\s[—–-]\s/)[0].trim();
+      const episode = (String(detail.title || "").match(/(?:Серия|серия|Episode|EP)\s*(\d+)/) || [])[1];
+      try {
+        if (detail.title_id) {
+          const plan = await apiGet(`/titles/${detail.title_id}/work-plan`);
+          if (plan && plan.nyaa_query_default) query = plan.nyaa_query_default;
+        }
+      } catch (_) { /* нет права на план — ищем по названию */ }
+      if (episode) query = `${query} ${String(episode).padStart(2, "0")}`.trim();
+      const { openNyaaForReport } = await import("./nyaa.js");
+      overlay.remove();
+      openNyaaForReport(publicId, query);
+    });
     sheet.querySelector("#report-assemble")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       btn.disabled = true;
