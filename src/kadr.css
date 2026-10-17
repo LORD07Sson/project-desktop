@@ -3065,3 +3065,4 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .ad-pick { cursor: pointer; }
 .ad-pick input { accent-color: var(--fire); width: 16px; height: 16px; flex: none; }
 .ad-pick b { flex: 1; font-weight: 600; word-break: break-word; }
+.ad-cover-seg { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
