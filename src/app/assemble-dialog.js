@@ -92,6 +92,7 @@ export async function openAssembleDialog(publicId) {
         <span class="ar-label">Качество и формат</span>
         <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}">${esc(p.name)}</option>`).join("")}</select>
         <p class="ar-hint" id="ad-profile-desc"></p>
+        <div class="ad-est" id="ad-est"><span>Считаю примерный размер…</span></div>
         <p class="ar-hint">${opts.intro ? `Интро тайтла: ${esc(opts.intro)}.` : "Интро: нет — соберём без него."} ${opts.watermark ? `Водяной знак: ${esc(opts.watermark)}.` : "Водяной знак: нет."}
           Свой профиль качества настраивается в Настройки → Сборка финала.</p>
       </div>
@@ -105,8 +106,44 @@ export async function openAssembleDialog(publicId) {
     const descEl = sheet.querySelector("#ad-profile-desc");
     const profileSel = sheet.querySelector("#ad-profile");
     const refreshDesc = () => { descEl.textContent = (opts.profiles.find(p => String(p.index) === profileSel.value) || {}).desc || ""; };
-    profileSel.addEventListener("change", refreshDesc);
+    profileSel.addEventListener("change", () => { refreshDesc(); paintEstimate(); });
     refreshDesc();
+
+    // Примерный размер готового файла: сервер читает выбранное видео отчёта (длительность, битрейт) и считает по профилям.
+    const estBox = sheet.querySelector("#ad-est");
+    const fmtSize = n => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : `${Math.round(n / 1048576)} МБ`);
+    const fmtDur = sec => { sec = Math.round(sec || 0); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
+    let estimate = null;
+    function paintEstimate() {
+      if (!estBox) return;
+      if (!estimate) return;
+      const e = estimate.estimates.find(x => String(x.index) === profileSel.value);
+      const srcInfo = `исходник ${fmtSize(estimate.source_size)} · ${fmtDur(estimate.duration)} · ${estimate.width}×${estimate.height} · ${estimate.video_kbps} кбит/с`;
+      if (!e || e.low == null) { estBox.className = "ad-est"; estBox.innerHTML = `<span>Размер для этого профиля не посчитать.</span><small>${esc(srcInfo)}</small>`; return; }
+      estBox.className = `ad-est${e.over_limit ? " bad" : ""}`;
+      estBox.innerHTML = `<b>≈ ${fmtSize(e.low)} – ${fmtSize(e.high)}</b>
+        <span>${e.over_limit ? "Может не поместиться в Telegram (лимит 2 ГБ) — выберите профиль полегче." : "Помещается в Telegram (лимит 2 ГБ)."}</span>
+        <small>${esc(srcInfo)}. Интро и склейка добавят своё; точность ±30% для режима CRF, ±8% для заданного битрейта.</small>`;
+      // подписи профилей в списке — тоже с размером
+      [...profileSel.options].forEach(o => {
+        const x = estimate.estimates.find(y => String(y.index) === o.value);
+        const base = (opts.profiles.find(p => String(p.index) === o.value) || {}).name || o.textContent;
+        o.textContent = x && x.low != null ? `${base} · ≈ ${fmtSize(Math.round((x.low + x.high) / 2))}` : base;
+      });
+    }
+    async function loadEstimate() {
+      const checked = sheet.querySelector('input[name="ad-video"]:checked');
+      if (estBox) estBox.innerHTML = `<span>Считаю примерный размер…</span>`;
+      try {
+        estimate = await apiGet(`/report/${publicId}/assemble-estimate`, { video: checked ? Number(checked.value) : 0 });
+        paintEstimate();
+      } catch (err) {
+        estimate = null;
+        if (estBox) estBox.innerHTML = `<span>Размер оценить не удалось: ${esc(err.message)}</span>`;
+      }
+    }
+    sheet.querySelectorAll('input[name="ad-video"]').forEach(r => r.addEventListener("change", loadEstimate));
+    loadEstimate();
 
     const modeBox = sheet.querySelector("#ad-mode");
     const syncMode = () => { if (modeBox) modeBox.hidden = !sheet.querySelector("[data-ad-audio]:checked"); };

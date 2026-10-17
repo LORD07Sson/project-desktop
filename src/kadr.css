@@ -3182,3 +3182,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-fs-act .rd-add { white-space: nowrap; font-size: 12px; padding: 7px 8px; gap: 5px; justify-content: center; }
 .rd-fs.done .rd-fs-act .rd-add.primary { background: none; color: var(--ink-soft); border-style: dashed; }
 .rd-fs-act .rd-add .ei { margin-right: 0; }
+
+/* оценка размера в окне «Собрать финал» */
+.ad-est { display: grid; gap: 3px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); font-size: 12.5px; }
+.ad-est b { font-size: 15px; } .ad-est small { color: var(--ink-dim); font-size: 11px; } .ad-est span { color: var(--ink-soft); }
+.ad-est.bad { border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .07); } .ad-est.bad span { color: #ffb3a8; }
