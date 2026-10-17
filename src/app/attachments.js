@@ -7,7 +7,8 @@
 import { state } from "./state.js";
 import { mediaUrl, openSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
-import { invoke, pickOutputFile, revealInFolder } from "./tauri.js";
+import { pickOutputFile } from "./tauri.js";
+import { downloadWithCard } from "./download-card.js";
 
 // Из десктопа отправляются только картинки: файлы тяжёлые, а канал до
 // VPS у провайдеров режется (~190 КБ/с на соединение) — их шлют боту.
@@ -46,12 +47,7 @@ export function attachHtml(a) {
 export async function downloadAttachment(rel, name) {
   const savePath = await pickOutputFile(name || "file");
   if (!savePath) return;
-  try {
-    await invoke("download_api_file", { apiPath: rel, initData: state.token || "", savePath });
-    toast("Файл сохранён.", "success", { label: "📂 Показать в папке", onClick: () => revealInFolder(savePath) });
-  } catch (e) {
-    toast(`Не удалось скачать: ${e}`, "error");
-  }
+  await downloadWithCard({ command: "download_api_file", args: { apiPath: rel }, savePath, name: name || "file" });
 }
 
 function openImage(rel, name) {

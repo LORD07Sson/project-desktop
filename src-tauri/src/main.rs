@@ -721,6 +721,18 @@ fn open_log_folder(app: tauri::AppHandle) -> Result<(), String> {
     app.opener().reveal_item_in_dir(&dir).map_err(|e| e.to_string())
 }
 
+/// «Показать в папке»: открывает проводник и выделяет сам файл (через opener, а не shell:open, у которого скоуп
+/// на пути в папки не рассчитан). Работает только для существующего файла.
+#[tauri::command(async)]
+fn reveal_in_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let p = std::path::PathBuf::from(&path);
+    if !p.exists() {
+        return Err("Файла уже нет на диске.".into());
+    }
+    app.opener().reveal_item_in_dir(&p).map_err(|e| e.to_string())
+}
+
 // Обращение к хранилищу учётных данных ОС тоже блокирующее (на Linux —
 // синхронный вызов Secret Service по D-Bus).
 #[tauri::command(async)]
@@ -977,6 +989,7 @@ async fn download_report_file(
     file_id: String,
     init_data: String,
     save_path: String,
+    job: Option<String>,
 ) -> Result<(), String> {
     let result = async {
         // Путь сохранения приходит из вебвью. Без этой проверки XSS мог
@@ -1003,7 +1016,7 @@ async fn download_report_file(
             tokio::time::sleep(std::time::Duration::from_secs(5 * attempt as u64)).await;
         };
 
-        save_response_to_file(resp, &save_path).await
+        save_response_to_file(resp, &save_path, job.map(|j| (app.clone(), j))).await
     }
     .await;
     log_result("download_report_file", result)
@@ -1042,6 +1055,7 @@ async fn download_api_file(
     api_path: String,
     init_data: String,
     save_path: String,
+    job: Option<String>,
 ) -> Result<(), String> {
     let result = async {
         if !allowed_attachment_path(&api_path) {
@@ -1066,7 +1080,7 @@ async fn download_api_file(
             attempt += 1;
             tokio::time::sleep(std::time::Duration::from_secs(5 * attempt as u64)).await;
         };
-        save_response_to_file(resp, &save_path).await
+        save_response_to_file(resp, &save_path, job.map(|j| (app.clone(), j))).await
     }
     .await;
     log_result("download_api_file", result)
@@ -1079,8 +1093,19 @@ async fn download_api_file(
 async fn save_response_to_file(
     mut resp: reqwest::Response,
     save_path: &std::path::Path,
+    progress: Option<(tauri::AppHandle, String)>,
 ) -> Result<(), String> {
     use std::io::Write;
+    let declared = resp.content_length().unwrap_or(0);
+    let mut last_emit = std::time::Instant::now() - std::time::Duration::from_secs(1);
+    let emit = |done: u64, force: bool, last: &mut std::time::Instant| {
+        if let Some((app, job)) = &progress {
+            if force || last.elapsed() >= std::time::Duration::from_millis(150) {
+                *last = std::time::Instant::now();
+                let _ = app.emit("download-progress", serde_json::json!({ "job": job, "done": done, "total": declared }));
+            }
+        }
+    };
     if let Some(len) = resp.content_length() {
         if len > MAX_UPLOAD_BYTES {
             return Err(format!("Файл слишком большой ({} МБ).", len / 1024 / 1024));
@@ -1099,7 +1124,9 @@ async fn save_response_to_file(
                 return Err("Файл слишком большой.".into());
             }
             out.write_all(&chunk).map_err(|e| format!("Не удалось сохранить файл: {e}"))?;
+            emit(total, false, &mut last_emit);
         }
+        emit(total, true, &mut last_emit);
         out.flush().map_err(|e| format!("Не удалось сохранить файл: {e}"))
     }
     .await;
@@ -1386,6 +1413,7 @@ fn main() {
             mt_concat_media,
             mt_mux_media,
             open_log_folder,
+            reveal_in_folder,
         ])
         .setup(|app| {
             // Первая строка в файловом логе за сеанс — якорь, от которого

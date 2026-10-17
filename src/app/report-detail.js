@@ -12,6 +12,7 @@ import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, deadlineCellHtml, posterSrc } from "./reports.js";
 import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from "./titles-admin.js";
 import { setDropTarget } from "./file-drop.js";
+import { downloadWithCard } from "./download-card.js";
 import { recordRecentReport } from "./recent-reports.js";
 import { toggleFocusMode, syncFocusButton } from "./focus-mode.js";
 import { loadAvatars } from "./profile.js";
@@ -838,20 +839,9 @@ export async function openReportDetail(publicId) {
         if (!savePath) return;
         btn.disabled = true;
         try {
-          await invoke("download_report_file", {
-            reportId: publicId,
-            fileId,
-            initData: state.token || "",
-            savePath,
-          });
-          toast("Файл сохранён.", "success", {
-            label: "📂 Показать в папке",
-            onClick: () => revealInFolder(savePath),
-          });
-        } catch (e) {
-          toast(`Не удалось скачать: ${e}`, "error");
+          const ok = await downloadWithCard({ command: "download_report_file", args: { reportId: publicId, fileId }, savePath, name: btn.dataset.fileName || "файл" });
           // Файл мог уйти в архив Telegram и пропасть из кэша сервера — бот достанет его оттуда и пришлёт сам.
-          if (confirm(`Не удалось скачать «${btn.dataset.fileName || "файл"}» на компьютер.
+          if (!ok && confirm(`Не удалось скачать «${btn.dataset.fileName || "файл"}» на компьютер.
 
 Прислать его через бота в Telegram? Бот возьмёт файл из архива.`)) {
             try {
@@ -1078,7 +1068,7 @@ function productionHtml(detail, fileList) {
     </div>`;
   const sendFile = [...list].reverse().find(f => /_final\./i.test(f.file_name || "")) || [...list].reverse().find(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
-  const nyaa = can("reports.files") ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск">⚠ ОПАСНАЯ ЗОНА · Видео с Nyaa</button>` : "";
+  const nyaa = can("reports.files") ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l1">⚠ Опасная зона</span><span class="dz-l2">Видео с Nyaa</span></button>` : "";
   const assemble = can("reports.assemble") ? `<button class="rd-add primary" id="report-assemble">🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
   return `

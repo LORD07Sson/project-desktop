@@ -129,6 +129,10 @@ function parentDir(filePath) {
 export function openInSystemPlayer(filePath) {
   return invoke("plugin:shell|open", { path: filePath });
 }
-export function revealInFolder(filePath) {
-  return invoke("plugin:shell|open", { path: parentDir(filePath) });
+export async function revealInFolder(filePath) {
+  try {
+    await invoke("reveal_in_folder", { path: filePath });
+  } catch (_) {
+    await invoke("plugin:shell|open", { path: parentDir(filePath) });
+  }
 }
