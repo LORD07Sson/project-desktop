@@ -262,10 +262,11 @@ export async function openTitleAdminDetail(titleId, onClose) {
   }
 
   async function render() {
-    let d, roles, assignable, wm;
+    let d, roles, assignable, wm, intro;
     try {
       [d, roles, assignable] = await Promise.all([apiGet(`/titles/${titleId}`), loadRoles(), loadAssignable()]);
       wm = await apiGet(`/titles/${titleId}/watermark`).catch(() => ({ has: false, corner: "br", opacity: 60, scale: 15 }));
+      intro = await apiGet(`/titles/${titleId}/intro`).catch(() => ({ has: false, name: null }));
     } catch (e) {
       sheet.innerHTML = `<div class="no-assignee">Не удалось загрузить: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
       sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
@@ -341,6 +342,16 @@ export async function openTitleAdminDetail(titleId, onClose) {
           <input id="ep-label-new" placeholder="Номер/название серии, например «Серия 5»…">
           <input id="ep-deadline-new" type="date">
           <button class="btn" id="ep-add">Создать</button>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Интро</h3>
+        <div class="no-assignee" style="margin-bottom:8px;">Короткое видео, которое ставится в начало финала при сборке (до 500 МБ). Одно на тайтл — новое заменяет прежнее.</div>
+        <div class="add-row" style="align-items:center; gap:10px;">
+          ${intro.has ? `<span class="meta">🎬 ${esc(intro.name || "интро")}</span>` : `<span class="meta">Интро не загружено — соберём без него</span>`}
+          <button class="btn" id="intro-pick">${intro.has ? "Заменить интро" : "Загрузить интро"}</button>
+          ${intro.has ? `<button class="btn ghost" id="intro-clear">Убрать</button>` : ""}
         </div>
       </div>
 
@@ -490,6 +501,29 @@ export async function openTitleAdminDetail(titleId, onClose) {
       corner: wmCorner,
       opacity: sheet.querySelector("#wm-opacity").value,
       scale: sheet.querySelector("#wm-scale").value,
+    });
+    sheet.querySelector("#intro-pick").addEventListener("click", async () => {
+      const file = await pickFile("video/*");
+      if (!file) return;
+      const btn = sheet.querySelector("#intro-pick");
+      btn.disabled = true;
+      btn.textContent = "Загружаю…";
+      try {
+        await apiUpload(`/titles/${titleId}/intro`, file, {});
+        toast("Интро загружено — оно будет в начале финала.", "success");
+        await render();
+      } catch (e) {
+        toast(`Не удалось загрузить интро: ${e.message}`, "error");
+        btn.disabled = false;
+        btn.textContent = "Загрузить интро";
+      }
+    });
+    sheet.querySelector("#intro-clear")?.addEventListener("click", async () => {
+      if (!confirm("Убрать интро у тайтла? Финал будет собираться без него.")) return;
+      try {
+        await apiPost(`/titles/${titleId}/intro/delete`, {});
+        await render();
+      } catch (e) { toast(`Не удалось убрать: ${e.message}`, "error"); }
     });
     sheet.querySelector("#wm-pick").addEventListener("click", async () => {
       const file = await pickFile("image/png");
