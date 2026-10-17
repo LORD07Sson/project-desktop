@@ -6,7 +6,7 @@ import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast, dialogSkele
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { state, can } from "./state.js";
-import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow } from "./tauri.js";
+import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow, openExternal } from "./tauri.js";
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, deadlineCellHtml, posterSrc } from "./reports.js";
@@ -31,7 +31,7 @@ const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙",
 // и переживает перерисовку шторки (при каждом опросе, если её не стало, возвращается на место).
 const assemblyWatchers = new Set();
 
-function startAssemblyWatch(publicId, overlay, waitForStart) {
+function startAssemblyWatch(publicId, overlay, waitForStart, botName = "") {
   if (assemblyWatchers.has(publicId)) return;
   assemblyWatchers.add(publicId);
   const startedAt = Date.now();
@@ -53,9 +53,16 @@ function startAssemblyWatch(publicId, overlay, waitForStart) {
     if (!card) { card = document.createElement("div"); card.className = "rd-asm"; }
     if (!card.isConnected) btn.insertAdjacentElement("afterend", card);
     if (!st) {
-      card.innerHTML = `<b>🎬 Сборка финала</b><span class="rd-asm-step">Жду подтверждения в боте — откройте карточку и нажмите «Собрать».</span>`;
+      if (card.dataset.state === "waiting") return;  // не перерисовываем, чтобы не мигала кнопка
+      card.dataset.state = "waiting";
+      card.innerHTML = `<b>🎬 Сборка финала</b><span class="rd-asm-step">Жду подтверждения в боте — откройте карточку и нажмите «Собрать».</span>
+        ${botName ? `<button type="button" class="btn primary rd-asm-cancel" data-asm-open>📲 Открыть бота в Telegram</button>` : ""}`;
+      card.querySelector("[data-asm-open]")?.addEventListener("click", () => {
+        openExternal(`tg://resolve?domain=${botName}`).catch(() => openExternal(`https://t.me/${botName}`).catch(() => toast("Откройте бота в Telegram — карточка сборки ждёт в чате.", "info")));
+      });
       return;
     }
+    card.dataset.state = st.stage || "run";
     const pct = Math.round((st.fraction || 0) * 100);
     const lines = [];
     if (st.frame) lines.push(`Кадры: ${num(st.frame)}${st.total_frames ? ` из ≈ ${num(st.total_frames)}` : ""}`);
@@ -657,9 +664,9 @@ export async function openReportDetail(publicId) {
         const audioNote = check.audios && check.audios.length ? `\nДорожки в отчёте: ${check.audios.slice(0, 4).join(", ")}${check.audios.length > 4 ? " …" : ""} — в боте можно подставить дорожку даббера (заменить звук или смешать).` : "";
         const chooseNote = choose.length ? `\nВ боте можно выбрать другой файл: ${choose.join(", ")}.` : "";
         if (!confirm(`Собрать финал?\n\nВидео: ${check.video}\nСубтитры: ${check.subs}\n${introText[0].toUpperCase() + introText.slice(1)}${audioNote}${chooseNote}\n\nКарточка подтверждения придёт вам в бота, сборка идёт там.`)) return;
-        await apiPost(`/report/${publicId}/assemble`, {});
+        const started = await apiPost(`/report/${publicId}/assemble`, {});
         toast("Карточка сборки отправлена в бота — подтвердите там.", "success");
-        startAssemblyWatch(publicId, overlay, true);
+        startAssemblyWatch(publicId, overlay, true, started && started.bot ? started.bot : "");
         if (can("posts.manage")) offerPublishPost();
       } catch (err) {
         toast(`Не удалось запустить сборку: ${err.message}`, "error");
