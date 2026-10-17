@@ -68,9 +68,9 @@ function startAssemblyWatch(publicId, overlay, waitForStart) {
     const failed = st.stage === "error";
     card.className = `rd-asm${failed ? " bad" : st.stage === "done" ? " ok" : ""}`;
     card.innerHTML = `
-      <b>${failed ? "❌ Сборка не удалась" : st.stage === "done" ? "✅ Финал собран" : "🎬 Сборка финала"}</b>
+      <b>${failed ? "❌ Сборка не удалась" : st.stage === "done" ? "✅ Финал собран" : st.stage === "queued" ? "⏳ Сборка в очереди" : "🎬 Сборка финала"}</b>
       <span class="rd-asm-step">${esc(st.message || "")}</span>
-      ${failed || st.stage === "done" ? "" : `<div class="rd-asm-bar"><i style="width:${pct}%"></i><em>${pct}%</em></div>`}
+      ${failed || st.stage === "done" || st.stage === "queued" ? "" : `<div class="rd-asm-bar"><i style="width:${pct}%"></i><em>${pct}%</em></div>`}
       ${lines.map(l => `<span class="rd-asm-meta">${esc(l)}</span>`).join("")}`;
   };
 
