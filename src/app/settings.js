@@ -127,7 +127,7 @@ async function openSettings() {
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc, "Профиль и выход"], ["st-look", "Внешний вид", ICONS.look, "Тема, акцент, масштаб"], ["st-notif", "Уведомления", ICONS.bell, "Что и когда присылать"], ["st-behave", "Поведение", ICONS.behave, "Автозапуск, старт, фокус"], ["st-keys", "Горячие клавиши", ICONS.keys, "Все сочетания"]]],
     ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"], ["st-av", "Антивирус", ICONS.shield, "Проверка ПК, карантин, базы"]]],
-    ...((state.isAdmin && TILES.length) || state.isDeveloper || can("reports.assemble") ? [["Команда", [...(((state.isAdmin && TILES.length) || state.isDeveloper) ? [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"]] : []), ...(can("reports.assemble") ? [["st-assemble", "Сборка финала", ICONS.film, "Кодирование: формат, битрейт, кодек"]] : []), ...(state.isDeveloper ? [["st-auto", "Автоматизация", ICONS.bot, "Архив серий, чаты бота, скорость"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
+    ...((state.isAdmin && TILES.length) || state.isDeveloper || can("reports.assemble") ? [["Команда", [...(((state.isAdmin && TILES.length) || state.isDeveloper) ? [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"]] : []), ...(can("reports.assemble") ? [["st-assemble", "Сборка финала", ICONS.film, "Кодирование: формат, битрейт, кодек"]] : []), ...(state.isDeveloper ? [["st-auto", "Автоматизация", ICONS.bot, "Архивы, чаты бота, скорость, логи"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`
@@ -294,7 +294,7 @@ async function openSettings() {
 
         ${state.isDeveloper ? `
         <section class="st-sec" id="st-auto">
-          <h3>Автоматизация</h3><p class="st-lead">Что бот делает сам: архив серий, чаты и ограничения скорости.</p>
+          <h3>Автоматизация</h3><p class="st-lead">Что бот делает сам: архивы серий, отчётов и документов, чаты, ограничения скорости, логи.</p>
           <div id="st-auto-root"></div>
         </section>
         <section class="st-sec" id="st-perms">

@@ -5,6 +5,7 @@ import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
 
 const TABS = [
+  ["overview", "Обзор", '<path d="M4 5h7v7H4zM13 5h7v4h-7zM13 11h7v8h-7zM4 14h7v5H4z"/>'],
   ["archive", "Архив серий", '<path d="M4 7h16M6 7v11h12V7M10 11h4"/>'],
   ["chats", "Чаты бота", '<path d="M4 5h16v11H9l-5 4z"/>'],
   ["reports", "Отчёты", '<path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/>'],
@@ -15,6 +16,36 @@ const TABS = [
 const svg = d => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 
 const fmtBytes = n => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : n >= 1048576 ? `${(n / 1048576).toFixed(1)} МБ` : `${Math.round(n / 1024)} КБ`);
+
+async function mountOverview(root, go) {
+  let d;
+  try { d = await apiGet("/automation/overview"); }
+  catch (e) { root.innerHTML = `<div class="bc-warn">Не удалось загрузить: ${esc(e.message)}</div>`; return; }
+  const mb = d.speed.total ? ` · общий потолок ${d.speed.total}` : "";
+  const lim = v => (v ? `${v} Мбит/с` : "без лимита");
+  const state = (on, paused) => (!on ? ["выключен", "off"] : paused ? ["на паузе", "warn"] : ["работает", "ok"]);
+  const card = (tab, title, st, lines) => {
+    const [label, cls] = st;
+    return `<button type="button" class="ar-card" data-au-go="${tab}" style="text-align:left; cursor:pointer; display:grid; gap:6px;">
+      <div class="ar-card-head"><h4>${title}</h4><span class="bcn-badge ${cls === "ok" ? "work" : cls === "warn" ? "" : "gone"}">${label}</span></div>
+      ${lines.map(l => `<span class="ar-hint" style="margin:0;">${l}</span>`).join("")}
+    </button>`;
+  };
+  root.innerHTML = `
+    <div class="ar" style="display:grid; gap:14px;">
+      ${d.problems.length ? `<div class="ar-card" style="border-color:rgba(255,120,90,.5);"><div class="ar-card-head"><h4>Нужно внимание · ${d.problems.length}</h4></div>
+        ${d.problems.map(p => `<div class="ar-row" style="display:flex; justify-content:space-between; gap:12px; align-items:center;"><span>${esc(p.text)}</span><button type="button" class="btn" data-au-go="${p.tab}">Открыть</button></div>`).join("")}</div>`
+        : `<div class="ar-card"><div class="ar-card-head"><h4>Всё в порядке</h4></div><p class="ar-hint" style="margin:0;">Ошибок и зависших очередей нет. Свободно на диске сервера: ${(d.disk_free / 1024 ** 3).toFixed(1)} ГБ.</p></div>`}
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px;">
+        ${card("archive", "Архив серий", state(d.archive.enabled, d.archive.paused), [`В очереди: ${d.archive.queue}${d.archive.held ? ` · ждут решения: ${d.archive.held}` : ""}`, `Лимит заливки: ${lim(d.archive.limit)}`])}
+        ${card("reports", "Архив отчётов", state(d.reports.enabled, d.reports.paused), [`В очереди: ${d.reports.queue} · перенесено: ${d.reports.done}`, d.reports.failed ? `Ошибок: ${d.reports.failed}` : "Ошибок нет"])}
+        ${card("docs", "Архив документов", state(d.docs.enabled, d.docs.paused), [`В очереди: ${d.docs.queue} · отправлено: ${d.docs.done}`, d.docs.failed ? `Ошибок: ${d.docs.failed}` : "Ошибок нет"])}
+        ${card("speed", "Скорость", ["действует", "ok"], [`Архив: ${lim(d.speed.archive)} · торренты: ${lim(d.speed.torrent)}${mb}`, d.speed.night_now ? "Сейчас ночной режим" : "Обычный режим"])}
+        ${card("logs", "Логи", ["действует", d.logs.auto ? "ok" : "warn"], [`Занимают ${(d.logs.bytes / 1048576).toFixed(0)} МБ`, d.logs.auto ? `Автоочистка: хранить ${d.logs.days} дн.` : "Автоочистка выключена"])}
+      </div>
+    </div>`;
+  root.querySelectorAll("[data-au-go]").forEach(b => b.addEventListener("click", () => go(b.dataset.auGo)));
+}
 
 async function mountLogs(root) {
   let d;
@@ -96,19 +127,49 @@ async function mountSpeed(root) {
       ${field("archive", "Заливка архива серий в Telegram", "Сколько бот заливает в архивную группу. Когда очередь пуста, бот сам снимает лимит; для большой пачки серий верните 45.", d.archive_mbit)}
       ${field("torrent", "Скачивание торрентов на сервере", "Очередь Nyaa и кнопка ☁ «Видео с Nyaa» в отчёте. Действует на новые скачивания.", d.torrent_mbit)}
       ${field("social", "Скачивание видео по ссылкам", "Видео с YouTube и других сайтов, которые бот качает по ссылке из чата. Действует на новые скачивания.", d.social_mbit)}
+      <div class="ar-card">
+        <div class="ar-card-head"><h4>Ночной режим</h4>
+          <span class="ar-switch sm"><input type="checkbox" id="sp-night-on" ${d.night_on ? "checked" : ""}><i></i></span></div>
+        <p class="ar-hint" style="margin:0 0 10px;">В заданные часы по Москве действуют свои лимиты, например ночью, когда студия не работает, можно качать быстрее.
+          Сейчас: <b>${d.night_now ? "ночной режим включён" : "обычный режим"}</b>; действующие лимиты — архив ${d.effective_archive || "без ограничения"}, торренты ${d.effective_torrent || "без ограничения"}${d.effective_archive || d.effective_torrent ? " Мбит/с" : ""}.</p>
+        <div class="ar-fields" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <span class="ar-meta">с</span><input class="field-input" type="number" min="0" max="23" id="sp-night-from" value="${d.night_from}" style="max-width:80px;">
+          <span class="ar-meta">до</span><input class="field-input" type="number" min="0" max="23" id="sp-night-to" value="${d.night_to}" style="max-width:80px;">
+          <span class="ar-meta">часов · архив</span><input class="field-input" type="number" min="0" max="1000" id="sp-night-archive" value="${d.night_archive}" style="max-width:100px;">
+          <span class="ar-meta">торренты</span><input class="field-input" type="number" min="0" max="1000" id="sp-night-torrent" value="${d.night_torrent}" style="max-width:100px;">
+          <span class="ar-meta">Мбит/с</span>
+          <button type="button" class="btn primary" id="sp-night-save">Сохранить</button>
+        </div>
+      </div>
+      ${field("total", "Общий потолок", "Если архив заливает серии, а рядом качаются торренты, канал делится: торренты получают не больше половины этого потолка. 0 — не делить.", d.total_mbit)}
     </div>`;
 
   root.querySelectorAll("[data-sp-preset]").forEach(b => b.addEventListener("click", () => {
     const [key, v] = b.dataset.spPreset.split(":");
     root.querySelector(`#sp-${key}`).value = v;
   }));
+  root.querySelector("#sp-night-save").addEventListener("click", async e => {
+    e.currentTarget.disabled = true;
+    try {
+      d = await apiPost("/speed", {
+        night_on: root.querySelector("#sp-night-on").checked,
+        night_from: Number(root.querySelector("#sp-night-from").value),
+        night_to: Number(root.querySelector("#sp-night-to").value),
+        night_archive: Number(root.querySelector("#sp-night-archive").value),
+        night_torrent: Number(root.querySelector("#sp-night-torrent").value),
+      });
+      toast("Ночной режим сохранён.", "success");
+    } catch (err) { toast(`Не сохранилось: ${err.message}`, "error"); }
+    finally { e.currentTarget.disabled = false; }
+  });
   root.querySelectorAll("[data-sp-save]").forEach(b => b.addEventListener("click", async () => {
     const key = b.dataset.spSave;
     const v = Number(root.querySelector(`#sp-${key}`).value);
     b.disabled = true;
     try {
       const r = await apiPost("/speed", { [key]: v });
-      toast(`Сохранено: ${r[key + "_mbit"] || "без ограничения"}${r[key + "_mbit"] ? " Мбит/с" : ""}.`, "success");
+      const saved = r[key + "_mbit"] ?? r[key];
+      toast(`Сохранено: ${saved || "без ограничения"}${saved ? " Мбит/с" : ""}.`, "success");
     } catch (e) { toast(`Не сохранилось: ${e.message}`, "error"); }
     finally { b.disabled = false; }
   }));
@@ -188,7 +249,8 @@ export function mountAutomation(root) {
     const host = document.createElement("div");
     host.dataset.auPane = name;
     pane.appendChild(host);
-    if (name === "archive") import("./archive.js").then(m => m.mountArchive(host));
+    if (name === "overview") mountOverview(host, show);
+    else if (name === "archive") import("./archive.js").then(m => m.mountArchive(host));
     else if (name === "chats") import("./bot-chats.js").then(m => m.mountBotChats(host));
     else if (name === "reports") import("./reports-archive.js").then(m => m.mountReportsArchive(host));
     else if (name === "docs") mountDocs(host);
@@ -196,5 +258,5 @@ export function mountAutomation(root) {
     else mountSpeed(host);
   };
   root.querySelectorAll("[data-au-tab]").forEach(b => b.addEventListener("click", () => show(b.dataset.auTab)));
-  show("archive");
+  show("overview");
 }
