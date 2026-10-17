@@ -269,6 +269,7 @@ export function createPlayer({ publicId, onAddNote, onClose, readOnly = false })
       const key = cacheKey(publicId, f.id);
       let blob = await getCached(key);
       if (!blob) {
+        msg.textContent = "Достаю дорожку… если её нет в кэше сервера, он берёт её из Telegram — это может занять до минуты.";
         blob = await apiBlob(`/report/${publicId}/files/${f.id}/download`, (got, total) => {
           if (seq !== loadSeq) return;
           msg.textContent = total ? `Загружаю звук… ${Math.round(got / total * 100)}%` : `Загружаю звук… ${(got / 1048576).toFixed(1)} МБ`;

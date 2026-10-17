@@ -18,6 +18,8 @@ export const API_BASE = "https://minitg.shitstudent.com:8443/api";
 // секунды — единицы секунд), но не бесконечность.
 const REQUEST_TIMEOUT_MS = 20_000;
 const BLOB_STALL_MS = 30_000;
+// Файла может не быть в кэше сервера (кэш чистится через час): сервер сначала достаёт его из Telegram и только потом начинает отвечать.
+const BLOB_START_MS = 300_000;
 
 // Токен могли отозвать прямо во время работы (вышли с другого
 // устройства, админ снял доступ). Раньше это выглядело как бесконечные
@@ -84,7 +86,7 @@ export async function api(method, path, body) {
   const controller = new AbortController();
   // Долгие серверные операции: «взять в работу» (опрос nyaa) и AI-проверка звука — гигабайтные WAV разбираются десятки секунд.
   const timeoutMs = /^\/titles\/\d+\/take(?:\?|$)/.test(path) ? 45_000
-    : /^\/report\/[^/]+\/files\/\d+\/qc(?:\?|$)/.test(path) ? 300_000
+    : /^\/report\/[^/]+\/files\/\d+\/(?:qc|peaks)(?:\?|$)/.test(path) ? 300_000
     : REQUEST_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs); // DevSkim: ignore DS172411 — функция, не строка
   let resp;
@@ -152,7 +154,7 @@ export async function apiBlob(path, onProgress) {
   const controller = new AbortController();
   // Два ограничения: ответ должен начаться за REQUEST_TIMEOUT_MS, а потом данные не должны
   // молчать дольше BLOB_STALL_MS (долгая, но живая загрузка не обрывается).
-  let timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); // DevSkim: ignore DS172411 — функция, не строка
+  let timer = setTimeout(() => controller.abort(), BLOB_START_MS); // DevSkim: ignore DS172411 — функция, не строка
   const arm = ms => { clearTimeout(timer); timer = setTimeout(() => controller.abort(), ms); }; // DevSkim: ignore DS172411 — функция, не строка
   const stalled = "Сервер перестал отвечать — проверьте соединение и попробуйте снова.";
   netStart();
