@@ -122,6 +122,15 @@ export async function openAssembleDialog(publicId) {
     const fmtSize = n => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : `${Math.round(n / 1048576)} МБ`);
     const fmtDur = sec => { sec = Math.round(sec || 0); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
     let estimate = null;
+    // Время рендера: на сервере — оценка сервера (2 ядра); у себя на NVENC видеокарта кодирует примерно в 7–14 раз быстрее реального
+    // времени (замер на RTX 3070: ~13×, с запасом на субтитры и логотип); без NVENC — оценка по процессору, как на сервере.
+    function renderRange(e) {
+      const local = typeof where === "string" && where === "local";
+      if (local && localInfo.nvenc && estimate && estimate.duration > 0) {
+        return { local: true, low: estimate.duration / 14, high: estimate.duration / 7 };
+      }
+      return e.render_low != null ? { local: false, low: e.render_low, high: e.render_high } : null;
+    }
     function paintEstimate() {
       if (!estBox) return;
       if (!estimate) return;
@@ -130,7 +139,11 @@ export async function openAssembleDialog(publicId) {
       if (!e || e.low == null) { estBox.className = "ad-est"; estBox.innerHTML = `<span>Размер для этого профиля не посчитать.</span><small>${esc(srcInfo)}</small>`; return; }
       estBox.className = `ad-est${e.over_limit ? " bad" : ""}`;
       const mins = x => (x >= 3600 ? `${(x / 3600).toFixed(1)} ч` : `${Math.max(1, Math.round(x / 60))} мин`);
-      const renderTxt = e.render_low != null ? `Рендер на сервере ≈ ${mins(e.render_low)} – ${mins(e.render_high)} (если нужна перекодировка: субтитры, надпись, логотип, масштаб).` : "";
+      const range = renderRange(e);
+      const renderTxt = range
+        ? (range.local ? `Рендер у вас на видеокарте ≈ ${mins(range.low)} – ${mins(range.high)}, плюс скачивание файлов и отправка результата (зависят от интернета).`
+          : `Рендер на сервере ≈ ${mins(range.low)} – ${mins(range.high)} (если нужна перекодировка: субтитры, надпись, логотип, масштаб).`)
+        : "";
       estBox.innerHTML = `<b>≈ ${fmtSize(e.low)} – ${fmtSize(e.high)}</b>
         <span>${renderTxt}</span>
         <span>${e.over_limit ? "Может не поместиться в Telegram (лимит 2 ГБ) — выберите профиль полегче." : "Помещается в Telegram (лимит 2 ГБ)."}</span>
@@ -139,7 +152,8 @@ export async function openAssembleDialog(publicId) {
       [...profileSel.options].forEach(o => {
         const x = estimate.estimates.find(y => String(y.index) === o.value);
         const base = (opts.profiles.find(p => String(p.index) === o.value) || {}).name || o.textContent;
-        const mid = x && x.render_low != null ? Math.round((x.render_low + x.render_high) / 2 / 60) : null;
+        const r = x ? renderRange(x) : null;
+        const mid = r ? Math.max(1, Math.round((r.low + r.high) / 2 / 60)) : null;
         o.textContent = x && x.low != null ? `${base} · ≈ ${fmtSize(Math.round((x.low + x.high) / 2))}${mid ? ` · ~${mid} мин` : ""}` : base;
       });
     }
@@ -212,6 +226,7 @@ export async function openAssembleDialog(publicId) {
       localBtn.disabled = !localInfo.ok;
       if (where === "local" && localBtn.disabled) where = "server";
       sheet.querySelectorAll("#ad-where button").forEach(b => b.classList.toggle("on", b.dataset.where === where));
+      paintEstimate();
       whereHint.textContent = localInfo.pending ? "Проверяю, можно ли собрать у себя…"
         : !localInfo.ok ? "Сборка у себя недоступна: не нашёлся ffmpeg или рабочий кодировщик (нужна видеокарта NVIDIA). Детали — строкой ниже."
         : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Всё то же, что на сервере: интро, склейка, озвучка, надпись, логотип. Файлы скачаются с сервера, готовое видео бот отправит в Telegram и прикрепит к отчёту.`
