@@ -3169,3 +3169,16 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-more summary { cursor: pointer; list-style: none; padding: 8px 12px; color: var(--ink-dim); font-size: 13px; border-radius: 10px; } .rd-more summary:hover { background: rgba(255, 255, 255, .04); color: var(--ink-soft); }
 .rd-more[open] { display: grid; gap: 4px; }
 @media (max-width: 860px) { .rd-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rd-fs::after { display: none; } }
+
+/* карточка отчёта: правки вёрстки по скриншотам */
+.rd-files { min-width: 0; overflow: hidden; }
+.file-item { flex-wrap: wrap; gap: 8px 10px; }
+.file-item > div:first-child { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.file-item > button, .file-item > .icon-btn { flex: none; }
+.raw-list, .raw-kind { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.raw-kind-head .rd-add { flex: none; white-space: nowrap; }
+.raw-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-flow { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.rd-fs-act .rd-add { white-space: nowrap; font-size: 12px; padding: 7px 8px; gap: 5px; justify-content: center; }
+.rd-fs.done .rd-fs-act .rd-add.primary { background: none; color: var(--ink-soft); border-style: dashed; }
+.rd-fs-act .rd-add .ei { margin-right: 0; }
