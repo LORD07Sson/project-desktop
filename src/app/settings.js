@@ -127,7 +127,7 @@ async function openSettings() {
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc, "Профиль и выход"], ["st-look", "Внешний вид", ICONS.look, "Тема, акцент, масштаб"], ["st-notif", "Уведомления", ICONS.bell, "Что и когда присылать"], ["st-behave", "Поведение", ICONS.behave, "Автозапуск, старт, фокус"], ["st-keys", "Горячие клавиши", ICONS.keys, "Все сочетания"]]],
     ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"], ["st-av", "Антивирус", ICONS.shield, "Проверка ПК, карантин, базы"]]],
-    ...((state.isAdmin && TILES.length) || state.isDeveloper || can("reports.assemble") ? [["Команда", [...(((state.isAdmin && TILES.length) || state.isDeveloper) ? [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"]] : []), ...(can("reports.assemble") ? [["st-assemble", "Сборка финала", ICONS.film, "Кодирование: формат, битрейт, кодек"]] : []), ...(state.isDeveloper ? [["st-bot", "Чаты бота", ICONS.bot, "Где работает бот"], ["st-archive", "Архив серий", ICONS.archive, "Перенос серий в архив"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
+    ...((state.isAdmin && TILES.length) || state.isDeveloper || can("reports.assemble") ? [["Команда", [...(((state.isAdmin && TILES.length) || state.isDeveloper) ? [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"]] : []), ...(can("reports.assemble") ? [["st-assemble", "Сборка финала", ICONS.film, "Кодирование: формат, битрейт, кодек"]] : []), ...(state.isDeveloper ? [["st-auto", "Автоматизация", ICONS.bot, "Архив серий, чаты бота, скорость"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`
@@ -293,13 +293,9 @@ async function openSettings() {
         </section>
 
         ${state.isDeveloper ? `
-        <section class="st-sec" id="st-bot">
-          <h3>Чаты бота</h3>
-          <div id="st-bot-chats"></div>
-        </section>
-        <section class="st-sec" id="st-archive">
-          <h3>Архив серий</h3>
-          <div id="st-archive-root"></div>
+        <section class="st-sec" id="st-auto">
+          <h3>Автоматизация</h3><p class="st-lead">Что бот делает сам: архив серий, чаты и ограничения скорости.</p>
+          <div id="st-auto-root"></div>
         </section>
         <section class="st-sec" id="st-perms">
           <h3>Права ролей</h3>
@@ -449,12 +445,10 @@ async function openSettings() {
     setTimeout(showWelcome, 200);
   });
 
-  const botRoot = overlay.querySelector("#st-bot-chats");
-  if (botRoot) import("./bot-chats.js").then(m => m.mountBotChats(botRoot));
+  const autoRoot = overlay.querySelector("#st-auto-root");
+  if (autoRoot) import("./automation.js").then(m => m.mountAutomation(autoRoot));
   const assembleRoot = overlay.querySelector("#st-assemble-root");
   if (assembleRoot) import("./assemble-settings.js").then(m => m.mountAssembleSettings(assembleRoot));
-  const archiveRoot = overlay.querySelector("#st-archive-root");
-  if (archiveRoot) import("./archive.js").then(m => m.mountArchive(archiveRoot));
   const avRoot = overlay.querySelector("#st-av-root");
   if (avRoot) import("./antivirus-ui.js").then(m => m.mountAntivirus(avRoot));
   overlay.querySelector("#s-open-av")?.addEventListener("click", () => showSection("st-av"));
