@@ -3187,3 +3187,10 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .ad-est { display: grid; gap: 3px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); font-size: 12.5px; }
 .ad-est b { font-size: 15px; } .ad-est small { color: var(--ink-dim); font-size: 11px; } .ad-est span { color: var(--ink-soft); }
 .ad-est.bad { border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .07); } .ad-est.bad span { color: #ffb3a8; }
+
+/* пост в канал: кадр видео в миниатюре и в превью */
+.cp-thumb img[data-cp-poster] { filter: brightness(.8); }
+.cp-thumb-video.over { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 4px; text-shadow: 0 1px 4px #000; pointer-events: none; }
+.cp-pv-video { position: relative; display: grid; place-items: center; overflow: hidden; }
+.cp-pv-video img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(.8); }
+.cp-pv-video svg { position: relative; z-index: 1; }

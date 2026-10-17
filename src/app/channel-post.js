@@ -225,8 +225,10 @@ export async function openChannelPostSheet(openId = null) {
         <div class="cp-label">Фото и видео <span>${d.media.length} / ${meta.limits.media}</span></div>
         <div class="cp-media">
           ${d.media.map((m, i) => {
-            const src = m.kind === "photo" ? mediaUrl(`/posts/${post.id}/media/${i}`) : "";
-            return `<div class="cp-thumb">${src ? `<img src="${src}" alt="">` : `<span class="cp-thumb-video">${I.play}<span>${esc(m.name || "видео")}</span></span>`}
+            // Фото — сама картинка, видео — кадр из него (сервер вырезает его ffmpeg-ом); нет кадра — плашка с названием.
+            const src = mediaUrl(`/posts/${post.id}/media/${i}`);
+            const video = m.kind === "video";
+            return `<div class="cp-thumb">${src ? `<img src="${src}" alt="" ${video ? `data-cp-poster="1"` : ""}>` : ""}${video ? `<span class="cp-thumb-video${src ? " over" : ""}">${I.play}<span>${esc(m.name || "видео")}</span></span>` : ""}
               <button type="button" class="cp-thumb-del" data-cp-mdel="${i}" aria-label="Убрать">${I.x}</button></div>`;
           }).join("")}
           ${d.media.length < meta.limits.media ? `<label class="cp-thumb cp-thumb-add">${I.plus}<span>Добавить</span><input type="file" id="cp-file" accept="image/*,video/*" multiple hidden></label>` : ""}
@@ -342,7 +344,7 @@ export async function openChannelPostSheet(openId = null) {
     const pv = sheet.querySelector("#cp-preview");
     const media = d.media.map((m, i) => m.kind === "photo"
       ? `<img src="${mediaUrl(`/posts/${post.id}/media/${i}`)}" alt="">`
-      : `<span class="cp-pv-video">${I.play}</span>`).join("");
+      : `<span class="cp-pv-video"><img src="${mediaUrl(`/posts/${post.id}/media/${i}`)}" alt="" onerror="this.remove()">${I.play}</span>`).join("");
     const text = post.html ? sanitize(post.html) : `<span class="cp-pv-empty">Пустой пост — начните с заголовка</span>`;
     const links = d.links.filter(l => l.text);
     pv.innerHTML = `
