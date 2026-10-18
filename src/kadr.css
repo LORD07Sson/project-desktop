@@ -3259,13 +3259,3 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .wm-stage[data-bg="light"] { background: linear-gradient(135deg, #e8ecf2, #cfd6e2); }
 .wm-stage[data-bg="check"] { background: repeating-conic-gradient(#8a93a3 0 25%, #c9cfda 0 50%) 0 0 / 24px 24px; }
 .wm-stage[data-bg="green"] { background: linear-gradient(135deg, #1f4d33, #2a6b46); }
-
-/* Пользовательское соглашение */
-.terms-doc { max-height: 70vh; overflow: auto; padding-right: 8px; line-height: 1.55; font-size: 13.5px; }
-.terms-doc h2.terms-h1 { font-size: 20px; margin: 0 0 4px; }
-.terms-doc h3.terms-h2 { font-size: 15px; margin: 18px 0 6px; color: var(--ink); }
-.terms-doc p { margin: 0 0 9px; color: var(--ink-soft); }
-.terms-doc ul, .terms-doc ol { margin: 0 0 10px; padding-left: 22px; color: var(--ink-soft); }
-.terms-doc li { margin-bottom: 4px; }
-.terms-doc b { color: var(--ink); }
-.auth-terms-link { background: none; border: 0; padding: 0; font: inherit; color: var(--fire, #f97316); cursor: pointer; text-decoration: underline; }

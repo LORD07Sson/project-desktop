@@ -19,7 +19,6 @@ import { installFileLogging } from "./applog.js";
 import { appWindow } from "./tauri.js";
 import { installWindowChrome } from "./window-chrome.js";
 import { tryRestoreSession } from "./auth.js";
-import { installTermsLinks } from "./terms.js";
 
 // Максимально рано — до любого другого кода, который уже мог бы
 // что-то залогировать (см. applog.js).
@@ -28,7 +27,6 @@ installFileLogging();
 // выключена), и на экране входа/загрузки окно тоже нужно чем-то
 // двигать и закрывать.
 installWindowChrome();
-installTermsLinks();
 import "./density.js";
 import "./ui-prefs.js";
 import "./tabs.js";
