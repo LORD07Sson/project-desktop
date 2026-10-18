@@ -10,7 +10,7 @@
 `powershell -File scripts\debug-launch.ps1`.
 
 Дальше:
-3. В Claude Code сервер `project-desktop` подключается сам по `.mcp.json` в корне репозитория
+1. В Claude Code сервер `project-desktop` подключается сам по `.mcp.json` в корне репозитория
    (при первом запуске агент спросит разрешение).
 
 ## Инструменты
