@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "project-desktop": {
+      "command": "node",
+      "args": ["tools/desktop-mcp/server.mjs"],
+      "env": { "PROJECT_DEBUG_PORT": "9222" }
+    }
+  }
+}
