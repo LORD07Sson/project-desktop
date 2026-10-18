@@ -60,6 +60,7 @@ function historyStripHtml(history) {
   return `
     <div class="svc-history-strip">${bars}</div>
     <div class="svc-history-axis"><span>${history?.length ? esc(history[0].date) : ""}</span><span>сегодня</span></div>
+    <div class="svc-history-legend">${["operational", "degraded", "down", "no_data"].map(k => { const m = STATUS_META[k]; return m ? `<span><i style="background:var(${m.colorVar});"></i>${esc(m.label.toLowerCase())}</span>` : ""; }).join("")}</div>
   `;
 }
 
@@ -78,8 +79,8 @@ function incidentRowHtml(inc) {
     <div class="mini-row" style="align-items:flex-start;">
       <span style="width:7px; height:7px; border-radius:50%; background:var(${meta.colorVar}); margin-top:5px; flex:none;"></span>
       <div style="min-width:0;">
-        <div style="font-size:12px; font-weight:600;">${esc(inc.service_name)} — ${esc(meta.label).toLowerCase()}</div>
-        <div style="font-size:10.5px; color:var(--ink-dim); margin-top:2px;">${esc(started)} · ${esc(durationLabel)}</div>
+        <div style="font-size:12px; font-weight:600;">${esc(inc.service_name)} — ${inc.ongoing ? esc(meta.label).toLowerCase() : "были проблемы, уже исправлено"}</div>
+        <div style="font-size:10.5px; color:var(--ink-dim); margin-top:2px;">${esc(started)} · ${inc.ongoing ? esc(durationLabel) : `длилось ${esc(durationLabel.replace("~", "около "))}`}</div>
       </div>
     </div>
   `;

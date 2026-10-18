@@ -3328,3 +3328,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .pf-hero-body { margin-top: -44px; }
 .pf-who .nm-row { padding-top: 6px; }
 .goal-hint { line-height: 1.5; }
+
+/* Сервисы: подпись цветов полоски аптайма. */
+.svc-history-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11px; color: var(--ink-dim); }
+.svc-history-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
