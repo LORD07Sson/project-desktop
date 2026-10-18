@@ -270,6 +270,7 @@ async function openSettings() {
           <h3>Диагностика</h3><p class="st-lead">Если что-то сломалось — отсюда проще всего рассказать, что именно.</p>
           <div class="st-group">
             ${row(ICONS.server, "Сервер команды", "Связь с сервером и время ответа", `<span class="st-ping" id="s-ping">проверяю…</span><button type="button" class="btn" id="s-ping-again">Проверить</button>`, "сеть сервер соединение")}
+            ${row(ICONS.learn, "Пользовательское соглашение", "Что делает программа, какие данные обрабатываются, правила работы", `<button type="button" class="btn" data-open-terms>Читать</button>`, "соглашение правила данные условия")}
             ${row(ICONS.logs, "Файловые логи приложения", "Обновления, сборка у себя, скачивание файлов", `<button class="btn" id="s-open-logs">Открыть логи</button>`, "логи")}
             ${row(ICONS.shield, "Антивирус", "Проверка ПК на вирусы и майнеры, карантин, обновление баз", `<button type="button" class="btn primary" id="s-open-av">Открыть</button>`, "антивирус вирус майнер карантин проверка защита")}
             ${row(ICONS.server, "Проверить компьютер", "ffmpeg, связь с сервером, уведомления, место", `<button type="button" class="btn" id="s-selfcheck">Проверить</button>`, "диагностика проверка ffmpeg микрофон")}
