@@ -39,7 +39,7 @@ export function devPanelHtml(d) {
       </div>
       <div class="dev-bcell">
         <div class="h">Дата вступления</div>
-        <input type="date" id="dev-joined-input" class="field-input" value="${esc((d.created_at || "").slice(0, 10))}">
+        <input type="text" inputmode="numeric" maxlength="10" placeholder="дд.мм.гггг" autocomplete="off" id="dev-joined-input" class="field-input" value="${esc((d.created_at || "").slice(0, 10).split("-").reverse().join("."))}">
         <button id="dev-joined-save" class="dev-save-btn">Сохранить</button>
       </div>
       <div class="dev-bcell">
@@ -73,10 +73,16 @@ export function wireDevPanel(root, telegramId, onSaved) {
     finally { profileBtn.disabled = false; }
   });
 
+  root.querySelector("#dev-joined-input")?.addEventListener("input", e => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+    e.target.value = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join(".");
+  });
   const joinedBtn = root.querySelector("#dev-joined-save");
   if (joinedBtn) joinedBtn.addEventListener("click", async () => {
-    const date = root.querySelector("#dev-joined-input").value;
-    if (!date) { toast("Укажите дату.", "error"); return; }
+    // Поле в виде дд.мм.гггг; на сервер уходит гггг-мм-дд.
+    const dm = root.querySelector("#dev-joined-input").value.trim().match(/^(\d\d)\.(\d\d)\.(\d{4})$/);
+    if (!dm || +dm[2] < 1 || +dm[2] > 12 || +dm[1] < 1 || +dm[1] > 31) { toast("Укажите дату в виде дд.мм.гггг.", "error"); return; }
+    const date = `${dm[3]}-${dm[2]}-${dm[1]}`;
     joinedBtn.disabled = true;
     try {
       await apiPost(`/dev/user/${telegramId}/joined`, { date });
