@@ -3349,3 +3349,11 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 /* Доска: в узкой пустой колонке длинное название («Перезапись/дозапись») переносится на вторую строку, а не обрезается. */
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { width: 176px; }
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) .board-col-head .lb { white-space: normal; line-height: 1.15; overflow: visible; }
+
+/* Профиль: нижний край шапки плавно растворяется, а не режет карточку резкой линией (найдено на живом окне). */
+.pf-banner { -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent 100%); mask-image: linear-gradient(180deg, #000 30%, transparent 100%); }
+.pf-banner::after { display: none; }
+
+/* Лента: системные события (напоминания о сроках) — иконка колокольчика вместо «?». */
+.fd-sys-ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.avatar-bubble.fd-sys { display: grid; place-items: center; }

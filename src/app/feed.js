@@ -165,7 +165,7 @@ function rowHtml(item, lastSeen) {
   return `
     <div class="fd-row${linkable ? " linkable" : ""}${a.type === "admin" ? " admin" : ""}${isNew ? " is-new" : ""}" data-fd-type="${a.type}" data-fd-actor="${esc(ev.actor || "")}"${linkable ? ` data-open="${esc(ev.public_id)}" tabindex="0" role="button"` : ""}>
       <span class="fd-av">
-        <span class="avatar-bubble" data-avatar-for="${ev.actor_telegram_id || ""}">${esc((ev.actor || "?").charAt(0).toUpperCase())}</span>
+        <span class="avatar-bubble${ev.actor ? "" : " fd-sys"}" data-avatar-for="${ev.actor_telegram_id || ""}">${ev.actor ? esc(ev.actor.charAt(0).toUpperCase()) : `<svg class="fd-sys-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/></svg>`}</span>
         <span class="fd-badge" style="--c:${a.color}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.type] || ICONS.dot}</svg></span>
       </span>
       <div class="fd-main">
