@@ -107,6 +107,24 @@ export async function openLockdownSheet() {
 
 const KIND_ICON = { report: "📋", title: "🎬", season: "📅" };
 
+const itemHtml = x => `
+  <div class="mini-row ld-item">
+    <span class="name">${KIND_ICON[x.kind] || "•"} ${esc(x.kind_label)} ${x.kind === "report" ? esc(x.ref) + " · " : ""}${esc(x.label || "")}</span>
+    <span class="val">${esc(x.deleted_by)} · ${esc(x.deleted_at || "")}</span>
+    <button class="btn" data-restore="${x.id}">Вернуть</button>
+  </div>`;
+
+// Одна операция «удалить» бывает десятком записей с одной секундой и автором — показываем их группой с «Вернуть все».
+function groupTrash(items) {
+  const groups = [];
+  for (const x of items) {
+    const last = groups[groups.length - 1];
+    if (last && last.by === x.deleted_by && last.at === (x.deleted_at || "")) last.items.push(x);
+    else groups.push({ by: x.deleted_by, at: x.deleted_at || "", items: [x] });
+  }
+  return groups;
+}
+
 export async function openTrashSheet() {
   const overlay = openSheet(`<h2>Корзина</h2><div class="no-assignee">Загружаю…</div>`, "wide");
   const sheet = overlay.querySelector(".sheet");
@@ -127,15 +145,27 @@ export async function openTrashSheet() {
       ${deleters.length ? `<div class="detail-section"><h3>Кто удалял за сутки</h3>
         ${deleters.map(x => `<div class="mini-row"><span class="name">${esc(x.name)}</span><span class="val">${x.count}</span></div>`).join("")}</div>` : ""}
       <div class="detail-section"><h3>Удалённое</h3>
-        ${items.length ? items.map(x => `
-          <div class="mini-row ld-item">
-            <span class="name">${KIND_ICON[x.kind] || "•"} ${esc(x.kind_label)} ${x.kind === "report" ? esc(x.ref) + " · " : ""}${esc(x.label || "")}</span>
-            <span class="val">${esc(x.deleted_by)} · ${esc(x.deleted_at || "")}</span>
-            <button class="btn" data-restore="${x.id}">Вернуть</button>
-          </div>`).join("") : `<div class="no-assignee">Корзина пуста.</div>`}
+        ${items.length ? groupTrash(items).map(g => g.items.length > 1 ? `
+          <div class="ld-group">
+            <div class="ld-group-head">
+              <span class="name"><b>${g.items.length} элементов</b> · ${esc(g.by)} · ${esc(g.at)}</span>
+              <button class="btn" data-restore-all="${g.items.map(x => x.id).join(",")}">Вернуть все</button>
+            </div>
+            ${g.items.map(itemHtml).join("")}
+          </div>` : itemHtml(g.items[0])).join("") : `<div class="no-assignee">Корзина пуста.</div>`}
       </div>
       <div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
     sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+    sheet.querySelectorAll("[data-restore-all]").forEach(btn => btn.addEventListener("click", async () => {
+      const ids = btn.dataset.restoreAll.split(",");
+      btn.disabled = true;
+      let ok = 0;
+      for (const id of ids) {
+        try { await apiPost(`/trash/${id}/restore`, {}); ok += 1; btn.textContent = `Возвращаю ${ok}/${ids.length}…`; } catch (e) { toast(e.message, "error"); }
+      }
+      toast(`♻️ Возвращено: ${ok} из ${ids.length}`, ok === ids.length ? "success" : "error");
+      await render();
+    }));
     sheet.querySelectorAll("[data-restore]").forEach(btn => btn.addEventListener("click", async () => {
       btn.disabled = true;
       try {

@@ -154,8 +154,8 @@ export async function mountPermissions(root) {
       } catch (err) { toast(err.message, "error"); }
       paint();
     });
-    root.querySelector("#pm-all")?.addEventListener("click", () => save(role.key, data.permissions.map(p => p.key), "Все права включены."));
-    root.querySelector("#pm-none")?.addEventListener("click", () => save(role.key, [], "Права сняты."));
+    root.querySelector("#pm-all")?.addEventListener("click", () => confirm(`Включить роли «${role.name}» все права сразу?`) && save(role.key, data.permissions.map(p => p.key), "Все права включены."));
+    root.querySelector("#pm-none")?.addEventListener("click", () => confirm(`Снять у роли «${role.name}» все права?`) && save(role.key, [], "Права сняты."));
     root.querySelector("#pm-copy")?.addEventListener("change", e => {
       const from = roles.find(r => r.key === e.target.value);
       if (from) save(role.key, granted(from.key), `Права скопированы с роли «${from.name}».`);

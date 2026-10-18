@@ -1444,7 +1444,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-status .ny-sp { flex: 1; }
 .ny-pis { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-dim); }
 .ny-pi { display: inline-flex; align-items: center; gap: 5px; }
-.ny-pi.ok b { color: #6fe39a; } .ny-pi.slow b { color: #ffc065; } .ny-pi.bad b { color: #ff7b7b; }
+.ny-pi.ok b { color: #6fe39a; } .ny-pi.slow b { color: #ffc065; } .ny-pi.bad b { color: var(--ink-soft); font-weight: 600; }
 .ny-pi em { font-style: normal; opacity: .75; }
 .ny-prog { flex-basis: 100%; height: 3px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
 .ny-prog i { display: block; height: 100%; background: var(--fire, #ff8a3d); transition: width .3s; }
@@ -3264,3 +3264,42 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .bd-form { grid-template-columns: minmax(0, 1fr) auto; }
 .bd-form #bd-name { grid-column: 1 / -1; }
 .bd-form button[type="submit"] { grid-column: 1 / -1; justify-self: end; }
+
+/* Настройки → Обновления: заметная плашка «Доступно обновление» с пульсом. */
+.st-upd { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; width: fit-content; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; color: var(--gold, #f5c26b); background: rgba(var(--fire-rgb), .14); border: 1px solid rgba(var(--fire-rgb), .3); }
+.st-upd::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: stUpdPulse 1.8s ease-in-out infinite; }
+@keyframes stUpdPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+.st-version .st-text { display: flex; flex-direction: column; }
+
+/* Автоматизация: вкладки переносятся на вторую строку вместо скрытой прокрутки (последняя вкладка «Логи» обрезалась). */
+.ar-tabs { flex-wrap: wrap; overflow: visible; }
+.ar-tabs button { flex: 1 1 auto; transition: background .18s, color .18s, transform .18s; }
+.ar-tabs button:active { transform: scale(.97); }
+
+/* Корзина: операции удаления сгруппированы. */
+.ld-group { margin: 8px 0; padding: 6px 8px 4px; border-radius: 14px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line-soft); }
+.ld-group-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 4px 8px; font-size: 13px; }
+.ld-group .ld-item { margin-top: 2px; }
+
+/* Профиль: пустая шапка получает акцентный градиент с мягким «дыханием» вместо глухого тёмного блока. */
+.pf-banner { height: 140px; background:
+  radial-gradient(60% 120% at 18% 0%, rgba(var(--fire-rgb), .34), transparent 70%),
+  radial-gradient(50% 110% at 85% 10%, rgba(80, 140, 200, .22), transparent 70%),
+  linear-gradient(180deg, rgba(255, 255, 255, .04), transparent); background-size: 140% 140%, 140% 140%, 100% 100%; animation: pfBannerDrift 14s ease-in-out infinite alternate; }
+@keyframes pfBannerDrift { from { background-position: 0% 0%, 100% 0%, 0 0; } to { background-position: 30% 20%, 70% 30%, 0 0; } }
+@media (prefers-reduced-motion: reduce) { .pf-banner { animation: none; } }
+
+.ms-empty-act { display: block; margin-top: 8px; }
+
+/* Общая «живость»: мягкое нажатие кнопок, подъём карточек при наведении, плавное появление разделов настроек. */
+.btn { transition: transform .14s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.btn:not(:disabled):active { transform: scale(.97); }
+.board-card, .pf-badge, .ar-card, .ld-group { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.board-card:hover, .pf-badge.won:hover { transform: translateY(-2px); }
+.st-sec, .ar-card { animation: stFadeUp .28s ease both; }
+@keyframes stFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .board-card, .pf-badge, .ar-card, .ld-group { transition: none; }
+  .st-sec, .ar-card { animation: none; }
+  .btn:not(:disabled):active, .board-card:hover, .pf-badge.won:hover { transform: none; }
+}

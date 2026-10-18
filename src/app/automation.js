@@ -155,9 +155,9 @@ async function mountSpeed(root) {
       <p class="ar-hint" style="margin:0 0 10px;">${sub}</p>
       <div class="ar-fields" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <input class="field-input" type="number" min="0" max="1000" step="1" id="sp-${key}" value="${value}" style="max-width:140px;">
-        <span class="ar-meta">Мбит/с · 0 — без ограничения</span>
-        <button type="button" class="btn" data-sp-preset="${key}:45">45</button>
-        <button type="button" class="btn" data-sp-preset="${key}:30">30</button>
+        <span class="ar-meta">Мбит/с</span>
+        <button type="button" class="btn" data-sp-preset="${key}:45">45 Мбит/с</button>
+        <button type="button" class="btn" data-sp-preset="${key}:30">30 Мбит/с</button>
         <button type="button" class="btn" data-sp-preset="${key}:0">Без лимита</button>
         <button type="button" class="btn primary" data-sp-save="${key}">Сохранить</button>
       </div>

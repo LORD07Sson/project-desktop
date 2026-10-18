@@ -596,7 +596,7 @@ function pingInline(url, path, label) {
   if (isPending(url, path)) return `<span class="ny-pi pend"><span class="ny-spin sm"></span>${esc(label)}: проверяю…</span>`;
   if (!last) return `<span class="ny-pi">${esc(label)}: не проверялось</span>`;
   const cls = last.ms == null ? "bad" : last.ms > SLOW_MS ? "slow" : "ok";
-  return `<span class="ny-pi ${cls}">${esc(label)}: <b>${last.ms == null ? "✕ нет ответа" : esc(durText(last.ms))}</b> <em>${esc(ageText(Date.now(), last.t))}</em></span>`;
+  return `<span class="ny-pi ${cls}">${esc(label)}: <b>${last.ms == null ? "нет ответа напрямую" : esc(durText(last.ms))}</b> <em>${esc(ageText(Date.now(), last.t))}</em></span>`;
 }
 function statusHtml() {
   const now = Date.now();

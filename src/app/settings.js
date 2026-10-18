@@ -235,7 +235,7 @@ async function openSettings() {
           <div class="st-group">
             <div class="st-version">
               <div class="st-version-logo">${ic('<path d="M5 5L19 19M19 5L5 19"/>')}</div>
-              <div class="st-text"><b>Project Desktop</b><span>версия ${esc(APP_VERSION)}</span></div>
+              <div class="st-text"><b>Project Desktop</b><span>версия ${esc(APP_VERSION)}</span><span class="st-upd" id="s-upd-pill" hidden></span></div>
               <button class="btn primary" id="s-check-update">Проверить обновления</button>
             </div>
             ${row(ICONS.update, "Канал обновлений", updateChannel === "alpha" ? "Альфа-сборка получает только обновления alpha" : "Стабильная сборка получает только официальные релизы", `<span class="st-ping">${updateChannel === "alpha" ? "Альфа" : "Стабильный"}</span>`, "альфа стабильный")}
@@ -379,6 +379,10 @@ async function openSettings() {
       if (update) {
         latestEl.textContent = commitFromVersion(update.version) || "?";
         latestEl.title = update.version;
+        const pill = overlay.querySelector("#s-upd-pill");
+        if (pill) { pill.hidden = false; pill.textContent = "Доступно обновление"; pill.title = update.version; }
+        const btn = overlay.querySelector("#s-check-update");
+        if (btn) btn.textContent = "Установить обновление";
       } else {
         latestEl.textContent = "нет новее";
         latestEl.title = "check_for_update вернул null — Velopack считает текущую версию актуальной для этого канала.";

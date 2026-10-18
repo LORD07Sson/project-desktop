@@ -180,7 +180,7 @@ function listHtml() {
   const chs = channels.map(ch => channelHtml(ch, q)).join("");
   const section = (title, extra) => `<div class="ms-section"><span>${title}</span>${extra || ""}</div>`;
   const html = general.map(chatItemHtml).join("")
-    + ((chs || canCreateChannel) ? section("Каналы", canCreateChannel ? `<button type="button" class="ms-section-btn" id="ms-new-channel" title="Новый канал">${PLUS_ICON}</button>` : "") + (chs || `<div class="ms-empty-list small">Каналов пока нет</div>`) : "")
+    + ((chs || canCreateChannel) ? section("Каналы", canCreateChannel ? `<button type="button" class="ms-section-btn" id="ms-new-channel" title="Новый канал">${PLUS_ICON}</button>` : "") + (chs || `<div class="ms-empty-list small">Каналов пока нет${canCreateChannel ? `<button type="button" class="btn ms-empty-act" data-new-channel>Создать канал</button>` : ""}</div>`) : "")
     + (dms.length ? section("Личные") + dms.map(chatItemHtml).join("") : "");
   return html || `<div class="ms-empty-list">${filter === "all" ? "Ничего не нашлось" : filter === "unread" ? "Всё прочитано" : "Вас пока не упоминали"}</div>`;
 }
@@ -210,6 +210,7 @@ function renderList() {
     } catch (err) { toast(err.message, "error"); input.disabled = false; }
   }));
   el.querySelector("#ms-new-channel")?.addEventListener("click", openNewChannelDialog);
+  el.querySelector("[data-new-channel]")?.addEventListener("click", openNewChannelDialog);
 }
 
 // ---------- лента ----------
