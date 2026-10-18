@@ -198,6 +198,72 @@ impl Drop for UpdateDownloadGuard {
     }
 }
 
+// ---------- Доступ для ИИ-агента (MCP, отладочный порт WebView2) ----------
+
+const DEFAULT_DEBUG_PORT: u16 = 9222;
+
+/// Файл-флаг лежит в %APPDATA%\com.project.desktop — там же, где app_data_dir, но доступен до создания приложения.
+fn debug_flag_path() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("com.project.desktop").join("debug_port.txt"))
+}
+
+fn debug_port_flag() -> Option<u16> {
+    let text = std::fs::read_to_string(debug_flag_path()?).ok()?;
+    let port = text.trim().parse::<u16>().unwrap_or(DEFAULT_DEBUG_PORT);
+    (port >= 1024).then_some(port)
+}
+
+#[derive(serde::Serialize)]
+struct DebugPortStatus {
+    /// Включено ли в настройках (вступит в силу после перезапуска).
+    enabled: bool,
+    /// Порт, который открыт прямо сейчас в этом запуске.
+    active: Option<u16>,
+    port: u16,
+}
+
+#[tauri::command]
+fn debug_port_status() -> DebugPortStatus {
+    let active = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").ok().and_then(|v| {
+        v.split_whitespace().find_map(|a| a.strip_prefix("--remote-debugging-port=").and_then(|p| p.parse::<u16>().ok()))
+    });
+    let flag = debug_port_flag();
+    DebugPortStatus { enabled: flag.is_some(), active, port: flag.unwrap_or(DEFAULT_DEBUG_PORT) }
+}
+
+#[tauri::command]
+fn debug_port_set(enabled: bool) -> Result<(), String> {
+    let path = debug_flag_path().ok_or("Не найдена папка данных программы")?;
+    if enabled {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&path, DEFAULT_DEBUG_PORT.to_string()).map_err(|e| e.to_string())
+    } else {
+        match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+}
+
+/// Перезапуск: новый экземпляр стартует через пару секунд, когда этот уже вышел (иначе single-instance
+/// принял бы новый запуск за второй экземпляр и закрыл его).
+#[tauri::command]
+fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let script = format!("Start-Sleep -Seconds 2; Start-Process -FilePath '{}'", exe.to_string_lossy().replace('\'', "''"));
+    std::process::Command::new("powershell")
+        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    app.exit(0);
+    Ok(())
+}
+
 /// После запуска: если перед выходом мы ставили обновление, а версия не сменилась — установка не удалась
 /// (Update.exe не смог заменить файлы). Возвращает текст для пользователя один раз и стирает отметку.
 #[tauri::command]
@@ -1291,6 +1357,13 @@ fn main() {
     // не ставится. Переносим рабочую папку во временную — ffmpeg рядом с exe находится и так (папка exe ищется первой).
     let _ = std::env::set_current_dir(std::env::temp_dir());
 
+    // Доступ для ИИ-агента (MCP): включается в Настройки → «Доступ для ИИ» и действует со следующего запуска.
+    // Порт слушает только 127.0.0.1; без флага-файла переменная не выставляется и порт закрыт.
+    if let Some(port) = debug_port_flag() {
+        // Единственный поток на этом этапе — других потоков, читающих окружение, ещё нет.
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", format!("--remote-debugging-port={port} --remote-allow-origins=*"));
+    }
+
     // Отдельный процесс антивируса с правами администратора: проверка закрытых папок без окна (см. antivirus::headless).
     let cli_args: Vec<String> = std::env::args().collect();
     if cli_args.iter().any(|a| a == "--av-scan") {
@@ -1405,6 +1478,9 @@ fn main() {
             check_for_update,
             download_and_apply_update,
             update_failure,
+            debug_port_status,
+            debug_port_set,
+            restart_app,
             upload_report_file,
             download_api_file,
             download_report_file,

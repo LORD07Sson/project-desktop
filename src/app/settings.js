@@ -126,7 +126,7 @@ async function openSettings() {
   const row = (icon, title, sub, control, keywords = "") => `<div class="st-row" data-st-find="${esc(`${title} ${sub} ${keywords}`.toLowerCase())}">${ic(icon)}<div class="st-text"><b>${title}</b>${sub ? `<span>${sub}</span>` : ""}</div>${control}</div>`;
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc, "Профиль и выход"], ["st-look", "Внешний вид", ICONS.look, "Тема, акцент, масштаб"], ["st-notif", "Уведомления", ICONS.bell, "Что и когда присылать"], ["st-behave", "Поведение", ICONS.behave, "Автозапуск, старт, фокус"], ["st-keys", "Горячие клавиши", ICONS.keys, "Все сочетания"]]],
-    ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"], ["st-av", "Антивирус", ICONS.shield, "Проверка ПК, карантин, базы"]]],
+    ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"], ["st-av", "Антивирус", ICONS.shield, "Проверка ПК, карантин, базы"], ...(state.isDeveloper ? [["st-mcp", "Доступ для ИИ", ICONS.dev, "MCP: скриншоты и клики для агента"]] : [])]],
     ...((state.isAdmin && TILES.length) || state.isDeveloper || can("reports.assemble") ? [["Команда", [...(((state.isAdmin && TILES.length) || state.isDeveloper) ? [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"]] : []), ...(can("reports.assemble") ? [["st-assemble", "Сборка финала", ICONS.film, "Кодирование: формат, битрейт, кодек"]] : []), ...(state.isDeveloper ? [["st-auto", "Автоматизация", ICONS.bot, "Архивы, чаты бота, скорость, логи"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
   ];
 
@@ -279,6 +279,18 @@ async function openSettings() {
           </div>
         </section>
 
+        ${state.isDeveloper ? `
+        <section class="st-sec" id="st-mcp">
+          <h3>Доступ для ИИ (MCP)</h3>
+          <p class="st-lead">Позволяет ИИ-агенту (Claude Code) смотреть на это окно: делать скриншоты, видеть кнопки и поля, кликать и вводить текст — вместо догадок по коду.</p>
+          <div class="st-group">
+            ${row(ICONS.dev, "Отладочный порт", "Открывается только на этом компьютере (127.0.0.1) и только пока включено. Вступает в силу после перезапуска.", `<span class="st-ping" id="s-mcp-state">…</span>${sw("s-mcp-enable", false)}`, "mcp ии агент claude отладка порт cdp")}
+            <div class="st-row" id="s-mcp-restart-row" hidden>${ic(ICONS.update)}<div class="st-text"><b>Нужен перезапуск</b><span>Изменение применится после перезапуска программы.</span></div><button type="button" class="btn primary" id="s-mcp-restart">Перезапустить</button></div>
+            ${row(ICONS.hint, "Как подключить агента", "В Claude Code откройте папку проекта project-desktop: сервер подключится сам по файлу .mcp.json (инструменты desktop_screenshot, desktop_snapshot, desktop_click и другие). Подробности — tools/desktop-mcp/README.md.", "", "")}
+            <div class="alpha-warn">Пока порт открыт, агент действует в вашей открытой сессии от вашего имени. Выключайте, когда он не нужен.</div>
+          </div>
+        </section>` : ""}
+
         ${can("reports.assemble") ? `
         <section class="st-sec" id="st-assemble">
           <h3>Сборка финала</h3>
@@ -395,6 +407,27 @@ async function openSettings() {
   refreshAlphaBlock(updateChannel);
 
   overlay.querySelector("#s-open-admin").addEventListener("click", openAdminPanel);
+  // ---- Доступ для ИИ (MCP) ----
+  const mcpBox = overlay.querySelector("#s-mcp-enable");
+  if (mcpBox) {
+    const stateEl = overlay.querySelector("#s-mcp-state");
+    const restartRow = overlay.querySelector("#s-mcp-restart-row");
+    const paintMcp = async () => {
+      try {
+        const st = await invoke("debug_port_status");
+        mcpBox.checked = !!st.enabled;
+        stateEl.textContent = st.active ? `порт ${st.active} открыт` : "закрыт";
+        restartRow.hidden = !!st.enabled === !!st.active;
+      } catch (_) { stateEl.textContent = "недоступно"; mcpBox.disabled = true; }
+    };
+    mcpBox.addEventListener("change", async () => {
+      try { await invoke("debug_port_set", { enabled: mcpBox.checked }); } catch (e) { toast(`Не удалось сохранить: ${e}`, "error"); }
+      paintMcp();
+    });
+    overlay.querySelector("#s-mcp-restart").addEventListener("click", () => invoke("restart_app").catch(e => toast(`Не удалось перезапустить: ${e}`, "error")));
+    paintMcp();
+  }
+
   overlay.querySelector("#s-open-logs").addEventListener("click", async () => {
     try {
       await invoke("open_log_folder");
