@@ -3303,3 +3303,20 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
   .st-sec, .ar-card { animation: none; }
   .btn:not(:disabled):active, .board-card:hover, .pf-badge.won:hover { transform: none; }
 }
+
+.bc-warn-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bc-pick { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+
+/* Тикеты: когда обращений нет — маленькое окно с одной надписью, без пустой левой колонки на 680 px. */
+.sheet.tk-sheet.tk-none { height: auto; width: min(520px, calc(100vw - 48px)); }
+.tk-sheet.tk-none .tk-layout { grid-template-columns: 1fr; min-height: 150px; }
+.tk-sheet.tk-none .tk-list { display: none; }
+
+/* Доска: пустые колонки уже (но принимают карточки как и раньше) — вся доска помещается без прокрутки. */
+.board-col { transition: width .28s ease; }
+.board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { width: 176px; }
+.board-col:not(.collapsed):has(> .board-cards[data-count="0"]) .board-col-empty { font-size: 12px; opacity: .6; }
+
+/* Обзор: при одной-двух сериях «плёнка» не занимает полэкрана — карточки компактные. */
+.kd-reel-few .kd-fr { width: 118px; }
+.kd-reel-few .kd-fr > b { font-size: 12.5px; }

@@ -321,7 +321,7 @@ function Overview(props) {
 
       <Show when={reel.length}>
         <div class="kd-sh"><h2>На плёнке</h2><span class="kd-label">в работе · {activeTotal}</span><span class="kd-orn" /><button type="button" class="kd-link" onClick={() => switchTab("board")}>Вся доска</button></div>
-        <div class="kd-reel">
+        <div class={`kd-reel${reel.length < 3 ? " kd-reel-few" : ""}`}>
           <For each={reel}>
             {r => {
               const left = daysLeft(r.deadline);

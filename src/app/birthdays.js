@@ -62,20 +62,25 @@ export async function openBirthdaysSheet(onChange) {
       <p class="tn-hint">Бот сам поздравляет команду в день рождения. Ближайшие видны на «Обзоре» и в «Календаре».</p>
       <form class="bd-form" id="bd-form">
         <input id="bd-name" type="text" maxlength="100" placeholder="Имя, например Никита (nikita_dub)" required aria-label="Имя">
-        <input id="bd-date" type="date" required aria-label="Дата рождения">
+        <input id="bd-date" type="text" inputmode="numeric" maxlength="10" placeholder="дд.мм.гггг" autocomplete="off" required aria-label="Дата рождения">
         <label class="bd-noyear"><input type="checkbox" id="bd-noyear"> без года</label>
         <button class="btn primary" type="submit">Добавить</button>
       </form>
       <div class="bd-list">${sorted.length ? sorted.map(rowHtml).join("") : `<div class="no-assignee">Пока никого — добавьте первый день рождения</div>`}</div>
       <div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
     sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+    sheet.querySelector("#bd-date").addEventListener("input", e => {
+      const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+      e.target.value = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join(".");
+    });
     sheet.querySelector("#bd-form").addEventListener("submit", async e => {
       e.preventDefault();
       const name = sheet.querySelector("#bd-name").value.trim();
-      const date = sheet.querySelector("#bd-date").value;
-      const m = date.match(/^(\d{4})-(\d\d)-(\d\d)$/);
-      if (!name || !m) { toast("Укажите имя и дату.", "error"); return; }
       const noYear = sheet.querySelector("#bd-noyear").checked;
+      // Дата в привычном виде дд.мм.гггг: системный выбор даты у части пользователей показывал американский мм/дд/гггг.
+      const dm = sheet.querySelector("#bd-date").value.trim().match(noYear ? /^(\d\d)\.(\d\d)(?:\.(\d{4}))?$/ : /^(\d\d)\.(\d\d)\.(\d{4})$/);
+      const m = dm && [null, dm[3] || "2000", dm[2], dm[1]];
+      if (!name || !m || +m[2] < 1 || +m[2] > 12 || +m[3] < 1 || +m[3] > 31) { toast("Укажите имя и дату в виде дд.мм.гггг.", "error"); return; }
       const btn = e.submitter || sheet.querySelector("#bd-form button");
       btn.disabled = true;
       try {

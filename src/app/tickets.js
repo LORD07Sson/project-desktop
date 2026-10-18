@@ -103,6 +103,7 @@ export async function openTicketsSheet(initialId) {
       listEl.innerHTML = `<div class="no-assignee">Не удалось загрузить: ${esc(e.message)}</div>`;
       return;
     }
+    sheet.classList.toggle("tk-none", !list.length);
     renderList();
     if (!activeId && list.length) openThread(list[0].id);
     if (!list.length) threadEl.innerHTML = `<div class="tk-empty">${status === "open" ? "Открытых обращений нет — всё разобрано" : "Закрытых обращений нет"}</div>`;

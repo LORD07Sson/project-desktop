@@ -41,7 +41,7 @@ export async function mountBotChats(root) {
     root.innerHTML = `
       <div class="ar">
         <p class="ar-hint" style="margin:0;">Группы и каналы, где состоит бот. Добавьте бота в группу и напишите там любое сообщение — она появится здесь. В новой группе всё включено.</p>
-        ${chats.some(c => c.active) && !chats.some(c => c.mention && c.active) ? `<div class="bc-warn">Рабочий чат для упоминаний не выбран — рассылка по расписанию сейчас никуда не уходит.</div>` : ""}
+        ${chats.some(c => c.active) && !chats.some(c => c.mention && c.active) ? `<div class="bc-warn bc-warn-act"><span>Рабочий чат для упоминаний не выбран — рассылка по расписанию сейчас никуда не уходит.</span><span class="bc-pick">${chats.filter(c => c.active).map(c => `<button type="button" class="btn" data-pick-mention="${c.chat_id}">Выбрать «${esc(c.title || c.chat_id)}»</button>`).join("")}</span></div>` : ""}
         ${chats.length ? `<div class="bcn-grid">${chats.map(c => chatHtml(c, d.features || [])).join("")}</div>` : `<div class="ar-empty">Бот пока ни в одной группе.</div>`}
       </div>`;
 
@@ -61,6 +61,7 @@ export async function mountBotChats(root) {
       card.querySelector("[data-mention]")?.addEventListener("change", () => save(chatId, { mention: true }));
       card.querySelector("[data-thread]")?.addEventListener("change", e => save(chatId, { mention_thread_id: e.target.value.trim() || 0 }));
     });
+    root.querySelectorAll("[data-pick-mention]").forEach(btn => btn.addEventListener("click", () => save(btn.dataset.pickMention, { mention: true })));
     root.querySelectorAll("[data-forget]").forEach(btn => btn.addEventListener("click", async () => {
       try { paint(await apiPost(`/bot-chats/${btn.dataset.forget}/forget`, {})); } catch (e) { toast(e.message, "error"); }
     }));
