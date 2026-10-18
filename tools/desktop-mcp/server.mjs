@@ -88,13 +88,37 @@ const SNAPSHOT_JS = `(() => {
   return { title: document.title, url: location.href, viewport: [innerWidth, innerHeight], scrollY: Math.round(scrollY), elements: items, text: body };
 })()`;
 
+// Значения ref/selector/text передаются в страницу КАК ДАННЫЕ (аргументы callFunctionOn), а не вставляются в текст кода.
+async function callInPage(fnSource, ...args) {
+  const g = await cdp("Runtime.evaluate", { expression: "globalThis" });
+  const r = await cdp("Runtime.callFunctionOn", {
+    objectId: g.result.objectId,
+    functionDeclaration: fnSource,
+    arguments: args.map(value => ({ value })),
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
+  return r.result.value;
+}
+
+const CENTER_FN = `function (ref, selector, text) {
+  let el = null;
+  if (ref != null) el = document.querySelector('[data-mcp-ref="' + Number(ref) + '"]');
+  else if (selector) el = document.querySelector(selector);
+  else {
+    el = [...document.querySelectorAll("button, a, [role=button], [role=tab], summary, label, li, div, span")]
+      .filter(e => (e.innerText || "").trim() === text && e.getBoundingClientRect().width > 0)
+      .sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length)[0] || null;
+  }
+  if (!el) return null;
+  el.scrollIntoView({ block: "center", inline: "center" });
+  const r = el.getBoundingClientRect();
+  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+}`;
+
 async function centerOf(args) {
-  const expr = args.ref != null
-    ? `document.querySelector('[data-mcp-ref="${Number(args.ref)}"]')`
-    : args.selector
-      ? `document.querySelector(${JSON.stringify(args.selector)})`
-      : `[...document.querySelectorAll("button, a, [role=button], [role=tab], summary, label, li, div, span")].filter(e => (e.innerText || "").trim() === ${JSON.stringify(args.text || "")} && e.getBoundingClientRect().width > 0).sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length)[0]`;
-  const pos = await evaluate(`(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: "center", inline: "center" }); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  const pos = await callInPage(CENTER_FN, args.ref ?? null, args.selector ?? null, args.text ?? "");
   if (!pos) throw new Error("Элемент не найден (ref/selector/text). Сначала desktop_snapshot.");
   return pos;
 }
