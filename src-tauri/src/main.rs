@@ -198,6 +198,22 @@ impl Drop for UpdateDownloadGuard {
     }
 }
 
+/// После запуска: если перед выходом мы ставили обновление, а версия не сменилась — установка не удалась
+/// (Update.exe не смог заменить файлы). Возвращает текст для пользователя один раз и стирает отметку.
+#[tauri::command]
+fn update_failure(app: tauri::AppHandle) -> Option<String> {
+    let path = app.path().app_data_dir().ok()?.join("update_pending.txt");
+    let target = std::fs::read_to_string(&path).ok()?;
+    let _ = std::fs::remove_file(&path);
+    let target = target.trim().to_string();
+    let current = velopack_update_manager(&app).ok()?.get_current_version_as_string();
+    if current == target {
+        return None;
+    }
+    log::error!("update_failure: ставили {target}, но запущена {current}");
+    Some(format!("Обновление до {target} не установилось: Windows не дала заменить файлы программы. Закройте программу полностью (трей → Выход) и нажмите «Установить обновление» ещё раз."))
+}
+
 /// Качает и сразу ставит обновление, перезапуская приложение —
 /// `apply_updates_and_restart` завершает текущий процесс сам, эта
 /// команда наружу успевает вернуться только в случае ошибки.
@@ -256,7 +272,19 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
             // apply_updates_and_restart сама завершает процесс — строка ниже
             // в норме никогда не выполняется до конца, но если она вообще
             // вернула управление, это уже само по себе ошибка на стороне ОС.
-            return um.apply_updates_and_restart(&info.TargetFullRelease).map_err(|e| e.to_string());
+            // Раньше тут был apply_updates_and_restart — он завершает процесс жёстким exit(0), без штатного
+            // закрытия окна. Дочерние процессы WebView2 после этого висели ещё секунды и держали папку
+            // `current`, а Update.exe не мог её переименовать («файл занят», 10 повторов и отказ): версия
+            // оставалась старой. Теперь Update.exe запускается и ждёт, а мы выходим штатно, закрывая webview.
+            um.wait_exit_then_apply_updates(&info.TargetFullRelease, false, true, Vec::<String>::new())
+                .map_err(|e| e.to_string())?;
+            if let Ok(dir) = app.path().app_data_dir() {
+                let _ = std::fs::create_dir_all(&dir);
+                let _ = std::fs::write(dir.join("update_pending.txt"), info.TargetFullRelease.Version.to_string());
+            }
+            log::info!("download_and_apply_update: Update.exe запущен, выходим для установки");
+            app.exit(0);
+            return Ok(());
         }
     })())
 }
@@ -1258,6 +1286,11 @@ fn main() {
     // остальной код приложения вообще успеет пойти.
     velopack::VelopackApp::build().run();
 
+    // Рабочая папка по умолчанию — `current` рядом с exe (так нас запускает Velopack), и каждый дочерний процесс
+    // (WebView2, ffmpeg) наследует её и «прижимает» папку: Update.exe потом не может её переименовать и обновление
+    // не ставится. Переносим рабочую папку во временную — ffmpeg рядом с exe находится и так (папка exe ищется первой).
+    let _ = std::env::set_current_dir(std::env::temp_dir());
+
     // Отдельный процесс антивируса с правами администратора: проверка закрытых папок без окна (см. antivirus::headless).
     let cli_args: Vec<String> = std::env::args().collect();
     if cli_args.iter().any(|a| a == "--av-scan") {
@@ -1371,6 +1404,7 @@ fn main() {
             is_autostart,
             check_for_update,
             download_and_apply_update,
+            update_failure,
             upload_report_file,
             download_api_file,
             download_report_file,

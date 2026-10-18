@@ -637,7 +637,16 @@ $("#open-settings").addEventListener("click", openSettings);
 const AUTO_CHECK_THROTTLE_MS = 4 * 60 * 60 * 1000; // 4 часа
 const AUTO_CHECK_STORAGE_KEY = "project_last_update_check_at";
 
+// Если перед выходом ставили обновление, а версия не сменилась — говорим об этом сразу, а не молча остаёмся на старой.
+async function reportFailedUpdate() {
+  try {
+    const msg = await invoke("update_failure");
+    if (msg) toast(msg, "error");
+  } catch (_) { /* команды нет (браузерная сборка) — не страшно */ }
+}
+
 export function maybeAutoCheckUpdates() {
+  reportFailedUpdate();
   let last = 0;
   try {
     last = Number(localStorage.getItem(AUTO_CHECK_STORAGE_KEY) || 0);
