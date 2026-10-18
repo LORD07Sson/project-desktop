@@ -3332,3 +3332,20 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 /* Сервисы: подпись цветов полоски аптайма. */
 .svc-history-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11px; color: var(--ink-dim); }
 .svc-history-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
+
+/* Чат: панель действий над сообщением не занимает место в строке (раньше невидимые 126 px сжимали пузырь до ~170 px
+   и короткие фразы переносились на 2–3 строки) — теперь всплывает над углом пузыря при наведении. */
+.ms-bubble-row { position: relative; }
+.ms-bubble-row > .ms-acts { position: absolute; top: -18px; left: 6px; z-index: 3; pointer-events: none; transform: translateY(4px); transition: opacity .15s, transform .15s; }
+.ms-msg:hover .ms-bubble-row > .ms-acts, .ms-bubble-row > .ms-acts:focus-within { pointer-events: auto; transform: none; }
+.ms-msg.out .ms-bubble-row > .ms-acts { left: auto; right: 6px; }
+
+/* Полосы прокрутки: тонкие вместо толстой плашки под Доской и Списком. */
+.board, .table-scroll, .list-scroll { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .18) transparent; }
+.board::-webkit-scrollbar { height: 8px; }
+.board::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .16); border-radius: 8px; }
+.board::-webkit-scrollbar-track { background: transparent; }
+
+/* Доска: в узкой пустой колонке длинное название («Перезапись/дозапись») переносится на вторую строку, а не обрезается. */
+.board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { width: 176px; }
+.board-col:not(.collapsed):has(> .board-cards[data-count="0"]) .board-col-head .lb { white-space: normal; line-height: 1.15; overflow: visible; }
