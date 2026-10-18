@@ -86,7 +86,7 @@ function analyticsHtml(d, trend) {
     },
     {
       label: "Среднее время выполнения",
-      value: d.avg_turnaround_days !== null && d.avg_turnaround_days !== undefined ? `${d.avg_turnaround_days}д` : "—",
+      value: d.avg_turnaround_days !== null && d.avg_turnaround_days !== undefined ? fmtTurnaround(d.avg_turnaround_days) : "—",
       trend: `<div class="an-trend">создан → завершён</div>`,
     },
     {
@@ -168,4 +168,12 @@ export async function loadAnalytics() {
   }
   root.innerHTML = analyticsHtml(d, trend);
   loadAvatars(root);
+}
+
+// 0.2 суток читается хуже, чем «около 5 ч»: до суток показываем часы.
+function fmtTurnaround(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n)) return "—";
+  if (n < 1) return `${Math.max(1, Math.round(n * 24))} ч`;
+  return `${String(Math.round(n * 10) / 10).replace(".", ",")} д`;
 }

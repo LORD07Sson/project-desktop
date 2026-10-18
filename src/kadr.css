@@ -3320,3 +3320,11 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 /* Обзор: при одной-двух сериях «плёнка» не занимает полэкрана — карточки компактные. */
 .kd-reel-few .kd-fr { width: 118px; }
 .kd-reel-few .kd-fr > b { font-size: 12.5px; }
+
+/* Профиль: подпись ранга в одну строку, остаток дней справа; имя не прилипает к краю шапки; цель месяца с абзацами. */
+.tenure-lbl { flex-wrap: wrap; row-gap: 2px; }
+.tenure-lbl .tl-main { margin-left: 0; color: var(--ink-soft); white-space: nowrap; }
+.tenure-lbl span:not(.tl-main) { white-space: nowrap; }
+.pf-hero-body { margin-top: -44px; }
+.pf-who .nm-row { padding-top: 6px; }
+.goal-hint { line-height: 1.5; }

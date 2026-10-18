@@ -101,7 +101,7 @@ function tenureProgressHtml(days) {
   return `
     <div class="tenure">
       <div class="tenure-lbl">
-        <b style="color:${color};">${esc(title)}</b> · ${days} ${pluralDays(days)} в команде
+        <span class="tl-main"><b style="color:${color};">${esc(title)}</b> · ${days} ${pluralDays(days)} в команде</span>
         ${next ? `<span>${left} ${pluralDays(left)} до «${esc(next.label)}»</span>` : `<span>высший ранг</span>`}
       </div>
       <div class="tenure-track"><i style="width:${pct}%; background:${color};"></i></div>
