@@ -1216,7 +1216,7 @@ tr:hover .row-actions .icon-btn { opacity: 1; }
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -6px 12px rgba(0, 0, 0, .25), 0 12px 24px -12px var(--fire); }
 .pf-badge.r-rare.won .ic::before { background: linear-gradient(145deg, #9ec5ff, #3d62b8); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 12px 24px -12px #5b9eff; }
 .pf-badge.r-epic.won .ic::before, .pf-badge.r-legendary.won .ic::before { background: linear-gradient(145deg, #d3b6ff, #6b3fd0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 12px 24px -12px #9b7bff; }
-.pf-badge .lb { font-size: 12.5px; font-weight: 700; line-height: 1.25; }
+.pf-badge .lb { font-size: 12.5px; font-weight: 700; line-height: 1.25; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .pf-badge .pr { margin-top: 4px; font-size: 11px; color: var(--ink-dim); }
 .pf-badge .tr { align-self: stretch; margin: 8px 6px 0; height: 3px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
 .pf-badge .tr i { display: block; height: 100%; background: linear-gradient(90deg, var(--fire), var(--gold)); border-radius: 3px; }
@@ -3259,3 +3259,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .wm-stage[data-bg="light"] { background: linear-gradient(135deg, #e8ecf2, #cfd6e2); }
 .wm-stage[data-bg="check"] { background: repeating-conic-gradient(#8a93a3 0 25%, #c9cfda 0 50%) 0 0 / 24px 24px; }
 .wm-stage[data-bg="green"] { background: linear-gradient(135deg, #1f4d33, #2a6b46); }
+
+/* Дни рождения: имя на всю ширину, ниже дата, «без года» и кнопка — раньше имя сжималось до обрезанной подсказки. */
+.bd-form { grid-template-columns: minmax(0, 1fr) auto; }
+.bd-form #bd-name { grid-column: 1 / -1; }
+.bd-form button[type="submit"] { grid-column: 1 / -1; justify-self: end; }

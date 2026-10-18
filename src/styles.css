@@ -3049,7 +3049,7 @@ body.watch-open #app-screen { pointer-events: none; }
 }
 .team-card-status { display: flex; align-items: center; gap: 5px; flex: none; }
 
-.dev-pill-toggle { display: flex; align-items: center; gap: 8px; }
+.dev-pill-toggle { display: block; }
 
 .dev-bento { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
 .dev-bcell {
