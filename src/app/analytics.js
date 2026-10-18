@@ -56,6 +56,7 @@ function trendChartHtml(days) {
           <path d="${line}" fill="none" stroke="url(#an-stroke)" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
         </svg>
         ${vals.map((v, i) => v > 0 ? `<span class="an-dot" style="left:${xPct(i)}%;top:${yPct(v)}%"></span>` : "").join("")}
+        ${vals.map((v, i) => v > 0 ? `<span class="an-val" style="left:${xPct(i)}%;top:${yPct(v)}%">${v}</span>` : "").join("")}
         ${vals.map((v, i) => `
           <div class="an-col" style="left:${xPct(i) - colW / 2}%;width:${colW}%">
             <span class="an-dot hov" style="left:50%;top:${yPct(v)}%"></span>

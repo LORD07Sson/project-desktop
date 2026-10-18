@@ -3357,3 +3357,6 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 /* Лента: системные события (напоминания о сроках) — иконка колокольчика вместо «?». */
 .fd-sys-ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .avatar-bubble.fd-sys { display: grid; place-items: center; }
+
+/* Аналитика: число над каждой точкой графика */
+.an-val { position: absolute; transform: translate(-50%, -22px); font-size: 12px; font-weight: 800; color: var(--ink); pointer-events: none; text-shadow: 0 1px 6px #000; }
