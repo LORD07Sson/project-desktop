@@ -581,7 +581,7 @@ function timelineSectionHtml(layout) {
 
 // Фильтр по месяцу срока: раньше это был <input type="month">, который
 // без выбранного значения показывал непонятное «------- ----» без
-// подписи. Теперь список: «Все сроки» и месяцы от −3 до +6 от текущего.
+// подписи. Теперь список: «Все сроки» и месяцы от −1 до +6 от текущего.
 function monthOptionsHtml(selected) {
   // Значение приходит из самого <select> — но в разметку пускаем только
   // строгий формат YYYY-MM.
@@ -589,7 +589,7 @@ function monthOptionsHtml(selected) {
   const now = new Date();
   const opts = [`<option value="">Все сроки</option>`];
   const values = [];
-  for (let i = -3; i <= 6; i++) {
+  for (let i = -1; i <= 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     values.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   }
