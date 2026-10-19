@@ -69,7 +69,7 @@ pub struct RenderResult {
     pub seconds: f64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct EncoderStatus {
     pub nvenc_h264: bool,
     pub nvenc_h265: bool,
@@ -347,14 +347,30 @@ fn encoder_works(list: &str, name: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Проверка кодировщиков — это несколько запусков ffmpeg (и инициализация драйвера NVENC, секунды), поэтому
+/// удачный результат запоминаем до закрытия приложения: перед каждым рендером заново её гонять незачем.
 pub fn encoder_status() -> EncoderStatus {
+    static CACHE: std::sync::OnceLock<EncoderStatus> = std::sync::OnceLock::new();
+    if let Some(cached) = CACHE.get() {
+        return cached.clone();
+    }
     let list = encoders_text();
-    EncoderStatus {
-        nvenc_h264: encoder_works(&list, "h264_nvenc"),
-        nvenc_h265: encoder_works(&list, "hevc_nvenc"),
+    let (h264, h265) = std::thread::scope(|sc| {
+        let a = sc.spawn(|| encoder_works(&list, "h264_nvenc"));
+        let b = sc.spawn(|| encoder_works(&list, "hevc_nvenc"));
+        (a.join().unwrap_or(false), b.join().unwrap_or(false))
+    });
+    let status = EncoderStatus {
+        nvenc_h264: h264,
+        nvenc_h265: h265,
         soft_h264: list.contains("libx264"),
         soft_h265: list.contains("libx265"),
+    };
+    // Пустой список — ffmpeg ещё не докачан: не запоминаем, чтобы следующий вызов проверил заново.
+    if !list.is_empty() {
+        let _ = CACHE.set(status.clone());
     }
+    status
 }
 
 pub async fn run(
