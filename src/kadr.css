@@ -316,9 +316,9 @@ input, select, textarea { font-family: inherit; }
 /* Модалки и выпадашки — стекло с тонкой кромкой, мягкое появление */
 /* Модалки открываются под шапкой: она выше всего (меню, кнопки окна),
    и карточка, заехавшая под остров, выглядела обрезанной. */
-.overlay { top: var(--titlebar-h); background: rgba(6, 4, 3, .52); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.overlay { top: var(--titlebar-h); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }   /* без затемнения и размытия фона за окнами */
 .sheet { max-height: calc(100vh - var(--titlebar-h) - 40px); }
-:root[data-theme="light"] .overlay { background: rgba(60, 30, 15, .22); }
+:root[data-theme="light"] .overlay { background: none; }
 .sheet {
   border-radius: var(--radius-xl);
   border: 1px solid var(--glass-border);
@@ -3412,3 +3412,9 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 /* Вкладка «Пульс»: страница с canvas-анимацией в iframe */
 .pulse-frame { display: block; width: 100%; height: calc(100vh - 96px); min-height: 520px; border: 0; border-radius: 20px; background: #070403; }
 #analytics-body .pulse-frame { height: calc(100vh - 92px); min-height: 560px; }
+
+/* Настройки → Обновления: фиолетовая плашка версии не торчит острыми углами из скруглённой рамки. */
+.st-group:has(> .st-version:first-child) { overflow: clip; }
+.st-group > .st-version:first-child { border-radius: 16px 16px 0 0; }
+/* Без затемнения фона окна должны быть непрозрачными, иначе сквозь них просвечивает страница. */
+.sheet { background: linear-gradient(var(--surface), var(--surface)), var(--bg-2); }
