@@ -36,6 +36,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL("./src/index.html", import.meta.url)),
         pin: fileURLToPath(new URL("./src/pin.html", import.meta.url)),
+        pulse: fileURLToPath(new URL("./src/pulse.html", import.meta.url)),
       },
     },
   },

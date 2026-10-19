@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пульс студии</title>
+<link rel="stylesheet" href="pulse/pulse.css">
+<script type="module" src="pulse/main.js"></script>
+</head>
+<body>
+  <div class="head">
+    <div>
+      <h1>Пульс студии</h1>
+      <p>Что горит и кто чем занят — одним взглядом. Справа «Внимание»: нажмите пункт — камера подлетит. Наведите на кружок — подсказка, нажмите — серия. Фильтры сверху, «Ярко» включает все эффекты.</p>
+    </div>
+    <div class="sp"></div>
+    <button class="btn" id="replay" type="button">↻ Показать вступление</button>
+  </div>
+
+  <div class="stage-wrap" id="wrap">
+    <div class="stage intro" id="stage">
+      <canvas class="layer" id="cNet" aria-label="Сеть студии"></canvas>
+      <canvas class="layer" id="cFx" aria-hidden="true"></canvas>
+
+      <div class="focus-dom" id="fDom">
+        <div class="f-title" id="fTitle"><b></b><span></span></div>
+        <div class="f-chip" id="fChip"></div>
+        <div id="fCards"></div>
+        <div id="fList"></div>
+        <div class="f-panel-wrap"><aside class="f-panel" id="fPanel" aria-live="polite"></aside></div>
+      </div>
+
+      <div class="hud">
+        <div class="topbar">
+          <div class="brand"><i></i>Project <span>/ Пульс</span></div>
+          <div class="tools" role="toolbar" aria-label="Фильтр">
+            <button type="button" data-f="all" aria-pressed="true">Все</button>
+            <button type="button" data-f="mine" aria-pressed="false">Мои</button>
+            <button type="button" data-f="hot" aria-pressed="false">Горящие</button>
+            <span class="sep"></span>
+            <select id="fStage" aria-label="Этап"><option value="-1">Все этапы</option><option value="0">Черновик</option><option value="1">Озвучка</option><option value="2">Перезапись</option><option value="3">В работе</option><option value="4">Завершено</option></select>
+            <span class="sep"></span>
+            <button type="button" id="zOut" aria-label="Отдалить">−</button>
+            <button type="button" id="zIn" aria-label="Приблизить">+</button>
+          </div>
+          <button type="button" class="calm" id="calmBtn" aria-pressed="false" title="Все эффекты: вращение, искры, подписи событий">✦ Ярко</button>
+          <div class="live"><i></i><span id="liveTxt">…</span></div>
+        </div>
+        <div class="timeline net-only" id="timeline"></div>
+        <div class="rcol net-only"><div class="attn" id="attn"></div><div class="feed" id="feed" aria-live="polite"></div></div>
+        <div class="legend net-only" id="legend"></div>
+        <div class="dock net-only" id="dock">
+          <div id="alerts"></div>
+          <div class="dock-in" id="dockIn">
+            <div class="kpis" id="kpis"></div>
+            <form class="search" id="searchForm" autocomplete="off">
+              <input id="q" type="text" placeholder="Найти серию или человека…" aria-label="Найти серию или человека">
+              <button type="submit" id="qGo" aria-label="Найти">➤</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="tip" id="tip" hidden></div>
+      <button class="f-back" id="fBack" type="button">← Вся студия</button>
+    </div>
+  </div>
+</body>
+</html>

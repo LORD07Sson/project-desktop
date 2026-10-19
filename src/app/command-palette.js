@@ -23,6 +23,7 @@ const ACTIONS = [
   { label: "Сообщения", icon: "💬", run: () => switchTab("messages") },
   { label: "Лента", icon: "🕘", run: () => switchTab("feed") },
   { label: "Аналитика", icon: "📈", run: () => switchTab("analytics") },
+  { label: "Пульс студии", icon: "💓", run: () => switchTab("pulse") },
   { label: "Команда", icon: "👥", run: () => switchTab("team") },
   { label: "Я", icon: "👤", run: () => switchTab("profile") },
   // Инструменты из меню шапки — те же кнопки, просто с клавиатуры.

@@ -13,6 +13,7 @@ import { loadFeed } from "./feed.js";
 import { loadNyaa } from "./nyaa.js";
 import { loadProfile } from "./profile.js";
 import { loadAnalytics } from "./analytics.js";
+import { loadPulse } from "./pulse-tab.js";
 import { loadServices } from "./services.js";
 import { loadTeam } from "./team.js";
 import { loadQueue } from "./queue.js";
@@ -35,6 +36,7 @@ const LOADERS = {
   feed: loadFeed,
   nyaa: loadNyaa,
   analytics: loadAnalytics,
+  pulse: loadPulse,
   services: loadServices,
   team: loadTeam,
   profile: loadProfile,
@@ -42,7 +44,7 @@ const LOADERS = {
 
 // Контейнеры вкладок — чистятся при выходе из аккаунта, чтобы данные
 // предыдущего пользователя не остались висеть в DOM.
-const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#services-body", "#team-body", "#profile-body", "#reports-body"];
+const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#pulse-body", "#services-body", "#team-body", "#profile-body", "#reports-body"];
 
 // Последняя открытая вкладка переживает не только смену пользователя
 // (см. комментарий у state.activeTab в state.js — это настройка
@@ -56,7 +58,7 @@ const LAST_TAB_KEY = "project-last-tab";
 export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
 // Какое право открывает админскую вкладку; остальные (Сервисы, Релизы) — только для админа.
-const TAB_PERMS = { overview: "reports.view", list: "reports.view", board: "reports.view", calendar: "reports.view", feed: "reports.view", analytics: "reports.view" };
+const TAB_PERMS = { overview: "reports.view", list: "reports.view", board: "reports.view", calendar: "reports.view", feed: "reports.view", analytics: "reports.view", pulse: "reports.view" };
 
 export function tabAllowed(name) {
   if (MEMBER_TABS.has(name)) return true;

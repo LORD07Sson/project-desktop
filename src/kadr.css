@@ -3408,3 +3408,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .tm-details li { margin-bottom: 6px; }
 .tm-sheet .sheet-actions { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 @media (max-width: 560px) { .tm-head { flex-direction: column; text-align: center; } }
+
+/* Вкладка «Пульс»: страница с canvas-анимацией в iframe */
+#pulse-body { height: 100%; }
+.pulse-frame { display: block; width: 100%; height: calc(100vh - 96px); min-height: 520px; border: 0; border-radius: 20px; background: #070403; }
