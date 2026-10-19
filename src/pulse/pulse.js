@@ -120,7 +120,7 @@ export function startPulse(DATA) {
     TITLES.forEach((t, i) => {
       const eps = t.eps;
       const tn = { kind: "title", t, i, th: i / n * Math.PI * 2, yh: (((i * .618034) % 1) - .5) * 290, eps, pct: Math.round(eps.reduce((s, e) => s + e.pct, 0) / Math.max(1, eps.length)),
-        act: .2 + hash(t.id, 9) * .8, boost: 0, born: 0, alpha: 1 };
+        act: .25 + .75 * Math.min(1, t.eps.filter(e => e.stage < 4).length / 3), boost: 0, born: 0, alpha: 1 };
       // выход следующей серии в эфир — главный дедлайн дубляжа (если расписание известно)
       tn.air = t.air;
       tn.nextEp = t.nextEp;
@@ -311,7 +311,7 @@ export function startPulse(DATA) {
       if (R() > .35 && n) twinkles.push({ x: n.px + (R() - .5) * 10, y: n.py + (R() - .5) * 10, born: t, life: 700 + R() * 700, s: (16 + R() * 26) * n.pd, cyan: R() > .82 });
       else { const tn = titleNodes[Math.floor(R() * titleNodes.length)], k = R(); twinkles.push({ x: lerp(CX, tn.px, k), y: lerp(CY, tn.py, k), born: t, life: 600 + R() * 600, s: 12 + R() * 18 }); }
     }
-    if (introT > 2200 && t - lastPulse > 700 && !focusing) { lastPulse = t; const pool = allNodes.filter(n => vis(n) && n.kind !== "track"); const n = pool[Math.floor(R() * pool.length)]; if (n) pulses.push({ n, born: t, col: n.kind === "title" ? "255,150,180" : n.kind === "ep" ? "190,165,255" : "120,240,195" }); }
+    // (раньше здесь кольца вспыхивали на случайных узлах — со стороны это выглядело как настоящая активность; убрано)
     twinkles = twinkles.filter(w => t - w.born < w.life);
     toasts = toasts.filter(w => t - w.born < 2600);
     if (!inflow.length) inflow = Array.from({ length: 36 }, () => ({ a: R() * 7, r: 60 + R() * 110, v: .03 + R() * .05 }));
@@ -1043,13 +1043,14 @@ export function startPulse(DATA) {
     renderFan(now() + 100);
   }
 
-  function dotsDraw(cv, seed, prog) {
+  // Точечный график — настоящая активность по серии за 40 дней (сколько действий в день); без данных точки остаются тусклыми.
+  function dotsDraw(cv, hist, prog) {
     const g = cv.getContext("2d"), w = cv.width, h = cv.height, cols = 40, rows = 9;
     g.clearRect(0, 0, w, h);
+    const max = Math.max(1, ...hist), top = hist.indexOf(Math.max(...hist, 0));
     for (let c = 0; c < cols; c++) {
       if (c / cols > prog) break;
-      const peak = c > cols * .5 && c < cols * .72;
-      const v = Math.round((Math.sin(c / 3 + seed) * .3 + .4 + hash(seed, c) * .35 + (peak ? .25 : 0)) * rows);
+      const n = hist[c] || 0, v = n ? Math.max(1, Math.round(n / max * rows)) : 0, peak = n > 0 && c === top;
       for (let r = 0; r < rows; r++) {
         const on = r < v, x = (c + .5) * (w / cols), y = h - (r + .5) * (h / rows);
         g.fillStyle = on ? (peak ? "#ffd27a" : "rgba(244,236,232,.6)") : "rgba(120,95,85,.35)";
@@ -1083,8 +1084,9 @@ export function startPulse(DATA) {
     await sleep(200); if (tok !== fTok) return;
     kids[3].classList.add("in");
     countTo(pn.querySelector(".meter [data-cnt]"), 0, F.info.pct, 1300);
-    const cv = $("#dots"), t0 = now(), seed = F.ep % 7;
-    const grow = () => { if (tok !== fTok || !cv.isConnected) return; const k = c01((now() - t0) / 1300); dotsDraw(cv, seed, reduce ? 1 : k); if (k < 1) requestAnimationFrame(grow); };
+    const cv = $("#dots"), t0 = now(), hist = F.info.hist || [];
+    cv.title = "Действия по серии за последние 40 дней";
+    const grow = () => { if (tok !== fTok || !cv.isConnected) return; const k = c01((now() - t0) / 1300); dotsDraw(cv, hist, reduce ? 1 : k); if (k < 1) requestAnimationFrame(grow); };
     grow();
     await sleep(400); if (tok !== fTok) return;
     kids[4].classList.add("in"); kids[5].classList.add("in");
