@@ -283,3 +283,5 @@ html, body { height: 100%; overflow: hidden; }
 .stage .focus-dom { inset: auto; left: 0; top: 0; width: 1280px; height: 760px; }
 .rpane { overflow-x: hidden; }
 .rrow, .attn { min-width: 0; }
+.rrow, .attn, .rtabs { box-sizing: border-box; max-width: 100%; }
+.rpane { padding-right: 2px; }

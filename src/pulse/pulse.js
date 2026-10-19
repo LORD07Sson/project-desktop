@@ -520,7 +520,10 @@ export function startPulse(DATA) {
     g.globalCompositeOperation = "source-over";
     for (const ts of toasts) {
       const k = (t - ts.born) / 2600, a = Math.min(c01(k / .08), c01((1 - k) / .25));
-      const x = ts.n.px + 14; let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10;
+      g.font = "600 11px Segoe UI, system-ui, sans-serif";
+      const tw = g.measureText(ts.text).width + 26;
+      let x = ts.n.px + 14; if (x + tw > 1160) x = ts.n.px - 14 - tw;        // не под правую колонку
+      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y < 175) y = ts.n.py + 44;   // не под верхнюю панель
       if (inTitle(x, y - 13, 180, 20)) y -= 54;     // не поверх названия тайтла
       g.font = "600 11px Segoe UI, system-ui, sans-serif"; g.textAlign = "left";
       const w = g.measureText(ts.text).width + 26;
