@@ -4,7 +4,6 @@
 // (короткий mtok в ссылке, токен не светится), файл качаем Rust-командой
 // download_api_file — токен заголовком, путь сохранения выбирает человек.
 
-import { state } from "./state.js";
 import { mediaUrl, openSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
 import { pickOutputFile } from "./tauri.js";

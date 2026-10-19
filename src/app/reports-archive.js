@@ -229,7 +229,6 @@ export async function mountReportsArchive(root) {
     q("#ra-refresh")?.addEventListener("click", load);
     // ---- маршруты ----
     const repaint = () => load();
-    const field = (i, key) => draft[i][key];
     root.querySelectorAll("[data-rt-f]").forEach(el => el.addEventListener("change", () => {
       const [i, key] = el.dataset.rtF.split(":");
       draft[Number(i)][key] = el.value;

@@ -331,7 +331,7 @@ console.log("nyaa-test: ok");
 }
 
 {
-  const { libraryKeys, parseRelease, episodeKey } = await import("../src/app/nyaa-core.js");
+  const { libraryKeys, episodeKey } = await import("../src/app/nyaa-core.js");
   const keys = libraryKeys([{ name: "[Erai-raws] Show Name - 03 [1080p].mkv", folder: "Show Name" }, { name: "Movie.mkv", folder: "Movies" }, { name: "[X] Show Name S2 - 01 [720p].mp4", folder: "" }]);
   assert.equal(keys.size, 2);
   assert.ok(keys.has(episodeKey({ title: "[SubsPlease] Show Name - 03 (1080p) [HEVC]" })), "та же серия другой группы считается имеющейся");

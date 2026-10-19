@@ -6,8 +6,8 @@ import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast, dialogSkele
 import { track } from "./telemetry.js";
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
-import { state, can } from "./state.js";
-import { invoke, pickOutputFile, pickInputFile, revealInFolder, pinReportWindow, openExternal } from "./tauri.js";
+import { can } from "./state.js";
+import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./tauri.js";
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, deadlineCellHtml, posterSrc } from "./reports.js";
@@ -132,22 +132,6 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
     timer = setTimeout(tick, 3000);
   };
   tick();
-}
-
-// После запуска сборки финала предлагаем сразу перейти к посту в канал (тот же конструктор, что в админ-панели).
-function offerPublishPost() {
-  const overlay = openSheet(`
-    <h2>Опубликовать пост?</h2>
-    <p class="bc-hint">Финал собирается в боте. Пока он готовится, можно подготовить пост для канала: заголовок, блоки с людьми, обложка и кнопки.</p>
-    <div class="sheet-actions">
-      <button class="btn" data-close>Позже</button>
-      <button class="btn primary" id="offer-post-open">Открыть «Пост в канал»</button>
-    </div>`);
-  overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
-  overlay.querySelector("#offer-post-open").addEventListener("click", () => {
-    overlay.remove();
-    import("./channel-post.js").then(m => m.openChannelPostSheet());
-  });
 }
 
 // «Кому прислать?»: файл отчёта (видео, дорожка, субтитры) бот пересылает выбранным людям в личку — по тому же file_id,

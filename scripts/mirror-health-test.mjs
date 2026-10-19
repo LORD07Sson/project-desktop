@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  newHealth, record, statsOf, cooling, pathScore, bestPath, pickMirror, shouldSwitch, sparkPoints, levelOf, serialize, deserialize, cooldownMs, HIST_MAX,
+  newHealth, record, statsOf, cooling, bestPath, pickMirror, shouldSwitch, sparkPoints, levelOf, serialize, deserialize, cooldownMs, HIST_MAX,
 } from "../src/app/mirror-health.js";
 
 const A = "https://a.example", B = "https://b.example", C = "https://c.example";
