@@ -2,6 +2,7 @@
 // окна того же origin.
 
 import { startPulse } from "./pulse.js";
+import { applyTheme, installColorMap } from "./theme.js";
 
 let started = false;
 
@@ -14,10 +15,12 @@ window.addEventListener("message", ev => {
   if (ev.origin !== window.location.origin || ev.source !== window.parent) return;
   const msg = ev.data;
   if (!msg || msg.source !== "app" || started) return;
-  if (msg.type === "pulse-error") { started = true; showEmpty(String(msg.text || "Не удалось загрузить данные.")); return; }
+  if (msg.type === "pulse-error") { started = true; applyTheme(msg.theme); showEmpty(String(msg.text || "Не удалось загрузить данные.")); return; }
   if (msg.type !== "pulse-data" || !msg.data) return;
   started = true;
   const data = msg.data;
+  applyTheme(msg.theme);
+  installColorMap(msg.theme);   // до startPulse: спрайты и туманность рисуются уже в цветах темы
   const month = new Date(`${data.today}T00:00:00`).toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
   const live = document.querySelector("#liveTxt");
   if (live) live.textContent = `${month} · команда ${data.people.length}`;

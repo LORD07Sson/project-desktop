@@ -19,12 +19,21 @@ function onMessage(ev) {
   else if (msg.type === "open-report" && /^[\w-]{1,40}$/.test(String(msg.public_id || ""))) openReportDetail(String(msg.public_id));
 }
 
+// Цвета активной темы приложения (акцент: янтарь, сакура, фиалка, небо, мята…) — страница «Пульса» применяет их у себя.
+const THEME_VARS = ["--bg", "--bg-2", "--bg-glow-1", "--bg-glow-2", "--surface", "--surface-2", "--surface-3", "--line", "--ink", "--ink-soft", "--ink-dim",
+  "--fire", "--ember", "--gold", "--on-accent", "--fire-rgb", "--gold-rgb", "--glow-rgb"];
+function currentTheme() {
+  const cs = getComputedStyle(document.documentElement), vars = {};
+  for (const name of THEME_VARS) { const v = cs.getPropertyValue(name).trim(); if (v) vars[name] = v; }
+  return { vars, light: document.documentElement.dataset.theme === "light" };
+}
+
 function deliver() {
   if (!frame || !pending) return;
   const win = frame.contentWindow;
   pending.then(
-    data => win.postMessage({ source: "app", type: "pulse-data", data }, window.location.origin),
-    err => win.postMessage({ source: "app", type: "pulse-error", text: `Не удалось загрузить данные: ${(err && err.message) || err}` }, window.location.origin),
+    data => win.postMessage({ source: "app", type: "pulse-data", data, theme: currentTheme() }, window.location.origin),
+    err => win.postMessage({ source: "app", type: "pulse-error", text: `Не удалось загрузить данные: ${(err && err.message) || err}`, theme: currentTheme() }, window.location.origin),
   );
 }
 
