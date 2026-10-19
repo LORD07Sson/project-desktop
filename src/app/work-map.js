@@ -76,6 +76,20 @@ const fmtAt = at => {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 };
 
+function netHtml(net) {
+  if (!net || !net.people.length) return `<div class="no-assignee">Проверок связи пока нет — они появятся, когда люди включат статистику и запустят приложение.</div>`;
+  const rows = net.people.map(r => `
+    <div class="wm-net${!r.server_ok || r.dns_ok === false ? " bad" : ""}">
+      <b>${esc(r.who)}</b>
+      <span class="wm-ip">${esc(r.ip || "—")}${r.country ? ` · ${esc(r.country)}` : ""}</span>
+      <span class="wm-ok ${r.server_ok ? "ok" : "no"}">${r.server_ok ? `сервер ✓ ${r.server_ms != null ? `${r.server_ms} мс` : ""}` : `сервер ✗ ${esc(r.server_error || "")}`}</span>
+      <span class="wm-ok ${r.dns_ok === false ? "no" : r.dns_ok ? "ok" : ""}">DNS ${r.dns_ok === false ? "✗" : r.dns_ok ? "✓" : "?"} ${esc(r.dns_provider || "")}</span>
+      <i>${esc(fmtAt(r.at))}${r.checks > 1 ? ` · сбоев ${r.server_fail + r.dns_fail} из ${r.checks}` : ""}</i>
+    </div>`).join("");
+  const groups = (title, list) => list.length ? `<div class="wm-grp"><b>${title}</b>${list.map(g => `<span class="${g.fail_pct >= 30 ? "bad" : ""}">${esc(g.name)}: ${g.checks} пров., сбоев ${g.fail_pct}%</span>`).join("")}</div>` : "";
+  return `<div class="wm-nets">${rows}</div>${groups("По DNS", net.by_dns)}${groups("По странам", net.by_country)}`;
+}
+
 function workMapHtml(m) {
   const recent = (m.recent || []).map(r => `<div class="wm-rec"><b>${esc(r.who)}</b><span>${esc(r.text)}</span><i>${esc(fmtAt(r.at))}</i></div>`).join("");
   const empty = !m.people.length && !m.tools.length && !m.stage_edges.length;
@@ -95,6 +109,8 @@ function workMapHtml(m) {
       ${insights ? `<ul class="wm-insights">${insights}</ul>` : ""}
       <div class="kd-ch" style="margin-top:14px;"><h3>Кто что делает</h3><span class="kd-label">последние действия</span></div>
       <div class="wm-recent">${recent || `<div class="no-assignee">Пока ничего не замечено</div>`}</div>
+      <div class="kd-ch" style="margin-top:14px;"><h3>Связь команды с сервером</h3><span class="kd-label">IP наполовину скрыт · страна · DNS</span></div>
+      ${netHtml(m.network)}
       <div class="kd-ch" style="margin-top:14px;"><h3>Серии в работе и ожидаемый срок</h3><span class="kd-label">по типичному времени этапов</span></div>
       <div class="wm-active">${active || `<div class="no-assignee">Нет серий в работе</div>`}</div>
     </div>`;

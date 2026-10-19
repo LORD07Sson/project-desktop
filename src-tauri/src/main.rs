@@ -18,6 +18,7 @@ mod library;
 mod local_render;
 mod nyaa;
 mod steam_session;
+mod net_diag;
 mod torrent_clients;
 mod media_tools;
 mod token_store;
@@ -752,6 +753,13 @@ fn local_render_encoders() -> local_render::EncoderStatus {
 
 /// Выполняет план сборки: скачивает файлы, рендерит, возвращает путь к готовому файлу. Путь сразу попадает в скоуп
 /// чтения, чтобы существующая `upload_report_file` могла его загрузить в отчёт.
+/// Проверка DNS для «Карты работы»: разрешается ли адрес нашего сервера, какие DNS настроены и чьи. Только наш сервер.
+#[tauri::command(async)]
+fn net_diagnose() -> net_diag::NetDiag {
+    let host = API_BASE.trim_start_matches("https://").split(['/', ':']).next().unwrap_or("");
+    net_diag::diagnose(host)
+}
+
 /// Параметры видео, лежащего на этом компьютере, для плана сборки (читается только выбранный пользователем файл).
 #[tauri::command(async)]
 fn local_render_probe(app: tauri::AppHandle, path: String) -> Result<local_render::LocalVideoInfo, String> {
@@ -1557,6 +1565,7 @@ fn main() {
             torrent_clients::tc_add,
             torrent_clients::tc_progress,
             local_render_probe,
+            net_diagnose,
             nyaa::nyaa_save_torrent,
             mt_tool_status,
             mt_probe_media,

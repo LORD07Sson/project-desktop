@@ -2,7 +2,8 @@
 // что и сколько смотрят. Только названия (экран, id кнопки, название тайтла) и длительность — никакого введённого текста,
 // содержимого сообщений или файлов. Человек может выключить сбор в Настройки → Поведение и стереть уже собранное.
 
-import { apiGet, apiPost, openSheet, dismissSheet, toast } from "./api.js";
+import { invoke } from "./tauri.js";
+import { apiGet, apiPost, openSheet, dismissSheet, toast, API_BASE } from "./api.js";
 import { esc } from "./utils.js";
 import { state } from "./state.js";
 
@@ -61,8 +62,9 @@ export async function flushTelemetry() {
 /** Включить/выключить сбор. Сервер тоже узнаёт о выборе (и при желании стирает уже собранное). */
 export async function setTracking(on, forget = false) {
   try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) { /* не критично */ }
-  if (!on) queue = [];
+  if (!on) { queue = []; savePendingNet([]); }
   if (state.token) await apiPost("/telemetry/consent", { enabled: !!on, forget: !!forget });
+  if (on) document.dispatchEvent(new CustomEvent("project:telemetry-on"));
 }
 
 // Нажатия: имя берётся только из id / data-атрибутов кнопки — текст кнопок и полей не читается.
@@ -89,6 +91,55 @@ document.addEventListener("visibilitychange", () => {
 });
 setInterval(flushTelemetry, FLUSH_MS);
 
+// ---- Проверка связи: удаётся ли соединиться с нашим сервером и определить его адрес через DNS ----
+// Приложение само меряет доступность сервера и DNS (имя, провайдер DNS), а IP (наполовину скрытый) и страну сервер определяет по
+// соединению. Неудачные проверки, когда сервер недоступен, ждут в очереди и уходят при первой же возможности.
+const NET_EVERY_MS = 20 * 60 * 1000;
+const NET_PENDING_KEY = "project-net-pending";
+let lastNet = 0;
+
+function pendingNet() {
+  try { return JSON.parse(localStorage.getItem(NET_PENDING_KEY) || "[]"); } catch (_) { return []; }
+}
+function savePendingNet(list) {
+  try { localStorage.setItem(NET_PENDING_KEY, JSON.stringify(list.slice(-20))); } catch (_) { /* не критично */ }
+}
+
+export async function runNetCheck() {
+  if (!trackingOn() || !state.token) return;
+  lastNet = Date.now();
+  const result = { server_ok: false, server_ms: null, server_error: "", dns_ok: null, dns_ms: null, dns_provider: "", dns_servers: [] };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  const t0 = performance.now();
+  try {
+    await fetch(`${API_BASE}/whoami`, { headers: { "X-Init-Data": state.token || "" }, signal: ctl.signal, cache: "no-store" });
+    result.server_ok = true;                       // ответ получен (какой — неважно): сервер достижим
+    result.server_ms = Math.round(performance.now() - t0);
+  } catch (e) {
+    result.server_error = e && e.name === "AbortError" ? "таймаут 8 с" : String((e && e.message) || e).slice(0, 100);
+  } finally { clearTimeout(timer); }
+  try {
+    const d = await invoke("net_diagnose");
+    result.dns_ok = !!d.dns_ok; result.dns_ms = d.dns_ms; result.dns_provider = d.dns_provider; result.dns_servers = d.dns_servers;
+  } catch (_) { /* не в приложении или команда недоступна */ }
+  const queue = pendingNet();
+  if (!result.server_ok) { queue.push(result); savePendingNet(queue); return; }   // сервер недоступен — отправим позже
+  for (const item of queue.concat([result])) {
+    try { await apiPost("/telemetry/net", item); } catch (_) { savePendingNet([item]); return; }
+  }
+  savePendingNet([]);
+}
+
+let netScheduled = false;
+function scheduleNetChecks() {
+  if (netScheduled) return;
+  netScheduled = true;
+  runNetCheck();
+  setInterval(() => { if (Date.now() - lastNet >= NET_EVERY_MS) runNetCheck(); }, 60_000);
+  window.addEventListener("online", () => runNetCheck());
+}
+
 // Окно согласия: пока человек не выбрал, ничего не собирается.
 const CONSENT_HTML = `
   <h2>Помогите нам развивать проект!</h2>
@@ -101,7 +152,7 @@ const CONSENT_HTML = `
     <p>Чтобы у вас не возникало лишних вопросов, вы можете заранее ознакомиться с тем, какие именно данные собираются и для каких целей они используются.</p>
     <details class="tm-details"><summary>Какие данные собираются</summary>
       <ul>
-        <li><b>Собирается:</b> какие экраны вы открываете и сколько на них находитесь; какие кнопки нажимаете (по названию кнопки); что и сколько смотрите (название тайтла и озвучки); скачивания, сборки, публикации постов и архивирование.</li>
+        <li><b>Собирается:</b> какие экраны вы открываете и сколько на них находитесь; какие кнопки нажимаете (по названию кнопки); что и сколько смотрите (название тайтла и озвучки); скачивания, сборки, публикации постов и архивирование; состояние связи: ваш IP-адрес (половина скрыта, например 84.54.•.•) и страна, удаётся ли соединиться с нашим сервером, работает ли DNS и какой у него провайдер.</li>
         <li><b>Не собирается:</b> введённый вами текст, сообщения в чате, содержимое файлов, пароли и токены.</li>
         <li><b>Зачем:</b> строить карту работы команды (кто что делает, где серии стоят, когда примерно выйдут) и улучшать программу.</li>
         <li><b>Кто видит:</b> только владелец проекта. Данные хранятся 120 дней.</li>
@@ -142,4 +193,7 @@ document.addEventListener("media-token-ready", async () => {
     try { localStorage.setItem(KEY, enabled ? "1" : "0"); } catch (_) { /* не критично */ }
     if (!decided) askConsent();
   } catch (_) { /* не критично */ }
+  if (trackingOn()) scheduleNetChecks();
 });
+// Согласился позже — проверки связи стартуют сразу
+document.addEventListener("project:telemetry-on", () => { if (trackingOn()) scheduleNetChecks(); });
