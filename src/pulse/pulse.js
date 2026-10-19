@@ -192,6 +192,7 @@ export function startPulse(DATA) {
   const cam = { x: CX, y: CY, s: 1 };
   // камера по умолчанию смотрит чуть правее студии — справа стоит блок «Внимание»
   const HOMEX = CX + 60;
+  let HOMES = 1;    // домашний масштаб камеры: при малом числе тайтлов сцена крупнее, чтобы не тонуть в пустоте
   let camTok = 0;
   function tweenCam(to, dur, ease = easeIO) {
     const tok = ++camTok, from = { ...cam }, t0 = now();
@@ -713,7 +714,7 @@ export function startPulse(DATA) {
       hideTip(true);
       if (n && n.kind === "title") { const v = epNodes.filter(x => x.tn === n && vis(x)); focusOpen(n, (v[v.length - 1] || epNodes.find(x => x.tn === n)).e.ep); }
       else if (n && n.kind === "ep") focusOpen(n.tn, n.e.ep);
-      else if (!n && (cam.s > 1.05 || Math.abs(cam.x - HOMEX) > 5)) tweenCam({ x: HOMEX, y: CY, s: 1 }, 800);
+      else if (!n && (cam.s > HOMES * 1.05 || Math.abs(cam.x - HOMEX) > 5)) tweenCam({ x: HOMEX, y: CY, s: HOMES }, 800);
     }
   });
   cNet.addEventListener("pointerleave", () => { hoverTitle = -1; mouse.tx = 0; mouse.ty = 0; if (!tipPinned) hideTip(); });
@@ -1135,7 +1136,7 @@ export function startPulse(DATA) {
     stage.classList.remove("focusing");
     rotTarget = 1;
     setTimeout(() => { $("#fDom").style.opacity = ""; }, 50);
-    await tweenCam({ x: HOMEX, y: CY, s: 1 }, 1200);
+    await tweenCam({ x: HOMEX, y: CY, s: HOMES }, 1200);
   }
   $("#fBack").addEventListener("click", () => { stopAuto(); focusClose(); });
   document.querySelectorAll("[data-f]").forEach(b => b.addEventListener("click", () => {
@@ -1209,13 +1210,13 @@ export function startPulse(DATA) {
     try { seen = localStorage.getItem("pulse-intro") === today; localStorage.setItem("pulse-intro", today); } catch (_) { /* без памяти */ }
     camTok++;
     if (reduce || (seen && !force)) {
-      finishIntro(); cam.x = HOMEX; cam.y = CY; cam.s = 1;
+      finishIntro(); cam.x = HOMEX; cam.y = CY; cam.s = HOMES;
       stage.classList.remove("intro");
     } else {
       stage.classList.add("intro");
       cam.x = CX; cam.y = CY; cam.s = 2.9;
       scheduleIntro(now());
-      tweenCam({ x: HOMEX, s: 1 }, 2600, t => easeIO(c01((t - .08) / .92)));
+      tweenCam({ x: HOMEX, s: HOMES }, 2600, t => easeIO(c01((t - .08) / .92)));
       await sleep(2300);
       stage.classList.remove("intro");
     }
@@ -1228,6 +1229,7 @@ export function startPulse(DATA) {
   stage.addEventListener("pointerdown", e => { if (!e.target.closest("#replay")) stopAuto(); });
 
   seedFeed(); labelStages(); build(); prepareEvents(); renderTimeline(); renderLegend(); renderKpis(); initRightColumn(); setCalm(CALM);
+  HOMES = titleNodes.length <= 2 ? 1.55 : titleNodes.length <= 4 ? 1.25 : 1;
   requestAnimationFrame(frame);
   run();
 }
