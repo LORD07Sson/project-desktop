@@ -77,7 +77,7 @@ export function startPulse(DATA) {
   // ---------- холсты ----------
   const stage = $("#stage"), wrapEl = $("#wrap");
   const cNet = $("#cNet"), cFx = $("#cFx"), gN = cNet.getContext("2d"), gF = cFx.getContext("2d");
-  let LLIM = 0, RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.6, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
+  let TLIM = 175, LLIM = 0, RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.6, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
   // сцена 1280×760 вписывается в доступное окно целиком (по ширине и по высоте) и стоит по центру — без внутренней прокрутки
   // Интерфейс (панели, шкала, KPI) растягивается на всё окно; сама сцена 1280×760 стоит по центру и масштабируется по меньшей стороне.
   const scene = $("#scene");
@@ -91,6 +91,7 @@ export function startPulse(DATA) {
     const s2 = Math.max(.35, Math.min(cw / W, Math.max(aw / W, ch / H) * 1.04));
     scene.style.transformOrigin = "0 0";
     scene.style.transform = `scale(${s2 / sc})`;
+    TLIM = (130 - (ch - H * s2) / 2) / s2;     // ниже верхней панели (≈130 px от верха окна), в координатах сцены
     LLIM = (L - (L + (aw - W * s2) / 2)) / s2;
     RLIM = (cw - R - (L + (aw - W * s2) / 2)) / s2;     // правый край свободной области в координатах сцены (дальше — колонка справа)
     scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
@@ -533,7 +534,7 @@ export function startPulse(DATA) {
       const tw = g.measureText(ts.text).width + 26;
       let x = ts.n.px + 14; if (x + tw > RLIM) x = ts.n.px - 14 - tw;        // не под правую колонку
       x = Math.max(LLIM + 8, Math.min(x, RLIM - tw - 8));     // и не за левый край
-      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y < 175) y = Math.max(175, ts.n.py + 44);   // не под верхнюю панель
+      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y < TLIM) y = Math.max(TLIM, ts.n.py + 44);   // не под верхнюю панель
       if (inTitle(x, y - 13, 180, 20)) y -= 54;     // не поверх названия тайтла
       g.font = "600 11px Segoe UI, system-ui, sans-serif"; g.textAlign = "left";
       const w = g.measureText(ts.text).width + 26;
@@ -717,7 +718,7 @@ export function startPulse(DATA) {
     }
     const n = pick(e);
     hoverTitle = n ? (n.kind === "title" ? n.i : n.kind === "ep" ? n.tn.i : -1) : -1;
-    cNet.classList.toggle("hot", !!n && n.kind !== "person");
+    cNet.classList.toggle("hot", !!n);
     if (n) showTip(n); else if (!tipPinned) hideTip();
   });
   cNet.addEventListener("pointerup", e => {
@@ -727,6 +728,7 @@ export function startPulse(DATA) {
       hideTip(true);
       if (n && n.kind === "title") { const v = epNodes.filter(x => x.tn === n && vis(x)); focusOpen(n, (v[v.length - 1] || epNodes.find(x => x.tn === n)).e.ep); }
       else if (n && n.kind === "ep") focusOpen(n.tn, n.e.ep);
+      else if (n && n.kind === "person") openPerson(n.p.n);
       else if (!n && (cam.s > HOMES * 1.05 || Math.abs(cam.x - HOMEX) > 5)) tweenCam({ x: HOMEX, y: CY, s: HOMES }, 800);
     }
   });
@@ -830,11 +832,11 @@ export function startPulse(DATA) {
     const rows = pplNodes.map(pn => {
       const ld = personLoad(pn), pf = perf[pn.p.n] || {}, pi = personInfo(pn.p.n), net = netBy[pn.p.n] || (pi && pi.net);
       const bad = net && (!net.server_ok || net.dns_ok === false);
-      return `<div class="rrow team${ld.late ? " late" : ""}"><b>${esc(pn.p.n)}</b>
+      return `<button type="button" class="rrow team${ld.late ? " late" : ""}" data-p="${esc(pn.p.n)}" title="Открыть сведения о человеке"><b>${esc(pn.p.n)}</b>
         <span>в работе ${ld.n}${ld.late ? `, просрочено ${ld.late}` : ""} · сдано за 30 дн: ${pf.completed || 0}</span>
         <i class="bar" style="--w:${Math.round((pf.completed || 0) / maxDone * 100)}%"></i>
         <small>${pi && pi.tools && pi.tools.length ? esc(pi.tools.slice(0, 2).map(t => t.label).join(", ")) : "нет данных об использовании"}${pi && pi.watch_s ? ` · смотрел ${esc(fmtDur(pi.watch_s))}` : ""}</small>
-        ${net ? `<small class="${bad ? "bad" : "ok"}">${esc(net.ip || "")}${net.country ? ` · ${esc(net.country)}` : ""} · сервер ${net.server_ok ? "✓" : "✗"} · DNS ${net.dns_ok === false ? "✗" : net.dns_ok ? "✓" : "?"}${net.dns_provider ? ` ${esc(net.dns_provider)}` : ""}</small>` : ""}</div>`;
+        ${net ? `<small class="${bad ? "bad" : "ok"}">${esc(net.ip || "")}${net.country ? ` · ${esc(net.country)}` : ""} · сервер ${net.server_ok ? "✓" : "✗"} · DNS ${net.dns_ok === false ? "✗" : net.dns_ok ? "✓" : "?"}${net.dns_provider ? ` ${esc(net.dns_provider)}` : ""}</small>` : ""}</button>`;
     });
     $("#rp-team").innerHTML = `<div class="attn-h"><span><b>●</b> КОМАНДА</span><span>${rows.length}</span></div>` + (rows.join("") || `<div class="attn-empty">Пока никого.</div>`);
   }
@@ -850,11 +852,50 @@ export function startPulse(DATA) {
     if (/^win-/.test(m[2])) return null;
     return ACTIONS[m[2]] ? `${ACTIONS[m[2]]} · ${m[1]}` : `действие в разделе «${m[1]}»`;
   };
+  // одинаковые действия подряд («действие в разделе «Обзор»» ×12) сворачиваем в одну строку
+  const collapseRows = rows => {
+    const out = [];
+    for (const r of rows) {
+      const last = out[out.length - 1];
+      if (last && last.who === r.who && last.text === r.text) last.n++; else out.push({ ...r, n: 1 });
+    }
+    return out;
+  };
+  const humanRows = list => { const rows = []; for (const r of list) { const text = humanText(String(r.text)); if (text) rows.push({ ...r, text }); } return collapseRows(rows); };
+  const rowHtml = (r, withWho = true) => `<div class="lh">${withWho ? `<b>${esc(r.who)}</b>` : `<span></span>`}<small>${esc(ago(r.at))}</small></div><span>${esc(r.text)}${r.n > 1 ? ` <em class="x">×${r.n}</em>` : ""}</span>`;
   function renderLogPane() {
-    const rows = [];
-    for (const r of ((WM && WM.recent) || (ALGO && ALGO.feed) || [])) { const text = humanText(String(r.text)); if (text) rows.push({ ...r, text }); if (rows.length >= 25) break; }
-    $("#logList").innerHTML = `<div class="attn-h"><span><b>●</b> КТО ЧТО ДЕЛАЕТ</span><span>${rows.length}</span></div>` + (rows.length ? rows.map(r => `<div class="rrow log"><div class="lh"><b>${esc(r.who)}</b><small>${esc(ago(r.at))}</small></div><span>${esc(r.text)}</span></div>`).join("") : `<div class="attn-empty">Пока ничего не замечено.</div>`);
+    const rows = humanRows((WM && WM.recent) || (ALGO && ALGO.feed) || []).slice(0, 25);
+    $("#logList").innerHTML = `<div class="attn-h"><span><b>●</b> КТО ЧТО ДЕЛАЕТ</span><span>${rows.length}</span></div>` + (rows.length ? rows.map(r => `<button type="button" class="rrow log" data-p="${esc(r.who)}" title="Открыть сведения о человеке">${rowHtml(r)}</button>`).join("") : `<div class="attn-empty">Пока ничего не замечено.</div>`);
   }
+  // ---------- сведения о человеке: кто, что делал, чем пользуется, какие серии на руках ----------
+  function openPerson(name) {
+    const el = $("#pdet"); if (!el || !name) return;
+    hideTip(true);
+    const pn = pplNodes.find(x => x.p.n === name), ld = pn ? personLoad(pn) : { n: 0, late: 0, titles: [] };
+    const pf = (((AN && AN.performers) || []).find(p => p.name === name)) || {};
+    const pi = personInfo(name), net = pi && pi.net;
+    const mine = epNodes.filter(en => en.e.who.some(p => p.n === name) && en.e.stage < 4);
+    const acts = humanRows(((WM && WM.recent) || []).filter(r => r.who === name)).slice(0, 60);
+    const tools = (pi && pi.tools) || [];
+    el.innerHTML = `<div class="pd-h"><div><small>СВЕДЕНИЯ О ЧЕЛОВЕКЕ</small><h3>${esc(name)}</h3></div><button type="button" class="pd-x" id="pdX" aria-label="Закрыть">×</button></div>
+      <div class="pd-kpis"><div><b>${ld.n}</b><span>в работе</span></div><div class="${ld.late ? "bad" : ""}"><b>${ld.late}</b><span>просрочено</span></div><div><b>${pf.completed || 0}</b><span>сдано за 30 дн</span></div></div>
+      <div class="pd-body">
+        <h4>Серии на руках</h4>${mine.length ? mine.map(en => `<button type="button" class="rrow${en.e.days < 0 ? " late" : ""}" data-open="${esc(en.e.public_id)}"><b>${esc(en.tn.t.name)}${en.e.ep ? ` · ${en.e.ep} серия` : ""}</b><span>${esc(STAGES[en.e.stage])} · ${esc(dueText(en.e.days))}</span></button>`).join("") : `<div class="attn-empty">Сейчас серий на руках нет.</div>`}
+        <h4>Чем пользуется</h4>${tools.length ? tools.map(t => `<div class="pd-tool"><span>${esc(t.label)}</span><i>${t.count} раз${t.seconds ? ` · ${esc(fmtDur(t.seconds))}` : ""}</i></div>`).join("") : `<div class="attn-empty">Данных об использовании пока нет.</div>`}
+        ${pi && pi.watch_s ? `<div class="pd-tool"><span>Смотрел в приложении</span><i>${esc(fmtDur(pi.watch_s))}</i></div>` : ""}
+        ${net ? `<h4>Связь</h4><div class="pd-tool"><span>Сервер</span><i class="${net.server_ok ? "ok" : "bad"}">${net.server_ok ? "доступен" : "нет связи"}${net.server_ms ? ` · ${net.server_ms} мс` : ""}</i></div><div class="pd-tool"><span>DNS</span><i class="${net.dns_ok === false ? "bad" : "ok"}">${net.dns_ok === false ? "не отвечает" : "работает"}${net.dns_provider ? ` · ${esc(net.dns_provider)}` : ""}</i></div><div class="pd-tool"><span>Откуда</span><i>${esc(net.ip || "—")}${net.country ? ` · ${esc(net.country)}` : ""}</i></div>` : ""}
+        <h4>Последние действия</h4>${acts.length ? acts.map(r => `<div class="rrow log static">${rowHtml(r, false)}</div>`).join("") : `<div class="attn-empty">За этот период ничего не замечено.</div>`}
+      </div>`;
+    el.hidden = false; requestAnimationFrame(() => el.classList.add("on"));
+    $("#pdX").addEventListener("click", closePerson);
+    el.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => send({ type: "open-report", public_id: b.dataset.open })));
+  }
+  function closePerson() { const el = $("#pdet"); if (!el) return; el.classList.remove("on"); setTimeout(() => { if (!el.classList.contains("on")) el.hidden = true; }, 250); }
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closePerson(); });
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-p]");
+    if (b) openPerson(b.dataset.p);
+  });
   function setRightTab(name) {
     document.querySelectorAll("[data-rt]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rt === name)));
     for (const k of ["attn", "eta", "team", "log"]) { const el = $(`#rp-${k}`); if (el) el.hidden = k !== name; }
