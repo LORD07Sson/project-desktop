@@ -3390,3 +3390,12 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .wm-rec b { color: var(--ink); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wm-rec span { color: var(--ink); opacity: .85; }
 .wm-rec i { color: var(--ink-dim); font-style: normal; font-size: 12px; white-space: nowrap; }
+
+/* Окно согласия на статистику */
+.tm-sheet .tm-text { max-height: 58vh; overflow-y: auto; padding-right: 6px; font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+.tm-sheet .tm-text p { margin: 0 0 10px; opacity: .92; }
+.tm-sheet .tm-thanks { font-weight: 700; margin-top: 6px; }
+.tm-details { margin: 4px 0 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.tm-details summary { cursor: pointer; font-weight: 700; }
+.tm-details ul { margin: 8px 0 0; padding-left: 18px; color: var(--ink-dim); font-size: 13px; }
+.tm-details li { margin-bottom: 6px; }
