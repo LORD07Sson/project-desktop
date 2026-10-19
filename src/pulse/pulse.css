@@ -315,3 +315,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .pd-days { display: flex; align-items: flex-end; gap: 3px; height: 44px; padding: 4px 2px 0; }
 .pd-days i { flex: 1; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, var(--gold), var(--fire)); opacity: .85; min-height: 2px; }
 .pd-days i[title="0"] { background: var(--line-2); opacity: .6; }
+.pd-body, .rpane { overscroll-behavior: contain; contain: layout paint; will-change: scroll-position; }
+.pd-body .rrow, .rpane .rrow { content-visibility: auto; contain-intrinsic-size: auto 58px; }
+.pdet { will-change: transform, opacity; }

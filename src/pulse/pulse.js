@@ -1218,7 +1218,10 @@ export function startPulse(DATA) {
   // ---------- главный цикл ----------
   // Экономия: сцена, скрытая в другой вкладке, не рисуется и отдаёт память холстов; в покое — 30 кадров/с;
   // если кадры дольше 26 мс — качество холста снижается (и поднимается обратно, когда стало легко).
-  let last = now(), lastDraw = 0, lastAct = now(), slowN = 0, fastN = 0;
+  let last = now(), lastDraw = 0, lastAct = now(), lastScroll = 0, slowN = 0, fastN = 0;
+  // пока листается панель (сведения о человеке, правая колонка), сцена не рисуется: прокрутке достаются все 60 кадров/с
+  document.addEventListener("scroll", () => { lastScroll = now(); }, { capture: true, passive: true });
+  document.addEventListener("wheel", e => { if (e.target.closest && e.target.closest("#pdet, .rcol")) lastScroll = now(); }, { capture: true, passive: true });
   ["pointermove", "pointerdown", "wheel", "keydown"].forEach(ev => addEventListener(ev, () => { lastAct = now(); }, { passive: true }));
   new IntersectionObserver(es => {
     const v = es[0].isIntersecting;
@@ -1229,6 +1232,9 @@ export function startPulse(DATA) {
     requestAnimationFrame(frame);
     if (!VISIBLE) return;
     const t = now();
+    if (t - lastScroll < 220) { last = t; return; }
+    const panelOpen = !$("#pdet").hidden;
+    if (panelOpen && t - lastDraw < 50) return;     // с открытой панелью сцена за ней рисуется реже
     const idle = t - lastAct > 4000 && !playing && !F && !auto && !comets.length && !toasts.length;
     if (idle && t - lastDraw < 30) return;
     const dt = Math.min(50, t - last); last = t;
