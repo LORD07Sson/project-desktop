@@ -119,6 +119,9 @@ export async function openAssembleDialog(publicId) {
         </div>
         <p class="ar-hint" id="ad-where-hint"></p>
         <p class="ar-hint" id="ad-tools-status">Проверяю ffmpeg и видеокарту…</p>
+        <span class="ar-label">Название файла <small>— как будет называться готовый видеофайл</small></span>
+        <input class="field-input" id="ad-file-name" maxlength="80" placeholder="${esc(publicId)}" autocomplete="off">
+        <p class="ar-hint" id="ad-file-name-hint" style="margin:6px 0 0;"></p>
         <span class="ar-label">Качество и формат</span>
         <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}">${esc(p.name)}</option>`).join("")}</select>
         <p class="ar-hint" id="ad-profile-desc"></p>
@@ -132,6 +135,18 @@ export async function openAssembleDialog(publicId) {
         <button class="btn primary" id="ad-start">🎬 Собрать финал</button>
       </div>`;
 
+    // Предпросмотр имени: к названию всегда добавляется «_final» (по нему отчёт понимает, что это готовый финал) и расширение профиля.
+    const nameInput = sheet.querySelector("#ad-file-name");
+    const nameHint = sheet.querySelector("#ad-file-name-hint");
+    const cleanStem = raw => String(raw || "").replace(/[\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/^[ .]+|[ .]+$/g, "").replace(/[_ ]?final$/i, "").replace(/^[ ._]+|[ ._]+$/g, "").slice(0, 80);
+    const paintName = () => {
+      const p = opts.profiles.find(x => String(x.index) === sheet.querySelector("#ad-profile").value);
+      const ext = /mkv/i.test(p && p.desc || "") ? "mkv" : "mp4";
+      nameHint.textContent = `Получится: ${cleanStem(nameInput.value) || publicId}_final.${ext}`;
+    };
+    nameInput.addEventListener("input", paintName);
+    sheet.querySelector("#ad-profile").addEventListener("change", paintName);
+    paintName();
     sheet.querySelector("#ad-ins-text").addEventListener("input", e => { sheet.querySelector("#ad-ins-opts").hidden = !e.target.value.trim(); });
     const descEl = sheet.querySelector("#ad-profile-desc");
     const profileSel = sheet.querySelector("#ad-profile");
@@ -321,6 +336,7 @@ export async function openAssembleDialog(publicId) {
       try {
         const body = {
           post: withPost,
+          file_name: nameInput.value.trim(),
           splice: coverImage ? {
             image: coverImage.file_id,
             seconds: Number(sheet.querySelector("#ad-splice-sec").value || 4),
