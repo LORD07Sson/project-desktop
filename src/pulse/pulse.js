@@ -24,9 +24,12 @@ export function startPulse(DATA) {
   const PEOPLE = DATA.people.map(n => ({ n }));
   const byName = n => PEOPLE.find(p => p.n === n);
   const STAGES = DATA.stages;
+  // окно шкалы: от первой серии (минус две недели) до сегодня, не короче 60 дней — иначе при малом числе серий всё сжато у края
+  const minDay = Math.min(DATA.days - 1, ...DATA.titles.flatMap(t => t.eps.map(e => e.day)));
+  const SHIFT = Math.max(0, Math.min(minDay - 14, DATA.days - 60));
   const TITLES = DATA.titles.map(t => ({ id: t.id, name: t.name, roles: t.roles || [], air: t.air, nextEp: t.nextEp,
-    eps: t.eps.map(e => ({ ...e, who: e.who.map(byName).filter(Boolean) })) }));
-  const START = new Date(`${DATA.start}T00:00:00`);
+    eps: t.eps.map(e => ({ ...e, day: e.day - SHIFT, who: e.who.map(byName).filter(Boolean) })) }));
+  const START = new Date(new Date(`${DATA.start}T00:00:00`).getTime() + SHIFT * 86400000);
   const MONTHS_RU = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
   const MONTHS_GEN = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
   const AN = DATA.analytics || null;      // метрики и графики «Аналитики»: завершено, сроки, нагрузка, исполнители, динамика по дням
@@ -89,7 +92,7 @@ export function startPulse(DATA) {
   // Тайтлы стоят на невидимом цилиндре вокруг студии и медленно вращаются:
   // ближние крупнее и ярче, дальние меньше и тусклее. Серии и дорожки — на
   // чуть большем радиусе рядом со своим тайтлом, люди — на внутреннем круге.
-  const RX = 375, TILT = 26, DAYS = DATA.days;
+  const RX = 375, TILT = 26, DAYS = DATA.days - SHIFT;
   // начала месяцев внутри окна (в днях от его начала); подписи — настоящие названия месяцев
   const MONTH_START = [0], MONTH_IDX = [START.getMonth()];
   for (let d = 1; d < DAYS; d++) { const m = new Date(START.getTime() + d * 86400000); if (m.getDate() === 1) { MONTH_START.push(d); MONTH_IDX.push(m.getMonth()); } }
@@ -404,6 +407,12 @@ export function startPulse(DATA) {
     const label = (txt, x, y, font, col, al, align = "left") => { g.globalAlpha = al; g.font = font; g.textAlign = align; g.lineWidth = 3; g.strokeStyle = "rgba(8,5,4,.8)"; g.strokeText(txt, x, y); g.fillStyle = col; g.fillText(txt, x, y); };
     const badge = (txt, x, y, col, al) => { g.globalAlpha = al; g.font = "700 8.5px ui-monospace, Consolas, monospace"; g.textAlign = "left"; const w = g.measureText(txt).width + 7; g.fillStyle = "rgba(14,9,7,.9)"; g.beginPath(); g.roundRect(x, y - 8, w, 11, 3); g.fill(); g.fillStyle = col; g.fillText(txt, x + 3.5, y + .5); };
 
+    // прямоугольники подписей тайтлов — чтобы бейджи серий, имена людей и всплывашки не налезали на текст
+    const tRects = titleNodes.map(n => {
+      const right = n.px >= CX - 10, rr = 10 + 7, w = 190, x = right ? n.px + rr : n.px - rr - w;
+      return { x, y: n.py - 18, w, h: hasAir(n) ? 52 : 40 };
+    });
+    const inTitle = (x, y, w = 40, h = 12) => tRects.some(r => x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y);
     const drawNode = n => {
       const b = bornK(n); if (b <= 0) return;
       const sc = pop(n) * n.pd, dA = depthA(n), a = n.alpha * dA;
@@ -442,9 +451,9 @@ export function startPulse(DATA) {
       if (ld && ld.late) { g.strokeStyle = `rgba(255,90,100,${.6 * dA * n.alpha})`; g.lineWidth = 1.3; g.beginPath(); g.arc(n.px, n.py, cfg[3] * sc * .7 + 3, 0, 7); g.stroke(); }
       if (n.kind === "ep" && late(n)) { g.strokeStyle = `rgba(255,90,100,${(.5 + .4 * Math.sin(t / 220)) * dA})`; g.lineWidth = 1.3; g.beginPath(); g.arc(n.px, n.py, 11 * sc + 2 + Math.sin(t / 220), 0, 7); g.stroke(); }
       if (b > .5) {
-        if (n.kind === "ep") { if (!CALM) badge(String(n.e.ep), n.px + 8 * n.pd, n.py - 8 * n.pd, late(n) ? "#ff9a9a" : "#cdb8ff", n.alpha * b * dA); }
+        if (n.kind === "ep") { if (!CALM && !inTitle(n.px + 8 * n.pd, n.py - 16 * n.pd)) badge(String(n.e.ep), n.px + 8 * n.pd, n.py - 8 * n.pd, late(n) ? "#ff9a9a" : "#cdb8ff", n.alpha * b * dA); }
         else if (n.kind === "track") badge(String(n.n), n.px + 4, n.py - 5, "#ffd49a", n.alpha * b * dA);
-        else label(`${n.p.n} · ${ld.n}`, n.px + (cfg[3] * .7 + 6) * n.pd, n.py + 4, `600 ${Math.round(9 + 2.5 * n.pd)}px Segoe UI, system-ui, sans-serif`, ld.late ? "#ffb0b0" : "#bff5de", b * (.4 + .6 * dA) * (.3 + .7 * n.alpha));
+        else if (!inTitle(n.px, n.py - 10, 90, 16)) label(`${n.p.n} · ${ld.n}`, n.px + (cfg[3] * .7 + 6) * n.pd, n.py + 4, `600 ${Math.round(9 + 2.5 * n.pd)}px Segoe UI, system-ui, sans-serif`, ld.late ? "#ffb0b0" : "#bff5de", b * (.4 + .6 * dA) * (.3 + .7 * n.alpha));
       }
     };
     const drawHub = () => {
@@ -501,7 +510,8 @@ export function startPulse(DATA) {
     g.globalCompositeOperation = "source-over";
     for (const ts of toasts) {
       const k = (t - ts.born) / 2600, a = Math.min(c01(k / .08), c01((1 - k) / .25));
-      const x = ts.n.px + 14, y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10;
+      const x = ts.n.px + 14; let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10;
+      if (inTitle(x, y - 13, 180, 20)) y -= 54;     // не поверх названия тайтла
       g.font = "600 11px Segoe UI, system-ui, sans-serif"; g.textAlign = "left";
       const w = g.measureText(ts.text).width + 26;
       g.globalAlpha = a; g.fillStyle = "rgba(16,10,8,.92)"; g.strokeStyle = `rgba(${ts.col},.55)`; g.lineWidth = 1;
