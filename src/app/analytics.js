@@ -9,6 +9,7 @@ import { $, esc } from "./utils.js";
 import { loadAvatars } from "./profile.js";
 import { state } from "./state.js";
 import { appendWorkMap } from "./work-map.js";
+import { mountPulse } from "./pulse-tab.js";
 
 const WORKLOAD_COLOR_VAR = { draft: "--s-draft", working: "--s-work", review: "--s-review", completed: "--s-done" };
 // Сервер отдаёт подписи колонок по-английски (Pending/In Progress/...,
@@ -139,6 +140,10 @@ function analyticsHtml(d, trend) {
         <h1>Аналитика</h1>
       </div>
     </div>
+    <div class="bcell an-pulse-cell">
+      <div class="kd-ch"><h3>Пульс студии</h3><span class="kd-label">живая карта · алгоритм считает сроки и узкие места</span></div>
+      <div id="an-pulse"></div>
+    </div>
     <div class="an-metrics">${metricCards}</div>
     <div class="an-two">
       <div class="bcell" style="animation-delay:160ms;">
@@ -171,6 +176,7 @@ export async function loadAnalytics() {
   }
   root.innerHTML = analyticsHtml(d, trend);
   loadAvatars(root);
+  mountPulse(root.querySelector("#an-pulse"));
   if (state.isOwner) appendWorkMap(root);
 }
 

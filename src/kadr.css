@@ -3410,5 +3410,6 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 @media (max-width: 560px) { .tm-head { flex-direction: column; text-align: center; } }
 
 /* Вкладка «Пульс»: страница с canvas-анимацией в iframe */
-#pulse-body { height: 100%; }
 .pulse-frame { display: block; width: 100%; height: calc(100vh - 96px); min-height: 520px; border: 0; border-radius: 20px; background: #070403; }
+.an-pulse-cell { margin-bottom: 16px; }
+.an-pulse-cell .pulse-frame { height: min(760px, calc(100vh - 220px)); min-height: 480px; }

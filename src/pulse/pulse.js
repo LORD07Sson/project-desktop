@@ -29,6 +29,11 @@ export function startPulse(DATA) {
   const START = new Date(`${DATA.start}T00:00:00`);
   const MONTHS_RU = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
   const MONTHS_GEN = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  const ALGO = DATA.algo || null;   // выводы алгоритма «Карты работы» (только для владельца)
+  const fmtH = h => (h == null ? "—" : h < 1 ? `${Math.max(1, Math.round(h * 60))} мин` : h < 48 ? `${Math.round(h)} ч` : `${(h / 24).toFixed(1).replace(".", ",")} дн.`);
+  const fmtDur = s => (s >= 3600 ? `${(s / 3600).toFixed(1).replace(".", ",")} ч` : s >= 60 ? `${Math.round(s / 60)} мин` : `${s} с`);
+  const fmtWhen = ts => new Date(ts * 1000).toLocaleString("ru-RU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const personInfo = name => (ALGO && ALGO.persons && ALGO.persons[name]) || null;
   const send = msg => { try { parent.postMessage({ source: "pulse", ...msg }, window.location.origin); } catch (_) { /* вне приложения */ } };
 
   // ---------- спрайты света ----------
@@ -556,6 +561,20 @@ export function startPulse(DATA) {
     if (kpi && $("#attn")) renderAttn();
     if (kpi) { updateKpis(500); kpiDay = day; }
   }
+  // лента справа: сначала то, что алгоритм уже видел (кто что делал), дальше сюда падают события сцены
+  function seedFeed() {
+    const f = $("#feed"); if (!f || !ALGO) return;
+    for (const r of (ALGO.feed || []).slice(0, 3).reverse()) feedAdd({ col: "255,205,120", text: `${r.who} · ${r.text}` });
+  }
+  // в списке этапов — типичное время на этапе, которое посчитал алгоритм
+  function labelStages() {
+    if (!ALGO || !ALGO.stages) return;
+    const keys = ["draft", "review", "revision", "working", "completed"];
+    [...$("#fStage").options].forEach(o => {
+      const st = ALGO.stages[keys[Number(o.value)]];
+      if (st && st.median_h != null && st.samples >= 2 && Number(o.value) >= 0 && Number(o.value) < 4) o.textContent = `${STAGES[Number(o.value)]} · ~${fmtH(st.median_h)}`;
+    });
+  }
   function renderLegend() {
     const dot = (a, b) => `background:radial-gradient(circle at 35% 30%,${a},${b})`;
     $("#legend").innerHTML = `<b>Как читать</b>
@@ -657,6 +676,17 @@ export function startPulse(DATA) {
   });
   cNet.addEventListener("pointerleave", () => { hoverTitle = -1; mouse.tx = 0; mouse.ty = 0; if (!tipPinned) hideTip(); });
 
+  // что алгоритм знает о человеке: инструменты, просмотр, связь с сервером и DNS
+  function personTip(name) {
+    const pi = personInfo(name);
+    if (!pi) return "";
+    const tools = (pi.tools || []).slice(0, 3).map(t => `${esc(t.label)} ×${t.count}`).join(", ");
+    const net = pi.net;
+    const netLine = net ? `<div class="${net.server_ok && net.dns_ok !== false ? "" : "bad"}">Связь<em>${net.server_ok ? "сервер ✓" : "сервер ✗"}${net.dns_ok === false ? " · DNS ✗" : ""}</em></div>
+      <div>Откуда<em>${esc(net.ip || "—")}${net.country ? ` · ${esc(net.country)}` : ""}</em></div>${net.dns_provider ? `<div>DNS<em>${esc(net.dns_provider)}</em></div>` : ""}` : "";
+    return `${tools ? `<div>Пользуется<em>${tools}</em></div>` : ""}${pi.watch_s ? `<div>Смотрел<em>${fmtDur(pi.watch_s)}</em></div>` : ""}${netLine}`;
+  }
+
   // подсказка при наведении: главное о кружке без въезда в фокус
   let tipPinned = false, tipTimer = 0;
   function showTip(n, pin = false) {
@@ -671,11 +701,11 @@ export function startPulse(DATA) {
       html = `<b>${esc(n.tn.t.name)}${e.ep ? ` · ${e.ep} серия` : ""}</b><div>Этап<em>${STAGES[e.stage]}</em></div>
         <div class="${e.days < 0 ? "bad" : ""}">Срок<em>${dueText(e.days)}</em></div>
         ${e.stuck ? `<div class="bad">На этапе<em>${e.stuck} дн</em></div>` : ""}
-        <div>Делают<em>${esc(e.who.map(p => p.n).join(", "))}</em></div><div>Дорожек<em>${e.tracks}</em></div><div class="${e.qc > 2 ? "bad" : ""}">Открытых пунктов<em>${e.qc}</em></div><small>Нажмите — откроется серия</small>`;
+        ${e.eta ? `<div class="${e.eta.stuck ? "bad" : "soon"}">Ожидаемый выход<em>${esc(fmtWhen(e.eta.ts))}</em></div><div>Оценка<em>${e.eta.learned ? "по истории этапов" : "пока грубая"}</em></div>` : ""}<div>Делают<em>${esc(e.who.map(p => p.n).join(", "))}</em></div><div>Дорожек<em>${e.tracks}</em></div><div class="${e.qc > 2 ? "bad" : ""}">Открытых пунктов<em>${e.qc}</em></div><small>Нажмите — откроется серия</small>`;
     } else if (n.kind === "person") {
       const ld = personLoad(n);
       html = `<b>${esc(n.p.n)}</b><div>Серий в работе<em>${ld.n}</em></div><div class="${ld.late ? "bad" : ""}">Из них просрочено<em>${ld.late || "нет"}</em></div>
-        <small>${ld.titles.length ? esc(ld.titles.join(" · ")) : "Сейчас без задач — можно назначить"}</small>`;
+        ${personTip(n.p.n)}<small>${ld.titles.length ? esc(ld.titles.join(" · ")) : "Сейчас без задач — можно назначить"}</small>`;
     } else return;
     tip.innerHTML = html; tip.hidden = false;
     const p = toScreen(n.px, n.py), w = tip.offsetWidth, h = tip.offsetHeight;
@@ -709,7 +739,7 @@ export function startPulse(DATA) {
     const items = attentionItems(), box = $("#attn");
     box.innerHTML = `<div class="attn-h"><span><b>●</b> ВНИМАНИЕ</span><span>${items.length}</span></div>` +
       (items.length ? items.map((a, i) => `<button type="button" class="at" data-at="${i}" style="--c:${a.c}"><b>${a.t}</b><span>${esc(a.nm)}</span><small>${esc(a.d)}</small><i data-open="${i}" role="button" aria-label="Открыть серию">›</i></button>`).join("")
-        : `<div class="attn-empty">Ничего не горит — всё по плану.</div>`);
+        : `<div class="attn-empty">Ничего не горит — всё по плану.</div>`) + algoBlock();
     box.querySelectorAll("[data-at]").forEach(b => b.addEventListener("click", e => {
       stopAuto();
       const a = items[b.dataset.at];
@@ -717,6 +747,15 @@ export function startPulse(DATA) {
       box.querySelectorAll(".at").forEach(x => x.classList.toggle("on", x === b));
       flyTo(a.n);
     }));
+  }
+  // выводы алгоритма: узкое место и наблюдения («дольше всего на этапе…», «у X часто не удаётся соединиться…»)
+  function algoBlock() {
+    if (!ALGO) return "";
+    const lines = [];
+    if (ALGO.bottleneck && ALGO.bottleneck.median_h != null) lines.push(`Узкое место: «${String(ALGO.bottleneck.label).replace(/^[^\p{L}\p{N}]+/u, "")}» — обычно ${fmtH(ALGO.bottleneck.median_h)}`);
+    for (const t of ALGO.insights || []) if (!/^Дольше всего серия проводит/.test(t)) lines.push(t);
+    if (!lines.length) return "";
+    return `<div class="algo"><div class="attn-h"><span><b>◆</b> АЛГОРИТМ</span><span>${Math.min(3, lines.length)}</span></div>${lines.slice(0, 3).map(t => `<div class="algo-i">${esc(t)}</div>`).join("")}</div>`;
   }
   async function flyTo(n) {
     await tweenCam({ x: n.px - 90, y: n.py, s: 1.9 }, 900);
@@ -917,7 +956,7 @@ export function startPulse(DATA) {
       <div class="meter"><div class="meter-h"><span>Готовность серии</span><span class="tag">${info.stage >= 4 ? "ГОТОВО" : d < 0 ? "ПРОСРОЧЕНО" : d <= 2 ? "СРОК СКОРО" : "В СРОК"}</span></div>
         <div class="meter-b"><div class="big"><span data-cnt="${info.pct}">0</span>%</div><div class="delta"><b>${d >= 99 ? "—" : d < 0 ? `−${-d} дн` : `${d} дн`}</b><span>${d >= 99 ? "срок не задан" : d < 0 ? "просрочка" : "до срока"}</span></div><canvas id="dots" width="400" height="96"></canvas></div></div>
       <div class="fp-sum"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8M15 8h5v5"/></svg>Сводка по серии</div>
-      <div class="fp-note"><b>${info.qc ? `Открытых пунктов чек-листа: ${info.qc}` : "Открытых пунктов нет"}</b>${info.stage >= 4 ? "Серия завершена." : d < 0 ? "Срок прошёл — стоит напомнить исполнителям или сдвинуть срок." : info.stuck ? `Серия ${info.stuck} дн на этапе «${esc(STAGES[info.stage])}» — стоит проверить.` : "Идёт по плану."}</div>
+      <div class="fp-note"><b>${info.qc ? `Открытых пунктов чек-листа: ${info.qc}` : "Открытых пунктов нет"}</b>${info.stage >= 4 ? "Серия завершена." : d < 0 ? "Срок прошёл — стоит напомнить исполнителям или сдвинуть срок." : info.stuck ? `Серия ${info.stuck} дн на этапе «${esc(STAGES[info.stage])}» — стоит проверить.` : "Идёт по плану."}${info.eta ? `<br>Ожидаемый выход: <b>${esc(fmtWhen(info.eta.ts))}</b> (${info.eta.learned ? "оценка по истории этапов" : "пока грубая оценка"}).` : ""}</div>
       <button type="button" class="btn fp-ask" id="fpOpen2">Открыть карточку серии ›</button>`;
     $("#fpOpen")?.addEventListener("click", () => send({ type: "open-report", public_id: info.public_id }));
     $("#fpOpen2")?.addEventListener("click", () => send({ type: "open-report", public_id: info.public_id }));
@@ -1075,7 +1114,7 @@ export function startPulse(DATA) {
   $("#replay").addEventListener("click", () => run(true));
   stage.addEventListener("pointerdown", e => { if (!e.target.closest("#replay")) stopAuto(); });
 
-  build(); prepareEvents(); renderTimeline(); renderLegend(); renderKpis(); setCalm(CALM);
+  seedFeed(); labelStages(); build(); prepareEvents(); renderTimeline(); renderLegend(); renderKpis(); setCalm(CALM);
   requestAnimationFrame(frame);
   run();
 }

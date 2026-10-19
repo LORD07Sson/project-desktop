@@ -1,8 +1,9 @@
-// Вкладка «Пульс»: живая карта студии (pulse.html в iframe — тяжёлая canvas-анимация не делит CSS и скрипты с приложением).
+// «Пульс студии» внутри Аналитики: живая карта студии (pulse.html в iframe — тяжёлая canvas-анимация не делит CSS и скрипты
+// с приложением). Её наполняет алгоритм «Карты работы»: сроки, узкие места, кто чем занят, связь.
 // Данные берём у сервера (/pulse) и отдаём странице через postMessage; её «Открыть серию» приходит сюда и открывает карточку отчёта.
 
 import { apiGet } from "./api.js";
-import { $, esc } from "./utils.js";
+import { esc } from "./utils.js";
 import { openReportDetail } from "./report-detail.js";
 
 let frame = null;
@@ -27,8 +28,7 @@ function deliver() {
   );
 }
 
-export async function loadPulse() {
-  const root = $("#pulse-body");
+export function mountPulse(root) {
   if (!root) return;
   if (!listening) { window.addEventListener("message", onMessage); listening = true; }
   // Каждый заход — свежая страница и свежие данные (вступление играется не чаще раза в день).
