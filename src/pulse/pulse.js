@@ -242,12 +242,12 @@ export function startPulse(DATA) {
       const tn = titleNodes.find(x => x.t.id === ev.tid);
       const en = tn && epNodes.find(x => x.tn === tn && x.e.ep === ev.ep);
       const low = String(ev.text).toLowerCase();
-      return en ? { en, who: ev.who, text: `${ev.who} · ${ev.text}`, kind: /завершен|готов|сдан/.test(low) ? "done" : /замечан|ошиб|удал/.test(low) ? "qc" : "up" } : null;
+      return en ? { en, who: ev.who, at: ev.at, text: `${ev.who} · ${ev.text}`, kind: /завершен|готов|сдан/.test(low) ? "done" : /замечан|ошиб|удал/.test(low) ? "qc" : "up" } : null;
     }).filter(Boolean);
   };
   let evCursor = 0;
   function fireEvent(kind, target, quiet) {
-    let en, text, who, k = kind;
+    let en, text, who, at, k = kind;
     if (target) {
       en = target; who = (en.e.who[0] || PEOPLE[0] || { n: "" }).n;
       text = `${who} · серия ${en.e.ep}`.trim(); k = k || "up";
@@ -255,10 +255,10 @@ export function startPulse(DATA) {
       const pool = REAL_EVENTS.filter(x => vis(x.en));
       if (!pool.length) return;
       const ev = pool[evCursor++ % pool.length];
-      en = ev.en; who = ev.who; text = ev.text; k = k || ev.kind;
+      en = ev.en; who = ev.who; text = ev.text; k = k || ev.kind; at = ev.at;
     }
     const l = links.find(x => x.b === en && x.a.p.n === who) || links.find(x => x.b === en);
-    comets.push({ from: k === "done" || !l ? HUB : l.a, to: en, born: now(), dur: k === "done" ? 1100 : 850, col: EV_COL[k], kind: k, text, quiet, hit: false });
+    comets.push({ from: k === "done" || !l ? HUB : l.a, to: en, born: now(), dur: k === "done" ? 1100 : 850, col: EV_COL[k], kind: k, text, at, quiet, hit: false });
   }
   function arrive(c) {
     const en = c.to, tn = en.tn, t = now();
@@ -270,18 +270,20 @@ export function startPulse(DATA) {
     else if (!c.quiet) {
       // подписей над узлами не больше трёх, и не друг на друге
       const crowded = toasts.length >= 3 || toasts.some(o => Math.hypot(o.n.px - en.px, o.n.py - en.py) < 40);
-      if (!crowded) toasts.push({ n: en, text: c.text, col: c.col, born: t });
+      if (!crowded) toasts.push({ n: en, text: c.at && evAge(c.at) !== "сейчас" ? `${c.text} · ${evAge(c.at)}` : c.text, col: c.col, born: t });
       feedAdd(c);
     }
   }
+  // Подпись времени — настоящая: события из истории не выдаём за происходящие прямо сейчас.
+  const evAge = at => { const d = new Date(String(at).replace(" ", "T") + "Z"), m = Math.round((Date.now() - d.getTime()) / 60000); return Number.isNaN(m) ? "" : m < 2 ? "сейчас" : m < 60 ? `${m} мин назад` : m < 1440 ? `${Math.round(m / 60)} ч назад` : m < 10080 ? `${Math.round(m / 1440)} дн назад` : d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }); };
   function feedAdd(c) {
     const f = $("#feed"); if (!f) return;
     const el = document.createElement("div");
-    el.className = "fd"; el._born = now();
-    el.innerHTML = `<i style="background:rgb(${c.col});box-shadow:0 0 8px rgb(${c.col})"></i><span>${esc(c.text)}</span><em>сейчас</em>`;
+    el.className = "fd";
+    el.innerHTML = `<i style="background:rgb(${c.col});box-shadow:0 0 8px rgb(${c.col})"></i><span>${esc(c.text)}</span><em>${esc(c.at ? evAge(c.at) : "перемотка")}</em>`;
     f.prepend(el);
     while (f.children.length > 3) f.lastChild.remove();
-    [...f.children].forEach((x, i) => { x.style.opacity = (1 - i * .24).toFixed(2); const s = Math.round((now() - x._born) / 1000); x.querySelector("em").textContent = s < 2 ? "сейчас" : `${s} с назад`; });
+    [...f.children].forEach((x, i) => { x.style.opacity = (1 - i * .24).toFixed(2); });
   }
   function ambient(t, dt) {
     rotSpeed = lerp(rotSpeed, rotTarget, .03);
@@ -604,7 +606,7 @@ export function startPulse(DATA) {
   // лента справа: сначала то, что алгоритм уже видел (кто что делал), дальше сюда падают события сцены
   function seedFeed() {
     const f = $("#feed"); if (!f || !ALGO) return;
-    for (const r of (ALGO.feed || []).slice(0, 3).reverse()) feedAdd({ col: "255,205,120", text: `${r.who} · ${r.text}` });
+    for (const r of (ALGO.feed || []).slice(0, 3).reverse()) feedAdd({ col: "255,205,120", text: `${r.who} · ${r.text}`, at: r.at });
   }
   // в списке этапов — типичное время на этапе, которое посчитал алгоритм
   function labelStages() {
@@ -884,8 +886,9 @@ export function startPulse(DATA) {
     const { tn, info } = F, t = tn.t;
     const who = info.who.map(p => p.n);
     if (key === "roles") {
-      const names = t.roles.length ? t.roles : who;
-      return names.map((r, i) => ({ n: r, m: who.length ? who[i % who.length] : "", chip: ["", ""] }));
+      // настоящие данные: кто озвучивает персонажа и кто в оригинале; назначений не выдумываем
+      if (!t.roles.length) return who.map(n => ({ n, m: "исполнитель серии", chip: ["", ""] }));
+      return t.roles.map(r => { r = typeof r === "string" ? { n: r } : r; return { n: r.n, m: r.by ? r.by : r.va ? `в оригинале: ${r.va}` : "не назначен", chip: r.by ? ["ok", "ГОЛОС"] : ["", "СВОБОДЕН"] }; });
     }
     if (key === "tracks") return info.tracks_list.map(f => ({ n: f.n, m: f.m, chip: ["ok", "ДОРОЖКА"] }));
     if (key === "qc") return info.qc_list.map(c => ({ n: c.n, m: "чек-лист серии", chip: c.done ? ["ok", "СДЕЛАНО"] : ["bad", "ОТКРЫТО"] }));
