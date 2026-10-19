@@ -270,3 +270,8 @@ button.rrow { cursor: pointer; }
 .head { margin-bottom: 8px; }
 
 html, body { overflow-x: hidden; }
+
+/* на всё окно: без шапки и внутренней прокрутки */
+html, body { height: 100%; overflow: hidden; }
+.stage-wrap { aspect-ratio: auto; height: 100vh; border-radius: 0; border: 0; }
+.stage-wrap .calm { white-space: nowrap; }

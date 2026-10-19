@@ -75,10 +75,11 @@ export function startPulse(DATA) {
   const stage = $("#stage"), wrapEl = $("#wrap");
   const cNet = $("#cNet"), cFx = $("#cFx"), gN = cNet.getContext("2d"), gF = cFx.getContext("2d");
   let RES = 1;
-  const stageScale = () => wrapEl.clientWidth / W;
+  // сцена 1280×760 вписывается в доступное окно целиком (по ширине и по высоте) и стоит по центру — без внутренней прокрутки
+  const stageScale = () => Math.min(wrapEl.clientWidth / W, wrapEl.clientHeight / H);
   function resize() {
     const sc = stageScale();
-    stage.style.transform = `scale(${sc})`;
+    stage.style.transform = `translate(${(wrapEl.clientWidth - W * sc) / 2}px, ${(wrapEl.clientHeight - H * sc) / 2}px) scale(${sc})`;
     RES = clamp((devicePixelRatio || 1) * sc, 1, 2);
     for (const c of [cNet, cFx]) { c.width = Math.round(W * RES); c.height = Math.round(H * RES); }
   }

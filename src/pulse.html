@@ -8,15 +8,6 @@
 <script type="module" src="pulse/main.js"></script>
 </head>
 <body>
-  <div class="head">
-    <div>
-      <h1>Аналитика <span>· пульс студии</span></h1>
-      <p>Что горит и кто чем занят — одним взглядом. Справа «Внимание»: нажмите пункт — камера подлетит. Наведите на кружок — подсказка, нажмите — серия. Фильтры сверху, «Ярко» включает все эффекты.</p>
-    </div>
-    <div class="sp"></div>
-    <button class="btn" id="replay" type="button">↻ Показать вступление</button>
-  </div>
-
   <div class="stage-wrap" id="wrap">
     <div class="stage intro" id="stage">
       <canvas class="layer" id="cNet" aria-label="Сеть студии"></canvas>
@@ -43,6 +34,7 @@
             <button type="button" id="zOut" aria-label="Отдалить">−</button>
             <button type="button" id="zIn" aria-label="Приблизить">+</button>
           </div>
+          <button type="button" class="calm" id="replay" title="Показать вступление">↻ Вступление</button>
           <button type="button" class="calm" id="calmBtn" aria-pressed="false" title="Все эффекты: вращение, искры, подписи событий">✦ Ярко</button>
           <div class="live"><i></i><span id="liveTxt">…</span></div>
         </div>
