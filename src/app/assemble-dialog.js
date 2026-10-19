@@ -180,22 +180,44 @@ export async function openAssembleDialog(publicId) {
       });
     }
     const selVideo = () => { const c = sheet.querySelector('input[name="ad-video"]:checked'); return c ? c.value : ""; };
+    // Сервер читает видео (ffprobe) и может не успеть или временно не отвечать — поэтому несколько попыток подряд с паузой,
+    // а не одна. Устаревший ответ (выбрали другое видео, пока шёл прежний запрос) отбрасывается.
+    const EST_TRIES = 5;
+    let estRun = 0;
     async function loadEstimate() {
+      const run = ++estRun;
       const checked = sheet.querySelector('input[name="ad-video"]:checked');
       if (checked && checked.value === "local") {
         estimate = null;
         if (estBox) estBox.innerHTML = `<span>Размер и время рендера посчитаю после скачивания: видео лежит у вас на компьютере, сервер его не видит.</span>`;
         return;
       }
-      if (estBox) estBox.innerHTML = `<span>Считаю примерный размер…</span>`;
-      try {
-        estimate = await apiGet(`/report/${publicId}/assemble-estimate`, { video: checked ? Number(checked.value) : 0 });
-        paintEstimate();
-      } catch (err) {
-        estimate = null;
-        if (estBox) estBox.innerHTML = `<span>Размер оценить не удалось: ${esc(err.message)}</span>`;
+      let lastError = null;
+      for (let attempt = 1; attempt <= EST_TRIES; attempt++) {
+        if (run !== estRun || !overlay.isConnected) return;
+        if (estBox) estBox.innerHTML = `<span>Считаю примерный размер…${attempt > 1 ? ` (попытка ${attempt} из ${EST_TRIES})` : ""}</span>`;
+        try {
+          const result = await apiGet(`/report/${publicId}/assemble-estimate`, { video: checked ? Number(checked.value) : 0 });
+          if (run !== estRun) return;
+          estimate = result;
+          paintEstimate();
+          return;
+        } catch (err) {
+          lastError = err;
+          if (attempt < EST_TRIES) await new Promise(r => setTimeout(r, Math.min(1500 * attempt, 6000)));
+        }
+      }
+      if (run !== estRun) return;
+      estimate = null;
+      if (estBox) {
+        estBox.innerHTML = `<span>Размер оценить не удалось: ${esc((lastError && lastError.message) || "нет ответа")}</span><button type="button" class="btn" data-est-retry>Посчитать снова</button>`;
+        estBox.querySelector("[data-est-retry]").addEventListener("click", loadEstimate);
       }
     }
+    // Вернулась сеть — пробуем сами, не заставляя нажимать кнопку.
+    const onOnline = () => { if (!estimate && overlay.isConnected) loadEstimate(); };
+    window.addEventListener("online", onOnline);
+    overlay.addEventListener("sheet-dismissed", () => window.removeEventListener("online", onOnline));
     sheet.querySelectorAll('input[name="ad-video"]').forEach(r => r.addEventListener("change", loadEstimate));
     loadEstimate();
 
