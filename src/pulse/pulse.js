@@ -77,7 +77,7 @@ export function startPulse(DATA) {
   // ---------- холсты ----------
   const stage = $("#stage"), wrapEl = $("#wrap");
   const cNet = $("#cNet"), cFx = $("#cFx"), gN = cNet.getContext("2d"), gF = cFx.getContext("2d");
-  let TLIM = 175, LLIM = 0, RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.6, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
+  let TLIM = 175, LLIM = 0, RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.3, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
   // сцена 1280×760 вписывается в доступное окно целиком (по ширине и по высоте) и стоит по центру — без внутренней прокрутки
   // Интерфейс (панели, шкала, KPI) растягивается на всё окно; сама сцена 1280×760 стоит по центру и масштабируется по меньшей стороне.
   const scene = $("#scene");
@@ -95,7 +95,7 @@ export function startPulse(DATA) {
     LLIM = (L - (L + (aw - W * s2) / 2)) / s2;
     RLIM = (cw - R - (L + (aw - W * s2) / 2)) / s2;     // правый край свободной области в координатах сцены (дальше — колонка справа)
     scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
-    RES = clamp((devicePixelRatio || 1) * s2 * QUAL * SS, 1, 2.8);   // SS: запас по разрешению — браузер уменьшает его при показе, края и текст получаются чёткими
+    RES = clamp((devicePixelRatio || 1) * s2 * QUAL * SS, 1, 2.2);   // SS: запас по разрешению — браузер уменьшает его при показе, края и текст получаются чёткими
     for (const c of [cNet, cFx]) { c.width = VISIBLE ? Math.round(W * RES) : 1; c.height = VISIBLE ? Math.round(H * RES) : 1; }
   }
   new ResizeObserver(resize).observe(wrapEl); resize();
@@ -1234,9 +1234,8 @@ export function startPulse(DATA) {
     const t = now();
     if (t - lastScroll < 220) { last = t; return; }
     const panelOpen = !$("#pdet").hidden;
-    if (panelOpen && t - lastDraw < 50) return;     // с открытой панелью сцена за ней рисуется реже
+    if (t - lastDraw < (panelOpen ? 30 : 15.5)) return;     // ровно 60 кадров/с (на мониторах 144–240 Гц не рисуем лишнее), с панелью — 30
     const idle = t - lastAct > 4000 && !playing && !F && !auto && !comets.length && !toasts.length;
-    if (idle && t - lastDraw < 30) return;
     const dt = Math.min(50, t - last); last = t;
     const cost = t - lastDraw; lastDraw = t;
     if (!idle) {
