@@ -5,7 +5,7 @@
 // Прогресс рендера — событие localrender-progress, отмена — local_render_cancel; дальше ход ведёт карточка сборки отчёта.
 
 import { invoke, listen } from "./tauri.js";
-import { apiPost, toast } from "./api.js";
+import { apiPost, toast, openSheet, dismissSheet } from "./api.js";
 import { state } from "./state.js";
 import { esc } from "./utils.js";
 
@@ -80,6 +80,31 @@ function paint(el, { title, label, fraction, cancel }) {
   });
 }
 
+/** Окно «Сохранить копию себе?»: после рендера, пока файл ещё лежит во временной папке (потом её убирают). */
+function askSaveCopy(done) {
+  return new Promise(resolve => {
+    const overlay = openSheet(`<h2>Сохранить копию себе?</h2>
+      <p class="dev-hint">${esc(done.out_name)} · ${(done.size / 1048576).toFixed(0)} МБ. На сервер видео уйдёт в любом случае, а на компьютере временный файл после отправки удаляется.</p>
+      <div class="sheet-actions"><button type="button" class="btn primary" data-yes>Да, выбрать папку</button><button type="button" class="btn" data-no>Нет</button></div>`);
+    const finish = yes => { resolve(yes); dismissSheet(overlay); };
+    overlay.addEventListener("sheet-dismissed", () => resolve(false));
+    overlay.querySelector("[data-yes]").addEventListener("click", () => finish(true));
+    overlay.querySelector("[data-no]").addEventListener("click", () => finish(false));
+  });
+}
+
+async function saveCopy(done) {
+  try {
+    const dir = await invoke("pick_output_dir");
+    if (!dir) return;
+    const saved = await invoke("local_render_save_copy", { path: done.path, dir, name: done.out_name });
+    toast("Копия сохранена.", "success");
+    try { await invoke("reveal_in_folder", { path: saved }); } catch (_) { /* не критично */ }
+  } catch (e) {
+    toast(`Копию сохранить не удалось: ${String((e && e.message) || e)}`, "error");
+  }
+}
+
 /** selection — тело, как у /assemble/start (video, sub, audios, mode, profile, inscription). */
 export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   if (running) { toast("Сборка у себя уже идёт — дождитесь или отмените её.", "error"); return false; }
@@ -95,6 +120,7 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
     plan = await apiPost(`/report/${publicId}/local-render/plan`, selection);
     paint(el, { title: "🖥 Сборка у себя", label: "Скачиваю файлы…", fraction: 0, cancel: true });
     const done = await invoke("local_render_run", { plan, initData: state.token || "" });
+    if (await askSaveCopy(done)) await saveCopy(done);
     paint(el, { title: "⬆ Отправляю готовое видео на сервер", label: `${done.out_name} · ${(done.size / 1048576).toFixed(0)} МБ · ${done.encoder}`, fraction: 1, cancel: false });
     await invoke("local_render_upload", { publicId, path: done.path, initData: state.token || "" });
     const mins = Math.max(1, Math.round(done.seconds / 60));

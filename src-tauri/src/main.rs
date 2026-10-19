@@ -784,6 +784,31 @@ fn local_render_cancel() -> Result<(), String> {
     Ok(())
 }
 
+/// Копия готового рендера в папку, которую пользователь выбрал в диалоге (pick_output_dir). Исходник читается только
+/// по пути, который вернул local_render_run; имя берём без каталогов, существующий файл не затираем — добавляем (2), (3)…
+#[tauri::command(async)]
+fn local_render_save_copy(app: tauri::AppHandle, path: String, dir: String, name: String) -> Result<String, String> {
+    let result = (|| {
+        let scope = app.state::<file_scope::FileScope>();
+        let src = scope.check_read(&path)?;
+        let dir = scope.check_write(&dir)?;
+        let base = Path::new(&name).file_name().and_then(|n| n.to_str()).filter(|n| !n.is_empty()).unwrap_or("render.mp4");
+        let (stem, ext) = match base.rsplit_once('.') {
+            Some((s, e)) if !s.is_empty() => (s.to_string(), format!(".{e}")),
+            _ => (base.to_string(), String::new()),
+        };
+        let mut target = dir.join(base);
+        let mut n = 2;
+        while target.exists() {
+            target = dir.join(format!("{stem} ({n}){ext}"));
+            n += 1;
+        }
+        std::fs::copy(&src, &target).map_err(|e| format!("Не удалось сохранить копию: {e}"))?;
+        Ok(target.to_string_lossy().into_owned())
+    })();
+    log_result("local_render_save_copy", result)
+}
+
 #[tauri::command(async)]
 fn local_render_cleanup(public_id: String) -> Result<(), String> {
     log_result("local_render_cleanup", local_render::cleanup(&public_id))
@@ -1438,6 +1463,7 @@ fn main() {
             local_render_upload,
             local_render_cancel,
             local_render_cleanup,
+            local_render_save_copy,
             antivirus::av_scan,
             antivirus::av_cancel,
             antivirus::av_status,
