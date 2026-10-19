@@ -193,7 +193,7 @@ document.addEventListener("media-token-ready", async () => {
   try {
     const { enabled, decided } = await apiGet("/telemetry/consent");
     try { localStorage.setItem(KEY, enabled ? "1" : "0"); } catch (_) { /* не критично */ }
-    if (!decided) askConsent();
+    if (decided === false) askConsent();   // только если сервер прямо сказал «ещё не выбирал»; непонятный ответ окно не открывает
   } catch (_) { /* не критично */ }
   if (trackingOn()) scheduleNetChecks();
 });
