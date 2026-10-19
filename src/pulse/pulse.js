@@ -92,7 +92,7 @@ export function startPulse(DATA) {
     scene.style.transformOrigin = "0 0";
     scene.style.transform = `scale(${s2 / sc})`;
     scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
-    RES = clamp((devicePixelRatio || 1) * s2 * QUAL, 1, 2.25);
+    RES = clamp((devicePixelRatio || 1) * s2 * QUAL, 1, 2.5);
     for (const c of [cNet, cFx]) { c.width = VISIBLE ? Math.round(W * RES) : 1; c.height = VISIBLE ? Math.round(H * RES) : 1; }
   }
   new ResizeObserver(resize).observe(wrapEl); resize();
@@ -1176,7 +1176,7 @@ export function startPulse(DATA) {
     const dt = Math.min(50, t - last); last = t;
     const cost = t - lastDraw; lastDraw = t;
     if (!idle) {
-      if (cost > 26) { fastN = 0; if (++slowN > 40 && QUAL > .7) { QUAL = .7; slowN = 0; resize(); } }
+      if (cost > 36) { fastN = 0; if (++slowN > 90 && QUAL > .85) { QUAL = .85; slowN = 0; resize(); } }
       else { slowN = 0; if (++fastN > 600 && QUAL < 1) { QUAL = 1; fastN = 0; resize(); } }
     }
     // ошибка в одном слое не должна останавливать всю сцену
