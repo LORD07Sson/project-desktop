@@ -488,7 +488,13 @@ export function parseCover(text) {
 export const coverKey = title => {
   const r = parseRelease(title);
   const base = r.episode != null && r.show ? r.show : cleanTitleForSearch(title);
-  return String(base || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 80);
+  // «Китайское / английское / ромадзи» название: ищем по латинскому варианту — AniList не находит ряд из иероглифов и слэшей
+  let text = String(base || "").replace(/：/g, ":");
+  if (/\s[/|]\s/.test(text)) {
+    const latin = text.split(/\s[/|]\s/).map(x => x.trim()).find(x => /[A-Za-z]{3,}/.test(x) && !/[぀-ヿ㐀-鿿]/.test(x));
+    if (latin) text = latin.replace(/\s+s\d+$/i, "");
+  }
+  return text.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 80);
 };
 
 const REL = { SEQUEL: "Продолжение", PREQUEL: "Предыстория", SIDE_STORY: "Побочная история", SPIN_OFF: "Спин-офф", PARENT: "Основной тайтл", ALTERNATIVE: "Альтернатива", ADAPTATION: "Первоисточник", SUMMARY: "Пересказ", OTHER: "Связано" };

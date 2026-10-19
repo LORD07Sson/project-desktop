@@ -255,6 +255,9 @@ console.log("nyaa-test: ok");
   assert.equal(parseCover("не json"), "");
   assert.equal(coverKey("[Sokudo] Re ZERO - S04E19 [1080p AV1]"), coverKey("[Breeze] Re ZERO - S04E19 [1080p AV1]"));
   assert.ok(coverKey("[A] Show X - 03 [1080p]").startsWith("show x"));
+  // название «иероглифы / английское / ромадзи»: ищем по латинскому варианту
+  assert.equal(coverKey("[LoliHouse] 与暗黑召唤师秘密恋爱中(无修版) / Dark Summoner to Dekiteiru (UNCENSORED) - 03 [WebRip 1080p HEVC-10bit AAC][无字幕]"), "dark summoner to dekiteiru");
+  assert.equal(coverKey("[ANi] Ao Ashi S02 / 青之蘆葦 第二季 - 03 [1080P][Baha][WEB-DL]"), "ao ashi");
 }
 
 {
