@@ -4,7 +4,6 @@
 
 import { invoke } from "./tauri.js";
 import { apiGet, apiPost, openSheet, dismissSheet, toast, API_BASE } from "./api.js";
-import { esc } from "./utils.js";
 // «じ――» — пристальный взгляд: заставка окна согласия (Vite отдаёт готовый URL ассета).
 import stareUrl from "../assets/stare-ji.gif";
 import { state } from "./state.js";
@@ -113,11 +112,11 @@ export async function runNetCheck() {
   const result = { server_ok: false, server_ms: null, server_error: "", dns_ok: null, dns_ms: null, dns_provider: "", dns_servers: [] };
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
-  const t0 = performance.now();
+  const t0 = window.performance.now();
   try {
     await fetch(`${API_BASE}/whoami`, { headers: { "X-Init-Data": state.token || "" }, signal: ctl.signal, cache: "no-store" });
     result.server_ok = true;                       // ответ получен (какой — неважно): сервер достижим
-    result.server_ms = Math.round(performance.now() - t0);
+    result.server_ms = Math.round(window.performance.now() - t0);
   } catch (e) {
     result.server_error = e && e.name === "AbortError" ? "таймаут 8 с" : String((e && e.message) || e).slice(0, 100);
   } finally { clearTimeout(timer); }
