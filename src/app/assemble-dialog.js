@@ -72,19 +72,7 @@ export async function openAssembleDialog(publicId) {
           <label class="ar-row ad-pick"><input type="radio" name="ad-sub" value="0" ${opts.subs.length ? "" : "checked"}><b>Без субтитров</b>
             <span class="ar-meta">${opts.subs.length ? "видео без субтитров" : "файла субтитров в отчёте нет — видео будет без них"}</span></label>
         </div>
-        <span class="ar-label">Надпись поверх видео <small>— необязательно: можно без субтитров или вместе с ними</small></span>
-        <input class="field-input" id="ad-ins-text" placeholder="например: Озвучка DreamyVoice · серия 12">
-        <div class="ar-fields" id="ad-ins-opts" hidden>
-          <select class="field-input" id="ad-ins-pos" style="max-width:190px;">
-            <option value="bottom">Снизу по центру</option><option value="top">Сверху по центру</option><option value="center">По центру</option>
-            <option value="tl">Левый верх</option><option value="tr">Правый верх</option><option value="bl">Левый низ</option><option value="br">Правый низ</option>
-          </select>
-          <select class="field-input" id="ad-ins-size" style="max-width:150px;"><option value="3.5">Мелкая</option><option value="5" selected>Средняя</option><option value="8">Крупная</option></select>
-          <select class="field-input" id="ad-ins-dur" style="max-width:200px;">
-            <option value="0">Всё видео</option><option value="5">Первые 5 секунд</option><option value="10">Первые 10 секунд</option><option value="30">Первые 30 секунд</option>
-          </select>
-        </div>
-        <p class="ar-hint">Что будет с оригиналом: из mkv всегда убираются его встроенные субтитры, шрифты, главы и названия дорожек — остаётся одна видеодорожка и одна звуковая. Потом в картинку вшиваются выбранные вами субтитры и/или надпись (или ничего, если не выбрали). Субтитры и надписи, которые уже «выжжены» в само изображение оригинала, убрать нельзя.</p>
+        <p class="ar-hint">Что будет с оригиналом: из mkv всегда убираются его встроенные субтитры, шрифты, главы и названия дорожек — остаётся одна видеодорожка и одна звуковая. Потом в картинку вшиваются выбранные вами субтитры (или ничего, если не выбрали). Субтитры и надписи, которые уже «выжжены» в само изображение оригинала, убрать нельзя.</p>
         ${opts.audios.length ? `
         <span class="ar-label">Дорожки даббера <small>— отметьте нужные, звучат вместе</small></span>
         <div class="ar-list">${opts.audios.map(a => `
@@ -135,19 +123,18 @@ export async function openAssembleDialog(publicId) {
         <button class="btn primary" id="ad-start">🎬 Собрать финал</button>
       </div>`;
 
-    // Предпросмотр имени: к названию всегда добавляется «_final» (по нему отчёт понимает, что это готовый финал) и расширение профиля.
+    // Предпросмотр имени: название как введено + расширение профиля.
     const nameInput = sheet.querySelector("#ad-file-name");
     const nameHint = sheet.querySelector("#ad-file-name-hint");
-    const cleanStem = raw => String(raw || "").replace(/[\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/^[ .]+|[ .]+$/g, "").replace(/[_ ]?final$/i, "").replace(/^[ ._]+|[ ._]+$/g, "").slice(0, 80);
+    const cleanStem = raw => String(raw || "").replace(/[\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/^[ .]+|[ .]+$/g, "").slice(0, 80);
     const paintName = () => {
       const p = opts.profiles.find(x => String(x.index) === sheet.querySelector("#ad-profile").value);
       const ext = /mkv/i.test(p && p.desc || "") ? "mkv" : "mp4";
-      nameHint.textContent = `Получится: ${cleanStem(nameInput.value) || publicId}_final.${ext}`;
+      nameHint.textContent = `Получится: ${cleanStem(nameInput.value) || publicId}.${ext}`;
     };
     nameInput.addEventListener("input", paintName);
     sheet.querySelector("#ad-profile").addEventListener("change", paintName);
     paintName();
-    sheet.querySelector("#ad-ins-text").addEventListener("input", e => { sheet.querySelector("#ad-ins-opts").hidden = !e.target.value.trim(); });
     const descEl = sheet.querySelector("#ad-profile-desc");
     const profileSel = sheet.querySelector("#ad-profile");
     const refreshDesc = () => { descEl.textContent = (opts.profiles.find(p => String(p.index) === profileSel.value) || {}).desc || ""; };
@@ -179,7 +166,7 @@ export async function openAssembleDialog(publicId) {
       const range = renderRange(e);
       const renderTxt = range
         ? (range.local ? `Рендер у вас на видеокарте ≈ ${mins(range.low)} – ${mins(range.high)}, плюс скачивание файлов и отправка результата (зависят от интернета).`
-          : `Рендер на сервере ≈ ${mins(range.low)} – ${mins(range.high)} (если нужна перекодировка: субтитры, надпись, логотип, масштаб).`)
+          : `Рендер на сервере ≈ ${mins(range.low)} – ${mins(range.high)} (если нужна перекодировка: субтитры, логотип, масштаб).`)
         : "";
       estBox.innerHTML = `<b>≈ ${fmtSize(e.low)} – ${fmtSize(e.high)}</b>
         <span>${renderTxt}</span>
@@ -301,7 +288,7 @@ export async function openAssembleDialog(publicId) {
         : mustLocal && !localInfo.ok ? "Видео лежит на вашем компьютере, поэтому собрать можно только у себя, а ffmpeg или кодировщик не нашёлся. Детали — строкой ниже."
         : mustLocal ? `Видео возьмётся с этого компьютера${localVideo && localVideo.state === "downloading" ? " — когда докачается (приложение подождёт)" : ""}; на сервер оно не загружается. Рендер пойдёт на ${localInfo.nvenc ? "видеокарте NVIDIA" : "процессоре"}, готовый файл уйдёт в Telegram и в отчёт.`
         : !localInfo.ok ? "Сборка у себя недоступна: не нашёлся ffmpeg или рабочий кодировщик (нужна видеокарта NVIDIA). Детали — строкой ниже."
-        : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Всё то же, что на сервере: интро, склейка, озвучка, надпись, логотип. Файлы скачаются с сервера, готовое видео бот отправит в Telegram и прикрепит к отчёту.`
+        : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Всё то же, что на сервере: интро, склейка, озвучка, логотип. Файлы скачаются с сервера, готовое видео бот отправит в Telegram и прикрепит к отчёту.`
         : "Рендер пойдёт на сервере (2 ядра процессора).";
     };
     sheet.querySelectorAll("#ad-where button").forEach(b => b.addEventListener("click", () => { if (!b.disabled) { where = b.dataset.where; syncWhere(); } }));
@@ -344,13 +331,7 @@ export async function openAssembleDialog(publicId) {
           } : null,
           video: selVideo() === "local" ? "local" : Number(selVideo()),
           sub: Number(sheet.querySelector('input[name="ad-sub"]:checked').value) || null,
-          inscription: sheet.querySelector("#ad-ins-text").value.trim() ? {
-            text: sheet.querySelector("#ad-ins-text").value.trim(),
-            position: sheet.querySelector("#ad-ins-pos").value,
-            size: Number(sheet.querySelector("#ad-ins-size").value),
-            start: 0,
-            duration: Number(sheet.querySelector("#ad-ins-dur").value),
-          } : null,
+          inscription: null,
           audios: [...sheet.querySelectorAll("[data-ad-audio]:checked")].map(c => Number(c.dataset.adAudio)),
           mode,
           profile: Number(profileSel.value),

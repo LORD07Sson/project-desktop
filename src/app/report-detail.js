@@ -1055,7 +1055,8 @@ const VIDEO_NAME_RE = /\.(mkv|mp4|mov|avi|webm|m4v|ts)$/i;
 function productionHtml(detail, fileList) {
   if (!can("reports.assemble") && !can("reports.files")) return "";
   const list = fileList || [];
-  const hasFinal = list.some(f => /_final\./i.test(f.file_name || ""));
+  const isFinalFile = f => !!f.is_final || /_final\./i.test(f.file_name || "");
+  const hasFinal = list.some(isFinalFile);
   const hasVideo = hasFinal || list.some(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
   const hasSubs = list.some(f => /\.(ass|ssa|srt)$/i.test(f.file_name || ""));
   const hasAudio = list.some(f => AUDIO_RE.test(f.file_type || "") || AUDIO_RE.test(f.file_name || ""));
@@ -1066,7 +1067,7 @@ function productionHtml(detail, fileList) {
       <small>${label}</small>
       <div class="rd-fs-act">${body}</div>
     </div>`;
-  const sendFile = [...list].reverse().find(f => /_final\./i.test(f.file_name || "")) || [...list].reverse().find(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
+  const sendFile = [...list].reverse().find(isFinalFile) || [...list].reverse().find(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
   const nyaa = can("reports.files") ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l1">⚠ Опасная зона</span><span class="dz-l2">Видео с Nyaa</span></button>` : "";
   const assemble = can("reports.assemble") ? `<button class="rd-add primary" id="report-assemble">🎬 Собрать финал</button>` : "";
