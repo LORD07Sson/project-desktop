@@ -43,8 +43,8 @@ export function startPulse(DATA) {
 
   // ---------- спрайты света ----------
   function sprite(size, draw) { const c = document.createElement("canvas"); c.width = c.height = size; draw(c.getContext("2d"), size); return c; }
-  const glow = col => sprite(128, (g, s) => { const r = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2); r.addColorStop(0, col); r.addColorStop(.25, col.replace(/[\d.]+\)$/, ".35)")); r.addColorStop(1, col.replace(/[\d.]+\)$/, "0)")); g.fillStyle = r; g.fillRect(0, 0, s, s); });
-  const sphere = (stops, ring) => sprite(160, (g, s) => {
+  const glow = col => sprite(256, (g, s) => { const r = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2); r.addColorStop(0, col); r.addColorStop(.25, col.replace(/[\d.]+\)$/, ".35)")); r.addColorStop(1, col.replace(/[\d.]+\)$/, "0)")); g.fillStyle = r; g.fillRect(0, 0, s, s); });
+  const sphere = (stops, ring) => sprite(320, (g, s) => {
     const c = s / 2, r = s * .34;
     if (ring) { g.strokeStyle = "rgba(255,255,255,.22)"; g.lineWidth = s * .018; g.beginPath(); g.arc(c, c, r * 1.32, 0, 7); g.stroke(); const hr = g.createRadialGradient(c, c, r, c, c, r * 1.32); hr.addColorStop(0, "rgba(255,255,255,.10)"); hr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = hr; g.beginPath(); g.arc(c, c, r * 1.32, 0, 7); g.fill(); }
     const gr = g.createRadialGradient(c - r * .35, c - r * .4, r * .05, c, c, r);
@@ -62,14 +62,14 @@ export function startPulse(DATA) {
     amber: sphere([[0, "#fff1d2"], [.4, "#ffb44e"], [1, "#6a3304"]], false),
   };
   const GL = { gold: glow("rgba(255,190,90,1)"), fire: glow("rgba(255,110,40,1)"), rose: glow("rgba(255,120,160,1)"), violet: glow("rgba(170,140,255,1)"), mint: glow("rgba(100,240,190,1)"), cyan: glow("rgba(110,220,255,1)"), white: glow("rgba(255,245,225,1)") };
-  const STAR = sprite(96, (g, s) => {
+  const STAR = sprite(192, (g, s) => {
     const c = s / 2;
     g.globalCompositeOperation = "lighter";
     for (const [w, a] of [[s * .5, 1], [s * .2, .6]]) {
       let gr = g.createLinearGradient(c - w, c, c + w, c); gr.addColorStop(0, "rgba(255,230,180,0)"); gr.addColorStop(.5, `rgba(255,248,230,${a})`); gr.addColorStop(1, "rgba(255,230,180,0)");
-      g.fillStyle = gr; g.fillRect(c - w, c - 1, w * 2, 2);
+      g.fillStyle = gr; g.fillRect(c - w, c - s / 96, w * 2, s / 48);
       gr = g.createLinearGradient(c, c - w, c, c + w); gr.addColorStop(0, "rgba(255,230,180,0)"); gr.addColorStop(.5, `rgba(255,248,230,${a})`); gr.addColorStop(1, "rgba(255,230,180,0)");
-      g.fillStyle = gr; g.fillRect(c - 1, c - w, 2, w * 2);
+      g.fillStyle = gr; g.fillRect(c - s / 96, c - w, s / 48, w * 2);
     }
     const r = g.createRadialGradient(c, c, 0, c, c, s * .18); r.addColorStop(0, "rgba(255,250,235,1)"); r.addColorStop(1, "rgba(255,200,120,0)"); g.fillStyle = r; g.fillRect(0, 0, s, s);
   });
@@ -92,7 +92,7 @@ export function startPulse(DATA) {
     scene.style.transformOrigin = "0 0";
     scene.style.transform = `scale(${s2 / sc})`;
     scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
-    RES = clamp((devicePixelRatio || 1) * s2 * QUAL, 1, 1.5);
+    RES = clamp((devicePixelRatio || 1) * s2 * QUAL, 1, 2.25);
     for (const c of [cNet, cFx]) { c.width = VISIBLE ? Math.round(W * RES) : 1; c.height = VISIBLE ? Math.round(H * RES) : 1; }
   }
   new ResizeObserver(resize).observe(wrapEl); resize();
@@ -523,7 +523,7 @@ export function startPulse(DATA) {
       g.font = "600 11px Segoe UI, system-ui, sans-serif";
       const tw = g.measureText(ts.text).width + 26;
       let x = ts.n.px + 14; if (x + tw > 1160) x = ts.n.px - 14 - tw;        // не под правую колонку
-      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y < 175) y = ts.n.py + 44;   // не под верхнюю панель
+      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y < 175) y = Math.max(175, ts.n.py + 44);   // не под верхнюю панель
       if (inTitle(x, y - 13, 180, 20)) y -= 54;     // не поверх названия тайтла
       g.font = "600 11px Segoe UI, system-ui, sans-serif"; g.textAlign = "left";
       const w = g.measureText(ts.text).width + 26;
