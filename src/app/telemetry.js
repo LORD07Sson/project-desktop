@@ -5,6 +5,8 @@
 import { invoke } from "./tauri.js";
 import { apiGet, apiPost, openSheet, dismissSheet, toast, API_BASE } from "./api.js";
 import { esc } from "./utils.js";
+// «じ――» — пристальный взгляд: заставка окна согласия (Vite отдаёт готовый URL ассета).
+import stareUrl from "../assets/stare-ji.gif";
 import { state } from "./state.js";
 
 const KEY = "project-telemetry";          // "1" — разрешил; "0" или пусто — не собираем (пока человек явно не согласится)
@@ -142,6 +144,7 @@ function scheduleNetChecks() {
 
 // Окно согласия: пока человек не выбрал, ничего не собирается.
 const CONSENT_HTML = `
+  <div class="tm-stare"><img src="${stareUrl}" alt="じ―― Пристально смотрю…" draggable="false"></div>
   <h2>Помогите нам развивать проект!</h2>
   <div class="tm-text">
     <p>Включая сбор статистики использования, вы вносите свой вклад в развитие нашего проекта. Для нас это действительно важно!</p>

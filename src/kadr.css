@@ -3410,3 +3410,5 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .wm-grp { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 12.5px; color: var(--ink-dim); }
 .wm-grp b { color: var(--ink); }
 .wm-grp .bad { color: var(--s-stop, #e5484d); font-weight: 700; }
+.tm-stare { display: flex; justify-content: center; margin: 0 0 14px; padding: 6px 0; border-radius: 18px; background: #f3f0fa; }
+.tm-stare img { height: 150px; width: auto; display: block; user-select: none; }
