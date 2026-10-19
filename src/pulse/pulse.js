@@ -83,10 +83,15 @@ export function startPulse(DATA) {
   const scene = $("#scene");
   const stageScale = () => Math.min(wrapEl.clientWidth / W, wrapEl.clientHeight / H) || 1;
   function resize() {
-    const sc = stageScale(), sw = wrapEl.clientWidth / sc, sh = wrapEl.clientHeight / sc;
-    stage.style.width = `${sw}px`; stage.style.height = `${sh}px`; stage.style.transform = `scale(${sc})`;
-    scene.style.left = `${(sw - W) / 2}px`; scene.style.top = `${(sh - H) / 2}px`;
-    RES = clamp((devicePixelRatio || 1) * sc * QUAL, 1, 1.5);
+    const cw = wrapEl.clientWidth, ch = wrapEl.clientHeight, sc = stageScale();
+    stage.style.width = `${cw / sc}px`; stage.style.height = `${ch / sc}px`; stage.style.transform = `scale(${sc})`;
+    // сцена живёт между шкалой слева и колонкой справа, а не под ними
+    const L = cw > 1100 ? 170 : 0, R = cw > 1100 ? 400 : 0, aw = cw - L - R;
+    const s2 = Math.max(.35, Math.min(aw / W, ch / H));
+    scene.style.transformOrigin = "0 0";
+    scene.style.transform = `scale(${s2 / sc})`;
+    scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
+    RES = clamp((devicePixelRatio || 1) * s2 * QUAL, 1, 1.5);
     for (const c of [cNet, cFx]) { c.width = VISIBLE ? Math.round(W * RES) : 1; c.height = VISIBLE ? Math.round(H * RES) : 1; }
   }
   new ResizeObserver(resize).observe(wrapEl); resize();

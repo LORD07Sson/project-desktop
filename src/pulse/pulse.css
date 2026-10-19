@@ -281,3 +281,5 @@ html, body { height: 100%; overflow: hidden; }
 .scene { position: absolute; width: 1280px; height: 760px; }
 .stage { width: 100%; height: 100%; }
 .stage .focus-dom { inset: auto; left: 0; top: 0; width: 1280px; height: 760px; }
+.rpane { overflow-x: hidden; }
+.rrow, .attn { min-width: 0; }
