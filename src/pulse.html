@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Пульс студии</title>
+<title>Аналитика — пульс студии</title>
 <link rel="stylesheet" href="pulse/pulse.css">
 <script type="module" src="pulse/main.js"></script>
 </head>
 <body>
   <div class="head">
     <div>
-      <h1>Пульс студии</h1>
+      <h1>Аналитика <span>· пульс студии</span></h1>
       <p>Что горит и кто чем занят — одним взглядом. Справа «Внимание»: нажмите пункт — камера подлетит. Наведите на кружок — подсказка, нажмите — серия. Фильтры сверху, «Ярко» включает все эффекты.</p>
     </div>
     <div class="sp"></div>
@@ -47,7 +47,18 @@
           <div class="live"><i></i><span id="liveTxt">…</span></div>
         </div>
         <div class="timeline net-only" id="timeline"></div>
-        <div class="rcol net-only"><div class="attn" id="attn"></div><div class="feed" id="feed" aria-live="polite"></div></div>
+        <div class="rcol net-only">
+          <div class="rtabs" role="tablist" aria-label="Панель">
+            <button type="button" role="tab" data-rt="attn" aria-selected="true">Внимание</button>
+            <button type="button" role="tab" data-rt="eta" aria-selected="false">Сроки</button>
+            <button type="button" role="tab" data-rt="team" aria-selected="false">Команда</button>
+            <button type="button" role="tab" data-rt="log" aria-selected="false">Лента</button>
+          </div>
+          <div class="rpane" id="rp-attn"><div class="attn" id="attn"></div></div>
+          <div class="rpane" id="rp-eta" hidden></div>
+          <div class="rpane" id="rp-team" hidden></div>
+          <div class="rpane" id="rp-log" hidden><div class="feed" id="feed" aria-live="polite"></div><div class="attn" id="logList"></div></div>
+        </div>
         <div class="legend net-only" id="legend"></div>
         <div class="dock net-only" id="dock">
           <div id="alerts"></div>

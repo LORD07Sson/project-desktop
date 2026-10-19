@@ -29,6 +29,8 @@ export function startPulse(DATA) {
   const START = new Date(`${DATA.start}T00:00:00`);
   const MONTHS_RU = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
   const MONTHS_GEN = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  const AN = DATA.analytics || null;      // метрики и графики «Аналитики»: завершено, сроки, нагрузка, исполнители, динамика по дням
+  const WM = DATA.workmap || null;        // таблицы алгоритма (только владелец): связь, события, сроки
   const ALGO = DATA.algo || null;   // выводы алгоритма «Карты работы» (только для владельца)
   const fmtH = h => (h == null ? "—" : h < 1 ? `${Math.max(1, Math.round(h * 60))} мин` : h < 48 ? `${Math.round(h)} ч` : `${(h / 24).toFixed(1).replace(".", ",")} дн.`);
   const fmtDur = s => (s >= 3600 ? `${(s / 3600).toFixed(1).replace(".", ",")} ч` : s >= 60 ? `${Math.round(s / 60)} мин` : `${s} с`);
@@ -517,10 +519,16 @@ export function startPulse(DATA) {
   const dayY = d => TL_TOP + d / (DAYS - 1) * TL_H;
   const dateLabel = d => { const m = monthOf(d); return `${Math.floor(d - MONTH_START[m]) + 1} ${MON_GEN[m]}`; };
   let dayAct = [];
+  // завершённые по дням (из «Аналитики») тоже рисуются на шкале слева
+  const trendByDay = {};
+  for (const t of (AN && AN.trend && AN.trend.days) || []) {
+    const i = Math.round((new Date(`${t.date}T00:00:00`) - START) / 86400000);
+    if (i >= 0 && i < DAYS) trendByDay[i] = t.completed || 0;
+  }
   function renderTimeline() {
     dayAct = Array.from({ length: DAYS }, (_, d) => {
       let s = 0; for (const en of epNodes) { const k = Math.abs(en.day - d); if (k < 8) s += (8 - k) / 8; }
-      return s * 4;
+      return s * 4 + (trendByDay[d] || 0) * 10;
     });
     const tl = $("#timeline");
     tl.innerHTML = `<button type="button" class="tl-play" id="tlPlay">▶ Перемотка сезона</button><canvas id="tlc" width="120" height="1000"></canvas>` +
@@ -575,22 +583,29 @@ export function startPulse(DATA) {
       if (st && st.median_h != null && st.samples >= 2 && Number(o.value) >= 0 && Number(o.value) < 4) o.textContent = `${STAGES[Number(o.value)]} · ~${fmtH(st.median_h)}`;
     });
   }
+  const WL_LABEL = { draft: "Черновики", working: "В работе", review: "Озвучка", revision: "Перезапись", completed: "Завершено" };
+  const WL_COLOR = { draft: "#8f8f9e", working: "#f5c542", review: "#a98bff", revision: "#ff9448", completed: "#33d17a" };
   function renderLegend() {
-    const dot = (a, b) => `background:radial-gradient(circle at 35% 30%,${a},${b})`;
-    $("#legend").innerHTML = `<b>Как читать</b>
-      <div><i style="${dot("#ffe6ee", "#b83a62")}"></i>Тайтл: размер — серий в работе</div>
-      <div><i style="border:2px solid #ffc46a;background:none"></i>Кольцо — готовность</div>
-      <div><i style="${dot("#eafff6", "#0e5a40")}"></i>Человек · число — серий на нём</div>
-      <div><i style="background:#ff5a64;box-shadow:0 0 8px #ff5a64"></i>Красное — просрочка</div>`;
+    const dot = (x, y) => `background:radial-gradient(circle at 35% 30%,${x},${y})`;
+    const help = "Тайтл: размер — серий в работе\nКольцо — готовность\nЧеловек · число — серий на нём\nКрасное — просрочка";
+    const wl = (AN && AN.workload) || [];
+    const max = Math.max(1, ...wl.map(w => w.total || 0));
+    $("#legend").innerHTML = `<b title="${esc(help)}">Загрузка доски <u>?</u></b>` + (wl.length
+      ? wl.map(w => `<div class="wl"><span>${esc(WL_LABEL[w.key] || w.label || w.key)}</span><i style="--w:${Math.round((w.total || 0) / max * 100)}%;--c:${WL_COLOR[w.key] || "#b5a39b"}"></i><em>${w.total || 0}</em></div>`).join("")
+      : `<div><i style="${dot("#ffe6ee", "#b83a62")}"></i>Тайтл: размер — серий в работе</div><div><i style="${dot("#eafff6", "#0e5a40")}"></i>Человек · число — серий на нём</div><div><i style="background:#ff5a64;box-shadow:0 0 8px #ff5a64"></i>Красное — просрочка</div>`);
   }
-  const kpiVals = { on: 0, eps: 0, tr: 0, qc: 0 };
+  const kpiVals = { done: 0, ontime: 0, over: 0, avg: 0 };
+  const fmtAvg = days => (days == null ? null : days < 2 ? { v: Math.max(1, Math.round(days * 24)), u: "ч" } : { v: Math.round(days * 10) / 10, u: "д" });
   function renderKpis() {
+    const m = (AN && AN.metrics) || {};
+    const delta = m.completed_prior_30d ? Math.round((m.completed_30d - m.completed_prior_30d) / m.completed_prior_30d * 100) : null;
+    const avg = fmtAvg(m.avg_turnaround_days);
     $("#kpis").innerHTML = `
-      <div class="kpi"><span>Серий в срок</span><b><svg viewBox="0 0 12 12"><path d="M1 10 4.5 6 7 8.5 11 3"/></svg><i data-k="on">0</i><small>%</small></b></div>
-      <div class="kpi"><span>Серий в работе</span><b><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5"/><path d="M6 1.5V6h4.5"/></svg><i data-k="eps">0</i></b></div>
-      <div class="kpi"><span>Дорожек (аудио)</span><b><svg viewBox="0 0 12 12"><path d="M2 5v2M4.5 3v6M7 1.5v9M9.5 4v4"/></svg><i data-k="tr">0</i></b></div>
-      <div class="kpi"><span>Открытых пунктов</span><b><svg viewBox="0 0 12 12"><path d="M6 1.5 1 10.5h10L6 1.5ZM6 5v2.5"/></svg><i data-k="qc">0</i></b></div>`;
-    $("#kpis").querySelectorAll("i").forEach(i => i.style.fontStyle = "normal");
+      <div class="kpi"><span>Завершено за 30 дней</span><b><svg viewBox="0 0 12 12"><path d="M1 10 4.5 6 7 8.5 11 3"/></svg><i data-k="done">0</i>${delta != null ? `<small class="${delta >= 0 ? "up" : "dn"}">${delta >= 0 ? "+" : ""}${delta}%</small>` : ""}</b></div>
+      <div class="kpi"><span>Вовремя</span><b><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5"/><path d="M6 1.5V6h4.5"/></svg><i data-k="ontime">0</i><small>%</small></b></div>
+      <div class="kpi"><span>Просрочено сейчас</span><b><svg viewBox="0 0 12 12"><path d="M6 1.5 1 10.5h10L6 1.5ZM6 5v2.5"/></svg><i data-k="over">0</i></b></div>
+      <div class="kpi"><span>Среднее время серии</span><b><svg viewBox="0 0 12 12"><path d="M2 5v2M4.5 3v6M7 1.5v9M9.5 4v4"/></svg><i data-k="avg">${avg ? 0 : "—"}</i>${avg ? `<small>${avg.u}</small>` : ""}</b></div>`;
+    $("#kpis").querySelectorAll("i").forEach(i => { i.style.fontStyle = "normal"; });
   }
   function countTo(el, from, to, dur = 700) {
     if (!el) return;
@@ -600,9 +615,16 @@ export function startPulse(DATA) {
     requestAnimationFrame(step);
   }
   function updateKpis(dur) {
-    const v = epNodes.filter(vis);
-    const next = { eps: v.filter(en => en.e.stage < 4).length, tr: v.reduce((s, en) => s + en.e.tracks, 0), qc: v.reduce((s, en) => s + en.e.qc, 0), on: v.length ? Math.round(v.filter(en => en.e.days >= 0 || en.e.stage === 4).length / v.length * 100) : 0 };
-    for (const k in next) { if (next[k] !== kpiVals[k]) countTo($(`#kpis [data-k="${k}"]`), kpiVals[k], next[k], dur); kpiVals[k] = next[k]; }
+    const m = (AN && AN.metrics) || {};
+    const avg = fmtAvg(m.avg_turnaround_days);
+    const next = { done: m.completed_30d || 0, ontime: m.on_time_rate == null ? 0 : Math.round(m.on_time_rate), over: m.overdue_now || 0, avg: avg ? avg.v : 0 };
+    for (const k in next) {
+      if (next[k] !== kpiVals[k]) {
+        const el = $(`#kpis [data-k="${k}"]`);
+        if (k === "avg" && avg && avg.v % 1) { if (el) el.textContent = avg.v; } else countTo(el, kpiVals[k], next[k], dur);
+      }
+      kpiVals[k] = next[k];
+    }
     const d = $("#dockIn"); d.classList.add("glow"); clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove("glow"), 600);
     $("#kpis").style.setProperty("--kx", `${(monthOf(day) % 4) * 138}px`);
   }
@@ -756,6 +778,51 @@ export function startPulse(DATA) {
     for (const t of ALGO.insights || []) if (!/^Дольше всего серия проводит/.test(t)) lines.push(t);
     if (!lines.length) return "";
     return `<div class="algo"><div class="attn-h"><span><b>◆</b> АЛГОРИТМ</span><span>${Math.min(3, lines.length)}</span></div>${lines.slice(0, 3).map(t => `<div class="algo-i">${esc(t)}</div>`).join("")}</div>`;
+  }
+  // ---------- правая колонка: всё, что раньше было отдельными блоками «Аналитики» ----------
+  const stageName = en => STAGES[en.e.stage];
+  function renderEtaPane() {
+    const rows = epNodes.filter(en => en.e.stage < 4).sort((x, y) => ((x.e.eta ? x.e.eta.h : 9e9) - (y.e.eta ? y.e.eta.h : 9e9)));
+    $("#rp-eta").innerHTML = `<div class="attn-h"><span><b>●</b> СЕРИИ В РАБОТЕ</span><span>${rows.length}</span></div>` + (rows.length ? rows.map((en, i) => `
+      <button type="button" class="rrow" data-eta="${i}"><b>${esc(en.tn.t.name)}${en.e.ep ? ` · ${en.e.ep}` : ""}</b>
+        <span>${esc(stageName(en))}${en.e.days < 99 ? ` · ${esc(dueText(en.e.days))}` : ""}</span>
+        <small class="${en.e.eta && en.e.eta.stuck ? "bad" : ""}">${en.e.eta ? `выход ≈ ${esc(fmtWhen(en.e.eta.ts))}${en.e.eta.learned ? "" : " (грубо)"}` : "срок выхода не посчитан"}</small></button>`).join("") : `<div class="attn-empty">Нет серий в работе.</div>`);
+    $("#rp-eta").querySelectorAll("[data-eta]").forEach(b => b.addEventListener("click", () => { stopAuto(); flyTo(rows[Number(b.dataset.eta)]); }));
+  }
+  function renderTeamPane() {
+    const perf = Object.fromEntries(((AN && AN.performers) || []).map(p => [p.name, p]));
+    const maxDone = Math.max(1, ...Object.values(perf).map(p => p.completed || 0));
+    const netBy = Object.fromEntries((((WM && WM.network) || {}).people || []).map(r => [r.who, r]));
+    const rows = pplNodes.map(pn => {
+      const ld = personLoad(pn), pf = perf[pn.p.n] || {}, pi = personInfo(pn.p.n), net = netBy[pn.p.n] || (pi && pi.net);
+      const bad = net && (!net.server_ok || net.dns_ok === false);
+      return `<div class="rrow team${ld.late ? " late" : ""}"><b>${esc(pn.p.n)}</b>
+        <span>в работе ${ld.n}${ld.late ? `, просрочено ${ld.late}` : ""} · сдано за 30 дн: ${pf.completed || 0}</span>
+        <i class="bar" style="--w:${Math.round((pf.completed || 0) / maxDone * 100)}%"></i>
+        <small>${pi && pi.tools && pi.tools.length ? esc(pi.tools.slice(0, 2).map(t => t.label).join(", ")) : "нет данных об использовании"}${pi && pi.watch_s ? ` · смотрел ${esc(fmtDur(pi.watch_s))}` : ""}</small>
+        ${net ? `<small class="${bad ? "bad" : "ok"}">${esc(net.ip || "")}${net.country ? ` · ${esc(net.country)}` : ""} · сервер ${net.server_ok ? "✓" : "✗"} · DNS ${net.dns_ok === false ? "✗" : net.dns_ok ? "✓" : "?"}${net.dns_provider ? ` ${esc(net.dns_provider)}` : ""}</small>` : ""}</div>`;
+    });
+    $("#rp-team").innerHTML = `<div class="attn-h"><span><b>●</b> КОМАНДА</span><span>${rows.length}</span></div>` + (rows.join("") || `<div class="attn-empty">Пока никого.</div>`);
+  }
+  const ago = at => {
+    const d = new Date(String(at).replace(" ", "T") + "Z"), m = Math.round((Date.now() - d.getTime()) / 60000);
+    return Number.isNaN(m) ? "" : m < 1 ? "только что" : m < 60 ? `${m} мин назад` : m < 1440 ? `${Math.round(m / 60)} ч назад` : d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  };
+  function renderLogPane() {
+    const list = ((WM && WM.recent) || (ALGO && ALGO.feed) || []).slice(0, 25);
+    $("#logList").innerHTML = `<div class="attn-h"><span><b>●</b> КТО ЧТО ДЕЛАЕТ</span><span>${list.length}</span></div>` + (list.length ? list.map(r => `<div class="rrow log"><b>${esc(r.who)}</b><span>${esc(r.text)}</span><small>${esc(ago(r.at))}</small></div>`).join("") : `<div class="attn-empty">Пока ничего не замечено.</div>`);
+  }
+  function setRightTab(name) {
+    document.querySelectorAll("[data-rt]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rt === name)));
+    for (const k of ["attn", "eta", "team", "log"]) { const el = $(`#rp-${k}`); if (el) el.hidden = k !== name; }
+    try { localStorage.setItem("pulse-rtab", name); } catch (_) { /* без памяти */ }
+  }
+  function initRightColumn() {
+    renderEtaPane(); renderTeamPane(); renderLogPane();
+    document.querySelectorAll("[data-rt]").forEach(b => b.addEventListener("click", () => { stopAuto(); setRightTab(b.dataset.rt); }));
+    let saved = "attn";
+    try { saved = localStorage.getItem("pulse-rtab") || "attn"; } catch (_) { /* без памяти */ }
+    setRightTab(["attn", "eta", "team", "log"].includes(saved) ? saved : "attn");
   }
   async function flyTo(n) {
     await tweenCam({ x: n.px - 90, y: n.py, s: 1.9 }, 900);
@@ -1114,7 +1181,7 @@ export function startPulse(DATA) {
   $("#replay").addEventListener("click", () => run(true));
   stage.addEventListener("pointerdown", e => { if (!e.target.closest("#replay")) stopAuto(); });
 
-  seedFeed(); labelStages(); build(); prepareEvents(); renderTimeline(); renderLegend(); renderKpis(); setCalm(CALM);
+  seedFeed(); labelStages(); build(); prepareEvents(); renderTimeline(); renderLegend(); renderKpis(); initRightColumn(); setCalm(CALM);
   requestAnimationFrame(frame);
   run();
 }
