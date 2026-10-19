@@ -77,7 +77,7 @@ export function startPulse(DATA) {
   // ---------- холсты ----------
   const stage = $("#stage"), wrapEl = $("#wrap");
   const cNet = $("#cNet"), cFx = $("#cFx"), gN = cNet.getContext("2d"), gF = cFx.getContext("2d");
-  let RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.6, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
+  let LLIM = 0, RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.6, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
   // сцена 1280×760 вписывается в доступное окно целиком (по ширине и по высоте) и стоит по центру — без внутренней прокрутки
   // Интерфейс (панели, шкала, KPI) растягивается на всё окно; сама сцена 1280×760 стоит по центру и масштабируется по меньшей стороне.
   const scene = $("#scene");
@@ -91,6 +91,7 @@ export function startPulse(DATA) {
     const s2 = Math.max(.35, Math.min(cw / W, Math.max(aw / W, ch / H) * 1.04));
     scene.style.transformOrigin = "0 0";
     scene.style.transform = `scale(${s2 / sc})`;
+    LLIM = (L - (L + (aw - W * s2) / 2)) / s2;
     RLIM = (cw - R - (L + (aw - W * s2) / 2)) / s2;     // правый край свободной области в координатах сцены (дальше — колонка справа)
     scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
     RES = clamp((devicePixelRatio || 1) * s2 * QUAL * SS, 1, 2.8);   // SS: запас по разрешению — браузер уменьшает его при показе, края и текст получаются чёткими
@@ -528,7 +529,8 @@ export function startPulse(DATA) {
       const k = (t - ts.born) / 2600, a = Math.min(c01(k / .08), c01((1 - k) / .25));
       g.font = "600 11px Segoe UI, system-ui, sans-serif";
       const tw = g.measureText(ts.text).width + 26;
-      let x = ts.n.px + 14; if (x + tw > 1160) x = ts.n.px - 14 - tw;        // не под правую колонку
+      let x = ts.n.px + 14; if (x + tw > RLIM) x = ts.n.px - 14 - tw;        // не под правую колонку
+      x = Math.max(LLIM + 8, Math.min(x, RLIM - tw - 8));     // и не за левый край
       let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y < 175) y = Math.max(175, ts.n.py + 44);   // не под верхнюю панель
       if (inTitle(x, y - 13, 180, 20)) y -= 54;     // не поверх названия тайтла
       g.font = "600 11px Segoe UI, system-ui, sans-serif"; g.textAlign = "left";
