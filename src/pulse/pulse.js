@@ -77,7 +77,7 @@ export function startPulse(DATA) {
   // ---------- холсты ----------
   const stage = $("#stage"), wrapEl = $("#wrap");
   const cNet = $("#cNet"), cFx = $("#cFx"), gN = cNet.getContext("2d"), gF = cFx.getContext("2d");
-  let RES = 1, QUAL = 1, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
+  let RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.6, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
   // сцена 1280×760 вписывается в доступное окно целиком (по ширине и по высоте) и стоит по центру — без внутренней прокрутки
   // Интерфейс (панели, шкала, KPI) растягивается на всё окно; сама сцена 1280×760 стоит по центру и масштабируется по меньшей стороне.
   const scene = $("#scene");
@@ -91,8 +91,9 @@ export function startPulse(DATA) {
     const s2 = Math.max(.35, Math.min(cw / W, Math.max(aw / W, ch / H) * 1.04));
     scene.style.transformOrigin = "0 0";
     scene.style.transform = `scale(${s2 / sc})`;
+    RLIM = (cw - R - (L + (aw - W * s2) / 2)) / s2;     // правый край свободной области в координатах сцены (дальше — колонка справа)
     scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
-    RES = clamp((devicePixelRatio || 1) * s2 * QUAL, 1, 2.5);
+    RES = clamp((devicePixelRatio || 1) * s2 * QUAL * SS, 1, 2.8);   // SS: запас по разрешению — браузер уменьшает его при показе, края и текст получаются чёткими
     for (const c of [cNet, cFx]) { c.width = VISIBLE ? Math.round(W * RES) : 1; c.height = VISIBLE ? Math.round(H * RES) : 1; }
   }
   new ResizeObserver(resize).observe(wrapEl); resize();
@@ -441,8 +442,13 @@ export function startPulse(DATA) {
         g.lineWidth = 2.2 * n.pd; g.strokeStyle = "rgba(255,255,255,.12)"; g.beginPath(); g.arc(n.px, n.py, rr, 0, 7); g.stroke();
         g.strokeStyle = "#ffc46a"; g.lineCap = "round"; g.beginPath(); g.arc(n.px, n.py, rr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * n.pct / 100 * pop(n)); g.stroke();
         if (hot) { g.strokeStyle = `rgba(255,90,100,${.45 + .35 * Math.sin(t / 260)})`; g.lineWidth = 1.4; g.beginPath(); g.arc(n.px, n.py, rr + 5 + Math.sin(t / 260) * 1.5, 0, 7); g.stroke(); }
-        const right = n.px >= CX - 10, lx = n.px + (right ? rr + 8 : -rr - 8), al = c01((b - .4) / .6) * (.35 + .65 * dA);
-        label(n.t.name, lx, n.py - 1, `600 ${Math.round(11 + 3 * n.pd)}px Segoe UI, system-ui, sans-serif`, n.i === hoverTitle ? "#ffd99a" : "#f6ece6", al * (.3 + .7 * n.alpha), right ? "left" : "right");
+        const nameFont = `600 ${Math.round(11 + 3 * n.pd)}px Segoe UI, system-ui, sans-serif`;
+        g.font = nameFont;
+        const tw = Math.max(g.measureText(n.t.name).width, 150 * n.pd);
+        let right = n.px >= CX - 10;
+        if (right && n.px + rr + 8 + tw > RLIM) right = false;     // подпись не уходит под правую колонку
+        const lx = n.px + (right ? rr + 8 : -rr - 8), al = c01((b - .4) / .6) * (.35 + .65 * dA);
+        label(n.t.name, lx, n.py - 1, nameFont, n.i === hoverTitle ? "#ffd99a" : "#f6ece6", al * (.3 + .7 * n.alpha), right ? "left" : "right");
         const sub = `${n.pct}% готово${hot ? " · просрочка" : ""}`;
         label(sub, lx, n.py + 13, `700 ${Math.round(8 + 2 * n.pd)}px ui-monospace, Consolas, monospace`, hot ? "#ff8a8a" : "#ffc46a", al * .9 * n.alpha, right ? "left" : "right");
         if (hasAir(n)) label(`${n.nextEp} серия · эфир ${airText(n.air)}`, lx, n.py + 25, `600 ${Math.round(8 + 2 * n.pd)}px Segoe UI, system-ui, sans-serif`, n.air <= 1 ? "#ffb070" : "#a8968c", al * .85 * n.alpha, right ? "left" : "right");
