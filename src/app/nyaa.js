@@ -1,7 +1,7 @@
 // Страница «Релизы» (Nyaa): живая подборка из публичной RSS-ленты прямо во
 // вкладке — не нужно заходить на сайт. Категории, фильтр доверенных,
 // поиск, сортировка, «запомнить запрос», выбор строк и копирование magnet /
-// ссылок / названий пачкой. Двойной щелчок (или кнопка ⓘ) открывает
+// ссылок / названий пачкой. Щелчок по строке (или кнопка ⓘ) открывает
 // страницу раздачи внутри программы: данные, описание, картинки, файлы.
 // «Источники» — смена зеркала Nyaa и проверка связи с Nyaa, Shikimori,
 // AniList, Jikan и сервером студии. Программа ничего не скачивает: только
@@ -370,7 +370,7 @@ function shellHtml() {
   <div class="ny">
     <header class="ny-hero">
       <div class="ny-hero-t"><h2>Nyaa <span class="ny-beta">Beta</span></h2>
-        <p>Свежие раздачи из публичной ленты. Двойной щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p></div>
+        <p>Свежие раздачи из публичной ленты. Щелчок по строке открывает страницу раздачи (отметить — галочка слева или Shift/Ctrl + щелчок): описание, картинки, файлы.</p></div>
       <div class="ny-stats" id="ny-stats"></div>
     </header>
     <section class="ny-sources" id="ny-sources" hidden></section>
@@ -2023,12 +2023,6 @@ function wire(root) {
     prefs.saved = [...prefs.saved, entry].slice(-8);
     savePrefs(); paintStatic(); toast("Запрос сохранён.", "success");
   });
-  root.addEventListener("dblclick", e => {
-    const row = e.target.closest(".ny-row[data-id]");
-    if (!row || e.target.closest("button, input")) return;
-    const it = byId(Number(row.dataset.id));
-    if (it) openDetail(it);
-  });
   const onClick = e => {
     const t = e.target;
     if (t.closest("[data-more]")) { loadMore(); return; }
@@ -2237,6 +2231,8 @@ function wire(root) {
       else if (a.dataset.a === "open") openExternal(pageUrl(it)).catch(() => toast("Не удалось открыть ссылку.", "error"));
       return;
     }
+    // Один щелчок по строке открывает раздачу; отметка ставится галочкой, а также Shift (диапазон) и Ctrl (одна строка).
+    if (!t.closest(".ny-ck") && !t.closest("button, a") && !e.shiftKey && !e.ctrlKey && !e.metaKey) { touch(it.id); openDetail(it); return; }
     if (t.closest(".ny-ck") || !t.closest("button, a")) {
       if (e.shiftKey && anchorId != null && anchorId !== it.id) {
         rangeIds(view().map(i => i.id), anchorId, it.id).forEach(id => selected.add(id));
