@@ -310,3 +310,4 @@ html, body { height: 100%; overflow: hidden; }
 .rrow.log .x { font-style: normal; color: var(--gold); font: 700 10.5px var(--mono); }
 .rrow.log.static { cursor: default; }
 button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rgb), .45); }
+.pd-last { margin-top: 6px; font-size: 11.5px; color: var(--ink-dim); } .pd-last b { color: var(--ink-soft); }
