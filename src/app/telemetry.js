@@ -74,7 +74,7 @@ document.addEventListener("click", ev => {
   const el = ev.target && ev.target.closest ? ev.target.closest("button, a, [role=button], [data-a], [data-act]") : null;
   if (!el) return;
   const raw = el.dataset.a || el.dataset.act || el.dataset.tab || el.id || "";
-  if (!raw || /\d{4,}/.test(raw) || /^win-/.test(raw)) return;   // пустое, «динамическое» (с номерами) и кнопки окна не берём            // пустое или «динамическое» (с номерами) не берём
+  if (!raw || /\d{4,}/.test(raw) || /^win-/.test(raw)) return;   // пустое, «динамическое» (с номерами) и кнопки окна не берём
   const name = `${screen || "app"}.${raw}`.slice(0, 60);
   const now = Date.now();
   if (name === lastClick.name && now - lastClick.at < 400) return;
