@@ -77,14 +77,14 @@ export function startPulse(DATA) {
   // ---------- холсты ----------
   const stage = $("#stage"), wrapEl = $("#wrap");
   const cNet = $("#cNet"), cFx = $("#cFx"), gN = cNet.getContext("2d"), gF = cFx.getContext("2d");
-  let RES = 1;
+  let RES = 1, QUAL = 1, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
   // сцена 1280×760 вписывается в доступное окно целиком (по ширине и по высоте) и стоит по центру — без внутренней прокрутки
   const stageScale = () => Math.min(wrapEl.clientWidth / W, wrapEl.clientHeight / H);
   function resize() {
     const sc = stageScale();
     stage.style.transform = `translate(${(wrapEl.clientWidth - W * sc) / 2}px, ${(wrapEl.clientHeight - H * sc) / 2}px) scale(${sc})`;
-    RES = clamp((devicePixelRatio || 1) * sc, 1, 2);
-    for (const c of [cNet, cFx]) { c.width = Math.round(W * RES); c.height = Math.round(H * RES); }
+    RES = clamp((devicePixelRatio || 1) * sc * QUAL, 1, 1.5);
+    for (const c of [cNet, cFx]) { c.width = VISIBLE ? Math.round(W * RES) : 1; c.height = VISIBLE ? Math.round(H * RES) : 1; }
   }
   new ResizeObserver(resize).observe(wrapEl); resize();
 
@@ -1145,10 +1145,27 @@ export function startPulse(DATA) {
   $("#zOut").addEventListener("click", () => { stopAuto(); if (!F) tweenCam({ s: clamp(cam.s / 1.3, .7, 3) }, 450); });
 
   // ---------- главный цикл ----------
-  let last = now();
+  // Экономия: сцена, скрытая в другой вкладке, не рисуется и отдаёт память холстов; в покое — 30 кадров/с;
+  // если кадры дольше 26 мс — качество холста снижается (и поднимается обратно, когда стало легко).
+  let last = now(), lastDraw = 0, lastAct = now(), slowN = 0, fastN = 0;
+  ["pointermove", "pointerdown", "wheel", "keydown"].forEach(ev => addEventListener(ev, () => { lastAct = now(); }, { passive: true }));
+  new IntersectionObserver(es => {
+    const v = es[0].isIntersecting;
+    if (v === VISIBLE) return;
+    VISIBLE = v; resize(); if (v) last = now();
+  }).observe(wrapEl);
   function frame() {
-    const t = now(), dt = Math.min(50, t - last); last = t;
     requestAnimationFrame(frame);
+    if (!VISIBLE) return;
+    const t = now();
+    const idle = t - lastAct > 4000 && !playing && !F && !auto && !comets.length && !toasts.length;
+    if (idle && t - lastDraw < 30) return;
+    const dt = Math.min(50, t - last); last = t;
+    const cost = t - lastDraw; lastDraw = t;
+    if (!idle) {
+      if (cost > 26) { fastN = 0; if (++slowN > 40 && QUAL > .7) { QUAL = .7; slowN = 0; resize(); } }
+      else { slowN = 0; if (++fastN > 600 && QUAL < 1) { QUAL = 1; fastN = 0; resize(); } }
+    }
     // ошибка в одном слое не должна останавливать всю сцену
     for (const step of [() => ambient(t, dt), project, () => drawNet(t), () => drawFx(t)]) {
       try { step(); } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }
