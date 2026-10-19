@@ -256,7 +256,8 @@ button.rrow { cursor: pointer; }
 .rrow small.bad, .rrow.late b { color: #ff8a8a; }
 .rrow small.ok { color: #7ee7b4; }
 .rrow.team .bar { display: block; height: 4px; margin: 3px 0 2px; border-radius: 3px; background: linear-gradient(90deg, var(--gold) var(--w), rgba(255, 255, 255, .08) 0); }
-.rrow.log { grid-template-columns: 90px 1fr auto; gap: 8px; align-items: baseline; }
+.rrow.log { gap: 2px; }
+.rrow.log .lh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .rrow.log b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kpi b small.up { color: #5fe0b0; }
 .kpi b small.dn { color: #ff8a8a; }

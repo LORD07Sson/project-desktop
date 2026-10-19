@@ -819,9 +819,18 @@ export function startPulse(DATA) {
     const d = new Date(String(at).replace(" ", "T") + "Z"), m = Math.round((Date.now() - d.getTime()) / 60000);
     return Number.isNaN(m) ? "" : m < 1 ? "только что" : m < 60 ? `${m} мин назад` : m < 1440 ? `${Math.round(m / 60)} ч назад` : d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
   };
+  // «нажал в разделе «Обзор»: win-maximize» → по-человечески; служебные нажатия окна не показываем
+  const ACTIONS = { "nav-more": "открыл меню разделов", "btn-refresh": "обновил данные", "btn-search": "открыл поиск", "search": "открыл поиск", "notif": "открыл уведомления" };
+  const humanText = text => {
+    const m = /^нажал в разделе «([^»]+)»: (.+)$/.exec(text);
+    if (!m) return text;
+    if (/^win-/.test(m[2])) return null;
+    return ACTIONS[m[2]] ? `${ACTIONS[m[2]]} · ${m[1]}` : `действие в разделе «${m[1]}»`;
+  };
   function renderLogPane() {
-    const list = ((WM && WM.recent) || (ALGO && ALGO.feed) || []).slice(0, 25);
-    $("#logList").innerHTML = `<div class="attn-h"><span><b>●</b> КТО ЧТО ДЕЛАЕТ</span><span>${list.length}</span></div>` + (list.length ? list.map(r => `<div class="rrow log"><b>${esc(r.who)}</b><span>${esc(r.text)}</span><small>${esc(ago(r.at))}</small></div>`).join("") : `<div class="attn-empty">Пока ничего не замечено.</div>`);
+    const rows = [];
+    for (const r of ((WM && WM.recent) || (ALGO && ALGO.feed) || [])) { const text = humanText(String(r.text)); if (text) rows.push({ ...r, text }); if (rows.length >= 25) break; }
+    $("#logList").innerHTML = `<div class="attn-h"><span><b>●</b> КТО ЧТО ДЕЛАЕТ</span><span>${rows.length}</span></div>` + (rows.length ? rows.map(r => `<div class="rrow log"><div class="lh"><b>${esc(r.who)}</b><small>${esc(ago(r.at))}</small></div><span>${esc(r.text)}</span></div>`).join("") : `<div class="attn-empty">Пока ничего не замечено.</div>`);
   }
   function setRightTab(name) {
     document.querySelectorAll("[data-rt]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rt === name)));
