@@ -87,7 +87,8 @@ export function startPulse(DATA) {
     stage.style.width = `${cw / sc}px`; stage.style.height = `${ch / sc}px`; stage.style.transform = `scale(${sc})`;
     // сцена живёт между шкалой слева и колонкой справа, а не под ними
     const L = cw > 1100 ? 170 : 0, R = cw > 1100 ? 400 : 0, aw = cw - L - R;
-    const s2 = Math.max(.35, Math.min(aw / W, ch / H));
+    // сцена крупная: заполняет окно по высоте (чуть обрезаясь сверху и снизу), по центру свободной области; справа может уходить под колонку
+    const s2 = Math.max(.35, Math.min(cw / W, Math.max(aw / W, ch / H) * 1.04));
     scene.style.transformOrigin = "0 0";
     scene.style.transform = `scale(${s2 / sc})`;
     scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
