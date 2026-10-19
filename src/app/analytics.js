@@ -7,6 +7,8 @@
 import { apiGet } from "./api.js";
 import { $, esc } from "./utils.js";
 import { loadAvatars } from "./profile.js";
+import { state } from "./state.js";
+import { appendWorkMap } from "./work-map.js";
 
 const WORKLOAD_COLOR_VAR = { draft: "--s-draft", working: "--s-work", review: "--s-review", completed: "--s-done" };
 // Сервер отдаёт подписи колонок по-английски (Pending/In Progress/...,
@@ -169,6 +171,7 @@ export async function loadAnalytics() {
   }
   root.innerHTML = analyticsHtml(d, trend);
   loadAvatars(root);
+  if (state.isOwner) appendWorkMap(root);
 }
 
 // 0.2 суток читается хуже, чем «около 5 ч»: до суток показываем часы.

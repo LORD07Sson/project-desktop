@@ -3,6 +3,7 @@
 // профиля коллеги.
 
 import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { track } from "./telemetry.js";
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { state, can } from "./state.js";
@@ -731,6 +732,7 @@ export async function openReportDetail(publicId) {
         const { openAssembleDialog } = await import("./assemble-dialog.js");
         const started = await openAssembleDialog(publicId);
         if (!started) return;
+        track("action", started.local ? "assemble.start_local" : "assemble.start_server", publicId);
         if (started.local) {
           // Сборка у себя: файлы качаются сюда, рендер идёт на видеокарте, результат уходит в отчёт — без бота.
           const { runLocalRender } = await import("./local-render.js");

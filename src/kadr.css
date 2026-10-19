@@ -3360,3 +3360,33 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 
 /* Аналитика: число над каждой точкой графика */
 .an-val { position: absolute; transform: translate(-50%, -22px); font-size: 12px; font-weight: 800; color: var(--ink); pointer-events: none; text-shadow: 0 1px 6px #000; }
+
+/* Карта работы (Аналитика) */
+.wm-svg { width: 100%; height: auto; display: block; }
+.wm-row { font-size: 10px; font-weight: 700; letter-spacing: .2em; fill: var(--ink-dim); }
+.wm-edge { fill: none; stroke: rgba(var(--gold-rgb), .38); stroke-linecap: round; transition: stroke .15s; }
+.wm-edge.tool { stroke: rgba(120, 170, 255, .34); }
+.wm-edge:hover { stroke: var(--gold); }
+.wm-flow { fill: none; stroke: var(--ink-dim); opacity: .75; stroke-linecap: round; }
+.wm-flow.back { stroke: var(--s-stop, #e07b39); stroke-dasharray: 4 4; }
+.wm-arrow-head { fill: var(--ink-dim); }
+.wm-node rect, .wm-node circle { fill: rgba(255, 255, 255, .05); stroke: var(--line); stroke-width: 1.5; }
+.wm-node rect { stroke: var(--c, var(--line)); }
+.wm-node.hot rect { stroke: var(--s-stop, #e5484d); stroke-width: 2.5; fill: rgba(229, 72, 77, .12); }
+.wm-node.person circle { fill: rgba(var(--gold-rgb), .16); stroke: rgba(var(--gold-rgb), .5); }
+.wm-node text.t1 { fill: var(--ink); font-size: 13px; font-weight: 700; }
+.wm-node text.t2 { fill: var(--ink-dim); font-size: 10.5px; }
+.wm-badge { fill: var(--s-stop, #e5484d); stroke: none !important; }
+.wm-badge-t { fill: #fff; font-size: 11px; font-weight: 800; }
+.wm-insights { margin: 12px 0 0; padding-left: 18px; color: var(--ink); font-size: 13.5px; line-height: 1.55; }
+.wm-active { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.wm-row-a { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.wm-row-a.stuck { border-color: rgba(229, 72, 77, .55); }
+.wm-row-a .wm-t { flex: 1 1 220px; color: var(--ink); }
+.wm-row-a .wm-s, .wm-row-a .wm-eta { color: var(--ink-dim); font-size: 12.5px; }
+.wm-warn { color: var(--s-stop, #e5484d); font-style: normal; font-size: 12px; font-weight: 700; }
+.wm-recent { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; max-height: 320px; overflow-y: auto; }
+.wm-rec { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, .05); font-size: 13px; align-items: baseline; }
+.wm-rec b { color: var(--ink); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wm-rec span { color: var(--ink); opacity: .85; }
+.wm-rec i { color: var(--ink-dim); font-style: normal; font-size: 12px; white-space: nowrap; }

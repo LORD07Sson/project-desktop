@@ -9,6 +9,7 @@
 // Вкладка только для админов, как и Nyaa в боте.
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
+import { track } from "./telemetry.js";
 import { getLocalVideo, setLocalVideo, trackLocalDownload, pickLocalVideo } from "./local-video.js";
 import { toast, API_BASE, apiBlob, apiUpload, apiGet, apiPost, openSheet, dismissSheet } from "./api.js";
 import { pickFiles } from "./attachments.js";
@@ -527,6 +528,7 @@ function pickTorrentFile(videos, limit) {
 
 async function serverDownload(it) {
   if (!reportTarget) return;
+  track("action", "nyaa.download_server", reportTarget.publicId);
   if (serverJob) { toast("Одно скачивание на сервере уже идёт — дождитесь или отмените его.", "error"); return; }
   const { publicId } = reportTarget;
   let info;
@@ -561,6 +563,7 @@ document.addEventListener("local-video-changed", paintLocalStatus);
 
 async function localDownload(it) {
   if (!reportTarget) return;
+  track("action", "nyaa.download_local", reportTarget.publicId);
   const { publicId } = reportTarget;
   const magnet = magnetLink(it);
   if (!magnet) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
@@ -946,6 +949,7 @@ async function sendToClient(list) {
   }
   const magnets = list.map(magnetLink).filter(Boolean);
   if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
+  track("action", "nyaa.send_client", reportTarget ? reportTarget.publicId : "");
   try {
     const n = await invoke("tc_add", { magnets });
     list.forEach(i => touch(i.id));

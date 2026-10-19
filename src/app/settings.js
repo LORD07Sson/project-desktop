@@ -16,6 +16,7 @@ import { fetchPerson, openPauseDialog } from "./people.js";
 import { openAdminPanel } from "./admin.js";
 import { tagLogger } from "./applog.js";
 import { midiEnabled, setMidiEnabled } from "./midi-control.js";
+import { trackingOn, setTracking } from "./telemetry.js";
 import { currentTune, applyTune } from "./tune.js";
 import { cacheSummary, clearCache } from "./audio-cache.js";
 import { checkTool, checkServer, checkStorage, checkNotify, summarize } from "./selfcheck-core.js";
@@ -220,6 +221,8 @@ async function openSettings() {
             ${row(ICONS.power, "Запускать при старте системы", "Окно сразу уходит в трей и следит за назначениями", sw("s-autostart", autostartOn), "автозапуск windows")}
             ${row(ICONS.home, "Стартовый раздел", "Что открывать при запуске", seg("data-st-start", Object.entries(START_TABS), start), "запуск вкладка")}
             ${row(ICONS.focus, "MIDI-контроллер для плеера", "До — пауза, Си и Ре — назад и вперёд на 5 с, ручка CC 7 — громкость, колесо CC 1 — перемотка", sw("s-midi", midiEnabled()), "midi клавиатура контроллер")}
+            ${row(ICONS.focus, "Помогать строить карту работы", "Какие экраны и кнопки вы открываете и сколько смотрите — без текста, сообщений и файлов. Видит только владелец", sw("s-telemetry", trackingOn()), "статистика телеметрия карта работы")}
+            ${row(ICONS.trash || ICONS.focus, "Удалить мою статистику", "Стирает всё, что уже собрано о вас для карты работы", `<button type="button" class="btn" id="s-telemetry-forget">Удалить</button>`, "статистика телеметрия удалить")}
             ${row(ICONS.focus, "Фокус-режим при открытии отчёта", "Карточка отчёта на весь экран, остальное прячется", sw("s-focus-mode", focusModePreferred()))}
             ${state.isDeveloper ? `<div class="dev-pill-toggle">${row(ICONS.dev, "Режим разработчика", "Правка чужих ролей, профиля, даты вступления и наград — на карточке коллеги", sw("s-dev-mode", isDevModeOn()))}</div>` : ""}
           </div>
@@ -322,6 +325,16 @@ async function openSettings() {
   overlay.querySelector("#s-density").value = currentDensity();
   overlay.querySelector("#s-density").addEventListener("change", e => applyDensity(e.target.value));
   overlay.querySelector("#s-focus-mode").addEventListener("change", e => setFocusModePreferred(e.target.checked));
+  overlay.querySelector("#s-telemetry").addEventListener("change", async e => {
+    try { await setTracking(e.target.checked); toast(e.target.checked ? "Статистика для карты работы включена." : "Статистика выключена — ничего не собирается.", "info"); }
+    catch (err) { toast(`Не удалось сохранить выбор: ${err.message}`, "error"); }
+  });
+  overlay.querySelector("#s-telemetry-forget").addEventListener("click", async e => {
+    e.currentTarget.disabled = true;
+    try { await setTracking(trackingOn(), true); toast("Собранная о вас статистика удалена.", "success"); }
+    catch (err) { toast(`Не удалось удалить: ${err.message}`, "error"); }
+    finally { e.currentTarget.disabled = false; }
+  });
   overlay.querySelector("#s-desktop-notify").addEventListener("change", e => setDesktopNotifyEnabled(e.target.checked));
   const tuneNow = () => applyTune({ blur: overlay.querySelector("#s-tune-blur").value, round: overlay.querySelector("#s-tune-round").value });
   overlay.querySelector("#s-tune-blur").addEventListener("input", tuneNow);

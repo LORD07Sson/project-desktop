@@ -67,6 +67,8 @@ let P = null; // состояние открытого плеера
 // и сжимал видео; он остаётся только для запуска в обычном браузере.
 const IN_TAURI = "__TAURI_INTERNALS__" in window;
 
+import { track } from "./telemetry.js";
+
 export async function openAnimePlayer({ shikiId, name }) {
   closeAnimePlayer();
   const root = document.createElement("section");
@@ -487,6 +489,8 @@ function wireControls() {
   };
   v.addEventListener("play", syncPlay);
   v.addEventListener("pause", syncPlay);
+  v.addEventListener("playing", () => { if (P && !P.watchSince) P.watchSince = Date.now(); });
+  v.addEventListener("pause", flushWatch);
   v.addEventListener("waiting", () => root.classList.add("buffering"));
   v.addEventListener("playing", () => { root.classList.remove("buffering"); setWait(""); });
   v.addEventListener("canplay", () => { root.classList.remove("buffering"); setWait(""); });
@@ -523,8 +527,18 @@ function onFullscreen() {
   if (P && P.fs && !document.fullscreenElement) setFullscreen(false);
 }
 
+// Сколько человек реально смотрел (только время воспроизведения) — в «Карту работы», название тайтла без номеров серий.
+function flushWatch() {
+  if (P && P.watchSince) { P.watchMs = (P.watchMs || 0) + Date.now() - P.watchSince; P.watchSince = 0; }
+}
+
 export function closeAnimePlayer() {
   if (!P) return;
+  flushWatch();
+  if (P.watchMs > 5000) {
+    const tr = (P.translations || []).find(t => t.id === P.trId);
+    track("watch", "player", `${P.name || P.shikiId}${tr && tr.authors ? ` · ${tr.authors}` : ""}`, P.watchMs);   // тайтл и озвучка
+  }
   saveProgress();
   window.clearInterval(P.saveTimer);
   window.clearInterval(P.nextTimer);
