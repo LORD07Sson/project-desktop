@@ -373,6 +373,7 @@ export async function ensureMediaToken() {
       const res = await apiPost("/media/token", {});
       state.mediaToken = res.token;
       state.mediaTokenExpiresAt = Date.now() + res.expires_in * 1000;
+      document.dispatchEvent(new CustomEvent("media-token-ready"));
     } catch (_) {
       // Сеть подвела — оставляем старый токен (если был) до следующей
       // попытки, картинки просто продолжат грузиться на нём же, пока он
@@ -383,6 +384,24 @@ export async function ensureMediaToken() {
   })();
   return mediaTokenPromise;
 }
+
+// Картинки с нашего сервера (постеры, баннеры, фото) <img src=".../img_proxy?...&mtok=…"> один раз перезапрашиваем, если загрузка
+// не удалась: сервер мог на секунду не ответить или перезапуститься (тогда прежний токен уже недействителен). Без этого
+// постер оставался пустым, пока экран не перерисуют. Повтор один на картинку — отсутствующие (404/204) не долбим.
+document.addEventListener("error", ev => {
+  const img = ev.target;
+  if (!img || img.tagName !== "IMG" || img.dataset.mtokRetried) return;
+  const src = img.currentSrc || img.src || "";
+  if (!src.startsWith(API_BASE) || !src.includes("mtok=")) return;
+  img.dataset.mtokRetried = "1";
+  setTimeout(async () => {
+    try { await forceMediaToken(); } catch (_) { /* не критично */ }
+    if (!img.isConnected || !state.mediaToken) return;
+    const url = new URL(src);
+    url.searchParams.set("mtok", state.mediaToken);
+    img.src = url.toString();
+  }, 2500);
+}, true);
 
 // Фоновое обновление — тот же приём, что presence.js (pingPresence):
 // проверка раз в минуту, сам ensureMediaToken() решает, нужно ли

@@ -7,7 +7,7 @@
 import { state } from "./state.js";
 import { fillRemindersCard } from "./reminders.js";
 import { fetchPerson, workSectionHtml, wireWorkSection, fillPauseCard } from "./people.js";
-import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken } from "./api.js";
 import { $, esc, isOverdue, relTime, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
 import { setQuickFilter, loadReports } from "./reports.js";
 import { switchTab } from "./tabs.js";
@@ -31,19 +31,32 @@ export function avatarHtml(telegramId, name, size) {
 // Реальные фото участников подгружаются лениво поверх инициалов —
 // тот же приём, что в мини-аппе: отдельный <img>, а не background,
 // чтобы молча остаться на инициалах при 204/ошибке сети (см. /api/avatar).
+// Раньше элемент помечался «загружен» ещё до проверки токена: если экран рисовался раньше, чем пришёл токен для картинок,
+// или запрос на секунду не прошёл, фото не появлялось уже никогда (оставались буквы). Теперь пометка ставится, только когда
+// запрос реально ушёл; при ошибке — одна повторная попытка с новым токеном; когда токен пришёл — недогруженные подтягиваются сами.
 export function loadAvatars(root) {
   (root || document).querySelectorAll("[data-avatar-for]").forEach(el => {
     const tid = el.getAttribute("data-avatar-for");
     if (!tid || el.getAttribute("data-avatar-loaded")) return;
+    const src = mediaUrl(`/avatar/${encodeURIComponent(tid)}`);
+    if (!src) return; // токена ещё нет — повторим, когда он придёт (событие media-token-ready)
     el.setAttribute("data-avatar-loaded", "1");
     const img = new Image();
     img.onload = () => { el.innerHTML = ""; el.appendChild(img); };
-    img.onerror = () => {};
-    const src = mediaUrl(`/avatar/${encodeURIComponent(tid)}`);
-    if (!src) return; // без токена запрашивать нечего
+    img.onerror = () => {
+      // 204 (фото нет) тоже приходит сюда — повторяем один раз, а не бесконечно
+      if (el.getAttribute("data-avatar-retried")) return;
+      el.setAttribute("data-avatar-retried", "1");
+      setTimeout(async () => {
+        try { await forceMediaToken(); } catch (_) { /* не критично */ }
+        el.removeAttribute("data-avatar-loaded");
+        if (el.isConnected) loadAvatars(el.parentElement || document);
+      }, 2500);
+    };
     img.src = src;
   });
 }
+document.addEventListener("media-token-ready", () => loadAvatars(document));
 
 // Своя картинка баннера профиля (/api/banner/{id}) — 204, если её нет
 // (пресет/пусто), тогда молча остаёмся на градиенте из CSS.
