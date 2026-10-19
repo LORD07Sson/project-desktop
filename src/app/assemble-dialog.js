@@ -105,6 +105,8 @@ export async function openAssembleDialog(publicId) {
             <input class="field-input" id="ad-splice-sec" type="number" min="1" max="30" step="1" value="4" style="max-width:80px;"> сек.</label>
           ${opts.intro ? `<select class="field-input" id="ad-splice-pos" style="max-width:260px;"><option value="start">В самом начале, до интро</option><option value="after_intro">После интро</option></select>` : ""}
         </div>
+        <label class="ar-row ad-pick" id="ad-up-raw-row" hidden><input type="checkbox" id="ad-up-raw"><b>Загрузить и равку в отчёт после сборки</b>
+          <span class="ar-meta">видео с компьютера уйдёт на сервер отдельным файлом — это долго, зато исходник будет в отчёте</span></label>
         <span class="ar-label">Кому отправить <small>— готовое видео всегда ложится в отчёт; сюда — кому ещё прислать в личку</small></span>
         <div class="ar-list" id="ad-recipients">
           <div class="ar-row ad-pick" style="opacity:.85;"><b>Мне</b><span class="ar-meta">всегда</span></div>
@@ -251,6 +253,7 @@ export async function openAssembleDialog(publicId) {
     const syncWhere = () => {
       const mustLocal = selVideo() === "local";   // видео только на этом компьютере — на сервере собрать нельзя
       const serverBtn = sheet.querySelector('#ad-where [data-where="server"]');
+      sheet.querySelector("#ad-up-raw-row").hidden = !mustLocal;
       localBtn.disabled = !localInfo.ok;
       serverBtn.disabled = mustLocal;
       if (mustLocal) where = "local";
@@ -315,7 +318,11 @@ export async function openAssembleDialog(publicId) {
           profile: Number(profileSel.value),
           send_to: [...sheet.querySelectorAll("[data-ad-to]:checked")].map(c => Number(c.dataset.adTo)),
         };
-        if (where === "local") { finish({ local: true, selection: body, post: withPost }); return; }
+        if (where === "local") {
+          if (selVideo() === "local" && sheet.querySelector("#ad-up-raw").checked) body.upload_raw = true;   // только для приложения: сервер ключ не читает
+          finish({ local: true, selection: body, post: withPost });
+          return;
+        }
         await apiPost(`/report/${publicId}/assemble/start`, body);
         finish(withPost ? "post" : "final");
       } catch (err) {

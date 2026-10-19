@@ -148,6 +148,9 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   let plan = null;
   try {
     let localPath = null;
+    const uploadRaw = !!selection.upload_raw;
+    selection = Object.assign({}, selection);
+    delete selection.upload_raw;
     if (selection.video === "local") {
       const lv = await prepareLocalVideo(publicId, el);
       localPath = lv.path;
@@ -160,6 +163,13 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
     if (await askSaveCopy(done)) await saveCopy(done);
     paint(el, { title: "⬆ Отправляю готовое видео на сервер", label: `${done.out_name} · ${(done.size / 1048576).toFixed(0)} МБ · ${done.encoder}`, fraction: 1, cancel: false });
     await invoke("local_render_upload", { publicId, path: done.path, initData: state.token || "" });
+    if (uploadRaw && localPath) {
+      paint(el, { title: "⬆ Загружаю равку в отчёт", label: `${localPath.split("\\").pop().split("/").pop()} — это может занять время`, fraction: 1, cancel: false });
+      try {
+        await invoke("upload_report_file", { reportId: publicId, filePath: localPath, initData: state.token || "" });
+        document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
+      } catch (e) { toast(`Финал отправлен, а равку в отчёт загрузить не удалось: ${String((e && e.message) || e)}`, "error"); }
+    }
     const mins = Math.max(1, Math.round(done.seconds / 60));
     toast(`Рендер у вас готов (${done.encoder}, ~${mins} мин). Бот отправляет видео в Telegram и прикрепляет к отчёту.`, "success");
     el.remove();
