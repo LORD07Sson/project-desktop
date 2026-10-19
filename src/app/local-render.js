@@ -5,6 +5,7 @@
 // Прогресс рендера — событие localrender-progress, отмена — local_render_cancel; дальше ход ведёт карточка сборки отчёта.
 
 import { invoke, listen } from "./tauri.js";
+import { getLocalVideo, pickLocalVideo } from "./local-video.js";
 import { apiPost, toast, openSheet, dismissSheet } from "./api.js";
 import { state } from "./state.js";
 import { esc } from "./utils.js";
@@ -105,6 +106,35 @@ async function saveCopy(done) {
   }
 }
 
+/** Видео «у себя» (равка, которую качает торрент-клиент): ждём, пока докачается, и берём параметры файла. Сервер файла не видит. */
+async function prepareLocalVideo(publicId, el) {
+  let cancelled = false;
+  const waitText = v => `Жду, пока видео докачается на компьютер: ${Math.round((v.progress || 0) * 100)}%${v.speed > 0 ? ` · ${(v.speed / 1048576).toFixed(1)} МБ/с` : ""}`;
+  let v = getLocalVideo(publicId);
+  while (v && v.state === "downloading" && !cancelled) {
+    paint(el, { title: "💻 Скачиваю видео себе", label: waitText(v), fraction: v.progress || 0, cancel: true });
+    el.querySelector("[data-lr-cancel]")?.addEventListener("click", () => { cancelled = true; });
+    await new Promise(r => setTimeout(r, 1500));
+    v = getLocalVideo(publicId);
+  }
+  if (cancelled) throw new Error("Операция отменена.");
+  if (!v || v.state !== "ready" || !v.path) throw new Error("Видео на компьютере не найдено — укажите файл кнопкой «Файл на компьютере» в Nyaa.");
+  paint(el, { title: "🖥 Сборка у себя", label: "Читаю параметры видео…", fraction: 0, cancel: false });
+  let path = v.path;
+  let info;
+  try {
+    info = await invoke("local_render_probe", { path });
+  } catch (e) {
+    // после перезапуска приложения доступ к файлу сброшен — просим выбрать его ещё раз (диалог заново выдаёт доступ)
+    if (!/не выбирали|доступ/i.test(String((e && e.message) || e))) throw e;
+    toast("Укажите файл видео ещё раз — после перезапуска приложение не помнит разрешение на чтение.", "info");
+    path = await pickLocalVideo(publicId);
+    if (!path) throw new Error("Операция отменена.");
+    info = await invoke("local_render_probe", { path });
+  }
+  return { path, info };
+}
+
 /** selection — тело, как у /assemble/start (video, sub, audios, mode, profile, inscription). */
 export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   if (running) { toast("Сборка у себя уже идёт — дождитесь или отмените её.", "error"); return false; }
@@ -117,9 +147,16 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   });
   let plan = null;
   try {
+    let localPath = null;
+    if (selection.video === "local") {
+      const lv = await prepareLocalVideo(publicId, el);
+      localPath = lv.path;
+      selection = Object.assign({}, selection, { video: 0, local_video: lv.info });
+    }
+    paint(el, { title: "🖥 Сборка у себя", label: "Готовлю план сборки…", fraction: 0, cancel: false });
     plan = await apiPost(`/report/${publicId}/local-render/plan`, selection);
     paint(el, { title: "🖥 Сборка у себя", label: "Скачиваю файлы…", fraction: 0, cancel: true });
-    const done = await invoke("local_render_run", { plan, initData: state.token || "" });
+    const done = await invoke("local_render_run", { plan, initData: state.token || "", localVideo: localPath });
     if (await askSaveCopy(done)) await saveCopy(done);
     paint(el, { title: "⬆ Отправляю готовое видео на сервер", label: `${done.out_name} · ${(done.size / 1048576).toFixed(0)} МБ · ${done.encoder}`, fraction: 1, cancel: false });
     await invoke("local_render_upload", { publicId, path: done.path, initData: state.token || "" });

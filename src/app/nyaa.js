@@ -9,6 +9,7 @@
 // Вкладка только для админов, как и Nyaa в боте.
 
 import { invoke, openExternal, pickOutputFile } from "./tauri.js";
+import { getLocalVideo, setLocalVideo, trackLocalDownload, pickLocalVideo } from "./local-video.js";
 import { toast, API_BASE, apiBlob, apiUpload, apiGet, apiPost, openSheet, dismissSheet } from "./api.js";
 import { pickFiles } from "./attachments.js";
 import { state } from "./state.js";
@@ -294,7 +295,7 @@ function rowHtml(it, maxSeed, now) {
       </div>
       <div class="ny-act">
         <button type="button" class="ny-ib" data-a="send" title="Отправить в торрент-клиент" aria-label="Отправить в торрент-клиент">${ICONS.send}</button>
-        ${reportTarget ? `<button type="button" class="ny-ib ny-srv" data-a="srv" title="Скачать на сервер и прикрепить к отчёту ${esc(reportTarget.publicId)}" aria-label="Скачать на сервер">☁</button>` : ""}
+        ${reportTarget ? `<button type="button" class="ny-ib ny-srv" data-a="srv" title="Скачать на сервер и прикрепить к отчёту ${esc(reportTarget.publicId)}" aria-label="Скачать на сервер">☁</button><button type="button" class="ny-ib ny-srv" data-a="mine" title="Скачать на этот компьютер (торрент-клиент): видео останется у вас, на сервере будут только субтитры и звук" aria-label="Скачать у себя">💻</button>` : ""}
         <button type="button" class="ny-ib" data-a="menu" title="Ещё действия" aria-label="Ещё действия" aria-haspopup="menu">${ICONS.more}</button>
       </div>
     </div>`;
@@ -429,12 +430,17 @@ function paintReportBar() {
   const bar = document.createElement("div");
   bar.id = "ny-report-bar";
   bar.className = "ny-report-bar";
-  bar.innerHTML = `<div><b>Видео для отчёта ${esc(reportTarget.publicId)}</b><span>Найдите раздачу: кнопка ☁ в строке — сервер скачает видео и прикрепит к отчёту сам; кнопка со стрелкой — в ваш торрент-клиент (тогда после скачивания нажмите «Прикрепить видео»). Потом откройте «Собрать финал» в отчёте.</span></div>
+  bar.innerHTML = `<div><b>Видео для отчёта ${esc(reportTarget.publicId)}</b><span>Найдите раздачу. ☁ — сервер скачает видео и прикрепит к отчёту сам. 💻 — видео скачается на этот компьютер и на сервер не пойдёт: при сборке «у себя» оно возьмётся отсюда. Стрелка — просто в торрент-клиент (потом «Прикрепить видео»).</span><span id="ny-rb-local"></span></div>
+    <button type="button" class="btn" data-rb-mine title="Указать уже скачанное видео на этом компьютере — на сервер оно не загружается">Файл на компьютере</button>
     <button type="button" class="btn primary" data-rb-attach>Прикрепить видео</button>
     <button type="button" class="btn ghost" data-rb-close>Закрыть</button>
     <div class="ny-rb-prog" id="ny-rb-prog" hidden><div class="ny-rb-bar"><i></i></div><span></span><button type="button" class="btn ghost" data-rb-cancel>Отменить скачивание</button></div>`;
   shell.insertAdjacentElement("beforebegin", bar);
   bar.querySelector("[data-rb-attach]").addEventListener("click", attachVideoToReport);
+  bar.querySelector("[data-rb-mine]").addEventListener("click", async () => {
+    if (reportTarget && await pickLocalVideo(reportTarget.publicId)) toast("Видео с компьютера запомнено. В «Собрать финал» выберите «Видео на этом компьютере» и режим «У себя».", "success");
+  });
+  paintLocalStatus();
   bar.querySelector("[data-rb-cancel]").addEventListener("click", cancelServerDownload);
   if (serverJob) showServerProgress(serverJob.last);
   bar.querySelector("[data-rb-close]").addEventListener("click", () => { reportTarget = null; paintReportBar(); });
@@ -538,6 +544,40 @@ async function serverDownload(it) {
     toast(`Сервер начал скачивать: ${r.names && r.names[0] ? r.names[0] : "видео"}. Ход виден вверху.`, "success");
     watchServerDownload(r, publicId, r.names);
   } catch (e) { toast(`Не удалось запустить скачивание: ${e.message}`, "error"); }
+}
+
+// Состояние «видео у себя» для отчёта, с которым открыт Nyaa.
+function paintLocalStatus() {
+  const el = $("#ny-rb-local");
+  if (!el || !reportTarget) return;
+  const v = getLocalVideo(reportTarget.publicId);
+  if (!v) { el.textContent = ""; return; }
+  const pct = Math.round((v.progress || 0) * 100);
+  el.textContent = v.state === "downloading" ? `💻 Качается на компьютер: ${pct}%${v.speed > 0 ? ` · ${fmtSize(v.speed)}/с` : ""}. Сборка «у себя» подождёт.`
+    : v.state === "ready" ? `💻 Видео на компьютере: ${v.name}`
+    : "💻 Раздача не отслеживается — укажите скачанный файл кнопкой «Файл на компьютере».";
+}
+document.addEventListener("local-video-changed", paintLocalStatus);
+
+async function localDownload(it) {
+  if (!reportTarget) return;
+  const { publicId } = reportTarget;
+  const magnet = magnetLink(it);
+  if (!magnet) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
+  if (!client) { toast("Сначала настройте торрент-клиент (кнопка «Торрент-клиент» слева): видео должно качаться на этот компьютер.", "error"); return; }
+  const old = getLocalVideo(publicId);
+  if (old && old.state === "downloading") { toast("Для этого отчёта видео уже качается на компьютер.", "error"); return; }
+  try {
+    await invoke("tc_add", { magnets: [magnet] });
+    touch(it.id); markSent([it]); paintList();
+  } catch (e) { toast(`Не удалось отправить в клиент: ${e}`, "error"); return; }
+  if (client.kind === "qbittorrent") {
+    trackLocalDownload(publicId, magnet, it.title);
+    toast("Видео качается на ваш компьютер — приложение дождётся и запомнит файл. Пока качается, субтитры и звук можно прикреплять к отчёту.", "success");
+  } else {
+    setLocalVideo(publicId, { name: it.title, state: "lost" });
+    toast(`${CLIENT_NAMES[client.kind]} отправлен. Ход скачивания виден только в qBittorrent — когда файл скачается, нажмите «Файл на компьютере».`, "info");
+  }
 }
 
 async function attachVideoToReport() {
@@ -2186,6 +2226,7 @@ function wire(root) {
       if (a.dataset.a === "menu") { openRowMenu(a, it); return; }
       if (a.dataset.a === "send") sendToClient([it]);
       else if (a.dataset.a === "srv") serverDownload(it);
+      else if (a.dataset.a === "mine") localDownload(it);
       else if (a.dataset.a === "mag") copy(magnetLink(it), "Magnet скопирован.");
       else if (a.dataset.a === "tor") saveTorrent(it);
       else if (a.dataset.a === "info") openDetail(it);

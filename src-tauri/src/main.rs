@@ -752,13 +752,28 @@ fn local_render_encoders() -> local_render::EncoderStatus {
 
 /// Выполняет план сборки: скачивает файлы, рендерит, возвращает путь к готовому файлу. Путь сразу попадает в скоуп
 /// чтения, чтобы существующая `upload_report_file` могла его загрузить в отчёт.
+/// Параметры видео, лежащего на этом компьютере, для плана сборки (читается только выбранный пользователем файл).
+#[tauri::command(async)]
+fn local_render_probe(app: tauri::AppHandle, path: String) -> Result<local_render::LocalVideoInfo, String> {
+    let result = (|| {
+        let p = app.state::<file_scope::FileScope>().check_read(&path)?;
+        local_render::probe_local_video(&p)
+    })();
+    log_result("local_render_probe", result)
+}
+
 #[tauri::command]
 async fn local_render_run(
     app: tauri::AppHandle,
     plan: local_render::Plan,
     init_data: String,
+    local_video: Option<String>,
 ) -> Result<local_render::RenderResult, String> {
-    let result = local_render::run(&app, http(), API_BASE, plan, &init_data).await;
+    let local_video = match local_video {
+        Some(p) => Some(app.state::<file_scope::FileScope>().check_read(&p)?),
+        None => None,
+    };
+    let result = local_render::run(&app, http(), API_BASE, plan, &init_data, local_video).await;
     if let Ok(done) = &result {
         app.state::<file_scope::FileScope>().allow_read(Path::new(&done.path));
     }
@@ -1540,6 +1555,8 @@ fn main() {
             torrent_clients::tc_clear,
             torrent_clients::tc_test,
             torrent_clients::tc_add,
+            torrent_clients::tc_progress,
+            local_render_probe,
             nyaa::nyaa_save_torrent,
             mt_tool_status,
             mt_probe_media,

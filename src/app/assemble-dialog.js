@@ -5,6 +5,7 @@
 import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
 import { can } from "./state.js";
+import { getLocalVideo } from "./local-video.js";
 import { localRenderSupport, prepareLocalRender, describeTools } from "./local-render.js";
 
 export async function openAssembleDialog(publicId) {
@@ -18,6 +19,11 @@ export async function openAssembleDialog(publicId) {
     sheet.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
     return false;
   }
+
+  // Видео, которое качается/лежит на этом компьютере: на сервер оно не загружается, собрать можно только «у себя».
+  const localVideo = getLocalVideo(publicId);
+  const hasLocalVideo = !!localVideo && localVideo.state !== "lost";
+  if (hasLocalVideo && opts.missing) opts.missing = opts.missing.filter(m => !/видео/i.test(m));
 
   return new Promise(resolve => {
     let mode = "replace";
@@ -40,10 +46,24 @@ export async function openAssembleDialog(publicId) {
         <label class="ar-row ad-pick"><input type="radio" name="${name}" value="${f.id}" ${i === 0 ? "checked" : ""}>
           <b>${esc(f.name)}</b>${f.version ? `<span class="ar-meta">v${f.version}</span>` : ""}</label>`).join("")}</div>`;
 
+    const localRow = () => {
+      if (!hasLocalVideo) return "";
+      const pct = Math.round((localVideo.progress || 0) * 100);
+      const meta = localVideo.state === "downloading" ? `качается: ${pct}% — сборка подождёт` : "на этом компьютере, на сервер не загружается";
+      return `<label class="ar-row ad-pick"><input type="radio" name="ad-video" value="local" checked>
+          <b>💻 ${esc(localVideo.name)}</b><span class="ar-meta">${esc(meta)}</span></label>`;
+    };
+    const videoPicker = () => {
+      if (!hasLocalVideo) return radios("ad-video", opts.videos, "Видео");
+      return `<span class="ar-label">Видео</span><div class="ar-list">${localRow()}${opts.videos.map(f => `
+        <label class="ar-row ad-pick"><input type="radio" name="ad-video" value="${f.id}">
+          <b>${esc(f.name)}</b>${f.version ? `<span class="ar-meta">v${f.version}</span>` : ""}</label>`).join("")}</div>`;
+    };
+
     sheet.innerHTML = `
       <h2>Собрать финал</h2>
       <div class="ad-body">
-        ${radios("ad-video", opts.videos, "Видео")}
+        ${videoPicker()}
         <span class="ar-label">Субтитры <small>— вшиваются в картинку, будут видны всегда</small></span>
         <div class="ar-list">
           ${opts.subs.map((f, i) => `
@@ -157,8 +177,14 @@ export async function openAssembleDialog(publicId) {
         o.textContent = x && x.low != null ? `${base} · ≈ ${fmtSize(Math.round((x.low + x.high) / 2))}${mid ? ` · ~${mid} мин` : ""}` : base;
       });
     }
+    const selVideo = () => { const c = sheet.querySelector('input[name="ad-video"]:checked'); return c ? c.value : ""; };
     async function loadEstimate() {
       const checked = sheet.querySelector('input[name="ad-video"]:checked');
+      if (checked && checked.value === "local") {
+        estimate = null;
+        if (estBox) estBox.innerHTML = `<span>Размер и время рендера посчитаю после скачивания: видео лежит у вас на компьютере, сервер его не видит.</span>`;
+        return;
+      }
       if (estBox) estBox.innerHTML = `<span>Считаю примерный размер…</span>`;
       try {
         estimate = await apiGet(`/report/${publicId}/assemble-estimate`, { video: checked ? Number(checked.value) : 0 });
@@ -223,17 +249,24 @@ export async function openAssembleDialog(publicId) {
     const whereHint = sheet.querySelector("#ad-where-hint");
     const localBtn = sheet.querySelector("#ad-where-local");
     const syncWhere = () => {
+      const mustLocal = selVideo() === "local";   // видео только на этом компьютере — на сервере собрать нельзя
+      const serverBtn = sheet.querySelector('#ad-where [data-where="server"]');
       localBtn.disabled = !localInfo.ok;
-      if (where === "local" && localBtn.disabled) where = "server";
+      serverBtn.disabled = mustLocal;
+      if (mustLocal) where = "local";
+      else if (where === "local" && localBtn.disabled) where = "server";
       sheet.querySelectorAll("#ad-where button").forEach(b => b.classList.toggle("on", b.dataset.where === where));
       paintEstimate();
       whereHint.textContent = localInfo.pending ? "Проверяю, можно ли собрать у себя…"
+        : mustLocal && !localInfo.ok ? "Видео лежит на вашем компьютере, поэтому собрать можно только у себя, а ffmpeg или кодировщик не нашёлся. Детали — строкой ниже."
+        : mustLocal ? `Видео возьмётся с этого компьютера${localVideo && localVideo.state === "downloading" ? " — когда докачается (приложение подождёт)" : ""}; на сервер оно не загружается. Рендер пойдёт на ${localInfo.nvenc ? "видеокарте NVIDIA" : "процессоре"}, готовый файл уйдёт в Telegram и в отчёт.`
         : !localInfo.ok ? "Сборка у себя недоступна: не нашёлся ffmpeg или рабочий кодировщик (нужна видеокарта NVIDIA). Детали — строкой ниже."
         : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Всё то же, что на сервере: интро, склейка, озвучка, надпись, логотип. Файлы скачаются с сервера, готовое видео бот отправит в Telegram и прикрепит к отчёту.`
         : "Рендер пойдёт на сервере (2 ядра процессора).";
     };
     sheet.querySelectorAll("#ad-where button").forEach(b => b.addEventListener("click", () => { if (!b.disabled) { where = b.dataset.where; syncWhere(); } }));
     sheet.querySelectorAll("[data-ad-audio]").forEach(c => c.addEventListener("change", syncWhere));
+    sheet.querySelectorAll('input[name="ad-video"]').forEach(r => r.addEventListener("change", syncWhere));
     syncWhere();
     const toolsLine = sheet.querySelector("#ad-tools-status");
     const checkTools = (force = false) => {
@@ -268,7 +301,7 @@ export async function openAssembleDialog(publicId) {
             seconds: Number(sheet.querySelector("#ad-splice-sec").value || 4),
             position: sheet.querySelector("#ad-splice-pos") ? sheet.querySelector("#ad-splice-pos").value : "start",
           } : null,
-          video: Number(sheet.querySelector('input[name="ad-video"]:checked').value),
+          video: selVideo() === "local" ? "local" : Number(selVideo()),
           sub: Number(sheet.querySelector('input[name="ad-sub"]:checked').value) || null,
           inscription: sheet.querySelector("#ad-ins-text").value.trim() ? {
             text: sheet.querySelector("#ad-ins-text").value.trim(),

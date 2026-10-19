@@ -320,6 +320,113 @@ pub async fn tc_add(magnets: Vec<String>) -> Result<usize, String> {
     Ok(magnets.len())
 }
 
+// ---------- ход скачивания («Скачать у себя» для отчёта) ----------
+
+#[derive(Serialize)]
+pub struct TcProgress {
+    /// not_found | downloading | done
+    pub state: String,
+    pub progress: f64,
+    pub speed: u64,
+    /// Только при done: самый крупный видеофайл раздачи.
+    pub path: Option<String>,
+}
+
+/// Хэш раздачи из magnet: 40 hex или 32 символа base32 (приводим к hex в нижнем регистре).
+fn magnet_hash(m: &str) -> Option<String> {
+    let rest = m.strip_prefix("magnet:?xt=urn:btih:")?;
+    let h: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+    if h.len() == 40 && h.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Some(h.to_ascii_lowercase());
+    }
+    if h.len() == 32 {
+        let mut bits = 0u64;
+        let mut n = 0u32;
+        let mut out = Vec::new();
+        for c in h.to_ascii_uppercase().chars() {
+            let v = match c {
+                'A'..='Z' => c as u64 - 'A' as u64,
+                '2'..='7' => c as u64 - '2' as u64 + 26,
+                _ => return None,
+            };
+            bits = (bits << 5) | v;
+            n += 5;
+            if n >= 8 {
+                n -= 8;
+                out.push(((bits >> n) & 0xff) as u8);
+            }
+        }
+        return Some(out.iter().map(|b| format!("{b:02x}")).collect());
+    }
+    None
+}
+
+const VIDEO_EXT: [&str; 7] = ["mkv", "mp4", "avi", "mov", "webm", "m4v", "ts"];
+
+/// Ход скачивания раздачи в qBittorrent (другие клиенты не отслеживаем — там файл указывают вручную).
+/// Когда скачано, возвращает путь к видеофайлу и разрешает его чтение для сборки.
+#[tauri::command(async)]
+pub async fn tc_progress(app: tauri::AppHandle, magnet: String) -> Result<TcProgress, String> {
+    use tauri::Manager;
+    if !valid_magnet(&magnet) {
+        return Err("Это не magnet-ссылка.".into());
+    }
+    let hash = magnet_hash(&magnet).ok_or("Не удалось прочитать хэш раздачи.")?;
+    let c = load_cfg()?;
+    if c.kind != "qbittorrent" {
+        return Err("Ход скачивания виден только в qBittorrent. Когда файл скачается, укажите его кнопкой «Файл на компьютере».".into());
+    }
+    let cookie = qb_login(&c.url, &c).await?;
+    let list: Value = client()
+        .get(format!("{}/api/v2/torrents/info", c.url))
+        .query(&[("hashes", hash.as_str())])
+        .header("Cookie", &cookie)
+        .header("Referer", &c.url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(t) = list.get(0) else {
+        return Ok(TcProgress { state: "not_found".into(), progress: 0.0, speed: 0, path: None });
+    };
+    let progress = t["progress"].as_f64().unwrap_or(0.0);
+    let speed = t["dlspeed"].as_u64().unwrap_or(0);
+    if progress < 0.999_999 {
+        return Ok(TcProgress { state: "downloading".into(), progress, speed, path: None });
+    }
+    let files: Value = client()
+        .get(format!("{}/api/v2/torrents/files", c.url))
+        .query(&[("hash", hash.as_str())])
+        .header("Cookie", &cookie)
+        .header("Referer", &c.url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    let best = files
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|f| {
+            let name = f["name"].as_str().unwrap_or("").to_ascii_lowercase();
+            VIDEO_EXT.iter().any(|e| name.ends_with(&format!(".{e}")))
+        })
+        .max_by_key(|f| f["size"].as_u64().unwrap_or(0))
+        .and_then(|f| f["name"].as_str());
+    let name = best.ok_or("В скачанной раздаче нет видеофайла.")?;
+    let save_path = t["save_path"].as_str().ok_or("qBittorrent не отдал папку загрузки.")?;
+    let full = std::path::Path::new(save_path).join(name);
+    if !full.is_file() {
+        return Err("Файл раздачи не найден на этом компьютере — qBittorrent работает на другой машине? Укажите файл вручную.".into());
+    }
+    app.state::<crate::file_scope::FileScope>().allow_read(&full);
+    Ok(TcProgress { state: "done".into(), progress: 1.0, speed: 0, path: Some(full.to_string_lossy().into_owned()) })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

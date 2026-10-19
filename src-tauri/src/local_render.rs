@@ -29,6 +29,9 @@ pub struct Download {
     pub image: Option<String>,
     pub prepared: Option<String>,
     pub label: Option<String>,
+    /// Видео лежит на этом компьютере («Скачать у себя»): вместо загрузки с сервера берём файл, который выбрал пользователь.
+    #[serde(default)]
+    pub local: Option<bool>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -379,6 +382,7 @@ pub async fn run(
     api_base: &str,
     plan: Plan,
     init_data: &str,
+    local_video: Option<PathBuf>,
 ) -> Result<RenderResult, String> {
     use tauri::Emitter;
 
@@ -408,6 +412,16 @@ pub async fn run(
     for (index, item) in plan.downloads.iter().enumerate() {
         let name = safe_name(&item.name)?;
         let label = item.label.clone().unwrap_or_else(|| name.to_string());
+        if item.local.unwrap_or(false) {
+            let src = local_video.as_ref().ok_or("План требует видео с этого компьютера, но файл не выбран.")?;
+            emit("download", index as f64 / total_files as f64 * 0.2, &format!("Беру видео с компьютера: {label}"));
+            let dest = dir.join(name);
+            // Жёсткая ссылка не копирует гигабайты (если файл на том же диске, что и Temp); иначе обычное копирование.
+            if std::fs::hard_link(src, &dest).is_err() {
+                std::fs::copy(src, &dest).map_err(|e| format!("Не удалось взять видео «{label}»: {e}"))?;
+            }
+            continue;
+        }
         let url = if item.watermark.unwrap_or(false) {
             format!("{api_base}/report/{}/local-asset?watermark=1", plan.public_id)
         } else if item.intro.unwrap_or(false) {
@@ -640,6 +654,46 @@ fn fmt_mb(bytes: u64) -> String {
     } else {
         format!("{} МБ", bytes / 1024 / 1024)
     }
+}
+
+#[derive(Serialize)]
+pub struct LocalVideoInfo {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub duration: f64,
+    pub fps: String,
+    pub has_audio: bool,
+    pub audio_codec: String,
+    pub size: u64,
+}
+
+/// Параметры видео на этом компьютере для плана сборки: сервер файла не видит, поэтому ffprobe выполняем здесь.
+pub fn probe_local_video(path: &std::path::Path) -> Result<LocalVideoInfo, String> {
+    let ffprobe = crate::media_tools::resolve_ffprobe();
+    let output = hidden_command(ffprobe)
+        .args(["-v", "error", "-print_format", "json", "-show_format", "-show_streams"])
+        .arg(path)
+        .output()
+        .map_err(|e| format!("ffprobe не запустился: {e}"))?;
+    if !output.status.success() {
+        return Err(format!("ffprobe не смог прочитать видео: {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|e| format!("Не удалось разобрать ответ ffprobe: {e}"))?;
+    let streams = json["streams"].as_array().cloned().unwrap_or_default();
+    let video = streams.iter().find(|s| s["codec_type"] == "video").ok_or("В файле нет видеодорожки.")?;
+    let audio = streams.iter().find(|s| s["codec_type"] == "audio");
+    let duration = json["format"]["duration"].as_str().and_then(|d| d.parse::<f64>().ok()).unwrap_or(0.0);
+    Ok(LocalVideoInfo {
+        name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "episode.mkv".into()),
+        width: video["width"].as_u64().unwrap_or(0) as u32,
+        height: video["height"].as_u64().unwrap_or(0) as u32,
+        duration,
+        fps: video["r_frame_rate"].as_str().unwrap_or("24/1").to_string(),
+        has_audio: audio.is_some(),
+        audio_codec: audio.and_then(|a| a["codec_name"].as_str()).unwrap_or("").to_string(),
+        size: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
+    })
 }
 
 #[cfg(test)]
