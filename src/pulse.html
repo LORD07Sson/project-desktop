@@ -10,6 +10,7 @@
 <body>
   <div class="stage-wrap" id="wrap">
     <div class="stage intro" id="stage">
+      <div class="scene" id="scene">
       <canvas class="layer" id="cNet" aria-label="Сеть студии"></canvas>
       <canvas class="layer" id="cFx" aria-hidden="true"></canvas>
 
@@ -19,6 +20,8 @@
         <div id="fCards"></div>
         <div id="fList"></div>
         <div class="f-panel-wrap"><aside class="f-panel" id="fPanel" aria-live="polite"></aside></div>
+      </div>
+        <div class="tip" id="tip" hidden></div>
       </div>
 
       <div class="hud">
@@ -63,7 +66,6 @@
           </div>
         </div>
       </div>
-      <div class="tip" id="tip" hidden></div>
       <button class="f-back" id="fBack" type="button">← Вся студия</button>
     </div>
   </div>

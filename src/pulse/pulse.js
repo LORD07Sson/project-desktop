@@ -79,10 +79,13 @@ export function startPulse(DATA) {
   const cNet = $("#cNet"), cFx = $("#cFx"), gN = cNet.getContext("2d"), gF = cFx.getContext("2d");
   let RES = 1, QUAL = 1, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
   // сцена 1280×760 вписывается в доступное окно целиком (по ширине и по высоте) и стоит по центру — без внутренней прокрутки
-  const stageScale = () => Math.min(wrapEl.clientWidth / W, wrapEl.clientHeight / H);
+  // Интерфейс (панели, шкала, KPI) растягивается на всё окно; сама сцена 1280×760 стоит по центру и масштабируется по меньшей стороне.
+  const scene = $("#scene");
+  const stageScale = () => Math.min(wrapEl.clientWidth / W, wrapEl.clientHeight / H) || 1;
   function resize() {
-    const sc = stageScale();
-    stage.style.transform = `translate(${(wrapEl.clientWidth - W * sc) / 2}px, ${(wrapEl.clientHeight - H * sc) / 2}px) scale(${sc})`;
+    const sc = stageScale(), sw = wrapEl.clientWidth / sc, sh = wrapEl.clientHeight / sc;
+    stage.style.width = `${sw}px`; stage.style.height = `${sh}px`; stage.style.transform = `scale(${sc})`;
+    scene.style.left = `${(sw - W) / 2}px`; scene.style.top = `${(sh - H) / 2}px`;
     RES = clamp((devicePixelRatio || 1) * sc * QUAL, 1, 1.5);
     for (const c of [cNet, cFx]) { c.width = VISIBLE ? Math.round(W * RES) : 1; c.height = VISIBLE ? Math.round(H * RES) : 1; }
   }
