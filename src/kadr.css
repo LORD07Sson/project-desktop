@@ -3418,3 +3418,6 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .st-group > .st-version:first-child { border-radius: 16px 16px 0 0; }
 /* Без затемнения фона окна должны быть непрозрачными, иначе сквозь них просвечивает страница. */
 .sheet { background: linear-gradient(var(--surface), var(--surface)), var(--bg-2); }
+
+/* Список: у ячейки с кнопками строки не гасим саму ячейку (opacity давал «шов» другого оттенка на фоне наведённой строки) — появляются только кнопки. */
+td.row-actions { opacity: 1; transition: none; }
