@@ -3234,7 +3234,7 @@ body.focus-mode .report-detail-overlay .sheet {
 .mt-volume { width: 92px; accent-color: var(--fire); }
 .mt-speed {
   padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--line);
-  background: var(--surface-1); color: var(--ink); font: inherit; font-size: 12px;
+  background: var(--surface-2); color: var(--ink); font: inherit; font-size: 12px;
 }
 
 /* Выбор дорожек звука/субтитров прямо в панели плеера — у релиза с
@@ -3243,7 +3243,7 @@ body.focus-mode .report-detail-overlay .sheet {
 .mt-track-pick { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-soft); }
 .mt-track-pick select {
   max-width: 130px; padding: 3px 6px; font-size: 11.5px;
-  background: var(--surface-1); color: var(--ink);
+  background: var(--surface-2); color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--radius-sm);
 }
 /* Включённая петля A-B должна быть видна с одного взгляда: в этом
