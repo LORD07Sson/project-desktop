@@ -338,6 +338,9 @@ export function startPulse(DATA) {
     g.globalCompositeOperation = "source-over";
 
     g.setTransform(RES * cam.s, 0, 0, RES * cam.s, RES * (W / 2 - cam.x * cam.s), RES * (H / 2 - 10 - cam.y * cam.s));
+    // границы свободной области в координатах мира: узлы рисуются с зумом камеры (×1.55 при 1–2 тайтлах),
+    // а LLIM/RLIM/TLIM — в координатах сцены; без пересчёта подписи уезжали под правую колонку
+    const wL = (LLIM - W / 2) / cam.s + cam.x, wR = (RLIM - W / 2) / cam.s + cam.x, wT = (TLIM - H / 2 + 10) / cam.s + cam.y;
     const bornK = n => c01((it - n.born) / 420);
     for (const n of allNodes) {
       const v = vis(n);
@@ -423,11 +426,23 @@ export function startPulse(DATA) {
     const badge = (txt, x, y, col, al) => { g.globalAlpha = al; g.font = "700 8.5px ui-monospace, Consolas, monospace"; g.textAlign = "left"; const w = g.measureText(txt).width + 7; g.fillStyle = "rgba(14,9,7,.9)"; g.beginPath(); g.roundRect(x, y - 8, w, 11, 3); g.fill(); g.fillStyle = col; g.fillText(txt, x + 3.5, y + .5); };
 
     // прямоугольники подписей тайтлов — чтобы бейджи серий, имена людей и всплывашки не налезали на текст
+    // сторона подписи считается здесь один раз — по ней же и рисуем, и обходим текст бейджами/всплывашками
+    const titleFont = n => `600 ${Math.round(11 + 3 * n.pd)}px Segoe UI, system-ui, sans-serif`;
     const tRects = titleNodes.map(n => {
-      const right = n.px >= CX - 10, rr = 10 + 7, w = 190, x = right ? n.px + rr : n.px - rr - w;
-      return { x, y: n.py - 18, w, h: hasAir(n) ? 52 : 40 };
+      g.font = titleFont(n);
+      const w = Math.max(g.measureText(n.t.name).width, 150 * n.pd) + 4, rr = (10 + 7) * n.pd + 8;
+      let right = n.px >= CX - 10;
+      if (right && n.px + rr + w > wR && n.px - rr - w >= wL) right = false;     // не под правую колонку
+      else if (!right && n.px - rr - w < wL && n.px + rr + w <= wR) right = true;   // и не за левый край
+      n.lRight = right;
+      return { x: right ? n.px + rr - 8 : n.px - rr - w, y: n.py - 18, w: w + 8, h: hasAir(n) ? 52 : 40 };
     });
     const inTitle = (x, y, w = 40, h = 12) => tRects.some(r => x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y);
+    // шар центра и подпись «Project · N тайтлов» — имена людей поверх них не пишем
+    const inHub = (x, y, w, h) => x < CX + 200 && x + w > CX - 40 && y < CY + 40 && y + h > CY - 40;
+    // Подписи рисуются отдельным проходом ПОСЛЕ всех узлов: иначе свечение спутников-серий и центра,
+    // нарисованных позже, ложилось поверх текста («просрочка», «эфир через…», имена за «Project»).
+    const deferred = [];
     const drawNode = n => {
       const b = bornK(n); if (b <= 0) return;
       const sc = pop(n) * n.pd, dA = depthA(n), a = n.alpha * dA;
@@ -446,16 +461,14 @@ export function startPulse(DATA) {
         g.lineWidth = 2.2 * n.pd; g.strokeStyle = "rgba(255,255,255,.12)"; g.beginPath(); g.arc(n.px, n.py, rr, 0, 7); g.stroke();
         g.strokeStyle = "#ffc46a"; g.lineCap = "round"; g.beginPath(); g.arc(n.px, n.py, rr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * n.pct / 100 * pop(n)); g.stroke();
         if (hot) { g.strokeStyle = `rgba(255,90,100,${.45 + .35 * Math.sin(t / 260)})`; g.lineWidth = 1.4; g.beginPath(); g.arc(n.px, n.py, rr + 5 + Math.sin(t / 260) * 1.5, 0, 7); g.stroke(); }
-        const nameFont = `600 ${Math.round(11 + 3 * n.pd)}px Segoe UI, system-ui, sans-serif`;
-        g.font = nameFont;
-        const tw = Math.max(g.measureText(n.t.name).width, 150 * n.pd);
-        let right = n.px >= CX - 10;
-        if (right && n.px + rr + 8 + tw > RLIM) right = false;     // подпись не уходит под правую колонку
+        const nameFont = titleFont(n), right = n.lRight;
         const lx = n.px + (right ? rr + 8 : -rr - 8), al = c01((b - .4) / .6) * (.35 + .65 * dA);
-        label(n.t.name, lx, n.py - 1, nameFont, n.i === hoverTitle ? "#ffd99a" : "#f6ece6", al * (.3 + .7 * n.alpha), right ? "left" : "right");
-        const sub = `${n.pct}% готово${hot ? " · просрочка" : ""}`;
-        label(sub, lx, n.py + 13, `700 ${Math.round(8 + 2 * n.pd)}px ui-monospace, Consolas, monospace`, hot ? "#ff8a8a" : "#ffc46a", al * .9 * n.alpha, right ? "left" : "right");
-        if (hasAir(n)) label(`${n.nextEp} серия · эфир ${airText(n.air)}`, lx, n.py + 25, `600 ${Math.round(8 + 2 * n.pd)}px Segoe UI, system-ui, sans-serif`, n.air <= 1 ? "#ffb070" : "#a8968c", al * .85 * n.alpha, right ? "left" : "right");
+        deferred.push(() => {
+          label(n.t.name, lx, n.py - 1, nameFont, n.i === hoverTitle ? "#ffd99a" : "#f6ece6", al * (.3 + .7 * n.alpha), right ? "left" : "right");
+          const sub = `${n.pct}% готово${hot ? " · просрочка" : ""}`;
+          label(sub, lx, n.py + 13, `700 ${Math.round(8 + 2 * n.pd)}px ui-monospace, Consolas, monospace`, hot ? "#ff8a8a" : "#ffc46a", al * .9 * n.alpha, right ? "left" : "right");
+          if (hasAir(n)) label(`${n.nextEp} серия · эфир ${airText(n.air)}`, lx, n.py + 25, `600 ${Math.round(8 + 2 * n.pd)}px Segoe UI, system-ui, sans-serif`, n.air <= 1 ? "#ffb070" : "#a8968c", al * .85 * n.alpha, right ? "left" : "right");
+        });
         return;
       }
       if (CALM && n.kind === "track") return;
@@ -473,7 +486,15 @@ export function startPulse(DATA) {
       if (b > .5) {
         if (n.kind === "ep") { if (!CALM && !inTitle(n.px + 8 * n.pd, n.py - 16 * n.pd)) badge(String(n.e.ep), n.px + 8 * n.pd, n.py - 8 * n.pd, late(n) ? "#ff9a9a" : "#cdb8ff", n.alpha * b * dA); }
         else if (n.kind === "track") badge(String(n.n), n.px + 4, n.py - 5, "#ffd49a", n.alpha * b * dA);
-        else if (!inTitle(n.px, n.py - 10, 90, 16)) label(`${n.p.n} · ${ld.n}`, n.px + (cfg[3] * .7 + 6) * n.pd, n.py + 4, `600 ${Math.round(9 + 2.5 * n.pd)}px Segoe UI, system-ui, sans-serif`, ld.late ? "#ffb0b0" : "#bff5de", b * (.4 + .6 * dA) * (.3 + .7 * n.alpha));
+        else {
+          // справа от узла; если там название тайтла или подпись центра — слева; если занято и там — не пишем
+          const txt = `${n.p.n} · ${ld.n}`, font = `600 ${Math.round(9 + 2.5 * n.pd)}px Segoe UI, system-ui, sans-serif`, off = (cfg[3] * .7 + 6) * n.pd;
+          g.font = font; const w = g.measureText(txt).width;
+          const busy = x => inTitle(x, n.py - 10, w, 16) || inHub(x, n.py - 10, w, 16);
+          const side = !busy(n.px + off) ? "left" : !busy(n.px - off - w) ? "right" : null;
+          const al = b * (.4 + .6 * dA) * (.3 + .7 * n.alpha), col = ld.late ? "#ffb0b0" : "#bff5de";
+          if (side) deferred.push(() => label(txt, side === "left" ? n.px + off : n.px - off, n.py + 4, font, col, al, side));
+        }
       }
     };
     const drawHub = () => {
@@ -491,8 +512,10 @@ export function startPulse(DATA) {
       }
       g.globalAlpha = .5; g.strokeStyle = "#ffcf85"; g.setLineDash([2, 2.5]); g.lineWidth = .8; g.beginPath(); g.arc(CX, CY, 25 * sc, 0, 7); g.stroke(); g.setLineDash([]);
       g.globalAlpha = 1; g.drawImage(SP.gold, CX - 34 * sc, CY - 34 * sc, 68 * sc, 68 * sc);
-      label("Project", CX + 44, CY + 2, "800 17px Segoe UI, system-ui, sans-serif", "#fff3e4", c01((it - 300) / 500));
-      label(`${titleNodes.length} тайтлов · ${epNodes.filter(vis).length} серий`, CX + 45, CY + 19, "600 10px ui-monospace, Consolas, monospace", "#c9b3a5", c01((it - 500) / 500));
+      deferred.push(() => {
+        label("Project", CX + 44, CY + 2, "800 17px Segoe UI, system-ui, sans-serif", "#fff3e4", c01((it - 300) / 500));
+        label(`${titleNodes.length} тайтлов · ${epNodes.filter(vis).length} серий`, CX + 45, CY + 19, "600 10px ui-monospace, Consolas, monospace", "#c9b3a5", c01((it - 500) / 500));
+      });
     };
 
     // порядок по глубине: дальнее → центр → ближнее
@@ -502,6 +525,8 @@ export function startPulse(DATA) {
     drawHub();
     for (const tn of titleNodes) if (tn.pz >= 0) drawBeam(tn);
     for (const n of order) if (n.pz >= 0) drawNode(n);
+    g.globalCompositeOperation = "source-over";
+    for (const f of deferred) f();
 
     // события: кометы, волны, вспышки, звёзды, подписи
     g.globalCompositeOperation = "lighter";
@@ -532,10 +557,14 @@ export function startPulse(DATA) {
       const k = (t - ts.born) / 2600, a = Math.min(c01(k / .08), c01((1 - k) / .25));
       g.font = "600 11px Segoe UI, system-ui, sans-serif";
       const tw = g.measureText(ts.text).width + 26;
-      let x = ts.n.px + 14; if (x + tw > RLIM) x = ts.n.px - 14 - tw;        // не под правую колонку
-      x = Math.max(LLIM + 8, Math.min(x, RLIM - tw - 8));     // и не за левый край
-      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y < TLIM) y = Math.max(TLIM, ts.n.py + 44);   // не под верхнюю панель
-      if (inTitle(x, y - 13, 180, 20)) y -= 54;     // не поверх названия тайтла
+      let x = ts.n.px + 14; if (x + tw > wR) x = ts.n.px - 14 - tw;        // не под правую колонку
+      x = Math.max(wL + 8, Math.min(x, wR - tw - 8));     // и не за левый край
+      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y - 13 < wT) y = Math.max(wT + 13, ts.n.py + 44);   // не под верхнюю панель
+      if (inTitle(x, y - 13, tw, 20)) {     // не поверх названия тайтла: выше него, а если там панель — ниже
+        const up = y - 54;
+        y = up - 13 >= wT ? up : ts.n.py + 70;
+      }
+      y = Math.max(y, wT + 13);
       g.font = "600 11px Segoe UI, system-ui, sans-serif"; g.textAlign = "left";
       const w = g.measureText(ts.text).width + 26;
       g.globalAlpha = a; g.fillStyle = "rgba(16,10,8,.92)"; g.strokeStyle = `rgba(${ts.col},.55)`; g.lineWidth = 1;

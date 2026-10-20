@@ -464,6 +464,7 @@ input, select, textarea { font-family: inherit; }
 .kd-fr-pc .kd-track { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 1; height: 3px; background: rgba(255, 255, 255, .2); }
 .kd-fr > b { display: block; margin-top: 11px; font-size: 13px; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kd-fr-sub { display: flex; align-items: center; gap: 7px; margin-top: 3px; font-size: 11.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; }
+.kd-fr-st { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .kd-three { display: grid; grid-template-columns: 1fr 1.05fr 1fr; gap: 16px; margin-top: 26px; }
 .kd-three > *, .kd-row2 > section { padding: 20px 22px; min-width: 0; }
@@ -764,6 +765,12 @@ button.kd-tile:hover { transform: translateY(-2px); }
    ================================================================ */
 .tab-panel[data-panel="list"] { padding: 10px 32px 0; }
 .list-page-header { margin-bottom: 20px; }
+/* Заголовок — по тому же краю, что и на других вкладках (у панели уже свой отступ 32px). */
+.tab-panel[data-panel="list"] .list-page-header { padding-left: 0; padding-right: 0; }
+/* Длинный подзаголовок серии обрезается многоточием, а не растягивает таблицу шире окна. */
+.content td.ls-series { max-width: 0; }
+.ls-id { display: block; overflow: hidden; text-overflow: ellipsis; }
+.ls-id .fav-star { vertical-align: middle; }
 .toolbar { gap: 8px; padding: 0; margin-bottom: 14px; background: none; border: 0; flex-wrap: wrap; }
 .toolbar input[type="search"], .toolbar select {
   height: 36px; padding: 0 12px; border-radius: 11px; background-color: rgba(255, 255, 255, .045); border: 1px solid var(--line);
@@ -3421,3 +3428,15 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 
 /* Список: у ячейки с кнопками строки не гасим саму ячейку (opacity давал «шов» другого оттенка на фоне наведённой строки) — появляются только кнопки. */
 td.row-actions { opacity: 1; transition: none; }
+
+/* ---------- Светлая тема: цвета, заданные под тёмный фон ---------- */
+/* Взятая в работу карточка тайтла: светло-мятный текст лежал на белой кнопке и не читался. */
+:root[data-theme="light"] .af-card .tl-take.on { background: color-mix(in srgb, var(--s-done) 14%, #fff); color: var(--s-done); border: 1px solid color-mix(in srgb, var(--s-done) 35%, transparent); }
+/* Nyaa: пинг, метки и ошибки были яркими пастельными — на белом почти пропадали. */
+:root[data-theme="light"] .ny-pi.ok b, :root[data-theme="light"] .ny-ping.ok b { color: var(--s-done); }
+:root[data-theme="light"] .ny-pi.slow b, :root[data-theme="light"] .ny-ping.slow b { color: var(--s-work); }
+:root[data-theme="light"] .ny-ping.bad b, :root[data-theme="light"] .ny-ev b.bad, :root[data-theme="light"] .ny-ev.fail { color: var(--s-stop); }
+:root[data-theme="light"] .ny-tags i.warn { color: var(--s-stop); }
+:root[data-theme="light"] .ny-tags i.sd-b { color: var(--s-review); }
+:root[data-theme="light"] .ny-tags i.sd-a { color: var(--s-work); }
+:root[data-theme="light"] .ny-tags i.have-i { color: var(--s-done); }

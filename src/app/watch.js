@@ -176,7 +176,7 @@ function continueHtml() {
     const name = c.title || (t && t.name) || "Тайтл";
     return `
       <button type="button" class="wm-cont" data-wm-play="${c.shikiId}" data-wm-name="${esc(name)}">
-        <span class="wm-shot"${pic ? ` style="background-image:url('${imgProxy(pic)}')"` : ""}>
+        <span class="wm-shot"${pic ? ` style="background-image:url('${imgProxy(pic)}')${t.cover && t.cover !== pic ? `, url('${imgProxy(t.cover)}')` : ""}"` : ""}>
           <span class="wm-pp">${I.play}</span>
           <span class="wm-cinfo"><b>${esc(c.label || "Серия")}</b><span>осталось ${left} мин</span></span>
           <span class="wm-bar"><i style="width:${Math.round((c.time / c.duration) * 100)}%"></i></span>
@@ -295,7 +295,7 @@ function heroHtml() {
     <div class="wm-hero" id="wm-hero">
       ${list.map((t, i) => `
         <div class="wm-slide${i === heroIdx ? " on" : ""}" data-wm-slide="${i}">
-          <div class="wm-frames">${heroPics(t).map((f, k) => `<div class="wm-frame${k === 0 ? " on" : ""}" style="background-image:url('${imgProxy(f)}');--kx:${k % 2 ? "-2%" : "2%"};--ky:${k % 3 ? "1.5%" : "-1.5%"}"></div>`).join("")}</div>
+          <div class="wm-frames">${heroPics(t).map((f, k) => `<div class="wm-frame${k === 0 ? " on" : ""}" style="background-image:url('${imgProxy(f)}')${t.cover && t.cover !== f ? `, url('${imgProxy(t.cover)}')` : ""};--kx:${k % 2 ? "-2%" : "2%"};--ky:${k % 3 ? "1.5%" : "-1.5%"}"></div>`).join("")}</div>
         </div>`).join("")}
       <div class="wm-grain"></div>
       <div class="wm-htext" id="wm-htext"></div>
@@ -795,6 +795,10 @@ export async function openWatchMode(fromEl) {
     r.querySelector("#wm-hero")?.animate([{ transform: "scale(1.12)", filter: "brightness(1.5) blur(6px)" }, { transform: "none", filter: "none" }], { duration: 1200, easing: "cubic-bezier(.22,.9,.3,1)" });
   }
 }
+
+// Вкладки верхнего меню видны и поверх «Смотреть»: клик по ним подсвечивал вкладку,
+// а сам режим оставался открытым и закрывал её собой (и крутил слайд-шоу впустую).
+document.addEventListener("project:tab", () => closeWatchMode());
 
 export function closeWatchMode() {
   const r = root();

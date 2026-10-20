@@ -334,7 +334,7 @@ function Overview(props) {
                     <span class="kd-track"><i style={{ width: `${progressOf(r)}%`, background: statusColor(r.status) }} /></span>
                   </span>
                   <b>{showName(r)}</b>
-                  <span class="kd-fr-sub"><i class="kd-dot" style={{ background: statusColor(r.status) }} />{stageOf(r)}{r.deadline ? ` · ${left === 0 ? "сегодня" : left === 1 ? "завтра" : left < 0 ? "просрочено" : ddmm(r.deadline)}` : ""}</span>
+                  <span class="kd-fr-sub"><i class="kd-dot" style={{ background: statusColor(r.status) }} /><span class="kd-fr-st">{stageOf(r)}{r.deadline ? ` · ${left === 0 ? "сегодня" : left === 1 ? "завтра" : left < 0 ? "просрочено" : ddmm(r.deadline)}` : ""}</span></span>
                 </button>
               );
             }}

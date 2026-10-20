@@ -100,6 +100,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   --bg-2: #fdf9f6;
   --bg-glow-1: #ffc9a8;
   --bg-glow-2: #fbeee6;
+  /* Цвета статусов глубже, чем в тёмной теме: яркие #33d17a/#f0a063 на белом
+     читались бледно (контраст ~2:1) в чипах, «застряло», «просрочено». */
+  --s-draft: #6f625c; --s-work: #9a7300; --s-review: #2563c9; --s-fix: #b4570f; --s-done: #15864a; --s-stop: #c62f2f;
   --surface: #ffffff;
   --surface-2: #f6ede7;
   --surface-3: #efe2d9;
@@ -108,9 +111,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   --line-soft: #f2e7df;
   --ink: #23140f;
   --ink-soft: #6b5249;
-  --ink-dim: #9c8278;
+  --ink-dim: #8a6f65;
   --fire: #e2531a;
-  --gold: #e08a12;
+  --gold: #b8650a;
   --on-accent: #ffffff;
   --accent-soft: rgba(226, 83, 26, .12);
   --shadow-xs: 0 1px 2px rgba(60,25,10,.06);
@@ -5937,7 +5940,7 @@ body.focus-mode .report-detail-overlay .sheet {
   --glass-bg: rgba(24, 10, 16, .62); --glass-bg-strong: rgba(15, 7, 11, .82); --glass-border: rgba(255, 150, 185, .1);
 }
 :root[data-accent="sakura"][data-theme="light"] {
-  --fire: #d42d62; --ember: #d42d62; --gold: #e0679a; --on-accent: #ffffff; --accent-soft: rgba(212, 45, 98, .12);
+  --fire: #d42d62; --ember: #d42d62; --gold: #c43d76; --on-accent: #ffffff; --accent-soft: rgba(212, 45, 98, .12);
 }
 :root[data-accent="violet"]:not([data-theme="light"]) {
   --bg: #06050b; --bg-2: #0b0913; --bg-glow-1: #4b25b8; --bg-glow-2: #150a33;
@@ -5948,7 +5951,7 @@ body.focus-mode .report-detail-overlay .sheet {
   --glass-bg: rgba(16, 12, 26, .62); --glass-bg-strong: rgba(10, 8, 18, .82); --glass-border: rgba(180, 150, 255, .1);
 }
 :root[data-accent="violet"][data-theme="light"] {
-  --fire: #6a3fe0; --ember: #6a3fe0; --gold: #9d6bf5; --on-accent: #ffffff; --accent-soft: rgba(106, 63, 224, .12);
+  --fire: #6a3fe0; --ember: #6a3fe0; --gold: #8a52ee; --on-accent: #ffffff; --accent-soft: rgba(106, 63, 224, .12);
 }
 :root[data-accent="sky"]:not([data-theme="light"]) {
   --bg: #04070a; --bg-2: #070c11; --bg-glow-1: #0b5a8f; --bg-glow-2: #05182a;
@@ -5959,7 +5962,7 @@ body.focus-mode .report-detail-overlay .sheet {
   --glass-bg: rgba(9, 16, 22, .62); --glass-bg-strong: rgba(6, 11, 16, .82); --glass-border: rgba(140, 200, 255, .1);
 }
 :root[data-accent="sky"][data-theme="light"] {
-  --fire: #0a84d6; --ember: #0a84d6; --gold: #2aa8e0; --on-accent: #ffffff; --accent-soft: rgba(10, 132, 214, .12);
+  --fire: #0a84d6; --ember: #0a84d6; --gold: #0f86c2; --on-accent: #ffffff; --accent-soft: rgba(10, 132, 214, .12);
 }
 :root[data-accent="mint"]:not([data-theme="light"]) {
   --bg: #040805; --bg-2: #070d09; --bg-glow-1: #0f7a45; --bg-glow-2: #052414;
@@ -5970,7 +5973,7 @@ body.focus-mode .report-detail-overlay .sheet {
   --glass-bg: rgba(9, 18, 13, .62); --glass-bg-strong: rgba(6, 12, 9, .82); --glass-border: rgba(140, 240, 180, .1);
 }
 :root[data-accent="mint"][data-theme="light"] {
-  --fire: #11985a; --ember: #11985a; --gold: #5fae1e; --on-accent: #ffffff; --accent-soft: rgba(17, 152, 90, .12);
+  --fire: #11985a; --ember: #11985a; --gold: #3f8a12; --on-accent: #ffffff; --accent-soft: rgba(17, 152, 90, .12);
 }
 
 /* Настройки → Цветовая тема: образцы палитр. */
