@@ -27,6 +27,19 @@ const I = {
 // теги, которые админ сам вписал в заголовок или реплику. Для
 // предпросмотра оставляем только то, что понимает Telegram, а ссылки —
 // только http(s) и tg.
+// Сколько знаков названия кнопки Telegram показывает на телефоне (Android, ~360 dp) и на компьютере — длиннее обрезается без многоточия.
+// Эмодзи считаем за два знака. Цифры подобраны по реальным постам: 2 в ряд — «✈️ Смотреть в Telegra», 3 — «✈️ Смотреть», 4 — «✈️ Смотр».
+const weigh = t => Array.from(t).reduce((n, c) => n + (/\p{Extended_Pictographic}/u.test(c) ? 2 : 1), 0);
+function labelCap(view, perRow) {
+  const total = view === "phone" ? 340 : 400, per = (total - 4 * (perRow - 1)) / perRow;
+  return Math.max(2, Math.floor((per - (view === "phone" ? 22 : 18)) / (view === "phone" ? 7.4 : 6.4)));
+}
+function clipLabel(text, cap) {
+  let n = 0, out = "";
+  for (const c of Array.from(text)) { n += /\p{Extended_Pictographic}/u.test(c) ? 2 : 1; if (n > cap) break; out += c; }
+  return out;
+}
+
 // Раскладка кнопок: «с новой строки» у кнопки задаёт ряды вручную, иначе — по «кнопок в ряд».
 function linkRows(d, links) {
   const manual = links.some(l => l.newrow), n = d.per_row || 2, rows = [];
@@ -289,6 +302,7 @@ export async function openChannelPostSheet(openId = null) {
       <section class="cp-sec">
         <div class="cp-label">Кнопки под постом <span>${d.links.length} / ${meta.limits.links}</span></div>
         <label class="cp-check cp-perrow">Кнопок в ряд: <select id="cp-perrow" aria-label="Кнопок в ряд">${[1, 2, 3, 4].map(n => `<option value="${n}"${(d.per_row || 2) === n ? " selected" : ""}>${n}</option>`).join("")}</select><span class="cp-hint">меньше места на кнопку, но больше кнопок на экране; высоту Telegram не меняет</span></label>
+        <div class="cp-cutwarn" id="cp-cutwarn"></div>
         ${d.links.map((l, i) => `
           <div class="cp-line cp-line-link">
             <input class="cp-in" data-cp-link="${i}:text" value="${esc(l.text)}" placeholder="Текст кнопки" aria-label="Текст кнопки">
@@ -469,9 +483,15 @@ export async function openChannelPostSheet(openId = null) {
         <div class="cp-pv-text">${text}</div>
         <div class="cp-pv-meta">${post.published_at ? "опубликовано" : "черновик"}</div>
       </div>
-      ${links.length ? `<div class="cp-pv-buttons">${linkRows(d, links).map(r => `<div class="cp-pv-row">${r.map(l => `<span>${esc(l.text)}</span>`).join("")}</div>`).join("")}</div>` : ""}`;
+      ${links.length ? `<div class="cp-pv-buttons">${linkRows(d, links).map(r => `<div class="cp-pv-row">${r.map(l => { const cap = labelCap(view, r.length), cut = weigh(l.text) > cap; return `<span${cut ? ' class="cut"' : ""}>${esc(cut ? clipLabel(l.text, cap) : l.text)}</span>`; }).join("")}</div>`).join("")}</div>` : ""}`;
     pv.dataset.view = view;
     sheet.querySelectorAll("[data-cp-view]").forEach(b => b.classList.toggle("on", b.dataset.cpView === view));
+    const warn = sheet.querySelector("#cp-cutwarn");
+    if (warn) {
+      const bad = [];
+      linkRows(d, links).forEach(r => r.forEach(l => { const cap = labelCap("phone", r.length); if (weigh(l.text) > cap) bad.push(`«${l.text}» (в ряду ${r.length}: влезает ≈${cap} знаков)`); }));
+      warn.innerHTML = bad.length ? `На телефоне обрежутся: ${bad.map(esc).join("; ")}. Сократите название или уменьшите «кнопок в ряд».` : "";
+    }
     const note = sheet.querySelector("#cp-pv-note");
     if (note) note.textContent = view === "phone" ? "Как в Telegram на телефоне: текст переносится чаще, длинные названия кнопок обрезаются." : "Как в Telegram на компьютере: кнопки шире, читаются полностью.";
     const st = sheet.querySelector("#cp-stats");
