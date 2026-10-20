@@ -718,18 +718,22 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .board-card:hover { transform: translateY(-2px); background: rgba(255, 255, 255, .055); border-color: rgba(255, 255, 255, .13); }
 .board-card.is-overdue { border-color: color-mix(in srgb, var(--s-stop) 35%, var(--line)); }
 .board-card::after { content: none; }
-.kc-pc { grid-row: 1 / 4; width: 42px; height: 58px; border-radius: 9px; object-fit: cover; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); background: var(--surface-3); }
+.kc-pc { grid-row: 1 / 4; align-self: center; width: 42px; height: 58px; border-radius: 9px; object-fit: cover; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); background: var(--surface-3); }
 .kc-pc-ph { display: grid; place-items: center; font-size: 13px; font-weight: 800; color: var(--ink-dim); }
 .kc-id { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board-card .ttl { margin: 0; font-size: 13px; font-weight: 700; line-height: 1.3; -webkit-line-clamp: 2; }
 .kc-sg { font-size: 11.5px; color: var(--ink-dim); line-height: 1.35; }
 .kc-sg .hot { color: var(--gold); font-weight: 700; }
 .board-card.is-overdue .kc-sg .hot { color: var(--s-stop); }
-.kc-ft { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--line); min-height: 32px; }
-.kc-ft .board-card-progress-track { flex: 1; height: 3px; margin: 0; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.kc-ft { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; margin-top: 9px; min-height: 22px; }
+.kc-ft .board-card-progress-track { flex: 1; height: 4px; margin: 0; background: rgba(255, 255, 255, .07); overflow: hidden; }
+.board-card[data-status="cancelled"] .kc-ft .board-card-progress-track i { background: var(--ink-dim) !important; opacity: .5; }
 .kc-ft .board-card-progress-track i { animation: none; box-shadow: none; }
 .kc-ft .board-card-progress-track i::after { display: none; }
-.kc-ft .avatar-bubble { width: 22px; height: 22px; font-size: 9.5px; border-width: 2px; }
+.kc-ft .avatar-stack { flex: none; }
+.kc-ft .avatar-bubble { width: 22px; height: 22px; font-size: 9.5px; border: 0; margin-left: -4px; box-shadow: 0 0 0 2px #15171c; }
+.kc-ft .avatar-bubble:first-child { margin-left: 0; }
+:root[data-theme="light"] .kc-ft .avatar-bubble { box-shadow: 0 0 0 2px #fff; }
 .kc-none { font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
 .kc-flag { position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--fire); box-shadow: 0 0 0 3px rgba(var(--fire-rgb), .18); }
 :root[data-theme="light"] .board-card { background: rgba(255, 255, 255, .75); }

@@ -190,9 +190,11 @@ export function boardCardHtml(c, status) {
   const poster = posterSrc(r.poster_url);
   const roles = r.pipeline_roles || [];
   const stage = roles.length && r.pipeline_stage != null ? roles[Math.min(r.pipeline_stage, roles.length - 1)] : cleanLabel(r.status_label) || "";
-  const pct = roles.length && r.pipeline_stage != null ? Math.round((r.pipeline_stage / roles.length) * 100) : STATUS_PROGRESS[status] ?? 6;
   // У закрытой серии срок уже не горит: «просрочено на 3 дн.» у «Завершено» только путает.
   const closed = status === "completed" || status === "cancelled";
+  // Завершённая — всегда полная полоска: этап конвейера мог так и остаться на «Звукаре».
+  const pct = status === "completed" ? 100
+    : roles.length && r.pipeline_stage != null ? Math.round((r.pipeline_stage / roles.length) * 100) : STATUS_PROGRESS[status] ?? 6;
   const overdue = c.overdue && !closed;
   const hotDue = !closed && (overdue || c.daysLeft === 0 || c.daysLeft === 1);
   return `
@@ -203,9 +205,9 @@ export function boardCardHtml(c, status) {
       ${poster ? `<img class="kc-pc" src="${poster}" alt="" loading="lazy">` : `<span class="kc-pc kc-pc-ph">${esc(initials(parts.name))}</span>`}
       <span class="kc-id">${esc(c.publicId)}${parts.ep ? ` · ${esc(parts.ep.replace("серия ", "EP "))}` : ""}</span>
       <b class="ttl">${esc(parts.name)}</b>
-      <span class="kc-sg">${stage ? `${esc(stage)} · ` : ""}<span class="${hotDue ? "hot" : ""}">${esc(closed ? (status === "completed" ? "закрыта" : "отменена") : deadlineLabel(c))}</span>${c.stale ? ` · без движения ${c.ageDays} дн.` : ""}</span>
+      <span class="kc-sg">${closed ? (status === "completed" ? "Завершена" : "Отменена") : `${stage ? `${esc(stage)} · ` : ""}<span class="${hotDue ? "hot" : ""}">${esc(deadlineLabel(c))}</span>`}${c.stale ? ` · без движения ${c.ageDays} дн.` : ""}</span>
       <span class="kc-ft">
-        <span class="board-card-progress-track"><i data-target-width="${pct}"></i></span>
+        <span class="board-card-progress-track" title="Готовность ${pct}%"><i data-target-width="${pct}"></i></span>
         ${c.unassigned ? `<span class="kc-none">не назначено</span>` : assigneesHtml(c.assignees)}
       </span>
     </div>`;
