@@ -5,7 +5,7 @@
 // общего «прочитано» для этого списка не ведёт.
 
 import { state } from "./state.js";
-import { apiGet } from "./api.js";
+import { apiGet, apiPost, toast } from "./api.js";
 import { $, esc, relTime } from "./utils.js";
 import { switchTab } from "./tabs.js";
 import { openReportDetail } from "./report-detail.js";
@@ -14,9 +14,9 @@ import { notifyDesktop, notifyKinds } from "./desktop-notify.js";
 
 const POLL_MS = 60_000;
 const FILTERS = [["all", "Все"], ["at", "Упоминания"], ["due", "Сроки"], ["work", "Работа"], ["chat", "Личные"]];
-const ICON = { work: "▶", due: "⏰", at: "@", chat: "✉", team: "🎂" };
+const ICON = { work: "▶", due: "⏰", at: "@", chat: "✉", team: "🎂", nyaa: "🧲" };
 const TITLE = { work: "по вашему отчёту", due: "срок", at: "упоминание", chat: "личное сообщение", team: "день рождения" };
-const COLOR = { work: "var(--fire)", due: "var(--s-stop)", at: "var(--gold)", chat: "var(--s-review)", team: "var(--s-done)" };
+const COLOR = { work: "var(--fire)", due: "var(--s-stop)", at: "var(--gold)", chat: "var(--s-review)", team: "var(--s-done)", nyaa: "var(--gold)" };
 
 let items = [];
 let filter = "all";
@@ -63,6 +63,7 @@ function textOf(it) {
   if (it.kind === "at") return `<b>${esc(it.actor)}</b> упомянул(а) вас · ${esc(it.where)}<span class="ib-q">${esc(it.text)}</span>`;
   if (it.kind === "chat") return `<b>${it.count}</b> ${it.count === 1 ? "новое сообщение" : "новых сообщения"} от <b>${esc(it.actor)}</b>`;
   if (it.kind === "team") return `День рождения у <b>${esc(it.actor)}</b> ${it.days === 0 ? "сегодня 🎉" : `через ${it.days} дн.`}`;
+  if (it.kind === "nyaa") return `<b>${esc(it.title)}</b>${it.episode ? ` · серия ${it.episode}` : ""} — ${esc(it.text)}`;
   return "";
 }
 
@@ -74,6 +75,7 @@ function plainOf(it) {
   if (it.kind === "at") return `${it.actor} упомянул(а) вас · ${it.where}: ${it.text}`;
   if (it.kind === "chat") return `${it.actor}: ${it.count === 1 ? "новое сообщение" : `новых сообщений — ${it.count}`}`;
   if (it.kind === "team") return `День рождения у ${it.actor} ${it.days === 0 ? "сегодня 🎉" : `через ${it.days} дн.`}`;
+  if (it.kind === "nyaa") return `${it.title}${it.episode ? ` · серия ${it.episode}` : ""}: ${it.text}`;
   return "";
 }
 
@@ -100,7 +102,7 @@ function paint() {
   const list = $("#ib-list"), badge = $("#ib-badge");
   if (!list) return;
   const st = readState();
-  const shown = items.filter(it => filter === "all" || it.kind === filter);
+  const shown = items.filter(it => filter === "all" || it.kind === filter || (filter === "work" && it.kind === "nyaa"));
   const unread = items.filter(it => !isRead(it, st)).length;
   badge.textContent = unread > 99 ? "99+" : String(unread);
   badge.hidden = !unread;
@@ -119,6 +121,15 @@ function paint() {
   shown.forEach(it => {
     const day = dayLabel(it.when);
     if (day !== last) { html += `<div class="ib-day">${esc(day)}</div>`; last = day; }
+    if (it.kind === "nyaa") {
+      // у уведомления о раздаче есть свои кнопки, поэтому это не кнопка целиком
+      html += `<div class="ib-it ib-nyaa${isRead(it, st) ? "" : " unread"}" data-ib-n="${esc(it.id)}" style="--c:${COLOR.nyaa}">
+        <span class="ib-ic">${ICON.nyaa}</span>
+        <span class="ib-t">${textOf(it)}<span class="ib-m">${esc(relTime(it.when))}</span>
+          <span class="ib-acts">${(it.actions || []).includes("retry") ? `<button type="button" class="btn" data-nyaa-act="retry" data-tid="${it.title_id}" data-ep="${it.episode}">🔄 Повторить поиск</button>` : ""}${(it.actions || []).includes("skip") ? `<button type="button" class="btn ghost" data-nyaa-act="skip" data-tid="${it.title_id}" data-ep="${it.episode}">⏭ Пропустить серию</button>` : ""}<button type="button" class="btn ghost" data-nyaa-act="read" data-id="${esc(it.id)}">Прочитано</button></span></span>
+      </div>`;
+      return;
+    }
     html += `<button type="button" class="ib-it${isRead(it, st) ? "" : " unread"}" data-ib="${esc(it.id)}" style="--c:${COLOR[it.kind] || "var(--fire)"}">
       <span class="ib-ic">${ICON[it.kind] || "•"}</span>
       <span class="ib-t">${textOf(it)}<span class="ib-m">${esc(relTime(it.when))}</span></span>
@@ -126,6 +137,24 @@ function paint() {
   });
   list.innerHTML = html;
   list.querySelectorAll("[data-ib]").forEach(b => b.addEventListener("click", () => open(items.find(x => x.id === b.dataset.ib))));
+  list.querySelectorAll("[data-nyaa-act]").forEach(b => b.addEventListener("click", async () => {
+    const act = b.dataset.nyaaAct;
+    if (act === "read") { markRead(b.dataset.id); paint(); return; }
+    b.disabled = true;
+    try {
+      if (act === "retry") {
+        const r = await apiPost(`/titles/${b.dataset.tid}/nyaa-retry`, {});
+        toast(r.found ? "Нашёл рав и отправил составу." : `Рав${r.group ? ` от «${r.group}»` : ""} пока не вышел. Поиск идёт сам.`, r.found ? "success" : undefined);
+      } else {
+        await apiPost(`/titles/${b.dataset.tid}/nyaa-skip`, { episode: Number(b.dataset.ep) });
+        toast(`Серия ${b.dataset.ep} пропущена, дальше — следующая.`);
+      }
+      refreshInbox();
+    } catch (err) {
+      b.disabled = false;
+      toast(err.message, "error");
+    }
+  }));
 }
 
 function open(it) {

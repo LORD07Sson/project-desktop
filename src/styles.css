@@ -5704,6 +5704,9 @@ body.focus-mode .report-detail-overlay .sheet {
 .tw-nyaa-pick .tw-g { grid-row: 1 / span 2; align-self: center; font: 700 11px var(--mono, monospace); color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tw-nyaa-pick b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tw-nyaa-pick small { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ib-nyaa { cursor: default; }
+.ib-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ib-acts .btn { height: 28px; padding: 0 10px; font-size: 12px; }
 .tw-crew-hint { font-size: 12px; color: var(--ink-dim); margin: 4px 0 6px; line-height: 1.45; }
 .tw-crew-hint:empty { display: none; }
 .tw-crew-hint .bad { color: #ff8a8a; }
