@@ -320,6 +320,8 @@ async function openSettings() {
     </div>
   `, "wide");
   overlay.querySelector(".sheet").classList.add("st-sheet");
+  // Крестик — первым: если какой-то обработчик ниже упадёт, окно всё равно можно закрыть.
+  overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
   overlay.querySelector("#s-theme").value = document.documentElement.dataset.theme || "dark";
   overlay.querySelector("#s-theme").addEventListener("change", e => applyTheme(e.target.value));
   overlay.querySelector("#s-density").value = currentDensity();
@@ -419,7 +421,9 @@ async function openSettings() {
   }
   refreshAlphaBlock(updateChannel);
 
-  overlay.querySelector("#s-open-admin").addEventListener("click", openAdminPanel);
+  // У участника плитки «Админ-панель» нет: без «?.» здесь падала вся настройка
+  // обработчиков ниже — не работали ни кнопки, ни даже крестик закрытия.
+  overlay.querySelector("#s-open-admin")?.addEventListener("click", openAdminPanel);
   // ---- Доступ для ИИ (MCP) ----
   const mcpBox = overlay.querySelector("#s-mcp-enable");
   if (mcpBox) {
@@ -448,7 +452,6 @@ async function openSettings() {
       toast(`Не удалось открыть папку с логами: ${err}`, "error");
     }
   });
-  overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
 
   // Плитки и сегменты — поверх тех же скрытых <select>, что и раньше:
   // обработчики выше не поменялись.
