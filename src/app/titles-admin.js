@@ -251,7 +251,8 @@ export function parseShikimoriId(input) {
 
 // ---------- Детальная карточка тайтла (состав, персонажи, серии) ----------
 
-export async function openTitleAdminDetail(titleId, onClose) {
+// section: "watermark" — открыть сразу на этом разделе (кнопка «Водяной знак» в карточке серии).
+export async function openTitleAdminDetail(titleId, onClose, section) {
   const overlay = openSheet(dialogSkeletonHtml(6), "wide");
   const sheet = overlay.querySelector(".sheet");
 
@@ -355,11 +356,11 @@ export async function openTitleAdminDetail(titleId, onClose) {
         </div>
       </div>
 
-      <div class="detail-section">
+      <div class="detail-section" id="ta-watermark">
         <h3>Водяной знак</h3>
         <div class="no-assignee" style="margin-bottom:8px;">Логотип (png, лучше с прозрачным фоном) накладывается на серию при сборке финала.</div>
         <div class="add-row" style="align-items:center; gap:10px;">
-          ${wm.has ? `<span style="background:repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 50% / 14px 14px; border-radius:6px; padding:4px;"><img src="${mediaUrl(`/titles/${titleId}/watermark/image`, { v: Date.now() })}" alt="" style="max-height:48px; max-width:120px; display:block;"></span><span class="meta">${esc(wm.name || "logo.png")}</span>` : `<span class="meta">Логотип не загружен</span>`}
+          ${wm.has ? `<span style="background:repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 50% / 14px 14px; border-radius:6px; padding:4px;"><img src="${mediaUrl(`/titles/${titleId}/watermark/image`, { v: Date.now() })}" alt="" style="max-height:48px; max-width:120px; display:block;"></span><span class="meta wm-fname" title="${esc(wm.name || "logo.png")}">${esc(wm.name || "logo.png")}</span>` : `<span class="meta">Логотип не загружен</span>`}
           <button class="btn" id="wm-pick">${wm.has ? "Заменить png" : "Загрузить png"}</button>
           ${wm.has ? `<button class="btn ghost" id="wm-trim" title="Если в png вокруг знака большой прозрачный кадр, двигать можно только весь кадр. Обрезка оставляет только рисунок — на видео он останется на том же месте и того же размера.">✂ Обрезать пустые поля</button><button class="btn ghost" id="wm-clear">Убрать</button>` : ""}
         </div>
@@ -711,5 +712,12 @@ export async function openTitleAdminDetail(titleId, onClose) {
   }
 
   await render();
+  if (section === "watermark") {
+    const sec = sheet.querySelector("#ta-watermark");
+    if (sec) {
+      sec.scrollIntoView({ block: "start", behavior: "smooth" });
+      sec.animate([{ boxShadow: "0 0 0 2px var(--fire)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1600, easing: "ease-out" });
+    }
+  }
 }
 

@@ -689,7 +689,7 @@ export async function openReportDetail(publicId) {
     sheet.querySelector("#report-post")?.addEventListener("click", () => {
       import("./channel-post.js").then(m => m.openChannelPostSheet());
     });
-    sheet.querySelector("#report-watermark")?.addEventListener("click", () => openTitleAdminDetail(detail.title_id));
+    sheet.querySelector("#report-watermark")?.addEventListener("click", () => openTitleAdminDetail(detail.title_id, undefined, "watermark"));
     // Сборка уже идёт (запущена раньше или с другого устройства) — карточка хода появится сама.
     if (sheet.querySelector("#report-assemble")) startAssemblyWatch(publicId, overlay, false);
     const startNyaa = async () => {

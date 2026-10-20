@@ -545,18 +545,18 @@ button.kd-tile:hover { transform: translateY(-2px); }
    ================================================================ */
 .overlay.report-detail-overlay .sheet {
   width: min(1080px, calc(100vw - 48px)); max-width: none; max-height: calc(100vh - var(--titlebar-h) - 32px);
-  border-radius: 26px; background: rgba(22, 17, 14, .94);
+  border-radius: 26px; background: var(--surface);   /* сплошной цвет темы: полупрозрачный пропускал текст списка, а зашитый коричневый не совпадал с палитрой «Небо»/«Мята»… */
   backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
   animation: kadr-pop .5s var(--kadr-ease) both;
 }
-:root[data-theme="light"] .overlay.report-detail-overlay .sheet { background: rgba(255, 252, 249, .96); }
+:root[data-theme="light"] .overlay.report-detail-overlay .sheet { background: var(--surface); }
 .rd-hero { padding: 26px 30px 18px; border-bottom: 0; isolation: isolate; }
 .rd-hero-bg { z-index: -2; opacity: .55; filter: blur(30px) saturate(1.2) brightness(.7); }
 .rd-hero-bg::after { background: none; }
 .rd-ban { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
 .rd-hero.no-ban .rd-ban { display: none; }
 .rd-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: linear-gradient(180deg, rgba(22, 17, 14, .3), rgba(22, 17, 14, .8) 62%, rgba(22, 17, 14, .97)), linear-gradient(90deg, rgba(22, 17, 14, .8), rgba(22, 17, 14, .1) 70%); }
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 30%, transparent), color-mix(in srgb, var(--surface) 80%, transparent) 62%, var(--surface)), linear-gradient(90deg, color-mix(in srgb, var(--surface) 80%, transparent), color-mix(in srgb, var(--surface) 10%, transparent) 70%); }
 :root[data-theme="light"] .rd-hero::after { background: linear-gradient(180deg, rgba(255, 252, 249, .25), rgba(255, 252, 249, .82) 62%, rgba(255, 252, 249, .98)), linear-gradient(90deg, rgba(255, 252, 249, .85), rgba(255, 252, 249, .1) 70%); }
 .rd-hero-in { align-items: flex-end; gap: 22px; padding-top: 56px; }
 .rd-poster { width: 104px; height: 144px; border-radius: 16px; box-shadow: 0 24px 40px -16px #000, 0 0 0 1px rgba(255, 255, 255, .12); }
@@ -578,6 +578,10 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-step.done { color: var(--ink-soft); }
 .rd-step.cur { color: var(--ink); background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent); }
 .rd-step i { width: 7px; height: 7px; }
+/* будущие этапы — пустой кружок, но в цвет своего статуса: серый контур на тёмном не было видно */
+.rd-step:not(.cur):not(.done) i { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 65%, transparent); }
+/* «Фокус» — текстовая кнопка среди иконок: ширина по тексту, иначе слово вылезало на кнопку ссылки */
+#btn-focus-toggle { width: auto; padding: 0 12px; font-size: 12px; font-weight: 700; }
 .rd-step-side { height: 32px; border-radius: 10px; margin-left: 8px; }
 :root[data-theme="light"] .rd-step { background: rgba(80, 40, 20, .05); }
 
@@ -813,7 +817,7 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .col-check input:checked::after, .row-check:checked::after { content: ""; width: 7px; height: 4px; border: 2px solid var(--on-accent); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
 :root[data-theme="light"] .col-check input, :root[data-theme="light"] .row-check { border-color: rgba(80, 40, 20, .3); }
 .row-actions .icon-btn { opacity: 0; transition: opacity .2s; }
-tr:hover .row-actions .icon-btn { opacity: 1; }
+tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacity: 1; }   /* с клавиатуры (Tab) кнопки тоже видны */
 .bulk-bar { position: sticky; bottom: 18px; margin: 16px auto; width: fit-content; padding: 8px 8px 8px 18px; border-radius: 16px; gap: 10px;
   background: var(--glass-bg-strong); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border); box-shadow: 0 20px 50px -20px #000; }
 .bulk-bar .spacer { display: none; }
@@ -3280,7 +3284,8 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 
 /* Автоматизация: вкладки переносятся на вторую строку вместо скрытой прокрутки (последняя вкладка «Логи» обрезалась). */
 .ar-tabs { flex-wrap: wrap; overflow: visible; }
-.ar-tabs button { flex: 1 1 auto; transition: background .18s, color .18s, transform .18s; }
+/* 8 вкладок с отступом 14px не влезали в раздел настроек (860px): «Логи» уезжали одни на вторую строку на всю ширину */
+.ar-tabs button { flex: 1 1 auto; padding: 9px 10px; gap: 6px; transition: background .18s, color .18s, transform .18s; }
 .ar-tabs button:active { transform: scale(.97); }
 
 /* Корзина: операции удаления сгруппированы. */
@@ -3440,3 +3445,18 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-theme="light"] .ny-tags i.sd-b { color: var(--s-review); }
 :root[data-theme="light"] .ny-tags i.sd-a { color: var(--s-work); }
 :root[data-theme="light"] .ny-tags i.have-i { color: var(--s-done); }
+
+/* Водяной знак тайтла: длинное имя файла — в одну строку с многоточием, кнопки не переносятся по словам */
+#ta-watermark .add-row { flex-wrap: wrap; }
+#ta-watermark .wm-fname { flex: 1 1 120px; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ta-watermark .add-row > .btn { flex: none; white-space: nowrap; }
+
+/* Переключатели «Своего профиля» сборки: чёрная подложка 25% на светлой теме давала грязно-серый блок */
+:root[data-theme="light"] .ar-seg { background: rgba(80, 40, 20, .06); }
+:root[data-theme="light"] .ar-seg button:hover { background: rgba(80, 40, 20, .05); }
+:root[data-theme="light"] .ar-seg button.on { background: var(--surface); box-shadow: 0 2px 8px -4px rgba(60, 25, 10, .3), inset 0 0 0 1px rgba(var(--fire-rgb), .4); }
+:root[data-theme="light"] .ar-tabs { background: rgba(80, 40, 20, .04); }
+:root[data-theme="light"] .ar-tabs button:hover { background: rgba(80, 40, 20, .05); }
+
+/* Активная вкладка своим фоном перекрывала кольцо фокуса — при навигации Tab было не видно, где фокус */
+#tabstrip > .tab-btn.active:focus-visible, #tabstrip.liquid > .tab-btn.active:focus-visible { box-shadow: inset 0 0 0 1.5px var(--fire); }
