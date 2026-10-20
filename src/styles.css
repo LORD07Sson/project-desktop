@@ -4274,7 +4274,7 @@ body.focus-mode .report-detail-overlay .sheet {
 .cp-block-head { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 32px); gap: 4px; align-items: center; }
 .cp-block-head .cp-in { font-weight: 700; }
 .cp-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 32px; gap: 6px; align-items: center; }
-.cp-line-link { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) 32px; }
+.cp-line-link { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) repeat(4, 32px); }
 .cp-in-link { color: var(--s-review); }
 .cp-block-add { display: flex; gap: 6px; align-items: center; }
 .cp-person-pick { max-width: 260px; }
@@ -6037,3 +6037,13 @@ body.focus-mode .report-detail-overlay .sheet {
 .cp-pv-text blockquote { margin: 4px 0; padding: 2px 8px; border-left: 3px solid #6ab3f3; }
 .cp-pv-buttons { grid-template-columns: minmax(0, 1fr); width: 100%; box-sizing: border-box; }
 .cp-pv-row { min-width: 0; }
+
+/* Предпросмотр кнопок: на телефоне — крупные кнопки Android, на компьютере — компактные, как в Telegram Desktop; значок ссылки ↗ в углу */
+.cp-pv-buttons span { position: relative; }
+.cp-pv-buttons span::after { content: "↗"; position: absolute; top: 2px; right: 6px; font-size: 9px; opacity: .55; font-weight: 400; }
+.cp-preview[data-view="phone"] .cp-pv-buttons { gap: 4px; }
+.cp-preview[data-view="phone"] .cp-pv-row { gap: 4px; }
+.cp-preview[data-view="phone"] .cp-pv-buttons span { font-size: 14.5px; font-weight: 500; line-height: 42px; padding: 0 12px; border-radius: 12px; background: rgba(34, 50, 66, .9); }
+.cp-preview[data-view="pc"] .cp-pv-buttons { gap: 3px; }
+.cp-preview[data-view="pc"] .cp-pv-row { gap: 3px; }
+.cp-preview[data-view="pc"] .cp-pv-buttons span { font-size: 12.5px; font-weight: 500; line-height: 28px; padding: 0 8px; border-radius: 6px; background: rgba(40, 56, 72, .85); }
