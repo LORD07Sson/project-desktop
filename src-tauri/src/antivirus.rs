@@ -313,6 +313,19 @@ fn detection_id(kind: &str, key: &str) -> String {
     hex(&h.finalize())[..16].to_string()
 }
 
+/// Строка внутри '…' для PowerShell. Кавычкой PowerShell считает не только ', но и типографские ‘ ’ ‚ ‛ —
+/// без их удвоения имя файла вроде «x’; calc; ’.exe» вышло бы из строки и выполнилось как команда.
+pub(crate) fn ps_quote(v: &str) -> String {
+    let mut out = String::with_capacity(v.len() + 2);
+    for c in v.chars() {
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            out.push(c);
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// PowerShell без окна, вывод в UTF-8. На не-Windows возвращает ошибку (проверка процессов и реестра только для Windows).
 fn powershell(script: &str) -> Result<String, String> {
     #[cfg(windows)]
@@ -1022,7 +1035,7 @@ fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String], all_files: bool
         let _ = fs::remove_file(dir.join(f));
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let q = |v: &str| v.replace('\'', "''");
+    let q = |v: &str| ps_quote(v);
     let mut args = vec![
         "'--av-scan'".to_string(),
         format!("'{}'", q(mode)),
@@ -1335,7 +1348,7 @@ pub async fn av_remove_autorun(hive: String, value: String) -> Result<(), String
     if hive != "HKCU" && hive != "HKLM" {
         return Err("Неизвестный раздел реестра".into());
     }
-    let name = value.replace('\'', "''");
+    let name = ps_quote(&value);
     let script = format!(
         "foreach($k in 'Run','RunOnce'){{ $p='{hive}:\\Software\\Microsoft\\Windows\\CurrentVersion\\'+$k; if(Get-ItemProperty -Path $p -Name '{name}' -ErrorAction SilentlyContinue){{ Remove-ItemProperty -Path $p -Name '{name}' -ErrorAction Stop; 'ok' }} }}"
     );
@@ -1350,7 +1363,7 @@ pub async fn av_remove_autorun(hive: String, value: String) -> Result<(), String
 /// Убрать исключение Защитника Windows (нужны права администратора).
 #[tauri::command(async)]
 pub async fn av_remove_defender_exclusion(path: String) -> Result<(), String> {
-    let p = path.replace('\'', "''");
+    let p = ps_quote(&path);
     let out = powershell(&format!(
         "try {{ Remove-MpPreference -ExclusionPath '{p}' -ErrorAction Stop; Remove-MpPreference -ExclusionProcess '{p}' -ErrorAction SilentlyContinue; 'ok' }} catch {{ 'fail' }}"
     ))?;

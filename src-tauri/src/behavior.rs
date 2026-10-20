@@ -390,7 +390,7 @@ fn powershell(script: &str) -> Option<String> {
 
 /// Подписан ли файл действительной подписью Authenticode.
 fn is_signed(path: &str) -> bool {
-    let p = path.replace('\'', "''");
+    let p = crate::antivirus::ps_quote(path);
     powershell(&format!("(Get-AuthenticodeSignature -LiteralPath '{p}').Status"))
         .map(|s| s.trim() == "Valid")
         .unwrap_or(true) // не смогли проверить — не обвиняем

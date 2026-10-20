@@ -255,7 +255,7 @@ fn debug_port_set(enabled: bool) -> Result<(), String> {
 fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let script = format!("Start-Sleep -Seconds 2; Start-Process -FilePath '{}'", exe.to_string_lossy().replace('\'', "''"));
+    let script = format!("Start-Sleep -Seconds 2; Start-Process -FilePath '{}'", antivirus::ps_quote(&exe.to_string_lossy()));
     std::process::Command::new("powershell")
         .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
         .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
