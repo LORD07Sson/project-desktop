@@ -699,7 +699,10 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .board-col-head .lb { order: 0; font-size: 13px; font-weight: 800; color: var(--ink); gap: 9px; }
 .board-col-head .lb .dot { width: 8px; height: 8px; background: var(--col-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--col-accent) 16%, transparent); }
 .board-col-head .cnt { order: 1; font-size: 12px; font-weight: 700; color: var(--ink-dim); background: none; padding: 0; }
-.board-col-head .board-col-collapse { order: 2; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; }
+.board-col-head .board-col-collapse { order: 2; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; padding: 0; color: var(--ink-soft); }
+/* ореол точки (box-shadow 4px) не должен срезаться overflow:hidden подписи */
+.board-col-head .lb { padding: 4px 0 4px 4px; margin: -4px 0 -4px -4px; }
+.board-col.collapsed .board-col-head .lb { padding: 0; margin: 0; }
 .board-col-head .board-col-collapse:hover { background: rgba(255, 255, 255, .07); }
 .board-col.collapsed { width: 48px; padding: 12px 6px; }
 .board-col.collapsed .board-col-head .lb .dot { box-shadow: none; }
