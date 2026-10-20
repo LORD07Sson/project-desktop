@@ -45,6 +45,11 @@ async function connect(targetIndex = 0) {
       const text = msg.params.args.map(a => a.value ?? a.description ?? "").join(" ");
       consoleLog.push(`[${msg.params.type}] ${text}`);
       if (consoleLog.length > CONSOLE_MAX) consoleLog.shift();
+    } else if (msg.method === "Fetch.requestPaused") {
+      onRequestPaused(msg.params).catch(e => {
+        consoleLog.push(`[sandbox] ${e.message}`);
+        cdp("Fetch.continueRequest", { requestId: msg.params.requestId }).catch(() => {});
+      });
     } else if (msg.method === "Runtime.exceptionThrown") {
       consoleLog.push(`[exception] ${msg.params.exceptionDetails?.exception?.description || msg.params.exceptionDetails?.text}`);
     }
@@ -52,6 +57,8 @@ async function connect(targetIndex = 0) {
   ws.onclose = () => { ws = null; };
   await cdp("Runtime.enable");
   await cdp("Page.enable");
+  // Новое подключение — новый CDP-сеанс: перехват прошлого сеанса браузер уже снял.
+  if (sandbox.on) await applySandbox();
 }
 
 function cdp(method, params = {}) {
@@ -111,7 +118,7 @@ const CENTER_FN = `function (ref, selector, text) {
       .filter(e => (e.innerText || "").trim() === text && e.getBoundingClientRect().width > 0)
       .sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length)[0] || null;
   }
-  if (!el) return null;
+  if (!el || !el.getClientRects().length) return null;
   el.scrollIntoView({ block: "center", inline: "center" });
   const r = el.getBoundingClientRect();
   return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
@@ -119,7 +126,7 @@ const CENTER_FN = `function (ref, selector, text) {
 
 async function centerOf(args) {
   const pos = await callInPage(CENTER_FN, args.ref ?? null, args.selector ?? null, args.text ?? "");
-  if (!pos) throw new Error("Элемент не найден (ref/selector/text). Сначала desktop_snapshot.");
+  if (!pos) throw new Error("Элемент не найден или скрыт (ref/selector/text). Сначала desktop_snapshot.");
   return pos;
 }
 
@@ -135,6 +142,146 @@ async function press(key, modifiers = 0) {
   const base = { key: key === "Space" ? " " : key, windowsVirtualKeyCode: code || key.toUpperCase().charCodeAt(0), modifiers };
   await cdp("Input.dispatchKeyEvent", { type: "keyDown", ...base });
   await cdp("Input.dispatchKeyEvent", { type: "keyUp", ...base });
+}
+
+// ---------- песочница: подмена ответов API ----------
+// Перехват идёт через CDP Fetch в этом же WebSocket-сеансе. Закрылся сеанс (агент отключился,
+// сервер упал) — браузер сам снимает перехват, программа снова ходит на сервер как обычно.
+// Пока песочница включена, НИ ОДИН изменяющий запрос (POST/PUT/PATCH/DELETE) не уходит на сервер:
+// он получает выдуманный ответ {ok:true} и попадает в журнал writes.
+const sandbox = { on: false, role: "as-is", mocks: [], writes: [], bannerId: null, nextMock: 1 };
+const WRITES_MAX = 100;
+
+const BANNER_JS = role => `(() => {
+  const mount = () => {
+    let b = document.getElementById("ai-sandbox-banner");
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "ai-sandbox-banner";
+      b.style.cssText = "position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:2147483647;pointer-events:none;" +
+        "padding:5px 12px;border-radius:99px;font:600 11px/1.3 system-ui,sans-serif;color:#1a1200;background:#ffc94d;box-shadow:0 4px 14px rgba(0,0,0,.35)";
+      document.documentElement.append(b);
+    }
+    b.textContent = "Песочница ИИ: данные подменены, изменения не сохраняются" + (${JSON.stringify(role)} !== "as-is" ? " · роль: " + ${JSON.stringify(role)} : "");
+  };
+  document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", mount) : mount();
+})()`;
+
+// Роль: правим ответы, по которым программа решает, что показывать (auth.js, settings.js).
+const ROLES = {
+  "as-is": null,
+  owner: { whoami: { is_admin: true }, perms: { is_owner: true } },
+  admin: { whoami: { is_admin: true }, perms: { is_owner: false }, me: { is_developer: false } },
+  member: { whoami: { is_admin: false, nyaa_access: false }, perms: { is_owner: false, permissions: [] }, me: { is_developer: false } },
+};
+
+function apiPath(url) {
+  const u = new URL(url);
+  if (u.hostname.endsWith(".localhost") || u.hostname === "localhost") return null;
+  const i = u.pathname.indexOf("/api/");
+  return i < 0 ? null : u.pathname.slice(i + 4) + u.search;
+}
+
+function corsHeaders(request) {
+  const origin = request.headers?.Origin || request.headers?.origin || "*";
+  return [
+    { name: "Content-Type", value: "application/json; charset=utf-8" },
+    { name: "Access-Control-Allow-Origin", value: origin },
+    { name: "Access-Control-Allow-Credentials", value: "true" },
+    { name: "Access-Control-Allow-Headers", value: "*" },
+    { name: "Access-Control-Allow-Methods", value: "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
+  ];
+}
+
+function fulfillJson(requestId, request, data, status = 200) {
+  const body = Buffer.from(typeof data === "string" ? data : JSON.stringify(data)).toString("base64");
+  return cdp("Fetch.fulfillRequest", { requestId, responseCode: status, responseHeaders: corsHeaders(request), body });
+}
+
+function findMock(method, path) {
+  // Последний добавленный — главный: так можно сузить общий мок частным.
+  for (let i = sandbox.mocks.length - 1; i >= 0; i--) {
+    const m = sandbox.mocks[i];
+    if ((m.method === "*" || m.method === method) && m.re.test(path)) return m;
+  }
+  return null;
+}
+
+function roleTransform(path) {
+  const r = ROLES[sandbox.role];
+  if (!r) return null;
+  const p = path.split("?")[0];
+  const patch = p === "/whoami" ? r.whoami : p === "/me/permissions" ? r.perms : p === "/me" ? r.me : null;
+  return patch ? data => ({ ...data, ...patch }) : null;
+}
+
+async function onRequestPaused(ev) {
+  const { requestId, request } = ev;
+  const path = apiPath(request.url);
+  if (path == null) return cdp("Fetch.continueRequest", { requestId });
+  const method = request.method;
+
+  // Стадия ответа: настоящий ответ сервера пришёл, применяем роль и transform-моки.
+  if (ev.responseStatusCode != null) {
+    const raw = await cdp("Fetch.getResponseBody", { requestId });
+    const text = raw.base64Encoded ? Buffer.from(raw.body, "base64").toString("utf8") : raw.body;
+    let data;
+    // Ошибки сервера (401, 404, 500) отдаём как есть: подмена нужна для данных, а не для текста ошибки.
+    if (ev.responseStatusCode >= 400) return cdp("Fetch.continueRequest", { requestId });
+    try { data = JSON.parse(text); } catch (_) { return cdp("Fetch.continueRequest", { requestId }); }
+    const role = roleTransform(path);
+    if (role) data = role(data);
+    const m = findMock(method, path);
+    if (m?.transform) data = await m.transform(data, path);
+    return fulfillJson(requestId, request, data, ev.responseStatusCode);
+  }
+
+  if (method === "OPTIONS") {
+    return cdp("Fetch.fulfillRequest", { requestId, responseCode: 204, responseHeaders: corsHeaders(request) });
+  }
+  const m = findMock(method, path);
+  if (m && m.json !== undefined) {
+    m.hits++;
+    return fulfillJson(requestId, request, m.json, m.status);
+  }
+  if (method !== "GET" && method !== "HEAD") {
+    sandbox.writes.push({ at: new Date().toISOString().slice(11, 19), method, path, body: (request.postData || "").slice(0, 500) });
+    if (sandbox.writes.length > WRITES_MAX) sandbox.writes.shift();
+    return fulfillJson(requestId, request, { ok: true, sandbox: true });
+  }
+  if (m?.transform || roleTransform(path)) {
+    if (m) m.hits++;
+    return cdp("Fetch.continueRequest", { requestId, interceptResponse: true });
+  }
+  return cdp("Fetch.continueRequest", { requestId });
+}
+
+async function applySandbox() {
+  await cdp("Fetch.enable", { patterns: [{ urlPattern: "*/api/*", requestStage: "Request" }] });
+  const js = BANNER_JS(sandbox.role);
+  if (sandbox.bannerId) await cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier: sandbox.bannerId }).catch(() => {});
+  sandbox.bannerId = (await cdp("Page.addScriptToEvaluateOnNewDocument", { source: js })).identifier;
+  await evaluate(js);
+}
+
+async function dropSandbox() {
+  await cdp("Fetch.disable").catch(() => {});
+  if (sandbox.bannerId) await cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier: sandbox.bannerId }).catch(() => {});
+  sandbox.bannerId = null;
+  await evaluate(`document.getElementById("ai-sandbox-banner")?.remove()`).catch(() => {});
+}
+
+function sandboxStatus() {
+  return JSON.stringify({
+    on: sandbox.on, role: sandbox.role,
+    mocks: sandbox.mocks.map(m => ({ id: m.id, method: m.method, pattern: m.re.source, kind: m.json !== undefined ? "json" : "transform", hits: m.hits })),
+    writes: sandbox.writes.slice(-20),
+  }, null, 1);
+}
+
+async function reloadPage() {
+  await cdp("Page.reload", { ignoreCache: false });
+  await new Promise(r => setTimeout(r, 1500));
 }
 
 const TOOLS = {
@@ -202,6 +349,82 @@ const TOOLS = {
     description: "Последние сообщения консоли и необработанные ошибки программы (копятся с момента первого подключения).",
     schema: { type: "object", properties: { clear: { type: "boolean" } } },
     run: async args => { await connect(args.window || 0); const out = consoleLog.join("\n") || "(пусто)"; if (args.clear) consoleLog.length = 0; return out; },
+  },  desktop_sandbox: {
+    description: "Песочница: подмена данных без похода на сервер. on: true — все изменяющие запросы (POST/PUT/PATCH/DELETE) " +
+      "перестают уходить на сервер и получают {ok:true}, внизу окна плашка «Песочница ИИ». role: as-is | owner | admin | member — " +
+      "смотреть программу глазами роли. reload (по умолчанию true при смене on/role) перезагружает страницу. " +
+      "Без аргументов — состояние, моки и журнал перехваченных изменений (writes): так видно, какой запрос отправила бы кнопка. " +
+      "Отключение агента снимает песочницу само.",
+    schema: { type: "object", properties: { on: { type: "boolean" }, role: { type: "string", enum: Object.keys(ROLES) }, reload: { type: "boolean" }, clear_writes: { type: "boolean" } } },
+    run: async args => {
+      await connect(args.window || 0);
+      let changed = false;
+      if (args.role && args.role !== sandbox.role) { sandbox.role = args.role; changed = true; }
+      if (args.on != null && args.on !== sandbox.on) { sandbox.on = args.on; changed = true; }
+      if (args.role && args.role !== "as-is" && !sandbox.on) { sandbox.on = true; changed = true; }
+      if (args.clear_writes) sandbox.writes.length = 0;
+      if (changed) {
+        if (sandbox.on) await applySandbox();
+        else { await dropSandbox(); sandbox.mocks.length = 0; sandbox.role = "as-is"; sandbox.writes.length = 0; }
+        if (args.reload !== false) await reloadPage();
+      }
+      return sandboxStatus();
+    },
+  },
+  desktop_mock: {
+    description: "Подменить ответ API (включает песочницу). pattern — регулярка по пути после /api (например ^/board, ^/reports\\?). " +
+      "Либо json — готовый ответ целиком, либо transform — JS-функция (data, path) => новый data (или просто её тело), " +
+      "применяется к НАСТОЯЩЕМУ ответу сервера: размножить карточки, удлинить названия, сдвинуть сроки, обнулить списки. " +
+      "method по умолчанию GET, \"*\" — любой. Новые моки главнее старых. reload: true — перезагрузить страницу.",
+    schema: { type: "object", properties: {
+      pattern: { type: "string" }, method: { type: "string" }, json: {}, transform: { type: "string" },
+      status: { type: "number" }, reload: { type: "boolean" } }, required: ["pattern"] },
+    run: async args => {
+      await connect(args.window || 0);
+      if ((args.json === undefined) === (args.transform === undefined)) throw new Error("Нужно ровно одно из: json или transform");
+      const m = { id: sandbox.nextMock++, method: (args.method || "GET").toUpperCase(), re: new RegExp(args.pattern), status: args.status || 200, hits: 0 };
+      if (args.json !== undefined) m.json = args.json;
+      else {
+        const body = args.transform.trim();
+        // Принимаем и функцию целиком, и просто её тело.
+        m.transform = /^(\(|async\b|function\b|[\w$]+\s*=>)/.test(body) ? new Function(`return (${body});`)() : new Function("data", "path", body);
+      }
+      sandbox.mocks.push(m);
+      if (!sandbox.on) { sandbox.on = true; await applySandbox(); }
+      if (args.reload) await reloadPage();
+      return sandboxStatus();
+    },
+  },
+  desktop_mock_clear: {
+    description: "Убрать мок по id (из desktop_sandbox) или все моки, если id не указан. Песочница остаётся включённой.",
+    schema: { type: "object", properties: { id: { type: "number" }, reload: { type: "boolean" } } },
+    run: async args => {
+      await connect(args.window || 0);
+      if (args.id == null) sandbox.mocks.length = 0;
+      else sandbox.mocks = sandbox.mocks.filter(m => m.id !== args.id);
+      if (args.reload) await reloadPage();
+      return sandboxStatus();
+    },
+  },
+  desktop_viewport: {
+    description: "Эмулировать размер окна (width×height в CSS-пикселях), чтобы проверить узкие и широкие раскладки. reset: true — вернуть настоящий размер.",
+    schema: { type: "object", properties: { width: { type: "number" }, height: { type: "number" }, reset: { type: "boolean" } } },
+    run: async args => {
+      await connect(args.window || 0);
+      if (args.reset || !args.width) { await cdp("Emulation.clearDeviceMetricsOverride"); return "Размер сброшен"; }
+      const [, h] = await evaluate("[innerWidth, innerHeight]");
+      await cdp("Emulation.setDeviceMetricsOverride", { width: args.width, height: args.height || h, deviceScaleFactor: 0, mobile: false });
+      return `Окно ${args.width}×${args.height || h}`;
+    },
+  },
+  desktop_theme: {
+    description: "Временно переключить тему окна (light | dark) без сохранения в настройках — чтобы проверить обе.",
+    schema: { type: "object", properties: { theme: { type: "string", enum: ["light", "dark"] } }, required: ["theme"] },
+    run: async args => {
+      await connect(args.window || 0);
+      await callInPage("function (t) { document.documentElement.dataset.theme = t; }", args.theme);
+      return `Тема ${args.theme} (до перезагрузки)`;
+    },
   },
 };
 
@@ -231,6 +454,12 @@ async function handle(msg) {
   }
   if (id != null) send({ jsonrpc: "2.0", id, error: { code: -32601, message: `Метод ${method} не поддерживается` } });
 }
+
+// Агент отключился штатно — снимаем плашку песочницы (перехват браузер снимет сам вместе с сеансом).
+process.stdin.on("end", async () => {
+  if (sandbox.on && ws) await dropSandbox().catch(() => {});
+  process.exit(0);
+});
 
 let buf = "";
 process.stdin.setEncoding("utf8");
