@@ -1567,6 +1567,16 @@ async function onClick(e) {
 // Картинка не открылась → следующий запасной адрес; адреса кончились → заглушка с инициалами.
 document.addEventListener("error", async e => {
   const im = e.target;
+  // Скриншоты в превью витрины: один повтор через несколько секунд (сервер мог на миг не достучаться
+  // до Steam), не вышло — убираем кадр, а не оставляем рамку со значком «битой» картинки.
+  if (im && im.tagName === "IMG" && im.parentElement && im.parentElement.classList.contains("gm-tp-shots")) {
+    if (im.dataset.shotRetry !== "1") {
+      im.dataset.shotRetry = "1";
+      const src = im.src;
+      setTimeout(() => { if (im.isConnected) { im.src = ""; im.src = src; } }, 4000);
+    } else im.remove();
+    return;
+  }
   if (!im || im.tagName !== "IMG" || !im.dataset || !im.dataset.id || !im.closest("#games-screen, .gm-ov")) return;
   const list = imageCandidates(im.dataset.id, im.dataset.p);
   const current = Number(im.dataset.n || 0);
