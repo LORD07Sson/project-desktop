@@ -3329,7 +3329,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { width: 176px; }
 /* На широком экране колонки тянутся до края (раньше справа оставалась треть пустоты, а названия переносились), пустые — вполовину */
 .board-col:not(.collapsed) { flex: 1 0 268px; max-width: 440px; }
-.board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { flex: .45 0 176px; max-width: 260px; }
+.board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { flex: .45 0 192px; max-width: 260px; }   /* 192 — влезает «Перезапись 0» со счётчиком и кнопкой свернуть */
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) .board-col-empty { font-size: 12px; opacity: .6; }
 
 /* Обзор: при одной-двух сериях «плёнка» не занимает полэкрана — карточки компактные. */
@@ -3363,7 +3363,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 
 /* Доска: в узкой пустой колонке длинное название («Перезапись/дозапись») переносится на вторую строку, а не обрезается. */
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { width: 176px; }
-@media (max-width: 1500px) { .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) .board-col-head .lb { white-space: normal; line-height: 1.15; overflow: visible; } }   /* узкое окно: пустые колонки узкие — название в две строки */
+/* названия колонок однословные («Перезапись/дозапись» → «Перезапись», полное — в подсказке), перенос не нужен */
 
 /* Профиль: нижний край шапки плавно растворяется, а не режет карточку резкой линией (найдено на живом окне). */
 .pf-banner { -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent 100%); mask-image: linear-gradient(180deg, #000 30%, transparent 100%); }

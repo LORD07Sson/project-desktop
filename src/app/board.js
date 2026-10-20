@@ -480,7 +480,7 @@ function columnHtml(col, collapsed) {
     <div class="board-col ${collapsed.has(col.status) ? "collapsed" : ""}${col.overWip ? " over-wip" : ""}"
          data-status="${esc(col.status)}" style="--col-accent: var(${colorVar});">
       <div class="board-col-head">
-        <span class="lb"><span class="dot ${STATUS_DOT_CLASS[col.status] || "draft"}"></span>${esc(cleanLabel(col.label))}</span>
+        <span class="lb" title="${esc(cleanLabel(col.label))}"><span class="dot ${STATUS_DOT_CLASS[col.status] || "draft"}"></span>${esc(cleanLabel(col.label).split("/")[0])}</span>
         <span class="cnt${col.overWip ? " over" : ""}" title="${col.overWip ? `Больше ${col.wipLimit} в работе одновременно — многовато` : "Всего в статусе"}">${col.total}${col.overWip ? ` / ${col.wipLimit}` : ""}</span>
         <button class="board-col-collapse" data-collapse="${esc(col.status)}" title="Свернуть/развернуть колонку">‹</button>
       </div>
