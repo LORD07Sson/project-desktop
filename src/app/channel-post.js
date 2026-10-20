@@ -193,7 +193,7 @@ export async function openChannelPostSheet(openId = null) {
       <section class="cp-sec">
         <label class="cp-label" for="cp-title">Заголовок</label>
         <textarea id="cp-title" rows="2" placeholder="Например: Фрирен 2 — 7 серия в озвучке Project">${esc(d.title)}</textarea>
-        <div class="cp-hint">Жирным выделится сам. Внутри можно &lt;i&gt;, &lt;u&gt;, &lt;tg-spoiler&gt;, &lt;a href="…"&gt;.</div>
+        <div class="cp-hint">Обычным текстом (жирным — галочка «Заголовок жирным» ниже). Внутри можно &lt;i&gt;, &lt;u&gt;, &lt;tg-spoiler&gt;, &lt;a href="…"&gt;.</div>
       </section>
 
       <section class="cp-sec">
@@ -242,6 +242,7 @@ export async function openChannelPostSheet(openId = null) {
 
       <section class="cp-sec">
         <div class="cp-label">Вид и подпись</div>
+        <label class="cp-check"><input type="checkbox" id="cp-bold"${d.bold ? " checked" : ""}> Заголовок жирным</label>
         <label class="cp-check"><input type="checkbox" id="cp-inline"${d.inline ? " checked" : ""}> Люди в строку, как в постах канала: «🎙 Роли озвучивали: Имя, Имя»</label>
         <label class="cp-label cp-sub" for="cp-footer">Подпись под блоками</label>
         <textarea id="cp-footer" rows="2" placeholder="Например: Всем приятного просмотра!">${esc(d.footer || "")}</textarea>
@@ -251,6 +252,7 @@ export async function openChannelPostSheet(openId = null) {
 
       <section class="cp-sec">
         <div class="cp-label">Кнопки под постом <span>${d.links.length} / ${meta.limits.links}</span></div>
+        <label class="cp-check cp-perrow">Кнопок в ряд: <select id="cp-perrow" aria-label="Кнопок в ряд">${[1, 2, 3, 4].map(n => `<option value="${n}"${(d.per_row || 2) === n ? " selected" : ""}>${n}</option>`).join("")}</select><span class="cp-hint">меньше места на кнопку, но больше кнопок на экране; высоту Telegram не меняет</span></label>
         ${d.links.map((l, i) => `
           <div class="cp-line cp-line-link">
             <input class="cp-in" data-cp-link="${i}:text" value="${esc(l.text)}" placeholder="Текст кнопки" aria-label="Текст кнопки">
@@ -328,6 +330,8 @@ export async function openChannelPostSheet(openId = null) {
     }));
     ed.querySelectorAll("[data-cp-kdel]").forEach(b => b.addEventListener("click", () => structural(x => x.links.splice(+b.dataset.cpKdel, 1))));
     ed.querySelector("#cp-inline")?.addEventListener("change", e => { d.inline = e.target.checked; scheduleSave(); });
+    ed.querySelector("#cp-bold")?.addEventListener("change", e => { d.bold = e.target.checked; scheduleSave(); });
+    ed.querySelector("#cp-perrow")?.addEventListener("change", e => { d.per_row = Number(e.target.value) || 2; scheduleSave(); renderPreview(); });
     ed.querySelector("#cp-footer")?.addEventListener("input", e => { d.footer = e.target.value; scheduleSave(); });
     ed.querySelector("#cp-tags")?.addEventListener("input", e => { d.tags = e.target.value; scheduleSave(); });
     ed.querySelectorAll("[data-cp-cover]").forEach(b => b.addEventListener("click", () => openCoverPicker(+b.dataset.cpCover)));
@@ -420,7 +424,7 @@ export async function openChannelPostSheet(openId = null) {
         <div class="cp-pv-text">${text}</div>
         <div class="cp-pv-meta">${post.published_at ? "опубликовано" : "черновик"}</div>
       </div>
-      ${links.length ? `<div class="cp-pv-buttons">${links.map(l => `<span>${esc(l.text)}</span>`).join("")}</div>` : ""}`;
+      ${links.length ? `<div class="cp-pv-buttons">${(rows => rows.map(r => `<div class="cp-pv-row">${r.map(l => `<span>${esc(l.text)}</span>`).join("")}</div>`).join(""))(links.reduce((acc, l, i) => { const n = d.per_row || 2; if (i % n === 0) acc.push([]); acc[acc.length - 1].push(l); return acc; }, []))}</div>` : ""}`;
     const st = sheet.querySelector("#cp-stats");
     st.innerHTML = `
       <span>${post.plain_length} симв.</span>
