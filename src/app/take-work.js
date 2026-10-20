@@ -81,6 +81,9 @@ export async function openTakeWork(titleId, onDone) {
   const work = plan.work && plan.work.active ? plan.work : null;
   let nyaaCandidates = [];
   let selectedSource = null;
+  // «запомненный рав»: группа и приметы выбранной раздачи; следующие серии подбираются такими же
+  let pattern = work && work.nyaa_group ? { group: work.nyaa_group, tags: (work.nyaa_tags || "").split(" ").filter(Boolean), ref: work.nyaa_ref || "" } : null;
+  let browseItems = [];
   const crew = plan.crew.length ? plan.crew : DEFAULT_ROLES.map(role => ({ role, telegram_id: null }));
   const hours = work ? work.deadline_hours : plan.deadline_hours_default;
   const priority = work ? work.priority : "high";
@@ -123,6 +126,10 @@ export async function openTakeWork(titleId, onDone) {
           <input type="checkbox" data-nyaa${!work || work.nyaa_enabled ? " checked" : ""}>
           <span><b>Автоматически отправлять раздачи с Nyaa</b><small>Когда выйдет новая серия, бот пришлёт .torrent назначенным участникам. Ссылку можно выбрать и отправить вручную ниже.</small></span>
         </label>
+        <div class="tw-pick">
+          <button type="button" class="btn" data-nyaa-browse>📚 Выбрать раздачу в каталоге Nyaa</button>
+          <div class="tw-pattern" data-pattern></div>
+        </div>
         <div class="tw-nyaa-q">
           <input data-nyaa-q autocomplete="off" value="${esc((work && work.nyaa_query) || plan.nyaa_query_default || "")}" placeholder="Название или ссылка Nyaa" maxlength="240">
           <label class="tw-nyaa-episode"><span>Серия</span><input data-nyaa-episode type="number" min="1" max="9999" step="1" value="${plan.episodes_aired || plan.next_episode || 1}"></label>
@@ -211,6 +218,56 @@ export async function openTakeWork(titleId, onDone) {
     nyaaRes.querySelectorAll("[data-nyaa-pick]").forEach(b => { const active = b === choice; b.classList.toggle("selected", active); b.setAttribute("aria-pressed", String(active)); });
     nyaaSendNote.textContent = selectedSource ? `Раздача для серии ${sheet.querySelector("[data-nyaa-episode]").value} уйдёт назначенному составу при сохранении.` : "";
   });
+  const patternBox = sheet.querySelector("[data-pattern]");
+  const paintPattern = () => {
+    patternBox.innerHTML = pattern
+      ? `<span class="tw-pattern-on">Запомнено: <b>${esc(pattern.group || "любая группа")}</b>${pattern.tags.length ? ` · ${esc(pattern.tags.slice(0, 5).join(" · "))}` : ""}</span><small title="${esc(pattern.ref || "")}">${esc((pattern.ref || "").slice(0, 90))}</small><button type="button" class="tw-pattern-x" data-pattern-clear title="Забыть выбор">✕ забыть</button>`
+      : `<small>Раздача не выбрана: следующие серии подбираются по названию и качеству.</small>`;
+  };
+  paintPattern();
+  patternBox.addEventListener("click", e => { if (e.target.closest("[data-pattern-clear]")) { pattern = null; paintPattern(); } });
+  sheet.querySelector("[data-nyaa-browse]").addEventListener("click", async e => {
+    const btn = e.target.closest("button");
+    btn.disabled = true;
+    clearNyaaSelection();
+    nyaaRes.classList.remove("bad");
+    nyaaRes.textContent = "Открываю каталог Nyaa…";
+    try {
+      const r = await apiGet(`/titles/${titleId}/nyaa-browse`, { q: sheet.querySelector("[data-nyaa-q]").value.trim() });
+      browseItems = r.items || [];
+      nyaaRes.innerHTML = browseItems.length
+        ? `<div class="tw-nyaa-results-head">«${esc(r.query)}» · ${browseItems.length} раздач. Выберите ту, которую брать как образец: запомню группу и формат.</div><div class="tw-nyaa-results">${browseItems.map((it, i) => `<button type="button" class="tw-nyaa-pick" data-browse-pick="${i}">
+            <span class="tw-g">${esc(it.group || "—")}</span><b>${esc(it.show || it.title)}${it.episode != null ? ` · серия ${it.episode}` : ""}</b>
+            <small>${esc([it.resolution, (it.tags || []).slice(0, 4).join(" "), it.size, it.seeders != null ? `${it.seeders} сидов` : ""].filter(Boolean).join(" · "))}</small></button>`).join("")}</div>`
+        : `По запросу «${esc(r.query)}» ничего нет. Поправьте название в поле ниже и нажмите ещё раз.`;
+      nyaaRes.classList.toggle("bad", !browseItems.length);
+    } catch (err) {
+      nyaaRes.textContent = `Не удалось открыть каталог: ${err.message}`;
+      nyaaRes.classList.add("bad");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  nyaaRes.addEventListener("click", e => {
+    const pick = e.target.closest("[data-browse-pick]");
+    if (!pick) return;
+    const it = browseItems[Number(pick.dataset.browsePick)];
+    if (!it) return;
+    nyaaRes.querySelectorAll("[data-browse-pick]").forEach(b => b.classList.toggle("selected", b === pick));
+    pattern = { group: it.group || "", tags: it.tags || [], ref: it.title };
+    if (it.show) sheet.querySelector("[data-nyaa-q]").value = it.show;      // название — как у этой группы, а не из базы
+    if (it.episode != null) sheet.querySelector("[data-nyaa-episode]").value = it.episode;
+    // раздачу уже вышедшей серии отправляем составу сразу; старые серии — только запоминаем формат
+    const latest = Math.max(plan.episodes_aired || 0, 1);
+    if (it.episode != null && it.episode >= latest) {
+      selectedSource = { url: it.url, title: it.title };
+      nyaaSendNote.textContent = `Раздача серии ${it.episode} уйдёт назначенному составу при сохранении; следующие серии — такие же (${it.group || "та же раздача"}).`;
+    } else {
+      selectedSource = null;
+      nyaaSendNote.textContent = `Запомнил формат: ${it.group || "без группы"}. Эту серию отправлять не буду, следующие подберу такими же.`;
+    }
+    paintPattern();
+  });
   sheet.querySelector("[data-nyaa-test]").addEventListener("click", async e => {
     const btn = e.target.closest("button");
     btn.disabled = true;
@@ -269,6 +326,7 @@ export async function openTakeWork(titleId, onDone) {
         nyaa: sheet.querySelector("[data-nyaa]").checked,
         nyaa_query: sheet.querySelector("[data-nyaa-q]").value.trim(),
         nyaa_quality: sheet.querySelector("[data-nyaa-quality]").value,
+        nyaa_pattern: pattern,
         manual_release: selectedSource ? { episode: Number(sheet.querySelector("[data-nyaa-episode]").value), url: selectedSource.url, title: selectedSource.title } : null,
       });
       const n = r.created_episodes.length;

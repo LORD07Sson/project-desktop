@@ -5692,6 +5692,18 @@ body.focus-mode .report-detail-overlay .sheet {
 .tw-crew-row input, .tw-crew-row select { height: 34px; min-width: 0; }
 .tw-sheet input[type="text"], .tw-sheet input:not([type]), .tw-sheet input[type="number"] { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 9px; padding: 0 10px; }
 .tw-sheet input:-webkit-autofill, .tw-sheet input:-webkit-autofill:focus { -webkit-text-fill-color: var(--ink); box-shadow: 0 0 0 100px var(--surface-2) inset; caret-color: var(--ink); }
+.tw-pick { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.tw-pick .btn { align-self: flex-start; }
+.tw-pattern { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; color: var(--ink-dim); }
+.tw-pattern-on { color: var(--ink); background: rgba(var(--fire-rgb), .14); border: 1px solid rgba(var(--fire-rgb), .35); padding: 3px 10px; border-radius: 99px; }
+.tw-pattern small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-pattern-x { border: 0; background: none; color: var(--ink-dim); font: inherit; font-size: 11.5px; cursor: pointer; text-decoration: underline; }
+.tw-nyaa-pick { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 2px 10px; text-align: left; width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; font: inherit; }
+.tw-nyaa-pick:hover, .tw-nyaa-pick.selected { border-color: var(--fire); }
+.tw-nyaa-pick.selected { background: rgba(var(--fire-rgb), .1); }
+.tw-nyaa-pick .tw-g { grid-row: 1 / span 2; align-self: center; font: 700 11px var(--mono, monospace); color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-nyaa-pick b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-nyaa-pick small { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tw-crew-hint { font-size: 12px; color: var(--ink-dim); margin: 4px 0 6px; line-height: 1.45; }
 .tw-crew-hint:empty { display: none; }
 .tw-crew-hint .bad { color: #ff8a8a; }
