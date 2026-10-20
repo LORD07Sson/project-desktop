@@ -495,6 +495,17 @@ export function toast(text, kind = "info", action = null) {
 // подпись, дальше блоки. Одинаковые прямоугольники одной высоты,
 // как было раньше, ничего не говорят о том, что грузится, и на
 // медленной сети читаются как «сломалось».
+// Повторное открытие вкладки (switchTab всегда грузит свежие данные): пока идёт запрос,
+// на экране остаётся прошлое содержимое, а не скелетон — раньше каждая смена вкладки
+// давала пустой кадр, полоски-заглушки и «перепрыгивание» карточек. Скелетон — только
+// при первом открытии, когда показывать ещё нечего.
+export function keepOnReload(root) {
+  return !!(state.softReload && root && root.children.length && !root.querySelector(":scope > .skeleton-wrap"));
+}
+export function tabSkeleton(root, html) {
+  if (root && !keepOnReload(root)) root.innerHTML = html;
+}
+
 export function dialogSkeletonHtml(lines = 4, variant = "rows") {
   const shape = i => {
     if (variant === "cards") return i === 0 ? "line" : "card";

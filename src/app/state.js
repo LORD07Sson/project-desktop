@@ -3,6 +3,7 @@
 // как и раньше, когда всё было одним файлом с общей областью видимости).
 
 export const state = {
+  softReload: false,   // идёт повторная загрузка уже открытой вкладки (tabs.js::loadActiveTab)
   token: null,
   telegramId: null,
   name: null,

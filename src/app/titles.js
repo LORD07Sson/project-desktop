@@ -3,7 +3,7 @@
 // voteCardHtml/castVote/openTitleDetailPublic (miniapp/static/index.html).
 
 import { state, can } from "./state.js";
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, tabSkeleton } from "./api.js";
 import { $, esc } from "./utils.js";
 import { openSeasonsAdminSheet } from "./titles-admin.js";
 import { clearTitleHoverCache } from "./title-hover.js";
@@ -380,7 +380,7 @@ export async function loadTitlesTab() {
   detailsCache.clear();
   clearTitleHoverCache();
   const root = $("#titles-body");
-  root.innerHTML = dialogSkeletonHtml(3);
+  tabSkeleton(root, dialogSkeletonHtml(3));
   let d;
   try {
     d = await apiGet("/public/seasons");

@@ -21,7 +21,7 @@
 // надёжно доставляемый в любом Chromium-движке механизм, руками
 // реализующий тот же «взял — перенёс — отпустил».
 
-import { apiGet, apiPost, toast, dialogSkeletonHtml, openSheet } from "./api.js";
+import { apiGet, apiPost, toast, dialogSkeletonHtml, openSheet, tabSkeleton } from "./api.js";
 import { invoke, pickInputFile } from "./tauri.js";
 import { $, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, PRIORITY_LABELS } from "./utils.js";
 import { timelineHtml, playTimelineIntro } from "./charts.js";
@@ -869,7 +869,7 @@ function wireBoardHeaderActions(root) {
 
 export async function loadBoard() {
   const root = $("#board-body");
-  root.innerHTML = dialogSkeletonHtml(5, "cards");
+  tabSkeleton(root, dialogSkeletonHtml(5, "cards"));
   await ensureSeasonsLoaded();
   try {
     lastBoardData = await apiGet("/board", {

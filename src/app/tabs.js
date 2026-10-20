@@ -101,9 +101,28 @@ export async function loadActiveTab(force) {
   if (!force && state.loadedTabs.has(name)) return;
   const loader = LOADERS[name];
   if (!loader) return;
-  const ok = await loader();
+  // Вкладка уже показывалась — грузим «мягко»: прошлое содержимое остаётся до прихода
+  // свежих данных (см. keepOnReload в api.js), а входные анимации новой разметки сразу
+  // доводятся до конца, чтобы знакомые карточки не «впрыгивали» на каждом клике.
+  const soft = state.loadedTabs.has(name);
+  state.softReload = soft;
+  let ok;
+  try { ok = await loader(); } finally { state.softReload = false; }
+  if (soft) finishEntrance(document.querySelector(`.tab-panel[data-panel="${name}"]`));
   if (ok !== false) state.loadedTabs.add(name);
   else state.loadedTabs.delete(name);
+}
+
+// Входные (конечные) анимации внутри панели — сразу в конечный кадр. Бесконечные
+// (индикатор «в сети», пульс сроков) не трогаем.
+function finishEntrance(panel) {
+  if (!panel) return;
+  for (const a of panel.getAnimations({ subtree: true })) {
+    const t = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null;
+    if (t && t.iterations !== Infinity && a.playState !== "finished" && a.effect.target !== panel) {
+      try { a.finish(); } catch (_) { /* анимация без конца — пропускаем */ }
+    }
+  }
 }
 
 // Вызывается один раз при старте, до первой загрузки данных — иначе

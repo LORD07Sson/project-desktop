@@ -11,7 +11,7 @@
 
 import { render } from "solid-js/web";
 import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
-import { apiGet, openSheet, dialogSkeletonHtml } from "./api.js";
+import { apiGet, openSheet, dialogSkeletonHtml, keepOnReload } from "./api.js";
 import { $, esc, initials, relTime, STATUS_COLOR_VAR } from "./utils.js";
 // esc() нужен только в строковых шаблонах (openMonthlyTopSheet ниже). В JSX его быть не должно: Solid экранирует
 // текстовые узлы сам, и esc() поверх этого даёт двойное экранирование —
@@ -467,8 +467,11 @@ let disposePrev = null;
 
 export async function loadOverview() {
   const root = $("#overview-body");
-  if (disposePrev) { disposePrev(); disposePrev = null; }
-  root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
+  // при повторном открытии прошлый «Обзор» остаётся на экране до прихода свежих данных
+  if (!keepOnReload(root)) {
+    if (disposePrev) { disposePrev(); disposePrev = null; }
+    root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
+  }
   let d, trend, dash, feed;
   try {
     [d, trend, dash, feed] = await Promise.all([
@@ -480,9 +483,11 @@ export async function loadOverview() {
       apiGet("/feed", { offset: 0, page_size: 4 }).catch(() => null),
     ]);
   } catch (e) {
+    if (disposePrev) { disposePrev(); disposePrev = null; }
     root.innerHTML = `<div class="bento-empty">Не удалось загрузить обзор: ${esc(e.message)}</div>`;
     return false;
   }
+  if (disposePrev) { disposePrev(); disposePrev = null; }
   root.innerHTML = "";
   disposePrev = render(() => <Overview data={d} trend={trend} dash={dash} feed={feed} />, root);
   loadAvatars(root);

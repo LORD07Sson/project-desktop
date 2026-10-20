@@ -3,7 +3,7 @@
 // только админам: «что мне записать и к какому сроку» нужно каждому.
 
 import { state } from "./state.js";
-import { apiGet } from "./api.js";
+import { apiGet, tabSkeleton } from "./api.js";
 import { $, esc } from "./utils.js";
 import { imgProxy, titleArt } from "./title-page.js";
 import { openReportDetail } from "./report-detail.js";
@@ -84,7 +84,7 @@ let tickTimer = null;
 export async function loadQueue() {
   const root = $("#queue-body");
   if (!root) return;
-  root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
+  tabSkeleton(root, `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`);
   let d;
   try {
     d = await apiGet("/me/queue");

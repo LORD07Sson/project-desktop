@@ -7,7 +7,7 @@
 // _service_status_sampler). График честно неполный первые дни после
 // включения — "нет данных", а не зелёная заливка наугад.
 
-import { apiGet } from "./api.js";
+import { apiGet, tabSkeleton } from "./api.js";
 import { $, esc, relTime } from "./utils.js";
 
 const STATUS_META = {
@@ -151,7 +151,7 @@ function servicesHtml(d) {
 
 export async function loadServices() {
   const root = $("#services-body");
-  root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
+  tabSkeleton(root, `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`);
   let d;
   try {
     d = await apiGet("/services/status");

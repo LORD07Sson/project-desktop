@@ -3,7 +3,7 @@
 // Необязательные поля сервера (current, completed_month, paused_until)
 // показываются, когда он их отдаёт; без них карточка просто короче.
 
-import { apiGet } from "./api.js";
+import { apiGet, tabSkeleton } from "./api.js";
 import { can } from "./state.js";
 import { $, esc } from "./utils.js";
 import { avatarHtml, loadAvatars, openUserProfile } from "./profile.js";
@@ -160,7 +160,7 @@ function teamHtml(d) {
 
 export async function loadTeam() {
   const root = $("#team-body");
-  root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
+  tabSkeleton(root, `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`);
   try {
     teamData = await apiGet("/team");
   } catch (e) {

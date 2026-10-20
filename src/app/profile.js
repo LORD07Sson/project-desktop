@@ -7,7 +7,7 @@
 import { state } from "./state.js";
 import { fillRemindersCard } from "./reminders.js";
 import { fetchPerson, workSectionHtml, wireWorkSection, fillPauseCard } from "./people.js";
-import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken } from "./api.js";
+import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken, tabSkeleton } from "./api.js";
 import { $, esc, isOverdue, relTime, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
 import { setQuickFilter, loadReports } from "./reports.js";
 import { switchTab } from "./tabs.js";
@@ -34,6 +34,10 @@ export function avatarHtml(telegramId, name, size) {
 // Раньше элемент помечался «загружен» ещё до проверки токена: если экран рисовался раньше, чем пришёл токен для картинок,
 // или запрос на секунду не прошёл, фото не появлялось уже никогда (оставались буквы). Теперь пометка ставится, только когда
 // запрос реально ушёл; при ошибке — одна повторная попытка с новым токеном; когда токен пришёл — недогруженные подтягиваются сами.
+// Адреса аватарок, которые уже загрузились в этом сеансе: такие вставляем сразу, без
+// onload — иначе при каждом показе вкладки на кадр мелькала буква-заглушка.
+const AVATAR_OK = new Set();
+
 export function loadAvatars(root) {
   (root || document).querySelectorAll("[data-avatar-for]").forEach(el => {
     const tid = el.getAttribute("data-avatar-for");
@@ -42,7 +46,8 @@ export function loadAvatars(root) {
     if (!src) return; // токена ещё нет — повторим, когда он придёт (событие media-token-ready)
     el.setAttribute("data-avatar-loaded", "1");
     const img = new Image();
-    img.onload = () => { el.innerHTML = ""; el.appendChild(img); };
+    if (AVATAR_OK.has(src)) { img.src = src; el.innerHTML = ""; el.appendChild(img); return; }
+    img.onload = () => { AVATAR_OK.add(src); el.innerHTML = ""; el.appendChild(img); };
     img.onerror = () => {
       // 204 (фото нет) тоже приходит сюда — повторяем один раз, а не бесконечно
       if (el.getAttribute("data-avatar-retried")) return;
@@ -392,7 +397,7 @@ function wireProfileCommon(root, telegramId, onReload) {
 
 export async function loadProfile() {
   const root = $("#profile-body");
-  root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
+  tabSkeleton(root, `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`);
   let me;
   try {
     me = await apiGet("/me");
