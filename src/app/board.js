@@ -162,13 +162,22 @@ function layoutRequest(columns) {
 // взгляда, «2026-09-20» требует посчитать в уме.
 function deadlineLabel(c) {
   if (c.deadline == null) return "без срока";
-  if (c.daysLeft == null) return c.deadline;
+  if (c.daysLeft == null) return `до ${prettyDate(c.deadline)}`;
   if (c.daysLeft < -1) return `просрочено на ${-c.daysLeft} дн.`;
   if (c.daysLeft === -1) return "просрочено вчера";
   if (c.daysLeft === 0) return "сегодня";
   if (c.daysLeft === 1) return "завтра";
   if (c.daysLeft <= 14) return `через ${c.daysLeft} дн.`;
-  return c.deadline;
+  return `до ${prettyDate(c.deadline)}`;
+}
+
+// «2026-11-04» → «4 нояб.»; другой год — с годом.
+function prettyDate(iso) {
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const opts = { day: "numeric", month: "short" };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString("ru-RU", opts).replace(/\s*г\.$/, "");
 }
 
 // Обложка, тайтл и этапы серии — из ответа /board (раскладка board.rs
