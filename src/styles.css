@@ -6016,3 +6016,22 @@ body.focus-mode .report-detail-overlay .sheet {
   background-image: linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%), linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
   background-position: calc(100% - 14px) 13px, calc(100% - 9px) 13px; background-size: 5px 5px; background-repeat: no-repeat; }
 .tl-sort select:hover { border-color: var(--surface-4); }
+
+/* Пост в канал: оформление, публикация, вид на телефоне и компьютере */
+.cp-style-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 12px; margin-top: 6px; }
+.cp-style { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--ink-dim); }
+.cp-style select { height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; font-size: 13px; padding: 0 8px; }
+.cp-style select:focus { outline: none; border-color: var(--fire); }
+.cp-line-link .icon-btn.cp-on { background: rgba(var(--fire-rgb), .22); border-color: var(--fire); color: var(--fire); }
+.cp-views { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); align-self: flex-start; }
+.cp-views button { border: 0; background: none; color: var(--ink-soft); font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.cp-views button.on { color: var(--on-accent); background: linear-gradient(135deg, var(--fire), var(--gold)); }
+.cp-pv-note { font-size: 11px; color: var(--ink-dim); margin: -2px 0 2px; }
+.cp-preview[data-view="phone"] { width: 330px; max-width: 100%; padding: 10px; border-radius: 22px; border: 2px solid var(--line); background: linear-gradient(180deg, #0f1a24, #0b121a); }
+.cp-preview[data-view="phone"] .cp-pv-text { font-size: 15px; line-height: 1.38; }
+.cp-preview[data-view="phone"] .cp-pv-post { border-radius: 16px 16px 16px 5px; }
+.cp-preview[data-view="phone"] .cp-pv-buttons span { font-size: 13px; padding: 10px 6px; border-radius: 10px; }
+.cp-preview[data-view="pc"] .cp-pv-text { font-size: 14px; line-height: 1.45; }
+.cp-preview[data-view="pc"] .cp-pv-buttons span { font-size: 13px; padding: 7px 10px; border-radius: 8px; font-weight: 500; }
+.cp-preview[data-view="pc"] .cp-pv-post { border-radius: 12px 12px 12px 3px; }
+.cp-pv-text blockquote { margin: 4px 0; padding: 2px 8px; border-left: 3px solid #6ab3f3; }

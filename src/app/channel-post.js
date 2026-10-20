@@ -27,6 +27,16 @@ const I = {
 // теги, которые админ сам вписал в заголовок или реплику. Для
 // предпросмотра оставляем только то, что понимает Telegram, а ссылки —
 // только http(s) и tg.
+// Раскладка кнопок: «с новой строки» у кнопки задаёт ряды вручную, иначе — по «кнопок в ряд».
+function linkRows(d, links) {
+  const manual = links.some(l => l.newrow), n = d.per_row || 2, rows = [];
+  links.forEach((l, i) => {
+    if (!rows.length || (manual ? l.newrow : rows[rows.length - 1].length >= n)) rows.push([]);
+    rows[rows.length - 1].push(l);
+  });
+  return rows;
+}
+
 function sanitize(html) {
   const doc = new window.DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
   const walk = node => {
@@ -58,6 +68,7 @@ export async function openChannelPostSheet(openId = null) {
   let meta;      // /posts: список, канал, пресеты, лимиты
   let people = [];
   let post = null; // /posts/{id}
+  let view = (() => { try { return localStorage.getItem("cp-view") === "pc" ? "pc" : "phone"; } catch (_) { return "phone"; } })();   // как показывать предпросмотр: телефон или компьютер
   let saveTimer = null;
   let saving = Promise.resolve();
 
@@ -131,7 +142,9 @@ export async function openChannelPostSheet(openId = null) {
         <div class="cp-editor" id="cp-editor"></div>
         <div class="cp-side">
           <div class="cp-side-title">Так увидят в канале</div>
+          <div class="cp-views" role="tablist" aria-label="Устройство"><button type="button" data-cp-view="pc">Компьютер</button><button type="button" data-cp-view="phone">Телефон</button></div>
           <div class="cp-preview" id="cp-preview"></div>
+          <div class="cp-pv-note" id="cp-pv-note"></div>
           <div class="cp-stats" id="cp-stats"></div>
           <div class="cp-publish" id="cp-publish"></div>
         </div>
@@ -150,6 +163,11 @@ export async function openChannelPostSheet(openId = null) {
       await flush();
       await openPost(Number(e.target.value));
     });
+    sheet.querySelectorAll("[data-cp-view]").forEach(b => b.addEventListener("click", () => {
+      view = b.dataset.cpView;
+      try { localStorage.setItem("cp-view", view); } catch (_) { /* не запомнится */ }
+      renderPreview();
+    }));
     renderChannel();
   }
 
@@ -184,6 +202,8 @@ export async function openChannelPostSheet(openId = null) {
       ${Object.entries(groups).map(([role, list]) => `<optgroup label="${esc(role)}">${list.map(([p, i]) => `<option value="${i}">${esc(p.name)}</option>`).join("")}</optgroup>`).join("")}
     </select>`;
   }
+
+  const styleSelect = (key, label, options, value) => `<label class="cp-style"><span>${label}</span><select data-cp-style="${key}">${options.map(([v, t]) => `<option value="${v}"${String(value) === v ? " selected" : ""}>${t}</option>`).join("")}</select></label>`;
 
   function editorHtml() {
     const d = data();
@@ -242,12 +262,28 @@ export async function openChannelPostSheet(openId = null) {
 
       <section class="cp-sec">
         <div class="cp-label">Вид и подпись</div>
-        <label class="cp-check"><input type="checkbox" id="cp-bold"${d.bold ? " checked" : ""}> Заголовок жирным</label>
         <label class="cp-check"><input type="checkbox" id="cp-inline"${d.inline ? " checked" : ""}> Люди в строку, как в постах канала: «🎙 Роли озвучивали: Имя, Имя»</label>
         <label class="cp-label cp-sub" for="cp-footer">Подпись под блоками</label>
         <textarea id="cp-footer" rows="2" placeholder="Например: Всем приятного просмотра!">${esc(d.footer || "")}</textarea>
         <label class="cp-label cp-sub" for="cp-tags">Хештеги</label>
         <input class="cp-in" id="cp-tags" value="${esc(d.tags || "")}" placeholder="#Название_тайтла #DreamyVoice">
+      </section>
+
+      <section class="cp-sec">
+        <div class="cp-label">Оформление текста</div>
+        <div class="cp-style-grid">
+          ${styleSelect("title_style", "Заголовок", [["plain", "Обычный"], ["bold", "Жирный"], ["italic", "Курсив"], ["underline", "Подчёркнутый"], ["quote", "Цитата"], ["equote", "Цитата, сворачиваемая"]], d.title_style || (d.bold ? "bold" : "plain"))}
+          ${styleSelect("head_style", "Названия блоков (🎙 Роли озвучивали:)", [["plain", "Обычные"], ["bold", "Жирные"], ["italic", "Курсив"], ["underline", "Подчёркнутые"]], d.head_style || "plain")}
+          ${styleSelect("block_style", "Каждый блок", [["plain", "Без оформления"], ["quote", "В цитате"], ["equote", "В сворачиваемой цитате"]], d.block_style || "plain")}
+          ${styleSelect("footer_style", "Подпись под блоками", [["plain", "Обычная"], ["italic", "Курсив"], ["quote", "Цитата"], ["equote", "Цитата, сворачиваемая"]], d.footer_style || "plain")}
+          ${styleSelect("gap", "Расстояние между частями", [["2", "Пустая строка"], ["1", "Плотно"]], String(d.gap || 2))}
+        </div>
+      </section>
+
+      <section class="cp-sec">
+        <div class="cp-label">Публикация</div>
+        ${[["silent", "Без звука (подписчики не получат уведомление)"], ["protect", "Запретить пересылку и сохранение"], ["spoiler", "Скрыть фото и видео спойлером"], ["caption_above", "Текст над фото и видео"], ["pin", "Закрепить пост после публикации"]]
+          .map(([k, t]) => `<label class="cp-check"><input type="checkbox" data-cp-flag="${k}"${d[k] ? " checked" : ""}> ${t}</label>`).join("")}
       </section>
 
       <section class="cp-sec">
@@ -257,6 +293,9 @@ export async function openChannelPostSheet(openId = null) {
           <div class="cp-line cp-line-link">
             <input class="cp-in" data-cp-link="${i}:text" value="${esc(l.text)}" placeholder="Текст кнопки" aria-label="Текст кнопки">
             <input class="cp-in cp-in-link" data-cp-link="${i}:url" value="${esc(l.url)}" placeholder="Ссылка" aria-label="Ссылка кнопки">
+            <button type="button" class="icon-btn${l.newrow ? " cp-on" : ""}" data-cp-knr="${i}" title="Начать с новой строки (свои ряды вместо «кнопок в ряд»)"${i === 0 ? " disabled" : ""}>↵</button>
+            <button type="button" class="icon-btn" data-cp-kmove="${i}:-1" title="Левее / выше"${i === 0 ? " disabled" : ""}>${I.up}</button>
+            <button type="button" class="icon-btn" data-cp-kmove="${i}:1" title="Правее / ниже"${i === d.links.length - 1 ? " disabled" : ""}>${I.down}</button>
             <button type="button" class="icon-btn cp-danger" data-cp-kdel="${i}" title="Убрать">${I.x}</button>
           </div>`).join("")}
         ${d.links.length < meta.limits.links ? `<div class="chip-row cp-presets">
@@ -330,7 +369,13 @@ export async function openChannelPostSheet(openId = null) {
     }));
     ed.querySelectorAll("[data-cp-kdel]").forEach(b => b.addEventListener("click", () => structural(x => x.links.splice(+b.dataset.cpKdel, 1))));
     ed.querySelector("#cp-inline")?.addEventListener("change", e => { d.inline = e.target.checked; scheduleSave(); });
-    ed.querySelector("#cp-bold")?.addEventListener("change", e => { d.bold = e.target.checked; scheduleSave(); });
+    ed.querySelectorAll("[data-cp-style]").forEach(sel => sel.addEventListener("change", () => { const k = sel.dataset.cpStyle; d[k] = k === "gap" ? Number(sel.value) : sel.value; if (k === "title_style") d.bold = sel.value === "bold"; scheduleSave(); }));
+    ed.querySelectorAll("[data-cp-flag]").forEach(cb => cb.addEventListener("change", () => { d[cb.dataset.cpFlag] = cb.checked; scheduleSave(); }));
+    ed.querySelectorAll("[data-cp-knr]").forEach(b => b.addEventListener("click", () => structural(x => { const l = x.links[+b.dataset.cpKnr]; l.newrow = !l.newrow; })));
+    ed.querySelectorAll("[data-cp-kmove]").forEach(b => b.addEventListener("click", () => {
+      const [i, dir] = b.dataset.cpKmove.split(":").map(Number);
+      structural(x => { const [l] = x.links.splice(i, 1); x.links.splice(i + dir, 0, l); });
+    }));
     ed.querySelector("#cp-perrow")?.addEventListener("change", e => { d.per_row = Number(e.target.value) || 2; scheduleSave(); renderPreview(); });
     ed.querySelector("#cp-footer")?.addEventListener("input", e => { d.footer = e.target.value; scheduleSave(); });
     ed.querySelector("#cp-tags")?.addEventListener("input", e => { d.tags = e.target.value; scheduleSave(); });
@@ -424,7 +469,11 @@ export async function openChannelPostSheet(openId = null) {
         <div class="cp-pv-text">${text}</div>
         <div class="cp-pv-meta">${post.published_at ? "опубликовано" : "черновик"}</div>
       </div>
-      ${links.length ? `<div class="cp-pv-buttons">${(rows => rows.map(r => `<div class="cp-pv-row">${r.map(l => `<span>${esc(l.text)}</span>`).join("")}</div>`).join(""))(links.reduce((acc, l, i) => { const n = d.per_row || 2; if (i % n === 0) acc.push([]); acc[acc.length - 1].push(l); return acc; }, []))}</div>` : ""}`;
+      ${links.length ? `<div class="cp-pv-buttons">${linkRows(d, links).map(r => `<div class="cp-pv-row">${r.map(l => `<span>${esc(l.text)}</span>`).join("")}</div>`).join("")}</div>` : ""}`;
+    pv.dataset.view = view;
+    sheet.querySelectorAll("[data-cp-view]").forEach(b => b.classList.toggle("on", b.dataset.cpView === view));
+    const note = sheet.querySelector("#cp-pv-note");
+    if (note) note.textContent = view === "phone" ? "Как в Telegram на телефоне: текст переносится чаще, длинные названия кнопок обрезаются." : "Как в Telegram на компьютере: кнопки шире, читаются полностью.";
     const st = sheet.querySelector("#cp-stats");
     st.innerHTML = `
       <span>${post.plain_length} симв.</span>
