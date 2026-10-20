@@ -6035,3 +6035,5 @@ body.focus-mode .report-detail-overlay .sheet {
 .cp-preview[data-view="pc"] .cp-pv-buttons span { font-size: 13px; padding: 7px 10px; border-radius: 8px; font-weight: 500; }
 .cp-preview[data-view="pc"] .cp-pv-post { border-radius: 12px 12px 12px 3px; }
 .cp-pv-text blockquote { margin: 4px 0; padding: 2px 8px; border-left: 3px solid #6ab3f3; }
+.cp-pv-buttons { grid-template-columns: minmax(0, 1fr); width: 100%; box-sizing: border-box; }
+.cp-pv-row { min-width: 0; }
