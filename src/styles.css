@@ -5690,6 +5690,11 @@ body.focus-mode .report-detail-overlay .sheet {
 .tw-crew { display: flex; flex-direction: column; gap: 6px; }
 .tw-crew-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 34px; gap: 8px; }
 .tw-crew-row input, .tw-crew-row select { height: 34px; min-width: 0; }
+.tw-sheet input[type="text"], .tw-sheet input:not([type]), .tw-sheet input[type="number"] { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 9px; padding: 0 10px; }
+.tw-sheet input:-webkit-autofill, .tw-sheet input:-webkit-autofill:focus { -webkit-text-fill-color: var(--ink); box-shadow: 0 0 0 100px var(--surface-2) inset; caret-color: var(--ink); }
+.tw-crew-hint { font-size: 12px; color: var(--ink-dim); margin: 4px 0 6px; line-height: 1.45; }
+.tw-crew-hint:empty { display: none; }
+.tw-crew-hint .bad { color: #ff8a8a; }
 .tw-add { margin-top: 6px; }
 .tw-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); cursor: pointer; }
 .tw-toggle span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }

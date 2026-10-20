@@ -45,7 +45,7 @@ function userOptions(selected) {
 function crewRowHtml(role, telegramId) {
   return `
     <div class="tw-crew-row" data-crew-row>
-      <input class="tw-role" value="${esc(role)}" placeholder="Роль" maxlength="40" list="tw-roles">
+      <input class="tw-role" value="${esc(role)}" placeholder="Роль" maxlength="40" list="tw-roles" autocomplete="off">
       <select class="tw-user">${userOptions(telegramId)}</select>
       <button type="button" class="icon-btn tw-del" title="Убрать роль" data-crew-del>✕</button>
     </div>`;
@@ -115,6 +115,7 @@ export async function openTakeWork(titleId, onDone) {
         <label>Состав — на каждую роль своя задача в каждой серии</label>
         <div class="tw-crew" data-crew>${crew.map(c => crewRowHtml(c.role, c.telegram_id)).join("")}</div>
         <datalist id="tw-roles">${[...new Set([...(plan.roles_suggest || []), ...DEFAULT_ROLES])].map(r => `<option value="${esc(r)}">`).join("")}</datalist>
+        <div class="tw-crew-hint" data-crew-hint></div>
         <button type="button" class="btn ghost tw-add" data-crew-add>+ Роль</button>
       </div>
       <div class="tw-field tw-full tw-nyaa">
@@ -123,7 +124,7 @@ export async function openTakeWork(titleId, onDone) {
           <span><b>Автоматически отправлять раздачи с Nyaa</b><small>Когда выйдет новая серия, бот пришлёт .torrent назначенным участникам. Ссылку можно выбрать и отправить вручную ниже.</small></span>
         </label>
         <div class="tw-nyaa-q">
-          <input data-nyaa-q value="${esc((work && work.nyaa_query) || plan.nyaa_query_default || "")}" placeholder="Название или ссылка Nyaa" maxlength="240">
+          <input data-nyaa-q autocomplete="off" value="${esc((work && work.nyaa_query) || plan.nyaa_query_default || "")}" placeholder="Название или ссылка Nyaa" maxlength="240">
           <label class="tw-nyaa-episode"><span>Серия</span><input data-nyaa-episode type="number" min="1" max="9999" step="1" value="${plan.episodes_aired || plan.next_episode || 1}"></label>
           <button type="button" class="btn" data-nyaa-test>Найти варианты</button>
         </div>
@@ -158,6 +159,19 @@ export async function openTakeWork(titleId, onDone) {
       : "Сейчас серии не создаются";
   };
   if (!backfill.length) sheet.querySelector("[data-backfill]").disabled = true;
+  // Подсказка по составу: повторы ролей сервер молча отбрасывает, а роль без исполнителя создаст задачу «ничью»
+  const crewCheck = () => {
+    const rows = [...sheet.querySelectorAll("[data-crew-row]")].map(r => ({ role: r.querySelector(".tw-role").value.trim(), user: r.querySelector(".tw-user").value })).filter(r => r.role);
+    const seen = new Set(), dup = [];
+    rows.forEach(r => { const k = r.role.toLowerCase(); if (seen.has(k)) dup.push(r.role); seen.add(k); });
+    const free = rows.filter(r => !r.user).map(r => r.role);
+    const hint = sheet.querySelector("[data-crew-hint]");
+    hint.innerHTML = [dup.length ? `<span class="bad">Повтор роли: ${dup.map(esc).join(", ")} — останется одна.</span>` : "", free.length ? `Без исполнителя: ${free.map(esc).join(", ")} — задачи появятся свободными, их возьмёт любой.` : ""].filter(Boolean).join("<br>");
+    return { dup, free };
+  };
+  crewCheck();
+  sheet.querySelector("[data-crew]").addEventListener("input", crewCheck);
+  sheet.querySelector("[data-crew]").addEventListener("change", crewCheck);
   summary();
 
   sheet.querySelectorAll("[data-seg]").forEach(seg => seg.addEventListener("click", e => {
@@ -171,6 +185,7 @@ export async function openTakeWork(titleId, onDone) {
     if (!e.target.closest("[data-crew-del]")) return;
     e.target.closest("[data-crew-row]").remove();
     summary();
+    crewCheck();
   });
   sheet.querySelector("[data-crew-add]").addEventListener("click", () => {
     crewBox.insertAdjacentHTML("beforeend", crewRowHtml("", null));
@@ -221,6 +236,7 @@ export async function openTakeWork(titleId, onDone) {
   sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
 
   sheet.querySelector("[data-stop]")?.addEventListener("click", async e => {
+    if (!confirm("Больше не заводить новые серии этого тайтла автоматически? Уже заведённые останутся.")) return;
     e.target.disabled = true;
     try {
       await apiPost(`/titles/${titleId}/work/stop`, {});
@@ -239,6 +255,8 @@ export async function openTakeWork(titleId, onDone) {
       telegram_id: r.querySelector(".tw-user").value || null,
     })).filter(r => r.role);
     if (!rows.length) { toast("Добавьте в состав хотя бы одну роль.", "error"); return; }
+    const { dup } = crewCheck();
+    if (dup.length) { toast(`Роль повторяется: ${dup.join(", ")}. Оставьте одну или переименуйте.`, "error"); return; }
     const btn = e.target.closest("button");
     btn.disabled = true;
     btn.textContent = "Сохраняю…";
