@@ -56,7 +56,7 @@ const LAST_TAB_KEY = "project-last-tab";
 export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
 // Какое право открывает админскую вкладку; остальные (Сервисы, Релизы) — только для админа.
-const TAB_PERMS = { overview: "reports.view", list: "reports.view", board: "reports.view", calendar: "reports.view", feed: "reports.view", analytics: "reports.view" };
+const TAB_PERMS = { feed: "reports.feed", board: "reports.board", overview: "reports.overview", list: "reports.list", calendar: "reports.calendar", analytics: "reports.analytics" };
 
 export function tabAllowed(name) {
   if (MEMBER_TABS.has(name)) return true;

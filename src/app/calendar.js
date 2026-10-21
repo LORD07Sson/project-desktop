@@ -4,7 +4,7 @@
 //  • выход серий онгоингов текущего сезона — по next_episode_at из
 //    /public/titles/{id}: дальше и раньше серия повторяется раз в неделю
 //    в то же время, номер серии считаем от episodes_aired;
-//  • дедлайны отчётов (/reports?sort=deadline) — дата без времени, строка
+//  • дедлайны отчётов (/calendar/deadlines) — дата без времени, строка
 //    «Весь день» сверху;
 //  • дни рождения из /overview — тоже «Весь день».
 
@@ -82,7 +82,7 @@ async function fetchAirings() {
 // Ход нашей работы по сериям взятых тайтлов (/work/episodes, только
 // админам): {title_id: {номер: {total, completed, overdue}}}.
 async function fetchWork() {
-  if (!can("reports.view")) return {};
+  if (!can("reports.calendar")) return {};
   try { return (await apiGet("/work/episodes")).titles || {}; } catch (_) { return {}; }
 }
 
@@ -98,18 +98,8 @@ function workPill(e, work, past) {
 }
 
 async function fetchDeadlines(from, to) {
-  const out = [];
-  for (let page = 0; page < 5; page++) {
-    let r;
-    try { r = await apiGet("/reports", { sort: "deadline", page, page_size: 100 }); } catch (_) { break; }
-    const list = r.reports || [];
-    for (const rep of list) {
-      if (rep.deadline && rep.deadline >= from && rep.deadline <= to) out.push(rep);
-    }
-    const last = list[list.length - 1];
-    if (list.length < 100 || !last || !last.deadline || last.deadline > to) break;
-  }
-  return out;
+  try { return (await apiGet("/calendar/deadlines", { from, to })).reports || []; }
+  catch (_) { return []; }
 }
 
 // Полный список (/birthdays); на старом сервере без него — 5 ближайших

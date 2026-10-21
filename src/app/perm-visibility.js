@@ -4,10 +4,13 @@
 
 import { state, can } from "./state.js";
 
-const REPORT_TABS = ["overview", "list", "board", "calendar", "feed", "analytics"].map(t => `.tab-btn[data-tab="${t}"]`).join(",");
-
 const RULES = [
-  [REPORT_TABS, "reports.view"],
+  ['.tab-btn[data-tab="feed"]', "reports.feed"],
+  ['.tab-btn[data-tab="board"]', "reports.board"],
+  ['.tab-btn[data-tab="overview"]', "reports.overview"],
+  ['.tab-btn[data-tab="list"]', "reports.list"],
+  ['.tab-btn[data-tab="calendar"]', "reports.calendar"],
+  ['.tab-btn[data-tab="analytics"]', "reports.analytics"],
   ["#titles-admin-btn", "titles.create"],
   ["#team-roles-btn", "roles.manage"],
   ["#tn-edit", "notice.manage"],
@@ -23,7 +26,8 @@ export function applyPermVisibility() {
       if (allowed && !state.isAdmin) el.setAttribute("data-perm-show", "1"); else el.removeAttribute("data-perm-show");
     });
   }
-  document.documentElement.dataset.permReports = can("reports.view") && !state.isAdmin ? "1" : "0";
+  const canSeeReportTab = ["reports.feed", "reports.board", "reports.overview", "reports.list", "reports.calendar", "reports.analytics"].some(can);
+  document.documentElement.dataset.permReports = canSeeReportTab && !state.isAdmin ? "1" : "0";
 }
 
 let observer = null;

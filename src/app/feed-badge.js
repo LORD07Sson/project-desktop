@@ -8,7 +8,7 @@
 // как есть, без парсинга дат.
 
 import { apiGet } from "./api.js";
-import { state } from "./state.js";
+import { state, can } from "./state.js";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -57,7 +57,7 @@ export function resetFeedBadge() {
 }
 
 async function pollFeed() {
-  if (!state.token || !state.isAdmin) return;
+  if (!state.token || !can("reports.feed")) return;
   if (state.activeTab === "feed") return; // сама вкладка и так открыта
   try {
     const r = await apiGet("/feed", { offset: 0, page_size: 30 });
