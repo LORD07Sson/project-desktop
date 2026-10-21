@@ -21,6 +21,7 @@ import { clearDirectoryCache } from "./titles-admin.js";
 import { refreshTeamNotice, clearTeamNotice } from "./team-notice.js";
 import { refreshLockdown, clearLockdown } from "./lockdown.js";
 import { clearBackdrop } from "./backdrop.js";
+import { refreshPermissions } from "./permissions-refresh.js";
 
 // Загрузчики возвращают false, если данные взять не удалось (сеть/сервер)
 // — см. loadActiveTab ниже.
@@ -197,6 +198,9 @@ export async function refreshAll() {
   const originalText = label.textContent;
   label.textContent = "Обновляю…";
   try {
+    // Матрица могла измениться после входа; F5/«Обновить» должны
+    // перечитать права и сразу показать новые вкладки.
+    await refreshPermissions();
     clearDirectoryCache();
     refreshTeamNotice();
     refreshLockdown();

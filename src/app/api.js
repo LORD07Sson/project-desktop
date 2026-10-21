@@ -96,7 +96,7 @@ export async function api(method, path, body) {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      cache: path.startsWith("/games/deals?") ? "no-store" : "default",
+      cache: (method === "GET" && path === "/me/permissions") || path.startsWith("/games/deals?") ? "no-store" : "default",
       signal: controller.signal,
     });
   } catch (e) {

@@ -17,6 +17,7 @@ import { pingPresence } from "./presence.js";
 import { loadTitlebarTeam } from "./profile.js";
 import { refreshInbox, resetInbox } from "./inbox.js";
 import { maybeWelcome, resetTourUi } from "./tour.js";
+import { refreshPermissions } from "./permissions-refresh.js";
 
 // Экран загрузки при старте — тот же маскот/прогресс-бар, что и в
 // мини-аппе (см. #splash в miniapp/static/index.html). Держим минимум
@@ -68,7 +69,7 @@ export async function tryRestoreSession() {
   try {
     const who = await api("GET", "/whoami");
     state.telegramId = who.telegram_id;
-    applyRole(!!who.is_admin, !!who.nyaa_access);
+    await applyRole(!!who.is_admin, !!who.nyaa_access);
     await ensureMediaToken();
     showApp();
     restoreLastTab();
@@ -118,35 +119,15 @@ function replayWordmark() {
   word.querySelectorAll(".aw-part i").forEach(i => { i.style.animation = "none"; void i.offsetWidth; i.style.animation = ""; });
 }
 
-// Права роли (владелец настраивает матрицу в Настройках); сервер всё равно проверяет каждый запрос.
-async function loadPermissions() {
-  try {
-    const r = await api("GET", "/me/permissions");
-    // Ответ без списка (старый сервер) — не считаем, что прав нет: ведём себя как раньше.
-    state.perms = Array.isArray(r.permissions) ? new Set(r.permissions) : null;
-    state.isOwner = !!r.is_owner;
-    // Новые серверы также описывают доступ к Няшке матрицей ролей. Держим
-    // этот флаг синхронным с /me/permissions, чтобы вкладка появилась даже
-    // если /whoami пришёл от старого кэша или ответил до обновления прав.
-    if (state.perms?.has("nyaa.view")) {
-      state.nyaaAccess = true;
-      document.documentElement.dataset.nyaa = state.isAdmin ? "0" : "1";
-    }
-    import("./perm-visibility.js").then(m => m.startPermVisibility());
-  } catch (_) {
-    state.perms = null;
-  }
-}
-
 // Админ или рядовой участник: у участника прячем админские вкладки и
 // кнопки (CSS по data-role) и не запускаем опросы админских данных.
-export function applyRole(isAdmin, nyaaAccess = false) {
+export async function applyRole(isAdmin, nyaaAccess = false) {
   state.isAdmin = isAdmin;
-  loadPermissions();
   state.nyaaAccess = isAdmin || nyaaAccess;
   document.documentElement.dataset.role = isAdmin ? "admin" : "member";
   // Роспись и звукари видят «Релизы» (Няшку), хотя остальное админское скрыто.
   document.documentElement.dataset.nyaa = !isAdmin && nyaaAccess ? "1" : "0";
+  await refreshPermissions();
 }
 
 // Стена обложек на экране входа. Картинки — с нашего сервера по номеру
@@ -246,7 +227,7 @@ async function submitCode() {
     state.telegramId = result.telegram_id;
     setDisplayName(result.name);
     await invoke("token_save", { token: result.token });
-    try { const who = await api("GET", "/whoami"); applyRole(!!who.is_admin, !!who.nyaa_access); } catch (_) { applyRole(false); }
+    try { const who = await api("GET", "/whoami"); await applyRole(!!who.is_admin, !!who.nyaa_access); } catch (_) { await applyRole(false); }
     await ensureMediaToken();
     showApp();
     restoreLastTab();
