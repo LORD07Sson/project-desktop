@@ -27,7 +27,7 @@ import { $, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, PRIORITY_LABELS }
 import { timelineHtml, playTimelineIntro } from "./charts.js";
 import { assigneesHtml, seriesParts, posterSrc } from "./reports.js";
 import { openReportDetail } from "./report-detail.js";
-import { state } from "./state.js";
+import { state, can } from "./state.js";
 import { ATTACH_EXTENSIONS } from "./file-drop.js";
 import { loadAvatars } from "./profile.js";
 
@@ -635,6 +635,7 @@ async function renderBoard(root) {
   rememberSeries(lastBoardData.statuses);
   const stats = boardStats(layout);
   const active = layout.columns.filter(c => c.status !== "completed" && c.status !== "cancelled").reduce((n, c) => n + (c.total || 0), 0);
+  const canCreateReport = can("reports.create");
   const timeline = boardMode() === "timeline";
   const timelineCell = timeline ? timelineSectionHtml(layout) : "";
   root.innerHTML = `
@@ -648,8 +649,8 @@ async function renderBoard(root) {
           <button type="button" data-board-mode="cols" class="${timeline ? "" : "on"}">Колонки</button>
           <button type="button" data-board-mode="timeline" class="${timeline ? "on" : ""}">Таймлайн</button>
         </div>
-        <button class="btn" id="board-import-btn">Импорт</button>
-        <button class="btn primary" id="board-add-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Новый проект</button>
+        ${canCreateReport ? `<button class="btn" id="board-import-btn">Импорт</button>
+        <button class="btn primary" id="board-add-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Новый проект</button>` : ""}
       </div>
     </div>
     ${boardToolbarHtml()}

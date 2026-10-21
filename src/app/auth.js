@@ -125,6 +125,13 @@ async function loadPermissions() {
     // Ответ без списка (старый сервер) — не считаем, что прав нет: ведём себя как раньше.
     state.perms = Array.isArray(r.permissions) ? new Set(r.permissions) : null;
     state.isOwner = !!r.is_owner;
+    // Новые серверы также описывают доступ к Няшке матрицей ролей. Держим
+    // этот флаг синхронным с /me/permissions, чтобы вкладка появилась даже
+    // если /whoami пришёл от старого кэша или ответил до обновления прав.
+    if (state.perms?.has("nyaa.view")) {
+      state.nyaaAccess = true;
+      document.documentElement.dataset.nyaa = state.isAdmin ? "0" : "1";
+    }
     import("./perm-visibility.js").then(m => m.startPermVisibility());
   } catch (_) {
     state.perms = null;
