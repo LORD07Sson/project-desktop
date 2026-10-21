@@ -156,6 +156,12 @@ function groupHtml(item) {
     <div class="fd-group-row"><span class="fd-group-dot" style="--c:${a.color}"></span><span class="fd-verb">${esc(a.label)}</span>${ev.detail ? `<span class="fd-detail">${esc(ev.detail)}</span>` : ""}<time>${hhmm(parseTs(ev.created_at))}</time></div>`).join("")}</div>`;
 }
 
+function actorRoleHtml(ev) {
+  if (!ev.actor_telegram_id) return "";
+  const roles = Array.isArray(ev.actor_roles) ? ev.actor_roles.filter(Boolean) : [];
+  return `<span class="fd-tag">${esc(roles.length ? roles.join(" · ") : "без роли")}</span>`;
+}
+
 function rowHtml(item, lastSeen) {
   const { ev, a } = item;
   const d = parseTs(ev.created_at);
@@ -171,11 +177,11 @@ function rowHtml(item, lastSeen) {
       <div class="fd-main">
         <div class="fd-line">
           <b class="fd-actor">${esc(ev.actor || "система")}</b>
+          ${actorRoleHtml(ev)}
           <span class="fd-verb">${item.group ? `${item.group.length} ${plural(item.group.length, "изменение", "изменения", "изменений")} в` : esc(a.label)}</span>
           ${posterHtml(ev)}
           ${ev.public_id ? `<span class="fd-rid">${esc(ev.public_id)}</span>` : ""}
           ${ev.title ? `<span class="fd-title">${esc(ev.title)}</span>` : ""}
-          ${a.type === "admin" ? `<span class="fd-tag owner">владелец</span>` : ""}
           ${a.source ? `<span class="fd-tag">${esc(a.source)}</span>` : ""}
         </div>
         ${item.group ? groupHtml(item) : (result ? `<div class="fd-result">${result}</div>` : "")}
