@@ -3990,3 +3990,45 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-dcore i:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--ds) * .422)); }
 .sp-dcore i:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--ds) * .422)); }
 .sp-dcore i:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--ds) * .422)); }
+
+/* ---- Аватар в карточке команды и в шапке профиля: ровное тёмное кольцо ----
+   Раньше кольцо рисовала тень аватара поверх градиента той же толщины — по краю градиент проступал
+   рваной цветной каймой. Теперь кольцо — сплошная подложка, тень у аватара убрана. */
+.tm-av, .pf-hero .avatar-ring { padding: 3px; background: var(--bg); box-shadow: 0 0 0 1px rgba(255, 255, 255, .07); }
+.tm-av .avatar.xl, .pf-hero .avatar-ring .avatar.xl { box-shadow: none; }
+.pf-hero .avatar-ring.tier-bronze { box-shadow: 0 0 0 2px #b0774a; }
+.pf-hero .avatar-ring.tier-silver { box-shadow: 0 0 0 2px #b9c2cc; }
+.pf-hero .avatar-ring.tier-gold { box-shadow: 0 0 0 2px var(--gold); }
+
+/* ---- Стиль «Свечение»: риска активной вкладки верхней навигации ----
+   Правило «золотой риски» для боковой панели (left: -16px; top: 8px) сдвигало полоску верхней навигации влево-вверх. */
+:root[data-look="glow"][data-theme="dark"] #tabstrip > .tab-btn.active::before { left: 50%; top: auto; bottom: 3px; width: calc(100% - 26px); height: 2px; border-radius: 2px; transform: translateX(-50%); }
+
+/* ---- Баннер профиля: картинка стоит на месте (без «дыхания» фона) и двигается только по желанию ---- */
+.pf-banner.has-img, .profile-banner-wrap.has-img { animation: none; }
+.pf-ban-move { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; opacity: 0; transition: opacity .2s;
+  background: rgba(0, 0, 0, .45); border: 1px solid rgba(255, 255, 255, .14); color: #fff; backdrop-filter: blur(8px); }
+.pf-ban-move svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pf-hero:hover .pf-ban-move, .profile-banner-wrap:hover .pf-ban-move, .pf-ban-move:focus-visible { opacity: 1; }
+.has-img.adjust .pf-ban-move { display: none; }
+.has-img.adjust { cursor: grab; box-shadow: inset 0 2px 0 color-mix(in srgb, var(--fire) 80%, transparent); }
+.has-img.adjust.grabbing { cursor: grabbing; }
+.pf-ban-bar { position: absolute; top: 10px; right: 12px; z-index: 2; display: flex; align-items: center; gap: 6px; }
+.pf-ban-hint { padding: 5px 10px; border-radius: 8px; font-size: 12px; color: #fff; background: rgba(0, 0, 0, .5); backdrop-filter: blur(8px); }
+.pf-ban-bar .btn.ghost { background: rgba(0, 0, 0, .45); color: #fff; }
+
+/* ---- Кость в заставке: цельная, а не склеенные карточки ----
+   Скругление меньше (щели у вершин меньше), ядро того же цвета, что и грани, по краям граней — фаска-тень. */
+.sp-df { border-radius: 20%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), inset 0 0 calc(var(--ds) * .1) rgba(0, 0, 0, .22); }
+.sp-dcore { inset: 6%; }
+.sp-dcore i { background: color-mix(in srgb, var(--fire) 90%, #000); }
+.sp-dcore i:nth-child(1) { transform: translateZ(calc(var(--ds) * .44)); }
+.sp-dcore i:nth-child(2) { transform: rotateY(180deg) translateZ(calc(var(--ds) * .44)); }
+.sp-dcore i:nth-child(3) { transform: rotateY(90deg) translateZ(calc(var(--ds) * .44)); }
+.sp-dcore i:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--ds) * .44)); }
+.sp-dcore i:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--ds) * .44)); }
+.sp-dcore i:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--ds) * .44)); }
+/* верх светлее, низ и бока темнее — грани читаются как один объём */
+.sp-df.d2 { filter: brightness(1.12); }
+.sp-df.d5 { filter: brightness(.78); }
+.sp-df.d3, .sp-df.d4 { filter: brightness(.9); }

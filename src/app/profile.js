@@ -65,18 +65,91 @@ document.addEventListener("media-token-ready", () => loadAvatars(document));
 
 // Своя картинка баннера профиля (/api/banner/{id}) — 204, если её нет
 // (пресет/пусто), тогда молча остаёмся на градиенте из CSS.
+// Положение по вертикали — banner_pos_y с сервера (0–100 %, то же, что в мини-аппе).
 function loadProfileBanner(el, telegramId) {
   if (!el || !telegramId) return;
   const img = new Image();
   img.onload = () => {
     el.style.backgroundImage = `url(${img.src})`;
     el.style.backgroundSize = "cover";
-    el.style.backgroundPosition = "center";
+    el.style.backgroundPosition = `50% ${bannerPos(el)}%`;
+    el.classList.add("has-img");
+    if (el.dataset.editable) wireBannerAdjust(el, img);
   };
   img.onerror = () => {};
   const src = mediaUrl(`/banner/${encodeURIComponent(telegramId)}`);
   if (!src) return;
   img.src = src;
+}
+
+function bannerPos(el) {
+  const v = Number(el.dataset.pos);
+  return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 50;
+}
+
+// Свой баннер можно подвинуть прямо в шапке: «Положение» → тянуть картинку вверх-вниз (или колесом) → «Сохранить».
+function wireBannerAdjust(el, img) {
+  if (el.querySelector(".pf-ban-move")) return;
+  const btn = document.createElement("button");
+  btn.className = "btn sm pf-ban-move";
+  btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/></svg>Положение`;
+  el.append(btn);
+  // сколько пикселей картинки «не влезает» по высоте при cover — столько и можно прокрутить
+  const spare = () => {
+    const w = el.clientWidth, h = el.clientHeight;
+    return Math.max(0, img.naturalHeight * Math.max(w / img.naturalWidth, h / img.naturalHeight) - h);
+  };
+  btn.addEventListener("click", e => {
+    e.stopPropagation();
+    if (spare() < 2) { toast("Картинка целиком помещается в шапку — двигать нечего."); return; }
+    const was = bannerPos(el);
+    let pos = was;
+    const set = v => { pos = Math.min(100, Math.max(0, v)); el.style.backgroundPosition = `50% ${pos}%`; };
+    const bar = document.createElement("div");
+    bar.className = "pf-ban-bar";
+    bar.innerHTML = `<span class="pf-ban-hint">Тяните картинку вверх или вниз</span><button class="btn sm ghost" data-a="cancel">Отмена</button><button class="btn sm primary" data-a="save">Сохранить</button>`;
+    el.append(bar);
+    el.classList.add("adjust");
+    let drag = null;
+    const down = ev => {
+      if (ev.button !== 0 || ev.target.closest(".pf-ban-bar")) return;
+      drag = { y: ev.clientY, pos };
+      el.setPointerCapture(ev.pointerId);
+      el.classList.add("grabbing");
+    };
+    // тянем картинку: вниз — показываем её верх (процент уменьшается)
+    const move = ev => { if (drag) set(drag.pos - (ev.clientY - drag.y) / spare() * 100); };
+    const up = () => { drag = null; el.classList.remove("grabbing"); };
+    const wheel = ev => { ev.preventDefault(); set(pos + Math.sign(ev.deltaY) * 4); };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+    el.addEventListener("wheel", wheel, { passive: false });
+    const done = () => {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      el.removeEventListener("wheel", wheel);
+      el.classList.remove("adjust", "grabbing");
+      bar.remove();
+    };
+    bar.querySelector('[data-a="cancel"]').addEventListener("click", ev => { ev.stopPropagation(); set(was); done(); });
+    bar.querySelector('[data-a="save"]').addEventListener("click", async ev => {
+      ev.stopPropagation();
+      const v = Math.round(pos);
+      try {
+        await apiPost("/me/profile", { banner_pos_y: v });
+        el.dataset.pos = String(v);
+        set(v);
+        done();
+        toast("Положение баннера сохранено.");
+      } catch (err) {
+        toast(`Не удалось сохранить: ${err.message}`, "error");
+      }
+    });
+  });
 }
 
 // Кольцо аватара по стажу в команде — те же пороги, что в мини-аппе.
@@ -296,7 +369,7 @@ function profileHeaderHtml(d, isSelf, asParts) {
   }
 
   const left = `
-    <div class="profile-banner-wrap" data-role="profile-banner"></div>
+    <div class="profile-banner-wrap" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}"${isSelf ? ' data-editable="1"' : ""}></div>
     <div class="profile-head-card">
       <span class="avatar-ring${tier ? " tier-" + tier : ""}">${avatarHtml(d.telegram_id, d.display_name || d.name, "xl")}</span>
       <div class="nm-row">
@@ -510,7 +583,7 @@ function myHeroHtml(d) {
     </div>` : `<div class="pf-about empty">Статус и пара слов о себе — их видят коллеги в карточке профиля.</div>`;
   return `
     <section class="pf-hero">
-      <div class="pf-banner" data-role="profile-banner"></div>
+      <div class="pf-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}" data-editable="1"></div>
       <div class="pf-hero-body">
         <span class="avatar-ring${tier ? " tier-" + tier : ""}">${avatarHtml(d.telegram_id, d.display_name || d.name, "xl")}</span>
         <div class="pf-who">
