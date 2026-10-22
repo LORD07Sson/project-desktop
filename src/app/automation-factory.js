@@ -17,30 +17,38 @@ function led(on, paused, queue, failed) {
 }
 const LED_LABEL = { off: "Выключена", run: "Работает", idle: "Ждёт работу", pause: "Пауза", err: "Есть ошибки" };
 
+// Этап линии: только цифра и смысл. Состояние и кнопки — один раз на всю линию (раньше «Ждёт работу» и «Стоп»
+// повторялись в каждой карточке и ломали её высоту). Клик по этапу открывает его настройки.
 function machine(m) {
   const k = m.led || "idle";
   return `
-  <div class="fc-machine" data-led="${k}">
-    <div class="fc-m-head"><i class="fc-led"></i><b>${esc(m.title)}</b></div>
-    <div class="fc-m-body">
-      <div class="fc-count">${m.count ?? "—"}</div>
-      <div class="fc-sub">${esc(m.unit || "")}</div>
-    </div>
-    <div class="fc-m-lines">${(m.lines || []).map(l => `<span>${esc(l)}</span>`).join("")}</div>
-    <div class="fc-m-foot">
-      <span class="fc-state">${LED_LABEL[k]}</span>
-      ${m.toggle ? `<button type="button" class="fc-btn ${m.on ? "stop" : "go"}" data-fc-toggle="${m.toggle}" data-on="${m.on ? 1 : 0}">${m.on ? "Стоп" : "Пуск"}</button>` : ""}
-      ${m.tab ? `<button type="button" class="fc-btn" data-fc-go="${m.tab}" title="Настройки машины">⚙</button>` : ""}
-    </div>
-  </div>`;
+  <button type="button" class="fc-machine" data-led="${k}" ${m.tab ? `data-fc-go="${m.tab}"` : "disabled"} title="${esc(LED_LABEL[k])}${m.tab ? " · открыть настройки" : ""}">
+    <span class="fc-m-head"><i class="fc-led"></i><b>${esc(m.title)}</b></span>
+    <span class="fc-m-body"><span class="fc-count">${m.count ?? "—"}</span><span class="fc-sub">${esc(m.unit || "")}</span></span>
+    <span class="fc-m-lines">${(m.lines || []).map(l => `<span>${esc(l)}</span>`).join("")}</span>
+  </button>`;
 }
+
+// Общее состояние линии — по самому «тревожному» этапу: ошибки > пауза > работает > ждёт > выключена.
+const LINE_ORDER = ["err", "pause", "run", "idle", "off"];
+const lineLed = machines => LINE_ORDER.find(k => machines.some(m => (m.led || "idle") === k)) || "idle";
 
 const belt = (active, load = 1) => `<div class="fc-belt${active ? " on" : ""}" style="--fc-speed:${Math.max(0.8, 3 - load * 0.4)}s"><span></span><span></span><span></span></div>`;
 
 function line(title, sub, machines, belts) {
+  const k = lineLed(machines);
+  const ctl = machines.find(m => m.toggle);
+  const tab = (ctl || machines.find(m => m.tab) || {}).tab;
   return `
-  <section class="fc-line">
-    <header><h4>${esc(title)}</h4><span>${esc(sub)}</span></header>
+  <section class="fc-line" data-led="${k}">
+    <header>
+      <div class="fc-l-title"><h4>${esc(title)}</h4><span>${esc(sub)}</span></div>
+      <div class="fc-l-ctl">
+        <span class="fc-pill" data-led="${k}"><i class="fc-led"></i>${LED_LABEL[k]}</span>
+        ${ctl ? `<button type="button" class="fc-btn ${ctl.on ? "stop" : "go"}" data-fc-toggle="${ctl.toggle}" data-on="${ctl.on ? 1 : 0}">${ctl.on ? "Остановить" : "Запустить"}</button>` : ""}
+        ${tab ? `<button type="button" class="fc-btn fc-gear" data-fc-go="${tab}" title="Настройки линии" aria-label="Настройки линии">⚙</button>` : ""}
+      </div>
+    </header>
     <div class="fc-row">
       ${machines.map((m, i) => machine(m) + (i < machines.length - 1 ? belt(belts[i], m.count || 1) : "")).join("")}
     </div>
@@ -58,35 +66,35 @@ export function mountFactory(root, go) {
     const diskUsed = d.disk_free;
 
     const lineSeries = [
-      { title: "Канал-источник", count: "TG", unit: "новые серии", lines: ["Бот ловит посты сам"], led: a.enabled ? "run" : "off", tab: "archive" },
-      { title: "Очередь серий", count: a.queue, unit: "ждёт заливки", lines: [a.held ? `Ждут решения: ${a.held}` : "Порядок по сериям"], led: led(a.enabled, a.paused, a.queue, 0), tab: "archive" },
-      { title: "Заливка в архив", count: a.limit || "∞", unit: a.limit ? "Мбит/с" : "без лимита", lines: [s.night_now ? "Ночной режим" : "Обычный режим"], led: led(a.enabled, a.paused, a.queue, 0), toggle: "archive", on: a.enabled, tab: "speed" },
-      { title: "Архивная группа", count: f.topics.archive || 0, unit: "тем тайтлов", lines: ["Тема на каждый тайтл"], led: a.enabled ? "idle" : "off", tab: "archive" },
+      { title: "Канал", count: "TG", unit: "новые серии", lines: ["Бот ловит посты сам"], led: a.enabled ? "run" : "off", tab: "archive" },
+      { title: "Очередь", count: a.queue, unit: "ждёт заливки", lines: [a.held ? `Ждут решения: ${a.held}` : "Порядок по сериям"], led: led(a.enabled, a.paused, a.queue, 0), tab: "archive" },
+      { title: "Заливка", count: a.limit || "∞", unit: a.limit ? "Мбит/с" : "без лимита", lines: [s.night_now ? "Ночной режим" : "Обычный режим"], led: led(a.enabled, a.paused, a.queue, 0), toggle: "archive", on: a.enabled, tab: "speed" },
+      { title: "Группа", count: f.topics.archive || 0, unit: "тем тайтлов", lines: ["Тема на каждый тайтл"], led: a.enabled ? "idle" : "off", tab: "archive" },
     ];
     const lineReports = [
-      { title: "Завершённые отчёты", count: r.queue + r.done, unit: "прошли / ждут", lines: ["Фильтры по статусам"], led: r.enabled ? "run" : "off", tab: "reports" },
-      { title: "Очередь переноса", count: r.queue, unit: "ждёт срока", lines: [r.paused ? "Пауза общего архива" : "По одному за раз"], led: led(r.enabled, r.paused, r.queue, r.failed), tab: "reports" },
-      { title: "Карточка в тему", count: r.done, unit: "перенесено", lines: [r.failed ? `Ошибок: ${r.failed}` : "Ошибок нет"], led: led(r.enabled, r.paused, r.queue, r.failed), toggle: "reports", on: r.enabled, tab: "reports" },
-      { title: "Группа отчётов", count: f.topics.reports || 0, unit: "тем тайтлов", lines: ["Заметки, авторы, файлы"], led: r.enabled ? "idle" : "off", tab: "reports" },
+      { title: "Готовые", count: r.queue + r.done, unit: "прошли / ждут", lines: ["Фильтры по статусам"], led: r.enabled ? "run" : "off", tab: "reports" },
+      { title: "Очередь", count: r.queue, unit: "ждёт срока", lines: [r.paused ? "Пауза общего архива" : "По одному за раз"], led: led(r.enabled, r.paused, r.queue, r.failed), tab: "reports" },
+      { title: "Перенос", count: r.done, unit: "перенесено", lines: [r.failed ? `Ошибок: ${r.failed}` : "Ошибок нет"], led: led(r.enabled, r.paused, r.queue, r.failed), toggle: "reports", on: r.enabled, tab: "reports" },
+      { title: "Группа", count: f.topics.reports || 0, unit: "тем тайтлов", lines: ["Заметки и файлы"], led: r.enabled ? "idle" : "off", tab: "reports" },
     ];
     const lineDocs = [
-      { title: "Файлы отчётов", count: c.queue + c.done, unit: "всего", lines: ["Файлы, субтитры, звук, торренты"], led: c.enabled ? "run" : "off", tab: "docs" },
-      { title: "Очередь файлов", count: c.queue, unit: "ждёт отправки", lines: [c.paused ? "На паузе" : "Пачками раз в минуту"], led: led(c.enabled, c.paused, c.queue, c.failed), tab: "docs" },
+      { title: "Файлы", count: c.queue + c.done, unit: "всего", lines: ["Видео, звук, сабы"], led: c.enabled ? "run" : "off", tab: "docs" },
+      { title: "Очередь", count: c.queue, unit: "ждёт отправки", lines: [c.paused ? "На паузе" : "Пачками раз в минуту"], led: led(c.enabled, c.paused, c.queue, c.failed), tab: "docs" },
       { title: "Отправка", count: c.done, unit: "отправлено", lines: [c.failed ? `Ошибок: ${c.failed}` : "Ошибок нет", f.local_videos ? `Видео на диске: ${f.local_videos}` : "Диск чист"], led: led(c.enabled, c.paused, c.queue, c.failed), toggle: "docs", on: c.enabled, tab: "docs" },
-      { title: "Группа документов", count: f.topics.docs || 0, unit: "тем тайтлов", lines: ["Тема «Документы · тайтл»"], led: c.enabled ? "idle" : "off", tab: "docs" },
+      { title: "Группа", count: f.topics.docs || 0, unit: "тем тайтлов", lines: ["Тема на тайтл"], led: c.enabled ? "idle" : "off", tab: "docs" },
     ];
     const lineProd = [
-      { title: "Nyaa / торренты", count: f.torrents, unit: "качает сервер", lines: [`Лимит: ${fmtLimit(s.torrent)}`], led: f.torrents ? "run" : "idle", tab: "speed" },
-      { title: "Диск сервера", count: f.local_videos, unit: "видео лежит", lines: [`Свободно ${fmtGb(diskUsed)}`], led: diskUsed < 5 * 1024 ** 3 ? "err" : f.local_videos ? "run" : "idle", tab: "logs" },
-      { title: "Сборка финала", count: f.assembling, unit: "рендерится", lines: ["Очередь по одному"], led: f.assembling ? "run" : "idle" },
-      { title: "Готовый финал", count: "TG", unit: "в отчёт и пост", lines: ["Черновик поста — по кнопке"], led: "idle" },
+      { title: "Торренты", count: f.torrents, unit: "качает сервер", lines: [`Лимит: ${fmtLimit(s.torrent)}`], led: f.torrents ? "run" : "idle", tab: "speed" },
+      { title: "Диск", count: f.local_videos, unit: "видео лежит", lines: [`Свободно ${fmtGb(diskUsed)}`], led: diskUsed < 5 * 1024 ** 3 ? "err" : f.local_videos ? "run" : "idle", tab: "logs" },
+      { title: "Сборка", count: f.assembling, unit: "рендерится", lines: ["Очередь по одному"], led: f.assembling ? "run" : "idle" },
+      { title: "Финал", count: "TG", unit: "в отчёт и пост", lines: ["Пост — по кнопке"], led: "idle" },
     ];
 
     root.innerHTML = `
     <div class="fc">
       <div class="fc-trunk">
-        <div class="fc-trunk-title"><b>Магистраль канала</b><span>Хостинг режет канал выше ~50 Мбит/с</span></div>
-        <div class="fc-gauge"><i style="width:${Math.min(100, backbone / 50 * 100)}%"></i><em>${backbone ? `лимиты до ${backbone} Мбит/с${s.total ? ` · общий потолок ${s.total}` : ""}` : "лимитов нет"}</em></div>
+        <div class="fc-trunk-title"><b>Магистраль канала</b><span>${backbone ? `лимиты до ${backbone} Мбит/с${s.total ? ` · общий потолок ${s.total}` : ""}` : "лимитов нет"} · хостинг режет выше ~50 Мбит/с</span></div>
+        <div class="fc-gauge" title="Сколько из ~50 Мбит/с канала занимают лимиты"><i style="width:${Math.min(100, backbone / 50 * 100)}%"></i></div>
         <div class="fc-trunk-sub">${s.night_now ? "🌙 ночной режим" : "☀ обычный режим"} · Свободно на складе (диск): ${fmtGb(d.disk_free)}</div>
       </div>
       ${line("Линия 1 · Серии → архив", "Новые серии из канала ложатся в темы архивной группы", lineSeries, [a.enabled && a.queue > 0, a.enabled && !a.paused && a.queue > 0, a.enabled])}

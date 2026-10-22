@@ -476,7 +476,7 @@ async function mountDocs(root) {
 export function mountAutomation(root) {
   if (!root) return;
   root.innerHTML = `
-    <div class="ar-tabs" role="tablist">
+    <div class="ar-tabs au-tabs" role="tablist">
       ${TABS.map(([k, label, ic]) => `<button type="button" data-au-tab="${k}">${svg(ic)}${label}</button>`).join("")}
     </div>
     <div id="au-pane" style="margin-top:14px;"></div>`;
