@@ -5,6 +5,7 @@
 // только локально.
 
 import { state } from "./state.js";
+import { apiGet } from "./api.js";
 
 const MAX_RECENT = 8;
 
@@ -37,4 +38,29 @@ export function recordRecentReport(publicId, title) {
 
 export function recentReports() {
   return readList();
+}
+
+// Отчёт удалён (или доступ к нему сняли) — из истории его убираем, иначе палитра
+// так и показывала бы «мёртвые» карточки, которые не открываются.
+export function forgetRecentReport(publicId) {
+  writeList(readList().filter(x => x.publicId !== publicId));
+}
+
+// Проверка истории на сервере: каждый отчёт — не чаще раза в 5 минут за сеанс.
+// Возвращает true, если что-то убрали. Сетевые сбои ничего не удаляют.
+const checkedAt = new Map();
+export async function pruneRecentReports() {
+  const now = Date.now();
+  const todo = readList().filter(x => !(now - (checkedAt.get(x.publicId) || 0) < 5 * 60 * 1000));
+  const gone = [];
+  await Promise.all(todo.map(async x => {
+    try {
+      await apiGet(`/report/${encodeURIComponent(x.publicId)}`);
+      checkedAt.set(x.publicId, Date.now());
+    } catch (e) {
+      if (e.status === 404 || e.status === 403) gone.push(x.publicId);
+    }
+  }));
+  gone.forEach(forgetRecentReport);
+  return gone.length > 0;
 }

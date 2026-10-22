@@ -10,7 +10,7 @@ import { openSheet, apiGet } from "./api.js";
 import { $, esc } from "./utils.js";
 import { switchTab } from "./tabs.js";
 import { openReportDetail } from "./report-detail.js";
-import { recentReports } from "./recent-reports.js";
+import { recentReports, pruneRecentReports } from "./recent-reports.js";
 import { parseProjectLink } from "./deeplink-core.js";
 
 const ACTIONS = [
@@ -143,6 +143,8 @@ export function openPalette() {
 
   setItems([...recentItems(), ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, sub: a.sub, run: a.run }))]);
   input.focus();
+  // удалённые отчёты пропадают из «недавнего» сразу, как сервер подтвердит, что их нет
+  pruneRecentReports().then(changed => { if (changed && overlay.isConnected && !input.value.trim()) onInput(); }).catch(() => {});
 }
 
 document.addEventListener("keydown", e => {

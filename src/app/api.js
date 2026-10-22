@@ -114,7 +114,9 @@ export async function api(method, path, body) {
     let detail = resp.status;
     try { detail = (await resp.json()).detail ?? detail; } catch (_) {}
     checkSessionLost(resp.status, detail, path);
-    throw new Error(formatApiError(detail, resp.status));
+    const err = new Error(formatApiError(detail, resp.status));
+    err.status = resp.status;
+    throw err;
   }
   const text = await resp.text();
   return text ? stripStatusEmoji(JSON.parse(text)) : {};

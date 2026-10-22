@@ -14,7 +14,7 @@ import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadR
 import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from "./titles-admin.js";
 import { setDropTarget } from "./file-drop.js";
 import { downloadWithCard } from "./download-card.js";
-import { recordRecentReport } from "./recent-reports.js";
+import { recordRecentReport, forgetRecentReport } from "./recent-reports.js";
 import { toggleFocusMode, syncFocusButton } from "./focus-mode.js";
 import { loadAvatars } from "./profile.js";
 import { createPlayer, isAudioFile } from "./player.js";
@@ -282,6 +282,7 @@ export async function openReportDetail(publicId) {
         apiGet(`/report/${publicId}/raws`).catch(() => ({ raws: [] })),
       ]);
     } catch (e) {
+      if (e.status === 404 || e.status === 403) forgetRecentReport(publicId);
       overlay.querySelector(".sheet").innerHTML = `<div style="color:var(--s-stop);">Не удалось загрузить карточку: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
       overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
       return;
