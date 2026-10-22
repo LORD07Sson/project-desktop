@@ -243,14 +243,27 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -e
-          id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.tag_name=="alpha-latest") | .id' | head -1)
-          if [ -z "$id" ]; then
+          # Под тегом alpha-latest может лежать несколько релизов: прерванный параллельный запуск
+          # оставляет черновик рядом с опубликованным. Опубликовать такой черновик GitHub не даст
+          # (422 already_exists), поэтому: есть опубликованный — лишние черновики удаляем;
+          # опубликованного нет — публикуем самый свежий черновик.
+          rels=$(gh api "repos/$REPO/releases" --paginate --jq '.[] | select(.tag_name=="alpha-latest") | "\(.id) \(.draft)"')
+          if [ -z "$rels" ]; then
             echo "::error::Релиза alpha-latest нет вообще"
             exit 1
           fi
-          if [ "$(gh api "repos/$REPO/releases/$id" --jq .draft)" = "true" ]; then
+          published=$(echo "$rels" | awk '$2=="false"{print $1; exit}')
+          drafts=$(echo "$rels" | awk '$2=="true"{print $1}')
+          if [ -n "$published" ]; then
+            for d in $drafts; do
+              echo "::warning::Удаляю лишний черновик alpha-latest (id=$d)"
+              gh api -X DELETE "repos/$REPO/releases/$d" || true
+            done
+          else
+            id=$(echo "$drafts" | head -1)
             echo "::warning::vpk оставил релиз черновиком — публикуем сами"
             gh api -X PATCH "repos/$REPO/releases/$id" -F draft=false -F prerelease=true
+            for d in $(echo "$drafts" | tail -n +2); do gh api -X DELETE "repos/$REPO/releases/$d" || true; done
           fi
           # Контрольный выстрел: фид должен скачиваться анонимно, ровно
           # так за ним и приходит клиент.
