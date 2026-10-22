@@ -168,7 +168,7 @@ async function sceneWord(root) {
   ], { duration: 220, easing: OUT });
   for (let i = 3; i < letters.length; i++) { rise(i); await wait(80); }
   // слово держится до отметки 3,2 с от начала ролика
-  await wait(Math.max(420, 3200 - (performance.now() - t0) / S));
+  await wait(Math.max(420, 3200 - (Date.now() - t0) / S));
 }
 
 // слово гаснет (≈35 мс), пауза, три точки слева направо с шагом 50 мс; пока грузится — «дышат» волной
@@ -269,7 +269,7 @@ export function startSplash() {
   if (!root || reduce()) { ready = Promise.resolve(); return; }
   build(root);
   root.classList.add("sp-run");
-  t0 = performance.now();
+  t0 = Date.now();
   const skip = () => { skipped = true; root.getAnimations({ subtree: true }).forEach(a => { try { a.finish(); } catch (_) { a.cancel(); } }); };
   root.addEventListener("click", skip);
   document.addEventListener("keydown", e => { if (e.key === "Escape") skip(); }, { once: true });
