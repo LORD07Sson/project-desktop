@@ -30,11 +30,9 @@ export function hideSplash() {
   if (!el || el.dataset.hidden) return;
   el.dataset.hidden = "1";
   const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashShownAt));
-  // DevSkim: ignore DS172411 — оба таймера вызывают функции, не строки, данные не внешние
-  setTimeout(() => {
-    el.classList.add("hide");
-    setTimeout(() => el.remove(), 400);
-  }, wait);
+  // Интро заставки доигрывает само и уводит плитку на место логотипа в шапке (splash.js).
+  // DevSkim: ignore DS172411 — таймер вызывает функцию, не строку
+  setTimeout(() => import("./splash.js").then(m => m.finishSplash()), wait);
 }
 
 // Имя в шапке. Отдельной функцией, потому что при восстановлении сессии

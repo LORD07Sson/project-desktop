@@ -27,6 +27,8 @@ installFileLogging();
 // выключена), и на экране входа/загрузки окно тоже нужно чем-то
 // двигать и закрывать.
 installWindowChrome();
+// Заставка — сразу после того, как тема и акцент применены (theme.js и ui-prefs.js при импорте).
+startSplash();
 import "./density.js";
 import "./ui-prefs.js";
 import "./tabs.js";
@@ -51,6 +53,7 @@ import "./watch.js";
 import { installLiquidNav } from "./nyaa-fx.js";
 import { startEmojiIcons } from "./icons.js";
 import { startAntivirusAuto } from "./antivirus-ui.js";
+import { startSplash } from "./splash.js";
 installLiquidNav();
 // Эмодзи в тексте интерфейса → линейные значки в стиле остальных иконок (см. icons.js).
 startEmojiIcons();
