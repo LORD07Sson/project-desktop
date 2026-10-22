@@ -5,7 +5,7 @@
 //   • меняются только изменившиеся знаки; при 59→00 десятки и минуты прокручиваются тем же движением.
 // Использование: rollText(el, "14:32:07") — первый вызов просто рисует, следующие анимируют разницу.
 
-const reduce = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const reduce = () => typeof window.Element?.prototype.animate !== "function" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 function cell(ch) {
   const c = document.createElement("span");

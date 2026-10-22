@@ -8,7 +8,8 @@
 //           кольцами → плитка с крестиком логотипа улетает на своё место в шапке, фон растворяется.
 // Цвет — акцент пользователя (--fire / --gold / --accent-grad), фон — его тема (--bg). Клик или Esc — пропустить.
 
-const reduce = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+// Без Web Animations API (тесты в jsdom, старый WebView) — как при «уменьшить движение»: без интро.
+const reduce = () => typeof window.Element?.prototype.animate !== "function" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const OUT = "cubic-bezier(.22, .9, .3, 1)";
 // Темп: ролик целиком в полтора раза медленнее оригинала — чтобы каждую сцену успевали рассмотреть.
 const S = 1.5;
