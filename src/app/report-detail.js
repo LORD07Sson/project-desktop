@@ -422,7 +422,7 @@ export async function openReportDetail(publicId) {
               <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}
                 <span class="rd-h-act rd-h-tools">
                   <button class="rd-add" id="report-file-add">${detail.is_sound ? "+ Сдать готовую дорожку" : "+ Добавить файл"}</button>
-                  ${can("titles.edit") && detail.title_id ? `<button class="rd-add" id="report-watermark" title="Логотип, угол, прозрачность и размер — общие для всех серий тайтла">💧 Водяной знак</button>` : ""}
+                  ${can("titles.edit") ? `<button class="rd-add" id="report-watermark" title="${detail.title_id ? "Логотип, угол, прозрачность и размер — общие для всех серий тайтла" : "Серия без тайтла — при сборке берётся общий водяной знак студии"}">💧 Водяной знак</button>` : ""}
                 </span>
               </h3>
               ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="rd-empty">Файлов пока нет — добавьте кнопкой выше или перетащите файл в окно.</div>`}
@@ -690,7 +690,9 @@ export async function openReportDetail(publicId) {
     sheet.querySelector("#report-post")?.addEventListener("click", () => {
       import("./channel-post.js").then(m => m.openChannelPostSheet());
     });
-    sheet.querySelector("#report-watermark")?.addEventListener("click", () => openTitleAdminDetail(detail.title_id, undefined, "watermark"));
+    sheet.querySelector("#report-watermark")?.addEventListener("click", () => (detail.title_id
+      ? openTitleAdminDetail(detail.title_id, undefined, "watermark")
+      : import("./watermark-editor.js").then(m => m.openStudioWatermark())));
     // Сборка уже идёт (запущена раньше или с другого устройства) — карточка хода появится сама.
     if (sheet.querySelector("#report-assemble")) startAssemblyWatch(publicId, overlay, false);
     const startNyaa = async () => {
