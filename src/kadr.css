@@ -3854,3 +3854,61 @@ td.row-actions { opacity: 1; transition: none; }
 /* сцена кубика: «лепестки» быстрее гаснут к краям, между ними чёрное, виньетка плотнее — как в кадре ролика */
 .sp-glow.c i { background: radial-gradient(120% 110% at var(--lx) var(--ly), color-mix(in srgb, var(--fire) 60%, #fff 40%) 0%, var(--fire) 22%, color-mix(in srgb, var(--fire) 52%, #000) 46%, color-mix(in srgb, var(--fire) 24%, #000) 74%, color-mix(in srgb, var(--fire) 15%, #000) 100%); filter: blur(.45vmin); }
 .sp-scene[data-s="cube"]::after { background: radial-gradient(circle at 50% 50%, transparent 26%, rgba(0, 0, 0, .7) 78%, #000 100%); }
+
+/* ---- Заставка 6: сцена «кубик» по кадру ролика в полном разрешении ----
+   Фон: три сплошные плиты акцента + общий «свет» от центра (яркость зависит только от расстояния до кубика),
+   между плитами — чёрный крест. Кубик — прозрачное стекло: видно то, что за ним; сам он — кромки, блики и капля. */
+.sp-glow.c i { background: color-mix(in srgb, var(--fire) 86%, #fff 14%); filter: blur(.9vmin); border-radius: 6vmin; box-shadow: none; }
+.sp-glow.c i:nth-child(1) { --x: 29vmin; --y: -14vmin; --w: 45vmin; --h: 45vmin; --r: 35deg; }
+.sp-glow.c i:nth-child(2) { --x: -37vmin; --y: -9vmin; --w: 45vmin; --h: 45vmin; --r: -35deg; }
+.sp-glow.c i:nth-child(3) { --x: 5vmin; --y: 36vmin; --w: 43vmin; --h: 43vmin; --r: -15deg; }
+.sp-shade { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 15vmin, rgba(0, 0, 0, .34) 29vmin, rgba(0, 0, 0, .7) 45vmin, rgba(0, 0, 0, .92) 61vmin, #000 76vmin); }
+.sp-scene[data-s="cube"]::after { content: none; }
+
+.sp-cube { perspective: none; position: relative; z-index: 1; }
+.sp-glass { position: relative; width: 33vmin; height: 33vmin; border-radius: 6vmin; }
+.sp-glass > i, .sp-glass > b { position: absolute; display: block; }
+.g-body { inset: 0; border-radius: inherit; background: rgba(0, 0, 0, .1); backdrop-filter: blur(.4vmin) brightness(.93); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
+.g-rim { inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 .28vmin 0 rgba(255, 255, 255, .3), inset -.3vmin 0 0 rgba(255, 255, 255, .2), inset .2vmin 0 0 rgba(255, 255, 255, .1), inset 0 -.2vmin 0 rgba(255, 255, 255, .12); }
+.g-left { left: 0; top: 7%; bottom: 14%; width: 9%; border-radius: 6vmin 0 0 6vmin / 5vmin 0 0 5vmin;
+  background: linear-gradient(90deg, rgba(72, 74, 78, .9), rgba(28, 29, 31, .5) 55%, transparent); }
+.g-top { left: 2%; right: 2%; top: 0; height: 0; border-radius: 6vmin 6vmin 0 0;
+  background: linear-gradient(180deg, rgba(86, 88, 92, .7), rgba(14, 14, 15, .45)); box-shadow: inset 0 -.25vmin 0 rgba(0, 0, 0, .8); }
+.g-bottom { left: 0; right: 0; bottom: 0; height: 19%; border-radius: 0 0 6vmin 6vmin;
+  background: linear-gradient(90deg, #505257 0%, #232427 14%, #0b0b0c 45%, #070708 85%, #18191b 100%);
+  box-shadow: inset 0 .3vmin 0 rgba(0, 0, 0, .9), inset 0 .55vmin 0 rgba(255, 255, 255, .08), inset 0 -.25vmin 0 rgba(255, 255, 255, .2); }
+.g-bottom::before { content: ""; position: absolute; left: 3%; top: 22%; width: 9%; height: 56%; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, .55), transparent 70%); }
+.g-spec.l { left: 4%; top: 6%; width: 6.5%; height: 15%; border-radius: 50%; filter: blur(.12vmin);
+  background: radial-gradient(ellipse at 50% 35%, #fff 0 30%, rgba(255, 255, 255, .6) 50%, transparent 72%); }
+.g-spec.l::after { content: ""; position: absolute; left: 30%; top: 88%; width: 40%; height: 230%; border-radius: 50%; background: linear-gradient(180deg, rgba(255, 255, 255, .42), transparent); }
+.g-spec.r { right: 3.5%; top: 7%; width: 5%; height: 12%; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 35%, rgba(235, 255, 248, .95) 0 25%, rgba(255, 255, 255, .4) 50%, transparent 72%); }
+.g-drop { left: 52%; top: 47%; width: 36%; height: 36%; transform: translate(-50%, -50%); border-radius: 50%;
+  background: radial-gradient(circle at 44% 62%, #67696d 0%, #34363a 22%, #121314 48%, #000 70%);
+  box-shadow: inset 0 0 0 .22vmin rgba(210, 215, 220, .55), inset -.9vmin .9vmin 1.2vmin rgba(0, 0, 0, .6),
+    inset .7vmin -.7vmin .6vmin color-mix(in srgb, var(--fire) 60%, transparent), 0 0 0 .15vmin rgba(0, 0, 0, .8); }
+.g-drop::before { content: ""; position: absolute; inset: 9% 7% 5% 11%; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+.g-drop::after { content: ""; position: absolute; right: 12%; bottom: 13%; width: 20%; height: 12%; border-radius: 50%; transform: rotate(-38deg);
+  background: radial-gradient(ellipse, #fff 0 35%, rgba(255, 255, 255, .4) 60%, transparent 75%); }
+
+/* доводка: плиты вращаются вокруг своего центра (раньше — вокруг левого края, раскладка съезжала на ~30°);
+   у кубика тёмная толстая кромка по периметру, прозрачна только середина; капля темнее */
+.app-splash .sp-glow i { transform-origin: 50% 50%; }
+.g-body { background: radial-gradient(ellipse 72% 72% at 50% 48%, rgba(0, 0, 0, .06) 55%, rgba(0, 0, 0, .5) 82%, rgba(0, 0, 0, .78) 100%); }
+.g-left { width: 11%; background: linear-gradient(90deg, rgba(78, 80, 84, .95), rgba(30, 31, 33, .65) 50%, transparent); }
+.g-drop { background: radial-gradient(circle at 44% 64%, #4a4c50 0%, #1e1f21 25%, #050506 55%, #000 72%); }
+
+/* стекло кубика как в кадре: корпус тёмный, по периметру толстая тёмно-серая кромка;
+   плита просвечивает только в правой верхней четверти пятном со скруглённым краем (преломление) */
+.sp-glow.c i:nth-child(1) { --w: 48vmin; --h: 48vmin; }
+.sp-glow.c i:nth-child(2) { --w: 48vmin; --h: 48vmin; }
+.sp-glow.c i:nth-child(3) { --w: 46vmin; --h: 44vmin; }
+.g-body { backdrop-filter: none; background: #030304;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13), inset 0 0 1.2vmin .9vmin rgba(44, 46, 50, .8), inset 0 0 0 1.4vmin rgba(18, 19, 21, .9); }
+.g-see { left: 58%; top: 1.5%; right: 2.5%; height: 39%; border-radius: 0 5.4vmin 0 70% / 0 5.4vmin 0 62%;
+  background: linear-gradient(200deg, color-mix(in srgb, var(--fire) 80%, #fff 20%), var(--fire) 60%, color-mix(in srgb, var(--fire) 80%, #000)); filter: blur(.25vmin); }
+
+/* затухание плит от центра: ярко у кубика, к дальним краям — почти чёрное, как в кадре ролика */
+.sp-shade { background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 16vmin, rgba(0, 0, 0, .32) 28vmin, rgba(0, 0, 0, .66) 42vmin, rgba(0, 0, 0, .9) 58vmin, #000 72vmin); }

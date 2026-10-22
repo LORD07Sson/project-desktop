@@ -34,9 +34,10 @@ function build(root) {
   root.innerHTML = `
     <section class="sp-scene" data-s="cube">
       ${glow("c")}
-      <div class="sp-cube"><div class="sp-c3">
-        <div class="sp-cf f1"><b></b></div><div class="sp-cf f2"></div><div class="sp-cf f3"></div>
-        <div class="sp-cf f4"></div><div class="sp-cf f5"></div><div class="sp-cf f6"></div>
+      <div class="sp-shade"></div>
+      <div class="sp-cube"><div class="sp-glass">
+        <i class="g-body"></i><i class="g-see"></i><i class="g-left"></i><i class="g-top"></i><i class="g-bottom"></i>
+        <i class="g-spec l"></i><i class="g-spec r"></i><i class="g-rim"></i><b class="g-drop"></b>
       </div></div>
     </section>
     <section class="sp-scene" data-s="dock">
@@ -93,10 +94,18 @@ function cut(root, name) {
   return next;
 }
 
+// Камера облетает кубик: плиты поворачиваются против часовой (~14°), кубик — от «виден верх и правый бок»
+// к «виден низ и левая фаска». Кубик прозрачный: что за ним — видно сквозь стекло, как в ролике.
 async function sceneCube(root) {
   const s = cut(root, "cube");
-  play(s.querySelector(".sp-glow"), [{ transform: "rotate(-7deg) scale(1.1)" }, { transform: "rotate(3deg) scale(1)" }], { duration: 520, easing: "linear" });
-  play(s.querySelector(".sp-c3"), [{ transform: "rotateX(17deg) rotateY(-12deg) rotateZ(-2deg)" }, { transform: "rotateX(12deg) rotateY(6deg) rotateZ(1deg)" }], { duration: 520, easing: "ease-out" });
+  const g = s.querySelector(".sp-glass");
+  play(s.querySelector(".sp-glow"), [{ transform: "rotate(11deg) scale(1.05)" }, { transform: "rotate(-3deg) scale(1)" }], { duration: 520, easing: "linear" });
+  play(g, [{ transform: "perspective(900px) rotateX(-17deg) rotateY(-15deg) rotateZ(10deg)" }, { transform: "perspective(900px) rotateX(13deg) rotateY(8deg) rotateZ(-1deg)" }], { duration: 520, easing: "ease-in-out" });
+  play(g.querySelector(".g-top"), [{ height: "15%" }, { height: "0%" }], { duration: 520, easing: "ease-in-out" });
+  play(g.querySelector(".g-bottom"), [{ height: "3%" }, { height: "19%" }], { duration: 520, easing: "ease-in-out" });
+  play(g.querySelector(".g-left"), [{ width: "3%" }, { width: "9%" }], { duration: 520, easing: "ease-in-out" });
+  // пятно плиты, видное сквозь стекло, сползает вслед за поворотом камеры
+  play(g.querySelector(".g-see"), [{ transform: "translate(-6%, 10%) scale(.8)", opacity: .75 }, { transform: "none", opacity: 1 }], { duration: 520, easing: "ease-in-out" });
   await wait(520);
 }
 
