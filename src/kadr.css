@@ -3978,3 +3978,15 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-glow.c .sp-blade:nth-child(1) { --p: -32deg; --s: 12deg; }
 .sp-glow.c .sp-blade:nth-child(2) { --p: -32deg; --s: 12deg; }
 .sp-glow.c .sp-blade:nth-child(3) { --p: -32deg; --s: 12deg; }
+
+/* ---- Заставка 9: кость — сплошная внутри ----
+   Грани скруглены, поэтому у вершин между ними щели: при кувырке сквозь них было видно пустоту.
+   Внутри — ядро-кубик чуть меньше, его вершины ложатся ровно на скругления граней, и щели закрыты. */
+.sp-dcore { position: absolute; inset: 7.8%; transform-style: preserve-3d; pointer-events: none; }
+.sp-dcore i { position: absolute; inset: 0; background: color-mix(in srgb, var(--fire) 82%, #000); }
+.sp-dcore i:nth-child(1) { transform: translateZ(calc(var(--ds) * .422)); }
+.sp-dcore i:nth-child(2) { transform: rotateY(180deg) translateZ(calc(var(--ds) * .422)); }
+.sp-dcore i:nth-child(3) { transform: rotateY(90deg) translateZ(calc(var(--ds) * .422)); }
+.sp-dcore i:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--ds) * .422)); }
+.sp-dcore i:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--ds) * .422)); }
+.sp-dcore i:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--ds) * .422)); }

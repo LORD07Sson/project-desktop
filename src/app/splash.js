@@ -11,8 +11,8 @@
 // Без Web Animations API (тесты в jsdom, старый WebView) — как при «уменьшить движение»: без интро.
 const reduce = () => typeof window.Element?.prototype.animate !== "function" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const OUT = "cubic-bezier(.22, .9, .3, 1)";
-// Темп: ролик целиком в полтора раза медленнее оригинала — чтобы каждую сцену успевали рассмотреть.
-const S = 1.5;
+// Темп: ролик чуть медленнее оригинала — сцены успевают рассмотреть, но без затянутости.
+const S = 1.2;
 let skipped = false;
 const wait = ms => (skipped ? Promise.resolve() : new Promise(r => setTimeout(r, ms * S)));
 const play = (el, frames, opts = {}) => {
@@ -62,7 +62,7 @@ function build(root) {
       </div>
     </section>
     <section class="sp-scene" data-s="dice">
-      <div class="sp-dice"><div class="sp-d3">${face(1, "d1")}${face(6, "d6")}${face(3, "d3")}${face(4, "d4")}${face(2, "d2")}${face(5, "d5")}</div></div>
+      <div class="sp-dice"><div class="sp-d3"><div class="sp-dcore">${"<i></i>".repeat(6)}</div>${face(1, "d1")}${face(6, "d6")}${face(3, "d3")}${face(4, "d4")}${face(2, "d2")}${face(5, "d5")}</div></div>
     </section>
     <section class="sp-scene" data-s="profile">
       <div class="sp-prof">
@@ -167,9 +167,14 @@ async function sceneWord(root) {
     { left: flyer.style.left, top: flyer.style.top },
     { left: `${so.left - st.left + so.width / 2}px`, top: `${so.top - st.top + so.height / 2}px` },
   ], { duration: 220, easing: OUT });
+  // плитка села — дальше живёт внутри слота «o»: слово ещё растёт и сдвигается к центру, плитка едет вместе с ним
+  flyer.getAnimations().forEach(a => a.cancel());
+  Object.assign(flyer.style, { left: "50%", top: "50%", opacity: "1", transform: "translate(-50%, -50%)" });
+  slot.style.position = "relative";
+  slot.append(flyer);
   for (let i = 3; i < letters.length; i++) { rise(i); await wait(80); }
-  // слово держится до отметки 3,2 с от начала ролика
-  await wait(Math.max(420, 3200 - (Date.now() - t0) / S));
+  // слово держится до отметки 3 с от начала ролика
+  await wait(Math.max(380, 3000 - (Date.now() - t0) / S));
 }
 
 // слово гаснет (≈35 мс), пауза, три точки слева направо с шагом 50 мс; пока грузится — «дышат» волной
@@ -245,7 +250,9 @@ async function sceneCoin(root) {
   await wait(470);
 }
 
-// плитка «монеты» → логотип: точка уступает место крестику, плитка летит в шапку, фон растворяется
+// плитка «монеты» → логотип: точка уступает место крестику, плитка летит в шапку, фон растворяется.
+// Плитку на время полёта выносим поверх всего окна: заставка начинается под шапкой и обрезала бы её верхние углы,
+// а размер и скругление ведём напрямую (не scale) — углы на любом размере остаются ровными и в конце совпадают с логотипом.
 async function flyHome(root) {
   const t = root.querySelector('[data-s="coin"] .sp-t');
   const coin = root.querySelector(".sp-coin");
@@ -255,14 +262,39 @@ async function flyHome(root) {
   const from = t.getBoundingClientRect();
   const to = logo?.getBoundingClientRect();
   if (!to || !to.width) { await play(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 300 }); return; }
-  logo.style.opacity = "0";
   const z = parseFloat(document.documentElement.style.zoom || getComputedStyle(document.documentElement).zoom) || 1;
-  const dx = (to.left + to.width / 2 - (from.left + from.width / 2)) / z;
-  const dy = (to.top + to.height / 2 - (from.top + from.height / 2)) / z;
+  const box = r => ({ left: `${r.left / z}px`, top: `${r.top / z}px`, width: `${r.width / z}px`, height: `${r.height / z}px` });
+  const r0 = parseFloat(getComputedStyle(t).borderTopLeftRadius) || from.width / z * .28;
+  const r1 = parseFloat(getComputedStyle(logo).borderTopLeftRadius) || 0;
+  Object.assign(t.style, { position: "fixed", margin: "0", zIndex: "100000", pointerEvents: "none", ...box(from), borderRadius: `${r0}px` });
+  document.body.append(t);
+  logo.style.opacity = "0";
   play(coin.querySelector(".sp-disc"), [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.92)" }], { duration: 260, easing: "ease-in" });
   play(root, [{ backgroundColor: "#000" }, { backgroundColor: "transparent" }], { duration: 400, delay: 120, easing: "ease-out" });
-  await play(t, [{ transform: "none" }, { transform: `translate(${dx}px, ${dy}px) scale(${to.width / from.width})` }], { duration: 480, delay: 120, easing: "cubic-bezier(.65,0,.35,1)" });
-  logo.style.opacity = "";
+  try {
+    await play(t, [{ ...box(from), borderRadius: `${r0}px` }, { ...box(to), borderRadius: `${r1}px` }], { duration: 480, delay: 120, easing: "cubic-bezier(.65,0,.35,1)" });
+    logo.style.opacity = "";
+    // логотип уже на месте — плитка тает поверх него, без скачка
+    await play(t, [{ opacity: 1 }, { opacity: 0 }], { duration: 120 });
+  } finally {
+    logo.style.opacity = "";
+    t.remove();
+  }
+}
+
+// Окно загрузилось (страница, шрифты) и главный поток отпустило — несколько кадров подряд без задержек.
+// Не дольше 2,5 с: на медленной машине лучше начать, чем держать чёрный экран.
+async function settled() {
+  const limit = Date.now() + 2500;
+  if (document.readyState !== "complete") await new Promise(r => window.addEventListener("load", r, { once: true }));
+  await Promise.race([document.fonts?.ready, new Promise(r => setTimeout(r, 800))]);
+  let calm = 0;
+  let last = 0;
+  while (calm < 6 && Date.now() < limit && !skipped) {
+    const now = await new Promise(r => { requestAnimationFrame(r); setTimeout(() => r(0), 120); });
+    calm = last && now && now - last < 24 ? calm + 1 : 0;
+    last = now;
+  }
 }
 
 export function startSplash() {
@@ -270,11 +302,13 @@ export function startSplash() {
   if (!root || reduce()) { ready = Promise.resolve(); return; }
   build(root);
   root.classList.add("sp-run");
-  t0 = Date.now();
   const skip = () => { skipped = true; root.getAnimations({ subtree: true }).forEach(a => { try { a.finish(); } catch (_) { a.cancel(); } }); };
   root.addEventListener("click", skip);
   document.addEventListener("keydown", e => { if (e.key === "Escape") skip(); }, { once: true });
   ready = (async () => {
+    // пока окно только открылось, держим чёрный экран: ролик стартует, когда всё загружено и кадры идут ровно
+    await settled();
+    t0 = Date.now();
     await sceneCube(root);
     await sceneDock(root);
     await sceneWord(root);
