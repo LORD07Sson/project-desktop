@@ -10,10 +10,12 @@
 
 const reduce = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const OUT = "cubic-bezier(.22, .9, .3, 1)";
+// Темп: ролик целиком в полтора раза медленнее оригинала — чтобы каждую сцену успевали рассмотреть.
+const S = 1.5;
 let skipped = false;
-const wait = ms => (skipped ? Promise.resolve() : new Promise(r => setTimeout(r, ms)));
-const play = (el, frames, opts) => {
-  const a = el.animate(frames, { fill: "both", ...opts });
+const wait = ms => (skipped ? Promise.resolve() : new Promise(r => setTimeout(r, ms * S)));
+const play = (el, frames, opts = {}) => {
+  const a = el.animate(frames, { fill: "both", ...opts, duration: (opts.duration || 0) * S, delay: (opts.delay || 0) * S });
   if (skipped) a.finish();
   return a.finished.catch(() => {});
 };
@@ -39,7 +41,7 @@ function build(root) {
     </section>
     <section class="sp-scene" data-s="dock">
       <div class="sp-win">${glow("sm")}
-        <div class="sp-dock">${tile("rim")}<span class="sp-ic chat"><svg viewBox="0 0 24 24"><path d="M12 4c5 0 9 3.1 9 7s-4 7-9 7c-1 0-2-.1-2.9-.4L5 19l1-3.4C4.2 14.3 3 12.7 3 11c0-3.9 4-7 9-7Z"/></svg></span><span class="sp-ic"></span></div>
+        <div class="sp-dock"><span class="sp-ic app">${tile()}</span><span class="sp-ic chat"><svg viewBox="0 0 24 24"><path d="M12 4c5 0 9 3.1 9 7s-4 7-9 7c-1 0-2-.1-2.9-.4L5 19l1-3.4C4.2 14.3 3 12.7 3 11c0-3.9 4-7 9-7Z"/></svg></span><span class="sp-ic"></span></div>
       </div>
     </section>
     <section class="sp-scene" data-s="word">
@@ -69,20 +71,32 @@ function build(root) {
       </div>
     </section>
     <section class="sp-scene" data-s="coin">
-      <div class="sp-coin"><div class="sp-disc"><i class="r1"></i><i class="r2"></i><i class="r3"></i></div>${tile("fly")}</div>
+      <div class="sp-coin"><div class="sp-disc"><i class="r3"></i><i class="r1"></i><i class="r2"></i></div>${tile("fly")}</div>
     </section>
+    <div class="sp-flash"></div>
     <div class="app-splash-status" data-status>Загружаем данные…</div>`;
 }
 
+// Переход между сценами — «пролёт сквозь»: уходящая сцена наезжает на камеру и размывается,
+// новая проявляется из лёгкого отдаления и размытия; на стыке — короткая вспышка акцента.
 function cut(root, name) {
-  root.querySelectorAll(".sp-scene").forEach(s => s.classList.toggle("on", s.dataset.s === name));
-  return root.querySelector(`[data-s="${name}"]`);
+  const next = root.querySelector(`[data-s="${name}"]`);
+  const prev = root.querySelector(".sp-scene.on");
+  if (prev && prev !== next && !skipped) {
+    play(prev, [{ transform: "scale(1)", filter: "blur(0)", opacity: 1 }, { transform: "scale(1.22)", filter: "blur(14px)", opacity: 0 }], { duration: 260, easing: "cubic-bezier(.5,0,.75,0)" })
+      .then(() => { prev.classList.remove("on"); prev.getAnimations().forEach(a => a.cancel()); });
+    play(next, [{ transform: "scale(.9)", filter: "blur(12px)", opacity: 0 }, { transform: "scale(1)", filter: "blur(0)", opacity: 1 }], { duration: 340, delay: 90, easing: OUT });
+    const flash = root.querySelector(".sp-flash");
+    if (flash) play(flash, [{ opacity: 0 }, { opacity: .55, offset: .4 }, { opacity: 0 }], { duration: 300, delay: 60 });
+  } else if (prev && prev !== next) prev.classList.remove("on");
+  next.classList.add("on");
+  return next;
 }
 
 async function sceneCube(root) {
   const s = cut(root, "cube");
   play(s.querySelector(".sp-glow"), [{ transform: "rotate(-7deg) scale(1.1)" }, { transform: "rotate(3deg) scale(1)" }], { duration: 520, easing: "linear" });
-  play(s.querySelector(".sp-c3"), [{ transform: "rotateX(-24deg) rotateY(32deg)" }, { transform: "rotateX(-14deg) rotateY(48deg)" }], { duration: 520, easing: "ease-out" });
+  play(s.querySelector(".sp-c3"), [{ transform: "rotateX(-9deg) rotateY(-14deg) rotateZ(-3deg)" }, { transform: "rotateX(-5deg) rotateY(10deg) rotateZ(1deg)" }], { duration: 520, easing: "ease-out" });
   await wait(520);
 }
 
@@ -144,7 +158,7 @@ async function sceneWord(root) {
   ], { duration: 220, easing: OUT });
   for (let i = 3; i < letters.length; i++) { rise(i); await wait(80); }
   // слово держится до отметки 3,2 с от начала ролика
-  await wait(Math.max(420, 3200 - (performance.now() - t0)));
+  await wait(Math.max(420, 3200 - (performance.now() - t0) / S));
 }
 
 // слово гаснет (≈35 мс), пауза, три точки слева направо с шагом 50 мс; пока грузится — «дышат» волной

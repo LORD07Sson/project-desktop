@@ -3688,3 +3688,63 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-who b { font-size: 4.6vmin; } .sp-who small, .sp-who p { font-size: 2.5vmin; }
 /* монета */
 .sp-coin { width: 54vmin; height: 54vmin; }
+
+/* ---- Заставка 3: внешний вид сцен как в ролике ---- */
+.sp-scene { transform-origin: 50% 50%; will-change: transform, filter, opacity; }
+.sp-flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--fire) 40%, transparent), transparent 62%); }
+
+/* «лепестки»: крупные скруглённые плиты с чёткими краями, яркий внешний край → тёмный центр */
+.sp-glow i { width: 64vmin; height: 46vmin; margin-top: -23vmin; border-radius: 9vmin; filter: blur(.5vmin); opacity: .96;
+  background: linear-gradient(90deg, transparent 4%, color-mix(in srgb, var(--fire) 30%, transparent) 26%, color-mix(in srgb, var(--fire) 85%, transparent) 62%, color-mix(in srgb, var(--fire) 70%, #fff 30%) 100%);
+  box-shadow: inset 0 0 7vmin rgba(0, 0, 0, .45); }
+.sp-glow i:nth-child(1) { transform: rotate(-36deg) translateX(9vmin); }
+.sp-glow i:nth-child(2) { transform: rotate(96deg) translateX(10vmin) scale(.9); opacity: .9; }
+.sp-glow i:nth-child(3) { transform: rotate(196deg) translateX(9vmin) scale(.95); opacity: .85; }
+.sp-glow i:nth-child(4) { transform: rotate(262deg) translateX(18vmin) scale(.6); opacity: .25; }
+.sp-scene[data-s="cube"]::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, transparent 30%, rgba(0, 0, 0, .55) 85%); }
+
+/* глянцевый кубик почти анфас, блики по рёбрам, стеклянное кольцо */
+.sp-c3 { width: 30vmin; height: 30vmin; }
+.sp-cf { border-radius: 5vmin; border: 1px solid rgba(255, 255, 255, .32);
+  background: radial-gradient(120% 95% at 18% 8%, #4c4f57 0%, #16171b 34%, #050506 72%);
+  box-shadow: inset .6vmin .6vmin .7vmin rgba(255, 255, 255, .5), inset -.5vmin -.5vmin 1.2vmin rgba(255, 255, 255, .07), inset 0 0 0 .4vmin rgba(255, 255, 255, .04); }
+.sp-cf.f1 { transform: translateZ(15vmin); } .sp-cf.f2 { transform: rotateY(180deg) translateZ(15vmin); }
+.sp-cf.f3 { transform: rotateY(90deg) translateZ(15vmin); } .sp-cf.f4 { transform: rotateY(-90deg) translateZ(15vmin); }
+.sp-cf.f5 { transform: rotateX(90deg) translateZ(15vmin); } .sp-cf.f6 { transform: rotateX(-90deg) translateZ(15vmin); }
+.sp-cf.f1 b { width: 12vmin; height: 12vmin; border: 0; box-shadow: none;
+  background: radial-gradient(circle at 50% 58%, #020203 50%, #2b2d31 54%, #e4e8ec 58%, #8d9198 64%, #1c1e21 70%, transparent 72%); }
+
+/* плитка: фаска снизу, блик сверху, «лунка» точки */
+.sp-t { box-shadow: inset 0 -.8vmin 0 rgba(0, 0, 0, .16), inset 0 .5vmin .7vmin rgba(255, 255, 255, .35), 0 1.2vmin 3vmin -1vmin color-mix(in srgb, var(--fire) 65%, transparent); }
+.sp-t > i { background: radial-gradient(circle at 50% 32%, #44474d, #050506 68%); box-shadow: 0 .25vmin 0 rgba(255, 255, 255, .25); }
+
+/* угол окна: толстая металлическая рамка, «лепестки» внутри, светлая стеклянная полоса дока */
+.sp-win { border: 2.6vmin solid #18191d; box-shadow: 0 0 0 .5vmin #4c4f55, inset 0 0 0 .5vmin #34373c; background: #030304; }
+/* «лепестки» в окне — по центру видимого угла кадра, как в ролике, а не по центру огромного окна */
+.sp-win .sp-glow { inset: auto; left: calc(30vw - 40vmax); bottom: calc(58vh - 40vmax); width: 80vmax; height: 80vmax; }
+.sp-win .sp-glow i { width: 78vmin; height: 54vmin; margin-top: -27vmin; }
+.sp-dock { left: 7vmin; bottom: 10vmin; gap: 3vmin; padding: 2.8vmin; border-radius: 8vmin; background: rgba(255, 255, 255, .22); border: 1px solid rgba(255, 255, 255, .28); backdrop-filter: blur(26px) saturate(1.2); }
+.sp-ic { width: 25vmin; height: 25vmin; border-radius: 6.4vmin; background: linear-gradient(160deg, #17181b, #050506); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09), 0 1vmin 2vmin rgba(0, 0, 0, .4); }
+.sp-ic.app { display: grid; place-items: center; }
+.sp-ic.app .sp-t { width: 70%; height: 70%; }
+.sp-ic.chat svg { width: 68%; fill: #b9bcc2; filter: drop-shadow(0 .4vmin .5vmin rgba(0, 0, 0, .5)); }
+
+/* профиль крупно */
+.sp-prof aside { width: 22%; background: #141517; }
+.sp-banner { left: 22%; height: 46%; background: #020203; }
+.sp-ava { left: 26%; top: 22%; width: 44vmin; height: 44vmin; background: #151618; box-shadow: 0 0 0 2.4vmin #000; }
+.sp-who { left: 26%; top: 70%; }
+.sp-who b { font-size: 6.4vmin; letter-spacing: -.02em; } .sp-who small { font-size: 3.4vmin; } .sp-who p { font-size: 2.4vmin; }
+
+/* монета: рифлёный обод, толстые дуговые сегменты */
+.sp-coin { width: 62vmin; height: 62vmin; }
+.sp-disc { background: radial-gradient(circle at 50% 42%, #1c1d20, #060607 72%); box-shadow: 0 3vmin 7vmin rgba(0, 0, 0, .6); }
+.sp-disc::before { content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: repeating-conic-gradient(#3a3d42 0 1.6deg, #0c0d0f 1.6deg 3.2deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.4vmin), #000 calc(100% - 2.2vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - 2.4vmin), #000 calc(100% - 2.2vmin)); }
+.sp-disc .r3 { inset: 3.6%; border: 1px solid rgba(255, 255, 255, .16); }
+.sp-disc .r1 { inset: 12%; border: 0; background: repeating-conic-gradient(from 6deg, rgba(225, 230, 236, .62) 0 24deg, transparent 24deg 30deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1vmin), #000 calc(100% - .9vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - 1vmin), #000 calc(100% - .9vmin)); }
+.sp-disc .r2 { inset: 24%; border: 1px solid rgba(255, 255, 255, .07); }
+.sp-coin .sp-t { width: 38%; height: 38%; }
