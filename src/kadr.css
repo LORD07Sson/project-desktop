@@ -3748,3 +3748,109 @@ td.row-actions { opacity: 1; transition: none; }
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1vmin), #000 calc(100% - .9vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - 1vmin), #000 calc(100% - .9vmin)); }
 .sp-disc .r2 { inset: 24%; border: 1px solid rgba(255, 255, 255, .07); }
 .sp-coin .sp-t { width: 38%; height: 38%; }
+
+/* ---- Заставка 4: сцены по замерам кадров ролика (1 vmin ≈ 1 % высоты кадра) ----
+   Фон всего ролика — чисто чёрный, как в оригинале; цвет акцента остаётся пользовательским. */
+.app-splash.sp-run { background: #000; }
+.sp-word { color: #fff; }
+
+/* «лепестки»: точка-якорь в центре сцены, каждая плита — своё смещение, размер и поворот;
+   светится сторона, обращённая к центру, к краям уходит в черноту */
+.app-splash .sp-glow { inset: auto; left: 50%; top: 50%; width: 0; height: 0; }
+.app-splash .sp-glow i { left: 0; top: 0; margin: 0; width: var(--w); height: var(--h); border-radius: 8vmin; opacity: 1; box-shadow: none;
+  transform: translate(-50%, -50%) translate(var(--x), var(--y)) rotate(var(--r)); filter: blur(1.1vmin);
+  background: radial-gradient(130% 120% at var(--lx) var(--ly), color-mix(in srgb, var(--fire) 70%, #fff 30%) 0%, var(--fire) 20%, color-mix(in srgb, var(--fire) 55%, #000) 52%, color-mix(in srgb, var(--fire) 18%, #000) 80%, #000 100%); }
+.app-splash .sp-glow i:nth-child(4) { display: none; }
+/* сцена 1: справа-сверху, слева, снизу */
+.sp-glow.c i:nth-child(1) { --x: 30vmin; --y: -25vmin; --w: 58vmin; --h: 54vmin; --r: -30deg; --lx: 8%; --ly: 70%; }
+.sp-glow.c i:nth-child(2) { --x: -40vmin; --y: -14vmin; --w: 52vmin; --h: 50vmin; --r: 24deg; --lx: 96%; --ly: 30%; }
+.sp-glow.c i:nth-child(3) { --x: 1vmin; --y: 31vmin; --w: 48vmin; --h: 40vmin; --r: -10deg; --lx: 48%; --ly: 0%; }
+/* сцена 2 (в окне): крупная светлая плита слева-сверху, тёмная справа-сверху, тёмная снизу за доком */
+.sp-win .sp-glow { left: 44vmin !important; top: auto !important; bottom: 62vmin; }
+.sp-glow.w i:nth-child(1) { --x: -6vmin; --y: -12vmin; --w: 60vmin; --h: 66vmin; --r: -14deg; --lx: 30%; --ly: 20%; filter: blur(1.4vmin); }
+.sp-glow.w i:nth-child(2) { --x: 52vmin; --y: -28vmin; --w: 58vmin; --h: 40vmin; --r: 18deg; --lx: 10%; --ly: 80%; opacity: .7; }
+.sp-glow.w i:nth-child(3) { --x: 40vmin; --y: 54vmin; --w: 64vmin; --h: 40vmin; --r: -6deg; --lx: 30%; --ly: 10%; opacity: .55; }
+/* баннер профиля */
+.sp-banner .sp-glow { left: 62% !important; top: 34% !important; }
+.sp-glow.b i:nth-child(1) { --x: -10vmin; --y: -4vmin; --w: 46vmin; --h: 40vmin; --r: -20deg; --lx: 20%; --ly: 70%; }
+.sp-glow.b i:nth-child(2) { --x: 34vmin; --y: -8vmin; --w: 40vmin; --h: 34vmin; --r: 16deg; --lx: 10%; --ly: 60%; opacity: .8; }
+.sp-glow.b i:nth-child(3) { --x: 16vmin; --y: 26vmin; --w: 40vmin; --h: 30vmin; --r: -8deg; --lx: 40%; --ly: 0%; opacity: .6; }
+
+/* кубик: скруглённый «шайбой», наклонён верхом от зрителя, блик слева сверху, стеклянный правый бок,
+   нижняя грань подсвечена акцентом снизу */
+.sp-c3 { width: 34vmin; height: 34vmin; }
+.sp-cf { border-radius: 7vmin; border: 1px solid rgba(255, 255, 255, .26);
+  background: radial-gradient(110% 100% at 22% 12%, #2c2e33 0%, #0c0d0f 38%, #020203 75%);
+  box-shadow: inset .7vmin .7vmin .9vmin rgba(255, 255, 255, .42), inset -.6vmin -.4vmin 1vmin rgba(255, 255, 255, .06); }
+.sp-cf.f1 { transform: translateZ(17vmin); } .sp-cf.f2 { transform: rotateY(180deg) translateZ(17vmin); }
+.sp-cf.f3 { transform: rotateY(90deg) translateZ(17vmin); background: linear-gradient(90deg, rgba(8, 9, 10, .92), color-mix(in srgb, var(--fire) 35%, rgba(0, 0, 0, .55))); }
+.sp-cf.f4 { transform: rotateY(-90deg) translateZ(17vmin); }
+.sp-cf.f5 { transform: rotateX(90deg) translateZ(17vmin); }
+.sp-cf.f6 { transform: rotateX(-90deg) translateZ(17vmin); background: linear-gradient(180deg, #060607 10%, color-mix(in srgb, var(--fire) 45%, #000) 100%); }
+.sp-cf.f1::before { content: ""; position: absolute; left: 6%; top: 5%; width: 12%; height: 8%; border-radius: 50%; background: #fff; filter: blur(.35vmin); opacity: .95; }
+.sp-cf.f1::after { content: ""; position: absolute; right: 5%; top: 10%; bottom: 10%; width: 22%; border-radius: 0 6vmin 6vmin 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fire) 45%, transparent)); opacity: .55; }
+.sp-cf.f1 b { position: relative; width: 12vmin; height: 12vmin;
+  background: radial-gradient(circle at 50% 50%, #000 0 56%, #1d1f22 60%, #8e939a 64%, #2a2c30 69%, transparent 72%); }
+.sp-cf.f1 b::after { content: ""; position: absolute; right: 24%; bottom: 22%; width: 18%; height: 12%; border-radius: 50%; background: rgba(255, 255, 255, .7); filter: blur(.25vmin); transform: rotate(-35deg); }
+
+/* док: угол окна в кадре (слева снизу), толстая светлая металлическая рамка, полоса дока уходит за правый край */
+.sp-win { left: calc(50% - 46vmin); bottom: 4vmin; width: 220vmin; height: 220vmin; border-radius: 20vmin; border: 3.2vmin solid #26272a;
+  box-shadow: 0 0 0 .5vmin #74767c, inset 0 0 0 .5vmin #3d3f44, 0 0 0 1vmin #0b0b0c; background: #000; transform-origin: 0 100%; }
+.sp-dock { left: 20vmin; bottom: 18vmin; height: 43vmin; gap: 3.6vmin; padding: 6.5vmin 7vmin; border-radius: 22vmin;
+  background: rgba(255, 255, 255, .17); border: 1px solid rgba(255, 255, 255, .22); backdrop-filter: blur(30px) saturate(1.1); align-items: center; }
+.sp-ic { width: 30vmin; height: 30vmin; border-radius: 7.6vmin; background: linear-gradient(160deg, #111214, #020203); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
+.sp-ic.app .sp-t { width: 66%; height: 66%; }
+.sp-ic.chat svg { width: 76%; fill: #a7a9ad; filter: drop-shadow(0 -.4vmin .3vmin rgba(255, 255, 255, .25)) drop-shadow(0 .6vmin .6vmin rgba(0, 0, 0, .6)); }
+.sp-ic:last-child { background: linear-gradient(160deg, #111214, #020203); }
+.sp-ic:last-child::after { content: ""; display: block; width: 66%; height: 66%; margin: 17%; border-radius: 5vmin; background: #3a3b3e; }
+
+/* монета: тонкий рифлёный обод, ровный тёмный диск, два кольца дуг разной длины, плитка без ореола */
+.sp-coin { width: 66vmin; height: 66vmin; }
+.sp-disc { background: radial-gradient(circle at 50% 44%, #141516 0, #0b0b0c 58%, #060607 100%); box-shadow: none; }
+.sp-disc::before { background: repeating-conic-gradient(#34363a 0 1.1deg, #070708 1.1deg 2.2deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.5vmin), #000 calc(100% - 1.3vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - 1.5vmin), #000 calc(100% - 1.3vmin)); }
+.sp-disc .r3 { inset: 2.4%; border: 1px solid rgba(255, 255, 255, .2); }
+.sp-disc .r1 { inset: 15%; border: 0;
+  background: conic-gradient(from -8deg, #d9dce0 0 36deg, transparent 36deg 50deg, #d9dce0 50deg 62deg, transparent 62deg 78deg, #d9dce0 78deg 128deg, transparent 128deg 142deg,
+    #d9dce0 142deg 156deg, transparent 156deg 170deg, #d9dce0 170deg 216deg, transparent 216deg 230deg, #d9dce0 230deg 244deg, transparent 244deg 258deg,
+    #d9dce0 258deg 302deg, transparent 302deg 316deg, #d9dce0 316deg 330deg, transparent 330deg 346deg, #d9dce0 346deg 360deg);
+  opacity: .78; -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - .75vmin), #000 calc(100% - .65vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - .75vmin), #000 calc(100% - .65vmin)); }
+.sp-disc .r2 { inset: 8%; border: 0;
+  background: conic-gradient(from 20deg, #bfc2c6 0 22deg, transparent 22deg 70deg, #bfc2c6 70deg 84deg, transparent 84deg 150deg, #bfc2c6 150deg 196deg, transparent 196deg 250deg, #bfc2c6 250deg 262deg, transparent 262deg 320deg, #bfc2c6 320deg 344deg, transparent 344deg 360deg);
+  opacity: .35; -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - .45vmin), #000 calc(100% - .35vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - .45vmin), #000 calc(100% - .35vmin)); }
+.sp-disc .r4 { inset: 26%; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .05); }
+.sp-coin .sp-t { width: 39%; height: 39%; box-shadow: inset 0 -1vmin 0 rgba(0, 0, 0, .2), inset 0 .5vmin .6vmin rgba(255, 255, 255, .25); }
+
+/* профиль — тёмный, как в ролике */
+.sp-prof { background: #000; }
+.sp-prof aside { background: #141414; }
+.sp-banner { background: #000; }
+.sp-ava { background: #1a1a1b; box-shadow: 0 0 0 2.4vmin #000; }
+.sp-who b { color: #fff; } .sp-who small { color: #8a8a8e; } .sp-who p { color: #c9c9cc; }
+.sp-flash { background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--fire) 30%, transparent), transparent 60%); }
+
+/* ---- Заставка 5: доводка по второму сравнению с кадрами ---- */
+.app-splash .sp-glow i { filter: blur(.7vmin);
+  background: radial-gradient(130% 120% at var(--lx) var(--ly), color-mix(in srgb, var(--fire) 60%, #fff 40%) 0%, var(--fire) 28%, color-mix(in srgb, var(--fire) 62%, #000) 56%, color-mix(in srgb, var(--fire) 22%, #000) 82%, #000 100%); }
+.sp-glow.w i:nth-child(1) { filter: blur(1vmin); }
+.sp-c3 { width: 28vmin; height: 28vmin; }
+.sp-cf { border-radius: 6vmin; }
+.sp-cf.f1 { transform: translateZ(14vmin); } .sp-cf.f2 { transform: rotateY(180deg) translateZ(14vmin); }
+.sp-cf.f3 { transform: rotateY(90deg) translateZ(14vmin); } .sp-cf.f4 { transform: rotateY(-90deg) translateZ(14vmin); }
+.sp-cf.f5 { transform: rotateX(90deg) translateZ(14vmin); } .sp-cf.f6 { transform: rotateX(-90deg) translateZ(14vmin); }
+.sp-cf.f1 b { width: 9.5vmin; height: 9.5vmin;
+  background: radial-gradient(circle at 50% 50%, #000 0 60%, #16181a 64%, #5c6066 68%, #1f2124 72%, transparent 74%); }
+.sp-ic { border-radius: 8.6vmin; }
+.sp-ic.app .sp-t { width: 70%; height: 70%; }
+.sp-ic.chat svg { width: 86%; }
+.sp-disc { box-shadow: inset 0 0 0 1.5vmin transparent, inset 0 0 0 2.1vmin #121314, inset 0 0 0 2.5vmin #050506; }
+.sp-disc::before { background: repeating-conic-gradient(#202124 0 1.1deg, #050506 1.1deg 2.2deg); }
+.sp-disc .r3 { inset: 0; border: 1px solid rgba(255, 255, 255, .16); }
+.sp-disc .r1 { opacity: .95;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.05vmin), #000 calc(100% - .95vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - 1.05vmin), #000 calc(100% - .95vmin)); }
+.sp-disc .r2 { opacity: .55; }
+
+/* сцена кубика: «лепестки» быстрее гаснут к краям, между ними чёрное, виньетка плотнее — как в кадре ролика */
+.sp-glow.c i { background: radial-gradient(120% 110% at var(--lx) var(--ly), color-mix(in srgb, var(--fire) 60%, #fff 40%) 0%, var(--fire) 22%, color-mix(in srgb, var(--fire) 52%, #000) 46%, color-mix(in srgb, var(--fire) 24%, #000) 74%, color-mix(in srgb, var(--fire) 15%, #000) 100%); filter: blur(.45vmin); }
+.sp-scene[data-s="cube"]::after { background: radial-gradient(circle at 50% 50%, transparent 26%, rgba(0, 0, 0, .7) 78%, #000 100%); }

@@ -33,14 +33,14 @@ function build(root) {
   const name = (document.getElementById("whoami")?.textContent || "").trim();
   root.innerHTML = `
     <section class="sp-scene" data-s="cube">
-      ${glow()}
+      ${glow("c")}
       <div class="sp-cube"><div class="sp-c3">
         <div class="sp-cf f1"><b></b></div><div class="sp-cf f2"></div><div class="sp-cf f3"></div>
         <div class="sp-cf f4"></div><div class="sp-cf f5"></div><div class="sp-cf f6"></div>
       </div></div>
     </section>
     <section class="sp-scene" data-s="dock">
-      <div class="sp-win">${glow("sm")}
+      <div class="sp-win">${glow("w")}
         <div class="sp-dock"><span class="sp-ic app">${tile()}</span><span class="sp-ic chat"><svg viewBox="0 0 24 24"><path d="M12 4c5 0 9 3.1 9 7s-4 7-9 7c-1 0-2-.1-2.9-.4L5 19l1-3.4C4.2 14.3 3 12.7 3 11c0-3.9 4-7 9-7Z"/></svg></span><span class="sp-ic"></span></div>
       </div>
     </section>
@@ -65,13 +65,13 @@ function build(root) {
     <section class="sp-scene" data-s="profile">
       <div class="sp-prof">
         <aside></aside>
-        <div class="sp-banner">${glow("sm")}</div>
+        <div class="sp-banner">${glow("b")}</div>
         <div class="sp-ava">${tile()}</div>
         <div class="sp-who"><b>Project</b><small>${name ? `@${name.replace(/[<>&"]/g, "")}` : "@project"}</small><p>сделано с душой — студия озвучки</p></div>
       </div>
     </section>
     <section class="sp-scene" data-s="coin">
-      <div class="sp-coin"><div class="sp-disc"><i class="r3"></i><i class="r1"></i><i class="r2"></i></div>${tile("fly")}</div>
+      <div class="sp-coin"><div class="sp-disc"><i class="r3"></i><i class="r1"></i><i class="r2"></i><i class="r4"></i></div>${tile("fly")}</div>
     </section>
     <div class="sp-flash"></div>
     <div class="app-splash-status" data-status>Загружаем данные…</div>`;
@@ -96,7 +96,7 @@ function cut(root, name) {
 async function sceneCube(root) {
   const s = cut(root, "cube");
   play(s.querySelector(".sp-glow"), [{ transform: "rotate(-7deg) scale(1.1)" }, { transform: "rotate(3deg) scale(1)" }], { duration: 520, easing: "linear" });
-  play(s.querySelector(".sp-c3"), [{ transform: "rotateX(-9deg) rotateY(-14deg) rotateZ(-3deg)" }, { transform: "rotateX(-5deg) rotateY(10deg) rotateZ(1deg)" }], { duration: 520, easing: "ease-out" });
+  play(s.querySelector(".sp-c3"), [{ transform: "rotateX(17deg) rotateY(-12deg) rotateZ(-2deg)" }, { transform: "rotateX(12deg) rotateY(6deg) rotateZ(1deg)" }], { duration: 520, easing: "ease-out" });
   await wait(520);
 }
 
@@ -249,7 +249,7 @@ async function flyHome(root) {
   const dx = (to.left + to.width / 2 - (from.left + from.width / 2)) / z;
   const dy = (to.top + to.height / 2 - (from.top + from.height / 2)) / z;
   play(coin.querySelector(".sp-disc"), [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.92)" }], { duration: 260, easing: "ease-in" });
-  play(root, [{ backgroundColor: "var(--bg)" }, { backgroundColor: "transparent" }], { duration: 400, delay: 120, easing: "ease-out" });
+  play(root, [{ backgroundColor: "#000" }, { backgroundColor: "transparent" }], { duration: 400, delay: 120, easing: "ease-out" });
   await play(t, [{ transform: "none" }, { transform: `translate(${dx}px, ${dy}px) scale(${to.width / from.width})` }], { duration: 480, delay: 120, easing: "cubic-bezier(.65,0,.35,1)" });
   logo.style.opacity = "";
 }
