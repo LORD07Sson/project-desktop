@@ -3541,3 +3541,29 @@ td.row-actions { opacity: 1; transition: none; }
 .tw-legend .aired::before { border-color: color-mix(in srgb, var(--fire) 60%, transparent); background: var(--accent-soft); }
 .tw-legend .exists::before { border-color: color-mix(in srgb, var(--s-done) 60%, transparent); background: color-mix(in srgb, var(--s-done) 18%, transparent); }
 .tw-summary b { color: var(--ink); }
+
+/* ---- Заставка запуска (app/splash.js): слово «Pr▢ject» с плиткой акцента, точки, значок, полёт в шапку ---- */
+.app-splash { cursor: default; }
+.sp-stage { position: relative; display: grid; place-items: center; min-width: 120px; min-height: 160px; font-size: 84px; }
+.sp-word { display: flex; align-items: baseline; white-space: nowrap; font-weight: 800; letter-spacing: -.025em; line-height: 1; color: var(--ink); }
+.sp-l { display: inline-block; overflow: visible; opacity: 0; }
+.sp-o { width: .66em; height: .58em; opacity: 1; }
+.sp-tile { position: absolute; left: 50%; top: 50%; width: .58em; height: .58em; border-radius: .17em; opacity: 0; transform: translate(-50%, -50%);
+  display: grid; place-items: center; background: var(--accent-grad, var(--fire)); box-shadow: 0 10px 28px -10px color-mix(in srgb, var(--fire) 75%, transparent); }
+.sp-tile i { width: .2em; height: .2em; border-radius: 50%; background: var(--bg); }
+.sp-dots { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 14px; pointer-events: none; }
+.sp-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--fire); opacity: 0; }
+.sp-mark { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; overflow: visible; opacity: 0; transform-origin: center; }
+.sp-fill { fill: url(#sp-grad); opacity: 0; }
+.sp-stroke { fill: none; stroke: var(--fire); stroke-width: 2; stroke-dasharray: 100; stroke-dashoffset: 100; }
+.sp-dot { fill: var(--fire); transform-box: fill-box; transform-origin: center; }
+.sp-x { fill: none; stroke: #fff; stroke-width: 3.4; stroke-linecap: round; stroke-dasharray: 10; stroke-dashoffset: 10; }
+.app-splash .app-splash-status { position: absolute; bottom: 14%; left: 0; right: 0; text-align: center; opacity: 0; animation: none; transition: opacity .4s ease .6s; }
+.app-splash .app-splash-status.on { opacity: .8; }
+
+/* Прокрутка цифр (roll-digits.js): у каждой цифры своё окошко с запасом ниже строки — новая въезжает снизу,
+   старая уходит вверх; два знака на время смены лежат в одной клетке сетки друг на друге. */
+.rd { display: inline-flex; font-variant-numeric: tabular-nums; }
+.rd-c { display: inline-grid; overflow: hidden; height: 1.12em; line-height: 1.12em; padding-bottom: .1em; margin-bottom: -.1em; }
+.rd-g { grid-area: 1 / 1; display: block; will-change: transform; }
+.kd-now .q-clock { font-size: 26px; font-weight: 800; letter-spacing: .01em; line-height: 1; }

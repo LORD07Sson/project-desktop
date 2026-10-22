@@ -2,6 +2,7 @@
 // назначенные на меня, по срочности (/api/me/queue). Открыта всем, не
 // только админам: «что мне записать и к какому сроку» нужно каждому.
 
+import { rollText } from "./roll-digits.js";
 import { state } from "./state.js";
 import { apiGet, tabSkeleton } from "./api.js";
 import { $, esc } from "./utils.js";
@@ -81,6 +82,25 @@ function rowHtml(it, today) {
 
 let tickTimer = null;
 
+const clockText = () => {
+  const d = new Date();
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+};
+
+// Часы «Сейчас» и живой отсчёт у серий со сроком сегодня — цифры прокручиваются (roll-digits.js).
+// Один таймер на экран, выровненный по началу секунды: цифра меняется ровно со сменой времени.
+function startTicker(root) {
+  clearTimeout(tickTimer);
+  const tick = () => {
+    if (!root.isConnected) return;
+    rollText(root.querySelector("[data-q-clock]"), clockText());
+    const v = countdown();
+    root.querySelectorAll("[data-q-cd]").forEach(el => rollText(el, v));
+    tickTimer = setTimeout(tick, 1000 - (Date.now() % 1000) + 5);
+  };
+  tick();
+}
+
 export async function loadQueue() {
   const root = $("#queue-body");
   if (!root) return;
@@ -111,6 +131,7 @@ export async function loadQueue() {
         ${state.isAdmin ? "" : `<div class="sub">Карточка отчёта открывается здесь; сдать работу можно в боте: «📋 Мои задачи».</div>`}
       </div>
       <div class="kd-sum">
+        <div class="kd-now"><small>Сейчас</small><b class="q-clock" data-q-clock></b></div>
         <div><small>Активные</small><b>${items.length}</b></div>
         <div><small>Горит</small><b class="${hot ? "hot" : ""}">${hot}</b></div>
         <div><small>${overdue ? "Просрочено" : "Ближайший срок"}</small><b class="${overdue ? "hot" : ""}">${overdue || (nearest === null ? "—" : dueText(nearest))}</b></div>
@@ -119,6 +140,7 @@ export async function loadQueue() {
     </div>`;
 
   if (!items.length) {
+    clearTimeout(tickTimer);
     root.innerHTML = head + `
       <div class="q-empty">
         <div class="q-empty-ic">☕</div>
@@ -127,6 +149,7 @@ export async function loadQueue() {
         <button class="btn" data-q-titles>Проголосовать за тайтлы</button>
       </div>`;
     root.querySelector("[data-q-titles]").addEventListener("click", () => switchTab("titles"));
+    startTicker(root);
     return;
   }
 
@@ -138,16 +161,7 @@ export async function loadQueue() {
       <div class="kd-qlist">${list.map(it => rowHtml(it, today)).join("")}</div>`;
   }).join("");
   root.innerHTML = head + `<div class="kd-queue">${groups}</div>`;
-  // Живой отсчёт у серий со сроком сегодня; таймер один на экран.
-  clearInterval(tickTimer);
-  if (root.querySelector("[data-q-cd]")) {
-    tickTimer = setInterval(() => {
-      const els = root.querySelectorAll("[data-q-cd]");
-      if (!els.length || !root.isConnected) { clearInterval(tickTimer); return; }
-      const v = countdown();
-      els.forEach(el => { el.textContent = v; });
-    }, 1000);
-  }
+  startTicker(root);
   refreshQueueBadge();
   root.querySelectorAll("[data-q-open]").forEach(el => {
     const open = () => openReportDetail(el.dataset.qOpen);
