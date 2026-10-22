@@ -306,7 +306,7 @@ export const NYAA_MIRRORS = ["https://nyaa.si", "https://nya.iss.one", "https://
 export function buildServices(nyaaCustom = [], serverOrigin = "", extra = {}) {
   const services = [
     { id: "nyaa", name: "Nyaa", note: "список раздач и страницы", apply: true, mirrors: [...new Set([...NYAA_MIRRORS, ...nyaaCustom])] },
-    { id: "shikimori", name: "Shikimori", note: "каталог и постеры в режиме «Смотреть» идут через сервер студии", apply: false, mirrors: ["https://shikimori.one", "https://shikimori.io", "https://shikimori.me"] },
+    { id: "shikimori", name: "Shikimori", note: "каталог и постеры в режиме «Смотреть» идут через сервер студии", apply: false, mirrors: ["https://shikimori.io"] },  // .one и .me больше не отвечают: Shikimori переехал на .io
     { id: "anilist", name: "AniList", note: "описания, баннеры, расписание эфира", apply: false, mirrors: ["https://graphql.anilist.co", "https://anilist.co"] },
     { id: "jikan", name: "MyAnimeList (Jikan)", note: "оценки и опенинги", apply: false, mirrors: ["https://api.jikan.moe"] },
     { id: "sources", name: "Источники раздачи", note: "SeaDex, AnimeTosho, nekoBT, Tsukihime на вкладке «Источники»", apply: false, mirrors: ["https://releases.moe", "https://feed.animetosho.org", "https://nekobt.to", "https://api.tsukihime.org"] },
