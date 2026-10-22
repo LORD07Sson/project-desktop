@@ -62,7 +62,7 @@ function build(root) {
       </div>
     </section>
     <section class="sp-scene" data-s="dice">
-      <div class="sp-dice"><div class="sp-d3"><div class="sp-dcore">${"<i></i>".repeat(6)}</div>${face(1, "d1")}${face(6, "d6")}${face(3, "d3")}${face(4, "d4")}${face(2, "d2")}${face(5, "d5")}</div></div>
+      <div class="sp-dice"><div class="sp-d3"><div class="sp-dcore">${"<i></i>".repeat(6)}</div><div class="sp-dcore b">${"<i></i>".repeat(6)}</div>${face(1, "d1")}${face(6, "d6")}${face(3, "d3")}${face(4, "d4")}${face(2, "d2")}${face(5, "d5")}</div></div>
     </section>
     <section class="sp-scene" data-s="profile">
       <div class="sp-prof">

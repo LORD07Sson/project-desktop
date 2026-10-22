@@ -4032,3 +4032,20 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-df.d2 { filter: brightness(1.12); }
 .sp-df.d5 { filter: brightness(.78); }
 .sp-df.d3, .sp-df.d4 { filter: brightness(.9); }
+
+/* ---- Кость: щели у вершин ----
+   Ядро-кубик с острыми углами закрывало не всё: у вершин между тремя скруглёнными гранями оставались тёмные «зарубки»,
+   а грань, видная с ребра, торчала тонким лезвием. Второй слой ядра — чуть больше и скруглён — ложится между гранями
+   и ядром ступенькой, вершина выглядит круглой; оба слоя в цвет граней, тёмных провалов нет. */
+.sp-dcore i { background: color-mix(in srgb, var(--fire) 94%, #000); backface-visibility: visible; }
+.sp-dcore.b { inset: 2.5%; }
+.sp-dcore.b i { border-radius: 12%; }
+.sp-dcore.b i:nth-child(1) { transform: translateZ(calc(var(--ds) * .475)); }
+.sp-dcore.b i:nth-child(2) { transform: rotateY(180deg) translateZ(calc(var(--ds) * .475)); }
+.sp-dcore.b i:nth-child(3) { transform: rotateY(90deg) translateZ(calc(var(--ds) * .475)); }
+.sp-dcore.b i:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--ds) * .475)); }
+.sp-dcore.b i:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--ds) * .475)); }
+.sp-dcore.b i:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--ds) * .475)); }
+/* грани чуть меньше куба: вдоль рёбер видна скруглённая кромка второго слоя — с ребра кость не выглядит острой коробкой */
+.sp-df { inset: 2.5%; }
+.sp-dcore.b i { background: color-mix(in srgb, var(--fire) 86%, #000); }
