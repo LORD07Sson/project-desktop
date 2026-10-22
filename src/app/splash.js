@@ -99,7 +99,8 @@ function cut(root, name) {
 async function sceneCube(root) {
   const s = cut(root, "cube");
   const g = s.querySelector(".sp-glass");
-  play(s.querySelector(".sp-glow"), [{ transform: "rotate(11deg) scale(1.05)" }, { transform: "rotate(-3deg) scale(1)" }], { duration: 520, easing: "linear" });
+  // плиты — 3D-лопасти вокруг кубика; камера облетает их по трём осям, поэтому перспектива плит меняется, как в ролике
+  play(s.querySelector(".sp-glow"), [{ transform: "rotateX(var(--cx0)) rotateY(var(--cy0)) rotateZ(var(--cz0))" }, { transform: "rotateX(var(--cx1)) rotateY(var(--cy1)) rotateZ(var(--cz1))" }], { duration: 520, easing: "ease-in-out" });
   play(g, [{ transform: "perspective(900px) rotateX(-17deg) rotateY(-15deg) rotateZ(10deg)" }, { transform: "perspective(900px) rotateX(13deg) rotateY(8deg) rotateZ(-1deg)" }], { duration: 520, easing: "ease-in-out" });
   play(g.querySelector(".g-top"), [{ height: "15%" }, { height: "0%" }], { duration: 520, easing: "ease-in-out" });
   play(g.querySelector(".g-bottom"), [{ height: "3%" }, { height: "19%" }], { duration: 520, easing: "ease-in-out" });

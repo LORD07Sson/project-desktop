@@ -3912,3 +3912,30 @@ td.row-actions { opacity: 1; transition: none; }
 
 /* затухание плит от центра: ярко у кубика, к дальним краям — почти чёрное, как в кадре ролика */
 .sp-shade { background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 16vmin, rgba(0, 0, 0, .32) 28vmin, rgba(0, 0, 0, .66) 42vmin, rgba(0, 0, 0, .9) 58vmin, #000 72vmin); }
+
+/* ---- Заставка 7: плиты фона — настоящие 3D-лопасти ----
+   Три плиты через 120° вокруг кубика; каждая повёрнута вдоль своей радиальной оси (шаг, как у лопасти пропеллера)
+   и отодвинута вглубь. Сцена с перспективой, камера облетает конструкцию (углы — в --cx/--cy/--cz). */
+.sp-scene[data-s="cube"] { perspective: 95vmin; perspective-origin: 50% 50%; }
+.sp-glow.c { transform-style: preserve-3d;
+  --cx0: 16deg; --cy0: -18deg; --cz0: 12deg; --cx1: -6deg; --cy1: 10deg; --cz1: -3deg;
+  transform: rotateX(var(--cx1)) rotateY(var(--cy1)) rotateZ(var(--cz1)); }
+.sp-glow.c i { transform-origin: 50% 50%; width: var(--w); height: var(--w); backface-visibility: visible;
+  transform: translate(-50%, -50%) rotateZ(var(--a)) translateX(var(--R)) translateZ(var(--z)) rotateX(var(--p)) rotateZ(var(--s)); }
+.sp-glow.c i:nth-child(1) { --a: -38deg; --R: 34vmin; --z: -6vmin; --p: 42deg; --s: 8deg; --w: 47vmin; }
+.sp-glow.c i:nth-child(2) { --a: 202deg; --R: 35vmin; --z: -6vmin; --p: 42deg; --s: 8deg; --w: 46vmin; }
+.sp-glow.c i:nth-child(3) { --a: 84deg; --R: 33vmin; --z: -6vmin; --p: 42deg; --s: 8deg; --w: 44vmin; }
+
+/* подбор по кадрам: широкие плиты с умеренным шагом, внутренние углы уходят за кубик */
+.sp-glow.c i:nth-child(1) { --a: -40deg; --R: 30vmin; --z: -4vmin; --p: 24deg; --s: 10deg; --w: 53vmin; }
+.sp-glow.c i:nth-child(2) { --a: 194deg; --R: 31vmin; --z: -4vmin; --p: 24deg; --s: 10deg; --w: 52vmin; }
+.sp-glow.c i:nth-child(3) { --a: 86deg; --R: 29vmin; --z: -4vmin; --p: 24deg; --s: 10deg; --w: 48vmin; }
+
+.sp-glow.c i:nth-child(1) { --a: -40deg; --R: 37vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 47vmin; }
+.sp-glow.c i:nth-child(2) { --a: 194deg; --R: 37vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 46vmin; }
+.sp-glow.c i:nth-child(3) { --a: 86deg; --R: 35vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 43vmin; }
+
+.sp-glow.c i:nth-child(1) { --a: -43deg; --R: 34vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 48vmin; }
+.sp-glow.c i:nth-child(2) { --a: 182deg; --R: 35vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 48vmin; }
+.sp-glow.c i:nth-child(3) { --a: 84deg; --R: 32vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 44vmin; }
+.sp-shade { background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 18vmin, rgba(0, 0, 0, .28) 30vmin, rgba(0, 0, 0, .6) 44vmin, rgba(0, 0, 0, .88) 60vmin, #000 74vmin); }
