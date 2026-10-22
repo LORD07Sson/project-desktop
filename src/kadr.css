@@ -3567,3 +3567,124 @@ td.row-actions { opacity: 1; transition: none; }
 .rd-c { display: inline-grid; overflow: hidden; height: 1.12em; line-height: 1.12em; padding-bottom: .1em; margin-bottom: -.1em; }
 .rd-g { grid-area: 1 / 1; display: block; will-change: transform; }
 .kd-now .q-clock { font-size: 26px; font-weight: 800; letter-spacing: .01em; line-height: 1; }
+
+/* ---- Заставка 2: все сцены ролика (кубик → док → слово → точки → кубик-кость → профиль → монета) ----
+   Сцены — слои на весь экран, склейки — мгновенная смена видимости, как в ролике. Акцент — --fire/--gold,
+   поверхности — из темы (--bg/--surface-2), поэтому в светлой теме ролик светлый. */
+.sp-scene { position: absolute; inset: 0; display: grid; place-items: center; visibility: hidden; overflow: hidden; }
+.sp-scene.on { visibility: visible; }
+.sp-glow { position: absolute; inset: 0; pointer-events: none; transform-origin: 50% 50%; }
+.sp-glow i { position: absolute; left: 50%; top: 50%; width: 52vmin; height: 30vmin; margin: -15vmin 0 0; border-radius: 7vmin; transform-origin: 0 50%;
+  background: linear-gradient(120deg, var(--fire), color-mix(in srgb, var(--gold, var(--fire)) 55%, transparent)); filter: blur(2.6vmin); opacity: .9; }
+.sp-glow i:nth-child(1) { transform: rotate(-38deg) translateX(8vmin); }
+.sp-glow i:nth-child(2) { transform: rotate(78deg) translateX(10vmin); opacity: .8; }
+.sp-glow i:nth-child(3) { transform: rotate(190deg) translateX(9vmin); opacity: .65; }
+.sp-glow i:nth-child(4) { transform: rotate(258deg) translateX(14vmin) scale(.7); opacity: .35; }
+.sp-glow.sm i { width: 40vmin; height: 24vmin; margin-top: -12vmin; }
+
+/* стеклянный кубик */
+.sp-cube { perspective: 900px; z-index: 1; }
+.sp-c3 { position: relative; width: 20vmin; height: 20vmin; transform-style: preserve-3d; }
+.sp-cf { position: absolute; inset: 0; border-radius: 3.4vmin; background: linear-gradient(150deg, #3a3d45, #0c0d10 52%, #000);
+  border: 1px solid rgba(255, 255, 255, .3); box-shadow: inset 0 0 0 .5vmin rgba(255, 255, 255, .05), inset 0 1.4vmin 2.2vmin rgba(255, 255, 255, .14); }
+.sp-cf.f1 { transform: translateZ(10vmin); display: grid; place-items: center; }
+.sp-cf.f2 { transform: rotateY(180deg) translateZ(10vmin); }
+.sp-cf.f3 { transform: rotateY(90deg) translateZ(10vmin); }
+.sp-cf.f4 { transform: rotateY(-90deg) translateZ(10vmin); }
+.sp-cf.f5 { transform: rotateX(90deg) translateZ(10vmin); }
+.sp-cf.f6 { transform: rotateX(-90deg) translateZ(10vmin); }
+.sp-cf.f1 b { width: 6.4vmin; height: 6.4vmin; border-radius: 50%; background: #040506; border: .9vmin solid rgba(235, 240, 245, .8); box-shadow: 0 0 2vmin rgba(255, 255, 255, .15); }
+
+/* плитка-логотип (общая для дока, профиля, монеты) */
+.sp-t { position: relative; display: grid; place-items: center; border-radius: 28%; background: var(--accent-grad, var(--fire));
+  box-shadow: 0 1vmin 3vmin -1vmin color-mix(in srgb, var(--fire) 70%, transparent), inset 0 0 0 1px rgba(255, 255, 255, .25); }
+.sp-t > i { width: 34%; height: 34%; border-radius: 50%; background: var(--bg); }
+.sp-tx { position: absolute; left: 18%; top: 18%; width: 64%; height: 64%; fill: none; stroke: #fff; stroke-width: 2.8; stroke-linecap: round; }
+.sp-tx path { stroke-dasharray: 10; stroke-dashoffset: 10; }
+
+/* угол окна с доком */
+.sp-win { position: absolute; left: 16%; bottom: 10%; width: 120%; height: 130%; border-radius: 11vmin; overflow: hidden; transform-origin: 0 100%;
+  background: color-mix(in srgb, var(--bg) 70%, #000); border: 1.6vmin solid var(--surface-2, #1b1d22); box-shadow: 0 0 0 1px rgba(255, 255, 255, .1); }
+.sp-win .sp-glow { left: 30%; top: -20%; }
+.sp-dock { position: absolute; left: 6vmin; bottom: 8vmin; display: flex; gap: 2.4vmin; padding: 2.2vmin; border-radius: 5.4vmin;
+  background: rgba(255, 255, 255, .14); backdrop-filter: blur(24px); border: 1px solid rgba(255, 255, 255, .2); }
+.sp-dock .sp-t, .sp-ic { width: 13vmin; height: 13vmin; flex: none; }
+.sp-t.rim { box-shadow: 0 0 0 1.2vmin #0d0e11, 0 0 0 1.4vmin rgba(255, 255, 255, .2); }
+.sp-ic { border-radius: 3.6vmin; background: #0d0e11; display: grid; place-items: center; box-shadow: 0 0 0 1px rgba(255, 255, 255, .1); }
+.sp-ic.chat svg { width: 64%; fill: #a3a6ad; }
+
+/* кубик-кость */
+.sp-dice { perspective: 700px; }
+.sp-d3 { position: relative; width: 54px; height: 54px; transform-style: preserve-3d; }
+.sp-df { position: absolute; inset: 0; border-radius: 14px; background: var(--accent-grad, var(--fire)); backface-visibility: hidden;
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); padding: 8px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25); }
+.sp-df i { border-radius: 50%; margin: 2.5px; }
+.sp-df i.on { background: var(--bg); }
+.sp-df.d1 { padding: 0; grid-template-columns: 1fr; grid-template-rows: 1fr; place-items: center; }
+.sp-df.d1 i { display: none; } .sp-df.d1 i.on { display: block; width: 18px; height: 18px; margin: 0; }
+.sp-df.d1 { transform: translateZ(27px); }
+.sp-df.d6 { transform: rotateY(180deg) translateZ(27px); }
+.sp-df.d3 { transform: rotateY(90deg) translateZ(27px); }
+.sp-df.d4 { transform: rotateY(-90deg) translateZ(27px); }
+.sp-df.d2 { transform: rotateX(90deg) translateZ(27px); }
+.sp-df.d5 { transform: rotateX(-90deg) translateZ(27px); }
+
+/* карточка профиля */
+.sp-prof { position: relative; width: 120vmin; height: 80vmin; overflow: hidden; background: color-mix(in srgb, var(--bg) 80%, #000); transform-origin: 40% 50%; }
+.sp-prof aside { position: absolute; left: 0; top: 0; bottom: 0; width: 18%; background: var(--surface-2, #141518); }
+.sp-banner { position: absolute; left: 18%; right: 0; top: 0; height: 42%; overflow: hidden; background: color-mix(in srgb, var(--bg) 60%, #000); }
+.sp-banner .sp-glow { left: 35%; top: -25%; }
+.sp-ava { position: absolute; left: 24%; top: 27%; width: 24vmin; height: 24vmin; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surface-2, #16171b); box-shadow: 0 0 0 1.6vmin color-mix(in srgb, var(--bg) 80%, #000); }
+.sp-ava .sp-t { width: 56%; height: 56%; }
+.sp-who { position: absolute; left: 24%; top: 61%; display: grid; gap: .4vmin; text-align: left; }
+.sp-who b { font-size: 3.6vmin; font-weight: 800; color: var(--ink); }
+.sp-who small { font-size: 2vmin; color: var(--ink-dim); }
+.sp-who p { margin: 1.2vmin 0 0; font-size: 2vmin; color: var(--ink-soft); }
+
+/* монета с пунктирными кольцами */
+.sp-coin { position: relative; width: 34vmin; height: 34vmin; display: grid; place-items: center; }
+.sp-disc { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 50% 38%, #24272c, #070809 70%);
+  box-shadow: inset 0 0 0 .6vmin #2c2f35, inset 0 0 0 1.1vmin #0b0c0e, 0 2vmin 6vmin rgba(0, 0, 0, .55); }
+.sp-disc i { position: absolute; border-radius: 50%; }
+.sp-disc .r1 { inset: 9%; border: 2px dashed rgba(255, 255, 255, .2); }
+.sp-disc .r2 { inset: 17%; border: 1px dashed rgba(255, 255, 255, .14); }
+.sp-disc .r3 { inset: 3.5%; border: 1px solid rgba(255, 255, 255, .1); }
+.sp-coin .sp-t { width: 40%; height: 40%; z-index: 1; }
+
+/* ---- Заставка: масштаб как в ролике (камера крупно) ----
+   слово ≈ треть ширины, плитка/точки/кость в тех же пропорциях; док и монета крупные; профиль на весь кадр. */
+.app-splash { --sp-u: min(1vw, 1.7vh); }
+.sp-stage { font-size: calc(var(--sp-u) * 10); min-width: 0; min-height: 0; }
+.sp-dots { gap: calc(var(--sp-u) * 1.7); }
+.sp-dots i { width: calc(var(--sp-u) * 1.9); height: calc(var(--sp-u) * 1.9); }
+.sp-mark { width: calc(var(--sp-u) * 7); height: calc(var(--sp-u) * 7); margin: calc(var(--sp-u) * -3.5) 0 0 calc(var(--sp-u) * -3.5); }
+.sp-d3 { --ds: calc(var(--sp-u) * 7.8); width: var(--ds); height: var(--ds); }
+.sp-df { border-radius: 26%; padding: 15%; }
+.sp-df i { margin: 12%; }
+.sp-df.d1 i.on { width: 34%; height: 34%; }
+.sp-df.d1 { transform: translateZ(calc(var(--ds) / 2)); }
+.sp-df.d6 { transform: rotateY(180deg) translateZ(calc(var(--ds) / 2)); }
+.sp-df.d3 { transform: rotateY(90deg) translateZ(calc(var(--ds) / 2)); }
+.sp-df.d4 { transform: rotateY(-90deg) translateZ(calc(var(--ds) / 2)); }
+.sp-df.d2 { transform: rotateX(90deg) translateZ(calc(var(--ds) / 2)); }
+.sp-df.d5 { transform: rotateX(-90deg) translateZ(calc(var(--ds) / 2)); }
+.sp-c3 { width: 26vmin; height: 26vmin; }
+.sp-cf.f1 { transform: translateZ(13vmin); } .sp-cf.f2 { transform: rotateY(180deg) translateZ(13vmin); }
+.sp-cf.f3 { transform: rotateY(90deg) translateZ(13vmin); } .sp-cf.f4 { transform: rotateY(-90deg) translateZ(13vmin); }
+.sp-cf.f5 { transform: rotateX(90deg) translateZ(13vmin); } .sp-cf.f6 { transform: rotateX(-90deg) translateZ(13vmin); }
+.sp-cf.f1 b { width: 8.5vmin; height: 8.5vmin; border-width: 1.2vmin; }
+.sp-glow i { width: 70vmin; height: 40vmin; margin-top: -20vmin; border-radius: 10vmin; filter: blur(3.4vmin); }
+/* док: крупный план угла окна */
+.sp-win { left: 6%; bottom: 6%; width: 130%; height: 150%; border-radius: 16vmin; border-width: 2.2vmin; }
+.sp-dock { left: 9vmin; bottom: 12vmin; gap: 3.4vmin; padding: 3vmin; border-radius: 8vmin; }
+.sp-dock .sp-t, .sp-ic { width: 21vmin; height: 21vmin; }
+.sp-ic { border-radius: 5.6vmin; }
+.sp-t.rim { box-shadow: 0 0 0 1.8vmin #0d0e11, 0 0 0 2.1vmin rgba(255, 255, 255, .2); }
+/* профиль на весь кадр */
+.sp-prof { width: 100%; height: 100%; }
+.sp-ava { left: 24%; top: 24%; width: 30vmin; height: 30vmin; box-shadow: 0 0 0 2vmin color-mix(in srgb, var(--bg) 80%, #000); }
+.sp-who { top: 62%; }
+.sp-who b { font-size: 4.6vmin; } .sp-who small, .sp-who p { font-size: 2.5vmin; }
+/* монета */
+.sp-coin { width: 54vmin; height: 54vmin; }

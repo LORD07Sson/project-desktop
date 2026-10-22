@@ -1,48 +1,105 @@
-// Заставка при запуске — по мотивам интро Reroll (разобрано покадрово, 60 к/с):
-//   1. «P» проявляется из размытия, плитка цвета акцента прилетает с поворотом и встаёт на место «o»,
-//      остальные буквы выпрыгивают снизу с пружинкой, по ~80 мс друг за другом, слово раздвигается.
-//   2. Пока грузятся данные — три точки (проявляются слева направо, шаг 50 мс).
-//   3. Готово: точки сливаются в одну, вокруг по часовой рисуется контур квадрата, он заливается цветом,
-//      точка превращается в крестик логотипа, и плитка улетает на место логотипа в шапке — переход в программу.
-// Цвет — акцент пользователя (--fire / --accent-grad), фон — его тема (--bg). Клик или Esc — пропустить.
+// Заставка при запуске — повторяет интро-ролик Reroll целиком (разобран покадрово, 60 к/с), в цветах пользователя:
+//   0,00 с  сцена «кубик»: тёмный стеклянный кубик с точкой на фоне размытых «лепестков» акцента, камера плывёт
+//   0,52 с  склейка → угол окна программы с доком: плитка-логотип, значок чата, ещё приложение; камера отъезжает
+//   0,95 с  склейка → «P» из размытия, плитка с поворотом садится на место «o», буквы выпрыгивают снизу
+//   3,20 с  слово гаснет → три точки (пока грузятся данные, «дышат» волной)
+//   затем   точки сливаются в одну → контур квадрата по часовой → заливка → плитка подрастает и кувыркается
+//           3D-кубиком (грани 1–6) → карточка профиля (аватар-круг, имя, подпись) → «монета» с пунктирными
+//           кольцами → плитка с крестиком логотипа улетает на своё место в шапке, фон растворяется.
+// Цвет — акцент пользователя (--fire / --gold / --accent-grad), фон — его тема (--bg). Клик или Esc — пропустить.
 
 const reduce = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-const SPRING = "cubic-bezier(.34, 1.56, .64, 1)";
 const OUT = "cubic-bezier(.22, .9, .3, 1)";
-const wait = ms => new Promise(r => setTimeout(r, ms));
-const play = (el, frames, opts) => el.animate(frames, { fill: "both", ...opts }).finished.catch(() => {});
-
-let ready = null;      // промис «интро до точек доиграло»
 let skipped = false;
+const wait = ms => (skipped ? Promise.resolve() : new Promise(r => setTimeout(r, ms)));
+const play = (el, frames, opts) => {
+  const a = el.animate(frames, { fill: "both", ...opts });
+  if (skipped) a.finish();
+  return a.finished.catch(() => {});
+};
+
+let ready = null;      // промис «интро доиграло до точек»
+let wave = [];
+let t0 = 0;
+
+const tile = (extra = "") => `<span class="sp-t ${extra}"><i></i><svg class="sp-tx" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="10" d="M7 7l10 10M17 7 7 17"/></svg></span>`;
+const PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+const face = (n, cls) => `<div class="sp-df ${cls}">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(p => `<i${PIPS[n].includes(p) ? ' class="on"' : ""}></i>`).join("")}</div>`;
+const glow = (cls = "") => `<div class="sp-glow ${cls}"><i></i><i></i><i></i><i></i></div>`;
 
 function build(root) {
+  const name = (document.getElementById("whoami")?.textContent || "").trim();
   root.innerHTML = `
-    <div class="sp-stage">
-      <div class="sp-word" aria-label="Project">
-        <span class="sp-l" data-l>P</span><span class="sp-l" data-l>r</span><span class="sp-l sp-o" data-o></span><span class="sp-l" data-l>j</span><span class="sp-l" data-l>e</span><span class="sp-l" data-l>c</span><span class="sp-l" data-l>t</span>
+    <section class="sp-scene" data-s="cube">
+      ${glow()}
+      <div class="sp-cube"><div class="sp-c3">
+        <div class="sp-cf f1"><b></b></div><div class="sp-cf f2"></div><div class="sp-cf f3"></div>
+        <div class="sp-cf f4"></div><div class="sp-cf f5"></div><div class="sp-cf f6"></div>
+      </div></div>
+    </section>
+    <section class="sp-scene" data-s="dock">
+      <div class="sp-win">${glow("sm")}
+        <div class="sp-dock">${tile("rim")}<span class="sp-ic chat"><svg viewBox="0 0 24 24"><path d="M12 4c5 0 9 3.1 9 7s-4 7-9 7c-1 0-2-.1-2.9-.4L5 19l1-3.4C4.2 14.3 3 12.7 3 11c0-3.9 4-7 9-7Z"/></svg></span><span class="sp-ic"></span></div>
       </div>
-      <div class="sp-tile" data-tile><i></i></div>
-      <div class="sp-dots" data-dots><i></i><i></i><i></i></div>
-      <svg class="sp-mark" data-mark viewBox="0 0 48 48" aria-hidden="true">
-        <defs><linearGradient id="sp-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--fire)"/><stop offset="1" style="stop-color:var(--gold, var(--fire))"/></linearGradient></defs>
-        <path class="sp-fill" d="M12 1h24a11 11 0 0 1 11 11v24a11 11 0 0 1-11 11H12A11 11 0 0 1 1 36V12A11 11 0 0 1 12 1Z"/>
-        <path class="sp-stroke" pathLength="100" d="M47 24v12a11 11 0 0 1-11 11H12A11 11 0 0 1 1 36V12A11 11 0 0 1 12 1h24a11 11 0 0 1 11 11Z"/>
-        <circle class="sp-dot" cx="24" cy="24" r="6.5"/>
-        <path class="sp-x" pathLength="10" d="M16 16 32 32M32 16 16 32"/>
-      </svg>
-    </div>
+    </section>
+    <section class="sp-scene" data-s="word">
+      <div class="sp-stage">
+        <div class="sp-word" aria-label="Project">
+          <span class="sp-l">P</span><span class="sp-l">r</span><span class="sp-l sp-o" data-o></span><span class="sp-l">j</span><span class="sp-l">e</span><span class="sp-l">c</span><span class="sp-l">t</span>
+        </div>
+        <div class="sp-tile" data-tile><i></i></div>
+        <div class="sp-dots" data-dots><i></i><i></i><i></i></div>
+        <svg class="sp-mark" data-mark viewBox="0 0 48 48" aria-hidden="true">
+          <defs><linearGradient id="sp-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--fire)"/><stop offset="1" style="stop-color:var(--gold, var(--fire))"/></linearGradient></defs>
+          <path class="sp-fill" d="M12 1h24a11 11 0 0 1 11 11v24a11 11 0 0 1-11 11H12A11 11 0 0 1 1 36V12A11 11 0 0 1 12 1Z"/>
+          <path class="sp-stroke" pathLength="100" d="M47 24v12a11 11 0 0 1-11 11H12A11 11 0 0 1 1 36V12A11 11 0 0 1 12 1h24a11 11 0 0 1 11 11Z"/>
+          <circle class="sp-dot" cx="24" cy="24" r="6.5"/>
+        </svg>
+      </div>
+    </section>
+    <section class="sp-scene" data-s="dice">
+      <div class="sp-dice"><div class="sp-d3">${face(1, "d1")}${face(6, "d6")}${face(3, "d3")}${face(4, "d4")}${face(2, "d2")}${face(5, "d5")}</div></div>
+    </section>
+    <section class="sp-scene" data-s="profile">
+      <div class="sp-prof">
+        <aside></aside>
+        <div class="sp-banner">${glow("sm")}</div>
+        <div class="sp-ava">${tile()}</div>
+        <div class="sp-who"><b>Project</b><small>${name ? `@${name.replace(/[<>&"]/g, "")}` : "@project"}</small><p>сделано с душой — студия озвучки</p></div>
+      </div>
+    </section>
+    <section class="sp-scene" data-s="coin">
+      <div class="sp-coin"><div class="sp-disc"><i class="r1"></i><i class="r2"></i><i class="r3"></i></div>${tile("fly")}</div>
+    </section>
     <div class="app-splash-status" data-status>Загружаем данные…</div>`;
 }
 
-async function intro(root) {
-  const word = root.querySelector(".sp-word");
-  const letters = [...root.querySelectorAll(".sp-l")];
-  const tile = root.querySelector("[data-tile]");
-  const slot = root.querySelector("[data-o]");
-  // ширины букв — чтобы слово раздвигалось по мере появления, как в ролике
+function cut(root, name) {
+  root.querySelectorAll(".sp-scene").forEach(s => s.classList.toggle("on", s.dataset.s === name));
+  return root.querySelector(`[data-s="${name}"]`);
+}
+
+async function sceneCube(root) {
+  const s = cut(root, "cube");
+  play(s.querySelector(".sp-glow"), [{ transform: "rotate(-7deg) scale(1.1)" }, { transform: "rotate(3deg) scale(1)" }], { duration: 520, easing: "linear" });
+  play(s.querySelector(".sp-c3"), [{ transform: "rotateX(-24deg) rotateY(32deg)" }, { transform: "rotateX(-14deg) rotateY(48deg)" }], { duration: 520, easing: "ease-out" });
+  await wait(520);
+}
+
+async function sceneDock(root) {
+  const s = cut(root, "dock");
+  play(s.querySelector(".sp-win"), [{ transform: "translate(3%, -2%) scale(1.1)" }, { transform: "none" }], { duration: 430, easing: "ease-out" });
+  await wait(430);
+}
+
+async function sceneWord(root) {
+  const s = cut(root, "word");
+  const word = s.querySelector(".sp-word");
+  const letters = [...s.querySelectorAll(".sp-l")];
+  const flyer = s.querySelector("[data-tile]");
+  const slot = s.querySelector("[data-o]");
   const widths = letters.map(el => el.getBoundingClientRect().width);
   letters.forEach(el => { el.style.width = "0px"; });
-  root.classList.add("sp-run");
 
   const grow = (i, dur) => play(letters[i], [{ width: "0px" }, { width: `${widths[i]}px` }], { duration: dur, easing: OUT });
   const rise = i => {
@@ -55,71 +112,64 @@ async function intro(root) {
     ], { duration: 420, easing: "ease-out" });
   };
 
-  // 1) «P» из размытия, крупнее и тусклее → резко, 220 мс
+  // «P» из размытия, крупнее и тусклее → резко, 220 мс
   grow(0, 1);
   play(letters[0], [
     { filter: "blur(14px)", opacity: 0, transform: "scale(1.18)" },
     { filter: "blur(0)", opacity: 1, transform: "none" },
   ], { duration: 220, easing: OUT });
 
-  // плитка: справа-сверху, поворот −18° → 45° (ромб) → 0°, садится в слот «o» к ~560 мс
+  // плитка справа от «P»: поворот −18° → 45° (ромб) → 0°, садится в слот «o»
   const ws = word.getBoundingClientRect();
-  const placeTile = () => {
-    const s = slot.getBoundingClientRect();
-    const stage = root.querySelector(".sp-stage").getBoundingClientRect();
-    return { x: s.left - stage.left + s.width / 2, y: s.top - stage.top + s.height / 2 };
-  };
-  // Стартовая точка плитки — справа от «P» с зазором, чуть выше середины строки (как в ролике).
   const em = parseFloat(getComputedStyle(word).fontSize) || 84;
-  tile.style.left = `${widths[0] + em * .62}px`;
-  tile.style.top = `${ws.height / 2 - em * .12}px`;
-  play(tile, [{ opacity: 0 }, { opacity: 1 }], { duration: 120 });
-  play(tile, [
+  flyer.style.left = `${widths[0] + em * .62}px`;
+  flyer.style.top = `${ws.height / 2 - em * .12}px`;
+  play(flyer, [{ opacity: 0 }, { opacity: 1 }], { duration: 120 });
+  play(flyer, [
     { transform: "translate(-50%, -50%) rotate(-18deg) scale(1.3)" },
     { transform: "translate(-50%, -50%) rotate(45deg) scale(1.15)", offset: .5 },
     { transform: "translate(-50%, -50%) rotate(0) scale(1)" },
   ], { duration: 560, easing: OUT });
 
   await wait(240);
-  rise(1);                                     // «r»
+  rise(1);
   await wait(200);
-  grow(2, 260);                                // место под «o» раздвигается
+  grow(2, 260);
   await wait(120);
-  const t = placeTile();                       // плитка доезжает до своего места
-  await play(tile, [
-    { left: tile.style.left, top: tile.style.top },
-    { left: `${t.x}px`, top: `${t.y}px` },
+  const st = s.querySelector(".sp-stage").getBoundingClientRect();
+  const so = slot.getBoundingClientRect();
+  await play(flyer, [
+    { left: flyer.style.left, top: flyer.style.top },
+    { left: `${so.left - st.left + so.width / 2}px`, top: `${so.top - st.top + so.height / 2}px` },
   ], { duration: 220, easing: OUT });
   for (let i = 3; i < letters.length; i++) { rise(i); await wait(80); }
-  await wait(420);
+  // слово держится до отметки 3,2 с от начала ролика
+  await wait(Math.max(420, 3200 - (performance.now() - t0)));
 }
 
-let wave = [];
-
-// 2) слово гаснет (≈35 мс), пауза, три точки слева направо с шагом 50 мс; пока грузится — точки «дышат» волной
+// слово гаснет (≈35 мс), пауза, три точки слева направо с шагом 50 мс; пока грузится — «дышат» волной
 async function toDots(root) {
-  const word = root.querySelector(".sp-word");
-  const tile = root.querySelector("[data-tile]");
-  const dots = [...root.querySelectorAll("[data-dots] i")];
-  await Promise.all([word, tile].map(el => play(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 60 })));
+  const s = root.querySelector('[data-s="word"]');
+  const dots = [...s.querySelectorAll("[data-dots] i")];
+  await Promise.all([s.querySelector(".sp-word"), s.querySelector("[data-tile]")].map(el => play(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 60 })));
   await wait(30);
   await Promise.all(dots.map((d, i) => play(d, [{ opacity: 0, transform: "scale(.6)" }, { opacity: 1, transform: "none" }], { duration: 110, delay: i * 50, easing: OUT })));
+  if (skipped) return;
   wave = dots.map((d, i) => d.animate([{ transform: "none" }, { transform: "translateY(-6px)", offset: .3 }, { transform: "none", offset: .6 }, { transform: "none" }],
     { duration: 900, delay: 300 + i * 120, iterations: Infinity, easing: "ease-in-out" }));
 }
 
-async function outro(root) {
-  const dots = [...root.querySelectorAll("[data-dots] i")];
-  const box = root.querySelector("[data-dots]");
-  const mark = root.querySelector("[data-mark]");
-  const status = root.querySelector("[data-status]");
-
-  status.classList.remove("on");
+async function toTile(root) {
+  const s = root.querySelector('[data-s="word"]');
+  const dots = [...s.querySelectorAll("[data-dots] i")];
+  const box = s.querySelector("[data-dots]");
+  const mark = s.querySelector("[data-mark]");
+  root.querySelector("[data-status]").classList.remove("on");
   wave.forEach(a => a.cancel());
   wave = [];
-  await wait(200); // точки держатся ~200 мс, как в ролике
+  await wait(200);
 
-  // 3) слияние: левая перетекает в среднюю (110 мс), пауза, оставшиеся две — в одну; ряд держится по центру
+  // слияние: левая перетекает в среднюю (110 мс), пауза, две оставшиеся — в одну; ряд держится по центру
   const gap = dots[1].getBoundingClientRect().left - dots[0].getBoundingClientRect().left;
   const merge = async (from, into, shift) => {
     play(box, [{ transform: `translateX(${shift[0]}px)` }, { transform: `translateX(${shift[1]}px)` }], { duration: 110, easing: "ease-in-out" });
@@ -130,62 +180,97 @@ async function outro(root) {
   await wait(130);
   await merge(dots[1], dots[2], [-gap / 2, -gap]);
 
-  // точка → значок: контур по часовой от правого края (220 мс), пауза, заливка цветом, точка темнеет
+  // контур по часовой от правого края (220 мс), пауза 220 мс, заливка цветом и потемневшая точка (200 мс)
   mark.style.opacity = "1";
   play(box, [{ opacity: 1 }, { opacity: 0 }], { duration: 1 });
-  const stroke = mark.querySelector(".sp-stroke");
-  const fill = mark.querySelector(".sp-fill");
-  const dot = mark.querySelector(".sp-dot");
-  const cross = mark.querySelector(".sp-x");
-  await play(stroke, [{ strokeDashoffset: 100 }, { strokeDashoffset: 0 }], { duration: 220, easing: "cubic-bezier(.45,0,.55,1)" });
+  await play(mark.querySelector(".sp-stroke"), [{ strokeDashoffset: 100 }, { strokeDashoffset: 0 }], { duration: 220, easing: "cubic-bezier(.45,0,.55,1)" });
   await wait(220);
-  play(fill, [{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
-  await play(dot, [{ fill: "var(--fire)" }, { fill: "var(--bg)" }], { duration: 200 });
-  // точка уступает место крестику логотипа
-  play(dot, [{ transform: "scale(1)" }, { transform: "scale(0)" }], { duration: 160, easing: "ease-in" });
-  await play(cross, [{ strokeDashoffset: 10 }, { strokeDashoffset: 0 }], { duration: 240, delay: 80, easing: OUT });
-  await wait(120);
+  play(mark.querySelector(".sp-fill"), [{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
+  await play(mark.querySelector(".sp-dot"), [{ fill: "var(--fire)" }, { fill: "var(--bg)" }], { duration: 200 });
+  // плитка чуть подрастает перед кувырком (≈150 мс)
+  await play(mark, [{ transform: "scale(1)" }, { transform: "scale(1.12)" }], { duration: 150, easing: "ease-out" });
+}
 
-  // 4) плитка улетает на место логотипа в шапке, фон заставки растворяется — программа уже под ним
+async function sceneDice(root) {
+  const s = cut(root, "dice");
+  const d = s.querySelector(".sp-d3");
+  // кувырок: грани 1 → 3 → 4/6 → 5 → снова 1, ~370 мс; затем оседает и уменьшается (≈150 мс)
+  await play(d, [
+    { transform: "rotateX(0) rotateY(0) rotateZ(0)" },
+    { transform: "rotateX(-35deg) rotateY(-50deg) rotateZ(10deg)", offset: .25 },
+    { transform: "rotateX(-160deg) rotateY(-120deg) rotateZ(25deg)", offset: .55 },
+    { transform: "rotateX(-300deg) rotateY(-240deg) rotateZ(10deg)", offset: .85 },
+    { transform: "rotateX(-360deg) rotateY(-360deg) rotateZ(0)" },
+  ], { duration: 370, easing: "cubic-bezier(.3,.1,.3,1)" });
+  await play(s.querySelector(".sp-dice"), [{ transform: "scale(1.12)" }, { transform: "scale(1)" }], { duration: 150, easing: OUT });
+}
+
+async function sceneProfile(root) {
+  const s = cut(root, "profile");
+  play(s.querySelector(".sp-prof"), [{ transform: "translate(-1.5%, 1%) scale(1.06)" }, { transform: "none" }], { duration: 370, easing: "ease-out" });
+  play(s.querySelector(".sp-banner .sp-glow"), [{ transform: "rotate(-4deg)" }, { transform: "rotate(3deg)" }], { duration: 370, easing: "linear" });
+  await wait(370);
+}
+
+async function sceneCoin(root) {
+  const s = cut(root, "coin");
+  play(s.querySelector(".sp-coin"), [{ transform: "scale(1.1)" }, { transform: "none" }], { duration: 470, easing: "ease-out" });
+  play(s.querySelector(".r1"), [{ transform: "rotate(0)" }, { transform: "rotate(40deg)" }], { duration: 470 });
+  play(s.querySelector(".r2"), [{ transform: "rotate(0)" }, { transform: "rotate(-30deg)" }], { duration: 470 });
+  await wait(470);
+}
+
+// плитка «монеты» → логотип: точка уступает место крестику, плитка летит в шапку, фон растворяется
+async function flyHome(root) {
+  const t = root.querySelector('[data-s="coin"] .sp-t');
+  const coin = root.querySelector(".sp-coin");
+  play(t.querySelector("i"), [{ transform: "scale(1)" }, { transform: "scale(0)" }], { duration: 160, easing: "ease-in" });
+  play(t.querySelector(".sp-tx path"), [{ strokeDashoffset: 10 }, { strokeDashoffset: 0 }], { duration: 220, delay: 60, easing: OUT });
   const logo = document.querySelector(".titlebar-left .brand-logo");
-  const from = mark.getBoundingClientRect();
+  const from = t.getBoundingClientRect();
   const to = logo?.getBoundingClientRect();
-  if (to && to.width) {
-    logo.style.opacity = "0";
-    // Масштаб интерфейса (Настройки → Внешний вид) — это zoom на <html>: координаты экрана делим на него,
-    // иначе при 90 % плитка не долетала до логотипа.
-    const z = parseFloat(document.documentElement.style.zoom || getComputedStyle(document.documentElement).zoom) || 1;
-    const dx = (to.left + to.width / 2 - (from.left + from.width / 2)) / z;
-    const dy = (to.top + to.height / 2 - (from.top + from.height / 2)) / z;
-    const k = to.width / from.width;
-    play(root, [{ backgroundColor: "var(--bg)" }, { backgroundColor: "transparent" }], { duration: 380, delay: 80, easing: "ease-out" });
-    await play(mark, [{ transform: "none" }, { transform: `translate(${dx}px, ${dy}px) scale(${k})` }], { duration: 460, easing: "cubic-bezier(.65,0,.35,1)" });
-    logo.style.opacity = "";
-  } else {
-    await play(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 300 });
-  }
+  if (!to || !to.width) { await play(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 300 }); return; }
+  logo.style.opacity = "0";
+  const z = parseFloat(document.documentElement.style.zoom || getComputedStyle(document.documentElement).zoom) || 1;
+  const dx = (to.left + to.width / 2 - (from.left + from.width / 2)) / z;
+  const dy = (to.top + to.height / 2 - (from.top + from.height / 2)) / z;
+  play(coin.querySelector(".sp-disc"), [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.92)" }], { duration: 260, easing: "ease-in" });
+  play(root, [{ backgroundColor: "var(--bg)" }, { backgroundColor: "transparent" }], { duration: 400, delay: 120, easing: "ease-out" });
+  await play(t, [{ transform: "none" }, { transform: `translate(${dx}px, ${dy}px) scale(${to.width / from.width})` }], { duration: 480, delay: 120, easing: "cubic-bezier(.65,0,.35,1)" });
+  logo.style.opacity = "";
 }
 
 export function startSplash() {
   const root = document.getElementById("app-splash");
   if (!root || reduce()) { ready = Promise.resolve(); return; }
   build(root);
-  const skip = () => { skipped = true; root.getAnimations({ subtree: true }).forEach(a => a.finish()); };
+  root.classList.add("sp-run");
+  t0 = performance.now();
+  const skip = () => { skipped = true; root.getAnimations({ subtree: true }).forEach(a => { try { a.finish(); } catch (_) { a.cancel(); } }); };
   root.addEventListener("click", skip);
   document.addEventListener("keydown", e => { if (e.key === "Escape") skip(); }, { once: true });
-  ready = intro(root).then(() => (skipped ? null : toDots(root))).then(() => {
-    if (skipped) return;
+  ready = (async () => {
+    await sceneCube(root);
+    await sceneDock(root);
+    await sceneWord(root);
+    await toDots(root);
     // загрузка затянулась — через пару секунд под точками появится «Загружаем данные…»
     setTimeout(() => { if (wave.length) root.querySelector("[data-status]")?.classList.add("on"); }, 1800);
-  });
+  })();
 }
 
-// Вызывается, когда известно, куда вести (программа или вход): доигрываем интро и уводим заставку.
+// Вызывается, когда известно, куда вести (программа или вход): доигрываем ролик и уводим заставку.
 export async function finishSplash() {
   const root = document.getElementById("app-splash");
   if (!root) return;
   await (ready || Promise.resolve());
-  if (!reduce() && !skipped && root.classList.contains("sp-run")) await outro(root);
+  if (!reduce() && !skipped && root.classList.contains("sp-run")) {
+    await toTile(root);
+    await sceneDice(root);
+    await sceneProfile(root);
+    await sceneCoin(root);
+    await flyHome(root);
+  }
   root.classList.add("hide");
   setTimeout(() => root.remove(), reduce() || skipped ? 350 : 0);
 }
