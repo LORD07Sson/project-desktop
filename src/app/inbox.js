@@ -13,10 +13,10 @@ import { openChatKey } from "./messages.js";
 import { notifyDesktop, notifyKinds } from "./desktop-notify.js";
 
 const POLL_MS = 60_000;
-const FILTERS = [["all", "Все"], ["at", "Упоминания"], ["due", "Сроки"], ["work", "Работа"], ["chat", "Личные"]];
-const ICON = { work: "▶", due: "⏰", at: "@", chat: "✉", team: "🎂", nyaa: "🧲" };
-const TITLE = { work: "по вашему отчёту", due: "срок", at: "упоминание", chat: "личное сообщение", team: "день рождения" };
-const COLOR = { work: "var(--fire)", due: "var(--s-stop)", at: "var(--gold)", chat: "var(--s-review)", team: "var(--s-done)", nyaa: "var(--gold)" };
+const FILTERS = [["all", "Все"], ["assign", "Назначения"], ["at", "Упоминания"], ["due", "Сроки"], ["work", "Работа"], ["chat", "Личные"]];
+const ICON = { assign: "👤", work: "▶", due: "⏰", at: "@", chat: "✉", team: "🎂", nyaa: "🧲" };
+const TITLE = { assign: "вас назначили", work: "по вашему отчёту", due: "срок", at: "упоминание", chat: "личное сообщение", team: "день рождения" };
+const COLOR = { assign: "var(--fire)", work: "var(--fire)", due: "var(--s-stop)", at: "var(--gold)", chat: "var(--s-review)", team: "var(--s-done)", nyaa: "var(--gold)" };
 
 let items = [];
 let filter = "all";
@@ -52,6 +52,7 @@ function dayLabel(when) {
 
 function textOf(it) {
   const rep = it.report ? `<b>${esc(it.report)}</b> «${esc(it.title || "")}»` : "";
+  if (it.kind === "assign") return `Вас назначили на серию${it.actor ? ` · <b>${esc(it.actor)}</b>` : ""} — ${rep}`;
   if (it.kind === "work") {
     const detail = it.detail && !/^U-\d+$/.test(it.detail) ? `: ${esc(it.detail)}` : "";
     return `<b>${esc(it.actor)}</b> · ${esc(it.action)}${detail} — ${rep}`;
@@ -70,6 +71,7 @@ function textOf(it) {
 // То же, что textOf, но простым текстом — для системной всплывашки.
 function plainOf(it) {
   const rep = it.report ? `${it.report} «${it.title || ""}»` : "";
+  if (it.kind === "assign") return `${rep}${it.actor ? ` — назначил(а) ${it.actor}` : ""}`;
   if (it.kind === "work") return `${it.actor}: ${it.action}${it.detail && !/^U-\d+$/.test(it.detail) ? ` — ${it.detail}` : ""} · ${rep}`;
   if (it.kind === "due") return `${rep} — ${it.days < 0 ? `просрочен на ${-it.days} дн.` : it.days === 0 ? "срок сегодня" : "срок завтра"}`;
   if (it.kind === "at") return `${it.actor} упомянул(а) вас · ${it.where}: ${it.text}`;
@@ -81,12 +83,13 @@ function plainOf(it) {
 
 // Всплывашка на рабочий стол — только о том, что появилось после
 // запуска: первый опрос лишь запоминает текущий список, иначе при каждом
-// входе вываливалась бы вся накопленная лента. Назначения админу уже
-// сообщает notifications.js — их тут не дублируем.
+// входе вываливалась бы вся накопленная лента. Сообщения из чатов (личные
+// и @упоминания в чатах) сообщает chat-notify.js — с текстом и с учётом
+// заглушённых бесед; здесь их не дублируем, но в колокольчике они есть.
 function notifyFresh() {
   const st = readState();
   const fresh = items.filter(it => !isRead(it, st) && !(notified && notified.has(it.id))
-    && !(state.isAdmin && it.kind === "work" && /назнач/i.test(it.action || "")));
+    && it.kind !== "chat" && !(it.kind === "at" && it.chat));
   const first = notified === null;
   notified = new Set([...(notified || []), ...items.map(it => it.id)]);
   if (first || !fresh.length) return;

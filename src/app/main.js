@@ -39,6 +39,7 @@ import "./deeplink.js";
 import "./tune.js";
 import { maybeAutoCheckUpdates } from "./settings.js";
 import "./notifications.js";
+import "./chat-notify.js";
 import "./presence.js";
 import "./telemetry.js";
 import "./command-palette.js";

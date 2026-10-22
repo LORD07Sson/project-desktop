@@ -20,7 +20,8 @@ import { state } from "./state.js";
 import { nyaaCardsHtml } from "./nyaa-card.js";
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
 import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
-import { $, esc, relTime } from "./utils.js";
+import { $, esc, relTime, showContextMenu } from "./utils.js";
+import { isChatMuted, setChatMuted } from "./chat-notify.js";
 import { loadAvatars, openUserProfile } from "./profile.js";
 import { openReportDetail } from "./report-detail.js";
 
@@ -122,8 +123,10 @@ function lastLine(c) {
   return `${l.mine ? "Вы" : esc(l.author)}: ${esc(body)}`;
 }
 
+const MUTED_ICON = `<span class="ms-muted" title="Без уведомлений">🔕</span>`;
+
 function badges(c) {
-  return `${c.mentions ? `<span class="ms-badge mention" title="Вас упомянули">@</span>` : ""}${c.unread ? `<span class="ms-badge">${c.unread}</span>` : ""}`;
+  return `${isChatMuted(c.id, c.channel_id) ? MUTED_ICON : ""}${c.mentions ? `<span class="ms-badge mention" title="Вас упомянули">@</span>` : ""}${c.unread ? `<span class="ms-badge">${c.unread}</span>` : ""}`;
 }
 
 function chatItemHtml(c) {
@@ -154,7 +157,7 @@ function channelHtml(ch, q) {
       <button type="button" class="ms-channel-row" data-channel="${ch.id}" aria-expanded="${open}">
         ${src ? `<img class="ms-chat-av poster" src="${src}" alt="">` : `<span class="ms-chat-av channel">${HASH_ICON}</span>`}
         <span class="ms-channel-name">${esc(ch.name)}</span>
-        ${ch.mentions ? `<span class="ms-badge mention">@</span>` : ""}${ch.unread ? `<span class="ms-badge">${ch.unread}</span>` : ""}
+        ${isChatMuted(`c:${ch.id}`) ? MUTED_ICON : ""}${ch.mentions ? `<span class="ms-badge mention">@</span>` : ""}${ch.unread ? `<span class="ms-badge">${ch.unread}</span>` : ""}
         <span class="ms-chevron">${CHEVRON}</span>
       </button>
       ${open ? `<div class="ms-topics">
@@ -191,6 +194,17 @@ function renderList() {
   el.innerHTML = listHtml();
   loadAvatars(el);
   el.querySelectorAll("[data-chat]").forEach(b => b.addEventListener("click", () => openChat(b.dataset.chat)));
+  // правый клик — заглушить беседу или весь канал (только всплывашки на рабочий стол; @упоминания приходят всё равно)
+  const muteMenu = (e, id, what) => {
+    e.preventDefault();
+    const on = isChatMuted(id);
+    showContextMenu(e.clientX, e.clientY, [{
+      label: on ? `🔔 Включить уведомления ${what}` : `🔕 Без уведомлений ${what}`,
+      action: () => { setChatMuted(id, !on); toast(on ? "Уведомления включены." : "Уведомления выключены — @упоминания всё равно придут."); },
+    }]);
+  };
+  el.querySelectorAll("[data-chat]").forEach(b => b.addEventListener("contextmenu", e => muteMenu(e, b.dataset.chat, "из этой беседы")));
+  el.querySelectorAll("[data-channel]").forEach(b => b.addEventListener("contextmenu", e => muteMenu(e, `c:${b.dataset.channel}`, "из канала (все темы)")));
   el.querySelectorAll("[data-channel]").forEach(b => b.addEventListener("click", () => {
     const id = Number(b.dataset.channel);
     if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
@@ -779,3 +793,6 @@ export async function loadMessages() {
   window.clearInterval(pollTimer);
   pollTimer = window.setInterval(poll, POLL_MS);
 }
+
+// заглушили/включили беседу (здесь или из другого места) — значок 🔕 в списке обновляется сразу
+document.addEventListener("chat-mute-changed", () => renderList());

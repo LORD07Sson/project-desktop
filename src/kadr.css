@@ -4053,3 +4053,6 @@ td.row-actions { opacity: 1; transition: none; }
 /* ---- Кость — 3D-модель на canvas (см. dieRenderer в splash.js); CSS-грани больше не используются ---- */
 .sp-d3 { transform-style: flat; }
 .sp-dcv { position: absolute; left: 50%; top: 50%; width: 190%; height: 190%; transform: translate(-50%, -50%); }
+
+/* Чаты: заглушённая беседа или канал — приглушённый значок 🔕 рядом со счётчиком */
+.ms-muted { font-size: 11px; opacity: .55; margin-left: 4px; flex: none; }

@@ -1,7 +1,9 @@
-// Уведомления о новых назначениях — диф-опрос раз в минуту, сравниваем
-// с прошлым срезом и шлём системный тост только на реально новые id.
+// Счётчик новых назначений на вкладке «Я» — опрос раз в минуту «моей очереди»
+// (/me/queue доступна всем; раньше опрашивался /reports, а он только для
+// админов — у дабберов счётчик не работал). Всплывашку о назначении
+// показывает колокольчик (inbox.js): сервер отдаёт назначение отдельным
+// пунктом, каким бы путём человека ни назначили.
 
-import { notifyDesktop } from "./desktop-notify.js";
 import { state } from "./state.js";
 import { apiGet } from "./api.js";
 
@@ -62,18 +64,10 @@ export function resetAssignmentsBaseline() {
 }
 
 async function pollAssignments() {
-  if (!state.token || !state.isAdmin) return;
+  if (!state.token) return;
   try {
-    const r = await apiGet("/reports", { assignee: "me", page_size: 100 });
-    const ids = new Set((r.reports || []).map(x => x.public_id));
-    if (knownAssigned !== null) {
-      const fresh = [...ids].filter(id => !knownAssigned.has(id));
-      if (fresh.length) {
-        notifyDesktop("Project", fresh.length === 1
-          ? `Вам назначен отчёт ${fresh[0]}`
-          : `Вам назначено ${fresh.length} новых отчётов`, "assign");
-      }
-    }
+    const r = await apiGet("/me/queue");
+    const ids = new Set((r.items || []).map(x => x.public_id));
     knownAssigned = ids;
     updateMeBadge(ids);
   } catch (_) { /* тихо: трей не должен спамить ошибками сети раз в минуту */ }

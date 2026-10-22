@@ -12,6 +12,7 @@ import { maybeShowChooserOnStart, resetSpaces } from "./spaces.js";
 import { setTitlebarIdentity } from "./titlebar-menus.js";
 import { refreshQueueBadge } from "./queue.js";
 import { resetAssignmentsBaseline } from "./notifications.js";
+import { resetChatNotifyBaseline } from "./chat-notify.js";
 import { resetFeedBadge } from "./feed-badge.js";
 import { pingPresence } from "./presence.js";
 import { loadTitlebarTeam } from "./profile.js";
@@ -381,6 +382,7 @@ function logout() {
   resetTourUi();
   resetSessionState();
   resetAssignmentsBaseline();
+  resetChatNotifyBaseline();
   resetFeedBadge();
   clearTabDom();
   armSessionExpiry();
