@@ -149,7 +149,7 @@ async function press(key, modifiers = 0) {
 // сервер упал) — браузер сам снимает перехват, программа снова ходит на сервер как обычно.
 // Пока песочница включена, НИ ОДИН изменяющий запрос (POST/PUT/PATCH/DELETE) не уходит на сервер:
 // он получает выдуманный ответ {ok:true} и попадает в журнал writes.
-const sandbox = { on: false, role: "as-is", mocks: [], writes: [], bannerId: null, nextMock: 1 };
+const sandbox = { on: false, role: "as-is", perms: null, mocks: [], writes: [], bannerId: null, nextMock: 1 };
 const WRITES_MAX = 100;
 
 const BANNER_JS = role => `(() => {
@@ -212,7 +212,10 @@ function roleTransform(path) {
   if (!r) return null;
   const p = path.split("?")[0];
   const patch = p === "/whoami" ? r.whoami : p === "/me/permissions" ? r.perms : p === "/me" ? r.me : null;
-  return patch ? data => ({ ...data, ...patch }) : null;
+  if (!patch) return null;
+  // Права конкретной роли студии (например даббера из матрицы) — поверх роли «member».
+  if (p === "/me/permissions" && Array.isArray(sandbox.perms)) return data => ({ ...data, ...patch, permissions: sandbox.perms });
+  return data => ({ ...data, ...patch });
 }
 
 async function onRequestPaused(ev) {
@@ -244,6 +247,11 @@ async function onRequestPaused(ev) {
     m.hits++;
     return fulfillJson(requestId, request, m.json, m.status);
   }
+  // Служебные POST без изменения данных (выдача медиатокена, «я в сети», замер связи) пропускаем:
+  // без медиатокена в песочнице не грузились картинки.
+  if (method === "POST" && /^\/(media\/token|presence\/ping|telemetry\/net)/.test(path)) {
+    return cdp("Fetch.continueRequest", { requestId });
+  }
   if (method !== "GET" && method !== "HEAD") {
     sandbox.writes.push({ at: new Date().toISOString().slice(11, 19), method, path, body: (request.postData || "").slice(0, 500) });
     if (sandbox.writes.length > WRITES_MAX) sandbox.writes.shift();
@@ -273,7 +281,7 @@ async function dropSandbox() {
 
 function sandboxStatus() {
   return JSON.stringify({
-    on: sandbox.on, role: sandbox.role,
+    on: sandbox.on, role: sandbox.role, perms: sandbox.perms,
     mocks: sandbox.mocks.map(m => ({ id: m.id, method: m.method, pattern: m.re.source, kind: m.json !== undefined ? "json" : "transform", hits: m.hits })),
     writes: sandbox.writes.slice(-20),
   }, null, 1);
@@ -355,17 +363,20 @@ const TOOLS = {
       "смотреть программу глазами роли. reload (по умолчанию true при смене on/role) перезагружает страницу. " +
       "Без аргументов — состояние, моки и журнал перехваченных изменений (writes): так видно, какой запрос отправила бы кнопка. " +
       "Отключение агента снимает песочницу само.",
-    schema: { type: "object", properties: { on: { type: "boolean" }, role: { type: "string", enum: Object.keys(ROLES) }, reload: { type: "boolean" }, clear_writes: { type: "boolean" } } },
+    schema: { type: "object", properties: { on: { type: "boolean" }, role: { type: "string", enum: Object.keys(ROLES) },
+      perms: { type: "array", items: { type: "string" }, description: "права роли из матрицы (например у даббера), подставляются вместо списка /me/permissions" },
+      reload: { type: "boolean" }, clear_writes: { type: "boolean" } } },
     run: async args => {
       await connect(args.window || 0);
       let changed = false;
+      if (args.perms !== undefined && JSON.stringify(args.perms) !== JSON.stringify(sandbox.perms)) { sandbox.perms = args.perms; changed = true; }
       if (args.role && args.role !== sandbox.role) { sandbox.role = args.role; changed = true; }
       if (args.on != null && args.on !== sandbox.on) { sandbox.on = args.on; changed = true; }
       if (args.role && args.role !== "as-is" && !sandbox.on) { sandbox.on = true; changed = true; }
       if (args.clear_writes) sandbox.writes.length = 0;
       if (changed) {
         if (sandbox.on) await applySandbox();
-        else { await dropSandbox(); sandbox.mocks.length = 0; sandbox.role = "as-is"; sandbox.writes.length = 0; }
+        else { await dropSandbox(); sandbox.mocks.length = 0; sandbox.role = "as-is"; sandbox.perms = null; sandbox.writes.length = 0; }
         if (args.reload !== false) await reloadPage();
       }
       return sandboxStatus();
