@@ -26,8 +26,6 @@ let wave = [];
 let t0 = 0;
 
 const tile = (extra = "") => `<span class="sp-t ${extra}"><i></i><svg class="sp-tx" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="10" d="M7 7l10 10M17 7 7 17"/></svg></span>`;
-const PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
-const face = (n, cls) => `<div class="sp-df ${cls}">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(p => `<i${PIPS[n].includes(p) ? ' class="on"' : ""}></i>`).join("")}</div>`;
 const glow = (cls = "") => `<div class="sp-glow ${cls}"><i></i><i></i><i></i><i></i></div>`;
 
 function build(root) {
@@ -62,7 +60,7 @@ function build(root) {
       </div>
     </section>
     <section class="sp-scene" data-s="dice">
-      <div class="sp-dice"><div class="sp-d3"><div class="sp-dcore">${"<i></i>".repeat(6)}</div><div class="sp-dcore b">${"<i></i>".repeat(6)}</div>${face(1, "d1")}${face(6, "d6")}${face(3, "d3")}${face(4, "d4")}${face(2, "d2")}${face(5, "d5")}</div></div>
+      <div class="sp-dice"><div class="sp-d3"><canvas class="sp-dcv"></canvas></div></div>
     </section>
     <section class="sp-scene" data-s="profile">
       <div class="sp-prof">
@@ -77,6 +75,139 @@ function build(root) {
     </section>
     <div class="sp-flash"></div>
     <div class="app-splash-status" data-status>Загружаем данные…</div>`;
+}
+
+// Кость — настоящая 3D-модель на canvas: куб со скруглёнными рёбрами и углами (сетка граней, спроецированная
+// на скруглённую коробку), освещение и блик по нормалям, утопленные точки. Из плоских CSS-граней такую не собрать:
+// у них либо острые рёбра, либо щели у вершин. Модель выпуклая, поэтому достаточно отбросить грани, смотрящие от камеры.
+const PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+// грань: нормаль (ось и знак), базис u/v на ней и число точек — как раскладывал CSS-кубик (1 спереди, 2 сверху…)
+const DIE_FACES = [
+  { n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], pips: 1 },
+  { n: [0, 0, -1], u: [-1, 0, 0], v: [0, 1, 0], pips: 6 },
+  { n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0], pips: 3 },
+  { n: [-1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], pips: 4 },
+  { n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1], pips: 2 },
+  { n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1], pips: 5 },
+];
+const DIE_R = .13;                                   // радиус скругления рёбер (куб — от −0,5 до 0,5)
+const DIE_A = .5 - DIE_R;
+const DIE_GRID = (() => {                            // мельче у рёбер, крупно на плоской части
+  const edge = [0, .2, .4, .6, .8].map(k => -.5 + DIE_R * k);
+  return [...edge, ...[-1, -.6, -.2, .2, .6, 1].map(k => k * DIE_A), ...edge.map(x => -x).reverse()];
+})();
+const clampA = x => Math.max(-DIE_A, Math.min(DIE_A, x));
+const norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+// точка сетки грани → точка скруглённой коробки и её нормаль
+function rounded(p) {
+  const c = p.map(clampA);
+  const n = norm([p[0] - c[0], p[1] - c[1], p[2] - c[2]]);
+  return { p: [c[0] + n[0] * DIE_R, c[1] + n[1] * DIE_R, c[2] + n[2] * DIE_R], n };
+}
+const DIE_MESH = DIE_FACES.flatMap((f, fi) => {
+  const at = (a, b) => rounded([0, 1, 2].map(k => f.n[k] * .5 + f.u[k] * a + f.v[k] * b));
+  const quads = [];
+  for (let i = 0; i < DIE_GRID.length - 1; i++) {
+    for (let j = 0; j < DIE_GRID.length - 1; j++) {
+      const [a0, a1, b0, b1] = [DIE_GRID[i], DIE_GRID[i + 1], DIE_GRID[j], DIE_GRID[j + 1]];
+      quads.push({ fi, t: (a0 + a1 + b0 + b1) / 4 + .5, v: [at(a0, b0), at(a1, b0), at(a1, b1), at(a0, b1)] });
+    }
+  }
+  return quads;
+});
+
+function parseColor(ctx, css, fallback) {
+  ctx.fillStyle = fallback;
+  ctx.fillStyle = css || fallback;
+  const s = ctx.fillStyle;
+  if (s[0] === "#") return [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16));
+  return (s.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+}
+
+function dieRenderer(canvas, size) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = size * 1.9;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(W * dpr);
+  const ctx = canvas.getContext("2d");
+  const cs = getComputedStyle(canvas);
+  const fire = parseColor(ctx, cs.getPropertyValue("--fire").trim(), "#3aa0ff");
+  const gold = parseColor(ctx, cs.getPropertyValue("--gold").trim(), "#7fd0ff");
+  const bg = parseColor(ctx, cs.getPropertyValue("--bg").trim(), "#05070a");
+  const D = 700 / size;                               // перспектива как у CSS-сцены (700px), в единицах куба
+  const L = norm([-.38, -.6, .7]);                    // свет сверху-слева-спереди (ось y вниз, как в CSS)
+  const H = norm([L[0], L[1], L[2] + 1]);
+  const rgb = (c, k, sp) => `rgb(${c.map(x => Math.round(Math.min(255, x * k + 255 * sp))).join(",")})`;
+
+  return (ax, ay, az) => {
+    // поворот как у CSS «rotateX(ax) rotateY(ay) rotateZ(az)»: сначала Z, потом Y, потом X
+    const [sx, cx, sy, cy, sz, cz] = [Math.sin(ax), Math.cos(ax), Math.sin(ay), Math.cos(ay), Math.sin(az), Math.cos(az)];
+    const rot = ([x, y, z]) => {
+      [x, y] = [x * cz - y * sz, x * sz + y * cz];
+      [x, z] = [x * cy + z * sy, -x * sy + z * cy];
+      [y, z] = [y * cx - z * sx, y * sx + z * cx];
+      return [x, y, z];
+    };
+    const proj = ([x, y, z]) => { const k = D / (D - z); return [W / 2 + x * size * k, W / 2 + y * size * k]; };
+    const facing = (p, n) => n[0] * -p[0] + n[1] * -p[1] + n[2] * (D - p[2]) > 0;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, W);
+    ctx.lineJoin = "round";
+    ctx.lineWidth = .9;
+    for (const q of DIE_MESH) {
+      const ps = q.v.map(v => rot(v.p));
+      const ns = q.v.map(v => rot(v.n));
+      const n = norm(ns.reduce((s, v) => [s[0] + v[0], s[1] + v[1], s[2] + v[2]], [0, 0, 0]));
+      const c = ps.reduce((s, v) => [s[0] + v[0] / 4, s[1] + v[1] / 4, s[2] + v[2] / 4], [0, 0, 0]);
+      if (!facing(c, n)) continue;
+      const dif = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2]);
+      const spec = Math.pow(Math.max(0, n[0] * H[0] + n[1] * H[1] + n[2] * H[2]), 48) * .55;
+      const base = fire.map((x, k) => x + (gold[k] - x) * q.t * .4);
+      ctx.fillStyle = ctx.strokeStyle = rgb(base, .5 + .62 * dif, spec);
+      ctx.beginPath();
+      ps.map(proj).forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    // точки — лунки на плоской части видимых граней
+    for (const f of DIE_FACES) {
+      const n = rot(f.n);
+      if (!facing(rot(f.n.map(x => x * .5)), n)) continue;
+      const dim = .35 + .65 * Math.max(0, n[2]);
+      for (const p of PIPS[f.pips]) {
+        const a = ((p - 1) % 3 - 1) * .27, b = (Math.floor((p - 1) / 3) - 1) * .27;
+        const r = f.pips === 1 ? .15 : .085;
+        const ring = (rr, lift) => {
+          ctx.beginPath();
+          for (let k = 0; k <= 24; k++) {
+            const t = k / 24 * Math.PI * 2;
+            const u = a + Math.cos(t) * rr, v = b + Math.sin(t) * rr;
+            const [x, y] = proj(rot([0, 1, 2].map(i => f.n[i] * (.5 + lift) + f.u[i] * u + f.v[i] * v)));
+            k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.closePath();
+        };
+        ring(r, .002);
+        ctx.fillStyle = rgb(bg, 1, 0);
+        ctx.fill();
+        // тонкий светлый край лунки снизу — видно, что она утоплена
+        ctx.strokeStyle = `rgba(255,255,255,${.22 * dim})`;
+        ctx.lineWidth = .8;
+        ctx.stroke();
+      }
+    }
+  };
+}
+
+// cubic-bezier для собственной анимации кости (та же кривая, что была у CSS-кувырка)
+function bezier(x1, y1, x2, y2) {
+  const f = (t, a, b) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+  return x => {
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (f(m, x1, x2) < x) lo = m; else hi = m; }
+    return f((lo + hi) / 2, y1, y2);
+  };
 }
 
 // Переход между сценами — «пролёт сквозь»: уходящая сцена наезжает на камеру и размывается,
@@ -222,16 +353,29 @@ async function toTile(root) {
 }
 
 async function sceneDice(root) {
-  const s = cut(root, "dice");
-  const d = s.querySelector(".sp-d3");
+  const s = root.querySelector('[data-s="dice"]');
+  const box = s.querySelector(".sp-d3");
+  const draw = dieRenderer(s.querySelector(".sp-dcv"), box.offsetWidth || 120);
+  draw(0, 0, 0);
+  cut(root, "dice");
   // кувырок: грани 1 → 3 → 4/6 → 5 → снова 1, ~370 мс; затем оседает и уменьшается (≈150 мс)
-  await play(d, [
-    { transform: "rotateX(0) rotateY(0) rotateZ(0)" },
-    { transform: "rotateX(-35deg) rotateY(-50deg) rotateZ(10deg)", offset: .25 },
-    { transform: "rotateX(-160deg) rotateY(-120deg) rotateZ(25deg)", offset: .55 },
-    { transform: "rotateX(-300deg) rotateY(-240deg) rotateZ(10deg)", offset: .85 },
-    { transform: "rotateX(-360deg) rotateY(-360deg) rotateZ(0)" },
-  ], { duration: 370, easing: "cubic-bezier(.3,.1,.3,1)" });
+  const keys = [[0, 0, 0, 0], [.25, -35, -50, 10], [.55, -160, -120, 25], [.85, -300, -240, 10], [1, -360, -360, 0]];
+  const ease = bezier(.3, .1, .3, 1);
+  const dur = 370 * S;
+  const t0d = Date.now();
+  await new Promise(done => {
+    const frame = () => {
+      const raw = skipped ? 1 : Math.min(1, (Date.now() - t0d) / dur);
+      const p = raw < 1 ? ease(raw) : 1;
+      let i = 0;
+      while (i < keys.length - 2 && p > keys[i + 1][0]) i++;
+      const [o0, ...a] = keys[i], [o1, ...b] = keys[i + 1];
+      const k = Math.min(1, Math.max(0, (p - o0) / (o1 - o0)));
+      draw(...a.map((x, j) => (x + (b[j] - x) * k) * Math.PI / 180));
+      if (p < 1) requestAnimationFrame(frame); else done();
+    };
+    requestAnimationFrame(frame);
+  });
   await play(s.querySelector(".sp-dice"), [{ transform: "scale(1.12)" }, { transform: "scale(1)" }], { duration: 150, easing: OUT });
 }
 

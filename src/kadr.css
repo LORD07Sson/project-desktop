@@ -4049,3 +4049,7 @@ td.row-actions { opacity: 1; transition: none; }
 /* грани чуть меньше куба: вдоль рёбер видна скруглённая кромка второго слоя — с ребра кость не выглядит острой коробкой */
 .sp-df { inset: 2.5%; }
 .sp-dcore.b i { background: color-mix(in srgb, var(--fire) 86%, #000); }
+
+/* ---- Кость — 3D-модель на canvas (см. dieRenderer в splash.js); CSS-грани больше не используются ---- */
+.sp-d3 { transform-style: flat; }
+.sp-dcv { position: absolute; left: 50%; top: 50%; width: 190%; height: 190%; transform: translate(-50%, -50%); }
