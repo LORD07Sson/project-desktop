@@ -5,23 +5,77 @@
 import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
 
+// Что человек с ролью увидит в программе — та же логика, что у perm-visibility.js/tabs.js и проверок сервера.
+const ALWAYS = "always";
+const PREVIEW = [
+  ["Вкладки", [
+    ["Очередь", ALWAYS], ["Чат", ALWAYS], ["Команда", ALWAYS], ["Профиль", ALWAYS],
+    ["Лента", "reports.feed"], ["Доска", "reports.board"], ["Обзор", "reports.overview"], ["Список", "reports.list"],
+    ["Календарь", "reports.calendar"], ["Аналитика", "reports.analytics"], ["Тайтлы", "titles.view"], ["Релизы (Nyaa)", "nyaa.view"],
+  ]],
+  ["В отчётах", [
+    ["Открывать любые отчёты", ["reports.feed", "reports.board", "reports.overview", "reports.list", "reports.calendar", "reports.analytics", "reports.manage"]],
+    ["Свои задачи и файлы к ним", ALWAYS],
+    ["Создавать отчёты", "reports.create"], ["Менять статус, сроки, исполнителей", "reports.manage"],
+    ["Загружать и удалять файлы", "reports.files"], ["Собирать финал", "reports.assemble"],
+    ["Удалять отчёты", "reports.delete"], ["Пост в канал", "posts.manage"],
+  ]],
+  ["Тайтлы и команда", [
+    ["Создавать тайтлы", "titles.create"], ["Править тайтлы", "titles.edit"], ["Менять состав", "titles.crew"],
+    ["Брать в работу", "titles.work"], ["Удалять тайтлы", "titles.delete"], ["Заявки на доступ", "access.requests"],
+    ["Роли людей", "roles.manage"], ["Профили людей", "people.view"], ["Тикеты", "tickets.manage"],
+    ["Объявление", "notice.manage"], ["Дни рождения", "birthdays.manage"], ["Аварийный режим", "lockdown"],
+  ]],
+];
+const allows = (need, have) => need === ALWAYS || (Array.isArray(need) ? need.some(k => have.has(k)) : have.has(need));
+
+// Права группы «Тайтлы» без «Видеть тайтлы» бессмысленны: сервер не отдаст список, и править будет нечего.
+const TITLE_VIEW = "titles.view";
+function withDependencies(next, changedKey, turnedOn) {
+  const titleOps = ["titles.create", "titles.edit", "titles.crew", "titles.work", "titles.delete"];
+  if (turnedOn && titleOps.includes(changedKey)) next.add(TITLE_VIEW);
+  if (!turnedOn && changedKey === TITLE_VIEW) titleOps.forEach(k => next.delete(k));
+  return next;
+}
+
 export async function mountPermissions(root) {
   if (!root) return;
   let data = null;
   let current = null;   // ключ выбранной роли
   let query = "";
   let creating = false; // открыта форма «Новая роль»
+  let before = null;     // набор прав до последней правки — подсветить, что изменилось в превью
+  let savedAt = 0;
 
   const granted = key => new Set(data.grants[key] || []);
 
   async function save(role, perms, okText) {
+    before = granted(role);
     try {
       data = await apiPost("/permissions", { role, permissions: [...perms] });
-      toast(okText || "Сохранено.", "success");
+      savedAt = Date.now();
+      // Одиночная галочка — тихая отметка «сохранено» в шапке; всплывашка только для массовых действий.
+      if (okText) toast(okText, "success");
     } catch (e) {
       toast(e.message, "error");
     }
     paint();
+    before = null;
+  }
+
+  function previewHtml(have) {
+    return `<section class="pm-preview" aria-label="Что увидит человек с этой ролью">
+      <header><b>Что увидит человек с этой ролью</b><span>обновляется сразу, у людей — в течение минуты</span></header>
+      ${PREVIEW.map(([title, rows]) => `
+        <div class="pm-pv-group"><small>${esc(title)}</small><div class="pm-pv-chips">
+          ${rows.map(([label, need]) => {
+            const on = allows(need, have);
+            const was = before ? allows(need, before) : on;
+            return `<span class="pm-pv${on ? " on" : ""}${was !== on ? " chg" : ""}" title="${on ? "видно" : "скрыто"}">
+              <svg viewBox="0 0 24 24" aria-hidden="true">${on ? '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>' : '<path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6C3.9 8.3 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/>'}</svg>${esc(label)}</span>`;
+          }).join("")}
+        </div></div>`).join("")}
+    </section>`;
   }
 
   function paint() {
@@ -69,7 +123,7 @@ export async function mountPermissions(root) {
           <div class="pm-head">
             <div>
               <h3>${esc(role.name)}</h3>
-              <span>${have.size} из ${total} прав включено</span>
+              <span>${have.size} из ${total} прав включено${role.kind === "role" ? ` · людей с ролью: ${role.members || 0}` : ""}${Date.now() - savedAt < 4000 ? ` · <em class="pm-saved">сохранено ✓</em>` : ""}</span>
             </div>
             <div class="pm-tools">
               <input class="field-input" id="pm-search" placeholder="Найти право…" value="${esc(query)}">
@@ -82,6 +136,7 @@ export async function mountPermissions(root) {
               ${role.kind === "role" ? `<button class="btn" id="pm-delete" title="${role.members ? `Роль назначена людям: ${role.members}` : "Удалить роль"}">Удалить роль</button>` : ""}
             </div>
           </div>
+          ${previewHtml(have)}
           ${groups.length ? groups.map(g => {
             const on = g.items.filter(p => have.has(p.key)).length;
             return `
@@ -121,7 +176,11 @@ export async function mountPermissions(root) {
     root.querySelectorAll("input[data-pm-perm]").forEach(box => box.addEventListener("change", () => {
       const next = granted(role.key);
       if (box.checked) next.add(box.dataset.pmPerm); else next.delete(box.dataset.pmPerm);
-      save(role.key, next);
+      const size = next.size;
+      withDependencies(next, box.dataset.pmPerm, box.checked);
+      save(role.key, next, next.size !== size
+        ? (box.checked ? "Вместе с ним включено «Видеть тайтлы» — без него остальные права тайтлов не работают." : "Сняты и остальные права тайтлов — без «Видеть тайтлы» они не работают.")
+        : null);
     }));
     root.querySelectorAll("[data-pm-group]").forEach(b => b.addEventListener("click", () => {
       const next = granted(role.key);
