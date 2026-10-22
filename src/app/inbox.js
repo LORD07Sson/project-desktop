@@ -166,8 +166,9 @@ function open(it) {
     openChatKey(it.chat);
     switchTab("messages");
   } else if (it.report) {
-    if (state.isAdmin) openReportDetail(it.report);
-    else switchTab("profile");
+    // Карточку отчёта сервер открывает автору, исполнителям и ролям с правом смотреть отчёты —
+    // участнику тоже открываем её, а не профиль; нет доступа — сервер ответит, и это будет видно.
+    openReportDetail(it.report);
   }
 }
 

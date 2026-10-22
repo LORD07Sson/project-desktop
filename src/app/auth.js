@@ -17,7 +17,7 @@ import { pingPresence } from "./presence.js";
 import { loadTitlebarTeam } from "./profile.js";
 import { refreshInbox, resetInbox } from "./inbox.js";
 import { maybeWelcome, resetTourUi } from "./tour.js";
-import { refreshPermissions } from "./permissions-refresh.js";
+import { refreshPermissions, startPermissionsPolling } from "./permissions-refresh.js";
 
 // Экран загрузки при старте — тот же маскот/прогресс-бар, что и в
 // мини-аппе (см. #splash в miniapp/static/index.html). Держим минимум
@@ -128,6 +128,7 @@ export async function applyRole(isAdmin, nyaaAccess = false) {
   // Роспись и звукари видят «Релизы» (Няшку), хотя остальное админское скрыто.
   document.documentElement.dataset.nyaa = !isAdmin && nyaaAccess ? "1" : "0";
   await refreshPermissions();
+  startPermissionsPolling();
 }
 
 // Стена обложек на экране входа. Картинки — с нашего сервера по номеру
