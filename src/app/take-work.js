@@ -12,7 +12,11 @@ import { loadUsers } from "./tabs.js";
 
 const DEADLINES = [[24, "сутки"], [48, "2 дня"], [72, "3 дня"], [120, "5 дней"], [168, "неделя"]];
 const PRIORITIES = [["normal", "Обычный"], ["high", "Высокий"], ["urgent", "Срочный"], ["low", "Низкий"]];
-const DEFAULT_ROLES = ["Даббер", "Звукорежиссёр", "Роспись", "Переводчик", "Тайминг"];
+// Названия — как роли студии (Команда → Роли): «Звукарь», а не «Звукорежиссёр», иначе состав тайтла и роли людей расходятся.
+const DEFAULT_ROLES = ["Даббер", "Звукарь", "Роспись", "Переводчик", "Тайминг"];
+// Родственные названия одной роли (женская форма, старые варианты) — одна группа в списке исполнителей.
+const ROLE_ALIASES = { "дабберша": "даббер", "звукорежиссер": "звукарь", "распись": "роспись", "расписчик": "роспись", "расписчица": "роспись" };
+const roleKey = r => { const k = String(r || "").trim().toLowerCase().replace(/ё/g, "е"); return ROLE_ALIASES[k] || k; };
 const NYAA_QUALITIES = [["any", "Любое качество"], ["480p", "480p"], ["720p", "720p"], ["1080p", "1080p"], ["1440p", "1440p"], ["2160p", "2160p"]];
 
 function plural(n, one, few, many) {
@@ -36,17 +40,23 @@ function airLine(plan) {
   return `выходит по ${wd} в ${hm} · следующая — ${plan.next_episode}-я, ${shortDate(plan.next_episode_at)}`;
 }
 
-function userOptions(selected) {
+// Исполнители: сначала те, у кого в студии есть эта роль, — чтобы «Даббер» не приходилось искать среди всех подряд.
+function userOptions(selected, role) {
   const users = state.users || [];
-  return `<option value="">— не назначен —</option>` + users.map(u =>
-    `<option value="${u.telegram_id}"${String(u.telegram_id) === String(selected || "") ? " selected" : ""}>${esc(u.name)}${u.paused_until ? " (на паузе)" : ""}</option>`).join("");
+  const opt = u => `<option value="${u.telegram_id}"${String(u.telegram_id) === String(selected || "") ? " selected" : ""}>${esc(u.name)}${u.paused_until ? " (на паузе)" : ""}</option>`;
+  const key = roleKey(role);
+  const fit = key ? users.filter(u => (u.roles || []).some(r => roleKey(r) === key)) : [];
+  const rest = users.filter(u => !fit.includes(u));
+  const head = `<option value="">— не назначен —</option>`;
+  if (!fit.length) return head + rest.map(opt).join("");
+  return head + `<optgroup label="С ролью «${esc(role)}»">${fit.map(opt).join("")}</optgroup><optgroup label="Остальные">${rest.map(opt).join("")}</optgroup>`;
 }
 
 function crewRowHtml(role, telegramId) {
   return `
     <div class="tw-crew-row" data-crew-row>
       <input class="tw-role" value="${esc(role)}" placeholder="Роль" maxlength="40" list="tw-roles" autocomplete="off">
-      <select class="tw-user">${userOptions(telegramId)}</select>
+      <select class="tw-user">${userOptions(telegramId, role)}</select>
       <button type="button" class="icon-btn tw-del" title="Убрать роль" data-crew-del>✕</button>
     </div>`;
 }
@@ -62,7 +72,8 @@ function episodesHtml(plan) {
     const cls = e.exists ? "exists" : (e.aired ? "aired" : "");
     const sub = e.exists ? "заведена" : (e.aired ? "вышла" : (e.at ? shortDate(e.at) : "—"));
     return `<div class="tw-ep ${cls}" title="${e.at ? new Date(e.at).toLocaleString("ru-RU") : ""}">${e.n}<small>${sub}</small></div>`;
-  }).join("")}</div>`;
+  }).join("")}</div>
+  <div class="tw-legend"><span class="aired">вышла — можно завести сейчас</span><span class="exists">уже заведена</span><span>ещё не вышла — заведётся сама в день выхода</span></div>`;
 }
 
 export async function openTakeWork(titleId, onDone) {
@@ -103,19 +114,19 @@ export async function openTakeWork(titleId, onDone) {
     </div>
     <div class="tw-body">
       <div class="tw-field tw-full">
-        <label>Серии${plan.episodes_aired ? ` — вышло ${plan.episodes_aired}` : ""}</label>
+        <label><em class="tw-n">1</em>Серии${plan.episodes_aired ? ` — вышло ${plan.episodes_aired}` : ""}</label>
         ${episodesHtml(plan)}
       </div>
       <div class="tw-field">
-        <label>Дедлайн серии — после выхода</label>
+        <label><em class="tw-n">2</em>Срок на серию — от её выхода</label>
         <div class="tw-seg" data-seg="hours">${DEADLINES.map(([h, l]) => `<button type="button" data-v="${h}" class="${h === hours ? "on" : ""}">${l}</button>`).join("")}</div>
       </div>
       <div class="tw-field">
-        <label>Приоритет серий</label>
+        <label>Приоритет задач</label>
         <div class="tw-seg" data-seg="priority">${PRIORITIES.map(([v, l]) => `<button type="button" data-v="${v}" class="${v === priority ? "on" : ""}">${l}</button>`).join("")}</div>
       </div>
       <div class="tw-field tw-full">
-        <label>Состав — на каждую роль своя задача в каждой серии</label>
+        <label><em class="tw-n">3</em>Состав — каждая роль получит свою задачу в каждой серии</label>
         <div class="tw-crew" data-crew>${crew.map(c => crewRowHtml(c.role, c.telegram_id)).join("")}</div>
         <datalist id="tw-roles">${[...new Set([...(plan.roles_suggest || []), ...DEFAULT_ROLES])].map(r => `<option value="${esc(r)}">`).join("")}</datalist>
         <div class="tw-crew-hint" data-crew-hint></div>
@@ -124,7 +135,7 @@ export async function openTakeWork(titleId, onDone) {
       <div class="tw-field tw-full tw-nyaa">
         <label class="tw-toggle">
           <input type="checkbox" data-nyaa${!work || work.nyaa_enabled ? " checked" : ""}>
-          <span><b>Автоматически отправлять раздачи с Nyaa</b><small>Когда выйдет новая серия, бот пришлёт .torrent назначенным участникам. Ссылку можно выбрать и отправить вручную ниже.</small></span>
+          <span><b><em class="tw-n">4</em>Автоматически отправлять раздачи с Nyaa</b><small>Когда выйдет новая серия, бот пришлёт .torrent назначенным участникам. Ссылку можно выбрать и отправить вручную ниже.</small></span>
         </label>
         <div class="tw-pick">
           <button type="button" class="btn" data-nyaa-browse>📚 Выбрать раздачу в каталоге Nyaa</button>
@@ -161,9 +172,9 @@ export async function openTakeWork(titleId, onDone) {
     sheet.querySelector("[data-backfill-note]").textContent = backfill.length
       ? `${backfill.length} ${plural(backfill.length, "серия", "серии", "серий")}: ${backfill.length > 6 ? `${backfill[0]}–${backfill[backfill.length - 1]}` : backfill.join(", ")}`
       : "все вышедшие серии уже заведены";
-    sheet.querySelector("[data-summary]").textContent = eps
-      ? `Сейчас: ${eps} ${plural(eps, "серия", "серии", "серий")} × ${roles} ${plural(roles, "роль", "роли", "ролей")} = ${eps * roles} ${plural(eps * roles, "задача", "задачи", "задач")}`
-      : "Сейчас серии не создаются";
+    sheet.querySelector("[data-summary]").innerHTML = eps
+      ? `Сразу: <b>${eps * roles} ${plural(eps * roles, "задача", "задачи", "задач")}</b> (${eps} ${plural(eps, "серия", "серии", "серий")} × ${roles} ${plural(roles, "роль", "роли", "ролей")}) · дальше — по выходу серий`
+      : `Сейчас ничего не создаётся · задачи появятся по выходу серий`;
   };
   if (!backfill.length) sheet.querySelector("[data-backfill]").disabled = true;
   // Подсказка по составу: повторы ролей сервер молча отбрасывает, а роль без исполнителя создаст задачу «ничью»
@@ -177,6 +188,12 @@ export async function openTakeWork(titleId, onDone) {
     return { dup, free };
   };
   crewCheck();
+  sheet.querySelector("[data-crew]").addEventListener("change", e => {
+    const input = e.target.closest(".tw-role");
+    if (!input) return;
+    const select = input.closest("[data-crew-row]").querySelector(".tw-user");
+    select.innerHTML = userOptions(select.value, input.value.trim());
+  });
   sheet.querySelector("[data-crew]").addEventListener("input", crewCheck);
   sheet.querySelector("[data-crew]").addEventListener("change", crewCheck);
   summary();
