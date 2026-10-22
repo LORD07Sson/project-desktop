@@ -33,7 +33,7 @@ function build(root) {
   const name = (document.getElementById("whoami")?.textContent || "").trim();
   root.innerHTML = `
     <section class="sp-scene" data-s="cube">
-      ${glow("c")}
+      <div class="sp-glow c">${[1, 2, 3].map(() => '<div class="sp-blade"><i class="f"></i><i class="s t"></i><i class="s b"></i><i class="s l"></i><i class="s r"></i></div>').join("")}</div>
       <div class="sp-shade"></div>
       <div class="sp-cube"><div class="sp-glass">
         <i class="g-body"></i><i class="g-see"></i><i class="g-left"></i><i class="g-top"></i><i class="g-bottom"></i>

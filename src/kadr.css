@@ -3939,3 +3939,42 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-glow.c i:nth-child(2) { --a: 182deg; --R: 35vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 48vmin; }
 .sp-glow.c i:nth-child(3) { --a: 84deg; --R: 32vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 44vmin; }
 .sp-shade { background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 18vmin, rgba(0, 0, 0, .28) 30vmin, rgba(0, 0, 0, .6) 44vmin, rgba(0, 0, 0, .88) 60vmin, #000 74vmin); }
+
+/* ---- Заставка 8: плиты фона — толстые скруглённые бруски («клавиши») в 3D ----
+   Если поднять экспозицию кадра ролика, у каждой плиты видна боковая грань: это объёмные бруски вне фокуса.
+   Лицевая грань + 4 боковые (толщина --t), боковые темнее; кромка у кубика светлее; всё мягко размыто. */
+.sp-glow.c .sp-blade { position: absolute; left: 0; top: 0; width: var(--w); height: var(--w); transform-style: preserve-3d; --t: 9vmin;
+  transform: translate(-50%, -50%) rotateZ(var(--a)) translateX(var(--R)) translateZ(var(--z)) rotateX(var(--p)) rotateZ(var(--s)); }
+.sp-glow.c .sp-blade:nth-child(1) { --a: -43deg; --R: 36vmin; --z: -6vmin; --p: 30deg; --s: 14deg; --w: 50vmin; }
+.sp-glow.c .sp-blade:nth-child(2) { --a: 182deg; --R: 37vmin; --z: -6vmin; --p: 30deg; --s: 14deg; --w: 50vmin; }
+.sp-glow.c .sp-blade:nth-child(3) { --a: 84deg; --R: 34vmin; --z: -6vmin; --p: 30deg; --s: 14deg; --w: 46vmin; }
+.sp-blade > i { position: absolute; display: block; filter: blur(.9vmin); }
+.sp-blade .f { inset: 0; border-radius: 7vmin; transform: translateZ(calc(var(--t) / 2));
+  background: color-mix(in srgb, var(--fire) 86%, #fff 14%);
+  box-shadow: inset 0 0 2.6vmin color-mix(in srgb, var(--fire) 50%, #fff 50%), inset 0 0 8vmin color-mix(in srgb, var(--fire) 70%, #000 30%); }
+.sp-blade .s { background: color-mix(in srgb, var(--fire) 42%, #000); }
+.sp-blade .s.t { top: 0; left: 7vmin; right: 7vmin; height: var(--t); transform-origin: 50% 0; transform: translateZ(calc(var(--t) / 2)) rotateX(-90deg); }
+.sp-blade .s.b { bottom: 0; left: 7vmin; right: 7vmin; height: var(--t); transform-origin: 50% 100%; transform: translateZ(calc(var(--t) / 2)) rotateX(90deg); }
+.sp-blade .s.l { left: 0; top: 7vmin; bottom: 7vmin; width: var(--t); transform-origin: 0 50%; transform: translateZ(calc(var(--t) / 2)) rotateY(90deg); }
+.sp-blade .s.r { right: 0; top: 7vmin; bottom: 7vmin; width: var(--t); transform-origin: 100% 50%; transform: translateZ(calc(var(--t) / 2)) rotateY(-90deg); }
+
+/* грани брусков: селекторы специфичнее старых правил «лепестков» (.app-splash .sp-glow i), всё унаследованное сброшено */
+.app-splash .sp-glow.c .sp-blade > i { position: absolute; display: block; margin: 0; opacity: 1; width: auto; height: auto; left: auto; top: auto; right: auto; bottom: auto;
+  border-radius: 0; box-shadow: none; filter: blur(.9vmin); background: color-mix(in srgb, var(--fire) 42%, #000); }
+.app-splash .sp-glow.c .sp-blade > i.f { inset: 0; border-radius: 7vmin; transform-origin: 50% 50%; transform: translateZ(calc(var(--t) / 2));
+  background: color-mix(in srgb, var(--fire) 86%, #fff 14%);
+  box-shadow: inset 0 0 2.6vmin color-mix(in srgb, var(--fire) 50%, #fff 50%), inset 0 0 8vmin color-mix(in srgb, var(--fire) 70%, #000 30%); }
+.app-splash .sp-glow.c .sp-blade > i.t { top: 0; left: 7vmin; right: 7vmin; height: var(--t); transform-origin: 50% 0; transform: translateZ(calc(var(--t) / 2)) rotateX(-90deg); }
+.app-splash .sp-glow.c .sp-blade > i.b { bottom: 0; left: 7vmin; right: 7vmin; height: var(--t); transform-origin: 50% 100%; transform: translateZ(calc(var(--t) / 2)) rotateX(90deg); }
+.app-splash .sp-glow.c .sp-blade > i.l { left: 0; top: 7vmin; bottom: 7vmin; width: var(--t); transform-origin: 0 50%; transform: translateZ(calc(var(--t) / 2)) rotateY(90deg); }
+.app-splash .sp-glow.c .sp-blade > i.r { right: 0; top: 7vmin; bottom: 7vmin; width: var(--t); transform-origin: 100% 50%; transform: translateZ(calc(var(--t) / 2)) rotateY(-90deg); }
+
+.sp-glow.c .sp-blade:nth-child(2) { --R: 38vmin; --w: 46vmin; }
+.sp-glow.c .sp-blade:nth-child(3) { --R: 37vmin; --w: 44vmin; }
+.app-splash .sp-glow.c .sp-blade > i { filter: blur(1.15vmin); }
+
+/* наклон плит поперёк радиуса: внешний край ближе к камере (крупнее и сильнее размыт), как в ролике */
+.sp-glow.c .sp-blade { transform: translate(-50%, -50%) rotateZ(var(--a)) translateX(var(--R)) translateZ(var(--z)) rotateY(var(--p)) rotateZ(var(--s)); }
+.sp-glow.c .sp-blade:nth-child(1) { --p: -32deg; --s: 12deg; }
+.sp-glow.c .sp-blade:nth-child(2) { --p: -32deg; --s: 12deg; }
+.sp-glow.c .sp-blade:nth-child(3) { --p: -32deg; --s: 12deg; }
