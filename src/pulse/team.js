@@ -78,7 +78,7 @@ function countUp(root) {
 }
 const topTools = (tools, n = 6) => tools.filter(t => t.count > 0).sort((a, b) => b.count - a.count).slice(0, n).map(t => ({ label: t.label, value: t.count }));
 
-export function showTeam(wrap, data) {
+export function showTeam(wrap, data, { onMap = null } = {}) {
   const team = data.team || { people: [] };
   const people = team.people || [];
   const byName = Object.fromEntries(people.map(p => [p.name, p]));
@@ -146,7 +146,8 @@ export function showTeam(wrap, data) {
   wrap.classList.add("team-mode");
   wrap.innerHTML = `<div class="tm">
     <header class="tm-head">
-      <div><h1>Команда</h1><p>Серий в работе сейчас нет — здесь видно, кто чем занят.</p></div>
+      <div><h1>Команда</h1><p>${onMap ? "Кто в сети, чем занят, куда ходит и как голосует." : "Серий в работе сейчас нет — здесь видно, кто чем занят."}</p></div>
+      ${onMap ? `<button type="button" class="calm tm-tomap" data-tomap>← Карта студии</button>` : ""}
     </header>
     <div class="tm-bento">
       ${hasDays ? `<div class="tm-b tm-act tm-rise" style="--i:0">
@@ -192,6 +193,7 @@ export function showTeam(wrap, data) {
   </div>`;
 
   countUp(wrap);
+  wrap.querySelector("[data-tomap]")?.addEventListener("click", onMap);
   // Наведение на столбик — в заголовке плитки число и дата этого дня; ушёл — снова «за 7 дней».
   const act = wrap.querySelector(".tm-act");
   if (act) {
