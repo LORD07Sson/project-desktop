@@ -19,7 +19,7 @@
 import { state } from "./state.js";
 import { nyaaCardsHtml } from "./nyaa-card.js";
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
-import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
+import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON, FILE_MAX_MB } from "./attachments.js";
 import { $, esc, relTime, showContextMenu } from "./utils.js";
 import { isChatMuted, setChatMuted } from "./chat-notify.js";
 import { loadAvatars, openUserProfile } from "./profile.js";
@@ -312,7 +312,7 @@ function renderThread({ keepScroll } = {}) {
     <div class="ms-replybar" id="ms-replybar" ${replyTo ? "" : "hidden"}>${REPLY_ICON}<span>Ответ <b>${esc(replyTo ? replyTo.author : "")}</b>: ${esc(replyTo ? replyTo.text : "")}</span><button type="button" class="icon-btn" data-reply-cancel aria-label="Не отвечать">✕</button></div>
     <div class="ms-compose">
       <div class="ms-suggest" id="ms-suggest" hidden></div>
-      <button type="button" class="icon-btn ms-attach" id="ms-attach" title="Прикрепить картинку (или вставьте скриншот Ctrl+V)" aria-label="Прикрепить картинку">${CLIP_ICON}</button>
+      <button type="button" class="icon-btn ms-attach" id="ms-attach" title="Прикрепить файл — картинку, zip, видео, документ до 2 ГБ (или вставьте Ctrl+V)" aria-label="Прикрепить файл">${CLIP_ICON}</button>
       <textarea id="ms-input" rows="1" maxlength="2000" placeholder="${esc(placeholder)}"></textarea>
       <button type="button" class="btn primary ms-send" id="ms-send" aria-label="Отправить" title="Отправить (Enter)">${SEND_ICON}</button>
     </div>`;
@@ -441,14 +441,14 @@ function wireThread(el, c) {
   // следующим «Отправить» вместе с текстом (текст необязателен).
   const pendingBox = el.querySelector("#ms-pending");
   const setPending = file => {
-    if (file && tooBig(file)) return;
+    if (file && tooBig(file, { anyFile: true, maxMb: FILE_MAX_MB })) return;
     pendingFile = file;
     renderPending(pendingBox, file, () => setPending(null));
     input.focus();
   };
   renderPending(pendingBox, pendingFile, () => setPending(null));
   el.querySelector("#ms-attach").addEventListener("click", async () => {
-    const file = await pickFile("image/*");
+    const file = await pickFile();
     if (file) setPending(file);
   });
   input.addEventListener("paste", e => {

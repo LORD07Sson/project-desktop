@@ -61,6 +61,11 @@ function baseName(path) {
 
     const paths = event.payload.paths || [];
 
+    // Открыт чат — перетаскивание туда пока не поддерживается (файл до 2 ГБ надо грузить частями, а drop отдаёт только путь).
+    if (!activeReportId && document.querySelector("#ms-input")?.offsetParent) {
+      toast("Чтобы отправить файл в чат, нажмите скрепку или скопируйте файл в проводнике и вставьте Ctrl+V.");
+      return;
+    }
     if (!activeReportId) {
       const qcPaths = paths.filter(p => QC_EXT_RE.test(baseName(p)));
       if (!qcPaths.length) {

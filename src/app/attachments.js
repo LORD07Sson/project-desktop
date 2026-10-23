@@ -9,9 +9,11 @@ import { esc } from "./utils.js";
 import { pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
 
-// Из десктопа отправляются только картинки: файлы тяжёлые, а канал до
-// VPS у провайдеров режется (~190 КБ/с на соединение) — их шлют боту.
+// Картинки в заметках и тикетах — до 10 МБ. В чат — любой файл (zip, видео, документы) до 2 ГБ: крупный уходит
+// частями в несколько соединений (chunkedUpload в api.js), так провайдерский лимит на одно соединение не мешает,
+// а хранится файл в Telegram (архивная группа), не на сервере.
 export const ATTACH_MAX_MB = 10;
+export const FILE_MAX_MB = 2000;
 
 const FILE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>';
 const DL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
@@ -114,13 +116,19 @@ export function pastedFile(e) {
   return file;
 }
 
-export function tooBig(file) {
-  if (file && !/^image\//.test(file.type)) {
-    toast("Из десктопа можно отправить только картинку. Файлы отправляйте боту в Telegram.", "error");
+// anyFile — можно не только картинку (чат); maxMb — свой предел размера.
+export function tooBig(file, { anyFile = false, maxMb = ATTACH_MAX_MB } = {}) {
+  if (!file) return false;
+  if (!anyFile && !/^image\//.test(file.type)) {
+    toast("Сюда можно прикрепить только картинку. Файлы — в чат или боту в Telegram.", "error");
     return true;
   }
-  if (file && file.size > ATTACH_MAX_MB * 1024 * 1024) {
-    toast(`Картинка больше ${ATTACH_MAX_MB} МБ — так не отправить.`, "error");
+  if (!file.size) {
+    toast(`Файл «${file.name || "без имени"}» пустой — нечего отправлять.`, "error");
+    return true;
+  }
+  if (file.size > maxMb * 1024 * 1024) {
+    toast(`${anyFile ? "Файл" : "Картинка"} больше ${maxMb >= 1000 ? `${(maxMb / 1000).toFixed(0)} ГБ` : `${maxMb} МБ`} — так не отправить.`, "error");
     return true;
   }
   return false;
