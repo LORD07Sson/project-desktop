@@ -177,15 +177,30 @@ export async function openTakeWork(titleId, onDone) {
       : `Сейчас ничего не создаётся · задачи появятся по выходу серий`;
   };
   if (!backfill.length) sheet.querySelector("[data-backfill]").disabled = true;
-  // Подсказка по составу: повторы ролей сервер молча отбрасывает, а роль без исполнителя создаст задачу «ничью»
+  // Подсказка по составу. Роль в составе тайтла уникальна (на сервере одна строка на роль), поэтому вторая
+  // «Даббер» получает номер — «Даббер 2»: это тоже даббер (всё, что начинается на «даббер», — один параллельный
+  // этап), и у каждого своя задача. Роль без исполнителя создаст задачу «ничью».
+  let renamed = [];
   const crewCheck = () => {
+    const inputs = [...sheet.querySelectorAll("[data-crew-row] .tw-role")].filter(i => i.value.trim());
+    const taken = new Set(inputs.map(i => i.value.trim().toLowerCase()));
+    const seen = new Set();
+    for (const input of inputs) {
+      const role = input.value.trim(), key = role.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); continue; }
+      const base = role.replace(/\s+\d+$/, "");
+      let n = 2;
+      while (taken.has(`${base} ${n}`.toLowerCase())) n++;
+      input.value = `${base} ${n}`;
+      taken.add(input.value.toLowerCase()); seen.add(input.value.toLowerCase());
+      renamed.push(`${role} → ${input.value}`);
+    }
+    renamed = [...new Set(renamed)].filter(x => inputs.some(i => x.endsWith(`→ ${i.value.trim()}`)));
     const rows = [...sheet.querySelectorAll("[data-crew-row]")].map(r => ({ role: r.querySelector(".tw-role").value.trim(), user: r.querySelector(".tw-user").value })).filter(r => r.role);
-    const seen = new Set(), dup = [];
-    rows.forEach(r => { const k = r.role.toLowerCase(); if (seen.has(k)) dup.push(r.role); seen.add(k); });
     const free = rows.filter(r => !r.user).map(r => r.role);
     const hint = sheet.querySelector("[data-crew-hint]");
-    hint.innerHTML = [dup.length ? `<span class="bad">Повтор роли: ${dup.map(esc).join(", ")} — останется одна.</span>` : "", free.length ? `Без исполнителя: ${free.map(esc).join(", ")} — задачи появятся свободными, их возьмёт любой.` : ""].filter(Boolean).join("<br>");
-    return { dup, free };
+    hint.innerHTML = [renamed.length ? `Одинаковые роли пронумерованы: ${renamed.map(esc).join(", ")} — у каждого своя задача в каждой серии.` : "", free.length ? `Без исполнителя: ${free.map(esc).join(", ")} — задачи появятся свободными, их возьмёт любой.` : ""].filter(Boolean).join("<br>");
+    return { dup: [], free };
   };
   crewCheck();
   sheet.querySelector("[data-crew]").addEventListener("change", e => {
@@ -324,13 +339,12 @@ export async function openTakeWork(titleId, onDone) {
   });
 
   sheet.querySelector("[data-save]").addEventListener("click", async e => {
+    crewCheck();   // повторы ролей получают номера до отправки
     const rows = [...sheet.querySelectorAll("[data-crew-row]")].map(r => ({
       role: r.querySelector(".tw-role").value.trim(),
       telegram_id: r.querySelector(".tw-user").value || null,
     })).filter(r => r.role);
     if (!rows.length) { toast("Добавьте в состав хотя бы одну роль.", "error"); return; }
-    const { dup } = crewCheck();
-    if (dup.length) { toast(`Роль повторяется: ${dup.join(", ")}. Оставьте одну или переименуйте.`, "error"); return; }
     const btn = e.target.closest("button");
     btn.disabled = true;
     btn.textContent = "Сохраняю…";
