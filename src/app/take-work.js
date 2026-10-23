@@ -143,13 +143,9 @@ export async function openTakeWork(titleId, onDone) {
       </div>
       <div class="tw-field tw-full">
         <label><em class="tw-n">4</em>Файлы серий — необязательно</label>
-        <div class="tw-files-add">
-          <select data-tf-ep aria-label="Серия">${plan.episodes.map(e => `<option value="${e.n}">Серия ${e.n}${e.exists ? " · заведена" : e.aired ? " · вышла" : ""}</option>`).join("")}</select>
-          <select data-tf-kind aria-label="Что за файл">${FILE_KINDS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select>
-          <button type="button" class="btn" data-tf-pick title="Можно выбрать сразу несколько файлов (Ctrl / Shift) и нажимать ещё раз — для другой серии или вида">📎 Добавить файлы</button>
-        </div>
-        <div class="tw-files" data-tf-list></div>
-        <small class="tw-files-note"><b>Файлов можно сколько угодно:</b> в окне выбора отметьте несколько сразу (Ctrl / Shift), а для другой серии или вида — смените их и нажмите «Добавить файлы» ещё раз. Загрузятся после «Взять в работу». Общая равка ложится в серию — её увидят все задачи этой серии, можно и для ещё не вышедшей. Равки для озвучки, сведения и субтитры кладутся в задачи серии — только для заведённых или тех, что заводятся сейчас.</small>
+        <div class="tw-files-ep"><select data-tf-ep aria-label="Серия"></select><small data-tf-total></small></div>
+        <div class="tw-kinds" data-tf-kinds></div>
+        <small class="tw-files-note">Выберите серию — у каждого вида свои файлы, их можно добавлять сколько угодно. Загрузятся после «Взять в работу». Общие равки ложатся в серию (их увидят все её задачи, можно и для ещё не вышедшей), остальное — в задачи серии: только для заведённых или тех, что заводятся сейчас.</small>
       </div>
       <div class="tw-field tw-full tw-nyaa">
         <label class="tw-toggle">
@@ -187,23 +183,44 @@ export async function openTakeWork(titleId, onDone) {
   let queued = [];   // [{episode, kind, file}]
   const epSelect = sheet.querySelector("[data-tf-ep]");
   const defaultEp = backfill.length ? backfill[backfill.length - 1] : (plan.episodes.find(e => !e.aired) || plan.episodes[0] || {}).n;
-  if (epSelect && defaultEp) epSelect.value = String(defaultEp);
   // Серии, у которых к моменту загрузки будут задачи: уже заведённые и те, что заводятся сейчас.
   const withTasks = () => new Set([...plan.episodes.filter(e => e.exists).map(e => e.n), ...(sheet.querySelector("[data-backfill]").checked ? backfill : [])]);
+  const isShared = kind => FILE_KINDS.find(([k]) => k === kind)[2];
+  // Как «Равки» в карточке отчёта: выбрана серия — под ней по строке на каждый вид, у каждой своя кнопка и свои файлы.
   const renderQueued = () => {
-    const box = sheet.querySelector("[data-tf-list]");
+    if (!plan.episodes.length) {   // расписания нет — номера серий неизвестны
+      sheet.querySelector("[data-tf-kinds]").innerHTML = `<div class="tw-note">Расписания пока нет — файлы можно будет добавить в карточке задачи.</div>`;
+      epSelect.hidden = true;
+      return;
+    }
+    const ep = Number(epSelect.value || defaultEp);
     const ok = withTasks();
-    box.innerHTML = (queued.length ? `<div class="tw-files-count">Добавлено: ${queued.length} ${plural(queued.length, "файл", "файла", "файлов")} · ${sizeText(queued.reduce((a, q) => a + q.file.size, 0))}</div>` : "") + queued.map((q, i) => {
-      const shared = FILE_KINDS.find(([k]) => k === q.kind)[2];
-      const bad = !shared && !ok.has(q.episode);
-      return `<div class="tw-file${bad ? " bad" : ""}"><b>Серия ${q.episode}</b><span>${esc(FILE_KIND_LABEL[q.kind])}</span><em title="${esc(q.file.name)}">${esc(q.file.name)}</em><small>${esc(sizeText(q.file.size))}</small>
-        <button type="button" class="icon-btn" data-tf-del="${i}" aria-label="Убрать">✕</button>${bad ? `<small class="tw-file-why">у серии не будет задач — выберите общую равку или заведите серию</small>` : ""}</div>`;
+    const perEp = n => queued.filter(q => q.episode === n).length;
+    epSelect.innerHTML = plan.episodes.map(e => `<option value="${e.n}"${e.n === ep ? " selected" : ""}>Серия ${e.n}${e.exists ? " · заведена" : e.aired ? " · вышла" : ""}${perEp(e.n) ? ` · файлов: ${perEp(e.n)}` : ""}</option>`).join("");
+    const total = queued.length;
+    sheet.querySelector("[data-tf-total]").textContent = total
+      ? `Всего: ${total} ${plural(total, "файл", "файла", "файлов")} · ${sizeText(queued.reduce((a, q) => a + q.file.size, 0))}${new Set(queued.map(q => q.episode)).size > 1 ? ` в ${new Set(queued.map(q => q.episode)).size} сериях` : ""}`
+      : "";
+    sheet.querySelector("[data-tf-kinds]").innerHTML = FILE_KINDS.map(([kind, label, shared]) => {
+      const items = queued.map((q, i) => ({ q, i })).filter(({ q }) => q.episode === ep && q.kind === kind);
+      const blocked = !shared && !ok.has(ep);
+      return `<section class="tw-kind${items.length ? " has" : ""}${blocked ? " off" : ""}">
+        <div class="tw-kind-head"><span>${esc(label)}</span>${items.length ? `<em>${items.length}</em>` : ""}
+          ${blocked ? `<small>у серии ${ep} не будет задач</small>` : ""}
+          <button type="button" class="rd-add" data-tf-add="${kind}"${blocked ? " disabled" : ""}>+ Файлы</button></div>
+        ${items.map(({ q, i }) => `<div class="tw-file"><em title="${esc(q.file.name)}">${esc(q.file.name)}</em><small>${esc(sizeText(q.file.size))}</small><button type="button" class="icon-btn" data-tf-del="${i}" aria-label="Убрать">✕</button></div>`).join("")}
+      </section>`;
     }).join("");
   };
-  sheet.querySelector("[data-tf-pick]").addEventListener("click", async () => {
+  epSelect.addEventListener("change", renderQueued);
+  sheet.querySelector("[data-tf-kinds]").addEventListener("click", async e => {
+    const del = e.target.closest("[data-tf-del]");
+    if (del) { queued.splice(Number(del.dataset.tfDel), 1); renderQueued(); summary(); return; }
+    const add = e.target.closest("[data-tf-add]");
+    if (!add) return;
     const files = await pickFiles();
     if (!files || !files.length) return;
-    const episode = Number(epSelect.value), kind = sheet.querySelector("[data-tf-kind]").value;
+    const episode = Number(epSelect.value), kind = add.dataset.tfAdd;
     for (const file of files) {
       if (!file.size) { toast(`Файл «${file.name}» пустой.`, "error"); continue; }
       if (file.size > 2000 * 1024 * 1024) { toast(`Файл «${file.name}» больше 2 ГБ.`, "error"); continue; }
@@ -211,14 +228,10 @@ export async function openTakeWork(titleId, onDone) {
     }
     renderQueued(); summary();
   });
-  sheet.querySelector("[data-tf-list]").addEventListener("click", e => {
-    const b = e.target.closest("[data-tf-del]");
-    if (b) { queued.splice(Number(b.dataset.tfDel), 1); renderQueued(); summary(); }
-  });
   // После «Взять в работу»: по одному файлу, с прогрессом (apiUpload сам режет крупные на части).
   const uploadQueued = async () => {
     const ok = withTasks();
-    const todo = queued.filter(q => FILE_KINDS.find(([k]) => k === q.kind)[2] || ok.has(q.episode));
+    const todo = queued.filter(q => isShared(q.kind) || ok.has(q.episode));
     let done = 0;
     const failed = [];
     for (const q of todo) {
@@ -240,7 +253,7 @@ export async function openTakeWork(titleId, onDone) {
     sheet.querySelector("[data-summary]").innerHTML = eps
       ? `Сразу: <b>${eps * roles} ${plural(eps * roles, "задача", "задачи", "задач")}</b> (${eps} ${plural(eps, "серия", "серии", "серий")} × ${roles} ${plural(roles, "роль", "роли", "ролей")})${filesNote} · дальше — по выходу серий`
       : `Сейчас ничего не создаётся${filesNote} · задачи появятся по выходу серий`;
-    if (queued.length) renderQueued();   // от галочки «завести вышедшие» зависит, куда можно класть равки
+    renderQueued();   // от галочки «завести вышедшие» зависит, в какие серии можно класть равки и субтитры
   };
   if (!backfill.length) sheet.querySelector("[data-backfill]").disabled = true;
   // Подсказка по составу. Роль в составе тайтла уникальна (на сервере одна строка на роль), поэтому вторая

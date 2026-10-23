@@ -5715,21 +5715,23 @@ body.focus-mode .report-detail-overlay .sheet {
 .tw-crew-hint { font-size: 12px; color: var(--ink-dim); margin: 4px 0 6px; line-height: 1.45; }
 .tw-crew-hint:empty { display: none; }
 .tw-crew-hint .bad { color: #ff8a8a; }
-/* «Файлы серий» в окне «Взять в работу» */
-.tw-files-add { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(170px, 1fr) auto; gap: 8px; }
-.tw-files-add select { height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; }
-.tw-files { display: grid; gap: 6px; margin-top: 8px; }
-.tw-files:empty { display: none; }
-.tw-file { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 7px 8px 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px; }
-.tw-file b { white-space: nowrap; }
-.tw-file > span { color: var(--ink-soft); white-space: nowrap; }
+/* «Файлы серий» в окне «Взять в работу»: серия, под ней строка на каждый вид — как «Равки» в карточке отчёта */
+.tw-files-ep { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tw-files-ep select { height: 38px; min-width: 240px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; }
+.tw-files-ep small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.tw-kinds { display: grid; gap: 6px; margin-top: 10px; }
+.tw-kind { padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.tw-kind.has { border-color: color-mix(in srgb, var(--fire) 35%, var(--line)); }
+.tw-kind.off { opacity: .55; }
+.tw-kind-head { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 13px; font-weight: 600; }
+.tw-kind-head em { font-style: normal; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 800; color: var(--on-accent); background: var(--fire); }
+.tw-kind-head small { font-size: 11.5px; font-weight: 400; color: var(--ink-dim); }
+.tw-kind-head .rd-add { margin-left: auto; }
+.tw-kind-head .rd-add:disabled { opacity: .5; cursor: not-allowed; }
+.tw-file { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; margin-top: 6px; padding: 5px 6px 5px 10px; border-radius: 9px; background: var(--surface-2); font-size: 12.5px; }
 .tw-file em { font-style: normal; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tw-file small { color: var(--ink-dim); white-space: nowrap; }
 .tw-file .icon-btn { width: 26px; height: 26px; }
-.tw-file.bad { border-color: color-mix(in srgb, var(--s-stop) 45%, var(--line)); }
-.tw-file .tw-file-why { grid-column: 1 / -1; color: var(--s-stop); white-space: normal; }
-.tw-files-count { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
-.tw-files-note b { color: var(--ink-soft); font-weight: 600; }
 .tw-files-note { display: block; margin-top: 6px; font-size: 11.5px; color: var(--ink-dim); line-height: 1.45; }
 .tw-add { margin-top: 6px; }
 .tw-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); cursor: pointer; }
