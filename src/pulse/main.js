@@ -3,6 +3,7 @@
 
 import { startPulse } from "./pulse.js";
 import { applyTheme, installColorMap } from "./theme.js";
+import { showTeam } from "./team.js";
 
 let started = false;
 
@@ -24,7 +25,12 @@ window.addEventListener("message", ev => {
   const month = new Date(`${data.today}T00:00:00`).toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
   const live = document.querySelector("#liveTxt");
   if (live) live.textContent = `${month} · команда ${data.people.length}`;
-  if (!data.titles.length) { showEmpty("Когда появятся серии в работе, здесь будет живая карта студии."); return; }
+  if (!data.titles.length) {
+    // Серий нет — показываем команду: кто в сети, что делал, сеть и голосование (team.js).
+    if (data.team && data.team.people && data.team.people.length) showTeam(document.querySelector("#wrap"), data);
+    else showEmpty("Когда появятся серии в работе, здесь будет живая карта студии.");
+    return;
+  }
   startPulse(data);
 });
 
