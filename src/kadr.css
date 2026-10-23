@@ -882,8 +882,10 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .af-tag { height: 22px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; border-radius: 7px; }
 .af-tag.lead { background: rgba(var(--fire-rgb), .92); }
 .af-rank { width: 28px; height: 28px; font-size: 12px; border-radius: 9px; }
-.af-body { position: static; padding: 12px 2px 0; gap: 6px; }
-.af-name { font-size: 14px; font-weight: 800; color: var(--ink); text-shadow: none; }
+.af-body { position: static; padding: 12px 2px 0; gap: 6px; flex: 1; }
+/* Название всегда занимает две строки, голоса прижаты к низу — проценты и кнопки в ряду на одной высоте. */
+.af-name { font-size: 14px; font-weight: 800; color: var(--ink); text-shadow: none; min-height: 2.4em; }
+.af-body .af-votes { margin-top: auto; }
 .af-meta { font-size: 11.5px; color: var(--ink-dim); }
 .af-votes b { font-size: 12.5px; }
 .af-bar { height: 3px; background: rgba(255, 255, 255, .1); }
@@ -2869,6 +2871,9 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
   opacity: 0; pointer-events: none; transition: opacity .18s ease;
 }
 .af-card:hover .tl-take:not(.on) { opacity: 1; pointer-events: auto; }
+/* «В работе» — там же на постере, но видна всегда: под кнопками голоса она удлиняла карточку,
+   и голоса с кнопками у соседей в ряду оказывались ниже. */
+.af-card .tl-take.on { position: absolute; left: 10px; right: 10px; width: auto; z-index: 3; top: calc(100cqw * 1.3833 - 48px); backdrop-filter: blur(8px); }
 
 /* ---------- Антивирус ---------- */
 .av-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 10px 0 14px; }
