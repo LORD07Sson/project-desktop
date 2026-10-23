@@ -3402,6 +3402,12 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .ms-msg:hover .ms-bubble-row > .ms-acts, .ms-bubble-row > .ms-acts:focus-within { pointer-events: auto; transform: translate(0, -50%); }
 .ms-msg.out .ms-bubble-row > .ms-acts { left: auto; right: calc(100% + 6px); transform: translate(4px, -50%); }
 .ms-msg.out:hover .ms-bubble-row > .ms-acts, .ms-msg.out .ms-bubble-row > .ms-acts:focus-within { transform: translate(0, -50%); }
+/* Панель висит в 6px от пузыря: пока курсор шёл через этот зазор, наведение на сообщение терялось и кнопки
+   (в том числе «Удалить») исчезали раньше, чем до них доберёшься. Невидимый мостик через зазор — часть самой панели,
+   а на уход курсора панель гаснет не сразу. */
+.ms-bubble-row > .ms-acts::before { content: ""; position: absolute; top: -8px; bottom: -8px; left: -14px; right: -14px; z-index: -1; }
+.ms-bubble-row > .ms-acts { transition: opacity .15s .25s, transform .15s .25s; }
+.ms-msg:hover .ms-bubble-row > .ms-acts, .ms-bubble-row > .ms-acts:hover { transition-delay: 0s; }
 
 /* Полосы прокрутки: тонкие вместо толстой плашки под Доской и Списком. */
 .board, .table-scroll, .list-scroll { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .18) transparent; }
