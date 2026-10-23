@@ -4056,3 +4056,7 @@ td.row-actions { opacity: 1; transition: none; }
 
 /* Чаты: заглушённая беседа или канал — приглушённый значок 🔕 рядом со счётчиком */
 .ms-muted { font-size: 11px; opacity: .55; margin-left: 4px; flex: none; }
+
+/* Зеркала: под полным временем ответа — настоящий пинг (время соединения), мелко и приглушённо */
+.ny-c.has-ping { flex-direction: column; line-height: 1.15; gap: 1px; }
+.ny-c .ny-rtt { font-size: 10px; font-weight: 500; color: var(--ink-dim); opacity: .8; white-space: nowrap; }

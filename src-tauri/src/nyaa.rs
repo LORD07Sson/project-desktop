@@ -238,12 +238,32 @@ pub struct NetCheck {
     pub url: String,
     pub ok: bool,
     pub status: u16,
+    /// Полное время ответа: DNS, соединение, шифрование и ответ самого сайта.
     pub ms: u64,
+    /// Настоящий пинг — время установки TCP-соединения (один проход туда-обратно); None — не соединилось.
+    pub ping: Option<u64>,
     pub error: String,
+}
+
+/// Пинг: адрес сайта находим заранее, засекаем только само соединение с ним.
+async fn tcp_ping(u: &Url) -> Option<u64> {
+    let host = u.host_str()?;
+    let port = u.port().unwrap_or(443);
+    let addr = tokio::net::lookup_host((host, port)).await.ok()?.next()?;
+    let t0 = Instant::now();
+    match tokio::time::timeout(Duration::from_secs(5), tokio::net::TcpStream::connect(addr)).await {
+        Ok(Ok(_stream)) => Some(t0.elapsed().as_millis() as u64),
+        _ => None,
+    }
 }
 
 async fn check_one(url: String) -> NetCheck {
     let started = Instant::now();
+    let ping = match check_public_https(&url) {
+        Ok(u) => tcp_ping(&u).await,
+        Err(_) => None,
+    };
+    let started = if ping.is_some() { Instant::now() } else { started };
     let res = match check_public_https(&url) {
         Err(e) => Err(e),
         Ok(u) => client()
@@ -258,8 +278,8 @@ async fn check_one(url: String) -> NetCheck {
     };
     let ms = started.elapsed().as_millis() as u64;
     match res {
-        Ok(status) => NetCheck { url, ok: status < 500, status, ms, error: String::new() },
-        Err(error) => NetCheck { url, ok: false, status: 0, ms, error },
+        Ok(status) => NetCheck { url, ok: status < 500, status, ms, ping, error: String::new() },
+        Err(error) => NetCheck { url, ok: false, status: 0, ms, ping, error },
     }
 }
 

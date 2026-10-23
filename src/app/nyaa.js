@@ -1266,7 +1266,12 @@ function pingCell(url, path, who) {
     else { val = esc(durText(last.ms)); cls = last.ms > SLOW_MS ? "slow" : "ok"; }
   }
   const age = pend ? "проверяю…" : last ? `замер ${ageText(Date.now(), last.t)}` : "ещё не проверялось";
-  return `<span class="ny-c ${cls}" title="${esc(`${who}: ${age}`)}">${val}</span>`;
+  // Под полным временем ответа — настоящий пинг: только установка соединения (один проход туда-обратно).
+  // Полное время больше в 4–5 раз: туда входят ещё поиск адреса, шифрование и ответ самого сайта.
+  const chk = !pend && last && last.ms != null ? (path === "pc" ? localChecks[url] : serverChecks[url]) : null;
+  const ping = chk && typeof chk.ping === "number" ? chk.ping : null;
+  const tip = ping != null ? `${who}: полный ответ ${durText(last.ms)}, пинг ${ping} мс (только соединение) · ${age}` : `${who}: ${age}`;
+  return `<span class="ny-c ${cls}${ping != null ? " has-ping" : ""}" title="${esc(tip)}">${val}${ping != null ? `<small class="ny-rtt">пинг ${ping} мс</small>` : ""}</span>`;
 }
 
 function mirrorRow(sv, m) {
