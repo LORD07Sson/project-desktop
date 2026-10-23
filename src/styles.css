@@ -5728,6 +5728,8 @@ body.focus-mode .report-detail-overlay .sheet {
 .tw-file .icon-btn { width: 26px; height: 26px; }
 .tw-file.bad { border-color: color-mix(in srgb, var(--s-stop) 45%, var(--line)); }
 .tw-file .tw-file-why { grid-column: 1 / -1; color: var(--s-stop); white-space: normal; }
+.tw-files-count { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.tw-files-note b { color: var(--ink-soft); font-weight: 600; }
 .tw-files-note { display: block; margin-top: 6px; font-size: 11.5px; color: var(--ink-dim); line-height: 1.45; }
 .tw-add { margin-top: 6px; }
 .tw-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); cursor: pointer; }

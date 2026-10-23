@@ -146,10 +146,10 @@ export async function openTakeWork(titleId, onDone) {
         <div class="tw-files-add">
           <select data-tf-ep aria-label="Серия">${plan.episodes.map(e => `<option value="${e.n}">Серия ${e.n}${e.exists ? " · заведена" : e.aired ? " · вышла" : ""}</option>`).join("")}</select>
           <select data-tf-kind aria-label="Что за файл">${FILE_KINDS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select>
-          <button type="button" class="btn" data-tf-pick>📎 Выбрать файлы</button>
+          <button type="button" class="btn" data-tf-pick title="Можно выбрать сразу несколько файлов (Ctrl / Shift) и нажимать ещё раз — для другой серии или вида">📎 Добавить файлы</button>
         </div>
         <div class="tw-files" data-tf-list></div>
-        <small class="tw-files-note">Загрузятся после «Взять в работу». Общая равка ложится в серию — её увидят все задачи этой серии, можно и для ещё не вышедшей. Равки для озвучки, сведения и субтитры кладутся в задачи серии — только для заведённых или тех, что заводятся сейчас.</small>
+        <small class="tw-files-note"><b>Файлов можно сколько угодно:</b> в окне выбора отметьте несколько сразу (Ctrl / Shift), а для другой серии или вида — смените их и нажмите «Добавить файлы» ещё раз. Загрузятся после «Взять в работу». Общая равка ложится в серию — её увидят все задачи этой серии, можно и для ещё не вышедшей. Равки для озвучки, сведения и субтитры кладутся в задачи серии — только для заведённых или тех, что заводятся сейчас.</small>
       </div>
       <div class="tw-field tw-full tw-nyaa">
         <label class="tw-toggle">
@@ -193,7 +193,7 @@ export async function openTakeWork(titleId, onDone) {
   const renderQueued = () => {
     const box = sheet.querySelector("[data-tf-list]");
     const ok = withTasks();
-    box.innerHTML = queued.map((q, i) => {
+    box.innerHTML = (queued.length ? `<div class="tw-files-count">Добавлено: ${queued.length} ${plural(queued.length, "файл", "файла", "файлов")} · ${sizeText(queued.reduce((a, q) => a + q.file.size, 0))}</div>` : "") + queued.map((q, i) => {
       const shared = FILE_KINDS.find(([k]) => k === q.kind)[2];
       const bad = !shared && !ok.has(q.episode);
       return `<div class="tw-file${bad ? " bad" : ""}"><b>Серия ${q.episode}</b><span>${esc(FILE_KIND_LABEL[q.kind])}</span><em title="${esc(q.file.name)}">${esc(q.file.name)}</em><small>${esc(sizeText(q.file.size))}</small>
