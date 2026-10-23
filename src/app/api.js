@@ -85,7 +85,8 @@ export async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const controller = new AbortController();
   // Долгие серверные операции: «взять в работу» (опрос nyaa) и AI-проверка звука — гигабайтные WAV разбираются десятки секунд.
-  const timeoutMs = /^\/titles\/\d+\/take(?:\?|$)/.test(path) ? 45_000
+  // Поиск раздач на Nyaa (nyaa-test, nyaa-browse) тоже ходит на nyaa: при медленном сайте 20 с не хватало.
+  const timeoutMs = /^\/titles\/\d+\/(?:take|nyaa-test|nyaa-browse)(?:\?|$)/.test(path) ? 45_000
     : /^\/report\/[^/]+\/files\/\d+\/(?:qc|peaks)(?:\?|$)/.test(path) ? 300_000
     : REQUEST_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs); // DevSkim: ignore DS172411 — функция, не строка
