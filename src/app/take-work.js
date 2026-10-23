@@ -5,7 +5,8 @@
 // сервер заводит сам по мере выхода и пишет составу в Telegram.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { pickFiles, sizeText } from "./attachments.js";
 import { esc } from "./utils.js";
 import { imgProxy } from "./title-page.js";
 import { loadUsers } from "./tabs.js";
@@ -65,6 +66,14 @@ function crewRowHtml(role, telegramId) {
 function backfillNumbers(plan) {
   return plan.episodes.filter(e => e.aired && !e.exists).map(e => e.n).slice(-plan.max_backfill);
 }
+
+// Файлы серий из окна «Взять в работу» — те же виды, что в карточке отчёта. Общая равка — в серию (всем её задачам,
+// можно заранее); равки для озвучки/сведения и субтитры — в задачи серии, поэтому только для заводимых сейчас или уже заведённых.
+const FILE_KINDS = [
+  ["raw1080", "Равка 1080p · общая", true], ["raw480", "Равка 480p · общая", true],
+  ["voice", "Равка для озвучки", false], ["mix", "Равка для сведения", false], ["subs", "Субтитры · роспись", false],
+];
+const FILE_KIND_LABEL = Object.fromEntries(FILE_KINDS.map(([k, l]) => [k, l]));
 
 function episodesHtml(plan) {
   if (!plan.episodes.length) return `<div class="tw-note">Расписания пока нет — серии можно будет завести вручную на «Доске».</div>`;
@@ -132,10 +141,20 @@ export async function openTakeWork(titleId, onDone) {
         <div class="tw-crew-hint" data-crew-hint></div>
         <button type="button" class="btn ghost tw-add" data-crew-add>+ Роль</button>
       </div>
+      <div class="tw-field tw-full">
+        <label><em class="tw-n">4</em>Файлы серий — необязательно</label>
+        <div class="tw-files-add">
+          <select data-tf-ep aria-label="Серия">${plan.episodes.map(e => `<option value="${e.n}">Серия ${e.n}${e.exists ? " · заведена" : e.aired ? " · вышла" : ""}</option>`).join("")}</select>
+          <select data-tf-kind aria-label="Что за файл">${FILE_KINDS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select>
+          <button type="button" class="btn" data-tf-pick>📎 Выбрать файлы</button>
+        </div>
+        <div class="tw-files" data-tf-list></div>
+        <small class="tw-files-note">Загрузятся после «Взять в работу». Общая равка ложится в серию — её увидят все задачи этой серии, можно и для ещё не вышедшей. Равки для озвучки, сведения и субтитры кладутся в задачи серии — только для заведённых или тех, что заводятся сейчас.</small>
+      </div>
       <div class="tw-field tw-full tw-nyaa">
         <label class="tw-toggle">
           <input type="checkbox" data-nyaa${!work || work.nyaa_enabled ? " checked" : ""}>
-          <span><b><em class="tw-n">4</em>Автоматически отправлять раздачи с Nyaa</b><small>Когда выйдет новая серия, бот пришлёт .torrent назначенным участникам. Ссылку можно выбрать и отправить вручную ниже.</small></span>
+          <span><b><em class="tw-n">5</em>Автоматически отправлять раздачи с Nyaa</b><small>Когда выйдет новая серия, бот пришлёт .torrent назначенным участникам. Ссылку можно выбрать и отправить вручную ниже.</small></span>
         </label>
         <div class="tw-pick">
           <button type="button" class="btn" data-nyaa-browse>📚 Выбрать раздачу в каталоге Nyaa</button>
@@ -165,16 +184,63 @@ export async function openTakeWork(titleId, onDone) {
 
   const val = { hours, priority };
   const backfill = backfillNumbers(plan);
+  let queued = [];   // [{episode, kind, file}]
+  const epSelect = sheet.querySelector("[data-tf-ep]");
+  const defaultEp = backfill.length ? backfill[backfill.length - 1] : (plan.episodes.find(e => !e.aired) || plan.episodes[0] || {}).n;
+  if (epSelect && defaultEp) epSelect.value = String(defaultEp);
+  // Серии, у которых к моменту загрузки будут задачи: уже заведённые и те, что заводятся сейчас.
+  const withTasks = () => new Set([...plan.episodes.filter(e => e.exists).map(e => e.n), ...(sheet.querySelector("[data-backfill]").checked ? backfill : [])]);
+  const renderQueued = () => {
+    const box = sheet.querySelector("[data-tf-list]");
+    const ok = withTasks();
+    box.innerHTML = queued.map((q, i) => {
+      const shared = FILE_KINDS.find(([k]) => k === q.kind)[2];
+      const bad = !shared && !ok.has(q.episode);
+      return `<div class="tw-file${bad ? " bad" : ""}"><b>Серия ${q.episode}</b><span>${esc(FILE_KIND_LABEL[q.kind])}</span><em title="${esc(q.file.name)}">${esc(q.file.name)}</em><small>${esc(sizeText(q.file.size))}</small>
+        <button type="button" class="icon-btn" data-tf-del="${i}" aria-label="Убрать">✕</button>${bad ? `<small class="tw-file-why">у серии не будет задач — выберите общую равку или заведите серию</small>` : ""}</div>`;
+    }).join("");
+  };
+  sheet.querySelector("[data-tf-pick]").addEventListener("click", async () => {
+    const files = await pickFiles();
+    if (!files || !files.length) return;
+    const episode = Number(epSelect.value), kind = sheet.querySelector("[data-tf-kind]").value;
+    for (const file of files) {
+      if (!file.size) { toast(`Файл «${file.name}» пустой.`, "error"); continue; }
+      if (file.size > 2000 * 1024 * 1024) { toast(`Файл «${file.name}» больше 2 ГБ.`, "error"); continue; }
+      queued.push({ episode, kind, file });
+    }
+    renderQueued(); summary();
+  });
+  sheet.querySelector("[data-tf-list]").addEventListener("click", e => {
+    const b = e.target.closest("[data-tf-del]");
+    if (b) { queued.splice(Number(b.dataset.tfDel), 1); renderQueued(); summary(); }
+  });
+  // После «Взять в работу»: по одному файлу, с прогрессом (apiUpload сам режет крупные на части).
+  const uploadQueued = async () => {
+    const ok = withTasks();
+    const todo = queued.filter(q => FILE_KINDS.find(([k]) => k === q.kind)[2] || ok.has(q.episode));
+    let done = 0;
+    const failed = [];
+    for (const q of todo) {
+      try {
+        await apiUpload(`/titles/${titleId}/episodes/${q.episode}/files/${q.kind}`, q.file, {});
+        done++;
+      } catch (err) { failed.push(`${q.file.name}: ${err.message}`); }
+    }
+    return { done, failed, skipped: queued.length - todo.length };
+  };
   const summary = () => {
     const on = sheet.querySelector("[data-backfill]").checked;
     const roles = sheet.querySelectorAll("[data-crew-row]").length;
+    const filesNote = queued.length ? ` · файлов: ${queued.length}` : "";
     const eps = on ? backfill.length : 0;
     sheet.querySelector("[data-backfill-note]").textContent = backfill.length
       ? `${backfill.length} ${plural(backfill.length, "серия", "серии", "серий")}: ${backfill.length > 6 ? `${backfill[0]}–${backfill[backfill.length - 1]}` : backfill.join(", ")}`
       : "все вышедшие серии уже заведены";
     sheet.querySelector("[data-summary]").innerHTML = eps
-      ? `Сразу: <b>${eps * roles} ${plural(eps * roles, "задача", "задачи", "задач")}</b> (${eps} ${plural(eps, "серия", "серии", "серий")} × ${roles} ${plural(roles, "роль", "роли", "ролей")}) · дальше — по выходу серий`
-      : `Сейчас ничего не создаётся · задачи появятся по выходу серий`;
+      ? `Сразу: <b>${eps * roles} ${plural(eps * roles, "задача", "задачи", "задач")}</b> (${eps} ${plural(eps, "серия", "серии", "серий")} × ${roles} ${plural(roles, "роль", "роли", "ролей")})${filesNote} · дальше — по выходу серий`
+      : `Сейчас ничего не создаётся${filesNote} · задачи появятся по выходу серий`;
+    if (queued.length) renderQueued();   // от галочки «завести вышедшие» зависит, куда можно класть равки
   };
   if (!backfill.length) sheet.querySelector("[data-backfill]").disabled = true;
   // Подсказка по составу. Роль в составе тайтла уникальна (на сервере одна строка на роль), поэтому вторая
@@ -373,6 +439,12 @@ export async function openTakeWork(titleId, onDone) {
         : "";
       const releaseFailed = r.release_requested && r.release_recipients !== r.release_targets;
       toast([workMessage, releaseMessage].filter(Boolean).join(" "), releaseFailed ? "error" : undefined);
+      if (queued.length) {
+        btn.textContent = "Загружаю файлы…";
+        const f = await uploadQueued();
+        const parts = [f.done ? `Файлы серий загружены: ${f.done}.` : "", f.skipped ? `Пропущено ${f.skipped}: у серии нет задач.` : "", f.failed.length ? `Не загрузились: ${f.failed.join("; ")}` : ""];
+        toast(parts.filter(Boolean).join(" "), f.failed.length || f.skipped ? "error" : "success");
+      }
       overlay.remove();
       onDone && onDone();
     } catch (err) {
