@@ -327,8 +327,7 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-muted { margin: 0; color: var(--ink-dim); font-size: 13px; }
 
 .tm-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 32px; margin-bottom: 30px; }
-.tm-eye { font: 700 10.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--fire); }
-.tm-head h1 { margin: 6px 0 4px; font: 800 34px/1.05 var(--disp); letter-spacing: -.01em; }
+.tm-head h1 { margin: 0 0 4px; font: 800 34px/1.05 var(--disp); letter-spacing: -.01em; }
 .tm-head p { margin: 0; color: var(--ink-soft); font-size: 13.5px; }
 
 .tm-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; align-items: start; }

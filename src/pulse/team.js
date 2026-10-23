@@ -146,7 +146,7 @@ export function showTeam(wrap, data) {
   wrap.classList.add("team-mode");
   wrap.innerHTML = `<div class="tm">
     <header class="tm-head">
-      <div><small class="tm-eye">Пульс студии</small><h1>Команда</h1><p>Серий в работе сейчас нет — здесь видно, кто чем занят.</p></div>
+      <div><h1>Команда</h1><p>Серий в работе сейчас нет — здесь видно, кто чем занят.</p></div>
     </header>
     <div class="tm-bento">
       ${hasDays ? `<div class="tm-b tm-act tm-rise" style="--i:0">
