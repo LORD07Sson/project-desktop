@@ -369,6 +369,7 @@ export async function openReportDetail(publicId) {
         <button class="rd-tab on" data-rd-tab="main">Обзор</button>
         <button class="rd-tab" data-rd-tab="history">История</button>
         <button class="rd-tab" data-rd-tab="activity">Активность</button>
+        <button class="rd-tab" data-rd-tab="notifications">Уведомления<span class="rd-tab-bad" hidden></span></button>
         ${canEdit ? `<button class="rd-tab" id="btn-qc-track" title="Проверить звук дорожки">QC дорожки</button>` : ""}
       </div>
 
@@ -442,6 +443,7 @@ export async function openReportDetail(publicId) {
           </div>
           <div class="rd-panel" data-rd-panel="history" hidden></div>
           <div class="rd-panel" data-rd-panel="activity" hidden></div>
+          <div class="rd-panel" data-rd-panel="notifications" hidden></div>
         </div>
 
         <aside class="rd-side">
@@ -492,6 +494,11 @@ export async function openReportDetail(publicId) {
       sheet.querySelectorAll("[data-rd-panel]").forEach(p => { p.hidden = p.dataset.rdPanel !== tab; });
       if (tab !== "main") fillLogPanel(sheet.querySelector(`[data-rd-panel="${tab}"]`), publicId, tab);
     }));
+    // Сколько уведомлений не дошло — видно сразу на вкладке, не открывая её.
+    apiGet(`/report/${publicId}/notifications`, { offset: 0, page_size: 1 }).then(r => {
+      const badge = sheet.querySelector(".rd-tab-bad");
+      if (badge && r && r.failed) { badge.textContent = r.failed; badge.hidden = false; badge.title = `Не доставлено: ${r.failed}`; }
+    }).catch(() => { /* вкладка просто без значка */ });
     const pipeEditor = sheet.querySelector("#pipe-editor");
     const openPipeEditor = () => { pipeEditor.hidden = !pipeEditor.hidden; };
     if (canEdit) sheet.querySelector("#pipe-add-open")?.addEventListener("click", e => { e.currentTarget.remove(); pipeEditor.hidden = false; });
@@ -1019,6 +1026,7 @@ async function fillLogPanel(panel, publicId, kind) {
     return;
   }
   const evs = res.events || [];
+  if (kind === "notifications") { renderNotifications(panel, publicId, res); return; }
   panel.innerHTML = `<div class="pf-acts">${evs.map(ev => `
     <div class="pf-act"><i></i><div>
       <div class="a">${kind === "history" ? esc(ev.new_status_label || "") + (ev.comment ? ` <span>· ${esc(ev.comment)}</span>` : "") : esc(ev.action || "") + (ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : "")}</div>
@@ -1026,6 +1034,26 @@ async function fillLogPanel(panel, publicId, kind) {
     </div></div>`).join("") || `<div class="pf-quiet">Пока пусто</div>`}</div>
     ${res.has_more ? `<button class="pf-link" data-log-more style="margin-top:10px;">показать всё →</button>` : ""}`;
   panel.querySelector("[data-log-more]")?.addEventListener("click", () => openReportLogSheet(publicId, kind));
+}
+
+// «Уведомления»: кому уходили сообщения по отчёту и дошли ли (журнал delivery_log на сервере).
+function renderNotifications(panel, publicId, res) {
+  const evs = res.events || [];
+  panel.innerHTML = `${res.total ? `<div class="rd-nt-sum"><span class="ok">✓ доставлено ${res.total - res.failed}</span>${res.failed ? `<span class="bad">✗ не доставлено ${res.failed}</span>` : ""}</div>` : ""}
+    <div class="rd-nt">${evs.map(ev => `
+    <div class="rd-nt-row ${ev.ok ? "ok" : "bad"}"><i aria-hidden="true">${ev.ok ? "✓" : "✗"}</i><div>
+      <div class="a">${esc(ev.title || "Уведомление")}</div>
+      <div class="m">${ev.to ? `→ ${esc(ev.to)}` : "→ никому"}${ev.ok ? " · доставлено" : ` · <b>${esc(ev.error || "не доставлено")}</b>`}</div>
+      <div class="t">${esc(String(ev.created_at || "").slice(0, 16))}${ev.source ? ` · через ${esc(ev.source)}` : ""}</div>
+    </div></div>`).join("") || `<div class="pf-quiet">Уведомлений по этому отчёту ещё не было. Они появятся здесь, когда кто-то сменит статус, загрузит файл, оставит заметку или подойдёт срок.</div>`}</div>
+    ${res.has_more ? `<button class="pf-link" data-nt-more style="margin-top:10px;">показать ещё →</button>` : ""}`;
+  panel.querySelector("[data-nt-more]")?.addEventListener("click", async e => {
+    e.currentTarget.disabled = true;
+    try {
+      const more = await apiGet(`/report/${publicId}/notifications`, { offset: evs.length, page_size: 100 });
+      renderNotifications(panel, publicId, { ...more, events: evs.concat(more.events || []) });
+    } catch (err) { toast(`Не удалось загрузить: ${err.message}`, "error"); e.currentTarget.disabled = false; }
+  });
 }
 
 // Скачивание — кнопка, а не <a href>. Ссылка с target="_blank" внутри
