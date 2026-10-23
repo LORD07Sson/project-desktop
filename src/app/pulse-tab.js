@@ -2,7 +2,7 @@
 // и скрипты с приложением). Сюда сводятся все данные аналитики: метрики и динамика, нагрузка, исполнители, а для владельца
 // ещё и выводы алгоритма (сроки, узкие места, кто чем занят, связь). Страница получает их одним сообщением.
 
-import { apiGet } from "./api.js";
+import { apiGet, mediaUrl } from "./api.js";
 import { esc } from "./utils.js";
 import { state } from "./state.js";
 import { openReportDetail } from "./report-detail.js";
@@ -44,6 +44,8 @@ async function collect() {
     apiGet("/trend").catch(() => null),
     state.isOwner ? apiGet("/analytics/work-map", { days: 30 }).catch(() => null) : Promise.resolve(null),
   ]);
+  // Фото участников для экрана «Команда»: страница в iframe сама токен для картинок не знает.
+  for (const p of (pulse.team && pulse.team.people) || []) p.avatar = p.tg ? mediaUrl(`/avatar/${encodeURIComponent(p.tg)}`) : null;
   return {
     ...pulse,
     analytics: project ? {
