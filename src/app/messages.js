@@ -36,8 +36,9 @@ const OPEN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v
 let chats = [];      // общий + личные
 let channels = [];   // [{id, name, poster_url, topics:[...] , unread}]
 let people = [];
-let canModerate = false;      // владелец: удаляет чужое, каналы и темы
-let canCreateChannel = false; // админ: создаёт каналы
+let canModerate = false;      // право «Удалять чужие сообщения» в общем чате и темах
+let canDeleteThreads = false; // владелец: удаляет темы, каналы и переписку у обоих
+let canCreateChannel = false; // право «Создавать каналы»
 const expanded = new Set();   // раскрытые каналы в списке
 let activeId = null;
 let messages = [];
@@ -288,8 +289,8 @@ function threadHeadHtml(c) {
       ${c.kind === "general" ? `<div class="ms-people">${c.participants.slice(0, 6).map(p => `<span class="avatar-bubble" data-avatar-for="${p.telegram_id}" title="${esc(p.name)}">${initial(p.name)}</span>`).join("")}${c.participants.length > 6 ? `<span class="ms-people-more">+${c.participants.length - 6}</span>` : ""}</div>` : ""}
       ${c.kind === "dm" && c.peer ? `<button type="button" class="btn" data-open-profile="${c.peer.telegram_id}">${OPEN_ICON}Профиль</button>` : ""}
       ${c.kind === "dm" ? `<button type="button" class="btn" data-clear-dm title="Переписка пропадёт только у вас, у собеседника останется">${TRASH_ICON}Очистить</button>` : ""}
-      ${c.kind === "dm" && canModerate ? `<button type="button" class="btn danger" data-clear-dm-both title="Удалить переписку целиком — у вас и у собеседника">${TRASH_ICON}У обоих</button>` : ""}
-      ${c.kind === "topic" && canModerate ? `
+      ${c.kind === "dm" && canDeleteThreads ? `<button type="button" class="btn danger" data-clear-dm-both title="Удалить переписку целиком — у вас и у собеседника">${TRASH_ICON}У обоих</button>` : ""}
+      ${c.kind === "topic" && canDeleteThreads ? `
         <button type="button" class="btn" data-del-topic="${c.topic_id}" title="Удалить тему со всей перепиской">${TRASH_ICON}Тему</button>
         <button type="button" class="btn danger" data-del-channel="${c.channel_id}" title="Удалить канал со всеми темами">${TRASH_ICON}Канал</button>` : ""}
     </div>`;
@@ -663,6 +664,8 @@ async function refreshLists() {
   people = d.people || people;
   canModerate = !!d.can_moderate;
   canCreateChannel = !!d.can_create_channel;
+  // Старый сервер не знал отдельного флага — тогда как раньше: владелец = модератор.
+  canDeleteThreads = d.can_delete_threads === undefined ? canModerate : !!d.can_delete_threads;
   renderList();
   updateNavBadge();
 }

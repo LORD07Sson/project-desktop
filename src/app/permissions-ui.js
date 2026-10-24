@@ -26,6 +26,10 @@ const PREVIEW = [
     ["Роли людей", "roles.manage"], ["Профили людей", "people.view"], ["Тикеты", "tickets.manage"],
     ["Объявление", "notice.manage"], ["Дни рождения", "birthdays.manage"], ["Аварийный режим", "lockdown"],
   ]],
+  ["В сообщениях", [
+    ["Личные переписки и общий чат", ALWAYS], ["Создавать каналы", "chat.channels"],
+    ["Закреплять в общих беседах", "chat.pin"], ["Удалять чужие сообщения", "chat.moderate"],
+  ]],
 ];
 const allows = (need, have) => need === ALWAYS || (Array.isArray(need) ? need.some(k => have.has(k)) : have.has(need));
 
