@@ -266,6 +266,9 @@ export async function openReportDetail(publicId) {
 
   // Вложение к следующей заметке — переживает перерисовку карточки.
   let pendingNoteFile = null;
+  // Открытый редактор пайплайна и его черновик тоже переживают перерисовку: карточка рисуется заново, когда догрузился
+  // файл или пришла заметка, и раньше недособранная цепочка пропадала. null — редактор закрыт.
+  let pipeEdit = null;   // { draft: [{role, telegram_id, name}], parallel }
 
   async function render() {
     let detail, notes, checklist, files, roles, assignable, raws;
@@ -295,10 +298,10 @@ export async function openReportDetail(publicId) {
     // Черновик цепочки пайплайна — правится локально до нажатия
     // «Сохранить», как и в мини-аппе (pipelineDraft): полный список
     // шагов уходит на /pipeline разом, PATCH одного шага сервер не
-    // умеет. Сбрасывается при каждом render() (в т.ч. после сохранения
-    // заметки/чек-листа отчёта) — то же поведение, что и там.
-    let pipelineParallel = !!detail.pipeline_parallel;
-    let pipelineDraft = (detail.pipeline || []).map(s => ({ role: s.role, telegram_id: s.telegram_id || null, name: s.user_name || null }));
+    // умеет. Пока редактор открыт, черновик берётся из pipeEdit —
+    // перерисовка карточки (догрузился файл, новая заметка) его не сбрасывает.
+    const pipelineParallel = pipeEdit ? pipeEdit.parallel : !!detail.pipeline_parallel;
+    const pipelineDraft = pipeEdit ? pipeEdit.draft : (detail.pipeline || []).map(s => ({ role: s.role, telegram_id: s.telegram_id || null, name: s.user_name || null }));
 
     const dotClass = STATUS_DOT_CLASS[detail.status] || "draft";
     const overdue = isOverdue(detail);
@@ -380,9 +383,11 @@ export async function openReportDetail(publicId) {
             ${productionHtml(detail, files.files)}
             <div class="rd-sec">
               <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди · " : ""}${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}${detail.pipeline.every(s => s.done) ? " · пройден" : ""}</span>` : ""}
-                ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? "изменить" : ""}</button>` : ""}</h3>
+                ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? (pipeEdit ? "отмена" : "изменить") : ""}</button>` : ""}</h3>
+              <div id="pipe-view"${pipeEdit ? " hidden" : ""}>
               ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, !!state.isAdmin) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
-              ${canEdit ? `<div id="pipe-editor" hidden>
+              </div>
+              ${canEdit ? `<div id="pipe-editor"${pipeEdit ? "" : " hidden"}>
                 <div id="pipeline-draft-list"></div>
                 <div class="add-row">
                   <select id="pipeline-role-pick" class="field-input"><option value="">+ роль…</option>${roles.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>
@@ -500,11 +505,24 @@ export async function openReportDetail(publicId) {
       if (badge && r && r.failed) { badge.textContent = r.failed; badge.hidden = false; badge.title = `Не доставлено: ${r.failed}`; }
     }).catch(() => { /* вкладка просто без значка */ });
     const pipeEditor = sheet.querySelector("#pipe-editor");
-    const openPipeEditor = () => { pipeEditor.hidden = !pipeEditor.hidden; };
-    if (canEdit) sheet.querySelector("#pipe-add-open")?.addEventListener("click", e => { e.currentTarget.remove(); pipeEditor.hidden = false; });
+    const pipeView = sheet.querySelector("#pipe-view");
     const pipeToggle = sheet.querySelector("#pipe-edit-toggle");
-    if (pipeToggle && hasPipe && canEdit) pipeToggle.addEventListener("click", openPipeEditor);
+    // Редактор открывается на месте шкалы этапов (раньше — под ней, вне экрана, и казалось, что «изменить» не работает).
+    const setPipeEditing = on => {
+      pipeEdit = on ? { draft: pipelineDraft, parallel: pipelineParallel } : null;
+      if (pipeEditor) pipeEditor.hidden = !on;
+      if (pipeView && hasPipe) pipeView.hidden = on;
+      if (pipeToggle && hasPipe) pipeToggle.textContent = on ? "отмена" : "изменить";
+      if (on) pipeEditor?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    };
+    if (canEdit) sheet.querySelector("#pipe-add-open")?.addEventListener("click", e => { e.currentTarget.remove(); setPipeEditing(true); });
+    if (pipeToggle && hasPipe && canEdit) pipeToggle.addEventListener("click", async () => {
+      if (!pipeEdit) { setPipeEditing(true); return; }
+      pipeEdit = null;          // «отмена» — черновик выбрасываем, шкала снова из сохранённого
+      await render();
+    });
     else pipeToggle?.remove();
+    sheet.querySelector("#pipeline-parallel")?.addEventListener("change", e => { if (pipeEdit) pipeEdit.parallel = e.target.checked; });
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
     loadAvatars(sheet);
     sheet.querySelectorAll("[data-nav]").forEach(b => b.addEventListener("click", () => {
@@ -613,6 +631,7 @@ export async function openReportDetail(publicId) {
       try {
         await apiPost(`/report/${publicId}/pipeline`, { steps: pipelineDraft.map(s => ({ role: s.role, telegram_id: s.telegram_id })), parallel: !!sheet.querySelector("#pipeline-parallel")?.checked });
         toast(pipelineDraft.length ? "Пайплайн сохранён." : "Пайплайн снят.");
+        pipeEdit = null;
         await render();
       } catch (e) { toast(`Не удалось сохранить пайплайн: ${e.message}`, "error"); }
     });
@@ -622,6 +641,7 @@ export async function openReportDetail(publicId) {
       try {
         await apiPost(`/report/${publicId}/pipeline`, { steps: [] });
         toast("Пайплайн снят.");
+        pipeEdit = null;
         await render();
       } catch (e) { toast(`Не удалось снять пайплайн: ${e.message}`, "error"); }
     });
