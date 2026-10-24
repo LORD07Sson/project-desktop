@@ -38,11 +38,12 @@ function deliver() {
 }
 
 async function collect() {
-  const [pulse, project, trend, workmap] = await Promise.all([
+  const [pulse, project, trend, workmap, errors] = await Promise.all([
     apiGet("/pulse"),
     apiGet("/analytics/project").catch(() => null),
     apiGet("/trend").catch(() => null),
     state.isOwner ? apiGet("/analytics/work-map", { days: 30 }).catch(() => null) : Promise.resolve(null),
+    state.isOwner ? apiGet("/analytics/errors", { days: 14 }).catch(() => null) : Promise.resolve(null),
   ]);
   // Фото участников для экрана «Команда»: страница в iframe сама токен для картинок не знает.
   for (const p of (pulse.team && pulse.team.people) || []) p.avatar = p.tg ? mediaUrl(`/avatar/${encodeURIComponent(p.tg)}`) : null;
@@ -56,6 +57,7 @@ async function collect() {
       workload: project.workload || [], performers: project.performers || [], trend,
     } : null,
     workmap,
+    errors,
   };
 }
 

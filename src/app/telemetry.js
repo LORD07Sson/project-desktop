@@ -2,7 +2,7 @@
 // что и сколько смотрят. Только названия (экран, id кнопки, название тайтла) и длительность — никакого введённого текста,
 // содержимого сообщений или файлов. Человек может выключить сбор в Настройки → Поведение и стереть уже собранное.
 
-import { invoke } from "./tauri.js";
+import { invoke, getVersion } from "./tauri.js";
 import { apiGet, apiPost, openSheet, dismissSheet, toast, API_BASE } from "./api.js";
 // «じ――» — пристальный взгляд: заставка окна согласия (Vite отдаёт готовый URL ассета).
 import stareUrl from "../assets/stare-ji.gif";
@@ -17,6 +17,12 @@ let screen = "";
 let screenMs = 0;       // накопленное ВИДИМОЕ время на текущем экране
 let visibleSince = 0;
 let lastClick = { name: "", at: 0 };
+const trail = [];       // последние шаги человека — прикладываются к ошибке, чтобы было видно, что к ней привело
+
+function step(text) {
+  trail.push(text);
+  if (trail.length > 6) trail.shift();
+}
 
 export function trackingOn() {
   try { return localStorage.getItem(KEY) === "1"; } catch (_) { return false; }
@@ -45,6 +51,7 @@ export function trackScreen(name) {
   if (name === screen) return;
   closeScreen();
   screen = name || "";
+  if (screen) step(`открыл: ${screen}`);
   screenMs = 0;
   visibleSince = document.visibilityState === "visible" ? Date.now() : 0;
 }
@@ -79,6 +86,7 @@ document.addEventListener("click", ev => {
   const now = Date.now();
   if (name === lastClick.name && now - lastClick.at < 400) return;
   lastClick = { name, at: now };
+  step(`нажал: ${name}`);
   track("action", name);
 }, true);
 
@@ -86,11 +94,71 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     if (visibleSince) { screenMs += Date.now() - visibleSince; visibleSince = 0; }
     flushTelemetry();
+    flushErrors();
   } else {
     visibleSince = Date.now();
   }
 });
 setInterval(flushTelemetry, FLUSH_MS);
+
+// ---- Ошибки для Аналитики (только у согласившихся на статистику) ----
+// Ловим то, что человек увидел (красное сообщение), молчаливые сбои сервера (нет связи, 5xx) и падения самой программы —
+// с экраном, последними шагами и версией. Повтор той же ошибки в течение 5 с не дублируется.
+const ERR_FLUSH_MS = 3000;
+let errQueue = [];
+let errTimer = null;
+let lastErr = { key: "", at: 0 };
+let lastApi = null;     // последний неудачный запрос — к красному сообщению, вызванному им
+let appVersion = "";
+getVersion().then(v => { appVersion = v; }).catch(() => { /* не в приложении */ });
+
+function reportError(kind, message, detail) {
+  if (!trackingOn() || !message) return;
+  const key = `${kind}:${message}`, now = Date.now();
+  if (key === lastErr.key && now - lastErr.at < 5000) return;
+  lastErr = { key, at: now };
+  errQueue.push({ kind, message: String(message).slice(0, 300), detail: detail ? String(detail).slice(0, 600) : undefined, screen, trail: trail.slice(), version: appVersion });
+  if (errQueue.length > 40) errQueue = errQueue.slice(-40);
+  clearTimeout(errTimer);
+  errTimer = setTimeout(flushErrors, ERR_FLUSH_MS); // DevSkim: ignore DS172411 — функция, не строка
+}
+
+async function flushErrors() {
+  if (!state.token || !errQueue.length || !trackingOn()) return;
+  const batch = errQueue.splice(0, 20);
+  try {
+    await apiPost("/telemetry/errors", { errors: batch });
+  } catch (_) {
+    errQueue = batch.concat(errQueue).slice(-40); // нет связи — уйдут со следующей ошибкой или при сворачивании
+  }
+}
+
+const apiLine = a => `${a.method} ${a.path} · ${a.status || "нет связи"}`;
+document.addEventListener("project:api-fail", ev => {
+  const d = ev.detail || {};
+  if (String(d.path).startsWith("/telemetry")) return;
+  if (lastApi) clearTimeout(lastApi.timer);
+  lastApi = { ...d, at: Date.now(), timer: null };
+  // Нет связи или сервер упал — это ошибка, даже если экран ничего не показал. Если следом появится красное сообщение,
+  // запишется оно (с этим запросом), а не два раза одно и то же. Отказ 4xx экран обрабатывает сам — его ловит сообщение.
+  if (!d.status || d.status >= 500) {
+    const a = lastApi;
+    a.timer = setTimeout(() => reportError("api", a.message, apiLine(a)), 2500); // DevSkim: ignore DS172411 — функция, не строка
+  }
+});
+document.addEventListener("project:error-shown", ev => {
+  const recent = lastApi && Date.now() - lastApi.at < 3000 ? lastApi : null;
+  if (recent) clearTimeout(recent.timer);
+  reportError("toast", (ev.detail || {}).text, recent ? apiLine(recent) : "");
+});
+window.addEventListener("error", ev => {
+  if (!ev.message || /ResizeObserver loop/.test(ev.message)) return;
+  reportError("crash", ev.message, ev.filename ? `${String(ev.filename).split("/").pop()}:${ev.lineno}:${ev.colno}` : "");
+});
+window.addEventListener("unhandledrejection", ev => {
+  const r = ev.reason;
+  reportError("crash", (r && r.message) || String(r), r && r.stack ? String(r.stack).split(/\r?\n/).slice(0, 3).join(" | ") : "");
+});
 
 // ---- Проверка связи: удаётся ли соединиться с нашим сервером и определить его адрес через DNS ----
 // Приложение само меряет доступность сервера и DNS (имя, провайдер DNS), а IP (наполовину скрытый) и страну сервер определяет по

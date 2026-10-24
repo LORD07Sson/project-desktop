@@ -80,6 +80,11 @@ function formatApiError(detail, status) {
   return `Ошибка ${status}`;
 }
 
+// Для «Ошибок» в Аналитике (telemetry.js слушает): какой запрос не прошёл. Адрес без параметров — в них бывает поиск.
+function reportApiFail(method, path, status, message) {
+  document.dispatchEvent(new CustomEvent("project:api-fail", { detail: { method, path: String(path).split("?")[0], status, message } }));
+}
+
 export async function api(method, path, body) {
   const headers = { "Content-Type": "application/json" };
   if (state.token) headers["X-Init-Data"] = state.token;
@@ -108,6 +113,7 @@ export async function api(method, path, body) {
       ? new Error("Сервер не отвечает — проверьте соединение и попробуйте снова.")
       : new Error(`Нет связи с сервером: ${e.message}`);
     failure.network = true;
+    reportApiFail(method, path, 0, failure.message);
     throw failure;
   } finally {
     clearTimeout(timeout);
@@ -119,6 +125,7 @@ export async function api(method, path, body) {
     checkSessionLost(resp.status, detail, path);
     const err = new Error(formatApiError(detail, resp.status));
     err.status = resp.status;
+    reportApiFail(method, path, resp.status, err.message);
     throw err;
   }
   const text = await resp.text();
@@ -461,7 +468,10 @@ export function toast(text, kind = "info", action = null) {
   // отовсюду) попадает и в файловый лог, без правки каждого места
   // вызова по отдельности. Тег "toast" — по нему легко отличить "это
   // увидел пользователь" от прочих внутренних debug/info-записей.
-  if (kind === "error") toastLog.error(text);
+  if (kind === "error") {
+    toastLog.error(text);
+    document.dispatchEvent(new CustomEvent("project:error-shown", { detail: { text: String(text) } }));
+  }
   const root = $("#toast-root");
   if (!root) return;
   const el = document.createElement("div");

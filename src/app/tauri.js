@@ -24,7 +24,8 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-export { invoke, listen, emit, getCurrentWindow, WebviewWindow, convertFileSrc };
+import { getVersion } from "@tauri-apps/api/app";
+export { invoke, listen, emit, getCurrentWindow, WebviewWindow, convertFileSrc, getVersion };
 
 // Системное уведомление — своей командой, а не @tauri-apps/plugin-notification:
 // плагин на Windows показывает тост от имени «Windows PowerShell» (см.

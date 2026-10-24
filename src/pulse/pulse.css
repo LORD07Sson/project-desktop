@@ -507,3 +507,25 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-rise { animation: tm-rise .55s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
 @keyframes tm-rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
 @media (prefers-reduced-motion: reduce) { .tm-rise, .tm-bars i, .tm-radar .shape, .tm-ring .fg, .tm-pulse { animation: none; } }
+
+/* Ошибки у команды (team.js: errHtml) — группа раскрывается, внутри случаи: кто, когда и шаги до ошибки. */
+.tm h2 small { margin-left: auto; font: 500 12px var(--disp); color: var(--ink-dim); }
+.tm-elist { display: grid; gap: 8px; }
+.tm-err { border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.tm-err[open] { border-color: color-mix(in srgb, var(--s-stop) 40%, var(--line)); }
+.tm-err summary { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; list-style: none; }
+.tm-err summary::-webkit-details-marker { display: none; }
+.tm-err summary > i { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; font: 700 13px var(--mono); font-style: normal;
+  color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 14%, transparent); }
+.tm-err.is-api summary > i { color: var(--s-work); background: color-mix(in srgb, var(--s-work) 14%, transparent); }
+.tm-err.is-crash summary > i { color: var(--violet); background: color-mix(in srgb, var(--violet) 16%, transparent); }
+.tm-err-t { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.tm-err-t b { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-err[open] .tm-err-t b { white-space: normal; }
+.tm-err-t small { color: var(--ink-dim); font-size: 12px; }
+.tm-err-cases { display: grid; gap: 10px; padding: 0 14px 14px 54px; }
+.tm-case-h { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.tm-case-h small { color: var(--ink-dim); }
+.tm-trail { margin: 6px 0 0; padding: 0 0 0 18px; display: grid; gap: 2px; color: var(--ink-soft); font: 12px var(--mono); }
+.tm-trail li::marker { color: var(--ink-dim); }
+.tm-trail li.bad { color: var(--s-stop); }

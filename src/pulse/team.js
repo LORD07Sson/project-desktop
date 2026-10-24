@@ -102,6 +102,19 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
   const teamAxes = topTools(Object.entries(toolSum).map(([label, count]) => ({ label, count })));
   const onlinePeople = people.filter(p => p.online);
 
+  // Ошибки у команды (только владельцу): одинаковые сгруппированы, внутри — кто, когда и что делал перед ошибкой.
+  const errs = data.errors;
+  const ERR_KIND = { toast: ["!", "показано на экране"], api: ["⇅", "сбой связи или сервера"], crash: ["✕", "сбой программы"] };
+  const errHtml = g => {
+    const [icon, kindText] = ERR_KIND[g.kind] || ["!", ""];
+    return `<details class="tm-err is-${esc(g.kind)}"><summary><i aria-hidden="true">${icon}</i>
+      <span class="tm-err-t"><b>${esc(g.message)}</b><small>${esc(kindText)} · ${g.count} ${words(g.count, "раз", "раза", "раз")} · ${g.people.length} ${words(g.people.length, "человек", "человека", "человек")} · ${esc(ago(g.last_at))}</small></span>
+      <span class="tm-stack">${g.people.slice(0, 4).map(n => av(n, "xs")).join("")}</span></summary>
+      <div class="tm-err-cases">${g.cases.map(c => `<div class="tm-case">
+        <div class="tm-case-h">${av(c.who, "xs")}<b>${esc(c.who)}</b><small>${esc(ago(c.at))}${c.screen ? ` · ${esc(c.screen)}` : ""}${c.version ? ` · v${esc(c.version)}` : ""}</small></div>
+        <ol class="tm-trail">${(c.trail || []).map(t => `<li>${esc(t)}</li>`).join("")}<li class="bad">${esc(c.detail || "ошибка")}</li></ol>
+      </div>`).join("")}</div></details>`;
+  };
   const av = (name, size = "", ring = "") => {
     const p = byName[name] || {};
     const img = p.avatar ? `<img src="${esc(p.avatar)}" alt="" loading="lazy" onerror="this.remove()">` : "";
@@ -182,6 +195,9 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
           ${never.length ? `<div class="tm-never"><span>Ещё ни разу не заходили</span><div>${never.map(p => `<button type="button" class="tm-chip" data-p="${esc(p.name)}" ${filterAttrs(p)}>${av(p.name, "xs")}${esc(p.name)}</button>`).join("")}</div></div>` : ""}
           <p class="tm-muted tm-none" hidden>Никого под этот фильтр.</p>
         </section>
+        ${errs ? `<section class="tm-errs"><h2>Ошибки <span>${errs.total}</span><small>${errs.days} дн · у тех, кто включил статистику</small></h2>
+          ${errs.groups.length ? `<div class="tm-elist">${errs.groups.map(errHtml).join("")}</div>` : `<p class="tm-muted">Ошибок не было.</p>`}
+        </section>` : ""}
         <section><h2>Кто что делал <span>${sess.length}</span></h2>
           ${sess.length ? `<div class="tm-feed">${sess.map(sessHtml).join("")}</div>` : `<p class="tm-muted">${owner ? "Пока ничего не замечено." : "Ленту действий видит только владелец."}</p>`}
         </section>
