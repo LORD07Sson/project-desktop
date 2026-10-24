@@ -13,6 +13,7 @@ import { track } from "./telemetry.js";
 import { getLocalVideo, setLocalVideo, trackLocalDownload, pickLocalVideo } from "./local-video.js";
 import { toast, API_BASE, apiBlob, apiUpload, apiGet, apiPost, openSheet, dismissSheet } from "./api.js";
 import { pickFiles } from "./attachments.js";
+import { imgProxy } from "./title-page.js";
 import { state } from "./state.js";
 import { liveButton, openShare } from "./nyaa-fx.js";
 import { notifyDesktop } from "./desktop-notify.js";
@@ -1481,6 +1482,13 @@ export async function nyaaCardInfo(id) {
   const meta = [f["file size"], f.submitter, f.seeders ? `раздают ${f.seeders}` : ""].filter(Boolean).join(" · ");
   let image = "";
   if (v.images && v.images[0]) { try { image = await fetchPic(v.images[0]); } catch (_) { /* без картинки */ } }
+  // У SubsPlease, Erai-raws и многих других в описании картинок нет — тогда постер нашего тайтла, если раздача про него.
+  if (!image && v.title) {
+    try {
+      const t = await apiGet("/release-title", { name: v.title });
+      if (t && t.poster_url) image = imgProxy(t.poster_url);
+    } catch (_) { /* без картинки */ }
+  }
   return { title: v.title || `Раздача №${id}`, meta, image };
 }
 
