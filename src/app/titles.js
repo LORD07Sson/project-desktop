@@ -54,6 +54,8 @@ function episodesText(det) {
   if (!det) return "";
   if (det.episodes_aired != null && det.episodes_total) return `${det.episodes_aired} / ${det.episodes_total}`;
   if (det.episodes_total) return String(det.episodes_total);
+  // Онгоинг, у которого Shikimori ещё не знает общего числа серий: вышедшие всё равно показываем.
+  if (det.episodes_aired) return `${det.episodes_aired} / ?`;
   return "";
 }
 
