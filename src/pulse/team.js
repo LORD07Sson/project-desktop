@@ -138,16 +138,19 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
   const latestVer = latestBy.stable || latestBy.alpha;
   const isOld = p => { const top = p.version && latestBy[chan(p.version)]; return !!(top && verKey(p.version) && verCmp(verKey(p.version), verKey(top)) < 0); };
   const shortVer = v => String(v).replace(/\+.*$/, "");
-  const verHtml = p => p.version ? `<span class="tm-ver${isOld(p) ? " old" : ""}" title="${esc(p.version)}">v${esc(shortVer(p.version))}</span>` : "";
+  // Номер версии программа сообщает с v2.3.9: десктоп есть, а номера нет — значит, версия старше.
+  const PRE_VER = "до v2.3.9";
+  const verHtml = p => p.version ? `<span class="tm-ver${isOld(p) ? " old" : ""}" title="${esc(p.version)}">v${esc(shortVer(p.version))}</span>`
+    : p.desktop ? `<span class="tm-ver old" title="Версии до 2.3.9 номер не сообщают — программу пора обновить">${PRE_VER}</span>` : "";
   const withVer = people.filter(p => p.version), oldPeople = people.filter(isOld);
-  const unknownVer = people.filter(p => !p.version && p.last_at);
+  const unknownVer = people.filter(p => !p.version && (p.desktop || p.last_at));
   const tile = (p, i) => {
     const pi = persons[p.name];
     return `<button type="button" class="tm-tile tm-rise${p.online ? " on" : ""}" style="--i:${i}" data-p="${esc(p.name)}" ${filterAttrs(p)}>
       <span class="tm-tile-top">${av(p.name, "", p.online ? "is-on" : "")}<span class="tm-who"><b>${esc(p.name)}</b><small>${esc(p.roles.length ? p.roles.join(" · ") : "без роли")}</small></span>
         <em class="tm-state${p.online ? " is-on" : ""}">${p.online ? "в сети" : esc(ago(p.last_at))}</em></span>
       <span class="tm-tile-bot">${pi && pi.days14 && pi.days14.some(Boolean) ? spark(pi.days14) : `<span class="tm-spark-ph"></span>`}
-        <span class="tm-week"><b>${p.week}</b> ${words(p.week, "действие", "действия", "действий")} за 7 дн${votes && !p.voted ? `<br><em>не голосовал</em>` : ""}${p.version ? `<br>${verHtml(p)}` : ""}</span></span>
+        <span class="tm-week"><b>${p.week}</b> ${words(p.week, "действие", "действия", "действий")} за 7 дн${votes && !p.voted ? `<br><em>не голосовал</em>` : ""}${p.version || p.desktop ? `<br>${verHtml(p)}` : ""}</span></span>
     </button>`;
   };
   const filterAttrs = p => `data-on="${p.online ? 1 : 0}" data-act="${p.week > 0 ? 1 : 0}" data-nv="${votes && !p.voted ? 1 : 0}"`;
@@ -201,7 +204,7 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
         <div class="tm-big"><b data-count="${withVer.length - oldPeople.length}">${withVer.length - oldPeople.length}</b><small>на свежей</small></div>
         <div class="tm-vers-l">
           ${oldPeople.map(p => `<button type="button" class="tm-chip" data-p="${esc(p.name)}">${av(p.name, "xs")}${esc(p.name)} ${verHtml(p)}</button>`).join("")}
-          ${unknownVer.map(p => `<button type="button" class="tm-chip" data-p="${esc(p.name)}" title="Версии до 24 октября номер не сообщают: либо программа старая, либо человек ещё не заходил после обновления">${av(p.name, "xs")}${esc(p.name)} <span class="tm-ver unk">не знаем</span></button>`).join("")}
+          ${unknownVer.map(p => `<button type="button" class="tm-chip" data-p="${esc(p.name)}" title="Версии до 24 октября номер не сообщают: либо программа старая, либо человек ещё не заходил после обновления">${av(p.name, "xs")}${esc(p.name)} ${p.desktop ? verHtml(p) : `<span class="tm-ver unk">не знаем</span>`}</button>`).join("")}
           ${!oldPeople.length && !unknownVer.length ? `<small class="tm-big-sub">все обновлены</small>` : ""}
         </div>
       </div>` : ""}
@@ -296,7 +299,7 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
     const rows = list => list.map(([a, b, cls = ""]) => `<div class="pd-tool"><span>${esc(a)}</span><i class="${cls}">${esc(b)}</i></div>`).join("");
     drawer.innerHTML = `<div class="tm-d-h">${av(name, "lg", p.online ? "is-on" : "")}<div><h3>${esc(name)}</h3><small>${esc(p.roles.join(" · ") || "без роли")}</small></div>
         <button type="button" class="pd-x" aria-label="Закрыть">×</button></div>
-      <div class="tm-d-k"><div><b>${p.online ? "в сети" : esc(ago(p.last_at) || "—")}</b><span>последняя активность</span></div><div><b>${p.week}</b><span>действий за 7 дн</span></div><div><b>${votes ? (p.voted ? "да" : "нет") : "—"}</b><span>голосовал</span></div><div><b>${p.version ? verHtml(p) : "—"}</b><span>${p.version ? (isOld(p) ? "версия · есть новее" : "версия") : "версия неизвестна"}</span></div></div>
+      <div class="tm-d-k"><div><b>${p.online ? "в сети" : esc(ago(p.last_at) || "—")}</b><span>последняя активность</span></div><div><b>${p.week}</b><span>действий за 7 дн</span></div><div><b>${votes ? (p.voted ? "да" : "нет") : "—"}</b><span>голосовал</span></div><div><b>${p.version || p.desktop ? verHtml(p) : "—"}</b><span>${p.version ? (isOld(p) ? "версия · есть новее" : "версия") : p.desktop ? "версия · пора обновить" : "десктопом не пользуется"}</span></div></div>
       <div class="pd-body">
         ${pi && pi.days14 && pi.days14.some(Boolean) ? `<h4>Активность · 14 дней</h4><div class="tm-d-spark">${spark(pi.days14)}</div>` : ""}
         ${axes.length >= 3 ? `<h4>Куда ходит <span class="tm-rad-v" data-def="">&nbsp;</span></h4><div class="tm-d-rad">${radarSvg(axes, 260)}</div>` : ""}
