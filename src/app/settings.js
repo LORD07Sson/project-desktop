@@ -12,6 +12,7 @@ import { desktopNotifyEnabled, setDesktopNotifyEnabled, NOTIFY_KINDS, notifyKind
 import { ACCENTS, SCALES, START_TABS, currentAccent, applyAccent, currentScale, applyScale, currentMotion, applyMotion, backdropOn, applyBackdrop, startTab, setStartTab } from "./ui-prefs.js";
 import { GROUPS as SHORTCUT_GROUPS } from "./shortcuts-help.js";
 import { avatarHtml, loadAvatars } from "./profile.js";
+import { previewOptionsHtml, setPreviewRole } from "./role-preview.js";
 import { fetchPerson, openPauseDialog } from "./people.js";
 import { openAdminPanel } from "./admin.js";
 import { tagLogger } from "./applog.js";
@@ -160,6 +161,9 @@ async function openSettings() {
               <button type="button" class="btn" id="s-acc-profile">Открыть профиль</button>
             </div>
           </div>
+          ${state.previewChoices ? `<div class="st-group">
+            ${row(ICONS.perms, "Смотреть как роль", "Примерить права даббера, звукаря, админа или участника — те же вкладки, кнопки и запреты, что у них. До закрытия программы", `<select id="s-acc-preview" aria-label="Смотреть как">${previewOptionsHtml()}</select>`, "предпросмотр роль даббер звукарь тест права смотреть как")}
+          </div>` : ""}
           <div class="st-group">
             ${row(ICONS.power, "Выйти из аккаунта", "На этом компьютере — для входа понадобится новый код из бота", `<button type="button" class="btn danger" id="s-acc-logout">Выйти</button>`, "logout выход")}
           </div>
@@ -575,6 +579,7 @@ async function openSettings() {
     dismissSheet(overlay);
     import("./tabs.js").then(m => m.switchTab("profile"));
   });
+  overlay.querySelector("#s-acc-preview")?.addEventListener("change", e => setPreviewRole(e.target.value || null));
   overlay.querySelector("#s-acc-logout").addEventListener("click", () => {
     dismissSheet(overlay);
     $("#logout-btn").click();

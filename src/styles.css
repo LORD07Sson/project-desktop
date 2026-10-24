@@ -6094,3 +6094,22 @@ body.focus-mode .report-detail-overlay .sheet {
 .cp-cutwarn:empty { display: none; }
 .cp-pv-buttons span.cut { text-overflow: clip; }
 .cp-preview[data-view="phone"] .cp-pv-buttons span { font-size: 14px; }
+
+/* «Смотреть как…» (role-preview.js): плашка поверх окна, пока владелец примеряет роль. */
+#role-preview-bar {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 9000;
+  display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px;
+  background: var(--surface-2); color: var(--ink); border: 1px solid rgba(var(--fire-rgb), .55);
+  border-radius: 999px; box-shadow: 0 8px 28px rgba(0, 0, 0, .45), 0 0 0 3px rgba(var(--fire-rgb), .12);
+  font-size: 13px;
+}
+#role-preview-bar b { font-weight: 600; color: var(--ember); }
+#role-preview-bar select {
+  background: var(--surface-3); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 10px; font: inherit;
+}
+#role-preview-bar .rp-exit {
+  background: var(--accent-grad); color: var(--on-accent); border: 0; border-radius: 999px;
+  padding: 5px 14px; font: inherit; font-weight: 600; cursor: pointer;
+}
+html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), .45); }

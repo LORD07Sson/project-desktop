@@ -3,6 +3,7 @@
 // используются буквально всеми остальными модулями.
 
 import { state } from "./state.js";
+import { addPreviewHeader } from "./role-preview.js";
 import { $ } from "./utils.js";
 import { tagLogger } from "./applog.js";
 
@@ -82,6 +83,7 @@ function formatApiError(detail, status) {
 export async function api(method, path, body) {
   const headers = { "Content-Type": "application/json" };
   if (state.token) headers["X-Init-Data"] = state.token;
+  addPreviewHeader(headers);
   const url = `${API_BASE}${path}`;
   const controller = new AbortController();
   // Долгие серверные операции: «взять в работу» (опрос nyaa) и AI-проверка звука — гигабайтные WAV разбираются десятки секунд.
@@ -154,6 +156,7 @@ function stripStatusEmoji(node) {
 export async function apiBlob(path, onProgress) {
   const headers = {};
   if (state.token) headers["X-Init-Data"] = state.token;
+  addPreviewHeader(headers);
   const controller = new AbortController();
   // Два ограничения: ответ должен начаться за REQUEST_TIMEOUT_MS, а потом данные не должны
   // молчать дольше BLOB_STALL_MS (долгая, но живая загрузка не обрывается).
@@ -234,6 +237,7 @@ function xhrRequest(url, body, { contentType, onProgress } = {}) {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
     if (state.token) xhr.setRequestHeader("X-Init-Data", state.token);
+    if (state.previewRole) xhr.setRequestHeader("X-Preview-Role", encodeURIComponent(state.previewRole));
     if (contentType) xhr.setRequestHeader("Content-Type", contentType);
     if (onProgress) xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded); };
     xhr.onerror = () => {

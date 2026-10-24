@@ -30,6 +30,9 @@ export const state = {
   // Админ студии или рядовой участник (/api/whoami). Участнику десктоп
   // показывает только «Тайтлы», «Сообщения», «Команду» и «Я».
   isAdmin: true,
+  // «Смотреть как…» (role-preview.js): примеренная владельцем роль и из чего выбирать (null — не владелец).
+  previewRole: (() => { try { return sessionStorage.getItem("preview-role") || null; } catch (_) { return null; } })(),
+  previewChoices: null,
 };
 
 // Выход из аккаунта. Раньше logout чистил только token и selected —

@@ -4,6 +4,7 @@
 import { api, toast } from "./api.js";
 import { state } from "./state.js";
 import { startPermVisibility } from "./perm-visibility.js";
+import { syncPreview } from "./role-preview.js";
 
 export async function refreshPermissions() {
   try {
@@ -11,6 +12,7 @@ export async function refreshPermissions() {
     // Старый сервер не отдавал список — сохраняем прежнее поведение.
     state.perms = Array.isArray(r.permissions) ? new Set(r.permissions) : null;
     state.isOwner = !!r.is_owner;
+    syncPreview(r.preview);
 
     if (state.perms) {
       state.nyaaAccess = state.isAdmin || state.perms.has("nyaa.view");

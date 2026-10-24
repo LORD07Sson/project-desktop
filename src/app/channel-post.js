@@ -11,6 +11,7 @@
 import { state } from "./state.js";
 import { API_BASE, apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, mediaUrl, ensureMediaToken } from "./api.js";
 import { esc } from "./utils.js";
+import { addPreviewHeader } from "./role-preview.js";
 
 const SAVE_DELAY_MS = 700;
 const ALLOWED = new Set(["B", "STRONG", "I", "EM", "U", "INS", "S", "STRIKE", "DEL", "CODE", "PRE", "BLOCKQUOTE", "SPAN", "TG-SPOILER", "TG-EMOJI", "A", "BR"]);
@@ -407,7 +408,7 @@ export async function openChannelPostSheet(openId = null) {
       const fd = new window.FormData();
       fd.append("file", f, f.name);
       try {
-        const r = await fetch(`${API_BASE}/posts/${post.id}/media`, { method: "POST", headers: { "X-Init-Data": state.token || "" }, body: fd });
+        const r = await fetch(`${API_BASE}/posts/${post.id}/media`, { method: "POST", headers: addPreviewHeader({ "X-Init-Data": state.token || "" }), body: fd });
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
         post = { ...body, data: { ...data(), media: body.data.media } };
