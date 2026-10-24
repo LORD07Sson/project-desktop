@@ -73,7 +73,6 @@ const FILE_KINDS = [
   ["raw1080", "Равка 1080p · общая", true], ["raw480", "Равка 480p · общая", true],
   ["voice", "Равка для озвучки", false], ["mix", "Равка для сведения", false], ["subs", "Субтитры · роспись", false],
 ];
-const FILE_KIND_LABEL = Object.fromEntries(FILE_KINDS.map(([k, l]) => [k, l]));
 
 function episodesHtml(plan) {
   if (!plan.episodes.length) return `<div class="tw-note">Расписания пока нет — серии можно будет завести вручную на «Доске».</div>`;

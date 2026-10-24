@@ -30,6 +30,7 @@ module.exports = [
         document: "readonly",
         navigator: "readonly",
         localStorage: "readonly",
+        sessionStorage: "readonly",
         indexedDB: "readonly",
         // nyaa.js — .torrent из ответа сервера приходит в base64.
         atob: "readonly",
