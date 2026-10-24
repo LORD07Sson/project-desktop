@@ -22,7 +22,18 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 
-const BASELINE: &str = include_str!("../av-baseline.json");
+// Закодировано в build.rs (строки сигнатур майнеров в открытом виде антивирусы принимают за сам майнер).
+const BASELINE_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/av-baseline.bin"));
+// Тот же ключ, что в build.rs; им же закодированы скачанные базы на диске (signatures.bin).
+const TEXT_KEY: &[u8] = b"DUB-av-baseline/1";
+
+fn xor_text(data: &[u8]) -> Vec<u8> {
+    data.iter().enumerate().map(|(i, b)| b ^ TEXT_KEY[i % TEXT_KEY.len()]).collect()
+}
+
+fn baseline_json() -> String {
+    String::from_utf8(xor_text(BASELINE_BIN)).unwrap_or_default()
+}
 const API_BASE: &str = "https://minitg.shitstudent.com:8443/api";
 const MAX_HASH_BYTES: u64 = 300 * 1024 * 1024;
 const XOR_KEY: u8 = 0x5A;
@@ -110,9 +121,11 @@ fn full_version_in(dir: &Path) -> (u32, usize) {
 }
 
 fn load_signatures_in(dir: &Path) -> Signatures {
-    let baseline: Signatures = serde_json::from_str(BASELINE).unwrap_or_default();
-    if let Ok(text) = fs::read_to_string(dir.join("signatures.json")) {
-        if let Ok(local) = serde_json::from_str::<Signatures>(&text) {
+    let baseline: Signatures = serde_json::from_str(&baseline_json()).unwrap_or_default();
+    // Скачанные базы — закодированный signatures.bin; signatures.json остался от старых версий.
+    let local = fs::read(dir.join("signatures.bin")).map(|b| xor_text(&b)).or_else(|_| fs::read(dir.join("signatures.json")));
+    if let Ok(text) = local {
+        if let Ok(local) = serde_json::from_slice::<Signatures>(&text) {
             if local.version >= baseline.version {
                 return local;
             }
@@ -122,7 +135,7 @@ fn load_signatures_in(dir: &Path) -> Signatures {
 }
 
 fn load_signatures(app: &AppHandle) -> Signatures {
-    av_dir(app).map(|d| load_signatures_in(&d)).unwrap_or_else(|_| serde_json::from_str(BASELINE).unwrap_or_default())
+    av_dir(app).map(|d| load_signatures_in(&d)).unwrap_or_else(|_| serde_json::from_str(&baseline_json()).unwrap_or_default())
 }
 
 // ------------------------------------------------------ исключения и карантин
@@ -1162,9 +1175,10 @@ pub async fn av_update_signatures(app: AppHandle) -> Result<Value, String> {
         return Ok(json!({ "updated": full.0, "version": current.version, "hashes": current.sha256.len(), "full": full.1 }));
     }
     let dir = av_dir(&app)?;
-    let tmp = dir.join("signatures.json.tmp");
-    fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, dir.join("signatures.json")).map_err(|e| e.to_string())?;
+    let tmp = dir.join("signatures.bin.tmp");
+    fs::write(&tmp, xor_text(&bytes)).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, dir.join("signatures.bin")).map_err(|e| e.to_string())?;
+    let _ = fs::remove_file(dir.join("signatures.json")); // открытый текст от старой версии — антивирусы ругаются на него
     Ok(json!({ "updated": true, "version": fresh.version, "hashes": fresh.sha256.len(), "when": fresh.updated, "full": full.1 }))
 }
 
@@ -1407,7 +1421,7 @@ mod tests {
     use super::*;
 
     fn sigs() -> Signatures {
-        serde_json::from_str(BASELINE).expect("baseline должен разбираться")
+        serde_json::from_str(&baseline_json()).expect("baseline должен разбираться")
     }
 
     #[test]
