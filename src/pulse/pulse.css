@@ -422,7 +422,7 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-d-h > div { flex: 1; min-width: 0; }
 .tm-d-h h3 { margin: 0; font: 800 20px var(--disp); overflow-wrap: anywhere; }
 .tm-d-h small { font-size: 12px; color: var(--ink-dim); }
-.tm-d-k { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0 6px; }
+.tm-d-k { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 18px 0 6px; }
 .tm-d-k div { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
 .tm-d-k b { display: block; font: 800 15px var(--disp); }
 .tm-d-k span { font-size: 10.5px; color: var(--ink-dim); }
@@ -529,3 +529,14 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-trail { margin: 6px 0 0; padding: 0 0 0 18px; display: grid; gap: 2px; color: var(--ink-soft); font: 12px var(--mono); }
 .tm-trail li::marker { color: var(--ink-dim); }
 .tm-trail li.bad { color: var(--s-stop); }
+
+/* Версии программы: полоса во всю ширину под плитками; старая версия — красным. */
+.tm-ver { display: inline-block; padding: 1px 7px; border-radius: 999px; font: 600 11px var(--mono); color: var(--s-done);
+  background: color-mix(in srgb, var(--s-done) 13%, transparent); }
+.tm-ver.old { color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 14%, transparent); }
+.tm-ver.unk { color: var(--ink-dim); background: color-mix(in srgb, var(--ink-dim) 14%, transparent); }
+.tm-b.tm-vers { grid-column: 1 / -1; order: 9; min-height: 0; height: auto; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto; align-content: start; align-items: center; gap: 10px 22px; }
+.tm-vers .tm-b-h { grid-column: 1 / -1; }
+.tm-vers .tm-big { margin: 0; }
+.tm-vers-l { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; grid-column: 2 / -1; }
+.tm-vers-l .tm-chip { display: inline-flex; align-items: center; gap: 6px; }

@@ -6,8 +6,13 @@ import { state } from "./state.js";
 import { addPreviewHeader } from "./role-preview.js";
 import { $ } from "./utils.js";
 import { tagLogger } from "./applog.js";
+import { getVersion } from "./tauri.js";
 
 const toastLog = tagLogger("toast");
+
+// Версия программы уходит с запросами (X-App-Version) — владелец видит в «Команде», у кого старая версия.
+let appVersion = "";
+getVersion().then(v => { appVersion = v; }).catch(() => { /* не в приложении */ });
 
 export const API_BASE = "https://minitg.shitstudent.com:8443/api";
 
@@ -88,6 +93,7 @@ function reportApiFail(method, path, status, message) {
 export async function api(method, path, body) {
   const headers = { "Content-Type": "application/json" };
   if (state.token) headers["X-Init-Data"] = state.token;
+  if (appVersion) headers["X-App-Version"] = appVersion;
   addPreviewHeader(headers);
   const url = `${API_BASE}${path}`;
   const controller = new AbortController();
