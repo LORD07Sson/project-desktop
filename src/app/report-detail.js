@@ -1168,7 +1168,8 @@ function fileHtml(f, canEdit = true) {
   const audioRe = AUDIO_RE;
   const isAudio = audioRe.test(f.file_type || "") || audioRe.test(f.file_name || "");
   return `<div class="file-item">
-    <div>${esc(FILE_ICONS[f.file_type] || "📎")} ${esc(f.file_name || f.file_type)} <span class="meta">${esc(f.file_size_label || "")}</span></div>
+    <div>${esc(FILE_ICONS[f.file_type] || "📎")} ${esc(f.file_name || f.file_type)} <span class="meta">${esc(f.file_size_label || "")}</span>${f.uploaded_by ? `
+      <span class="file-by"><span class="avatar-bubble" data-avatar-for="${esc(f.uploaded_by.telegram_id || "")}">${esc(initials(f.uploaded_by.name || "?"))}</span><b>${esc(f.uploaded_by.name || "")}</b>${f.created_at ? `<em>${esc(submittedWhen(f.created_at))}</em>` : ""}</span>` : ""}</div>
     ${isAudio ? `<button class="btn primary" style="padding:4px 10px; font-size:12px;" data-play-file="${f.id}">▶ Слушать</button>` : ""}
     ${isAudio && canEdit ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-qc-file="${f.id}">AI-проверка</button>` : ""}
     <button class="icon-btn" data-send-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Прислать кому-то">📤</button>

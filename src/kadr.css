@@ -3241,6 +3241,11 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-files { min-width: 0; overflow: hidden; }
 .file-item { flex-wrap: wrap; gap: 8px 10px; }
 .file-item > div:first-child { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+/* Кто загрузил файл: аватарка и имя под названием. */
+.file-by { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
+.file-by .avatar-bubble { width: 20px; height: 20px; margin: 0; border-width: 1px; font-size: 9.5px; }
+.file-by b { font-weight: 600; color: var(--ink); }
+.file-by em { font-style: normal; color: var(--ink-dim); }
 .file-item > button, .file-item > .icon-btn { flex: none; }
 .raw-list, .raw-kind { grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .raw-kind-head .rd-add { flex: none; white-space: nowrap; }
