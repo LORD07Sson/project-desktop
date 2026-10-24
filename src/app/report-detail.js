@@ -379,9 +379,9 @@ export async function openReportDetail(publicId) {
             <div id="rd-player-host"></div>
             ${productionHtml(detail, files.files)}
             <div class="rd-sec">
-              <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди" : `${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}`}</span>` : ""}
+              <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди · " : ""}${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}${detail.pipeline.every(s => s.done) ? " · пройден" : ""}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? "изменить" : ""}</button>` : ""}</h3>
-              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
+              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, canEdit) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
               ${canEdit ? `<div id="pipe-editor" hidden>
                 <div id="pipeline-draft-list"></div>
                 <div class="add-row">
@@ -625,6 +625,17 @@ export async function openReportDetail(publicId) {
         await render();
       } catch (e) { toast(`Не удалось снять пайплайн: ${e.message}`, "error"); }
     });
+    // «Я сдал(а)» / отметить за человека / снять отметку. Сдали все — сервер сам откроет следующий этап.
+    sheet.querySelectorAll("[data-pipe-submit], [data-pipe-undo]").forEach(b => b.addEventListener("click", async () => {
+      const undo = b.hasAttribute("data-pipe-undo");
+      const index = Number(undo ? b.dataset.pipeUndo : b.dataset.pipeSubmit);
+      b.disabled = true;
+      try {
+        const res = await apiPost(`/report/${publicId}/pipeline/submit`, { index, undo });
+        toast(undo ? "Отметка снята." : res.advanced ? `Все сдали — этап передан дальше: ${res.role}.` : res.complete ? "Все сдали — пайплайн пройден." : res.left ? `Отмечено. Ждём ещё: ${res.left}.` : "Отмечено.", "success");
+        await render();
+      } catch (e) { toast(`Не удалось отметить: ${e.message}`, "error"); b.disabled = false; }
+    }));
     const advanceBtn = sheet.querySelector("#btn-pipeline-advance");
     if (advanceBtn && (canEdit || detail.can_advance)) advanceBtn.addEventListener("click", async () => {
       const userSel = sheet.querySelector("#pipeline-next-user");
@@ -994,7 +1005,27 @@ function pipelineGroups(pipeline, parallel) {
   return groups;
 }
 
-function pipelineTimelineHtml(pipeline, parallel = false) {
+// Когда отмечено «сдал(а)»: время по-местному, для не сегодняшнего — ещё и дата.
+function submittedWhen(at) {
+  const d = new Date(String(at).replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return "";
+  const time = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} ${time}`;
+}
+
+// Звено текущего этапа: «Я сдал(а)» у своего, у админа — отметить за человека или снять отметку.
+function pipelineEntryActs(s, i, canManage) {
+  const inStage = s.current || s.submitted_at;
+  if (!inStage) return "";
+  if (s.submitted_at) {
+    const undo = s.mine || canManage ? `<button type="button" class="pf-link rd-tl-undo" data-pipe-undo="${i}">снять</button>` : "";
+    return `<div class="rd-tl-ok">✓ сдал(а) · ${esc(submittedWhen(s.submitted_at))}${s.submitted_by && s.submitted_by !== s.user_name ? ` · отметил(а) ${esc(s.submitted_by)}` : ""} ${undo}</div>`;
+  }
+  if (s.mine) return `<button type="button" class="btn primary rd-tl-sub" data-pipe-submit="${i}">Я сдал(а)</button>`;
+  return canManage ? `<button type="button" class="pf-link rd-tl-mark" data-pipe-submit="${i}">отметить сдачу</button>` : "";
+}
+
+function pipelineTimelineHtml(pipeline, parallel = false, canManage = false) {
   const groups = pipelineGroups(pipeline, parallel);
   const curGroup = groups.findIndex(g => g.some(i => pipeline[i].current));
   const at = curGroup !== -1 ? curGroup : groups.filter(g => g.every(i => pipeline[i].done)).length;
@@ -1002,11 +1033,12 @@ function pipelineTimelineHtml(pipeline, parallel = false) {
   return `<div class="rd-timeline" style="--n:${groups.length};--p:${p}">${groups.map((g, gi) => {
     const done = g.every(i => pipeline[i].done);
     const cur = g.some(i => pipeline[i].current);
+    const marked = g.filter(i => pipeline[i].submitted_at).length;
     return `
     <div class="rd-tl${done ? " done" : ""}${cur ? " cur" : ""}">
       <span class="rd-tl-dot">${done ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : gi + 1}</span>
-      ${g.map(i => `<div class="rd-tl-ent"><div class="rd-tl-t">${esc(pipeline[i].role)}</div><div class="rd-tl-p">${pipeline[i].user_name ? esc(pipeline[i].user_name) : "не выбран"}</div></div>`).join("")}
-      ${g.length > 1 ? `<div class="rd-tl-par">одновременно</div>` : ""}
+      ${g.map(i => `<div class="rd-tl-ent${pipeline[i].submitted_at ? " sub" : ""}"><div class="rd-tl-t">${esc(pipeline[i].role)}</div><div class="rd-tl-p">${pipeline[i].user_name ? esc(pipeline[i].user_name) : "не выбран"}</div>${pipelineEntryActs(pipeline[i], i, canManage)}</div>`).join("")}
+      ${g.length > 1 ? `<div class="rd-tl-par">одновременно${cur || marked ? ` · сдали ${marked} из ${g.length}` : ""}</div>` : ""}
     </div>`;
   }).join("")}</div>`;
 }
