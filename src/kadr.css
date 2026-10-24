@@ -951,6 +951,10 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 :root[data-theme="light"] .kcal-bar { color: color-mix(in srgb, var(--c) 70%, #000); }
 .kcal-bar:hover { filter: brightness(1.25); transform: translateY(-1px); }
 .kcal-bar.cut { border-top-left-radius: 4px; border-bottom-left-radius: 4px; margin-left: 0; }
+/* Без срока: правый край открыт и тает — срока сдачи (ромба) нет. */
+.kcal-bar.open { border-top-right-radius: 4px; border-bottom-right-radius: 4px; margin-right: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 18%, transparent), color-mix(in srgb, var(--c) 4%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 22%, transparent); }
 .kcal-bar > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kcal-bar em { position: absolute; right: -6px; top: 50%; width: 12px; height: 12px; margin-top: -6px; transform: rotate(45deg); border-radius: 2px; background: var(--c);
   box-shadow: 0 0 0 3px var(--bg), 0 0 14px color-mix(in srgb, var(--c) 70%, transparent); }

@@ -98,8 +98,10 @@ function workPill(e, work, past) {
 }
 
 async function fetchDeadlines(from, to) {
-  try { return (await apiGet("/calendar/deadlines", { from, to })).reports || []; }
-  catch (_) { return []; }
+  try {
+    const d = await apiGet("/calendar/deadlines", { from, to });
+    return { deadlines: d.reports || [], undated: d.undated || [] };
+  } catch (_) { return { deadlines: [], undated: [] }; }
 }
 
 // Полный список (/birthdays); на старом сервере без него — 5 ближайших
@@ -195,6 +197,8 @@ function ganttHtml(data) {
     .filter(r => r.status !== "cancelled" && r.deadline >= ymd(days[0]) && r.deadline <= ymd(days[RANGE_DAYS - 1]))
     .sort((a, b) => a.deadline.localeCompare(b.deadline)) : [];
   const shown = rows.slice(0, 12);
+  // Серии в работе без срока — полоса от создания до сегодня, открытая справа: видно, что серия идёт, но срока нет.
+  const undated = f.deadlines ? (data.undated || []).slice(0, Math.max(0, 12 - shown.length)) : [];
   const head = days.map((d, i) => {
     const evs = dayEvents(d, data);
     return `<button type="button" class="kcal-dc${sameDay(d, today) ? " td" : ""}${sameDay(d, selected) ? " pick" : ""}${d.getDay() % 6 === 0 ? " we" : ""}" data-day="${ymd(d)}">
@@ -214,6 +218,19 @@ function ganttHtml(data) {
       <button type="button" class="kcal-bar${cut ? " cut" : ""}${left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}"><span>${esc(stageOf(r))}</span><em></em></button>
     </div>`;
   }).join("");
+  const undatedBody = undated.map(r => {
+    const created = r.created_at ? dayDiff(parseDay(r.created_at), days[0]) : 0;
+    const nowCol = dayDiff(today, days[0]);
+    const st = Math.max(0, Math.min(created, RANGE_DAYS - 1));
+    const end = Math.max(st, Math.min(nowCol + 3, RANGE_DAYS - 1));   // хвост на пару дней вперёд: серия идёт, конца не видно
+    if (nowCol < 0 || created > RANGE_DAYS - 1) return "";
+    const ep = epOf(r);
+    const poster = r.poster_url ? mediaUrl("/img_proxy", { url: r.poster_url }) : "";
+    return `<div class="kcal-r">
+      <div class="kcal-who">${poster ? `<img src="${poster}" alt="" loading="lazy">` : `<span class="kcal-ph"></span>`}<div><b>${esc(seriesName(r))}</b><span>${esc(r.public_id)}${ep != null ? ` · EP ${pad2(ep)}` : ""}</span></div></div>
+      <button type="button" class="kcal-bar open${created < 0 ? " cut" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)} — срок не задан"><span>${esc(stageOf(r))} · без срока</span></button>
+    </div>`;
+  }).join("");
   const nowIdx = dayDiff(today, days[0]);
   const now = new Date();
   const frac = (now.getHours() + now.getMinutes() / 60) / 24;
@@ -222,7 +239,7 @@ function ganttHtml(data) {
       <div class="kcal-h"><span class="kd-label">Серия</span>${head}</div>
       <div class="kcal-body">
         <div class="kcal-cols">${cols}</div>
-        ${body || `<div class="kcal-quiet">${f.deadlines ? "В эти две недели сроков нет." : "Сроки скрыты фильтром."}</div>`}
+        ${body + undatedBody || `<div class="kcal-quiet">${f.deadlines ? "В эти две недели сроков нет." : "Сроки скрыты фильтром."}</div>`}
         ${nowIdx >= 0 && nowIdx < RANGE_DAYS ? `<div class="kcal-now" id="cal-now" style="left:calc(210px + (100% - 210px) * ${((nowIdx + frac) / RANGE_DAYS).toFixed(4)})"></div>` : ""}
       </div>
       <div class="kcal-lg">${rows.length > shown.length ? `<span>ещё ${rows.length - shown.length} в списке</span>` : ""}<span><i class="kcal-dia"></i>срок сдачи</span><span><i class="kcal-nowk"></i>сейчас</span><span><i class="kcal-dot" style="background:${BDAY_COLOR}"></i>день рождения</span><span><i class="kcal-dot" style="background:${REM_COLOR}"></i>напоминание</span></div>
@@ -316,10 +333,10 @@ async function renderWeek() {
   const to = ymd(toD);
   if (!cache) {
     const [airings, birthdays, rem, work] = await Promise.all([fetchAirings(), fetchBirthdays(), fetchReminders(), fetchWork()]);
-    cache = { airings, birthdays, reminders: rem ? rem.reminders : [], work, deadlines: [], from: null, to: null };
+    cache = { airings, birthdays, reminders: rem ? rem.reminders : [], work, deadlines: [], undated: [], from: null, to: null };
   }
   if (cache.from !== from || cache.to !== to) {
-    cache.deadlines = await fetchDeadlines(from, to);
+    Object.assign(cache, await fetchDeadlines(from, to));
     cache.from = from; cache.to = to;
   }
   if (seq !== requestSeq || !body.isConnected) return;
