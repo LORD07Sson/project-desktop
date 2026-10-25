@@ -25,7 +25,7 @@ import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 import { setBackdrop } from "./backdrop.js";
-import { Crack, crackLevel } from "./Crack.jsx";
+import { Crack, Shards, crackLevel } from "./Crack.jsx";
 
 const DAY_MS = 86400000;
 const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
@@ -221,8 +221,11 @@ function Hero(props) {
               </Show>
               <Show when={poster}>
                 <div class={`kd-slide-art${crack() >= 0.5 && crack() < 1 ? " creak" : ""}`} style={{ "--creak": `${(7 - crack() * 4.5).toFixed(2)}s` }}>
-                  <img src={poster} alt="" />
-                  <Crack seed={r.public_id} level={crack} />
+                  <div class="kd-art-glass">
+                    <img src={poster} alt="" />
+                    <Crack seed={r.public_id} level={crack} />
+                  </div>
+                  <Shards seed={r.public_id} level={crack} src={poster} active={() => i() === idx() && !(banner && !bannerFailed())} />
                 </div>
               </Show>
               <div class="kd-slide-fade" />

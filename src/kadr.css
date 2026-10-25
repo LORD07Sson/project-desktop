@@ -389,8 +389,20 @@ input, select, textarea { font-family: inherit; }
 .kd-slide.no-ban .kd-slide-ban { display: none; }
 .kd-slide.no-ban .kd-slide-art { display: block; }
 .kd-slide.on .kd-slide-art { opacity: 1; transform: rotate(2deg); }
-.kd-slide-art { overflow: hidden; }
-.kd-slide-art > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Обложка: стекло с трещинами обрезано по скруглению, а осколки (.kd-shards) вылетают за край. */
+.kd-art-glass { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }
+.kd-art-glass > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.kd-shards { position: absolute; inset: 0; pointer-events: none; perspective: 600px; z-index: 2; }
+.kd-shards span { position: absolute; inset: 0; animation: kd-shard 1.4s cubic-bezier(.3, .1, .7, .4) forwards; will-change: transform, opacity;
+  filter: drop-shadow(0 0 .6px #fff) drop-shadow(0 0 .6px rgba(255, 255, 255, .8)) drop-shadow(0 10px 10px rgba(0, 0, 0, .7)); }
+.kd-shards i { position: absolute; inset: 0; background: center / cover no-repeat; filter: brightness(1.25) contrast(1.08); }
+.kd-shards b { position: absolute; inset: 0; background: radial-gradient(circle, rgba(4, 3, 3, .95), rgba(4, 3, 3, .8)); animation: kd-shard-hole 1.4s ease-in forwards; }
+@keyframes kd-shard-hole { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes kd-shard {
+  0% { transform: none; opacity: 1; }
+  12% { transform: translate(calc(var(--dx) * .08), calc(var(--dy) * -.04)) rotate(calc(var(--rot) * .05)); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) rotateX(var(--tilt)); opacity: 0; }
+}
 /* Трещины по сроку (Crack.jsx): тёмная щель + светлый скол сбоку — как стекло. Длина растёт через dashoffset. */
 .kd-crack { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* Толщина — в единицах viewBox (100 × 140): non-scaling-stroke ломает пунктир через pathLength — линии шли рваными. */

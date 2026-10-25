@@ -2,7 +2,7 @@
 // волоски от точки удара, в последний день трещины ползут прямо на глазах (до полуночи), просрочено — разбито.
 // Рисунок у каждой серии свой (зерно — public_id) и не прыгает между перерисовками: растёт только длина линий.
 
-import { For, Show } from "solid-js";
+import { For, Show, createSignal, onCleanup } from "solid-js";
 
 const W = 100, H = 140;   // viewBox под пропорции обложки 3 : 4.2
 
@@ -46,13 +46,13 @@ function geometry(seed) {
     const a = (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.5;
     const pts = walk(rand, cx, cy, a, 200, 0.55);
     const start = 0.02 + (order[i] / n) * 0.5;
-    lines.push({ d: d(pts), start, span: 0.32, w: 1 });
+    lines.push({ d: d(pts), pts, start, span: 0.32, w: 1 });
     // Ответвления — появляются позже своей ветки.
     for (let k = 2; k < pts.length - 1; k += 2 + Math.floor(rand() * 3)) {
       if (rand() < 0.45) continue;
       const side = rand() < 0.5 ? -1 : 1;
       const fork = walk(rand, pts[k][0], pts[k][1], a + side * (0.5 + rand() * 0.7), 14 + rand() * 26, 0.7);
-      lines.push({ d: d(fork), start: Math.min(0.9, start + 0.18 + (k / pts.length) * 0.3), span: 0.2, w: 0.7 });
+      lines.push({ d: d(fork), pts: fork, start: Math.min(0.9, start + 0.18 + (k / pts.length) * 0.3), span: 0.2, w: 0.7 });
     }
   }
   // Кольца вокруг удара — паутина, когда уже совсем горит.
@@ -63,7 +63,7 @@ function geometry(seed) {
       const rr = r * (0.8 + rand() * 0.4);
       parts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
     }
-    lines.push({ d: d(parts), start, span: 0.14, w: 0.6 });
+    lines.push({ d: d(parts), pts: parts, start, span: 0.14, w: 0.6 });
   }
   // Выбитый осколок у точки удара — только у просроченных.
   const shard = Array.from({ length: 5 }, (_, i) => {
@@ -113,5 +113,75 @@ export function Crack(props) {
         </For>
       </svg>
     </Show>
+  );
+}
+
+// Осколки: кусочки самой обложки откалываются по видимым трещинам и улетают, падая. Чем ближе срок — тем чаще
+// и крупнее; у просроченной сыплется очередями. Только на активном слайде и если анимации не выключены.
+const SHARD_EVERY = level => (level >= 1 ? 700 : level >= 0.5 ? 3600 - (level - 0.5) * 6000 : level >= 0.35 ? 5500 : level > 0 ? 9000 : 0);
+const motionOff = () => document.documentElement.dataset.motion === "off" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let shardSeq = 0;
+
+function makeShard(g, level) {
+  const visible = g.lines.filter(l => level() > l.start + 0.02);
+  if (!visible.length) return null;
+  const line = visible[Math.floor(Math.random() * visible.length)];
+  const upTo = Math.max(1, Math.floor(line.pts.length * Math.min(1, (level() - line.start) / line.span)));
+  const [px, py] = line.pts[Math.floor(Math.random() * upTo)];
+  const size = 6 + Math.random() * 5 + level() * 7;
+  const corners = 3 + Math.floor(Math.random() * 2);
+  const base = Math.random() * Math.PI * 2;
+  const poly = Array.from({ length: corners }, (_, i) => {
+    const a = base + (i / corners) * Math.PI * 2 + (Math.random() - 0.5) * 0.9;
+    const r = size * (0.45 + Math.random() * 0.6);
+    return [Math.max(0, Math.min(W, px + Math.cos(a) * r)), Math.max(0, Math.min(H, py + Math.sin(a) * r))];
+  });
+  // Летит от точки удара, потом падает вниз.
+  const ang = Math.atan2(py - g.cy, px - g.cx) + (Math.random() - 0.5) * 0.8;
+  const push = 40 + Math.random() * 90;
+  return {
+    id: ++shardSeq,
+    clip: `polygon(${poly.map(([x, y]) => `${(x / W * 100).toFixed(1)}% ${(y / H * 100).toFixed(1)}%`).join(",")})`,
+    origin: `${(px / W * 100).toFixed(1)}% ${(py / H * 100).toFixed(1)}%`,
+    dx: `${(Math.cos(ang) * push).toFixed(0)}px`,
+    dy: `${(Math.sin(ang) * push * 0.5 + 140 + Math.random() * 120).toFixed(0)}px`,
+    rot: `${((Math.random() - 0.5) * 540).toFixed(0)}deg`,
+    tilt: `${((Math.random() - 0.5) * 300).toFixed(0)}deg`,
+    dur: `${(1.1 + Math.random() * 0.8).toFixed(2)}s`,
+  };
+}
+
+export function Shards(props) {
+  const g = geometryFor(props.seed);
+  const [list, setList] = createSignal([]);
+  let timer;
+  const schedule = () => {
+    const every = SHARD_EVERY(props.level());
+    timer = setTimeout(() => {
+      if (props.active() && every && !motionOff() && !document.hidden) {
+        const burst = props.level() >= 1 ? 2 + Math.floor(Math.random() * 3) : props.level() >= 0.5 ? 1 + Math.floor(Math.random() * 2) : 1;
+        const fresh = Array.from({ length: burst }, () => makeShard(g, props.level)).filter(Boolean);
+        if (fresh.length) setList(l => [...l, ...fresh].slice(-14));
+      }
+      schedule();
+    }, (every || 4000) * (0.6 + Math.random() * 0.8));
+  };
+  schedule();
+  onCleanup(() => clearTimeout(timer));
+  const drop = id => setList(l => l.filter(s => s.id !== id));
+  return (
+    <div class="kd-shards" aria-hidden="true">
+      <For each={list()}>
+        {s => (<>
+          {/* <b> — тёмная выемка на месте откола, пока осколок летит */}
+          <b style={{ "clip-path": s.clip, "animation-duration": s.dur }} />
+          {/* Обрезка — на <i>, а полёт и кромка (drop-shadow) — на обёртке: фильтр на самом обрезанном элементе срезается вместе с ним */}
+          <span style={{ "transform-origin": s.origin, "--dx": s.dx, "--dy": s.dy, "--rot": s.rot, "--tilt": s.tilt, "animation-duration": s.dur }}
+            onAnimationEnd={() => drop(s.id)}>
+            <i style={{ "background-image": `url("${props.src}")`, "clip-path": s.clip }} />
+          </span>
+        </>)}
+      </For>
+    </div>
   );
 }
