@@ -6,7 +6,7 @@
 // «Тайтлы» — доступно любому админу (сервер и так перепроверяет
 // _require_admin на каждый вызов), отдельного gate на кнопку не нужно.
 
-import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm } from "./api.js";
 import { pickFile } from "./attachments.js";
 import { pauseSuffix } from "./people.js";
 import { esc } from "./utils.js";
@@ -116,7 +116,7 @@ export async function openSeasonsAdminSheet(onClose) {
     sheet.querySelectorAll("[data-delete-season]").forEach(btn => {
       btn.addEventListener("click", async (ev) => {
         ev.stopPropagation();
-        if (!confirm("Удалить сезон? Это возможно только если в нём нет тайтлов.")) return;
+        if (!await askConfirm("Удалить сезон? Это возможно только если в нём нет тайтлов.")) return;
         try {
           await apiPost(`/seasons/${btn.dataset.deleteSeason}/delete`, {});
           toast("Сезон удалён.");
@@ -435,7 +435,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
     });
     sheet.querySelectorAll("[data-char-delete]").forEach(btn => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Удалить этого персонажа?")) return;
+        if (!await askConfirm("Удалить этого персонажа?")) return;
         try {
           await apiPost(`/titles/${titleId}/characters/delete`, { ids: [parseInt(btn.dataset.charDelete, 10)] });
           await render();
@@ -444,7 +444,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
     });
     const deleteAllBtn = sheet.querySelector("#char-delete-all");
     if (deleteAllBtn) deleteAllBtn.addEventListener("click", async () => {
-      if (!confirm("Удалить ВСЕХ персонажей тайтла?")) return;
+      if (!await askConfirm("Удалить ВСЕХ персонажей тайтла?")) return;
       try {
         await apiPost(`/titles/${titleId}/characters/delete`, { all: true });
         await render();
@@ -481,7 +481,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
       }
     });
     sheet.querySelector("#intro-clear")?.addEventListener("click", async () => {
-      if (!confirm("Убрать интро у тайтла? Финал будет собираться без него.")) return;
+      if (!await askConfirm("Убрать интро у тайтла? Финал будет собираться без него.")) return;
       try {
         await apiPost(`/titles/${titleId}/intro/delete`, {});
         await render();
@@ -497,7 +497,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
       } catch (e) { toast(`Не удалось переименовать: ${e.message}`, "error"); }
     });
     sheet.querySelector("#btn-delete-title").addEventListener("click", async () => {
-      if (!confirm(`Удалить тайтл «${d.name}»? Возможно только если у него нет серий.`)) return;
+      if (!await askConfirm(`Удалить тайтл «${d.name}»? Возможно только если у него нет серий.`)) return;
       try {
         await apiPost(`/titles/${titleId}/delete`, {});
         toast("Тайтл удалён.");

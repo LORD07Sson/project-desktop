@@ -449,6 +449,28 @@ export function dismissSheet(overlay) {
   overlay.dispatchEvent(new CustomEvent("sheet-dismissed"));
 }
 
+// Подтверждение действия окном внутри программы. Обычный confirm() здесь не годится: плагин диалогов Tauri подменяет его
+// асинхронной функцией, `if (!confirm(...))` получал Promise (всегда «да») — и удаление шло без вопроса.
+// Ответ — промис: true — «Да», false — «Отмена», Escape или клик мимо окна.
+export function askConfirm(text, { yes = "Да", no = "Отмена", danger = /удал|отозв|снять|сотр|навсегда|карантин|заверш/i.test(String(text)) } = {}) {
+  return new Promise(resolve => {
+    const overlay = openSheet(`
+      <div class="ask-text">${String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c])}</div>
+      <div class="sheet-actions">
+        <button type="button" class="btn ghost" data-ask="no">${no}</button>
+        <button type="button" class="btn ${danger ? "danger" : "primary"}" data-ask="yes">${yes}</button>
+      </div>`);
+    overlay.querySelector(".sheet").classList.add("ask-sheet");
+    let done = false;
+    const finish = ok => { if (done) return; done = true; overlay.remove(); resolve(ok); };
+    overlay.querySelector('[data-ask="yes"]').addEventListener("click", () => finish(true));
+    overlay.querySelector('[data-ask="no"]').addEventListener("click", () => finish(false));
+    overlay.addEventListener("sheet-dismissed", () => finish(false));
+    overlay.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); finish(true); } });
+    overlay.querySelector('[data-ask="yes"]').focus();
+  });
+}
+
 // Escape закрывает верхнюю модалку. Живёт здесь, рядом с openSheet, а
 // не в reports.js (где раньше соседствовал с Ctrl+F поиска по списку) —
 // к вкладке «Список» это поведение отношения не имеет.

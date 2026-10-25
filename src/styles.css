@@ -6113,3 +6113,7 @@ body.focus-mode .report-detail-overlay .sheet {
   padding: 5px 14px; font: inherit; font-weight: 600; cursor: pointer;
 }
 html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), .45); }
+
+/* Окно подтверждения (api.js::askConfirm) вместо системного confirm(). */
+.sheet.ask-sheet { max-width: 440px; }
+.ask-text { white-space: pre-wrap; font-size: 14px; line-height: 1.5; color: var(--ink); margin: 4px 0 18px; overflow-wrap: anywhere; }

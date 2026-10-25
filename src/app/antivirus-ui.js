@@ -3,7 +3,7 @@
 // Защитник Windows остаётся основной защитой системы — здесь его можно обновить и запустить, а наши проверки идут поверх.
 
 import { invoke, listen, sendNotification, pickOutputDir } from "./tauri.js";
-import { toast } from "./api.js";
+import { toast, askConfirm } from "./api.js";
 import { esc } from "./utils.js";
 
 const LS_AUTO_UPDATE = "av-auto-update";
@@ -142,7 +142,7 @@ export async function mountAntivirus(root) {
     root.querySelector("#av-update").addEventListener("click", updateDb);
     root.querySelector("#av-def-update").addEventListener("click", () => defender("update"));
     root.querySelector("#av-def-scan").addEventListener("click", () => defender("quickscan"));
-    root.querySelector("#av-def-full").addEventListener("click", () => { if (confirm("Полная проверка Защитником Windows идёт долго (от десятков минут). Продолжить?")) defender("fullscan"); });
+    root.querySelector("#av-def-full").addEventListener("click", async () => { if (await askConfirm("Полная проверка Защитником Windows идёт долго (от десятков минут). Продолжить?")) defender("fullscan"); });
     const q = root.querySelector('[data-av-tab="quarantine"] small');
     if (q && st) q.textContent = st.quarantine;
   }
@@ -226,11 +226,11 @@ export async function mountAntivirus(root) {
     btn.disabled = true;
     try {
       if (act === "quarantine") {
-        if (!confirm(`Отправить в карантин?\n\n${d.path}\n\nЕсли файл запущен, процесс будет завершён. Из карантина файл можно восстановить.`)) { btn.disabled = false; return; }
+        if (!await askConfirm(`Отправить в карантин?\n\n${d.path}\n\nЕсли файл запущен, процесс будет завершён. Из карантина файл можно восстановить.`)) { btn.disabled = false; return; }
         await call("av_quarantine", { path: d.path, pid: d.pid || null, label: (d.extra && d.extra.label) || d.title });
         toast("Файл в карантине.", "success");
       } else if (act === "kill") {
-        if (!confirm(`Завершить процесс (PID ${d.pid})?`)) { btn.disabled = false; return; }
+        if (!await askConfirm(`Завершить процесс (PID ${d.pid})?`)) { btn.disabled = false; return; }
         await call("av_kill", { pid: d.pid });
         toast("Процесс завершён.", "success");
       } else if (act === "autorun") {
@@ -240,7 +240,7 @@ export async function mountAntivirus(root) {
         await call("av_remove_defender_exclusion", { path: d.extra.exclusion });
         toast("Исключение Защитника убрано.", "success");
       } else if (act === "exclude") {
-        if (!confirm("Исключить из проверок? Этот файл больше не будет считаться угрозой.")) { btn.disabled = false; return; }
+        if (!await askConfirm("Исключить из проверок? Этот файл больше не будет считаться угрозой.")) { btn.disabled = false; return; }
         await call("av_exclude", { path: d.path || null, sha256: d.sha256 || null });
         toast("Добавлено в исключения.", "success");
       }
@@ -286,8 +286,8 @@ export async function mountAntivirus(root) {
       host.querySelectorAll("[data-q]").forEach(b => b.addEventListener("click", async () => {
         const id = b.dataset.id, kind = b.dataset.q;
         try {
-          if (kind === "delete") { if (!confirm("Удалить файл навсегда? Вернуть его будет нельзя.")) return; await call("av_quarantine_delete", { id }); toast("Удалено.", "success"); }
-          else { if (!confirm("Вернуть файл на прежнее место? Он снова сможет запускаться.")) return; await call("av_quarantine_restore", { id, exclude: kind === "restore-ex" }); toast("Файл восстановлен.", "success"); }
+          if (kind === "delete") { if (!await askConfirm("Удалить файл навсегда? Вернуть его будет нельзя.")) return; await call("av_quarantine_delete", { id }); toast("Удалено.", "success"); }
+          else { if (!await askConfirm("Вернуть файл на прежнее место? Он снова сможет запускаться.")) return; await call("av_quarantine_restore", { id, exclude: kind === "restore-ex" }); toast("Файл восстановлен.", "success"); }
           paintBody(); refreshHeader();
         } catch (e) { toast(String(e), "error"); }
       }));
@@ -330,11 +330,11 @@ export async function mountAntivirus(root) {
       host.querySelectorAll("[data-bh]").forEach(b => b.addEventListener("click", async () => {
         const a = alerts[Number(b.dataset.i)];
         try {
-          if (b.dataset.bh === "kill") { if (!confirm(`Завершить процесс «${a.name}» (PID ${a.pid})?`)) return; await call("av_kill", { pid: a.pid }); toast("Процесс завершён.", "success"); }
-          else if (b.dataset.bh === "quarantine") { if (!confirm(`Отправить в карантин?
+          if (b.dataset.bh === "kill") { if (!await askConfirm(`Завершить процесс «${a.name}» (PID ${a.pid})?`)) return; await call("av_kill", { pid: a.pid }); toast("Процесс завершён.", "success"); }
+          else if (b.dataset.bh === "quarantine") { if (!await askConfirm(`Отправить в карантин?
 
 ${a.path}`)) return; await call("av_quarantine", { path: a.path, pid: a.pid || null, label: a.title }); toast("Файл в карантине.", "success"); }
-          else if (b.dataset.bh === "trust") { if (!confirm("Доверять этой программе? Поведенческая защита перестанет следить за ней.")) return; await call("bh_trust", { path: a.path || null, name: a.name || null }); toast("Добавлено в доверенные.", "success"); }
+          else if (b.dataset.bh === "trust") { if (!await askConfirm("Доверять этой программе? Поведенческая защита перестанет следить за ней.")) return; await call("bh_trust", { path: a.path || null, name: a.name || null }); toast("Добавлено в доверенные.", "success"); }
           await call("bh_dismiss", { id: a.id });
           paintBody(); refreshHeader();
         } catch (e) { toast(String(e), "error"); }
@@ -384,7 +384,7 @@ ${a.path}`)) return; await call("av_quarantine", { path: a.path, pid: a.pid || n
     go.textContent = mode === "full" ? "Полная проверка" : (mode === "custom" ? "Выбрать папку и проверить" : "Проверить");
   }));
   root.querySelector(".av-go").addEventListener("click", async () => {
-    if (mode === "full" && !confirm("Полная проверка просматривает все диски — это может занять от нескольких минут до часа. Продолжить?")) return;
+    if (mode === "full" && !await askConfirm("Полная проверка просматривает все диски — это может занять от нескольких минут до часа. Продолжить?")) return;
     if (mode === "custom") {
       const dir = await pickOutputDir();
       if (!dir) return;

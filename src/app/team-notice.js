@@ -7,7 +7,7 @@
 // поставят новое объявление — оно снова появится.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, openSheet, toast } from "./api.js";
+import { apiGet, apiPost, openSheet, toast, askConfirm } from "./api.js";
 import { $, esc } from "./utils.js";
 import { loadAvatars } from "./profile.js";
 
@@ -118,7 +118,7 @@ export function openNoticeEditor() {
   });
   const clearBtn = sheet.querySelector("#tn-clear");
   if (clearBtn) clearBtn.addEventListener("click", async () => {
-    if (!confirm("Убрать объявление у всей команды?")) return;
+    if (!await askConfirm("Убрать объявление у всей команды?")) return;
     clearBtn.disabled = true;
     try {
       await apiPost("/team-notice/clear", {});

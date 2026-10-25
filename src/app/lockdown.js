@@ -6,7 +6,7 @@
 // чтобы было понятно, почему кнопки не работают.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, openSheet, toast } from "./api.js";
+import { apiGet, apiPost, openSheet, toast, askConfirm } from "./api.js";
 import { $, esc } from "./utils.js";
 
 const POLL_INTERVAL_MS = 60_000;
@@ -41,7 +41,7 @@ export function clearLockdown() {
 }
 
 async function disableLockdown() {
-  if (!confirm("Снять аварийный режим? Удаление, доступы и публикации снова заработают у всех.")) return;
+  if (!await askConfirm("Снять аварийный режим? Удаление, доступы и публикации снова заработают у всех.")) return;
   try {
     await apiPost("/lockdown", { on: false });
     toast("Аварийный режим снят — команда получила сообщение.");

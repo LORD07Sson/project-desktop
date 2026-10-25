@@ -2,7 +2,7 @@
 // Один и тот же редактор — у тайтла (/titles/{id}/watermark) и общий знак студии (titleId = 0, /titles/0/watermark):
 // общий накладывается при сборке на серии без тайтла и на тайтлы без своего знака.
 
-import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm } from "./api.js";
 import { pickFile } from "./attachments.js";
 import { esc } from "./utils.js";
 
@@ -222,7 +222,7 @@ export function wireWatermarkSection(sheet, titleId, wm, rerender) {
     }
   });
   sheet.querySelector("#wm-clear")?.addEventListener("click", async () => {
-    if (!confirm(titleId ? "Убрать водяной знак у тайтла?" : "Убрать общий водяной знак студии?")) return;
+    if (!await askConfirm(titleId ? "Убрать водяной знак у тайтла?" : "Убрать общий водяной знак студии?")) return;
     try {
       await apiPost(`/titles/${titleId}/watermark/delete`, {});
       await rerender();

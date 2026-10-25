@@ -4,7 +4,7 @@
 // шлёт упоминание в рабочий чат сразу. Кому выдали доступ — выпадает
 // из списка сам. /api/mentions, /toggle, /auto, /send.
 
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { esc, relTime } from "./utils.js";
 import { loadAvatars } from "./profile.js";
 
@@ -78,7 +78,7 @@ export async function openMentionsSheet(onChange) {
     });
     sheet.querySelectorAll("[data-mn-del]").forEach(b => b.addEventListener("click", () => call("/mentions/toggle", { telegram_id: Number(b.dataset.mnDel) })));
     sheet.querySelector("#mn-send").addEventListener("click", async e => {
-      if (!confirm(`Упомянуть ${d.watchlist.length} чел. в рабочем чате прямо сейчас?`)) return;
+      if (!await askConfirm(`Упомянуть ${d.watchlist.length} чел. в рабочем чате прямо сейчас?`)) return;
       e.currentTarget.disabled = true;
       await call("/mentions/send", {}, "Упоминание отправлено в рабочий чат.");
     });

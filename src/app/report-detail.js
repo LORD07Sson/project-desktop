@@ -2,7 +2,7 @@
 // серверная AI-проверка звука. Открывается из Списка/Доски/Ленты/
 // профиля коллеги.
 
-import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { track } from "./telemetry.js";
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
@@ -573,7 +573,7 @@ export async function openReportDetail(publicId) {
       });
     });
     sheet.querySelector("#btn-delete-report")?.addEventListener("click", async () => {
-      if (!confirm(`Удалить отчёт ${detail.public_id} («${detail.title}»)? Действие необратимо.`)) return;
+      if (!await askConfirm(`Удалить отчёт ${detail.public_id} («${detail.title}»)? Действие необратимо.`)) return;
       const btn = sheet.querySelector("#btn-delete-report");
       btn.disabled = true;
       btn.textContent = "Удаляем…";
@@ -637,7 +637,7 @@ export async function openReportDetail(publicId) {
     });
     const clearBtn = sheet.querySelector("#btn-pipeline-clear");
     if (clearBtn && canEdit) clearBtn.addEventListener("click", async () => {
-      if (!confirm("Снять пайплайн с отчёта?")) return;
+      if (!await askConfirm("Снять пайплайн с отчёта?")) return;
       try {
         await apiPost(`/report/${publicId}/pipeline`, { steps: [] });
         toast("Пайплайн снят.");
@@ -868,7 +868,7 @@ export async function openReportDetail(publicId) {
         try {
           const ok = await downloadWithCard({ command: "download_report_file", args: { reportId: publicId, fileId }, savePath, name: btn.dataset.fileName || "файл" });
           // Файл мог уйти в архив Telegram и пропасть из кэша сервера — бот достанет его оттуда и пришлёт сам.
-          if (!ok && confirm(`Не удалось скачать «${btn.dataset.fileName || "файл"}» на компьютер.
+          if (!ok && await askConfirm(`Не удалось скачать «${btn.dataset.fileName || "файл"}» на компьютер.
 
 Прислать его через бота в Telegram? Бот возьмёт файл из архива.`)) {
             try {
@@ -886,7 +886,7 @@ export async function openReportDetail(publicId) {
     sheet.querySelectorAll("[data-delete-file]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const label = btn.dataset.fileName || "файл";
-        if (!confirm(`Удалить файл «${label}» из отчёта?`)) return;
+        if (!await askConfirm(`Удалить файл «${label}» из отчёта?`)) return;
         btn.disabled = true;
         try {
           await apiPost(`/report/${publicId}/files/${btn.dataset.deleteFile}/delete`, {});

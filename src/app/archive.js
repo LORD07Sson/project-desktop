@@ -4,7 +4,7 @@
 // Сам перенос делает бот (archive_sync.py): берёт тайтл, сезон, качество и серию из хештегов поста, заливает видео
 // под новым именем и подписью, создаёт тему на каждый тайтл и закрепляет в ней превью.
 
-import { apiGet, apiPost, toast } from "./api.js";
+import { apiGet, apiPost, toast, askConfirm } from "./api.js";
 import { esc } from "./utils.js";
 
 const NL = String.fromCharCode(10);
@@ -249,7 +249,7 @@ export async function mountArchive(root) {
     root.querySelector("#ar-refresh")?.addEventListener("click", load);
     root.querySelector("#ar-queue-refresh")?.addEventListener("click", load);
     root.querySelector("#ar-requeue")?.addEventListener("click", async () => {
-      if (!confirm("Вернуть в очередь ВСЕ перенесённые серии и залить заново? Старая копия каждой серии удаляется только после того, как новая успешно залита. На сотню серий уйдёт несколько часов.")) return;
+      if (!await askConfirm("Вернуть в очередь ВСЕ перенесённые серии и залить заново? Старая копия каждой серии удаляется только после того, как новая успешно залита. На сотню серий уйдёт несколько часов.")) return;
       try { await apiPost("/archive/requeue", {}); toast("Серии возвращены в очередь — бот начнёт в течение 30 секунд.", "success"); setTimeout(load, 4000); }
       catch (e) { toast(e.message, "error"); }
     });

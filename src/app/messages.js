@@ -18,7 +18,7 @@
 
 import { state } from "./state.js";
 import { nyaaCardsHtml } from "./nyaa-card.js";
-import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm } from "./api.js";
 import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON, FILE_MAX_MB } from "./attachments.js";
 import { $, esc, relTime, showContextMenu } from "./utils.js";
 import { isChatMuted, setChatMuted } from "./chat-notify.js";
@@ -399,7 +399,7 @@ function wireThread(el, c) {
     const q = both
       ? `Удалить всю переписку с ${who} у вас обоих? Вернуть нельзя.`
       : `Очистить переписку с ${who}? Она пропадёт только у вас, у собеседника останется.`;
-    if (!confirm(q)) return;
+    if (!await askConfirm(q)) return;
     try {
       await apiPost(`/chats/${encodeURIComponent(c.id)}/clear`, { both });
       toast(both ? "Переписка удалена у обоих" : "Переписка очищена", "success");
@@ -411,7 +411,7 @@ function wireThread(el, c) {
   el.querySelector("[data-clear-dm]")?.addEventListener("click", () => clearDm(false));
   el.querySelector("[data-clear-dm-both]")?.addEventListener("click", () => clearDm(true));
   el.querySelector("[data-del-topic]")?.addEventListener("click", async () => {
-    if (!confirm(`Удалить тему «${c.title}» со всей перепиской? Вернуть нельзя.`)) return;
+    if (!await askConfirm(`Удалить тему «${c.title}» со всей перепиской? Вернуть нельзя.`)) return;
     try {
       await apiPost(`/topics/${c.topic_id}/delete`, {});
       activeId = "general";
@@ -420,7 +420,7 @@ function wireThread(el, c) {
     } catch (e) { toast(e.message, "error"); }
   });
   el.querySelector("[data-del-channel]")?.addEventListener("click", async () => {
-    if (!confirm(`Удалить канал «${c.channel_name}» со всеми темами и перепиской? Вернуть нельзя.`)) return;
+    if (!await askConfirm(`Удалить канал «${c.channel_name}» со всеми темами и перепиской? Вернуть нельзя.`)) return;
     try {
       await apiPost(`/channels/${c.channel_id}/delete`, {});
       activeId = "general";
@@ -430,7 +430,7 @@ function wireThread(el, c) {
   });
   el.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => {
     const m = messages.find(x => String(x.id) === b.dataset.del);
-    if (!confirm(m && !m.mine ? `Удалить сообщение ${m.author}? Текст сотрётся у всех.` : "Удалить сообщение? Текст сотрётся у всех.")) return;
+    if (!await askConfirm(m && !m.mine ? `Удалить сообщение ${m.author}? Текст сотрётся у всех.` : "Удалить сообщение? Текст сотрётся у всех.")) return;
     b.disabled = true;
     try {
       const r = await apiPost(`/chats/${encodeURIComponent(c.id)}/messages/${b.dataset.del}/delete`, {});

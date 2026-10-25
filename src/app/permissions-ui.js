@@ -2,7 +2,7 @@
 // Сервер: GET/POST /api/permissions ({role, permissions: [...]} — весь набор прав роли).
 // Каждое изменение сохраняется сразу; права проверяет сервер на каждом запросе, клиент лишь скрывает недоступное.
 
-import { apiGet, apiPost, toast } from "./api.js";
+import { apiGet, apiPost, toast, askConfirm } from "./api.js";
 import { esc } from "./utils.js";
 
 // Что человек с ролью увидит в программе — та же логика, что у perm-visibility.js/tabs.js и проверок сервера.
@@ -210,15 +210,15 @@ export async function mountPermissions(root) {
     });
     root.querySelector("#pm-delete")?.addEventListener("click", async () => {
       if (role.members) { toast(`Роль «${role.name}» назначена людям (${role.members}) — сначала снимите её в Команда → Роли.`, "error"); return; }
-      if (!window.confirm(`Удалить роль «${role.name}»? Её права тоже пропадут.`)) return;
+      if (!await askConfirm(`Удалить роль «${role.name}»? Её права тоже пропадут.`)) return;
       try {
         data = await apiPost("/permissions/role/delete", { name: role.name });
         toast(`Роль «${role.name}» удалена.`, "success");
       } catch (err) { toast(err.message, "error"); }
       paint();
     });
-    root.querySelector("#pm-all")?.addEventListener("click", () => confirm(`Включить роли «${role.name}» все права сразу?`) && save(role.key, data.permissions.map(p => p.key), "Все права включены."));
-    root.querySelector("#pm-none")?.addEventListener("click", () => confirm(`Снять у роли «${role.name}» все права?`) && save(role.key, [], "Права сняты."));
+    root.querySelector("#pm-all")?.addEventListener("click", async () => await askConfirm(`Включить роли «${role.name}» все права сразу?`) && save(role.key, data.permissions.map(p => p.key), "Все права включены."));
+    root.querySelector("#pm-none")?.addEventListener("click", async () => await askConfirm(`Снять у роли «${role.name}» все права?`) && save(role.key, [], "Права сняты."));
     root.querySelector("#pm-copy")?.addEventListener("change", e => {
       const from = roles.find(r => r.key === e.target.value);
       if (from) save(role.key, granted(from.key), `Права скопированы с роли «${from.name}».`);

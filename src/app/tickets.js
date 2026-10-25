@@ -8,7 +8,7 @@
 // /api/tickets/{id}/reply {text}, /reply-attach (файл + подпись),
 // /api/tickets/{id}/close, /reopen.
 
-import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { esc, relTime } from "./utils.js";
 import { loadAvatars } from "./profile.js";
@@ -166,7 +166,7 @@ export async function openTicketsSheet(initialId) {
     }
     const closeBtn = threadEl.querySelector("[data-tk-close]");
     if (closeBtn) closeBtn.addEventListener("click", async () => {
-      if (!confirm(`Закрыть обращение #${d.ticket.id}? Человеку придёт уведомление.`)) return;
+      if (!await askConfirm(`Закрыть обращение #${d.ticket.id}? Человеку придёт уведомление.`)) return;
       closeBtn.disabled = true;
       try {
         const r = await apiPost(`/tickets/${d.ticket.id}/close`, {});

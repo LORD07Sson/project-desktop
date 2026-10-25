@@ -2,7 +2,7 @@
 // список (по ближайшим), добавить, удалить. Поздравления рассылает
 // сам бот по этой же таблице. /api/birthdays, /api/birthdays/{id}/delete.
 
-import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { esc } from "./utils.js";
 
 const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -95,7 +95,7 @@ export async function openBirthdaysSheet(onChange) {
     });
     sheet.querySelectorAll("[data-bd-del]").forEach(b => b.addEventListener("click", async () => {
       const item = list.find(x => String(x.id) === b.dataset.bdDel);
-      if (!confirm(`Удалить день рождения «${item ? item.name : ""}»?`)) return;
+      if (!await askConfirm(`Удалить день рождения «${item ? item.name : ""}»?`)) return;
       b.disabled = true;
       try {
         const d = await apiPost(`/birthdays/${b.dataset.bdDel}/delete`, {});

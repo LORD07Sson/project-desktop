@@ -10,7 +10,7 @@
 // /api/people/{tid}, /api/people/{tid}/transfer, /api/people/{tid}/pause.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, openSheet, toast } from "./api.js";
+import { apiGet, apiPost, openSheet, toast, askConfirm } from "./api.js";
 import { esc, STATUS_COLOR_VAR } from "./utils.js";
 
 const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -164,7 +164,7 @@ export async function openTransferDialog(p, onChange) {
   sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
   go.addEventListener("click", async () => {
     const to = others.find(u => String(u.telegram_id) === sel.value);
-    if (!confirm(`Передать ${n} незакрытых серий от ${p.name} → ${to ? to.name : ""}?`)) return;
+    if (!await askConfirm(`Передать ${n} незакрытых серий от ${p.name} → ${to ? to.name : ""}?`)) return;
     go.disabled = true;
     try {
       const r = await apiPost(`/people/${p.telegram_id}/transfer`, { to_telegram_id: Number(sel.value) });

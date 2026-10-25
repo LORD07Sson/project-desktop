@@ -9,7 +9,7 @@
 // отдельного условия "только для админов" на кнопку не нужно — сервер
 // всё равно перепроверяет каждый вызов через _require_admin/_require_owner.
 
-import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { openNoticeEditor } from "./team-notice.js";
 import { openTicketsSheet } from "./tickets.js";
 import { openBirthdaysSheet } from "./birthdays.js";
@@ -59,7 +59,7 @@ export async function openAdminPanel() {
       slot.querySelectorAll("[data-access-revoke]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const id = btn.dataset.accessRevoke;
-          if (!confirm(`Отозвать доступ у ${id}?`)) return;
+          if (!await askConfirm(`Отозвать доступ у ${id}?`)) return;
           btn.disabled = true;
           try {
             const r = await apiDelete(`/admin/access/${id}`);

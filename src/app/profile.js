@@ -7,7 +7,7 @@
 import { state } from "./state.js";
 import { fillRemindersCard } from "./reminders.js";
 import { fetchPerson, workSectionHtml, wireWorkSection, fillPauseCard } from "./people.js";
-import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken, tabSkeleton } from "./api.js";
+import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken, tabSkeleton, askConfirm } from "./api.js";
 import { $, esc, isOverdue, relTime, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
 import { setQuickFilter, loadReports } from "./reports.js";
 import { switchTab } from "./tabs.js";
@@ -452,7 +452,7 @@ function wireProfileCommon(root, telegramId, onReload) {
   root.querySelectorAll("[data-revoke-badge]").forEach(btn => {
     btn.addEventListener("click", async (ev) => {
       ev.stopPropagation();
-      if (!confirm("Отозвать эту награду?")) return;
+      if (!await askConfirm("Отозвать эту награду?")) return;
       btn.disabled = true;
       try {
         await apiDelete(`/dev/badge/${btn.dataset.revokeBadge}`);
@@ -953,7 +953,7 @@ export async function openUserProfile(telegramId) {
   if (person) wireWorkSection(sheet, person, async () => { await openUserProfile(telegramId); overlay.remove(); });
   const purgeBtn = sheet.querySelector("[data-purge-chats]");
   if (purgeBtn) purgeBtn.addEventListener("click", async () => {
-    if (!confirm(`Удалить ВСЕ личные переписки ${d.name || "этого человека"}? Они сотрутся целиком, у обеих сторон. Общий чат не затронут. Вернуть нельзя.`)) return;
+    if (!await askConfirm(`Удалить ВСЕ личные переписки ${d.name || "этого человека"}? Они сотрутся целиком, у обеих сторон. Общий чат не затронут. Вернуть нельзя.`)) return;
     purgeBtn.disabled = true;
     try {
       const r = await apiPost("/chats/purge-person", { telegram_id: telegramId });

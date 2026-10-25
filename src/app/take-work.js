@@ -5,7 +5,7 @@
 // сервер заводит сам по мере выхода и пишет составу в Telegram.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { pickFiles, sizeText } from "./attachments.js";
 import { esc } from "./utils.js";
 import { imgProxy } from "./title-page.js";
@@ -403,7 +403,7 @@ export async function openTakeWork(titleId, onDone) {
   sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
 
   sheet.querySelector("[data-stop]")?.addEventListener("click", async e => {
-    if (!confirm("Больше не заводить новые серии этого тайтла автоматически? Уже заведённые останутся.")) return;
+    if (!await askConfirm("Больше не заводить новые серии этого тайтла автоматически? Уже заведённые останутся.")) return;
     e.target.disabled = true;
     try {
       await apiPost(`/titles/${titleId}/work/stop`, {});

@@ -9,7 +9,7 @@
 // /api/posts/{id}/delete, /api/posts/{id}/publish, /api/posts/channel.
 
 import { state } from "./state.js";
-import { API_BASE, apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, mediaUrl, ensureMediaToken } from "./api.js";
+import { API_BASE, apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, mediaUrl, ensureMediaToken, askConfirm } from "./api.js";
 import { esc } from "./utils.js";
 import { addPreviewHeader } from "./role-preview.js";
 
@@ -349,9 +349,9 @@ export async function openChannelPostSheet(openId = null) {
       d.links[+i][field] = inp.value;
       scheduleSave();
     }));
-    ed.querySelectorAll("[data-cp-bdel]").forEach(b => b.addEventListener("click", () => {
+    ed.querySelectorAll("[data-cp-bdel]").forEach(b => b.addEventListener("click", async () => {
       const blk = d.blocks[+b.dataset.cpBdel];
-      if (blk.lines.length && !confirm(`Удалить блок «${blk.head || "без заголовка"}» вместе с людьми?`)) return;
+      if (blk.lines.length && !await askConfirm(`Удалить блок «${blk.head || "без заголовка"}» вместе с людьми?`)) return;
       structural(x => x.blocks.splice(+b.dataset.cpBdel, 1));
     }));
     ed.querySelectorAll("[data-cp-bmove]").forEach(b => b.addEventListener("click", () => {
@@ -514,7 +514,7 @@ export async function openChannelPostSheet(openId = null) {
       <button type="button" class="btn primary cp-publish-btn" id="cp-go"${meta.channel && post.html ? "" : " disabled"}>${I.send}${post.published_at ? "Опубликовать ещё раз" : "Опубликовать"}${meta.channel ? ` в ${esc(meta.channel)}` : ""}</button>
       <button type="button" class="btn danger" id="cp-del">Удалить черновик</button>`;
     el.querySelector("#cp-go").addEventListener("click", async e => {
-      if (!confirm(`Опубликовать пост в ${meta.channel}? Его сразу увидят подписчики.`)) return;
+      if (!await askConfirm(`Опубликовать пост в ${meta.channel}? Его сразу увидят подписчики.`)) return;
       e.currentTarget.disabled = true;
       await flush();
       try {
@@ -530,7 +530,7 @@ export async function openChannelPostSheet(openId = null) {
       }
     });
     el.querySelector("#cp-del").addEventListener("click", async () => {
-      if (!confirm("Удалить черновик? В канале уже опубликованное не тронется.")) return;
+      if (!await askConfirm("Удалить черновик? В канале уже опубликованное не тронется.")) return;
       window.clearTimeout(saveTimer);
       try {
         await apiPost(`/posts/${post.id}/delete`, {});
