@@ -14,6 +14,14 @@ const toastLog = tagLogger("toast");
 let appVersion = "";
 getVersion().then(v => { appVersion = v; }).catch(() => { /* не в приложении */ });
 
+// Служебные заголовки для запросов в обход api(): XHR-загрузки, blob, медиа постов. Без версии сервер с обязательной
+// минимальной версией отвечал 426 «устарела» на свежей программе — так ломалась загрузка файлов в 2.5.5.
+export function clientHeaders(headers = {}) {
+  if (state.token) headers["X-Init-Data"] = state.token;
+  if (appVersion) headers["X-App-Version"] = appVersion;
+  return addPreviewHeader(headers);
+}
+
 export const API_BASE = "https://minitg.shitstudent.com:8443/api";
 
 // Без явного таймаута fetch() ждёт ответа сколько угодно — если сеть
@@ -173,9 +181,7 @@ function stripStatusEmoji(node) {
 // адресе. onProgress(загружено, всего) — всего бывает 0, если сервер не
 // назвал размер.
 export async function apiBlob(path, onProgress) {
-  const headers = {};
-  if (state.token) headers["X-Init-Data"] = state.token;
-  addPreviewHeader(headers);
+  const headers = clientHeaders();
   const controller = new AbortController();
   // Два ограничения: ответ должен начаться за REQUEST_TIMEOUT_MS, а потом данные не должны
   // молчать дольше BLOB_STALL_MS (долгая, но живая загрузка не обрывается).
@@ -255,8 +261,7 @@ function xhrRequest(url, body, { contentType, onProgress } = {}) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
-    if (state.token) xhr.setRequestHeader("X-Init-Data", state.token);
-    if (state.previewRole) xhr.setRequestHeader("X-Preview-Role", encodeURIComponent(state.previewRole));
+    for (const [k, v] of Object.entries(clientHeaders())) xhr.setRequestHeader(k, v);
     if (contentType) xhr.setRequestHeader("Content-Type", contentType);
     if (onProgress) xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded); };
     xhr.onerror = () => {
