@@ -389,6 +389,30 @@ input, select, textarea { font-family: inherit; }
 .kd-slide.no-ban .kd-slide-ban { display: none; }
 .kd-slide.no-ban .kd-slide-art { display: block; }
 .kd-slide.on .kd-slide-art { opacity: 1; transform: rotate(2deg); }
+.kd-slide-art { overflow: hidden; }
+.kd-slide-art > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Трещины по сроку (Crack.jsx): тёмная щель + светлый скол сбоку — как стекло. Длина растёт через dashoffset. */
+.kd-crack { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* Толщина — в единицах viewBox (100 × 140): non-scaling-stroke ломает пунктир через pathLength — линии шли рваными. */
+.kd-crack path:not(.kd-crack-hole) { fill: none; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1 1; stroke-dashoffset: var(--off); transition: stroke-dashoffset 1.6s cubic-bezier(.2, .7, .2, 1); }
+.kd-crack-dark { stroke: rgba(0, 0, 0, .6); stroke-width: calc(var(--w) * 1.1px); }
+.kd-crack-lit { stroke: rgba(255, 255, 255, .9); stroke-width: calc(var(--w) * .42px); transform: translate(.18px, -.14px);
+  filter: drop-shadow(0 0 .8px rgba(200, 230, 255, var(--crack-glow))); }
+.kd-crack-flash { opacity: var(--crack-glow); mix-blend-mode: screen; }
+.kd-crack-hole { fill: rgba(5, 4, 4, .92); stroke: rgba(255, 255, 255, .55); stroke-width: .3px; }
+.kd-crack:not(.broken) .kd-crack-hole { display: none; }
+.kd-crack.broken { filter: drop-shadow(0 0 6px rgba(var(--fire-rgb), .55)); }
+.kd-slide-art:has(.kd-crack.broken) > img { filter: saturate(.55) brightness(.8) contrast(1.1); }
+/* Последний день: стекло «потрескивает» — короткая дрожь, тем чаще, чем ближе полночь. */
+.kd-slide.on .kd-slide-art.creak { animation: kd-creak var(--creak) infinite; }
+@keyframes kd-creak {
+  0%, 90%, 100% { translate: 0 0; }
+  92% { translate: -1.5px .5px; }
+  94% { translate: 1.5px -.5px; }
+  96% { translate: -1px 0; }
+  98% { translate: .5px .5px; }
+}
 .kd-slide-fade { position: absolute; inset: 0;
   background: linear-gradient(90deg, rgba(11, 9, 8, .95) 0, rgba(11, 9, 8, .78) 32%, rgba(11, 9, 8, .18) 64%, rgba(11, 9, 8, 0) 82%), linear-gradient(0deg, rgba(11, 9, 8, .72), rgba(11, 9, 8, 0) 42%); }
 .kd-slide-tx { position: absolute; left: 46px; top: 40px; bottom: 36px; width: min(560px, 58%); display: flex; flex-direction: column; align-items: flex-start; color: #f1ebe6; }
