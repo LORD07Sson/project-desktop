@@ -717,12 +717,17 @@ function autoCheckIfDue() {
     // проверять можно, лучше лишний запрос, чем никогда не проверять.
   }
   if (Date.now() - last < AUTO_CHECK_THROTTLE_MS) return;
-  try {
-    localStorage.setItem(AUTO_CHECK_STORAGE_KEY, String(Date.now()));
-  } catch {
-    // не критично — просто не притормозит следующий запуск
-  }
-  checkForUpdates(true);
+  // Паузу в 4 часа запоминаем, только если обновления нет или человек сам нажал «Позже». Раньше время писалось ДО
+  // проверки: оборвался интернет посреди закачки — и окно «Доступно обновление» не появлялось 4 часа, сколько ни
+  // перезапускай программу.
+  checkForUpdates(true).then(result => {
+    if (result !== "none" && result !== "declined") return;
+    try {
+      localStorage.setItem(AUTO_CHECK_STORAGE_KEY, String(Date.now()));
+    } catch {
+      // не критично — просто не притормозит следующий запуск
+    }
+  });
 }
 
 // Программу часто не закрывают сутками — раньше она проверяла обновления только при запуске и новую версию так и
@@ -734,11 +739,12 @@ export async function checkForUpdates(silent) {
     const update = await invoke("check_for_update", { force: !silent });
     if (!update) {
       if (!silent) toast("У вас уже последняя версия.");
-      return;
+      return "none";
     }
     const yes = await confirmUpdateSheet(update);
-    if (!yes) return;
+    if (!yes) return "declined";
     await installUpdate();
+    return "installing";
   } catch (e) {
     // Тихую автопроверку при старте (silent=true) пользователь никогда
     // не видит тостом — раньше падение здесь (тот самый 403 на общем IP
