@@ -4288,7 +4288,8 @@ td.row-actions { opacity: 1; transition: none; }
 .lr-play svg { width: 20px; height: 20px; stroke: currentColor; fill: none; }
 .lr-play .pa, .lr-play.on .pl { display: none; }
 .lr-play.on .pa { display: block; }
-.lr-list { display: flex; flex-direction: column; gap: 4px; }
+.lr-list { display: flex; flex-direction: column; gap: 4px; max-height: min(340px, 50vh); overflow-y: auto; }
+.lr-group { margin: 6px 2px 1px; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
 .lr-st { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 11px; border-radius: 10px; border: 0; cursor: pointer; text-align: left;
   background: rgba(255, 255, 255, .03); color: var(--ink-soft); font: inherit; }
 .lr-st:hover { background: rgba(255, 255, 255, .07); }

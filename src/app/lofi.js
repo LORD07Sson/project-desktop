@@ -1,4 +1,4 @@
-// Lofi-радио в шапке: пять бесплатных интернет-станций (обычный <audio> по https — CSP media-src это разрешает),
+// Lofi-радио в шапке: бесплатные интернет-станции, обычные и японские (обычный <audio> по https — CSP media-src это разрешает),
 // пластинка и эквалайзер, пока играет, и свои слои атмосферы — дождь и треск винила, синтезированные Web Audio
 // (файлов нет, ничего не качается). Станция, громкость и слои запоминаются; само радио при запуске не включается.
 // Другое видео или звук в программе (плеер серий, дорожки) ставит радио на паузу.
@@ -11,6 +11,9 @@ const STATIONS = [
   { id: "chillhop", name: "FluxFM · Chillhop", note: "чиллхоп и битс", url: "https://streams.fluxfm.de/Chillhop/mp3-128/audio/" },
   { id: "ilovechill", name: "I Love Chillhop", note: "ilovemusic.de", url: "https://streams.ilovemusic.de/iloveradio17.mp3" },
   { id: "lofimusic", name: "Lofi Music", note: "zeno.fm", url: "https://stream.zeno.fm/f3wvbbqmdg8uv" },
+  { id: "neverland", name: "Radio Neverland", note: "аниме-лоуфай и джаз", url: "https://stream.zeno.fm/oaqigxpfjzqvv", jp: true },
+  { id: "jpcitypop", name: "Japan City Pop", note: "シティポップ · BOX", url: "https://play.streamafrica.net/japancitypop", jp: true },
+  { id: "nightwave", name: "Nightwave Plaza", note: "вейпорвейв, фьюча-фанк", url: "https://radio.plaza.one/mp3", jp: true },
 ];
 const STORE = "lofi-radio";
 
@@ -28,9 +31,19 @@ let rain = saved.rain ?? 0;        // 0…1
 let crackle = saved.crackle ?? 0;  // 0…1
 let status = "idle";               // idle | loading | playing | error
 
-const audio = new Audio();
-audio.preload = "none";
-audio.volume = volume;
+// <audio> заводим при первом запуске, а не при загрузке модуля: проверка сборки (scripts/verify-modules.mjs) импортирует
+// модули в Node, где Audio нет.
+let audio = null;
+function player() {
+  if (audio) return audio;
+  audio = new Audio();
+  audio.preload = "none";
+  audio.volume = volume;
+  audio.addEventListener("playing", () => setStatus("playing"));
+  audio.addEventListener("waiting", () => { if (status === "playing") setStatus("loading"); });
+  audio.addEventListener("error", () => { if (audio.getAttribute("src")) setStatus("error"); });
+  return audio;
+}
 
 // ── Атмосфера: дождь (коричневый шум через полосовой фильтр + редкие капли) и треск винила (щелчки и шипение). ──
 let ctx = null, rainGain = null, crackleGain = null;
@@ -106,16 +119,18 @@ function setStatus(s) {
 async function play() {
   if (rain || crackle) ensureAmbience();
   if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
-  if (audio.src !== cur.url) audio.src = cur.url;
+  const a = player();
+  if (a.src !== cur.url) a.src = cur.url;
   setStatus("loading");
   try {
-    await audio.play();
+    await a.play();
   } catch (e) {
     if (e && e.name === "AbortError") return;
     setStatus("error");
   }
 }
 function stop() {
+  if (!audio) return setStatus("idle");
   audio.pause();
   // Поток не держим: после паузы радио должно играть «сейчас», а не догонять старый буфер.
   audio.removeAttribute("src");
@@ -124,9 +139,6 @@ function stop() {
 }
 function toggle() { (status === "playing" || status === "loading") ? stop() : play(); }
 
-audio.addEventListener("playing", () => setStatus("playing"));
-audio.addEventListener("waiting", () => { if (status === "playing") setStatus("loading"); });
-audio.addEventListener("error", () => { if (audio.getAttribute("src")) setStatus("error"); });
 
 // Другой звук в программе — радио уступает.
 document.addEventListener("play", e => {
@@ -192,7 +204,7 @@ function panelHtml() {
       </button>
     </div>
     <div class="lr-list" role="listbox" aria-label="Станции">
-      ${STATIONS.map(s => `<button type="button" class="lr-st" data-lr-st="${s.id}" role="option"><b>${esc(s.name)}</b><small>${esc(s.note)}</small></button>`).join("")}
+      ${STATIONS.map((s, i) => `${s.jp && !STATIONS[i - 1]?.jp ? `<div class="lr-group">日本 · японское</div>` : ""}<button type="button" class="lr-st" data-lr-st="${s.id}" role="option"><b>${esc(s.name)}</b><small>${esc(s.note)}</small></button>`).join("")}
     </div>
     <label class="lr-row"><span>Громкость</span><input type="range" min="0" max="1" step="0.01" data-lr-vol value="${volume}"></label>
     <label class="lr-row"><span>🌧 Дождь</span><input type="range" min="0" max="1" step="0.01" data-lr-rain value="${rain}"></label>
@@ -206,7 +218,7 @@ function openPanel() {
     panel.dataset.built = "1";
     panel.querySelector("[data-lr-play]").addEventListener("click", toggle);
     panel.querySelectorAll("[data-lr-st]").forEach(b => b.addEventListener("click", () => pick(b.dataset.lrSt)));
-    panel.querySelector("[data-lr-vol]").addEventListener("input", e => { volume = +e.target.value; audio.volume = volume; applyAmbience(); save(); });
+    panel.querySelector("[data-lr-vol]").addEventListener("input", e => { volume = +e.target.value; if (audio) audio.volume = volume; applyAmbience(); save(); });
     panel.querySelector("[data-lr-rain]").addEventListener("input", e => { rain = +e.target.value; if (rain) ensureAmbience(); applyAmbience(); save(); });
     panel.querySelector("[data-lr-crackle]").addEventListener("input", e => { crackle = +e.target.value; if (crackle) ensureAmbience(); applyAmbience(); save(); });
   }
