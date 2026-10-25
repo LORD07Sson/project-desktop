@@ -4223,6 +4223,17 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-eye-pair i:last-child { animation-name: kd-blink-r; }
 @keyframes kd-blink-l { 0%, 92%, 100% { transform: rotate(8deg) scaleY(1); } 95% { transform: rotate(8deg) scaleY(.08); } }
 @keyframes kd-blink-r { 0%, 92%, 100% { transform: rotate(-8deg) scaleX(-1) scaleY(1); } 95% { transform: rotate(-8deg) scaleX(-1) scaleY(.08); } }
+/* Мрак последних 10 часов (--gloom 0…1 на слайде, gloomLevel в Crack.jsx): краски выцветают, свет гаснет,
+   тьма смыкается вокруг обложки. В последний час свет мигает, как умирающая лампа. Текст поверх — чтобы читался. */
+.kd-slide { --gloom: 0; }
+.kd-slide-tx { z-index: 2; }
+.kd-slide-amb { filter: blur(34px) saturate(calc(1.2 - var(--gloom) * .8)) brightness(calc(.55 - var(--gloom) * .3)); }
+.kd-slide-ban, .kd-art-glass > img { filter: saturate(calc(1 - var(--gloom) * .65)) brightness(calc(1 - var(--gloom) * .42)); }
+.kd-gloom { position: absolute; inset: 0; pointer-events: none; opacity: var(--gloom);
+  background: radial-gradient(ellipse 48% 72% at 72% 50%, transparent 28%, rgba(0, 0, 0, .55) 66%, rgba(0, 0, 0, .9)); }
+.kd-gloom::after { content: ""; position: absolute; inset: 0; background: #000; opacity: 0; }
+.kd-slide.flicker .kd-gloom::after { animation: kd-flicker 4.7s infinite; }
+@keyframes kd-flicker { 0%, 61%, 66%, 70%, 100% { opacity: 0; } 62% { opacity: .55; } 64% { opacity: .2; } 68% { opacity: .7; } 69% { opacity: .1; } }
 /* Сердцебиение: тёмно-красная виньетка бьётся дважды за такт, к полуночи — чаще. */
 .kd-dread { position: absolute; inset: 0; pointer-events: none; opacity: var(--dread);
   background: radial-gradient(ellipse at 60% 50%, transparent 35%, rgba(70, 0, 4, .55) 75%, rgba(25, 0, 2, .9));

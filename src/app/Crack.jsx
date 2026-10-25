@@ -84,6 +84,18 @@ function geometryFor(seed) {
 }
 
 // Сила 0…1 по оставшемуся времени. left — целые дни до срока (null — без срока).
+// Мрак последних часов: 0 — до срока больше 10 часов, 1 — полночь (и всё просроченное). Темнеет картинка,
+// глаз становится больше и они подбираются ближе, в последний час мигает свет.
+export const GLOOM_HOURS = 10;
+export function gloomLevel(left, now) {
+  if (left === null || left === undefined || left > 0) return 0;
+  if (left < 0) return 1;
+  const end = new Date(now);
+  end.setHours(24, 0, 0, 0);
+  const hoursLeft = (end - now) / 3600000;
+  return Math.max(0, Math.min(1, (GLOOM_HOURS - hoursLeft) / GLOOM_HOURS));
+}
+
 export function crackLevel(left, now) {
   if (left === null || left === undefined || left > 3) return 0;
   if (left < 0) return 1;
@@ -265,7 +277,8 @@ export async function strike(e, publicId, target, setTargets) {
 
 // Глаза в темноте вокруг обложки: чем ближе срок, тем больше пар; моргают, следят за курсором, у просроченной — красные.
 // Плюс «сердцебиение» — тёмно-красная виньетка, пульс чаще к полуночи.
-const EYE_PAIRS = level => (level <= 0 ? 0 : level < 0.3 ? 1 : level < 0.5 ? 2 : level < 1 ? 3 + Math.round((level - 0.5) * 6) : 8);
+const EYE_PAIRS = (level, gloom) => (level <= 0 ? 0 : level < 0.3 ? 1 : level < 0.5 ? 2 : level < 1 ? 3 + Math.round((level - 0.5) * 6) : 8)
+  + Math.round(gloom * 6);
 let eyeSeq = 0;
 
 export function Eyes(props) {
@@ -274,11 +287,14 @@ export function Eyes(props) {
   const spawn = () => {
     if (!box || !props.active() || document.hidden) return;
     const alive = pairs().filter(p => !p.gone);
-    if (alive.length >= EYE_PAIRS(props.level())) return;
+    const gloom = props.gloom();
+    if (alive.length >= EYE_PAIRS(props.level(), gloom)) return;
     const hb = box.getBoundingClientRect();
     const art = box.parentElement.querySelector(".kd-slide-art")?.getBoundingClientRect();
+    // С мраком глаза выходят и слева, из-за текста: окружают.
+    const from = 0.56 - gloom * 0.5;
     for (let k = 0; k < 20; k++) {
-      const x = hb.width * (0.56 + Math.random() * 0.42), y = hb.height * (0.08 + Math.random() * 0.84);
+      const x = hb.width * (from + Math.random() * (0.98 - from)), y = hb.height * (0.08 + Math.random() * 0.84);
       const inArt = art && art.width && x > art.left - hb.left - 30 && x < art.right - hb.left + 30 && y > art.top - hb.top - 20 && y < art.bottom - hb.top + 20;
       if (inArt || alive.some(p => Math.hypot(p.x - x, p.y - y) < 70)) continue;
       const pair = { id: ++eyeSeq, x, y, size: 0.6 + Math.random() * 0.8, blink: 2.5 + Math.random() * 4, delay: Math.random() * 3, tilt: (Math.random() - 0.5) * 16 };
@@ -309,6 +325,7 @@ export function Eyes(props) {
   return (
     <div class={`kd-eyes${props.level() >= 1 ? " red" : ""}`} ref={el => { box = el; }} aria-hidden="true"
       style={{ "--dread": Math.max(0, (props.level() - 0.35) * 1.2).toFixed(2), "--beat": `${(1.9 - props.level() * 0.9).toFixed(2)}s` }}>
+      <Show when={props.gloom() > 0}><div class="kd-gloom" /></Show>
       <Show when={props.level() >= 0.4}><div class="kd-dread" /></Show>
       <For each={pairs()}>
         {p => (

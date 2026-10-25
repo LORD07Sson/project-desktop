@@ -25,7 +25,7 @@ import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 import { setBackdrop } from "./backdrop.js";
-import { Crack, Shards, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel } from "./Crack.jsx";
+import { Crack, Shards, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel, gloomLevel } from "./Crack.jsx";
 
 const DAY_MS = 86400000;
 const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
@@ -213,6 +213,7 @@ function Hero(props) {
           const left = daysLeft(r.deadline);
           const ep = epNum(r);
           const crack = () => crackLevel(left, now());
+          const gloom = () => gloomLevel(left, now());
           const onSlide = () => i() === idx();
           // Кого ждёт серия — грузим при первом наведении на треснувшую обложку: окно в прошлое есть только у неё.
           const [targets, setTargets] = createSignal(null);
@@ -222,7 +223,8 @@ function Hero(props) {
             apiGet(`/report/${r.public_id}/strike`).then(d => setTargets(placeTargets(r.public_id, d.targets || []))).catch(() => {});
           };
           return (
-            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner && !bannerFailed() ? "" : " no-ban"}`}>
+            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner && !bannerFailed() ? "" : " no-ban"}${gloom() > 0.9 ? " flicker" : ""}`}
+              style={{ "--gloom": gloom().toFixed(3) }}>
               <div class="kd-slide-amb" style={poster ? { "background-image": `url("${poster}")` } : {}} />
               <Show when={banner}>
                 <img class="kd-slide-ban" src={banner} alt="" onLoad={() => setBannerFailed(false)} onError={() => setBannerFailed(true)} />
@@ -245,7 +247,7 @@ function Hero(props) {
                 </div>
               </Show>
               <div class="kd-slide-fade" />
-              <Show when={crack() > 0}><Eyes level={crack} active={onSlide} /></Show>
+              <Show when={crack() > 0}><Eyes level={crack} gloom={gloom} active={onSlide} /></Show>
               <div class="kd-slide-tx">
                 <span class={`kd-kick ${it.tone === "red" || left === 0 ? "hot" : ""}`}><i />{heroKick(it)}</span>
                 <h2 class="kd-ttl">{showName(r)}</h2>
