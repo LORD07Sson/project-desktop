@@ -341,6 +341,17 @@ export async function openReportDetail(publicId) {
     }).join("");
     const side = detail.status === "revision" || detail.status === "cancelled" ? detail.status : "";
 
+    // Черновик заметки (текст, время, курсор) переживает перерисовку. Карточка рисуется заново по F5 / «Обновить», когда
+    // догрузился файл или пришли заметки из QC — раньше недописанная заметка пропадала, и «Добавить» с пустым полем
+    // молча ничего не отправлял («заметка не отправляется»).
+    const oldNote = overlay.querySelector("#note-new");
+    const noteDraft = oldNote ? {
+      text: oldNote.value,
+      time: overlay.querySelector("#note-time")?.value || "",
+      focused: document.activeElement === oldNote,
+      caret: oldNote.selectionStart,
+    } : null;
+
     overlay.querySelector(".sheet").innerHTML = `
       <div class="rd-hero${banner ? "" : " no-ban"}">
         <div class="rd-hero-bg"${poster ? ` style="background-image:url('${esc(poster)}')"` : ""}></div>
@@ -815,12 +826,28 @@ export async function openReportDetail(publicId) {
       if (failure) toast(uploaded ? `Добавлено ${uploaded} из ${filesToAdd.length}. Не загрузился файл ${failure}` : `Не удалось загрузить: ${failure}`, "error");
       else toast(`Добавлено файлов: ${uploaded}.`, "success");
     }));
+    if (noteDraft) {
+      const ta = sheet.querySelector("#note-new");
+      const timeInput = sheet.querySelector("#note-time");
+      if (ta) {
+        ta.value = noteDraft.text;
+        if (timeInput) timeInput.value = noteDraft.time;
+        if (noteDraft.focused) {
+          ta.focus({ preventScroll: true });
+          ta.setSelectionRange(noteDraft.caret ?? ta.value.length, noteDraft.caret ?? ta.value.length);
+        }
+      }
+    }
     async function addNote() {
       const ta = sheet.querySelector("#note-new");
       const timeInput = sheet.querySelector("#note-time");
       const text = ta.value.trim();
       const file = pendingNoteFile;
-      if (!text && !file) return;
+      if (!text && !file) {
+        toast("Напишите текст заметки.", "error");
+        ta.focus();
+        return;
+      }
       const seconds = secondsFromTimeInput(timeInput.value);
       if (seconds === null) {
         toast("Время — в формате 04:12 или 1:02:03.", "error");
@@ -834,6 +861,9 @@ export async function openReportDetail(publicId) {
         if (file) await apiUpload(`/report/${publicId}/notes/attach`, file, { text: payload });
         else await apiPost(`/report/${publicId}/notes`, { text: payload });
         pendingNoteFile = null;
+        // Отправлено — черновик больше не нужен, иначе перерисовка вернула бы его в поле.
+        ta.value = "";
+        timeInput.value = "";
         await render();
       } catch (e) { toast(`Не удалось добавить заметку: ${e.message}`, "error"); }
     }
