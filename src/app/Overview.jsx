@@ -479,10 +479,23 @@ async function openMonthlyTopSheet() {
       <span class="val">${p.completed} ✓</span>
     </div>
   `).join("");
+  // Роспись — отдельным рейтингом: их вклад — подготовленные серии (сабы, равки, пайплайн), а не закрытые.
+  const prepRows = (d.prep_top || []).map((p, i) => `
+    <div class="mini-row">
+      <span class="rank">${medals[i] || i + 1}</span>
+      ${avatarHtml(p.telegram_id, p.name, "sm")}
+      <span class="name">${esc(p.name)}</span>
+      <span class="val" title="${p.subs} субтитров">${p.series} ✍️</span>
+    </div>
+  `).join("");
   sheet.innerHTML = `
     <h2>Рейтинг месяца</h2>
     <div style="color:var(--ink-dim); font-size:12px; margin:-8px 0 12px;">по закрытым отчётам за последние 30 дней</div>
     <div class="mini-list">${rows || `<div class="no-assignee">Пока никто не закрыл ни одной серии за последние 30 дней</div>`}</div>
+    ${d.prep_top ? `
+    <h3 style="margin:18px 0 4px; font-size:15px;">✍️ Роспись</h3>
+    <div style="color:var(--ink-dim); font-size:12px; margin:0 0 12px;">подготовленные серии за 30 дней: субтитры, равки, пайплайн</div>
+    <div class="mini-list">${prepRows || `<div class="no-assignee">За 30 дней роспись ещё ничего не выкладывала</div>`}</div>` : ""}
     <div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>
   `;
   loadAvatars(sheet);

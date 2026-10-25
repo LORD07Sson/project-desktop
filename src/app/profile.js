@@ -519,6 +519,7 @@ export async function loadProfile() {
       </div>
       <div class="pf-grid">
         <div class="pf-main">
+          ${prepHtml(me)}
           ${myWorkHtml(me)}
           ${myBadgesHtml(me)}
           <section class="pf-card" id="activity-card">
@@ -642,6 +643,35 @@ function myWorkHtml(me) {
       <div class="pf-reps">${rows}</div>
       ${reports.length > 6 ? `<div class="pf-quiet">и ещё ${reports.length - 6} — во вкладке «Список»</div>` : ""}
       ${roles ? `<div class="pf-roles"><span class="l">Роли в пайплайне</span>${roles}</div>` : ""}
+    </section>`;
+}
+
+// «Вклад росписи»: их работа — сабы, равки, пайплайн и распределение людей, а не закрытые серии, поэтому обычные
+// цифры профиля у них нули. Показываем тем, у кого роль «Роспись» или уже есть такой вклад (prep с сервера).
+function prepHtml(me) {
+  const p = me.prep;
+  if (!p || (!p.is_role && !p.series)) return "";
+  const n = (v, one, few, many) => `${v} ${v % 10 === 1 && v % 100 !== 11 ? one : v % 10 >= 2 && v % 10 <= 4 && (v % 100 < 12 || v % 100 > 14) ? few : many}`;
+  if (!p.series && !p.assigned) {
+    return `
+      <section class="pf-card pf-prep">
+        <div class="pf-card-head"><h3>✍️ Вклад росписи</h3></div>
+        <div class="pf-quiet">Пока пусто. Выложите субтитры или равки к серии или настройте пайплайн — это засчитается сюда, а дабберы увидят в уведомлении, кто подготовил серию.</div>
+      </section>`;
+  }
+  const tile = (v, l) => `<div class="pf-prep-t"><b>${v}</b><span>${l}</span></div>`;
+  return `
+    <section class="pf-card pf-prep">
+      <div class="pf-card-head"><h3>✍️ Вклад росписи</h3>${p.month ? `<span class="pf-prep-m">${n(p.month, "серия", "серии", "серий")} за 30 дней</span>` : ""}</div>
+      <div class="pf-prep-grid">
+        ${tile(p.series, "серий подготовлено")}
+        ${tile(p.titles, "тайтлов")}
+        ${tile(p.subs, "субтитров выложено")}
+        ${tile(p.raws, "равок выложено")}
+        ${tile(p.assigned, "людей распределено")}
+        ${tile(p.pipelines, "пайплайнов собрано")}
+      </div>
+      <div class="pf-quiet">Без росписи дабберам нечего озвучивать: каждая серия здесь — это серия, которую команда смогла начать.</div>
     </section>`;
 }
 
@@ -936,6 +966,7 @@ export async function openUserProfile(telegramId) {
   sheet.innerHTML = `
     ${profileHeaderHtml(d)}
     ${person ? workSectionHtml(person) : ""}
+    ${prepHtml(d)}
     <div class="bento">${badgesBentoHtml(d, 0)}</div>
     ${person ? "" : reportsHtml}
     ${devModeActive() ? devPanelHtml(d) : ""}

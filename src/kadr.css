@@ -4244,6 +4244,15 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-slide:has(.kd-pieces:not(.settled)) .kd-slide-art::before { content: ""; position: absolute; inset: -60%; z-index: 0; pointer-events: none; border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 245, 235, .9), rgba(255, 80, 40, .4) 30%, transparent 62%); animation: kd-jump-flash 1.1s ease-out forwards; }
 
+/* Профиль: «Вклад росписи» (prepHtml в profile.js). */
+.pf-prep { background: radial-gradient(120% 90% at 0% 0%, rgba(var(--gold-rgb), .10), transparent 60%), var(--surface); }
+.pf-prep-m { font-size: 11.5px; font-weight: 700; color: var(--gold); }
+.pf-prep-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.pf-prep-t { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .035); box-shadow: inset 0 0 0 1px var(--line); }
+.pf-prep-t b { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.pf-prep-t span { font-size: 11px; color: var(--ink-dim); }
+@media (max-width: 720px) { .pf-prep-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* Lofi-радио (lofi.js): кнопка в шапке — когда играет, вместо значка прыгают три полоски. */
 .lr-wrap { position: relative; }
 .lofi-btn { position: relative; }
