@@ -44,6 +44,19 @@ function readCollapsed() {
 function writeCollapsed(set) {
   try { localStorage.setItem(collapsedKey(), JSON.stringify([...set])); } catch (_) { /* не критично */ }
 }
+// Пустые колонки и «Отменено» свёрнуты сами — место достаётся тем, где есть работа. Развернул такую вручную —
+// запоминаем отдельно, чтобы она не схлопывалась обратно при следующей перерисовке.
+function expandedKey() { return `project_board_expanded_${state.telegramId || "anon"}`; }
+function readExpanded() {
+  try { return new Set(JSON.parse(localStorage.getItem(expandedKey()) || "[]")); } catch (_) { return new Set(); }
+}
+function writeExpanded(set) {
+  try { localStorage.setItem(expandedKey(), JSON.stringify([...set])); } catch (_) { /* не критично */ }
+}
+const autoCollapsed = col => (col.status === "cancelled" || !col.total) && !boardView.query;
+function isCollapsed(col, collapsed, expanded) {
+  return collapsed.has(col.status) || (autoCollapsed(col) && !expanded.has(col.status));
+}
 
 function plural(n, one, few, many) {
   const m10 = n % 10, m100 = n % 100;
@@ -204,6 +217,15 @@ export function boardCardHtml(c, status) {
   // Завершённая — всегда полная полоска: этап конвейера мог так и остаться на «Звукаре».
   const pct = status === "completed" ? 100
     : roles.length && r.pipeline_stage != null ? Math.round((r.pipeline_stage / roles.length) * 100) : STATUS_PROGRESS[status] ?? 6;
+  // Есть пайплайн — вместо полоски по звену на человека: сдавшие закрашены, и кого ждём.
+  const pipeDone = status === "completed" ? roles.length : Math.min(r.pipeline_done ?? 0, roles.length);
+  const waiting = (r.pipeline_waiting || []).join(", ");
+  const pipe = roles.length && !closed
+    ? `<span class="kc-pipe" title="${esc(`Пайплайн: ${roles.join(" → ")}${waiting ? `\nЖдём: ${waiting}` : ""}`)}">
+        <span class="kc-pipe-seg">${roles.map((_, i) => `<i${i < pipeDone ? ` class="on"` : ""}></i>`).join("")}</span>
+        <small><b>${pipeDone}/${roles.length}</b> сдали${waiting ? ` · ждём: ${esc(waiting)}` : ""}</small>
+      </span>`
+    : "";
   const overdue = c.overdue && !closed;
   const hotDue = !closed && (overdue || c.daysLeft === 0 || c.daysLeft === 1);
   return `
@@ -216,7 +238,7 @@ export function boardCardHtml(c, status) {
       <b class="ttl">${esc(parts.name)}</b>
       <span class="kc-sg">${closed ? (status === "completed" ? "Завершена" : "Отменена") : `${stage ? `${esc(stage)} · ` : ""}<span class="${hotDue ? "hot" : ""}">${esc(deadlineLabel(c))}</span>`}${c.stale ? ` · без движения ${c.ageDays} дн.` : ""}</span>
       <span class="kc-ft">
-        <span class="board-card-progress-track" title="Готовность ${pct}%"><i data-target-width="${pct}"></i></span>
+        ${pipe || `<span class="board-card-progress-track" title="Готовность ${pct}%"><i data-target-width="${pct}"></i></span>`}
         ${c.unassigned ? `<span class="kc-none">не назначено</span>` : assigneesHtml(c.assignees)}
       </span>
     </div>`;
@@ -485,14 +507,16 @@ function boardToolbarHtml() {
     </div>`;
 }
 
-function columnHtml(col, collapsed) {
+function columnHtml(col, collapsed, expanded) {
   const colorVar = STATUS_COLOR_VAR[col.status] || "--s-draft";
+  // Широкая колонка (много карточек) раскладывает их в два ряда.
+  const wide = col.cards.length >= 4;
   return `
-    <div class="board-col ${collapsed.has(col.status) ? "collapsed" : ""}${col.overWip ? " over-wip" : ""}"
+    <div class="board-col ${isCollapsed(col, collapsed, expanded) ? "collapsed" : ""}${col.overWip ? " over-wip" : ""}${wide ? " wide" : ""}"
          data-status="${esc(col.status)}" style="--col-accent: var(${colorVar});">
       <div class="board-col-head">
         <span class="lb" title="${esc(cleanLabel(col.label))}"><span class="dot ${STATUS_DOT_CLASS[col.status] || "draft"}"></span>${esc(cleanLabel(col.label).split("/")[0])}</span>
-        <span class="cnt${col.overWip ? " over" : ""}" title="${col.overWip ? `Больше ${col.wipLimit} в работе одновременно — многовато` : "Всего в статусе"}">${col.total}${col.overWip ? ` / ${col.wipLimit}` : ""}</span>
+        <span class="cnt${col.overWip ? " over" : ""}" title="${col.overWip ? `Серий в этом статусе больше, чем ${col.wipLimit} — команда может не успевать` : "Всего в статусе"}">${col.total}${col.overWip ? ` · больше ${col.wipLimit}` : ""}</span>
         <button class="board-col-collapse" data-collapse="${esc(col.status)}" title="Свернуть/развернуть колонку" aria-label="Свернуть/развернуть колонку"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
       </div>
       <div class="board-cards" data-count="${col.cards.length}">
@@ -632,6 +656,7 @@ async function renderBoard(root) {
     return;
   }
   const collapsed = readCollapsed();
+  const expanded = readExpanded();
   rememberSeries(lastBoardData.statuses);
   const stats = boardStats(layout);
   const active = layout.columns.filter(c => c.status !== "completed" && c.status !== "cancelled").reduce((n, c) => n + (c.total || 0), 0);
@@ -655,7 +680,7 @@ async function renderBoard(root) {
     </div>
     ${boardToolbarHtml()}
     ${timeline ? `<div class="board-top-row${timelineCell ? "" : " single"}">${timelineCell}${performanceHtml(stats)}</div>` : ""}
-    <div class="board">${layout.columns.map(col => columnHtml(col, collapsed)).join("")}</div>
+    <div class="board">${layout.columns.map(col => columnHtml(col, collapsed, expanded)).join("")}</div>
   `;
   root.querySelectorAll("[data-board-mode]").forEach(b => b.addEventListener("click", () => {
     setBoardMode(b.dataset.boardMode);
@@ -739,10 +764,11 @@ function wireColumnButtons(root) {
       e.stopPropagation();
       const status = btn.dataset.collapse;
       const colEl = root.querySelector(`.board-col[data-status="${status}"]`);
-      const set = readCollapsed();
+      const set = readCollapsed(), open = readExpanded();
       const now = colEl.classList.toggle("collapsed");
-      if (now) set.add(status); else set.delete(status);
+      if (now) { set.add(status); open.delete(status); } else { set.delete(status); open.add(status); }
       writeCollapsed(set);
+      writeExpanded(open);
     });
   });
   root.querySelectorAll("[data-loadmore]").forEach(btn => {

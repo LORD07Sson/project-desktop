@@ -3390,6 +3390,16 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { width: 176px; }
 /* На широком экране колонки тянутся до края (раньше справа оставалась треть пустоты, а названия переносились), пустые — вполовину */
 .board-col:not(.collapsed) { flex: 1 0 268px; max-width: 440px; }
+/* Колонка, где идёт работа, забирает освободившееся место и раскладывает карточки в два ряда. */
+.board-col.wide:not(.collapsed) { flex: 2.4 0 560px; max-width: none; }
+.board-col.wide:not(.collapsed) > .board-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); align-items: start; }
+/* Пайплайн на карточке: по звену на человека, сдавшие закрашены. */
+.kc-pipe { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.kc-pipe-seg { display: flex; gap: 3px; }
+.kc-pipe-seg i { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .1); }
+.kc-pipe-seg i.on { background: var(--s-done); }
+.kc-pipe small { font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kc-pipe small b { color: var(--ink-soft); }
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { flex: .45 0 192px; max-width: 260px; }   /* 192 — влезает «Перезапись 0» со счётчиком и кнопкой свернуть */
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) .board-col-empty { font-size: 12px; opacity: .6; }
 
