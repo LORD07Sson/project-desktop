@@ -159,7 +159,8 @@ function heroTitle(titles) {
 // открывает его настройки (состав, дедлайн, остановить автосерии).
 function takeButtonHtml(t) {
   if (!can("titles.work")) return "";
-  return t.in_work
+  // Серии заведены вручную, но тайтл не «взят» — настроек ещё нет, кнопка предлагает взять (старый сервер work_taken не знает).
+  return (t.work_taken ?? t.in_work)
     ? `<button class="btn tl-take on" data-take-title="${t.id}" title="Состав, дедлайн, автосерии">● В работе</button>`
     : `<button class="btn tl-take" data-take-title="${t.id}">⚑ Взять в работу</button>`;
 }
