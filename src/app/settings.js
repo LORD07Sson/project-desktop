@@ -383,7 +383,11 @@ async function openSettings() {
   });
   const devToggle = overlay.querySelector("#s-dev-mode");
   if (devToggle) devToggle.addEventListener("change", e => setDevModeOn(e.target.checked));
-  overlay.querySelector("#s-check-update").addEventListener("click", () => checkForUpdates(false));
+  // Ручная проверка — всегда свежий ответ GitHub (force), и блок «последний коммит» обновляется вместе с ней.
+  overlay.querySelector("#s-check-update").addEventListener("click", async () => {
+    await checkForUpdates(false);
+    refreshAlphaBlock(updateChannel);
+  });
 
   // Блок "текущий/последний коммит" — только для альфа-канала (у
   // стабильных сборок нет вшитого коммита, см. commitFromVersion).
@@ -701,6 +705,10 @@ async function reportFailedUpdate() {
 
 export function maybeAutoCheckUpdates() {
   reportFailedUpdate();
+  autoCheckIfDue();
+}
+
+function autoCheckIfDue() {
   let last = 0;
   try {
     last = Number(localStorage.getItem(AUTO_CHECK_STORAGE_KEY) || 0);
@@ -717,9 +725,13 @@ export function maybeAutoCheckUpdates() {
   checkForUpdates(true);
 }
 
+// Программу часто не закрывают сутками — раньше она проверяла обновления только при запуске и новую версию так и
+// не замечала. Раз в полчаса смотрим, не прошли ли те же 4 часа с последней проверки.
+setInterval(() => { if (document.visibilityState === "visible") autoCheckIfDue(); }, 30 * 60 * 1000);
+
 export async function checkForUpdates(silent) {
   try {
-    const update = await invoke("check_for_update");
+    const update = await invoke("check_for_update", { force: !silent });
     if (!update) {
       if (!silent) toast("У вас уже последняя версия.");
       return;

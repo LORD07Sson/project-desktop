@@ -134,12 +134,16 @@ fn update_check_cache() -> &'static Mutex<Option<CachedUpdateCheck>> {
 
 // Канал входит в ключ кэша, чтобы результаты разных типов сборки
 // не смешивались при локальном тестировании.
-fn check_for_update_cached(app: &tauri::AppHandle) -> Result<Option<UpdateInfoOut>, String> {
+// force — ручная кнопка «Проверить обновления»: всегда свежий запрос к GitHub. Раньше и она брала ответ из кэша, и
+// если за пять минут до этого автопроверка видела «нового нет», только что вышедшая альфа не находилась.
+fn check_for_update_cached(app: &tauri::AppHandle, force: bool) -> Result<Option<UpdateInfoOut>, String> {
     let channel = build_update_channel().to_string();
     let cache = update_check_cache();
-    if let Some(cached) = cache.lock().unwrap().as_ref() {
-        if cached.channel == channel && cached.at.elapsed() < UPDATE_CHECK_CACHE_TTL {
-            return cached.result.clone();
+    if !force {
+        if let Some(cached) = cache.lock().unwrap().as_ref() {
+            if cached.channel == channel && cached.at.elapsed() < UPDATE_CHECK_CACHE_TTL {
+                return cached.result.clone();
+            }
         }
     }
 
@@ -175,8 +179,8 @@ fn check_for_update_cached(app: &tauri::AppHandle) -> Result<Option<UpdateInfoOu
 // всё время работы. Тут внутри сетевой запрос к GitHub, так что без
 // этого атрибута «Проверить обновления» морозило интерфейс.
 #[tauri::command(async)]
-fn check_for_update(app: tauri::AppHandle) -> Result<Option<UpdateInfoOut>, String> {
-    log_result("check_for_update", check_for_update_cached(&app))
+fn check_for_update(app: tauri::AppHandle, force: Option<bool>) -> Result<Option<UpdateInfoOut>, String> {
+    log_result("check_for_update", check_for_update_cached(&app, force.unwrap_or(false)))
 }
 
 static UPDATE_DOWNLOADING: AtomicBool = AtomicBool::new(false);
