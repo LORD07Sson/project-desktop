@@ -432,3 +432,80 @@ export function Pieces(props) {
     </div>
   );
 }
+
+// ── То же для маленьких обложек на карточках «Доски» (обычный HTML-строкой: доска рисуется шаблонами) ──
+// Трещины, сыплющиеся сколы (чистый CSS, без таймеров — карточек десятки), мрак и глаза, в полночь — парящие куски.
+const DAY_MS = 86400000;
+function localDay(d) {
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+export function daysUntil(deadline, now = new Date()) {
+  if (!deadline) return null;
+  return Math.round((Date.parse(String(deadline).slice(0, 10)) - Date.parse(localDay(now))) / DAY_MS);
+}
+
+const attr = s => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+function crackSvgHtml(seed, level) {
+  const g = geometryFor(seed);
+  const lines = g.lines.map(l => {
+    const off = 1 - Math.max(0, Math.min(1, (level - l.start) / l.span));
+    return off >= 1 ? "" : `<g style="--w:${l.w};--off:${off.toFixed(3)}"><path class="kd-crack-dark" d="${l.d}" pathLength="1"/><path class="kd-crack-lit" d="${l.d}" pathLength="1"/></g>`;
+  }).join("");
+  return `<svg class="kd-crack" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" style="--crack-glow:${(level * 0.55).toFixed(2)}">${lines}</svg>`;
+}
+
+// Сколы по видимым трещинам: висят на месте, потом откалываются и падают — цикл повторяется сам.
+function chipsHtml(seed, level, src) {
+  if (level < 0.25) return "";
+  const g = geometryFor(seed);
+  const rand = rng(`${seed}:chips`);
+  const visible = g.lines.filter(l => level > l.start + 0.05);
+  const count = level >= 0.5 ? 3 : 2;
+  const cycle = (level >= 0.5 ? 5.5 - (level - 0.5) * 6 : 8).toFixed(2);
+  let out = "";
+  for (let k = 0; k < count && visible.length; k++) {
+    const line = visible[Math.floor(rand() * visible.length)];
+    const [px, py] = line.pts[Math.min(line.pts.length - 1, 1 + Math.floor(rand() * (line.pts.length - 1)))];
+    const size = 9 + rand() * 7;
+    const poly = Array.from({ length: 4 }, (_, i) => {
+      const a = (i / 4) * Math.PI * 2 + rand() * 0.9, r = size * (0.5 + rand() * 0.5);
+      return `${(Math.max(0, Math.min(W, px + Math.cos(a) * r)) / W * 100).toFixed(1)}% ${(Math.max(0, Math.min(H, py + Math.sin(a) * r)) / H * 100).toFixed(1)}%`;
+    }).join(",");
+    const ang = Math.atan2(py - g.cy, px - g.cx);
+    out += `<span class="kc-chip" style="--cx:${(Math.cos(ang) * 14).toFixed(0)}px;--cy:${(30 + rand() * 20).toFixed(0)}px;--cr:${((rand() - 0.5) * 300).toFixed(0)}deg;`
+      + `animation-duration:${cycle}s;animation-delay:${(-rand() * cycle).toFixed(2)}s;transform-origin:${(px / W * 100).toFixed(0)}% ${(py / H * 100).toFixed(0)}%">`
+      + `<i style="background-image:url(&quot;${attr(src)}&quot;);clip-path:polygon(${poly})"></i></span>`;
+  }
+  return out;
+}
+
+function piecesHtml(seed, src) {
+  const settled = exploded.has(seed) || motionOff();
+  exploded.add(seed);
+  return `<span class="kd-pieces${settled ? " settled" : ""}" style="--k:.09">${piecesFor(seed).map(p =>
+    `<span style="transform-origin:${p.origin};--ex:${p.ex};--ey:${p.ey};--er:${p.er};--ez:${p.ez}"><em style="transform-origin:${p.origin};--fy:${p.fy};--fr:${p.fr};animation-duration:${p.fdur};animation-delay:${p.fdelay}">`
+    + `<i style="background-image:url(&quot;${attr(src)}&quot;);clip-path:${p.clip}"></i></em></span>`).join("")}</span>`;
+}
+
+// Состояние карточки по сроку: null — срок далеко (или его нет), обычная обложка.
+export function doomState(deadline, now = new Date()) {
+  const left = daysUntil(deadline, now);
+  const level = crackLevel(left, now);
+  if (level <= 0) return null;
+  const gloom = gloomLevel(left, now);
+  return { level, gloom, key: `${level >= 1 ? "x" : (level * 40).toFixed(0)}:${(gloom * 20).toFixed(0)}` };
+}
+
+// Внутренность обёртки обложки на карточке.
+export function doomPosterHtml(seed, src, st) {
+  const eyes = st.gloom > 0.25 || st.level >= 1
+    ? `<span class="kc-eyes${st.level >= 1 ? " red" : ""}" style="left:${(20 + (rng(seed)() * 50)).toFixed(0)}%"><i></i><i></i></span>` : "";
+  if (st.level >= 1) return `<img class="kc-ghost" src="${attr(src)}" alt="" loading="lazy">${piecesHtml(seed, src)}${eyes}`;
+  return `<img src="${attr(src)}" alt="" loading="lazy">${crackSvgHtml(seed, st.level)}${chipsHtml(seed, st.level, src)}${eyes}`;
+}
+
+export function doomCardStyle(st) {
+  return `--gloom:${st.gloom.toFixed(3)};--doom:${st.level.toFixed(3)};--beat:${(1.9 - st.level * 0.9).toFixed(2)}s`;
+}

@@ -30,6 +30,7 @@ import { openReportDetail } from "./report-detail.js";
 import { state, can } from "./state.js";
 import { ATTACH_EXTENSIONS } from "./file-drop.js";
 import { loadAvatars } from "./profile.js";
+import { doomState, doomPosterHtml, doomCardStyle } from "./Crack.jsx";
 
 // Свёрнутые колонки — узкая студия часто держит "Завершено"/"Отменено"
 // сложенными: сами по себе они редко нужны, но занимают на широкой
@@ -193,6 +194,27 @@ function prettyDate(iso) {
   return d.toLocaleDateString("ru-RU", opts).replace(/\s*г\.$/, "");
 }
 
+const doomCardClass = st => ` doom${st.level >= 0.5 ? " dread" : ""}${st.gloom > 0.9 ? " flicker" : ""}`;
+
+// Раз в 20 секунд догоняем время: трещины растут, мрак сгущается, в 0:00 обложка разлетается — без перерисовки доски.
+function tickDoom() {
+  if (document.hidden) return;
+  for (const el of document.querySelectorAll(".kc-doom[data-doom]")) {
+    const st = doomState(el.dataset.doom);
+    const card = el.closest(".board-card");
+    if (!st || !card || st.key === el.dataset.doomKey) continue;
+    el.dataset.doomKey = st.key;
+    el.innerHTML = doomPosterHtml(card.dataset.id, el.dataset.doomSrc, st);
+    card.classList.remove("dread", "flicker");
+    card.className += doomCardClass(st).replace(" doom", "");
+    for (const kv of doomCardStyle(st).split(";")) {
+      const [k, v] = kv.split(":");
+      card.style.setProperty(k, v);
+    }
+  }
+}
+setInterval(tickDoom, 20000);
+
 // Обложка, тайтл и этапы серии — из ответа /board (раскладка board.rs
 // их не прокидывает, она про порядок и сроки). Обновляется на каждой
 // перерисовке доски.
@@ -228,12 +250,17 @@ export function boardCardHtml(c, status) {
     : "";
   const overdue = c.overdue && !closed;
   const hotDue = !closed && (overdue || c.daysLeft === 0 || c.daysLeft === 1);
+  // Срок близко — обложка трескается, как в герое «Обзора» (Crack.jsx); живое обновление — tickDoom ниже.
+  const doom = poster && !closed && c.deadline ? doomState(c.deadline) : null;
+  const posterHtml = doom
+    ? `<span class="kc-pc kc-doom" data-doom="${esc(c.deadline)}" data-doom-key="${doom.key}" data-doom-src="${esc(poster)}">${doomPosterHtml(c.publicId, poster, doom)}</span>`
+    : poster ? `<img class="kc-pc" src="${poster}" alt="" loading="lazy">` : `<span class="kc-pc kc-pc-ph">${esc(initials(parts.name))}</span>`;
   return `
-    <div class="board-card${overdue ? " is-overdue" : ""}${c.stale ? " is-stale" : ""}${(c.heat || 0) >= .7 ? " is-hot" : ""}"
+    <div class="board-card${overdue ? " is-overdue" : ""}${c.stale ? " is-stale" : ""}${(c.heat || 0) >= .7 ? " is-hot" : ""}${doom ? doomCardClass(doom) : ""}"
          data-open="${esc(c.publicId)}" data-id="${esc(c.publicId)}" data-status="${esc(status)}"
-         style="--accent-dot: var(${STATUS_COLOR_VAR[status] || "--s-draft"});">
+         style="--accent-dot: var(${STATUS_COLOR_VAR[status] || "--s-draft"});${doom ? doomCardStyle(doom) : ""}">
       ${c.priority === "urgent" ? `<i class="kc-flag" title="Срочно"></i>` : ""}
-      ${poster ? `<img class="kc-pc" src="${poster}" alt="" loading="lazy">` : `<span class="kc-pc kc-pc-ph">${esc(initials(parts.name))}</span>`}
+      ${posterHtml}
       <span class="kc-id">${esc(c.publicId)}${parts.ep ? ` · ${esc(parts.ep.replace("серия ", "EP "))}` : ""}</span>
       <b class="ttl">${esc(parts.name)}</b>
       <span class="kc-sg">${closed ? (status === "completed" ? "Завершена" : "Отменена") : `${stage ? `${esc(stage)} · ` : ""}<span class="${hotDue ? "hot" : ""}">${esc(deadlineLabel(c))}</span>`}${c.stale ? ` · без движения ${c.ageDays} дн.` : ""}</span>
