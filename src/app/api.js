@@ -129,13 +129,19 @@ export async function api(method, path, body) {
     let detail = resp.status;
     try { detail = (await resp.json()).detail ?? detail; } catch (_) {}
     checkSessionLost(resp.status, detail, path);
+    // 426 — версия ниже минимальной, которую задал владелец: окно «Нужно обновить» (force-update.js).
+    if (resp.status === 426) document.dispatchEvent(new CustomEvent("project:update-required", { detail: { message: formatApiError(detail, resp.status) } }));
     const err = new Error(formatApiError(detail, resp.status));
     err.status = resp.status;
     reportApiFail(method, path, resp.status, err.message);
     throw err;
   }
   const text = await resp.text();
-  return text ? stripStatusEmoji(JSON.parse(text)) : {};
+  const data = text ? stripStatusEmoji(JSON.parse(text)) : {};
+  if (path === "/whoami" && data.update_required) {
+    document.dispatchEvent(new CustomEvent("project:update-required", { detail: { message: `Эта версия устарела — нужна ${data.min_version} или новее.` } }));
+  }
+  return data;
 }
 
 // Сервер отдаёт подписи статусов с эмодзи-кружком («🟡 В работе») — это

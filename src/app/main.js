@@ -47,6 +47,7 @@ import "./titlebar-menus.js";
 import "./shortcuts-help.js";
 import "./focus-mode.js";
 import "./file-drop.js";
+import "./force-update.js";
 import "./avatar-hover.js";
 import "./feed-badge.js";
 import "./title-hover.js";

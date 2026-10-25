@@ -760,7 +760,7 @@ function confirmUpdateSheet(update) {
 
 let updateInstalling = false;
 
-async function installUpdate() {
+export async function installUpdate() {
   // Повторный клик, пока уже идёт закачка, ничего не запускает: две
   // параллельные закачки дерутся за один файл пакета.
   if (updateInstalling) { toast("Обновление уже скачивается — подождите.", "error"); return; }
