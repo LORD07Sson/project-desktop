@@ -4176,3 +4176,55 @@ td.row-actions { opacity: 1; transition: none; }
   100% { filter: none; transform: none; }
 }
 @keyframes kd-jump-flash { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.6); } }
+
+/* «Удар из прошлого»: цели видны только сквозь осколок. Метка Чужого — тёмное кольцо с алым свечением. */
+.kd-target { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.kd-target .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 13px; font-weight: 800;
+  background: #1a0f12 center / cover; color: #f3d6d6; box-shadow: 0 0 0 2px #0b0607, 0 0 0 3.5px rgba(255, 60, 60, .85), 0 0 18px 4px rgba(255, 30, 30, .55);
+  animation: kd-mark 1.6s ease-in-out infinite; }
+.kd-target b { font-size: 10px; font-weight: 700; letter-spacing: .04em; color: #ffd9d9; background: rgba(10, 4, 5, .75); padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
+.kd-target.cool .avatar { filter: grayscale(1) brightness(.7); animation: none; box-shadow: 0 0 0 2px #0b0607, 0 0 0 3.5px rgba(180, 180, 180, .5); }
+.kd-target.hit .avatar { animation: kd-hit .6s ease-out forwards; }
+@keyframes kd-mark { 50% { box-shadow: 0 0 0 2px #0b0607, 0 0 0 3.5px rgba(255, 60, 60, 1), 0 0 26px 8px rgba(255, 30, 30, .75); } }
+@keyframes kd-hit { 0% { transform: scale(1); } 30% { transform: scale(1.35); filter: brightness(2.5) saturate(0); } 100% { transform: scale(.9); filter: grayscale(1) brightness(.6); } }
+/* Прицел: курсор над целью — кромка осколка краснеет. */
+.kd-slide-art.timepiece.aim { cursor: crosshair; }
+.kd-slide-art.aim .kd-lens { filter: drop-shadow(0 0 .7px #fff) drop-shadow(0 0 1.5px rgba(255, 70, 70, 1)) drop-shadow(0 0 14px rgba(255, 30, 30, .6)); }
+/* Сам удар: алая вспышка из точки щелчка, слайд вздрагивает, по обложке — рассечение. */
+.kd-hero.strike::after { content: ""; position: absolute; inset: 0; z-index: 7; pointer-events: none;
+  background: radial-gradient(circle at var(--jx, 50%) var(--jy, 50%), rgba(255, 235, 235, .9), rgba(255, 40, 40, .55) 12%, rgba(120, 0, 0, .35) 40%, rgba(0, 0, 0, 0) 70%);
+  animation: kd-jump-flash .8s ease-out forwards; }
+.kd-hero.strike .kd-slide.on { animation: kd-strike-shake .5s cubic-bezier(.36, .07, .19, .97); }
+.kd-slide-art.strike::after { content: ""; position: absolute; left: -10%; right: -10%; top: calc(var(--ly, 50%) - 1px); height: 3px; z-index: 3; pointer-events: none;
+  background: linear-gradient(90deg, transparent, #fff 30%, #ff3b3b 50%, #fff 70%, transparent); box-shadow: 0 0 14px 3px rgba(255, 40, 40, .9);
+  transform: rotate(-24deg) scaleX(0); transform-origin: var(--lx, 50%) center; animation: kd-slash .55s ease-out forwards; }
+@keyframes kd-slash { 0% { transform: rotate(-24deg) scaleX(0); opacity: 1; } 35% { transform: rotate(-24deg) scaleX(1); opacity: 1; } 100% { transform: rotate(-24deg) scaleX(1.05); opacity: 0; } }
+@keyframes kd-strike-shake { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); } 30%, 50%, 70% { transform: translate(-6px, 2px); } 40%, 60% { transform: translate(6px, -1px); } }
+
+/* Глаза в темноте (Eyes в Crack.jsx): пары огоньков появляются из мрака, моргают и следят за курсором. */
+.kd-eyes { position: absolute; inset: 0; z-index: 1; pointer-events: none; --eye: 255, 196, 92; }
+.kd-eyes.red { --eye: 255, 40, 28; }
+.kd-eye-pair { position: absolute; display: flex; gap: calc(var(--s) * 13px); transform: translate(-50%, -50%) rotate(var(--tilt)) scale(var(--s));
+  opacity: .92; animation: kd-eyes-in 2.4s ease-out; transition: opacity 1.8s ease-in; }
+.kd-eye-pair.gone { opacity: 0; }
+.kd-eye-pair i { position: relative; width: 11px; height: 5px; border-radius: 60% 60% 50% 50% / 100% 100% 40% 40%; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 60%, rgba(255, 255, 230, .95), rgba(var(--eye), .95) 45%, rgba(var(--eye), .5) 80%);
+  box-shadow: 0 0 6px 2px rgba(var(--eye), .55), 0 0 18px 6px rgba(var(--eye), .22);
+  animation: kd-blink var(--blink) var(--delay) infinite; }
+.kd-eye-pair i:first-child { transform: rotate(8deg); }
+.kd-eye-pair i:last-child { transform: rotate(-8deg) scaleX(-1); }
+/* Зрачок — вертикальная щель, смотрит на курсор. */
+.kd-eye-pair i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2px; height: 6px; margin: -3px 0 0 -1px; border-radius: 1px; background: #120404;
+  transform: translate(var(--px, 0), var(--py, 0)); transition: transform .25s ease-out; }
+.kd-eye-pair i:last-child::after { transform: translate(calc(var(--px, 0) * -1), var(--py, 0)); }
+@keyframes kd-eyes-in { 0% { opacity: 0; filter: blur(3px); } 100% { opacity: .92; filter: blur(0); } }
+@keyframes kd-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.08); } }
+.kd-eye-pair i:first-child { animation-name: kd-blink-l; }
+.kd-eye-pair i:last-child { animation-name: kd-blink-r; }
+@keyframes kd-blink-l { 0%, 92%, 100% { transform: rotate(8deg) scaleY(1); } 95% { transform: rotate(8deg) scaleY(.08); } }
+@keyframes kd-blink-r { 0%, 92%, 100% { transform: rotate(-8deg) scaleX(-1) scaleY(1); } 95% { transform: rotate(-8deg) scaleX(-1) scaleY(.08); } }
+/* Сердцебиение: тёмно-красная виньетка бьётся дважды за такт, к полуночи — чаще. */
+.kd-dread { position: absolute; inset: 0; pointer-events: none; opacity: var(--dread);
+  background: radial-gradient(ellipse at 60% 50%, transparent 35%, rgba(70, 0, 4, .55) 75%, rgba(25, 0, 2, .9));
+  animation: kd-heart var(--beat) infinite; }
+@keyframes kd-heart { 0%, 40%, 100% { filter: brightness(1); transform: scale(1); } 8% { filter: brightness(1.6); transform: scale(1.015); } 18% { filter: brightness(1.15); } 26% { filter: brightness(1.45); transform: scale(1.01); } }

@@ -3,6 +3,9 @@
 // Рисунок у каждой серии свой (зерно — public_id) и не прыгает между перерисовками: растёт только длина линий.
 
 import { For, Show, createSignal, onCleanup } from "solid-js";
+import { apiPost, toast } from "./api.js";
+import { initials } from "./utils.js";
+import { loadAvatars } from "./profile.js";
 
 const W = 100, H = 140;   // viewBox под пропорции обложки 3 : 4.2
 
@@ -188,10 +191,133 @@ export function Shards(props) {
 
 // «Трещина в плите», как часы Чужого в Dishonored 2: за курсором ходит стеклянный осколок, и в нём видно «прошлое» —
 // та же обложка целой, яркой и чуть ближе. Щелчок — прыжок во времени: вспышка, искажение, и открывается серия.
+// Цели живут только в «прошлом»: они внутри обрезки осколка, так что видно их, лишь когда смотришь сквозь стекло.
 export function TimeLens(props) {
+  let clip;
   return (
     <div class="kd-lens" aria-hidden="true">
-      <div class="kd-lens-clip"><img src={props.src} alt="" /></div>
+      <div class="kd-lens-clip" ref={el => { clip = el; }}>
+        <img src={props.src} alt="" />
+        <For each={props.targets() || []}>
+          {t => {
+            Promise.resolve().then(() => clip && loadAvatars(clip));
+            return (
+              <span class={`kd-target${t.cooldown_min ? " cool" : ""}${t.hit ? " hit" : ""}`} style={{ left: `${t.x}%`, top: `${t.y}%` }}>
+                <i class="avatar" data-avatar-for={t.telegram_id}>{initials(t.name || "?")}</i>
+                <b>{t.cooldown_min ? `${t.name} · ещё ${t.cooldown_min} мин` : t.name}</b>
+              </span>
+            );
+          }}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+// Где «враги» стоят на обложке — у каждой серии свои места, не слишком близко друг к другу.
+export function placeTargets(seed, list) {
+  const rand = rng(`${seed}:targets`);
+  const spots = [];
+  return list.map(t => {
+    let x = 50, y = 50;
+    for (let k = 0; k < 30; k++) {
+      x = 18 + rand() * 64;
+      y = 20 + rand() * 62;
+      if (spots.every(([sx, sy]) => Math.hypot(sx - x, (sy - y) * 0.75) > 22)) break;
+    }
+    spots.push([x, y]);
+    return { ...t, x, y };
+  });
+}
+
+// В кого целится курсор (в px обложки): ближе 30px к цели.
+export function aimedTarget(e, targets) {
+  const el = e.currentTarget;
+  return (targets || []).find(t => Math.hypot(e.offsetX - t.x / 100 * el.clientWidth, e.offsetY - t.y / 100 * el.clientHeight) < 30) || null;
+}
+
+// Удар: красная вспышка и рассечение из точки щелчка, напоминание в Telegram именно этому человеку.
+export async function strike(e, publicId, target, setTargets) {
+  const art = e.currentTarget;
+  if (target.cooldown_min) {
+    toast(`${target.name} уже напоминали — следующий удар через ${target.cooldown_min} мин.`);
+    return;
+  }
+  const hero = art.closest(".kd-hero");
+  if (hero && !motionOff()) {
+    const b = hero.getBoundingClientRect();
+    hero.style.setProperty("--jx", `${e.clientX - b.left}px`);
+    hero.style.setProperty("--jy", `${e.clientY - b.top}px`);
+    for (const el of [hero, art]) { el.classList.remove("strike"); void el.offsetWidth; el.classList.add("strike"); }
+    setTimeout(() => { hero.classList.remove("strike"); art.classList.remove("strike"); }, 900);
+  }
+  const mark = patch => setTargets(list => list.map(t => (t.telegram_id === target.telegram_id ? { ...t, ...patch } : t)));
+  mark({ hit: true });
+  try {
+    const res = await apiPost(`/report/${publicId}/strike`, { telegram_id: target.telegram_id });
+    toast(`⚡ Удар из прошлого — ${res.hit} получил(а) напоминание в Telegram.`, "success");
+    mark({ hit: false, cooldown_min: res.cooldown_min });
+  } catch (err) {
+    toast(err && err.message ? err.message : String(err), "error");
+    mark({ hit: false });
+  }
+}
+
+// Глаза в темноте вокруг обложки: чем ближе срок, тем больше пар; моргают, следят за курсором, у просроченной — красные.
+// Плюс «сердцебиение» — тёмно-красная виньетка, пульс чаще к полуночи.
+const EYE_PAIRS = level => (level <= 0 ? 0 : level < 0.3 ? 1 : level < 0.5 ? 2 : level < 1 ? 3 + Math.round((level - 0.5) * 6) : 8);
+let eyeSeq = 0;
+
+export function Eyes(props) {
+  let box;
+  const [pairs, setPairs] = createSignal([]);
+  const spawn = () => {
+    if (!box || !props.active() || document.hidden) return;
+    const alive = pairs().filter(p => !p.gone);
+    if (alive.length >= EYE_PAIRS(props.level())) return;
+    const hb = box.getBoundingClientRect();
+    const art = box.parentElement.querySelector(".kd-slide-art")?.getBoundingClientRect();
+    for (let k = 0; k < 20; k++) {
+      const x = hb.width * (0.56 + Math.random() * 0.42), y = hb.height * (0.08 + Math.random() * 0.84);
+      const inArt = art && art.width && x > art.left - hb.left - 30 && x < art.right - hb.left + 30 && y > art.top - hb.top - 20 && y < art.bottom - hb.top + 20;
+      if (inArt || alive.some(p => Math.hypot(p.x - x, p.y - y) < 70)) continue;
+      const pair = { id: ++eyeSeq, x, y, size: 0.6 + Math.random() * 0.8, blink: 2.5 + Math.random() * 4, delay: Math.random() * 3, tilt: (Math.random() - 0.5) * 16 };
+      setPairs(l => [...l, pair]);
+      // Угасание — классом прямо на узле: новый объект в списке пересоздал бы элемент, и переход бы не сыграл.
+      setTimeout(() => { pair.gone = true; box?.querySelector(`[data-eye="${pair.id}"]`)?.classList.add("gone"); }, 5000 + Math.random() * 8000);
+      setTimeout(() => setPairs(l => l.filter(p => p.id !== pair.id)), 15000);
+      return;
+    }
+  };
+  const timer = setInterval(spawn, 1300);
+  let raf = 0;
+  const look = ev => {
+    if (raf || !box) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      const hb = box.getBoundingClientRect();
+      box.querySelectorAll(".kd-eye-pair").forEach(el => {
+        const dx = ev.clientX - hb.left - +el.dataset.x, dy = ev.clientY - hb.top - +el.dataset.y;
+        const d = Math.hypot(dx, dy) || 1;
+        el.style.setProperty("--px", `${(dx / d * 1.6).toFixed(2)}px`);
+        el.style.setProperty("--py", `${(dy / d * 1.1).toFixed(2)}px`);
+      });
+    });
+  };
+  document.addEventListener("mousemove", look);
+  onCleanup(() => { clearInterval(timer); document.removeEventListener("mousemove", look); cancelAnimationFrame(raf); });
+  return (
+    <div class={`kd-eyes${props.level() >= 1 ? " red" : ""}`} ref={el => { box = el; }} aria-hidden="true"
+      style={{ "--dread": Math.max(0, (props.level() - 0.35) * 1.2).toFixed(2), "--beat": `${(1.9 - props.level() * 0.9).toFixed(2)}s` }}>
+      <Show when={props.level() >= 0.4}><div class="kd-dread" /></Show>
+      <For each={pairs()}>
+        {p => (
+          <span class="kd-eye-pair" data-eye={p.id} data-x={p.x} data-y={p.y}
+            style={{ left: `${p.x}px`, top: `${p.y}px`, "--s": p.size, "--blink": `${p.blink}s`, "--delay": `${p.delay}s`, "--tilt": `${p.tilt}deg` }}>
+            <i /><i />
+          </span>
+        )}
+      </For>
     </div>
   );
 }

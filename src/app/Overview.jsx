@@ -25,7 +25,7 @@ import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 import { setBackdrop } from "./backdrop.js";
-import { Crack, Shards, TimeLens, aimLens, timeJump, crackLevel } from "./Crack.jsx";
+import { Crack, Shards, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel } from "./Crack.jsx";
 
 const DAY_MS = 86400000;
 const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
@@ -213,6 +213,14 @@ function Hero(props) {
           const left = daysLeft(r.deadline);
           const ep = epNum(r);
           const crack = () => crackLevel(left, now());
+          const onSlide = () => i() === idx();
+          // Кого ждёт серия — грузим при первом наведении на треснувшую обложку: окно в прошлое есть только у неё.
+          const [targets, setTargets] = createSignal(null);
+          const loadTargets = () => {
+            if (targets() !== null || crack() <= 0) return;
+            setTargets([]);
+            apiGet(`/report/${r.public_id}/strike`).then(d => setTargets(placeTargets(r.public_id, d.targets || []))).catch(() => {});
+          };
           return (
             <div class={`kd-slide${i() === idx() ? " on" : ""}${banner && !bannerFailed() ? "" : " no-ban"}`}>
               <div class="kd-slide-amb" style={poster ? { "background-image": `url("${poster}")` } : {}} />
@@ -221,16 +229,23 @@ function Hero(props) {
               </Show>
               <Show when={poster}>
                 <div class={`kd-slide-art${crack() >= 0.5 && crack() < 1 ? " creak" : ""}${crack() > 0 ? " timepiece" : ""}`} style={{ "--creak": `${(7 - crack() * 4.5).toFixed(2)}s` }}
-                  title="Открыть серию" onMouseMove={aimLens} onClick={e => timeJump(e, () => openReportDetail(r.public_id))}>
+                  title="Открыть серию" onMouseEnter={loadTargets}
+                  onMouseMove={e => { aimLens(e); e.currentTarget.classList.toggle("aim", !!aimedTarget(e, targets())); }}
+                  onClick={e => {
+                    const t = crack() > 0 && aimedTarget(e, targets());
+                    if (t) strike(e, r.public_id, t, setTargets);
+                    else timeJump(e, () => openReportDetail(r.public_id));
+                  }}>
                   <div class="kd-art-glass">
                     <img src={poster} alt="" />
                     <Crack seed={r.public_id} level={crack} />
                   </div>
-                  <Show when={crack() > 0}><TimeLens src={poster} /></Show>
-                  <Shards seed={r.public_id} level={crack} src={poster} active={() => i() === idx() && !(banner && !bannerFailed())} />
+                  <Show when={crack() > 0}><TimeLens src={poster} targets={targets} /></Show>
+                  <Shards seed={r.public_id} level={crack} src={poster} active={() => onSlide() && !(banner && !bannerFailed())} />
                 </div>
               </Show>
               <div class="kd-slide-fade" />
+              <Show when={crack() > 0}><Eyes level={crack} active={onSlide} /></Show>
               <div class="kd-slide-tx">
                 <span class={`kd-kick ${it.tone === "red" || left === 0 ? "hot" : ""}`}><i />{heroKick(it)}</span>
                 <h2 class="kd-ttl">{showName(r)}</h2>
