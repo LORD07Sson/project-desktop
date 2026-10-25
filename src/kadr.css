@@ -4148,3 +4148,31 @@ td.row-actions { opacity: 1; transition: none; }
 /* Зеркала: под полным временем ответа — настоящий пинг (время соединения), мелко и приглушённо */
 .ny-c.has-ping { flex-direction: column; line-height: 1.15; gap: 1px; }
 .ny-c .ny-rtt { font-size: 10px; font-weight: 500; color: var(--ink-dim); opacity: .8; white-space: nowrap; }
+
+/* Осколок-окно в «прошлое» (TimeLens в Crack.jsx): та же обложка, целая и ярче, в неровном стекле под курсором.
+   Обрезка — на .kd-lens-clip, кромка (drop-shadow) — на обёртке, увеличение — на картинке вокруг курсора. */
+.kd-slide-art { z-index: 1; }
+.kd-slide-art.timepiece { cursor: pointer; }
+.kd-lens { position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
+  filter: drop-shadow(0 0 .7px #fff) drop-shadow(0 0 1px rgba(190, 225, 255, .9)) drop-shadow(0 0 10px rgba(150, 210, 255, .45)); }
+.kd-slide-art.timepiece:hover .kd-lens { opacity: 1; }
+.kd-lens-clip { position: absolute; inset: 0; overflow: hidden; border-radius: inherit;
+  clip-path: polygon(calc(var(--lx, 50%) - 46px) calc(var(--ly, 50%) - 18px), calc(var(--lx, 50%) - 8px) calc(var(--ly, 50%) - 58px),
+    calc(var(--lx, 50%) + 40px) calc(var(--ly, 50%) - 40px), calc(var(--lx, 50%) + 54px) calc(var(--ly, 50%) + 12px),
+    calc(var(--lx, 50%) + 14px) calc(var(--ly, 50%) + 60px), calc(var(--lx, 50%) - 36px) calc(var(--ly, 50%) + 38px)); }
+.kd-lens-clip img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.12); transform-origin: var(--lx, 50%) var(--ly, 50%);
+  filter: saturate(1.35) brightness(1.12) contrast(1.05); }
+.kd-lens-clip::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at var(--lx, 50%) var(--ly, 50%), transparent 30px, rgba(140, 200, 255, .22) 62px); }
+
+/* Прыжок во времени: вспышка из точки щелчка и рябь по слайду, потом открывается серия. */
+.kd-hero.jump .kd-slide.on { animation: kd-jump .7s cubic-bezier(.3, .7, .3, 1); }
+.kd-hero.jump::after { content: ""; position: absolute; inset: 0; z-index: 7; pointer-events: none;
+  background: radial-gradient(circle at var(--jx, 50%) var(--jy, 50%), rgba(255, 255, 255, .95), rgba(170, 220, 255, .55) 18%, rgba(120, 180, 255, 0) 55%);
+  animation: kd-jump-flash .7s ease-out forwards; }
+@keyframes kd-jump {
+  0% { filter: none; transform: none; }
+  35% { filter: blur(5px) brightness(1.9) saturate(1.8) hue-rotate(35deg); transform: scale(1.035) skewX(-1.2deg); }
+  100% { filter: none; transform: none; }
+}
+@keyframes kd-jump-flash { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.6); } }

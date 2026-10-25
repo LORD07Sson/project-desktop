@@ -185,3 +185,33 @@ export function Shards(props) {
     </div>
   );
 }
+
+// «Трещина в плите», как часы Чужого в Dishonored 2: за курсором ходит стеклянный осколок, и в нём видно «прошлое» —
+// та же обложка целой, яркой и чуть ближе. Щелчок — прыжок во времени: вспышка, искажение, и открывается серия.
+export function TimeLens(props) {
+  return (
+    <div class="kd-lens" aria-hidden="true">
+      <div class="kd-lens-clip"><img src={props.src} alt="" /></div>
+    </div>
+  );
+}
+
+// offsetX/Y — в собственных координатах обложки (она повёрнута на 2°): все слои внутри неё размером с неё саму.
+export function aimLens(e) {
+  const el = e.currentTarget;
+  el.style.setProperty("--lx", `${e.offsetX}px`);
+  el.style.setProperty("--ly", `${e.offsetY}px`);
+}
+
+export function timeJump(e, open) {
+  const hero = e.currentTarget.closest(".kd-hero");
+  if (!hero || motionOff()) return open();
+  const b = hero.getBoundingClientRect();
+  hero.style.setProperty("--jx", `${e.clientX - b.left}px`);
+  hero.style.setProperty("--jy", `${e.clientY - b.top}px`);
+  hero.classList.remove("jump");
+  void hero.offsetWidth;
+  hero.classList.add("jump");
+  setTimeout(open, 380);
+  setTimeout(() => hero.classList.remove("jump"), 800);
+}

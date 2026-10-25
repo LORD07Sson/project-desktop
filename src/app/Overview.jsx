@@ -25,7 +25,7 @@ import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 import { setBackdrop } from "./backdrop.js";
-import { Crack, Shards, crackLevel } from "./Crack.jsx";
+import { Crack, Shards, TimeLens, aimLens, timeJump, crackLevel } from "./Crack.jsx";
 
 const DAY_MS = 86400000;
 const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
@@ -220,11 +220,13 @@ function Hero(props) {
                 <img class="kd-slide-ban" src={banner} alt="" onLoad={() => setBannerFailed(false)} onError={() => setBannerFailed(true)} />
               </Show>
               <Show when={poster}>
-                <div class={`kd-slide-art${crack() >= 0.5 && crack() < 1 ? " creak" : ""}`} style={{ "--creak": `${(7 - crack() * 4.5).toFixed(2)}s` }}>
+                <div class={`kd-slide-art${crack() >= 0.5 && crack() < 1 ? " creak" : ""}${crack() > 0 ? " timepiece" : ""}`} style={{ "--creak": `${(7 - crack() * 4.5).toFixed(2)}s` }}
+                  title="Открыть серию" onMouseMove={aimLens} onClick={e => timeJump(e, () => openReportDetail(r.public_id))}>
                   <div class="kd-art-glass">
                     <img src={poster} alt="" />
                     <Crack seed={r.public_id} level={crack} />
                   </div>
+                  <Show when={crack() > 0}><TimeLens src={poster} /></Show>
                   <Shards seed={r.public_id} level={crack} src={poster} active={() => i() === idx() && !(banner && !bannerFailed())} />
                 </div>
               </Show>
