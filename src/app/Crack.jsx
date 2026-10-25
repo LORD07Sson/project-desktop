@@ -358,3 +358,77 @@ export function timeJump(e, open) {
   setTimeout(open, 380);
   setTimeout(() => hero.classList.remove("jump"), 800);
 }
+
+// Полночь: обложка разлетается на куски, и они остаются парить в воздухе, медленно покачиваясь, — как обломки в
+// Бездне. Куски — ячейки Вороного (гуще у точки удара), каждая — та же обложка, обрезанная по своему многоугольнику.
+// Взрыв играет один раз за сеанс на серию; дальше куски сразу висят на своих местах.
+function clipHalf(poly, a, b) {
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, nx = b[0] - a[0], ny = b[1] - a[1];
+  const side = p => (p[0] - mx) * nx + (p[1] - my) * ny;
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    const sp = side(p), sq = side(q);
+    if (sp <= 0) out.push(p);
+    if ((sp < 0 && sq > 0) || (sp > 0 && sq < 0)) {
+      const t = sp / (sp - sq);
+      out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+    }
+  }
+  return out;
+}
+
+const piecesCache = new Map();
+function piecesFor(seed) {
+  if (piecesCache.has(seed)) return piecesCache.get(seed);
+  const g = geometryFor(seed);
+  const rand = rng(`${seed}:pieces`);
+  const seeds = [];
+  for (let i = 0; i < 7; i++) {
+    const a = rand() * Math.PI * 2, r = 4 + rand() * 22;
+    seeds.push([g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r * 1.2]);
+  }
+  for (let i = 0; i < 9; i++) seeds.push([rand() * W, rand() * H]);
+  const pieces = seeds.map((s, i) => {
+    let poly = [[0, 0], [W, 0], [W, H], [0, H]];
+    seeds.forEach((o, j) => { if (j !== i && poly.length) poly = clipHalf(poly, s, o); });
+    if (poly.length < 3) return null;
+    const px = poly.reduce((n, p) => n + p[0], 0) / poly.length, py = poly.reduce((n, p) => n + p[1], 0) / poly.length;
+    const dx = px - g.cx, dy = py - g.cy, dist = Math.hypot(dx, dy) || 1;
+    const push = 6 + rand() * 10 + (40 - Math.min(40, dist)) * 0.35;   // ближние к удару отлетают дальше
+    return {
+      clip: `polygon(${poly.map(([x, y]) => `${(x / W * 100).toFixed(2)}% ${(y / H * 100).toFixed(2)}%`).join(",")})`,
+      origin: `${(px / W * 100).toFixed(1)}% ${(py / H * 100).toFixed(1)}%`,
+      ex: `${(dx / dist * push * 2.4).toFixed(1)}px`,
+      ey: `${(dy / dist * push * 2.4).toFixed(1)}px`,
+      er: `${((rand() - 0.5) * 26).toFixed(1)}deg`,
+      ez: (0.92 + rand() * 0.16).toFixed(3),
+      fdur: `${(4 + rand() * 4).toFixed(2)}s`,
+      fdelay: `${(-rand() * 6).toFixed(2)}s`,
+      fy: `${(3 + rand() * 5).toFixed(1)}px`,
+      fr: `${(1 + rand() * 3).toFixed(1)}deg`,
+    };
+  }).filter(Boolean);
+  piecesCache.set(seed, pieces);
+  return pieces;
+}
+
+const exploded = new Set();
+export function Pieces(props) {
+  const pieces = piecesFor(props.seed);
+  const settled = exploded.has(props.seed) || motionOff();
+  exploded.add(props.seed);
+  return (
+    <div class={`kd-pieces${settled ? " settled" : ""}`} aria-hidden="true">
+      <For each={pieces}>
+        {p => (
+          <span style={{ "transform-origin": p.origin, "--ex": p.ex, "--ey": p.ey, "--er": p.er, "--ez": p.ez }}>
+            <em style={{ "transform-origin": p.origin, "--fy": p.fy, "--fr": p.fr, "animation-duration": p.fdur, "animation-delay": p.fdelay }}>
+              <i style={{ "background-image": `url("${props.src}")`, "clip-path": p.clip }} />
+            </em>
+          </span>
+        )}
+      </For>
+    </div>
+  );
+}

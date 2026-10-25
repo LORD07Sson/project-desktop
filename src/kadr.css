@@ -4223,6 +4223,27 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-eye-pair i:last-child { animation-name: kd-blink-r; }
 @keyframes kd-blink-l { 0%, 92%, 100% { transform: rotate(8deg) scaleY(1); } 95% { transform: rotate(8deg) scaleY(.08); } }
 @keyframes kd-blink-r { 0%, 92%, 100% { transform: rotate(-8deg) scaleX(-1) scaleY(1); } 95% { transform: rotate(-8deg) scaleX(-1) scaleY(.08); } }
+/* Полночь (Pieces в Crack.jsx): обложка разлетается на куски, и они парят. Внешний слой — взрыв (разлёт на место),
+   средний — бесконечное покачивание, внутренний — обрезка по куску. От целой обложки остаётся тёмный призрак. */
+.kd-art-glass.shattered > img { opacity: .1; filter: grayscale(1) blur(2px); transition: opacity .25s; }
+.kd-art-glass.shattered .kd-crack { display: none; }
+.kd-pieces { position: absolute; inset: 0; z-index: 1; pointer-events: none; perspective: 700px; }
+.kd-pieces span { position: absolute; inset: 0; transform: translate(var(--ex), var(--ey)) rotate(var(--er)) scale(var(--ez));
+  animation: kd-explode 1.3s cubic-bezier(.12, .9, .25, 1) backwards;
+  filter: drop-shadow(0 0 .7px rgba(255, 255, 255, .9)) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
+.kd-pieces.settled span { animation: none; }
+.kd-pieces em { position: absolute; inset: 0; animation: kd-float 6s ease-in-out infinite alternate; }
+.kd-pieces i { position: absolute; inset: 0; background: center / cover no-repeat; filter: saturate(.6) brightness(.85) contrast(1.1); }
+@keyframes kd-explode {
+  0% { transform: none; filter: brightness(3) drop-shadow(0 0 8px #fff); }
+  12% { transform: translate(calc(var(--ex) * 1.8), calc(var(--ey) * 1.8)) rotate(calc(var(--er) * 2)) scale(1.06); }
+  100% { transform: translate(var(--ex), var(--ey)) rotate(var(--er)) scale(var(--ez)); }
+}
+@keyframes kd-float { from { transform: translateY(calc(var(--fy) * -1)) rotate(calc(var(--fr) * -1)); } to { transform: translateY(var(--fy)) rotate(var(--fr)); } }
+/* Вспышка самого взрыва по всему слайду. */
+.kd-slide:has(.kd-pieces:not(.settled)) .kd-slide-art::before { content: ""; position: absolute; inset: -60%; z-index: 0; pointer-events: none; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 245, 235, .9), rgba(255, 80, 40, .4) 30%, transparent 62%); animation: kd-jump-flash 1.1s ease-out forwards; }
+
 /* Мрак последних 10 часов (--gloom 0…1 на слайде, gloomLevel в Crack.jsx): краски выцветают, свет гаснет,
    тьма смыкается вокруг обложки. В последний час свет мигает, как умирающая лампа. Текст поверх — чтобы читался. */
 .kd-slide { --gloom: 0; }

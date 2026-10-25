@@ -25,7 +25,7 @@ import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 import { setBackdrop } from "./backdrop.js";
-import { Crack, Shards, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel, gloomLevel } from "./Crack.jsx";
+import { Crack, Shards, Pieces, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel, gloomLevel } from "./Crack.jsx";
 
 const DAY_MS = 86400000;
 const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
@@ -212,8 +212,11 @@ function Hero(props) {
           const [bannerFailed, setBannerFailed] = createSignal(false);
           const left = daysLeft(r.deadline);
           const ep = epNum(r);
-          const crack = () => crackLevel(left, now());
-          const gloom = () => gloomLevel(left, now());
+          // Срок для трещин и мрака пересчитывается каждую секунду: в 0:00 серия становится просроченной прямо на глазах.
+          const liveLeft = () => { now(); return daysLeft(r.deadline); };
+          const crack = () => crackLevel(liveLeft(), now());
+          const gloom = () => gloomLevel(liveLeft(), now());
+          const broken = () => crack() >= 1;
           const onSlide = () => i() === idx();
           // Кого ждёт серия — грузим при первом наведении на треснувшую обложку: окно в прошлое есть только у неё.
           const [targets, setTargets] = createSignal(null);
@@ -238,12 +241,13 @@ function Hero(props) {
                     if (t) strike(e, r.public_id, t, setTargets);
                     else timeJump(e, () => openReportDetail(r.public_id));
                   }}>
-                  <div class="kd-art-glass">
+                  <div class={`kd-art-glass${broken() ? " shattered" : ""}`}>
                     <img src={poster} alt="" />
                     <Crack seed={r.public_id} level={crack} />
                   </div>
+                  <Show when={broken()}><Pieces seed={r.public_id} src={poster} /></Show>
                   <Show when={crack() > 0}><TimeLens src={poster} targets={targets} /></Show>
-                  <Shards seed={r.public_id} level={crack} src={poster} active={() => onSlide() && !(banner && !bannerFailed())} />
+                  <Shards seed={r.public_id} level={crack} src={poster} active={() => onSlide() && !broken() && !(banner && !bannerFailed())} />
                 </div>
               </Show>
               <div class="kd-slide-fade" />
@@ -261,7 +265,7 @@ function Hero(props) {
                     </Show>
                   </b></div>
                   <div><small>{left === 0 ? "Осталось" : "Срок"}</small>
-                    <b class={left !== null && left <= 1 ? "hot" : ""}>{left === 0 ? countdown(now()) : r.deadline ? ddmm(r.deadline) : "—"}</b></div>
+                    <b class={left !== null && left <= 1 ? "hot" : ""}>{left === 0 ? (liveLeft() < 0 ? "00:00:00" : countdown(now())) : r.deadline ? ddmm(r.deadline) : "—"}</b></div>
                 </div>
                 <div class="kd-acts">
                   <button class="btn primary" onClick={() => openReportDetail(r.public_id)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none" /></svg>Открыть серию</button>
