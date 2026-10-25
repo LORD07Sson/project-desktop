@@ -27,6 +27,7 @@ const ACTIONS = [
   { label: "Я", icon: "👤", run: () => switchTab("profile") },
   // Инструменты из меню шапки — те же кнопки, просто с клавиатуры.
   { label: "Смотреть", icon: "▶", run: () => $("#open-watch").click() },
+  { label: "Lofi-радио: играть / пауза", icon: "📻", run: () => import("./lofi.js").then(m => m.toggleLofi()) },
   { label: "Горячие клавиши", icon: "⌨", sub: "?", run: () => $("#open-shortcuts").click() },
   { label: "Настройки", icon: "⚙️", run: () => $("#open-settings").click() },
   { label: "Обновить", icon: "↻", run: () => $("#refresh-btn").click() },

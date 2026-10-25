@@ -4244,6 +4244,62 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-slide:has(.kd-pieces:not(.settled)) .kd-slide-art::before { content: ""; position: absolute; inset: -60%; z-index: 0; pointer-events: none; border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 245, 235, .9), rgba(255, 80, 40, .4) 30%, transparent 62%); animation: kd-jump-flash 1.1s ease-out forwards; }
 
+/* Lofi-радио (lofi.js): кнопка в шапке — когда играет, вместо значка прыгают три полоски. */
+.lr-wrap { position: relative; }
+.lofi-btn { position: relative; }
+.lofi-eq { display: none; position: absolute; inset: 0; align-items: flex-end; justify-content: center; gap: 2.5px; padding-bottom: 10px; }
+.lofi-eq i { width: 3px; border-radius: 2px; background: var(--gold); animation: lr-bar .9s ease-in-out infinite alternate; }
+.lofi-eq i:nth-child(2) { animation-duration: .65s; }
+.lofi-eq i:nth-child(3) { animation-duration: 1.1s; }
+.lofi-btn.on svg { visibility: hidden; }
+.lofi-btn.on .lofi-eq { display: flex; }
+.lofi-btn.loading svg { animation: lr-blink 1s ease-in-out infinite; }
+@keyframes lr-bar { from { height: 3px; } to { height: 14px; } }
+@keyframes lr-blink { 50% { opacity: .35; } }
+.lr-panel { position: absolute; top: calc(100% + 10px); right: -60px; width: 330px; z-index: 200; padding: 14px; display: flex; flex-direction: column; gap: 12px;
+  border-radius: 18px; border: 1px solid var(--line); box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .75); animation: ibPop .16s ease-out;
+  background: radial-gradient(120% 80% at 0% 0%, rgba(var(--gold-rgb), .12), transparent 60%), radial-gradient(90% 70% at 100% 100%, rgba(140, 110, 255, .12), transparent 60%), var(--surface); }
+.lr-panel[hidden] { display: none; }
+.lr-top { display: flex; align-items: center; gap: 12px; }
+/* Пластинка: бороздки, наклейка, блик; крутится, пока играет. */
+.lr-vinyl { flex: none; width: 64px; height: 64px; border-radius: 50%; position: relative;
+  background: repeating-radial-gradient(circle, #0e0c0b 0 1.5px, #1b1816 1.5px 3px); box-shadow: 0 6px 16px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .06);
+  animation: lr-spin 3.2s linear infinite; animation-play-state: paused; }
+.lr-vinyl.spin { animation-play-state: running; }
+.lr-vinyl::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 10%, rgba(255, 255, 255, .14) 14%, transparent 20% 60%, rgba(255, 255, 255, .08) 64%, transparent 70%); }
+.lr-vinyl i { position: absolute; inset: 22px; border-radius: 50%; background: radial-gradient(circle, #0e0c0b 0 2px, transparent 2.5px), linear-gradient(135deg, var(--gold), var(--fire)); }
+@keyframes lr-spin { to { transform: rotate(360deg); } }
+.lr-now { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lr-now small { font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-dim); }
+.lr-now b { font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lr-status { font-size: 11.5px; color: var(--ink-dim); }
+.lr-status[data-s="playing"] { color: var(--s-done, #5fd38d); }
+.lr-status[data-s="playing"]::before { content: "● "; animation: lr-blink 1.6s infinite; }
+.lr-status[data-s="error"] { color: var(--s-stop); }
+.lr-eq { display: flex; align-items: flex-end; gap: 3px; height: 14px; margin-top: 3px; }
+.lr-eq i { width: 4px; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--gold) 70%, transparent); }
+.lr-eq.on i { animation: lr-bar .8s ease-in-out infinite alternate; }
+.lr-eq.on i:nth-child(2) { animation-duration: .55s; }
+.lr-eq.on i:nth-child(3) { animation-duration: 1.05s; }
+.lr-eq.on i:nth-child(4) { animation-duration: .7s; }
+.lr-eq.on i:nth-child(5) { animation-duration: .95s; }
+.lr-play { flex: none; width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--gold), var(--fire)); color: #1a0f08; box-shadow: 0 8px 20px -6px rgba(var(--fire-rgb), .6); }
+.lr-play svg { width: 20px; height: 20px; stroke: currentColor; fill: none; }
+.lr-play .pa, .lr-play.on .pl { display: none; }
+.lr-play.on .pa { display: block; }
+.lr-list { display: flex; flex-direction: column; gap: 4px; }
+.lr-st { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 11px; border-radius: 10px; border: 0; cursor: pointer; text-align: left;
+  background: rgba(255, 255, 255, .03); color: var(--ink-soft); font: inherit; }
+.lr-st:hover { background: rgba(255, 255, 255, .07); }
+.lr-st b { font-size: 12.5px; font-weight: 700; }
+.lr-st small { font-size: 10.5px; color: var(--ink-dim); }
+.lr-st.cur { background: rgba(var(--gold-rgb), .14); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(var(--gold-rgb), .35); }
+.lr-row { display: grid; grid-template-columns: 86px 1fr; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-dim); }
+.lr-row input { width: 100%; accent-color: var(--gold); }
+:root[data-theme="light"] .lr-st { background: rgba(0, 0, 0, .03); }
+:root[data-motion="off"] .lr-vinyl, :root[data-motion="off"] .lr-eq i, :root[data-motion="off"] .lofi-eq i { animation: none !important; }
+
 /* Карточки «Доски» со сроком — те же трещины в миниатюре (doomPosterHtml в Crack.jsx). */
 .kc-doom { position: relative; overflow: visible; background: none; box-shadow: none; }
 .kc-doom > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit;
