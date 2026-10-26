@@ -4463,8 +4463,8 @@ td.row-actions { opacity: 1; transition: none; }
 @keyframes sg-lit { 0%, 100% { filter: brightness(1.25) drop-shadow(0 0 4px var(--c)); } 50% { filter: brightness(.55); } }
 :root[data-motion="off"] .sg-bulb, :root[data-motion="off"] .sg-bulb .sg-glass { animation: none; }
 :root[data-theme="light"] .sg-wire { stroke: #4a5a4c; }
-/* Шапка Деда Мороза на логотипе — только зимой. */
-.season-hat { display: none; position: absolute; left: -7px; top: -15px; width: 32px; height: 28px; pointer-events: none; transform: rotate(-14deg);
+/* Шапка Деда Мороза на логотипе — только зимой: опушка ровно по ширине логотипа и садится на его верхний край. */
+.season-hat { display: none; position: absolute; left: 2px; top: -12px; width: 28px; height: 24px; pointer-events: none; transform: rotate(-6deg); transform-origin: 45% 85%;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .45)); z-index: 2; }
 :root[data-season="winter"] .brand-logo { position: relative; overflow: visible; }
 :root[data-season="winter"] .season-hat { display: block; }
