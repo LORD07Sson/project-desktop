@@ -168,22 +168,24 @@ async function mountSpeed(root) {
       <p class="ar-hint" style="margin:0;">Хостинг сервера включает ограничение канала, если нагрузка долго держится выше ~50 Мбит/с. Задайте потолок для каждого вида загрузки: изменения подхватываются на ходу, перезапуск не нужен.</p>
       ${field("archive", "Заливка архива серий в Telegram", "Сколько бот заливает в архивную группу. Когда очередь пуста, бот сам снимает лимит; для большой пачки серий верните 45.", d.archive_mbit)}
       ${field("torrent", "Скачивание торрентов на сервере", "Очередь Nyaa и кнопка ☁ «Видео с Nyaa» в отчёте. Действует на новые скачивания.", d.torrent_mbit)}
+      ${field("a365", "Заливка на Anime 365", "Серии, которые бот заливает на smotret-anime.org (финалы и архив, «Ещё → Anime 365»). Подхватывается на ходу, даже посреди заливки.", d.a365_mbit ?? 40)}
       ${field("social", "Скачивание видео по ссылкам", "Видео с YouTube и других сайтов, которые бот качает по ссылке из чата. Действует на новые скачивания.", d.social_mbit)}
       <div class="ar-card">
         <div class="ar-card-head"><h4>Ночной режим</h4>
           <label class="ar-switch sm"><input type="checkbox" id="sp-night-on" ${d.night_on ? "checked" : ""}><i></i></label></div>
         <p class="ar-hint" style="margin:0 0 10px;">В заданные часы по Москве действуют свои лимиты, например ночью, когда студия не работает, можно качать быстрее.
-          Сейчас: <b>${d.night_now ? "ночной режим включён" : "обычный режим"}</b>; действующие лимиты — архив ${d.effective_archive || "без ограничения"}, торренты ${d.effective_torrent || "без ограничения"}${d.effective_archive || d.effective_torrent ? " Мбит/с" : ""}.</p>
+          Сейчас: <b>${d.night_now ? "ночной режим включён" : "обычный режим"}</b>; действующие лимиты — архив ${d.effective_archive || "без ограничения"}, торренты ${d.effective_torrent || "без ограничения"}, Anime 365 ${d.effective_a365 || "без ограничения"} (Мбит/с).</p>
         <div class="ar-fields" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <span class="ar-meta">с</span><input class="field-input" type="number" min="0" max="23" id="sp-night-from" value="${d.night_from}" style="max-width:80px;">
           <span class="ar-meta">до</span><input class="field-input" type="number" min="0" max="23" id="sp-night-to" value="${d.night_to}" style="max-width:80px;">
           <span class="ar-meta">часов · архив</span><input class="field-input" type="number" min="0" max="1000" id="sp-night-archive" value="${d.night_archive}" style="max-width:100px;">
           <span class="ar-meta">торренты</span><input class="field-input" type="number" min="0" max="1000" id="sp-night-torrent" value="${d.night_torrent}" style="max-width:100px;">
+          <span class="ar-meta">Anime 365</span><input class="field-input" type="number" min="0" max="1000" id="sp-night-a365" value="${d.night_a365 ?? d.a365_mbit ?? 40}" style="max-width:100px;">
           <span class="ar-meta">Мбит/с</span>
           <button type="button" class="btn primary" id="sp-night-save">Сохранить</button>
         </div>
       </div>
-      ${field("total", "Общий потолок", "Если архив заливает серии, а рядом качаются торренты, канал делится: торренты получают не больше половины этого потолка. 0 — не делить.", d.total_mbit)}
+      ${field("total", "Общий потолок", "Если одновременно идут две большие загрузки — архив, торренты или заливка на Anime 365, — канал делится: каждая получает не больше половины этого потолка. 0 — не делить.", d.total_mbit)}
     </div>`;
 
   root.querySelectorAll("[data-sp-preset]").forEach(b => b.addEventListener("click", () => {
@@ -199,6 +201,7 @@ async function mountSpeed(root) {
         night_to: Number(root.querySelector("#sp-night-to").value),
         night_archive: Number(root.querySelector("#sp-night-archive").value),
         night_torrent: Number(root.querySelector("#sp-night-torrent").value),
+        night_a365: Number(root.querySelector("#sp-night-a365").value),
       });
       toast("Ночной режим сохранён.", "success");
     } catch (err) { toast(`Не сохранилось: ${err.message}`, "error"); }
