@@ -14,6 +14,7 @@ import { loadNyaa } from "./nyaa.js";
 import { loadProfile } from "./profile.js";
 import { loadAnalytics } from "./analytics.js";
 import { loadServices } from "./services.js";
+import { loadA365 } from "./a365.js";
 import { loadTeam } from "./team.js";
 import { loadQueue } from "./queue.js";
 import { startTab } from "./ui-prefs.js";
@@ -37,13 +38,14 @@ const LOADERS = {
   nyaa: loadNyaa,
   analytics: loadAnalytics,
   services: loadServices,
+  a365: loadA365,
   team: loadTeam,
   profile: loadProfile,
 };
 
 // Контейнеры вкладок — чистятся при выходе из аккаунта, чтобы данные
 // предыдущего пользователя не остались висеть в DOM.
-const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#services-body", "#team-body", "#profile-body", "#reports-body"];
+const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#services-body", "#a365-body", "#team-body", "#profile-body", "#reports-body"];
 
 // Последняя открытая вкладка переживает не только смену пользователя
 // (см. комментарий у state.activeTab в state.js — это настройка
@@ -56,7 +58,7 @@ const LAST_TAB_KEY = "project-last-tab";
 // Вкладки, которые видит рядовой участник студии.
 export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
-// Какое право открывает админскую вкладку; остальные (Сервисы, Релизы) — только для админа.
+// Какое право открывает админскую вкладку; остальные (Сервисы, Anime 365, Релизы) — только для админа.
 const TAB_PERMS = { feed: "reports.feed", board: "reports.board", overview: "reports.overview", list: "reports.list", calendar: "reports.calendar", analytics: "reports.analytics" };
 
 export function tabAllowed(name) {

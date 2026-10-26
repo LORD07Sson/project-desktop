@@ -4410,8 +4410,32 @@ body.focus-mode .report-detail-overlay .sheet {
 .bs-err.warn { border-color: var(--s-work); color: var(--ink-soft); }
 @media (max-width: 1000px) { .bs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-/* Сервисы → Anime 365 */
+/* Ещё → Anime 365 */
 .a3-card .dash-cell-head { display: flex; align-items: center; gap: 10px; }
+.a3-tabs { margin: 4px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.a3-tabs .a3-filter { font-size: 13px; padding: 6px 16px; }
+.a3-filter i { font-style: normal; opacity: .65; margin-left: 2px; }
+.a3-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.a3-tools .a3-filters { margin-bottom: 0; }
+.a3-scanline { margin: -2px 0 10px; }
+.a3-card .a3-list { max-height: none; }
+.a3-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.a3-ghead { display: flex; align-items: baseline; gap: 10px; padding: 2px 2px 0; }
+.a3-ghead b { font-size: 13.5px; }
+.a3-ghead span { font-size: 11.5px; color: var(--ink-dim); }
+.a3-series { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 10px; background: var(--surface-2); text-align: left; }
+.a3-series img, .a3-noposter { width: 42px; height: 60px; object-fit: cover; border-radius: 6px; flex: none; background: var(--line); }
+.a3-results { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 340px; overflow-y: auto; }
+.a3-pick { all: unset; display: block; cursor: pointer; border-radius: 10px; }
+.a3-pick:hover .a3-series, .a3-pick:focus-visible .a3-series { outline: 1px solid var(--accent, var(--s-done)); }
+.a3-eps { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.a3-ep { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft); border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.a3-ep.ok { color: var(--s-done); border-color: color-mix(in srgb, var(--s-done) 45%, var(--line)); }
+.a3-manual { max-width: 860px; }
+.a3-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 12px; }
+.a3-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft); margin: 10px 0 2px; cursor: pointer; }
+.a3-chan { width: auto; min-width: 150px; }
+.a3-mstatus { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .a3-bad { color: var(--s-stop); }
 .a3-filters { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .a3-filter { border: 1px solid var(--line); background: transparent; color: var(--ink-soft); border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
