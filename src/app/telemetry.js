@@ -103,8 +103,10 @@ setInterval(flushTelemetry, FLUSH_MS);
 
 // ---- Ошибки для Аналитики (только у согласившихся на статистику) ----
 // Ловим то, что человек увидел (красное сообщение), молчаливые сбои сервера (нет связи, 5xx) и падения самой программы —
-// с экраном, последними шагами и версией. Повтор той же ошибки в течение 5 с не дублируется.
+// с экраном, последними шагами и версией. Повтор той же ошибки в течение 5 с не дублируется, «нет связи» — 10 мин: без
+// интернета чат и колокольчик опрашивают сервер раз в несколько секунд, и одна пропажа сети давала два десятка записей.
 const ERR_FLUSH_MS = 3000;
+const OFFLINE_REPEAT_MS = 10 * 60_000;
 let errQueue = [];
 let errTimer = null;
 let lastErr = { key: "", at: 0 };
@@ -112,10 +114,14 @@ let lastApi = null;     // последний неудачный запрос �
 let appVersion = "";
 getVersion().then(v => { appVersion = v; }).catch(() => { /* не в приложении */ });
 
-function reportError(kind, message, detail) {
+let lastOffline = 0;
+
+function reportError(kind, message, detail, offline = false) {
   if (!trackingOn() || !message) return;
   const key = `${kind}:${message}`, now = Date.now();
   if (key === lastErr.key && now - lastErr.at < 5000) return;
+  if (offline && now - lastOffline < OFFLINE_REPEAT_MS) return;
+  if (offline) lastOffline = now;
   lastErr = { key, at: now };
   errQueue.push({ kind, message: String(message).slice(0, 300), detail: detail ? String(detail).slice(0, 600) : undefined, screen, trail: trail.slice(), version: appVersion });
   if (errQueue.length > 40) errQueue = errQueue.slice(-40);
@@ -143,7 +149,7 @@ document.addEventListener("project:api-fail", ev => {
   // запишется оно (с этим запросом), а не два раза одно и то же. Отказ 4xx экран обрабатывает сам — его ловит сообщение.
   if (!d.status || d.status >= 500) {
     const a = lastApi;
-    a.timer = setTimeout(() => reportError("api", a.message, apiLine(a)), 2500); // DevSkim: ignore DS172411 — функция, не строка
+    a.timer = setTimeout(() => reportError("api", a.message, apiLine(a), !a.status), 2500); // DevSkim: ignore DS172411 — функция, не строка
   }
 });
 document.addEventListener("project:error-shown", ev => {

@@ -33,6 +33,7 @@ export const API_BASE = `${SERVER_ORIGIN}/api`;
 // зависшего интерфейса. 20с — заметно больше обычного отклика (доли
 // секунды — единицы секунд), но не бесконечность.
 const REQUEST_TIMEOUT_MS = 20_000;
+const NET_RETRY_MS = 1500;
 const BLOB_STALL_MS = 30_000;
 // Файла может не быть в кэше сервера (кэш чистится через час): сервер сначала достаёт его из Telegram и только потом начинает отвечать.
 const BLOB_START_MS = 300_000;
@@ -114,15 +115,24 @@ export async function api(method, path, body) {
     : REQUEST_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs); // DevSkim: ignore DS172411 — функция, не строка
   let resp;
+  const init = {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    cache: (method === "GET" && path === "/me/permissions") || path.startsWith("/games/deals?") ? "no-store" : "default",
+    signal: controller.signal,
+  };
   netStart();
   try {
-    resp = await fetch(url, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      cache: (method === "GET" && path === "/me/permissions") || path.startsWith("/games/deals?") ? "no-store" : "default",
-      signal: controller.signal,
-    });
+    try {
+      resp = await fetch(url, init);
+    } catch (e) {
+      // Оборвалось соединение (перезапуск сервера при обновлении — около секунды, мигнул VPN): чтение повторяем один раз.
+      // Запись не повторяем — сервер мог её уже выполнить.
+      if (method !== "GET" || e.name === "AbortError") throw e;
+      await new Promise(r => setTimeout(r, NET_RETRY_MS)); // DevSkim: ignore DS172411 — функция, не строка
+      resp = await fetch(url, init);
+    }
   } catch (e) {
     // network: ошибка транспорта, а не ответ сервера — токен тут ни при чём (см. tryRestoreSession).
     const failure = e.name === "AbortError"
