@@ -417,7 +417,7 @@ function openBind(root, tag, season, name) {
     } catch (e) { toast(e.message, "error"); }
     refresh(root);
   });
-  input.dispatchEvent(new Event("input"));
+  input.dispatchEvent(new window.Event("input"));
   input.focus();
 }
 
