@@ -510,8 +510,9 @@ export function doomCardStyle(st) {
   return `--gloom:${st.gloom.toFixed(3)};--doom:${st.level.toFixed(3)};--beat:${(1.9 - st.level * 0.9).toFixed(2)}s`;
 }
 
-// Просроченная карточка: поверх неё — кровавые прожилки от обложки, подтёки сверху и вторая пара глаз во тьме справа.
-export function deadFxHtml(seed, { veins: nVeins = 4, drips: nDrips = 4 } = {}) {
+// Просроченная карточка: поверх неё — подтёки сверху и вторая пара глаз во тьме справа (прожилки — только по запросу:
+// на карточке и слайде они читались как молнии).
+export function deadFxHtml(seed, { veins: nVeins = 0, drips: nDrips = 4 } = {}) {
   const r = rng(`${seed}:dead`);
   const veins = [];
   for (let v = 0; v < nVeins; v++) {
