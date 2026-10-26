@@ -25,7 +25,7 @@ import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 import { setBackdrop } from "./backdrop.js";
-import { Crack, Shards, Pieces, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel, gloomLevel, deadFxHtml } from "./Crack.jsx";
+import { Crack, Shards, Pieces, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel, gloomLevel, deadFxHtml, btnCrackHtml } from "./Crack.jsx";
 
 const DAY_MS = 86400000;
 const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
@@ -271,8 +271,8 @@ function Hero(props) {
                   <Show when={broken()}><i class="kd-blood" aria-hidden="true"><b /><b /><b /><b /></i></Show>
                 </div>
                 <div class="kd-acts">
-                  <button class="btn primary" onClick={() => openReportDetail(r.public_id)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none" /></svg>Открыть серию</button>
-                  <button class="btn" onClick={() => switchTab("board")}>Открыть доску</button>
+                  <button class="btn primary" onClick={() => openReportDetail(r.public_id)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none" /></svg>Открыть серию<Show when={broken()}><span class="kd-btn-crack" innerHTML={btnCrackHtml(r.public_id)} /></Show></button>
+                  <button class="btn" onClick={() => switchTab("board")}>Открыть доску<Show when={broken()}><span class="kd-btn-crack" innerHTML={btnCrackHtml(`${r.public_id}:board`)} /></Show></button>
                 </div>
               </div>
             </div>

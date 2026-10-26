@@ -530,3 +530,33 @@ export function deadFxHtml(seed, { veins: nVeins = 4, drips: nDrips = 4 } = {}) 
   return `<i class="kc-dead-fx" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${veins.join("")}</svg>${drips}`
     + `<span class="kc-eyes red kc-lurk" style="left:${(80 + r() * 10).toFixed(0)}%;--ld:${(-r() * 9).toFixed(1)}s"><i></i><i></i></span></i>`;
 }
+
+// Треснувшая кнопка на просроченном слайде: точка удара, рваные лучи от неё, обрывки кольца и отколотый уголок.
+export function btnCrackHtml(seed) {
+  const r = rng(`${seed}:btn`);
+  const W = 160, H = 40;
+  const cx = W * (0.82 + r() * 0.1), cy = H * (0.3 + r() * 0.4); // у правого края, не по надписи
+  const rays = [];
+  const n = 5 + Math.floor(r() * 3);
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2 + r() * 0.6;
+    let x = cx, y = cy, d = `M${x.toFixed(1)} ${y.toFixed(1)}`;
+    const len = 40 + r() * 110;
+    for (let t = 0; t < len; t += 7 + r() * 9) {
+      const aa = a + (r() - 0.5) * 0.7;
+      x += Math.cos(aa) * 8; y += Math.sin(aa) * 8 * 0.6;
+      d += ` L${x.toFixed(1)} ${y.toFixed(1)}`;
+    }
+    rays.push(d);
+  }
+  const ring = [];
+  for (let k = 0; k < 4; k++) {
+    const a0 = r() * Math.PI * 2, a1 = a0 + 0.5 + r() * 0.8, rr = 7 + r() * 6;
+    const p = a => `${(cx + Math.cos(a) * rr * 1.6).toFixed(1)} ${(cy + Math.sin(a) * rr * 0.7).toFixed(1)}`;
+    ring.push(`M${p(a0)} L${p((a0 + a1) / 2)} L${p(a1)}`);
+  }
+  const d = [...rays, ...ring].join(" ");
+  const chip = `M${W} 0 L${W} ${(H * (0.35 + r() * 0.2)).toFixed(0)} L${(W - 8 - r() * 8).toFixed(0)} 0Z`;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path class="chip" d="${chip}"/><path class="dk" d="${d}"/><path class="lt" d="${d}"/>`
+    + `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.2"/></svg>`;
+}

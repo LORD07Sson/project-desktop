@@ -4414,11 +4414,14 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-blood b:nth-child(2) { left: 31%; height: 26px; --dd: 8.2s; --dl: -5s; }
 .kd-blood b:nth-child(3) { left: 58%; height: 11px; --dd: 5.4s; --dl: -3s; }
 .kd-blood b:nth-child(4) { left: 86%; height: 21px; --dd: 7.3s; --dl: -6.5s; }
-.kd-slide.dead .kd-acts .btn.primary { background: linear-gradient(180deg, #d0161a, #7c0408); border-color: rgba(255, 70, 60, .55); color: #fff;
-  box-shadow: 0 8px 26px -6px rgba(210, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -8px 14px rgba(60, 0, 0, .45); }
-.kd-slide.dead .kd-acts .btn.primary:hover { background: linear-gradient(180deg, #e8221f, #8e060a); }
-.kd-slide.dead .kd-acts .btn:not(.primary) { background: rgba(90, 0, 0, .4); border-color: rgba(210, 30, 24, .4); color: #ffd9d5; }
-.kd-slide.dead .kd-acts .btn:not(.primary):hover { background: rgba(120, 0, 0, .55); }
+/* Кнопки — обычные, но треснувшие (btnCrackHtml в Crack.jsx): тёмный разлом с бликом и отколотый уголок. */
+.kd-slide.dead .kd-acts .btn { position: relative; overflow: hidden; }
+.kd-acts .btn .kd-btn-crack { position: absolute; inset: 0; pointer-events: none; }
+.kd-acts .btn .kd-btn-crack svg { width: 100%; height: 100%; display: block; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.kd-btn-crack .dk { stroke: rgba(0, 0, 0, .4); stroke-width: 1.6px; vector-effect: non-scaling-stroke; }
+.kd-btn-crack .lt { stroke: rgba(255, 255, 255, .75); stroke-width: .7px; vector-effect: non-scaling-stroke; transform: translate(.4px, -.4px); }
+.kd-btn-crack .chip { fill: rgba(8, 4, 4, .82); stroke: rgba(255, 255, 255, .55); stroke-width: .8px; vector-effect: non-scaling-stroke; }
+.kd-btn-crack circle { display: none; }
 :root[data-motion="off"] .kd-blood b, :root[data-motion="off"] .kd-blood b::after { animation: none !important; }
 .kd-slide.dead .kd-kick { color: #ff3b30; animation: kd-kick-beat var(--beat) infinite; }
 @keyframes kd-kick-beat { 0%, 40%, 100% { text-shadow: 0 0 6px rgba(255, 30, 20, .4); } 8% { text-shadow: 0 0 14px rgba(255, 30, 20, 1), 0 0 2px #fff; } 26% { text-shadow: 0 0 10px rgba(255, 30, 20, .75); } }
