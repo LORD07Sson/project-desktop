@@ -1,0 +1,4 @@
+{
+  "_": "Адрес сервера (voice_report_bot/miniapp) — единственное место. Сменить: npm run set-server -- https://новый.домен:порт (заодно правит CSP в src-tauri/tauri.conf.json). Порядок переезда — docs/server-domain.md.",
+  "origin": "https://minitg.shitstudent.com:8443"
+}

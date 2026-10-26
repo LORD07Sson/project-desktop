@@ -1011,12 +1011,9 @@ async fn is_autostart(app: tauri::AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
-// Тот же хост, что и API_BASE в src/app/api.js — держать в синхроне
-// руками, если он когда-нибудь сменится (не тянем сюда JS-константу,
-// у Rust-стороны и так уже есть свои захардкоженные UPDATE_*_URL —
-// тот же принцип: несколько мест, где живёт "адрес прода", это
-// осознанный компромисс маленького проекта без общего конфига).
-const API_BASE: &str = "https://minitg.shitstudent.com:8443/api";
+// Адрес сервера — из server.json в корне репозитория (build.rs передаёт его как SERVER_ORIGIN), тот же файл читает
+// интерфейс (src/app/api.js). Сменить: npm run set-server -- https://новый.домен.
+const API_BASE: &str = concat!(env!("SERVER_ORIGIN"), "/api");
 
 // Один клиент на всё приложение — у reqwest::Client внутри пул
 // соединений и TLS-сессии, создавать его на каждый запрос значит

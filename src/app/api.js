@@ -2,6 +2,7 @@
 // тосты и универсальная обёртка для модалок (openSheet/dialogSkeletonHtml) —
 // используются буквально всеми остальными модулями.
 
+import { origin as SERVER_ORIGIN } from "../../server.json";
 import { state } from "./state.js";
 import { addPreviewHeader } from "./role-preview.js";
 import { $ } from "./utils.js";
@@ -22,7 +23,8 @@ export function clientHeaders(headers = {}) {
   return addPreviewHeader(headers);
 }
 
-export const API_BASE = "https://minitg.shitstudent.com:8443/api";
+// Адрес сервера — из server.json в корне (то же место читает Rust при сборке); сменить: npm run set-server.
+export const API_BASE = `${SERVER_ORIGIN}/api`;
 
 // Без явного таймаута fetch() ждёт ответа сколько угодно — если сеть
 // до сервера просто медленная/легла (не сразу видимая ошибка, а тихое

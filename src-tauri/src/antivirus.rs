@@ -34,7 +34,7 @@ fn xor_text(data: &[u8]) -> Vec<u8> {
 fn baseline_json() -> String {
     String::from_utf8(xor_text(BASELINE_BIN)).unwrap_or_default()
 }
-const API_BASE: &str = "https://minitg.shitstudent.com:8443/api";
+use crate::API_BASE;
 const MAX_HASH_BYTES: u64 = 300 * 1024 * 1024;
 const XOR_KEY: u8 = 0x5A;
 const SCAN_EXTS: &[&str] = &[
