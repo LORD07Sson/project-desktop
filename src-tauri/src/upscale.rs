@@ -2,7 +2,7 @@
 //!
 //! Движок — upscayl-bin (поддерживаемый форк realesrgan-ncnn-vulkan от проекта Upscayl: свежий Vulkan, исправления;
 //! работает на любой видеокарте с Vulkan). Модели — из Upscayl: digital-art-4x под аниме и рисунки, ultrasharp-4x —
-//! самая резкая, high-fidelity-4x — бережно к текстуре, под реалистичные картинки. В установщик ничего не кладём:
+//! самая резкая (реалистичные модели не берём: у нас только аниме). В установщик ничего не кладём:
 //! при первом апскейле докачиваем закреплённый релиз движка и только выбранную модель (по закреплённому коммиту),
 //! сверяем SHA-256, зашитую в приложение, и складываем в %LOCALAPPDATA%\Project Desktop\tools\upscayl — рядом с
 //! докачанным ffmpeg (audio_qc::downloaded_tools_dir).
@@ -33,7 +33,7 @@ struct Model {
     bin_sha: &'static str,
 }
 
-const MODELS: [Model; 3] = [
+const MODELS: [Model; 2] = [
     Model {
         key: "anime",
         name: "digital-art-4x",
@@ -45,12 +45,6 @@ const MODELS: [Model; 3] = [
         name: "ultrasharp-4x",
         param_sha: "0136ca83686809a8f17f7111f11b951e8db93610e24b7f4137c9ffe4dbc4a806",
         bin_sha: "fb3e279d40d4cddb44db4e684d59e68d0aa39852c8cc14dc3f23ccc7e6eee9c1",
-    },
-    Model {
-        key: "photo",
-        name: "high-fidelity-4x",
-        param_sha: "4576ed5c2fc5fa250d3c3d585ef02248f26abdfc1867088078f501fe71e5d61e",
-        bin_sha: "8a135402b4f39286121b76abb47601a6b7b7e8d4f3e999a5aaa45ed277824fb4",
     },
 ];
 /// Больше — не обложка, а что-то не то; и памяти видеокарте хватит не на всё.
@@ -173,7 +167,7 @@ fn parse_percent(line: &str) -> Option<f64> {
     num.trim().replace(',', ".").parse::<f64>().ok().filter(|v| (0.0..=100.0).contains(v))
 }
 
-/// Увеличивает картинку в 4 раза. `mode` — "anime", "sharp" или "photo". Возвращает PNG.
+/// Увеличивает картинку в 4 раза. `mode` — "anime" или "sharp". Возвращает PNG.
 pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Vec<u8>, mode: &str) -> Result<Vec<u8>, String> {
     if bytes.is_empty() || bytes.len() > MAX_INPUT {
         return Err("Картинка пустая или слишком большая (больше 25 МБ).".into());
