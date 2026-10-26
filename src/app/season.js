@@ -8,7 +8,7 @@ const KEY = "project-season";
 export const SEASONS = { auto: "Авто", winter: "Зима", spring: "Весна", summer: "Лето", autumn: "Осень", halloween: "Хэллоуин", off: "Выкл." };
 
 const root = document.documentElement;
-let layer = null, canvas = null, ctx = null, garland = null, raf = 0, last = 0, parts = [], kind = "", sprites = null;
+let layer = null, canvas = null, ctx = null, raf = 0, last = 0, parts = [], kind = "", sprites = null;
 
 export function seasonPref() {
   let v = "auto";
@@ -215,85 +215,65 @@ function frame(t) {
   ctx.globalAlpha = 1;
 }
 
-// Новогодняя гирлянда — разноцветные «сосульки» на окнах: тонкий провод провисает дугами из-под вкладок, команды,
-// поиска и «Смотреть», по нему идут микро-огоньки, вниз свисают короткие нити с огоньками. Сдержанно: не на краю
-// зрения и без ярких полос — работать не мешает. Свечение — радиальный градиент (без blur: огоньков сотни),
-// мерцают вразнобой.
-const HANG_FROM = ["#tabstrip", "#titlebar-team", "#open-cmdk", "#open-watch"];
+// Гирлянда внутри панелей: по верхнему краю панели вкладок, поиска и «Смотреть», над надписями. Зимой — мелкие
+// разноцветные огоньки, на Хэллоуин — мини-тыквы-фонарики. SVG кладём прямо в панель (кликам не мешает), поэтому
+// она сидит над стеклом панели, а не размывается за ним. Свечение — радиальный градиент, мерцают вразнобой.
+const HANG_IN = ["#tabstrip", "#open-cmdk", "#open-watch"];
 const PALETTE = { winter: ["#ff4d4d", "#ffc83d", "#3ddc6e", "#4a8cff", "#ff5fc8", "#3de0e0"], halloween: ["#ff7a1a"] };
-let LED = PALETTE.winter;
 let hangObs = null;
-function led(x, y, k) {
-  const r = rand(0.9, 1.3);
-  const c = k % LED.length;
-  return `<g class="sg-led" style="--d:${(-rand(0, 3)).toFixed(2)}s;--t:${rand(3.5, 6.5).toFixed(2)}s"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(5.5 * r).toFixed(1)}" fill="url(#sg-halo-${c})"/>`
-    + `<circle class="sg-core" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(1.25 * r).toFixed(2)}" fill="${LED[c]}"/></g>`;
-}
-// Тыква-фонарик, как в настоящих хэллоуинских гирляндах: рёбрами объёмная, светится изнутри, прорезанные
-// глаза и зубастый рот горят жёлтым. Висит на коротком хвостике под проводом.
-function pumpkin(x, y, tilt) {
-  return `<g class="sg-pumpkin" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${tilt.toFixed(1)})" style="--d:${(-rand(0, 4)).toFixed(2)}s">`
-    + `<circle cx="0" cy="9" r="13" fill="url(#sg-pk-halo)"/><path d="M0 0 L0 3" stroke="#1a1a1a" stroke-width="1"/>`
-    + `<path d="M-.4 3.4 Q.8 1.8 2.2 2.2 L1.4 4.4Z" fill="#4c7a24"/>`
-    + `<ellipse cx="-3.6" cy="9.4" rx="3.6" ry="5.4" fill="url(#sg-pk)" stroke="#a8400a" stroke-width=".5"/>`
-    + `<ellipse cx="3.6" cy="9.4" rx="3.6" ry="5.4" fill="url(#sg-pk)" stroke="#a8400a" stroke-width=".5"/>`
-    + `<ellipse cx="0" cy="9.4" rx="3.4" ry="5.8" fill="url(#sg-pk)" stroke="#a8400a" stroke-width=".5"/>`
-    + `<path class="sg-face" d="M-4.2 7.6 L-2.6 5.6 L-1.2 7.6Z M1.2 7.6 L2.6 5.6 L4.2 7.6Z M-.6 9.6 L0 8.4 L.6 9.6Z M-4.4 10.8 L-3.3 12.4 L-2.2 11.4 L-1.1 13 L0 11.6 L1.1 13 L2.2 11.4 L3.3 12.4 L4.4 10.8 Q0 12 -4.4 10.8Z"/></g>`;
-}
-function drawGarland() {
-  if (!garland) return;
-  if (!PALETTE[kind]) { garland.innerHTML = ""; return; }
-  LED = PALETTE[kind];
-  const w = window.innerWidth, sag = 7;
-  let wire = "", leds = "", k = 0, bottom = 0;
-  const arc = (x0, x1, y0) => {
-    const cx = (x0 + x1) / 2, step = x1 - x0;
-    wire += `M${x0.toFixed(1)} ${y0.toFixed(1)} Q${cx.toFixed(1)} ${(y0 + sag * 2).toFixed(1)} ${x1.toFixed(1)} ${y0.toFixed(1)} `;
-    const m = Math.max(3, Math.round(step / 11));
-    for (let j = 0; j <= m; j++) {
-      const t = j / m, x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, y = y0 + 2 * (1 - t) * t * sag * 2;
-      if (kind === "halloween") continue;   // у тыквенной гирлянды — свои подвески ниже
-      leds += led(x, y, k++);
-      // нить-«сосулька» через каждые два огонька: 1–3 огонька вниз
-      if (j % 2 === 1 && j < m) {
-        const len = 1 + Math.floor(rand(0, 3));
-        wire += `M${x.toFixed(1)} ${y.toFixed(1)} L${x.toFixed(1)} ${(y + len * 6).toFixed(1)} `;
-        for (let q = 1; q <= len; q++) leds += led(x + rand(-0.6, 0.6), y + q * 6, k++);
-        bottom = Math.max(bottom, y + len * 6 + 8);
-      }
-    }
-    if (kind === "halloween") {
-      // тыквы через равные промежутки, чуть наклонены по проводу
-      const p = Math.max(2, Math.round(step / 30));
-      for (let j = 0; j < p; j++) {
-        const t = (j + 0.5) / p, x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, y = y0 + 2 * (1 - t) * t * sag * 2;
-        const tilt = Math.atan2(2 * (1 - t) * sag * 2 - 2 * t * sag * 2, step) * 180 / Math.PI * 0.5;
-        leds += pumpkin(x, y, tilt);
-      }
-      bottom = Math.max(bottom, y0 + sag + 30);
-    }
-  };
-  for (const sel of HANG_FROM) {
-    const el = document.querySelector(sel);
-    const r = el && el.getBoundingClientRect();
-    if (!r || r.width < 30 || !el.offsetParent) continue;
-    const L = r.left + 8, R = r.right - 8, y0 = r.bottom - 2;
-    const n = Math.max(1, Math.round((R - L) / 210));
-    for (let i = 0; i < n; i++) arc(L + i * (R - L) / n, L + (i + 1) * (R - L) / n, y0);
-  }
-  // Свечение каждого огонька — своего цвета.
-  const halos = LED.map((col, i) => `<radialGradient id="sg-halo-${i}"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".3" stop-color="${col}" stop-opacity=".55"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient>`).join("");
-  const pk = `<radialGradient id="sg-pk" cx=".5" cy=".45" r=".6"><stop offset="0" stop-color="#ffc163"/><stop offset=".55" stop-color="#ff8a1f"/><stop offset="1" stop-color="#d4540a"/></radialGradient>`
-    + `<radialGradient id="sg-pk-halo"><stop offset="0" stop-color="#ffb347" stop-opacity=".55"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>`;
-  garland.innerHTML = wire ? `<svg width="${w}" height="${bottom.toFixed(0)}"><defs>${halos}${kind === "halloween" ? pk : ""}</defs>
-    <path class="sg-wire" d="${wire}"/>${leds}</svg>` : "";
+
+function led(id, x, y, c, col) {
+  return `<g class="sg-led" style="--d:${(-rand(0, 3)).toFixed(2)}s;--t:${rand(3.5, 6.5).toFixed(2)}s"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="url(#${id}-h${c})"/>`
+    + `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.3" fill="${col}"/></g>`;
 }
 
-// Аватарки команды и вкладки меняют ширину — гирлянда перевешивается следом.
+// Мини-тыква-фонарик: объёмная, светится изнутри, глаза и зубастый рот горят жёлтым.
+function pumpkin(id, x, y, k = 0.62) {
+  return `<g class="sg-pumpkin" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})" style="--d:${(-rand(0, 4)).toFixed(2)}s">`
+    + `<circle cx="0" cy="9" r="12" fill="url(#${id}-pkh)"/><path d="M0 0 L0 3" stroke="#1a1a1a" stroke-width="1"/>`
+    + `<path d="M-.4 3.4 Q.8 1.8 2.2 2.2 L1.4 4.4Z" fill="#4c7a24"/>`
+    + `<ellipse cx="-3.6" cy="9.4" rx="3.6" ry="5.4" fill="url(#${id}-pk)" stroke="#a8400a" stroke-width=".5"/>`
+    + `<ellipse cx="3.6" cy="9.4" rx="3.6" ry="5.4" fill="url(#${id}-pk)" stroke="#a8400a" stroke-width=".5"/>`
+    + `<ellipse cx="0" cy="9.4" rx="3.4" ry="5.8" fill="url(#${id}-pk)" stroke="#a8400a" stroke-width=".5"/>`
+    + `<path class="sg-face" d="M-4.2 7.6 L-2.6 5.6 L-1.2 7.6Z M1.2 7.6 L2.6 5.6 L4.2 7.6Z M-.6 9.6 L0 8.4 L.6 9.6Z M-4.4 10.8 L-3.3 12.4 L-2.2 11.4 L-1.1 13 L0 11.6 L1.1 13 L2.2 11.4 L3.3 12.4 L4.4 10.8 Q0 12 -4.4 10.8Z"/></g>`;
+}
+
+function drawGarland() {
+  const pal = PALETTE[kind];
+  HANG_IN.forEach((sel, n) => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    let svg = el.querySelector(":scope > .sg-in");
+    if (!pal) { if (svg) svg.remove(); return; }
+    const w = el.clientWidth;
+    if (w < 40) return;
+    if (!svg) {
+      el.insertAdjacentHTML("afterbegin", `<svg class="sg-in" aria-hidden="true"></svg>`);
+      svg = el.querySelector(":scope > .sg-in");
+    }
+    const id = `sg${n}`, x0 = 12, x1 = w - 12, y0 = 3, sag = 2.5;
+    const halo = kind === "halloween" ? 22 : 13;   // шаг между фонариками
+    const m = Math.max(2, Math.round((x1 - x0) / halo));
+    let body = "";
+    for (let j = 0; j <= m; j++) {
+      const t = j / m, x = x0 + (x1 - x0) * t, y = y0 + 4 * t * (1 - t) * sag;
+      if (kind === "halloween") { if (j < m) body += pumpkin(id, x + (x1 - x0) / m / 2, y0 + 4 * (t + 0.5 / m) * (1 - t - 0.5 / m) * sag, el.clientHeight < 40 ? 0.46 : 0.62); }
+      else { const c = j % pal.length; body += led(id, x, y, c, pal[c]); }
+    }
+    const defs = kind === "halloween"
+      ? `<radialGradient id="${id}-pk" cx=".5" cy=".45" r=".6"><stop offset="0" stop-color="#ffc163"/><stop offset=".55" stop-color="#ff8a1f"/><stop offset="1" stop-color="#d4540a"/></radialGradient>`
+        + `<radialGradient id="${id}-pkh"><stop offset="0" stop-color="#ffb347" stop-opacity=".5"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>`
+      : pal.map((col, i) => `<radialGradient id="${id}-h${i}"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".3" stop-color="${col}" stop-opacity=".5"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient>`).join("");
+    svg.style.width = `${w}px`;   // стиль, а не атрибут: у кнопок свой размер для svg-иконок
+    svg.innerHTML = `<defs>${defs}</defs><path class="sg-wire" d="M${x0} ${y0} Q${(x0 + x1) / 2} ${y0 + sag * 2} ${x1} ${y0}"/>${body}`;
+  });
+}
+
+// Панели меняют ширину (вкладки, окно) — гирлянда перерисовывается следом.
 function watchHangers() {
   if (hangObs || typeof ResizeObserver === "undefined") return;
   hangObs = new ResizeObserver(() => drawGarland());
-  for (const sel of HANG_FROM) { const el = document.querySelector(sel); if (el) hangObs.observe(el); }
+  for (const sel of HANG_IN) { const el = document.querySelector(sel); if (el) hangObs.observe(el); }
 }
 
 // Шапка Деда Мороза (зимой) и шляпа ведьмы (на Хэллоуин) на логотипе — что видно, решает kadr.css.
@@ -336,16 +316,13 @@ function stop() {
 function restart() {
   stop();
   kind = root.dataset.season || "";
-  if (!kind) { if (layer) layer.hidden = true; return; }
+  if (!kind) { if (layer) layer.hidden = true; drawGarland(); return; }
   if (!layer) {
     layer = document.createElement("div");
     layer.className = "season-fx";
     layer.setAttribute("aria-hidden", "true");
     canvas = document.createElement("canvas");
     layer.appendChild(canvas);
-    garland = document.createElement("div");
-    garland.className = "season-garland";
-    layer.appendChild(garland);
     // Сразу за фоном из обложки (#app-backdrop) — под окном приложения.
     const bd = document.getElementById("app-backdrop");
     if (bd) bd.after(layer);
