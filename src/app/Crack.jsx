@@ -2,7 +2,7 @@
 // волоски от точки удара, в последний день трещины ползут прямо на глазах (до полуночи), просрочено — разбито.
 // Рисунок у каждой серии свой (зерно — public_id) и не прыгает между перерисовками: растёт только длина линий.
 
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal, onCleanup } from "solid-js";
 import { apiPost, toast } from "./api.js";
 import { initials } from "./utils.js";
 import { loadAvatars } from "./profile.js";
@@ -531,7 +531,8 @@ export function deadFxHtml(seed, { veins: nVeins = 4, drips: nDrips = 4 } = {}) 
     + `<span class="kc-eyes red kc-lurk" style="left:${(80 + r() * 10).toFixed(0)}%;--ld:${(-r() * 9).toFixed(1)}s"><i></i><i></i></span></i>`;
 }
 
-// Треснувшая кнопка на просроченном слайде: точка удара, рваные лучи от неё, обрывки кольца и отколотый уголок.
+// Треснувшая кнопка на просроченном слайде: точка удара, рваные лучи от неё, обрывки кольца и отколотый уголок —
+// трещины налиты кровью, у точки удара кровавое пятно.
 export function btnCrackHtml(seed) {
   const r = rng(`${seed}:btn`);
   const W = 160, H = 40;
@@ -558,80 +559,5 @@ export function btnCrackHtml(seed) {
   const d = [...rays, ...ring].join(" ");
   const chip = `M${W} 0 L${W} ${(H * (0.35 + r() * 0.2)).toFixed(0)} L${(W - 8 - r() * 8).toFixed(0)} 0Z`;
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path class="chip" d="${chip}"/><path class="dk" d="${d}"/><path class="lt" d="${d}"/>`
-    + `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.2"/></svg>`;
-}
-
-// Кровь с плашки просроченного слайда: ровные потёки медленно стекают вниз — в просвет между кнопками и правее —
-// и, как настоящая кровь, замедляются и встают. Без капель: только плавный наплыв у края и сужающаяся полоса.
-// Края скругляет «липкий» SVG-фильтр (размытие + резкий порог по прозрачности).
-const NS = "http://www.w3.org/2000/svg";
-
-export function BloodDrip(props) {
-  let svg;
-  const id = `kd-goo-${String(props.seed).replace(/\W/g, "")}`;
-  onMount(() => {
-    const strip = svg.parentElement;
-    const slide = strip.closest(".kd-slide");
-    const g = svg.querySelector("g");
-    const r = rng(`${props.seed}:blood`);
-    const add = tag => g.appendChild(document.createElementNS(NS, tag));
-    const set = (e, a) => { for (const k in a) e.setAttribute(k, a[k]); };
-    let runs = [], raf = 0, last = 0;
-
-    const layout = () => {
-      const sr = strip.getBoundingClientRect(), hr = slide.getBoundingClientRect();
-      if (!sr.width) return;
-      const h = Math.max(40, hr.bottom - sr.bottom);
-      set(svg, { viewBox: `0 -6 ${sr.width.toFixed(0)} ${(h + 6).toFixed(0)}` });
-      svg.style.height = `${h + 6}px`;
-      const btns = [...slide.querySelectorAll(".kd-acts .btn")].map(b => b.getBoundingClientRect());
-      const xs = [];
-      if (btns.length >= 2) xs.push((btns[0].right + btns[1].left) / 2 - sr.left);
-      const edge = (btns.length ? btns[btns.length - 1].right : sr.left) - sr.left;
-      const free = sr.width - edge;
-      if (free > 34) xs.push(edge + 12 + free * 0.25);
-      if (free > 110) xs.push(sr.width - 30 - r() * 20);
-      const old = runs;
-      for (const u of old) u.body.remove();
-      runs = xs.map((x, k) => ({ x, len: old[k] ? old[k].len : 2, max: h * (0.35 + r() * 0.5), v: 5 + r() * 5, w: 3 + r() * 1.6, body: add("path") }));
-      draw(0);
-    };
-
-    // Скорость падает к концу пути — потёк густеет и встаёт.
-    const draw = dt => {
-      for (const u of runs) {
-        u.len = Math.min(u.max, u.len + u.v * dt * Math.pow(Math.max(0, 1 - u.len / u.max), 0.6) + 0.02);
-        // У края плашки потёк плавно расширяется (наплыв), дальше — ровная сужающаяся полоса.
-        const f = n => n.toFixed(1), top = u.w / 2, bot = u.w * 0.32, flare = u.w * 1.5;
-        set(u.body, { d: `M${f(u.x - flare)} -6 L${f(u.x + flare)} -6 Q${f(u.x + top)} -2 ${f(u.x + top)} 5 L${f(u.x + bot)} ${f(u.len)} L${f(u.x - bot)} ${f(u.len)} L${f(u.x - top)} 5 Q${f(u.x - top)} -2 ${f(u.x - flare)} -6Z` });
-      }
-    };
-
-    const frame = t => {
-      raf = requestAnimationFrame(frame);
-      const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
-      last = t;
-      if (document.hidden || !slide.classList.contains("on")) { last = 0; return; }
-      draw(dt);
-    };
-
-    const ro = new ResizeObserver(layout);
-    ro.observe(slide);
-    requestAnimationFrame(() => {
-      layout();
-      if (document.documentElement.dataset.motion !== "off") raf = requestAnimationFrame(frame);
-    });
-    onCleanup(() => { cancelAnimationFrame(raf); ro.disconnect(); });
-  });
-  return (
-    <svg ref={svg} class="kd-blood" aria-hidden="true">
-      <defs>
-        <filter id={id} x="-50%" y="-20%" width="200%" height="140%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" />
-          <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" />
-        </filter>
-      </defs>
-      <g filter={`url(#${id})`} />
-    </svg>
-  );
+    + `<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="9" ry="6"/></svg>`;
 }

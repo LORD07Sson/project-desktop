@@ -4404,19 +4404,15 @@ td.row-actions { opacity: 1; transition: none; }
   box-shadow: inset 0 0 0 1px rgba(210, 24, 20, .42), inset 0 -12px 26px rgba(150, 0, 0, .4), 0 0 26px rgba(160, 0, 0, .28); }
 .kd-slide.dead .kd-strip > div { border-left-color: rgba(210, 30, 24, .28); }
 .kd-slide.dead .kd-strip small { color: rgba(255, 120, 108, .6); }
-.kd-slide.dead .kd-strip > div:nth-last-child(2) b { color: #ff3b30; text-shadow: 0 0 10px rgba(255, 30, 20, .7); }
-.kd-blood { position: absolute; left: 0; top: calc(100% - 6px); width: 100%; overflow: visible; pointer-events: none; z-index: 0;
-  filter: drop-shadow(0 0 3px rgba(200, 0, 0, .5)) drop-shadow(0 1px 0 rgba(255, 120, 110, .25)); }
-.kd-blood g { fill: rgb(150, 6, 8); }
-.kd-slide.dead .kd-acts { position: relative; z-index: 1; }
-/* Кнопки — обычные, но треснувшие (btnCrackHtml в Crack.jsx): тёмный разлом с бликом и отколотый уголок. */
+.kd-slide.dead .kd-strip > div:last-child b { color: #ff3b30; text-shadow: 0 0 10px rgba(255, 30, 20, .7); }
+/* Кнопки — обычные, но треснувшие (btnCrackHtml в Crack.jsx): трещины налиты кровью, у точки удара пятно, уголок отколот. */
 .kd-slide.dead .kd-acts .btn { position: relative; overflow: hidden; }
 .kd-acts .btn .kd-btn-crack { position: absolute; inset: 0; pointer-events: none; }
 .kd-acts .btn .kd-btn-crack svg { width: 100%; height: 100%; display: block; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.kd-btn-crack .dk { stroke: rgba(0, 0, 0, .4); stroke-width: 1.6px; vector-effect: non-scaling-stroke; }
-.kd-btn-crack .lt { stroke: rgba(255, 255, 255, .75); stroke-width: .7px; vector-effect: non-scaling-stroke; transform: translate(.4px, -.4px); }
-.kd-btn-crack .chip { fill: rgba(8, 4, 4, .82); stroke: rgba(255, 255, 255, .55); stroke-width: .8px; vector-effect: non-scaling-stroke; }
-.kd-btn-crack circle { display: none; }
+.kd-btn-crack .dk { stroke: rgba(90, 0, 0, .85); stroke-width: 2.4px; vector-effect: non-scaling-stroke; }
+.kd-btn-crack .lt { stroke: rgb(235, 22, 18); stroke-width: 1.1px; filter: drop-shadow(0 0 1.5px rgba(255, 20, 10, .9)); vector-effect: non-scaling-stroke; transform: translate(.4px, -.4px); }
+.kd-btn-crack .chip { fill: rgb(70, 0, 2); stroke: rgba(255, 40, 30, .8); stroke-width: .8px; vector-effect: non-scaling-stroke; }
+.kd-btn-crack ellipse { fill: rgba(150, 0, 4, .75); filter: blur(2.5px); }
 .kd-slide.dead .kd-kick { color: #ff3b30; animation: kd-kick-beat var(--beat) infinite; }
 @keyframes kd-kick-beat { 0%, 40%, 100% { text-shadow: 0 0 6px rgba(255, 30, 20, .4); } 8% { text-shadow: 0 0 14px rgba(255, 30, 20, 1), 0 0 2px #fff; } 26% { text-shadow: 0 0 10px rgba(255, 30, 20, .75); } }
 .kd-slide.dead .kd-kick i { background: #ff2a1f; box-shadow: 0 0 0 4px rgba(255, 30, 20, .2), 0 0 12px rgba(255, 30, 20, .8); }
