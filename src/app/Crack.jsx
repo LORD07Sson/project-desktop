@@ -511,10 +511,10 @@ export function doomCardStyle(st) {
 }
 
 // Просроченная карточка: поверх неё — кровавые прожилки от обложки, подтёки сверху и вторая пара глаз во тьме справа.
-export function deadFxHtml(seed) {
+export function deadFxHtml(seed, { veins: nVeins = 4, drips: nDrips = 4 } = {}) {
   const r = rng(`${seed}:dead`);
   const veins = [];
-  for (let v = 0; v < 4; v++) {
+  for (let v = 0; v < nVeins; v++) {
     let x = 18, y = 20 + r() * 60;
     let d = `M${x} ${y.toFixed(1)}`;
     const reach = 45 + r() * 50;
@@ -525,7 +525,7 @@ export function deadFxHtml(seed) {
     }
     veins.push(`<path d="${d}" style="--vd:${(r() * 2).toFixed(2)}s"/>`);
   }
-  const drips = Array.from({ length: 4 }, () =>
+  const drips = Array.from({ length: nDrips }, () =>
     `<b style="left:${(22 + r() * 72).toFixed(1)}%;--dh:${(6 + r() * 14).toFixed(0)}px;--dd:${(5 + r() * 6).toFixed(1)}s;--dl:${(-r() * 8).toFixed(1)}s"></b>`).join("");
   return `<i class="kc-dead-fx" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${veins.join("")}</svg>${drips}`
     + `<span class="kc-eyes red kc-lurk" style="left:${(80 + r() * 10).toFixed(0)}%;--ld:${(-r() * 9).toFixed(1)}s"><i></i><i></i></span></i>`;

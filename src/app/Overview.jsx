@@ -25,7 +25,7 @@ import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
 import { setBackdrop } from "./backdrop.js";
-import { Crack, Shards, Pieces, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel, gloomLevel } from "./Crack.jsx";
+import { Crack, Shards, Pieces, TimeLens, Eyes, aimLens, aimedTarget, placeTargets, strike, timeJump, crackLevel, gloomLevel, deadFxHtml } from "./Crack.jsx";
 
 const DAY_MS = 86400000;
 const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
@@ -226,7 +226,7 @@ function Hero(props) {
             apiGet(`/report/${r.public_id}/strike`).then(d => setTargets(placeTargets(r.public_id, d.targets || []))).catch(() => {});
           };
           return (
-            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner && !bannerFailed() ? "" : " no-ban"}${crack() > 0 ? " doom" : ""}${gloom() > 0.9 ? " flicker" : ""}`}
+            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner && !bannerFailed() ? "" : " no-ban"}${crack() > 0 ? " doom" : ""}${broken() ? " dead" : ""}${gloom() > 0.9 ? " flicker" : ""}`}
               style={{ "--gloom": gloom().toFixed(3) }}>
               <div class="kd-slide-amb" style={poster ? { "background-image": `url("${poster}")` } : {}} />
               <Show when={banner}>
@@ -251,6 +251,8 @@ function Hero(props) {
                 </div>
               </Show>
               <div class="kd-slide-fade" />
+              {/* Просрочено — те же кровавые прожилки, подтёки и помехи, что у карточки на «Доске». */}
+              <Show when={broken()}><div class="kd-dead" innerHTML={deadFxHtml(r.public_id, { veins: 8, drips: 9 })} /></Show>
               <Show when={crack() > 0}><Eyes level={crack} gloom={gloom} active={onSlide} /></Show>
               <div class="kd-slide-tx">
                 <span class={`kd-kick ${it.tone === "red" || left === 0 ? "hot" : ""}`}><i />{heroKick(it)}</span>

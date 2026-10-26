@@ -4385,6 +4385,24 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-motion="off"] .board-card.dead, :root[data-motion="off"] .board-card.dead *, :root[data-motion="off"] .kc-dead-fx::after { animation: none !important; }
 :root[data-motion="off"] .kc-dead-fx > b::after { display: none; }
 :root[data-motion="off"] .kc-lurk { opacity: .7; }
+/* То же на слайде «Обзора»: прожилки расходятся от разбитой обложки справа (зеркально), подтёки длиннее, глаза свои. */
+.kd-dead { position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit; }
+.kd-dead .kc-dead-fx svg { transform: scaleX(-1); }
+.kd-dead .kc-dead-fx path { stroke-width: 2.6; filter: drop-shadow(0 0 4px rgba(255, 20, 10, 1)) drop-shadow(0 0 12px rgba(255, 0, 0, .5)); animation-name: kd-vein; }
+@keyframes kd-vein { 0%, 40%, 100% { opacity: .4; } 8% { opacity: 1; } 26% { opacity: .75; } }
+.kd-dead .kc-dead-fx > b { width: 5px; height: calc(var(--dh) * 4); background: linear-gradient(rgba(90, 0, 0, 1), rgb(200, 12, 10)); box-shadow: 0 0 8px rgba(255, 10, 0, .6); }
+.kd-dead .kc-dead-fx > b::after { width: 7px; height: 9px; left: -1.5px; }
+.kd-dead .kc-dead-fx > b::after { animation-name: kc-drop-far; }
+@keyframes kc-drop-far { 0%, 68% { transform: none; opacity: 1; } 69% { transform: translateY(3px); } 100% { transform: translateY(380px); opacity: 0; } }
+.kd-dead .kc-lurk { display: none; }
+.kd-slide.dead { --beat: 1.05s; }
+.kd-slide.dead .kc-dead-fx path, .kd-slide.dead .kc-dead-fx > b, .kd-slide.dead .kc-dead-fx > b::after { animation-play-state: paused; }
+.kd-slide.dead.on .kc-dead-fx path, .kd-slide.dead.on .kc-dead-fx > b, .kd-slide.dead.on .kc-dead-fx > b::after { animation-play-state: running; }
+.kd-slide.dead .kd-ttl { animation: kc-glitch 5.3s infinite; }
+.kd-slide.dead .kd-kick { color: #ff3b30; animation: kd-kick-beat var(--beat) infinite; }
+@keyframes kd-kick-beat { 0%, 40%, 100% { text-shadow: 0 0 6px rgba(255, 30, 20, .4); } 8% { text-shadow: 0 0 14px rgba(255, 30, 20, 1), 0 0 2px #fff; } 26% { text-shadow: 0 0 10px rgba(255, 30, 20, .75); } }
+.kd-slide.dead .kd-kick i { background: #ff2a1f; box-shadow: 0 0 0 4px rgba(255, 30, 20, .2), 0 0 12px rgba(255, 30, 20, .8); }
+:root[data-motion="off"] .kd-slide.dead .kd-ttl, :root[data-motion="off"] .kd-slide.dead .kd-kick, :root[data-motion="off"] .kd-dead * { animation: none !important; }
 
 /* Мрак последних 10 часов (--gloom 0…1 на слайде, gloomLevel в Crack.jsx): краски выцветают, свет гаснет,
    тьма смыкается вокруг обложки. В последний час свет мигает, как умирающая лампа. Текст поверх — чтобы читался. */
