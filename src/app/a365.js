@@ -253,7 +253,7 @@ function manualHtml() {
         <div><label class="field-label">Тип перевода</label><select class="field-input" id="a3-mtype"><option value="voiceRu">Озвучка</option><option value="subRu">Русские субтитры</option></select></div>
         <div><label class="field-label">Авторы</label><input class="field-input" id="a3-mauthors" value="${esc((last && last.account && last.account.authors) || "DreamyVoice")}"></div>
       </div>
-      <div class="a3-note">Формат «Авторы», как на сайте: Команда (Участник &amp; Участник), например Dream Cast (Brigella &amp; Kirisiya). Без команды: Участник &amp; Участник.</div>
+      <div class="a3-note">Формат «Авторы», как на сайте: Команда (Участник &amp; Участник), например AniPlus (GreenWay &amp; YellowCup). Без команды: Участник &amp; Участник.</div>
       <label class="a3-check"><input type="checkbox" id="a3-mauthor" checked> Я участник команды авторов этого перевода</label>
       <div class="a3-grid">
         <div><label class="field-label">Видео</label><input class="field-input" id="a3-mvideo" type="file" accept="video/*,.mkv,.mp4,.webm,.avi,.mov,.ts"></div>
