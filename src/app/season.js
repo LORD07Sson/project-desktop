@@ -171,43 +171,87 @@ function frame(t) {
   ctx.globalAlpha = 1;
 }
 
-// Новогодняя гирлянда: свисает из-под вкладок, аватарок команды, поиска и кнопки «Смотреть» — провод провисает
-// дугами, на нём стеклянные лампочки с цоколем. Цвета по кругу, мигают группами со сдвигом — «волна».
-const BULBS = ["#ff3b3b", "#ffc93b", "#3bdc6a", "#3ba4ff", "#ff5fc8"];
+// Новогодняя гирлянда — синие «сосульки» на окнах: тонкий провод провисает дугами из-под вкладок, команды,
+// поиска и «Смотреть», по нему густо идут микро-огоньки, вниз свисают короткие нити с огоньками; по боковым
+// краям окна — «занавес» из вертикальных нитей. Ещё ёлка из огоньков со звездой в свободном месте заголовка. Свечение — радиальный градиент (без blur: огоньков сотни),
+// мерцают вразнобой.
 const HANG_FROM = ["#tabstrip", "#titlebar-team", "#open-cmdk", "#open-watch"];
+const LED = ["#8fbcff", "#4a84ff", "#2f63ff", "#d6e6ff"];
 let hangObs = null;
+function led(x, y, k) {
+  const r = rand(0.9, 1.3);
+  return `<g class="sg-led" style="--d:${(-rand(0, 3)).toFixed(2)}s;--t:${rand(1.6, 3.4).toFixed(2)}s"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(5.5 * r).toFixed(1)}" fill="url(#sg-halo)"/>`
+    + `<circle class="sg-core" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(1.25 * r).toFixed(2)}" fill="${LED[k % LED.length]}"/></g>`;
+}
 function drawGarland() {
   if (!garland) return;
   if (kind !== "winter") { garland.innerHTML = ""; return; }
   const w = window.innerWidth, sag = 7;
-  let wire = "", bulbs = "", k = 0, bottom = 0;
+  let wire = "", leds = "", k = 0, bottom = 0;
+  const arc = (x0, x1, y0) => {
+    const cx = (x0 + x1) / 2, step = x1 - x0;
+    wire += `M${x0.toFixed(1)} ${y0.toFixed(1)} Q${cx.toFixed(1)} ${(y0 + sag * 2).toFixed(1)} ${x1.toFixed(1)} ${y0.toFixed(1)} `;
+    const m = Math.max(3, Math.round(step / 11));
+    for (let j = 0; j <= m; j++) {
+      const t = j / m, x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, y = y0 + 2 * (1 - t) * t * sag * 2;
+      leds += led(x, y, k++);
+      // нить-«сосулька» через каждые два огонька: 1–3 огонька вниз
+      if (j % 2 === 1 && j < m) {
+        const len = 1 + Math.floor(rand(0, 3));
+        wire += `M${x.toFixed(1)} ${y.toFixed(1)} L${x.toFixed(1)} ${(y + len * 6).toFixed(1)} `;
+        for (let q = 1; q <= len; q++) leds += led(x + rand(-0.6, 0.6), y + q * 6, k++);
+        bottom = Math.max(bottom, y + len * 6 + 8);
+      }
+    }
+  };
   for (const sel of HANG_FROM) {
     const el = document.querySelector(sel);
     const r = el && el.getBoundingClientRect();
     if (!r || r.width < 30 || !el.offsetParent) continue;
     const L = r.left + 8, R = r.right - 8, y0 = r.bottom - 2;
-    bottom = Math.max(bottom, y0 + sag + 24);
     const n = Math.max(1, Math.round((R - L) / 210));
-    const step = (R - L) / n;
-    for (let i = 0; i < n; i++) {
-      const x0 = L + i * step, x1 = x0 + step, cx = x0 + step / 2;
-      wire += `M${x0.toFixed(1)} ${y0.toFixed(1)} Q${cx.toFixed(1)} ${(y0 + sag * 2).toFixed(1)} ${x1.toFixed(1)} ${y0.toFixed(1)} `;
-      const m = Math.max(2, Math.round(step / 34));
-      for (let j = 0; j < m; j++) {
-        const t = (j + 0.5) / m;
-        // точка и наклон на квадратичной кривой Безье
-        const x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1;
-        const y = y0 + 2 * (1 - t) * t * sag * 2;
-        const tilt = Math.atan2(2 * (1 - t) * sag * 2 - 2 * t * sag * 2, step) * 180 / Math.PI;
-        const col = BULBS[k % BULBS.length];
-        bulbs += `<g class="sg-bulb" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${tilt.toFixed(1)}) scale(.78)" style="--c:${col};--d:${((k % 5) * 0.32).toFixed(2)}s">`
-          + `<circle class="sg-glow" cx="0" cy="13" r="15"/><rect class="sg-cap" x="-3.2" y="0" width="6.4" height="5.5" rx="1.2"/>`
-          + `<path class="sg-glass" d="M-4.6 5.5 C-6.6 10 -5.8 17 0 21 C5.8 17 6.6 10 4.6 5.5Z"/><ellipse class="sg-shine" cx="-1.8" cy="10" rx="1.2" ry="3"/></g>`;
-        k++;
-      }
-    }
+    for (let i = 0; i < n; i++) arc(L + i * (R - L) / n, L + (i + 1) * (R - L) / n, y0);
   }
-  garland.innerHTML = wire ? `<svg width="${w}" height="${bottom.toFixed(0)}"><path class="sg-wire" d="${wire}"/>${bulbs}</svg>` : "";
+  // «Занавес» по боковым краям окна: вертикальные нити огоньков в полях слева и справа от содержимого.
+  const h = window.innerHeight, top0 = 52;
+  for (const x of [9, 19, w - 26, w - 36]) {
+    let d = `M${x} ${top0}`;
+    for (let y = top0; y < h - 4; y += 16) {
+      const xx = x + Math.sin(y / 37 + x) * 1.6;
+      d += ` L${xx.toFixed(1)} ${y}`;
+      leds += led(xx, y, k++);
+    }
+    wire += d + " ";
+  }
+  bottom = Math.max(bottom, h);
+  // Ёлка из огоньков — в просвете между вкладками и командой.
+  let tree = "";
+  const a = document.querySelector("#tabstrip"), b = document.querySelector("#titlebar-team");
+  const ra = a && a.getBoundingClientRect(), rb = b && b.getBoundingClientRect();
+  if (ra && rb && rb.left - ra.right > 80) {
+    const cx = (ra.right + rb.left) / 2, top = 9, H = 34, half = 15;
+    let zig = `M${cx} ${top + 3}`;
+    const rows = 5;
+    for (let i = 1; i <= rows; i++) {
+      const y = top + 3 + (H - 6) * i / rows, wdt = half * i / rows;
+      zig += ` L${(cx + (i % 2 ? wdt : -wdt)).toFixed(1)} ${y.toFixed(1)}`;
+    }
+    const pts = [];
+    // огоньки вдоль контура и зигзага гирлянды
+    for (let i = 0; i <= 14; i++) { const t = i / 14; pts.push([cx - half * t, top + 3 + (H - 6) * t], [cx + half * t, top + 3 + (H - 6) * t]); }
+    for (let i = 1; i <= rows; i++) {
+      const y0 = top + 3 + (H - 6) * (i - 1) / rows, y1 = top + 3 + (H - 6) * i / rows;
+      const x0 = i === 1 ? cx : cx + ((i - 1) % 2 ? half * (i - 1) / rows : -half * (i - 1) / rows), x1 = cx + (i % 2 ? half * i / rows : -half * i / rows);
+      for (let q = 1; q < 4; q++) pts.push([x0 + (x1 - x0) * q / 4, y0 + (y1 - y0) * q / 4]);
+    }
+    tree = `<path class="sg-tree" d="${zig}"/>` + pts.map(([x, y]) => led(x, y, k++)).join("")
+      + `<rect class="sg-trunk" x="${(cx - 2).toFixed(1)}" y="${top + H - 3}" width="4" height="4" rx="1"/>`
+      + `<path class="sg-star" d="M${cx} ${top - 4} l1.6 3.3 3.6 .5 -2.6 2.5 .6 3.6 -3.2 -1.7 -3.2 1.7 .6 -3.6 -2.6 -2.5 3.6 -.5Z"/>`;
+    bottom = Math.max(bottom, top + H + 4);
+  }
+  garland.innerHTML = (wire || tree) ? `<div class="sg-cove"></div><svg width="${w}" height="${bottom.toFixed(0)}">
+    <defs><radialGradient id="sg-halo"><stop offset="0" stop-color="#8fb4ff" stop-opacity=".95"/><stop offset=".35" stop-color="#2f63ff" stop-opacity=".5"/><stop offset="1" stop-color="#1a3cff" stop-opacity="0"/></radialGradient></defs>
+    <path class="sg-wire" d="${wire}"/>${leds}${tree}</svg>` : "";
 }
 
 // Аватарки команды и вкладки меняют ширину — гирлянда перевешивается следом.
