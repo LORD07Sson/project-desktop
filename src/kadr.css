@@ -4457,11 +4457,11 @@ td.row-actions { opacity: 1; transition: none; }
 /* У кнопок свои правила для svg-иконок (размер 14px, обводка currentColor) — гирлянде они не нужны. */
 .btn svg.sg-in, .tb-search svg.sg-in { height: 18px; stroke: none; fill: none; flex: none; }
 .sg-wire { fill: none; stroke: rgba(20, 30, 40, .9); stroke-width: .8; }
-.sg-led { animation: sg-twinkle var(--t, 2.4s) var(--d, 0s) ease-in-out infinite; }
-@keyframes sg-twinkle { 0%, 100% { opacity: .95; } 50% { opacity: .6; } }
+.sg-led { animation: sg-twinkle 4s ease-in-out infinite; }
+@keyframes sg-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .75; } }
 :root[data-motion="off"] .sg-led, :root[data-motion="off"] .sg-pumpkin { animation: none; }
-.sg-pumpkin { animation: sg-glow 5s var(--d, 0s) ease-in-out infinite; }
-@keyframes sg-glow { 0%, 100% { filter: brightness(1.05); } 50% { filter: brightness(.7); } }
+.sg-pumpkin { animation: sg-glow 4s ease-in-out infinite; }
+@keyframes sg-glow { 0%, 100% { filter: brightness(1.05); } 50% { filter: brightness(.85); } }
 .sg-face { fill: #fff1a8; filter: drop-shadow(0 0 1.2px #ffd04d) drop-shadow(0 0 3px #ff9a1f); }
 :root[data-season="halloween"] .sg-wire { stroke: #0d0d0d; stroke-width: 1.1; }
 :root[data-theme="light"] .sg-wire { stroke: #6a7a8c; }

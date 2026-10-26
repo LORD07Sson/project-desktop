@@ -217,20 +217,21 @@ function frame(t) {
 
 // Гирлянда внутри панелей: по верхнему краю панели вкладок, поиска и «Смотреть», над надписями. Зимой — мелкие
 // разноцветные огоньки, на Хэллоуин — мини-тыквы-фонарики. SVG кладём прямо в панель (кликам не мешает), поэтому
-// она сидит над стеклом панели, а не размывается за ним. Свечение — радиальный градиент, мерцают вразнобой.
+// она сидит над стеклом панели, а не размывается за ним. Ровный ряд без провода; светятся ровно и дышат все разом —
+// вразнобой тусклые выпадали, и ряд выглядел кривым.
 const HANG_IN = ["#tabstrip", "#open-cmdk", "#open-watch"];
 const PALETTE = { winter: ["#ff4d4d", "#ffc83d", "#3ddc6e", "#4a8cff", "#ff5fc8", "#3de0e0"], halloween: ["#ff7a1a"] };
 let hangObs = null;
 
 function led(id, x, y, c, col) {
-  return `<g class="sg-led" style="--d:${(-rand(0, 3)).toFixed(2)}s;--t:${rand(3.5, 6.5).toFixed(2)}s"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="url(#${id}-h${c})"/>`
+  return `<g class="sg-led"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="url(#${id}-h${c})"/>`
     + `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.3" fill="${col}"/></g>`;
 }
 
 // Мини-тыква-фонарик: объёмная, светится изнутри, глаза и зубастый рот горят жёлтым.
 function pumpkin(id, x, y, k = 0.62) {
-  return `<g class="sg-pumpkin" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})" style="--d:${(-rand(0, 4)).toFixed(2)}s">`
-    + `<circle cx="0" cy="9" r="12" fill="url(#${id}-pkh)"/><path d="M0 0 L0 3" stroke="#1a1a1a" stroke-width="1"/>`
+  return `<g class="sg-pumpkin" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})">`
+    + `<circle cx="0" cy="9" r="12" fill="url(#${id}-pkh)"/>`
     + `<path d="M-.4 3.4 Q.8 1.8 2.2 2.2 L1.4 4.4Z" fill="#4c7a24"/>`
     + `<ellipse cx="-3.6" cy="9.4" rx="3.6" ry="5.4" fill="url(#${id}-pk)" stroke="#a8400a" stroke-width=".5"/>`
     + `<ellipse cx="3.6" cy="9.4" rx="3.6" ry="5.4" fill="url(#${id}-pk)" stroke="#a8400a" stroke-width=".5"/>`
@@ -251,21 +252,23 @@ function drawGarland() {
       el.insertAdjacentHTML("afterbegin", `<svg class="sg-in" aria-hidden="true"></svg>`);
       svg = el.querySelector(":scope > .sg-in");
     }
-    const id = `sg${n}`, x0 = 16, x1 = w - 16, y0 = 4.5, sag = 0;   // ровная линия, мимо скруглённых углов
-    const halo = kind === "halloween" ? 22 : 13;   // шаг между фонариками
-    const m = Math.max(2, Math.round((x1 - x0) / halo));
+    // Ровный ряд без провода: одинаковый шаг и одинаковые поля слева и справа, все на одной высоте.
+    const id = `sg${n}`, small = el.clientHeight < 40, y0 = small ? 3 : 2.5;
+    const stepWant = kind === "halloween" ? (small ? 20 : 24) : 13;
+    const m = Math.max(2, Math.floor((w - 32) / stepWant));
+    const step = (w - 32) / m;
     let body = "";
-    for (let j = 0; j <= m; j++) {
-      const t = j / m, x = x0 + (x1 - x0) * t, y = y0 + 4 * t * (1 - t) * sag;
-      if (kind === "halloween") { if (j < m) body += pumpkin(id, x + (x1 - x0) / m / 2, y0 + 4 * (t + 0.5 / m) * (1 - t - 0.5 / m) * sag, el.clientHeight < 40 ? 0.46 : 0.62); }
-      else { const c = j % pal.length; body += led(id, x, y, c, pal[c]); }
+    for (let j = 0; j < m; j++) {
+      const x = 16 + step * (j + 0.5);
+      if (kind === "halloween") body += pumpkin(id, x, y0, small ? 0.46 : 0.58);
+      else { const c = j % pal.length; body += led(id, x, y0 + 3, c, pal[c]); }
     }
     const defs = kind === "halloween"
       ? `<radialGradient id="${id}-pk" cx=".5" cy=".45" r=".6"><stop offset="0" stop-color="#ffc163"/><stop offset=".55" stop-color="#ff8a1f"/><stop offset="1" stop-color="#d4540a"/></radialGradient>`
         + `<radialGradient id="${id}-pkh"><stop offset="0" stop-color="#ffb347" stop-opacity=".5"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>`
       : pal.map((col, i) => `<radialGradient id="${id}-h${i}"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".3" stop-color="${col}" stop-opacity=".5"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient>`).join("");
     svg.style.width = `${w}px`;   // стиль, а не атрибут: у кнопок свой размер для svg-иконок
-    svg.innerHTML = `<defs>${defs}</defs><path class="sg-wire" d="M${x0} ${y0} Q${(x0 + x1) / 2} ${y0 + sag * 2} ${x1} ${y0}"/>${body}`;
+    svg.innerHTML = `<defs>${defs}</defs>${body}`;
   });
 }
 
