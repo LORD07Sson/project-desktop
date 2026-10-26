@@ -211,6 +211,7 @@ export function titlePageHtml(d) {
             <div class="td-vote-cta tpg-actions">
               <button class="${d.my_vote === 1 ? "on-like" : ""}" data-vote-title="${d.id}" data-vote-choice="1">👍 Нравится</button>
               <button class="${d.my_vote === -1 ? "on-dislike" : ""}" data-vote-title="${d.id}" data-vote-choice="-1">👎 Не то</button>
+              <button class="tpg-upscale" data-tpg-upscale title="Увеличить обложку или баннер ×4 нейросетью">✨ Апскейл</button>
             </div>
           </div>
         </div>
@@ -270,6 +271,7 @@ export function wireTitlePage(root, d, { openProfile } = {}) {
       more.textContent = open ? "Показать полностью" : "Свернуть";
     });
   }
+  root.querySelector("[data-tpg-upscale]")?.addEventListener("click", () => import("./upscale-ui.js").then(m => m.openUpscale(d)));
   loadAvatars(root);
   if (openProfile) {
     root.querySelectorAll("[data-open-profile]").forEach(el => el.addEventListener("click", () => openProfile(Number(el.dataset.openProfile))));

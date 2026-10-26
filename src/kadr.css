@@ -4474,3 +4474,27 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-season="winter"] .season-hat.santa, :root[data-season="halloween"] .season-hat.witch, :root[data-season="autumn"] .season-hat.beanie,
 :root[data-season="spring"] .season-hat.crown, :root[data-season="summer"] .season-hat.straw { display: block; }
 :root[data-season="spring"] .season-hat.crown { transform: none; }
+
+/* Апскейл обложки/баннера (upscale-ui.js): выбор, прогресс, сравнение «до/после» ползунком. */
+.up-overlay .sheet { width: min(820px, 94vw); }
+.up { display: flex; flex-direction: column; gap: 14px; }
+.up-head h3 { white-space: nowrap; }
+.up-head { display: flex; align-items: baseline; gap: 12px; }
+.up-head h3 { margin: 0; font-size: 18px; }
+.up-head span { color: var(--ink-dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.up-row b { font-size: 13px; font-weight: 600; }
+.up-stage { display: grid; place-items: center; min-height: 160px; max-height: 62vh; border-radius: 14px; background: rgba(0, 0, 0, .25); border: 1px solid var(--line); padding: 10px; overflow: hidden; }
+.up-hint { color: var(--ink-dim); font-size: 13px; line-height: 1.5; max-width: 520px; text-align: center; }
+.up-cmp { --cut: 50%; position: relative; max-height: calc(62vh - 20px); max-width: 100%; height: calc(62vh - 20px); border-radius: 10px; overflow: hidden; cursor: ew-resize; user-select: none; touch-action: none; }
+.up-cmp img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; image-rendering: auto; }
+.up-cmp .up-after { clip-path: inset(0 0 0 var(--cut)); }
+.up-knob { position: absolute; top: 0; bottom: 0; left: var(--cut); width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 8px rgba(0, 0, 0, .6); pointer-events: none; }
+.up-knob::after { content: "⇆"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; background: #fff; color: #111; font-size: 15px; box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
+.up-tag { position: absolute; top: 8px; padding: 3px 8px; border-radius: 8px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; font-weight: 600; pointer-events: none; }
+.up-tag.l { left: 8px; } .up-tag.r { right: 8px; }
+.up-prog { position: relative; height: 26px; border-radius: 9px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.up-prog i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent-grad); opacity: .55; transition: width .3s; }
+.up-prog span { position: relative; display: block; line-height: 26px; padding: 0 10px; font-size: 12px; }
+.up-acts { display: flex; justify-content: flex-end; gap: 8px; }

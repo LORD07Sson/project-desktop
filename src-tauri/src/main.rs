@@ -22,6 +22,7 @@ mod net_diag;
 mod torrent_clients;
 mod media_tools;
 mod token_store;
+mod upscale;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -742,6 +743,20 @@ fn mt_extract_subtitles(
 }
 
 // ---------- «Собрать финал у себя» (local_render.rs): рендер на видеокарте ПК по плану сервера ----------
+
+// ---------- Апскейл картинок (upscale.rs) ----------
+
+/// Увеличивает картинку ×4 нейросетью (при первом вызове докачивает движок). PNG уходит сырым ответом — без JSON.
+#[tauri::command]
+async fn upscale_image(app: tauri::AppHandle, bytes: Vec<u8>, model: String) -> Result<tauri::ipc::Response, String> {
+    upscale::upscale(&app, http(), bytes, &model).await.map(tauri::ipc::Response::new)
+}
+
+/// Сохраняет последний результат апскейла — только в путь из диалога сохранения.
+#[tauri::command(async)]
+fn upscale_save(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    upscale::save(&app, &path)
+}
 
 /// Автопроверка инструментов: ffmpeg (докачивает из релиза на GitHub, если нет), видеокарта и кодировщики.
 #[tauri::command]
@@ -1485,6 +1500,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             desktop_notify::notify_desktop,
             local_render_prepare,
+            upscale_image,
+            upscale_save,
             local_render_encoders,
             local_render_run,
             local_render_upload,
