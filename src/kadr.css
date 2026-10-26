@@ -4459,8 +4459,10 @@ td.row-actions { opacity: 1; transition: none; }
 .sg-led { animation: sg-twinkle var(--t, 2.4s) var(--d, 0s) ease-in-out infinite; }
 @keyframes sg-twinkle { 0%, 100% { opacity: .95; } 50% { opacity: .6; } }
 :root[data-motion="off"] .sg-led, :root[data-motion="off"] .sg-pumpkin { animation: none; }
-.sg-pumpkin { animation: sg-twinkle 5s var(--d, 0s) ease-in-out infinite; }
-.sg-face { fill: #ffe066; filter: drop-shadow(0 0 1.5px #ffb02e); }
+.sg-pumpkin { animation: sg-glow 5s var(--d, 0s) ease-in-out infinite; }
+@keyframes sg-glow { 0%, 100% { filter: brightness(1.05); } 50% { filter: brightness(.7); } }
+.sg-face { fill: #fff1a8; filter: drop-shadow(0 0 1.2px #ffd04d) drop-shadow(0 0 3px #ff9a1f); }
+:root[data-season="halloween"] .sg-wire { stroke: #0d0d0d; stroke-width: 1.1; }
 :root[data-theme="light"] .sg-wire { stroke: #6a7a8c; }
 /* Шапка Деда Мороза на логотипе — только зимой: опушка ровно по ширине логотипа и садится на его верхний край. */
 .season-hat { display: none; position: absolute; left: 2px; top: -12px; width: 28px; height: 24px; pointer-events: none; transform: rotate(-6deg); transform-origin: 45% 85%;
