@@ -201,7 +201,8 @@ function cardHtml(list) {
 }
 
 function toolsHtml(a, items, missing) {
-  const scanLine = a.scanning ? `Бот читает посты архива… осталось ${a.unindexed}`
+  const scanLine = a.checking ? "Сверяю архив с 365… это пара минут, страница обновится сама"
+    : a.scanning ? `Бот читает посты архива… осталось ${a.unindexed}`
     : a.unindexed ? `В индексе нет ${a.unindexed} постов архива — нажмите «Обновить архив»`
       : `Индекс архива полный · ${items.length} серий · нажмите на номер серии — подробности`;
   return `
@@ -211,7 +212,7 @@ function toolsHtml(a, items, missing) {
         ["all", "Все", items.length]], archFilter, "a3-af")}
       <span style="flex:1"></span>
       ${canUpload() ? `<button type="button" class="btn ghost sm" data-a3-scan ${a.scanning ? "disabled" : ""}>Обновить архив</button>` : ""}
-      <button type="button" class="btn ghost sm" data-a3-checkarch>Проверить весь архив</button>
+      <button type="button" class="btn ghost sm" data-a3-checkarch ${a.checking ? "disabled" : ""}>${a.checking ? "Сверяю…" : "Проверить весь архив"}</button>
     </div>
     <div class="a3-note a3-scanline">${esc(scanLine)}</div>`;
 }
@@ -474,7 +475,7 @@ async function refresh(root) {
   clearTimeout(pollTimer);
   // Пока что-то в очереди, заливается или бот читает архив — обновляемся сами.
   const every = [...(d.items || []), ...((d.archive || {}).items || [])];
-  if (every.some(it => it.stage === "queued" || it.stage === "uploading") || (d.archive && d.archive.scanning)) {
+  if (every.some(it => it.stage === "queued" || it.stage === "uploading") || (d.archive && (d.archive.scanning || d.archive.checking))) {
     pollTimer = setTimeout(() => { if (root.isConnected && view !== "manual") refresh(root); }, 3000); // DevSkim: ignore DS172411 — функция, не строка
   }
   return true;
@@ -515,7 +516,11 @@ function bind(root) {
         return;
       }
       if (b.hasAttribute("data-a3-checkall")) { busy("Проверяю…"); await apiPost("/a365/check", { all: true }); }
-      else if (b.hasAttribute("data-a3-checkarch")) { busy("Проверяю архив…"); await apiPost("/a365/check", { archive: true }); }
+      else if (b.hasAttribute("data-a3-checkarch")) {
+        busy("Сверяю…");
+        await apiPost("/a365/check", { archive: true });
+        toast("Сверяю архив с 365 — это пара минут, страница обновится сама.", "ok");
+      }
       else if (b.hasAttribute("data-a3-scan")) {
         busy("Читаю…");
         const r = await apiPost("/a365/archive/scan");
