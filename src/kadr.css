@@ -388,6 +388,8 @@ input, select, textarea { font-family: inherit; }
   box-shadow: 0 30px 60px -20px #000, 0 0 0 1px rgba(255, 255, 255, .12); transform: rotate(2deg) translateY(8px); opacity: 0; transition: transform .9s var(--kadr-ease), opacity .9s var(--kadr-ease); }
 .kd-slide.no-ban .kd-slide-ban { display: none; }
 .kd-slide.no-ban .kd-slide-art { display: block; }
+/* Тикает срок — треснувшая обложка нужна и поверх баннера: трещины, осколки и линза живут только на ней. */
+.kd-slide.doom .kd-slide-art { display: block; }
 .kd-slide.on .kd-slide-art { opacity: 1; transform: rotate(2deg); }
 /* Обложка: стекло с трещинами обрезано по скруглению, а осколки (.kd-shards) вылетают за край. */
 .kd-art-glass { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }

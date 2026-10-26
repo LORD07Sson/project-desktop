@@ -226,7 +226,7 @@ function Hero(props) {
             apiGet(`/report/${r.public_id}/strike`).then(d => setTargets(placeTargets(r.public_id, d.targets || []))).catch(() => {});
           };
           return (
-            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner && !bannerFailed() ? "" : " no-ban"}${gloom() > 0.9 ? " flicker" : ""}`}
+            <div class={`kd-slide${i() === idx() ? " on" : ""}${banner && !bannerFailed() ? "" : " no-ban"}${crack() > 0 ? " doom" : ""}${gloom() > 0.9 ? " flicker" : ""}`}
               style={{ "--gloom": gloom().toFixed(3) }}>
               <div class="kd-slide-amb" style={poster ? { "background-image": `url("${poster}")` } : {}} />
               <Show when={banner}>
@@ -247,7 +247,7 @@ function Hero(props) {
                   </div>
                   <Show when={broken()}><Pieces seed={r.public_id} src={poster} /></Show>
                   <Show when={crack() > 0}><TimeLens src={poster} targets={targets} /></Show>
-                  <Shards seed={r.public_id} level={crack} src={poster} active={() => onSlide() && !broken() && !(banner && !bannerFailed())} />
+                  <Shards seed={r.public_id} level={crack} src={poster} active={() => onSlide() && !broken()} />
                 </div>
               </Show>
               <div class="kd-slide-fade" />
