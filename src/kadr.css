@@ -4408,7 +4408,6 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-blood { position: absolute; left: 0; top: calc(100% - 6px); width: 100%; overflow: visible; pointer-events: none; z-index: 0;
   filter: drop-shadow(0 0 3px rgba(200, 0, 0, .5)) drop-shadow(0 1px 0 rgba(255, 120, 110, .25)); }
 .kd-blood g { fill: rgb(150, 6, 8); }
-.kd-blood g.shine { fill: rgba(255, 190, 180, .45); }
 .kd-slide.dead .kd-acts { position: relative; z-index: 1; }
 /* Кнопки — обычные, но треснувшие (btnCrackHtml в Crack.jsx): тёмный разлом с бликом и отколотый уголок. */
 .kd-slide.dead .kd-acts .btn { position: relative; overflow: hidden; }
