@@ -266,28 +266,14 @@ function frame(t) {
 }
 
 // Гирлянда внутри панелей: по верхнему краю панели вкладок, поиска и «Смотреть», над надписями. Зимой — мелкие
-// разноцветные огоньки, на Хэллоуин — мини-тыквы-фонарики, осенью — кленовые листья на бечёвке, весной — цветки
-// сакуры на веточке, летом — разноцветные флажки. SVG кладём прямо в панель (кликам не мешает), поэтому
+// разноцветные огоньки, на Хэллоуин — мини-тыквы-фонарики. Остальным сезонам гирлянда не нужна — им хватает шапки. SVG кладём прямо в панель (кликам не мешает), поэтому
 // она сидит над стеклом панели, а не размывается за ним. Ровный ряд без провода; светятся ровно и дышат все разом —
 // вразнобой тусклые выпадали, и ряд выглядел кривым.
 const HANG_IN = ["#tabstrip", "#open-cmdk", "#open-watch"];
 const PALETTE = {
   winter: ["#ff4d4d", "#ffc83d", "#3ddc6e", "#4a8cff", "#ff5fc8", "#3de0e0"],
   halloween: ["#ff7a1a"],
-  autumn: ["#d9541e", "#e8892b", "#b8321a", "#f0b33a", "#a8461a"],   // кленовые листья на бечёвке
-  spring: ["#ffc4d6", "#ffffff", "#ffb0c8", "#ffe1ea"],              // цветки сакуры на веточке
-  summer: ["#ff5a5a", "#ffc23d", "#3ddc84", "#3db4ff", "#b46bff", "#ff7ac8"],   // флажки
 };
-// Осенью, весной и летом подвески качаются на ветру волной — задержка растёт вдоль ряда, без разнобоя.
-const sway = (j, inner) => `<g class="sg-sway" style="--d:${(-j * 0.22).toFixed(2)}s">${inner}</g>`;
-const leafEl = (x, y, k, col) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})"><path d="M0 0 L0 1.6" stroke="#6b4a2a" stroke-width=".6"/>`
-  + `<path d="M0 1.5 C-1 2.5 -4 2 -4.5 4 C-3 4.2 -3.5 5.5 -4.8 6.5 C-2.8 6.6 -1.6 7.4 -1.2 8.8 L0 7.6 L1.2 8.8 C1.6 7.4 2.8 6.6 4.8 6.5 C3.5 5.5 3 4.2 4.5 4 C4 2 1 2.5 0 1.5Z" fill="${col}"/>`
-  + `<path d="M0 2.4 L0 7.4 M0 4.6 L-2.4 3.6 M0 4.6 L2.4 3.6" stroke="rgba(70,25,5,.45)" stroke-width=".35" fill="none"/></g>`;
-const flowerEl = (x, y, k, col) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})">`
-  + [0, 72, 144, 216, 288].map(a => `<ellipse cx="0" cy="-2.2" rx="1.6" ry="2.3" fill="${col}" stroke="rgba(230,120,160,.55)" stroke-width=".3" transform="translate(0 3.6) rotate(${a})"/>`).join("")
-  + `<circle cx="0" cy="3.6" r="1.1" fill="#ffd54d"/></g>`;
-const sprigEl = (x, y, k) => `<ellipse cx="${x.toFixed(1)}" cy="${(y + 1.4 * k).toFixed(1)}" rx="${(1.9 * k).toFixed(2)}" ry="${(0.9 * k).toFixed(2)}" fill="#6fbf5a" transform="rotate(-20 ${x.toFixed(1)} ${(y + 1.4 * k).toFixed(1)})"/>`;
-const flagEl = (x, y, k, col) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})"><path d="M-3.6 0 L3.6 0 L0 8.2Z" fill="${col}"/><path d="M-3.6 0 L3.6 0 L3.1 1.1 L-3.1 1.1Z" fill="rgba(255,255,255,.35)"/></g>`;
 let hangObs = null;
 
 function led(id, x, y, c, col) {
@@ -321,23 +307,17 @@ function drawGarland() {
     }
     // Ровный ряд без провода: одинаковый шаг и одинаковые поля слева и справа, все на одной высоте.
     const id = `sg${n}`, small = el.clientHeight < 40, y0 = small ? 3 : 2.5;
-    const stepWant = { halloween: small ? 20 : 24, autumn: small ? 15 : 17, spring: small ? 13 : 15, summer: small ? 12 : 13 }[kind] || 13;
+    const stepWant = kind === "halloween" ? (small ? 20 : 24) : 13;
     const m = Math.max(2, Math.floor((w - 32) / stepWant));
     const step = (w - 32) / m;
     let body = "";
     for (let j = 0; j < m; j++) {
       const x = 16 + step * (j + 0.5);
-      const c = j % pal.length, k = small ? 0.82 : 1;
+      const c = j % pal.length;
       if (kind === "halloween") body += pumpkin(id, x, y0, small ? 0.46 : 0.58);
-      else if (kind === "autumn") body += sway(j, leafEl(x, y0 + 0.5, k, pal[c]));
-      else if (kind === "spring") body += flowerEl(x, y0 - 0.5, k * 0.9, pal[c]) + (j < m - 1 ? sprigEl(x + step / 2, y0, k) : "");
-      else if (kind === "summer") body += sway(j, flagEl(x, y0 + 0.5, k, pal[c]));
       else body += led(id, x, y0 + 3, c, pal[c]);
     }
-    // бечёвка у листьев и флажков, зелёная веточка у цветов — ровно от первой подвески до последней
-    const cord = { autumn: "#6b4a2a", summer: "rgba(240,235,225,.7)", spring: "#5f9e4c" }[kind];
-    if (cord) body = `<path d="M${(16 + step / 2 - 3).toFixed(1)} ${y0 + 0.5} L${(w - 16 - step / 2 + 3).toFixed(1)} ${y0 + 0.5}" stroke="${cord}" stroke-width=".8" fill="none"/>` + body;
-    const defs = kind !== "winter" && kind !== "halloween" ? "" : kind === "halloween"
+    const defs = kind === "halloween"
       ? `<radialGradient id="${id}-pk" cx=".5" cy=".45" r=".6"><stop offset="0" stop-color="#ffc163"/><stop offset=".55" stop-color="#ff8a1f"/><stop offset="1" stop-color="#d4540a"/></radialGradient>`
         + `<radialGradient id="${id}-pkh"><stop offset="0" stop-color="#ffb347" stop-opacity=".5"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>`
       : pal.map((col, i) => `<radialGradient id="${id}-h${i}"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".3" stop-color="${col}" stop-opacity=".5"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient>`).join("");

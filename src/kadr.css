@@ -4474,7 +4474,3 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-season="winter"] .season-hat.santa, :root[data-season="halloween"] .season-hat.witch, :root[data-season="autumn"] .season-hat.beanie,
 :root[data-season="spring"] .season-hat.crown, :root[data-season="summer"] .season-hat.straw { display: block; }
 :root[data-season="spring"] .season-hat.crown { transform: none; }
-/* Листья и флажки качаются на ветру — волной вдоль ряда (--d растёт с номером подвески). */
-.sg-sway { transform-box: fill-box; transform-origin: 50% 0; animation: sg-sway 3.2s var(--d, 0s) ease-in-out infinite alternate; }
-@keyframes sg-sway { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
-:root[data-motion="off"] .sg-sway { animation: none; }
