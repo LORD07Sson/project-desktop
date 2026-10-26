@@ -118,7 +118,7 @@ export function openUpscale(d) {
         if (!path) return;
         const bytes = await invoke("upscale_read", { path });
         const name = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
-        await setInput(new Blob([bytes]), name);
+        await setInput(new Blob([toBytes(bytes)]), name);
       } else {
         const url = mediaUrl(`/titles/${d.id}/art/${src}`, { w: 0 }) || (src === "poster" ? imgProxy(d.poster_url) : "");
         const r = url ? await fetch(url) : null;
@@ -176,7 +176,7 @@ export function openUpscale(d) {
       const sizeArg = pick.size.startsWith("w") ? { width: Number(pick.size.slice(1)) } : { scale: Number(pick.size.slice(1)) };
       const png = await invoke("upscale_image", { bytes: Array.from(bytes), model: pick.model, ...sizeArg });
       if (resultUrl) URL.revokeObjectURL(resultUrl);
-      resultUrl = URL.createObjectURL(new Blob([png], { type: "image/png" }));
+      resultUrl = URL.createObjectURL(new Blob([toBytes(png)], { type: "image/png" }));
       await showCompare(inputUrl, resultUrl);
       input.done = pick.size;
       $("[data-up-save]").hidden = false;
@@ -255,6 +255,12 @@ export function openUpscale(d) {
     cmp.addEventListener("pointerup", () => { pan = null; });
     cmp.addEventListener("dblclick", () => { view.z = 1; view.x = 0; view.y = 0; apply(); });
   }
+}
+
+// Сырой ответ команды (tauri::ipc::Response) приходит ArrayBuffer'ом только по двоичному каналу IPC; при запасном
+// (postMessage, как в сборке с нашей CSP) — обычным массивом чисел. Blob из такого массива — текст «137,80,…», не PNG.
+function toBytes(data) {
+  return data instanceof ArrayBuffer || Array.isArray(data) ? new Uint8Array(data) : data;
 }
 
 function size(url) {
