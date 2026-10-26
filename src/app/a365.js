@@ -14,6 +14,7 @@ import { openExternal } from "./tauri.js";
 let view = "finals";
 let finalsFilter = "todo";
 let archFilter = "missing";
+let openEp = null; // какая серия в карточке архива раскрыта
 let pollTimer = null;
 let last = null;
 const manual = { series: null, episodes: null, check: null, busy: false };
@@ -121,30 +122,85 @@ function archiveHtml(d) {
   const items = a.items || [];
   const missing = it => !isOn365(it) && kindOf(it) !== "queue" && kindOf(it) !== "unbound";
   const pick = { missing, on: isOn365, queue: it => kindOf(it) === "queue", unbound: it => kindOf(it) === "unbound", all: () => true }[archFilter] || missing;
+  // Карточка на тайтл (тег + сезон): постер, название, привязка и серии кнопками-номерами по цвету статуса.
+  // Фильтр выбирает тайтлы, где есть хоть одна подходящая серия; серии в карточке видны все — картина целиком.
   const groups = new Map();
-  for (const it of items.filter(pick)) {
+  for (const it of items) {
     const g = `${(it.tag || "").toLowerCase()}|${it.season}`;
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g).push(it);
   }
-  const groupHtml = list => {
-    const first = list[0];
-    const where = first.studio ? `тайтл студии «${esc(first.studio_title || "")}»`
-      : first.bound ? `привязан к аниме на 365 #${esc(String(first.series_id))}${first.auto ? " — подобрано автоматически по названию, проверьте" : ""}`
-        : `не привязан к аниме на 365`;
-    const bindBtn = first.studio ? ""
-      : `<button type="button" class="btn ${first.bound ? "ghost" : "primary"} sm" data-a3-bind="${esc(first.tag || "")}" data-a3-season="${esc(String(first.season))}" data-a3-name="${esc(first.title || first.tag || "")}">${first.bound ? "Сменить" : "Привязать"}</button>`;
-    return `
-      <div class="a3-group">
-        <div class="a3-ghead"><b>${esc(first.title || first.tag || "?")}</b><span>${esc(String(first.season))}-й сезон · ${where}</span><span style="flex:1"></span>${bindBtn}</div>
-        ${list.map(it => rowHtml({ ...it, label: `«${it.title || it.tag}», серия ${it.episode}` }, `Серия ${esc(String(it.episode))}`,
-          `${esc(it.file || "")}${it.size ? ` · ${fmtSize(it.size)}` : ""}`)).join("")}
-      </div>`;
-  };
+  const shown = [...groups.values()].filter(list => list.some(pick));
+  return toolsHtml(a, items, missing) + `<div class="a3-cards">${shown.map(cardHtml).join("") || `<div class="no-assignee">${emptyText(items)}</div>`}</div>`;
+}
+
+const CHIP = { done: ["ok", "✓"], elsewhere: ["ok", "✓"], ready: ["ready", "↑"], queue: ["run", "…"], bad: ["bad", "!"], unchecked: ["", ""], unbound: ["", ""] };
+
+function chipTitle(it) {
+  const k = kindOf(it);
+  const c = it.check || {};
+  if (k === "done") return "Залито отсюда";
+  if (k === "elsewhere") return "Наша озвучка уже на 365";
+  if (k === "ready") return "Нет на 365 — можно залить";
+  if (it.stage === "uploading") return `Заливается ${it.progress || 0}%`;
+  if (it.stage === "queued") return `В очереди${it.queue_pos ? ` №${it.queue_pos}` : ""}`;
+  if (k === "bad") return it.error || c.error || "Проверка не пройдена";
+  if (k === "unbound") return "Тайтл не привязан к аниме на 365";
+  return "Ещё не проверялось";
+}
+
+function cardHtml(list) {
+  const first = list[0];
+  const withPoster = list.find(it => it.poster) || first;
+  const name = first.title || first.tag || "?";
+  const count = k => list.filter(it => kindOf(it) === k).length;
+  const on = list.filter(isOn365).length;
+  const ready = list.filter(it => kindOf(it) === "ready");
+  const bad = count("bad");
+  const unbound = !first.studio && !first.bound;
+  const where = first.studio ? "тайтл студии"
+    : first.bound ? (first.auto ? "подобрано автоматически — проверьте" : "привязан вручную")
+      : "не привязан к 365";
+  const bindBtn = first.studio ? ""
+    : `<button type="button" class="btn ${first.bound ? "ghost" : "primary"} sm" data-a3-bind="${esc(first.tag || "")}" data-a3-season="${esc(String(first.season))}" data-a3-name="${esc(name)}">${first.bound ? "Сменить" : "Привязать"}</button>`;
+  const upAll = ready.length ? `<button type="button" class="btn primary sm" data-a3-upall="${esc(ready.map(it => it.key).join(","))}" data-a3-name="${esc(name)}">Залить недостающие · ${ready.length}</button>` : "";
+  const progress = list.length ? Math.round(on * 100 / list.length) : 0;
+  const open = list.find(it => it.key === openEp);
+  const sorted = list.slice().sort((x, y) => Number(x.episode) - Number(y.episode));
+  return `
+    <div class="a3-tcard${unbound ? " unbound" : ""}">
+      <div class="a3-tposter">${withPoster.poster ? `<img src="${esc(withPoster.poster)}" alt="" loading="lazy">` : `<span>${esc(name.slice(0, 1).toUpperCase())}</span>`}</div>
+      <div class="a3-tbody">
+        <div class="a3-thead">
+          <div class="a3-tname" title="${esc(name)}">${esc(name)}</div>
+          <div class="a3-tacts">${upAll}${bindBtn}</div>
+        </div>
+        <div class="a3-tmeta">
+          <span>${esc(String(first.season))}-й сезон</span>
+          <span class="a3-dot"></span><span class="${unbound ? "a3-warn" : first.auto ? "a3-auto" : ""}">${esc(where)}</span>
+          ${withPoster.series_season ? `<span class="a3-dot"></span><span>на 365: ${esc(withPoster.series_season)}</span>` : ""}
+        </div>
+        <div class="a3-tstat">
+          <div class="a3-tprog"><i style="width:${progress}%"></i></div>
+          <b>${on}</b><span>из ${list.length} на 365</span>
+          ${ready.length ? `<span class="a3-tag ready">${ready.length} можно залить</span>` : ""}
+          ${count("queue") ? `<span class="a3-tag run">${count("queue")} в очереди</span>` : ""}
+          ${bad ? `<span class="a3-tag bad">${bad} с проблемой</span>` : ""}
+        </div>
+        <div class="a3-chips">${sorted.map(it => {
+          const [tone, mark] = CHIP[kindOf(it)] || ["", ""];
+          return `<button type="button" class="a3-chip ${tone}${it.key === openEp ? " on" : ""}" data-a3-chip="${esc(it.key)}" title="Серия ${esc(String(it.episode))}: ${esc(chipTitle(it))}">${esc(String(it.episode))}${mark ? `<i>${mark}</i>` : ""}</button>`;
+        }).join("")}</div>
+      </div>
+      ${open ? `<div class="a3-tdetail">${rowHtml({ ...open, label: `«${name}», серия ${open.episode}` }, `Серия ${esc(String(open.episode))}`,
+        `${esc(open.file || "")}${open.size ? ` · ${fmtSize(open.size)}` : ""}`)}</div>` : ""}
+    </div>`;
+}
+
+function toolsHtml(a, items, missing) {
   const scanLine = a.scanning ? `Бот читает посты архива… осталось ${a.unindexed}`
-    : a.unindexed ? `В индексе нет ${a.unindexed} постов архива — нажмите «Обновить архив»` : `Индекс архива полный · ${items.length} серий`;
-  const empty = { missing: items.length ? "Всё из архива уже на 365 (или ещё не проверено — «Проверить весь архив») 🎉" : "Индекс архива пуст — нажмите «Обновить архив»",
-    on: "Ничего из архива на 365 не найдено", queue: "Очередь пуста", unbound: "Все тайтлы архива привязаны", all: "Индекс архива пуст" }[archFilter];
+    : a.unindexed ? `В индексе нет ${a.unindexed} постов архива — нажмите «Обновить архив»`
+      : `Индекс архива полный · ${items.length} серий · нажмите на номер серии — подробности`;
   return `
     <div class="a3-tools">
       ${filtersHtml([["missing", "Нет на 365", items.filter(missing).length], ["on", "На 365", items.filter(isOn365).length],
@@ -154,8 +210,14 @@ function archiveHtml(d) {
       <button type="button" class="btn ghost sm" data-a3-scan ${a.scanning ? "disabled" : ""}>Обновить архив</button>
       <button type="button" class="btn ghost sm" data-a3-checkarch>Проверить весь архив</button>
     </div>
-    <div class="a3-note a3-scanline">${esc(scanLine)}</div>
-    <div class="a3-list">${[...groups.values()].map(groupHtml).join("") || `<div class="no-assignee">${empty}</div>`}</div>`;
+    <div class="a3-note a3-scanline">${esc(scanLine)}</div>`;
+}
+
+function emptyText(items) {
+  return {
+    missing: items.length ? "Всё из архива уже на 365 (или ещё не проверено — «Проверить весь архив») 🎉" : "Индекс архива пуст — нажмите «Обновить архив»",
+    on: "Ничего из архива на 365 не найдено", queue: "Очередь пуста", unbound: "Все тайтлы архива привязаны", all: "Индекс архива пуст",
+  }[archFilter];
 }
 
 // ---------- «Вручную» ----------
@@ -426,6 +488,7 @@ function bind(root) {
     if (b.dataset.a3Ff) { finalsFilter = b.dataset.a3Ff; paint(root); return; }
     if (b.dataset.a3Af) { archFilter = b.dataset.a3Af; paint(root); return; }
     if (b.dataset.a3Open) { openExternal(b.dataset.a3Open); return; }
+    if (b.dataset.a3Chip) { openEp = openEp === b.dataset.a3Chip ? null : b.dataset.a3Chip; paint(root); return; }
     if (b.dataset.a3Bind != null && b.dataset.a3Season) { openBind(root, b.dataset.a3Bind, b.dataset.a3Season, b.dataset.a3Name); return; }
     if (b.hasAttribute("data-a3-mclear")) { manual.series = null; manual.episodes = null; manual.check = null; keepForm(root, () => paint(root)); return; }
     if (b.dataset.a3Ep) {
@@ -464,6 +527,18 @@ function bind(root) {
         busy("Проверяю…");
         await apiPost("/a365/upload", { key: b.dataset.a3Upload });
         toast("Поставлено в очередь — бот заливает по одной.", "ok");
+      } else if (b.dataset.a3Upall) {
+        const keys = b.dataset.a3Upall.split(",").filter(Boolean);
+        const ok = await askConfirm(`Залить на Anime 365 недостающие серии «${b.dataset.a3Name}» — ${keys.length} шт.?\n\n`
+          + "Встанут в очередь, бот зальёт по одной; перед каждой — ещё раз проверка сезона и дублей.", { yes: "Залить" });
+        if (!ok) return;
+        busy("Ставлю в очередь…");
+        let put = 0;
+        const fails = [];
+        for (const key of keys) {
+          try { await apiPost("/a365/upload", { key }); put++; } catch (err) { fails.push(err.message); }
+        }
+        toast(`В очереди: ${put} из ${keys.length}.${fails.length ? ` Не поставлено: ${fails[0]}` : ""}`, fails.length ? "error" : "ok");
       } else if (b.dataset.a3Cancel) {
         busy("Убираю…");
         await apiPost("/a365/cancel", { key: b.dataset.a3Cancel });
