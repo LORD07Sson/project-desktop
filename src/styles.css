@@ -4410,6 +4410,30 @@ body.focus-mode .report-detail-overlay .sheet {
 .bs-err.warn { border-color: var(--s-work); color: var(--ink-soft); }
 @media (max-width: 1000px) { .bs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* Сервисы → Anime 365 */
+.a3-card .dash-cell-head { display: flex; align-items: center; gap: 10px; }
+.a3-bad { color: var(--s-stop); }
+.a3-filters { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.a3-filter { border: 1px solid var(--line); background: transparent; color: var(--ink-soft); border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+.a3-filter.on { background: var(--surface-2); color: var(--ink); border-color: var(--accent, var(--line)); }
+.a3-list { display: flex; flex-direction: column; gap: 6px; max-height: 520px; overflow-y: auto; }
+.a3-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.a3-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.a3-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.a3-title b { font-weight: 700; }
+.a3-meta, .a3-note { font-size: 11.5px; color: var(--ink-dim); overflow-wrap: anywhere; }
+.a3-note.bad { color: var(--s-stop); }
+.a3-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.a3-actions { display: flex; gap: 6px; }
+.a3-pill { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--ink-dim) 16%, var(--surface)); color: var(--ink-dim); white-space: nowrap; }
+.a3-pill.ok { background: color-mix(in srgb, var(--s-done) 16%, var(--surface)); color: var(--s-done); }
+.a3-pill.ready { background: color-mix(in srgb, var(--s-done) 10%, var(--surface)); color: var(--s-done); }
+.a3-pill.run { background: color-mix(in srgb, var(--s-work) 16%, var(--surface)); color: var(--s-work); }
+.a3-pill.bad { background: color-mix(in srgb, var(--s-stop) 16%, var(--surface)); color: var(--s-stop); }
+.a3-bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 2px 0; }
+.a3-bar i { display: block; height: 100%; background: var(--s-work); transition: width .4s; }
+.a3-link { background: none; border: 0; padding: 0; color: var(--accent, var(--s-done)); font-size: 11.5px; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+
 /* Список на упоминание */
 .sheet.mn-sheet { width: min(720px, calc(100vw - 48px)); max-width: none; }
 .mn-auto { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 12px; }

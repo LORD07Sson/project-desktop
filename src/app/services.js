@@ -159,8 +159,9 @@ export async function loadServices() {
     root.innerHTML = `<div class="bento-empty">Не удалось загрузить статус сервисов: ${esc(e.message)}</div>`;
     return false;
   }
-  root.innerHTML = servicesHtml(d) + `<div id="bot-status-slot"></div>`;
+  root.innerHTML = servicesHtml(d) + `<div id="bot-status-slot"></div><div id="a365-slot"></div>`;
   fillBotStatus(root);
+  import("./a365.js").then(m => m.mountA365(root.querySelector("#a365-slot")));
 }
 
 // «Бот изнутри» — то же, что /status в боте: версия, аптайм бота и
