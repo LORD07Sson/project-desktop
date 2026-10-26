@@ -9,6 +9,7 @@
 
 import { apiGet, apiPost, askConfirm, openSheet, dismissSheet, toast } from "./api.js";
 import { $, esc, relTime } from "./utils.js";
+import { can } from "./state.js";
 import { openExternal } from "./tauri.js";
 
 let view = "finals";
@@ -18,6 +19,8 @@ let openEp = null; // какая серия в карточке архива р�
 let pollTimer = null;
 let last = null;
 const manual = { series: null, episodes: null, check: null, busy: false };
+// Право «Anime 365: заливать»: без него страница только для просмотра и проверок (сервер всё равно проверит каждый запрос).
+const canUpload = () => can("a365.upload");
 
 // ---------- общее ----------
 
@@ -67,12 +70,12 @@ function detailHtml(it) {
 function actionsHtml(it) {
   const key = esc(it.key);
   if (it.stage === "done" || it.stage === "uploading") return "";
-  if (it.stage === "queued") return `<button type="button" class="btn ghost sm" data-a3-cancel="${key}">Убрать</button>`;
+  if (it.stage === "queued") return canUpload() ? `<button type="button" class="btn ghost sm" data-a3-cancel="${key}">Убрать</button>` : "";
   const k = kindOf(it);
   if (k === "unbound") return "";
   const check = `<button type="button" class="btn ghost sm" data-a3-check="${key}">${it.check ? "Проверить снова" : "Проверить"}</button>`;
   // «Залить» — только после пройденной проверки (сервер всё равно проверит ещё раз).
-  return k === "ready" ? `${check}<button type="button" class="btn primary sm" data-a3-upload="${key}" data-a3-label="${esc(it.label || it.public_id || "")}">Залить</button>` : check;
+  return k === "ready" && canUpload() ? `${check}<button type="button" class="btn primary sm" data-a3-upload="${key}" data-a3-label="${esc(it.label || it.public_id || "")}">Залить</button>` : check;
 }
 
 function rowHtml(it, title, meta) {
@@ -161,9 +164,9 @@ function cardHtml(list) {
   const where = first.studio ? "тайтл студии"
     : first.bound ? (first.auto ? "подобрано автоматически — проверьте" : "привязан вручную")
       : "не привязан к 365";
-  const bindBtn = first.studio ? ""
+  const bindBtn = first.studio || !canUpload() ? ""
     : `<button type="button" class="btn ${first.bound ? "ghost" : "primary"} sm" data-a3-bind="${esc(first.tag || "")}" data-a3-season="${esc(String(first.season))}" data-a3-name="${esc(name)}">${first.bound ? "Сменить" : "Привязать"}</button>`;
-  const upAll = ready.length ? `<button type="button" class="btn primary sm" data-a3-upall="${esc(ready.map(it => it.key).join(","))}" data-a3-name="${esc(name)}">Залить недостающие · ${ready.length}</button>` : "";
+  const upAll = ready.length && canUpload() ? `<button type="button" class="btn primary sm" data-a3-upall="${esc(ready.map(it => it.key).join(","))}" data-a3-name="${esc(name)}">Залить недостающие · ${ready.length}</button>` : "";
   const progress = list.length ? Math.round(on * 100 / list.length) : 0;
   const open = list.find(it => it.key === openEp);
   const sorted = list.slice().sort((x, y) => Number(x.episode) - Number(y.episode));
@@ -207,7 +210,7 @@ function toolsHtml(a, items, missing) {
         ["queue", "Очередь", items.filter(it => kindOf(it) === "queue").length], ["unbound", "Не привязано", items.filter(it => kindOf(it) === "unbound").length],
         ["all", "Все", items.length]], archFilter, "a3-af")}
       <span style="flex:1"></span>
-      <button type="button" class="btn ghost sm" data-a3-scan ${a.scanning ? "disabled" : ""}>Обновить архив</button>
+      ${canUpload() ? `<button type="button" class="btn ghost sm" data-a3-scan ${a.scanning ? "disabled" : ""}>Обновить архив</button>` : ""}
       <button type="button" class="btn ghost sm" data-a3-checkarch>Проверить весь архив</button>
     </div>
     <div class="a3-note a3-scanline">${esc(scanLine)}</div>`;
@@ -429,7 +432,8 @@ function paint(root) {
   const every = [...(d.items || []), ...((d.archive || {}).items || [])];
   const queue = every.filter(it => kindOf(it) === "queue").length;
   const tabs = [["finals", "Финалы", (d.items || []).filter(it => !isOn365(it)).length],
-    ["archive", "Архив", ((d.archive || {}).items || []).filter(it => !isOn365(it) && kindOf(it) !== "unbound").length], ["manual", "Вручную", null]];
+    ["archive", "Архив", ((d.archive || {}).items || []).filter(it => !isOn365(it) && kindOf(it) !== "unbound").length], ...(canUpload() ? [["manual", "Вручную", null]] : [])];
+  if (view === "manual" && !canUpload()) view = "finals";
   root.innerHTML = `
     <div class="page-header">
       <div><span class="kd-label">Публикация · smotret-anime.org</span><h1>Anime 365</h1></div>

@@ -59,12 +59,12 @@ const LAST_TAB_KEY = "project-last-tab";
 export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
 // Какое право открывает админскую вкладку; остальные (Сервисы, Anime 365, Релизы) — только для админа.
-const TAB_PERMS = { feed: "reports.feed", board: "reports.board", overview: "reports.overview", list: "reports.list", calendar: "reports.calendar", analytics: "reports.analytics" };
+const TAB_PERMS = { a365: ["a365.view", "a365.upload"], feed: "reports.feed", board: "reports.board", overview: "reports.overview", list: "reports.list", calendar: "reports.calendar", analytics: "reports.analytics" };
 
 export function tabAllowed(name) {
   if (MEMBER_TABS.has(name)) return true;
   if (name === "nyaa" && state.nyaaAccess) return true;
-  if (TAB_PERMS[name]) return can(TAB_PERMS[name]);
+  if (TAB_PERMS[name]) return [].concat(TAB_PERMS[name]).some(can);
   return !!state.isAdmin;
 }
 
