@@ -158,7 +158,7 @@ function density(w, h) {
 }
 
 function frame(t) {
-  raf = requestAnimationFrame(frame);
+  raf = window.requestAnimationFrame(frame);
   if (document.hidden) { last = 0; return; }
   const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
   last = t;
@@ -326,7 +326,7 @@ function resize() {
 }
 
 function stop() {
-  cancelAnimationFrame(raf);
+  window.cancelAnimationFrame(raf);
   raf = 0;
   last = 0;
   parts = [];
@@ -361,13 +361,16 @@ function restart() {
   if (root.dataset.motion === "off") return;   // свечение и гирлянда остаются, частицы стоят
   sprites ||= makeSprites();
   resize();
-  raf = requestAnimationFrame(frame);
+  raf = window.requestAnimationFrame(frame);
 }
 
 // Анимации выключили/включили в настройках — частицы встают или идут снова.
-new MutationObserver(restart).observe(root, { attributes: true, attributeFilter: ["data-motion"] });
+if (typeof MutationObserver !== "undefined") new MutationObserver(restart).observe(root, { attributes: true, attributeFilter: ["data-motion"] });
 
 (function init() {
+  // Вне настоящего окна (проверка модулей в Node) — ни холста, ни кадров анимации.
+  if (typeof window.requestAnimationFrame !== "function" || typeof window.cancelAnimationFrame !== "function") return;
+  try { if (!document.createElement("canvas").getContext("2d")) return; } catch (_) { return; }
   const go = () => applySeason(seasonPref());
   if (document.body) go();
   else document.addEventListener("DOMContentLoaded", go, { once: true });
