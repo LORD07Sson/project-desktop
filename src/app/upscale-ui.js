@@ -1,16 +1,17 @@
 // «✨ Апскейл» на странице тайтла: нейросеть (upscale.rs: движок и модели Upscayl) увеличивает обложку, баннер или
 // свою картинку (файл с диска или Ctrl+V) — «Аниме» (digital-art-4x) или «Резко» (ultrasharp-4x), ×2/×3/×4 или до
-// нужной ширины. Обложку и баннер берём с сервера исходником (?w=0 — без серверного растягивания); при первом запуске
+// нужной ширины; можно поставить свою ncnn-модель (.param + .bin). Обложку и баннер берём с сервера исходником (?w=0 — без серверного растягивания); при первом запуске
 // движок и модель докачиваются сами. Результат — сравнение «до/после» и сохранение PNG в выбранное место.
 
-import { invoke, listen, pickInputFile, pickOutputFile } from "./tauri.js";
-import { mediaUrl, openSheet, toast } from "./api.js";
+import { invoke, listen, pickInputFile, pickInputFiles, pickOutputFile } from "./tauri.js";
+import { mediaUrl, openSheet, toast, askConfirm } from "./api.js";
 import { imgProxy } from "./title-page.js";
 import { esc } from "./utils.js";
 
 // Размер результата: во сколько раз или до какой ширины (px).
 const SIZES = [["x2", "×2"], ["x3", "×3"], ["x4", "×4"], ["w1920", "1920 px"], ["w2560", "2560 px"], ["w3840", "4K · 3840"]];
 const IMAGE_TYPES = ["png", "jpg", "jpeg", "webp", "bmp"];
+const BUILTIN = [["anime", "Аниме-арт"], ["sharp", "Максимально резко"]];
 
 export function openUpscale(d) {
   const sources = [["poster", "Обложка"], ...(d.has_banner ? [["banner", "Баннер"]] : []), ["own", "Своя картинка…"]];
@@ -22,7 +23,7 @@ export function openUpscale(d) {
     <div class="up">
       <div class="up-head"><h3>✨ Апскейл</h3><span>${esc(d.name)}</span></div>
       <div class="up-row"><b>Что увеличить</b>${seg("data-up-src", sources, pick.src)}</div>
-      <div class="up-row"><b>Нейросеть</b>${seg("data-up-model", [["anime", "Аниме-арт"], ["sharp", "Максимально резко"]], pick.model)}</div>
+      <div class="up-row"><b>Нейросеть</b><div class="up-models" data-up-models></div></div>
       <div class="up-row"><b>Размер <em class="up-dims" data-up-dims></em></b>${seg("data-up-size", SIZES, pick.size)}</div>
       <div class="up-stage" data-up-stage><div class="up-hint">Нейросеть дорисует детали и уберёт мыло и квадратики сжатия. Работает на видеокарте. При первом запуске скачается движок и выбранная модель — один раз: аниме ≈11 МБ, резкая ≈35 МБ.</div></div>
       <div class="up-prog" data-up-prog hidden><i></i><span></span></div>
@@ -37,7 +38,47 @@ export function openUpscale(d) {
   const $ = sel => overlay.querySelector(sel);
   const selectSeg = (attr, value) => overlay.querySelectorAll(`[${attr}]`).forEach(x => x.classList.toggle("active", x.getAttribute(attr) === value));
   overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
-  overlay.querySelectorAll("[data-up-model]").forEach(b => b.addEventListener("click", () => { pick.model = b.dataset.upModel; selectSeg("data-up-model", pick.model); }));
+  // Нейросети: встроенные + свои (ncnn .param/.bin). Своя — ключ «custom:имя».
+  let custom = [];
+  const short = n => (n.length > 22 ? `${n.slice(0, 21)}…` : n);
+  function renderModels() {
+    const items = [...BUILTIN, ...custom.map(n => [`custom:${n}`, short(n)])];
+    if (!items.some(([v]) => v === pick.model)) pick.model = "anime";
+    const box = $("[data-up-models]");
+    box.innerHTML = seg("data-up-model", items, pick.model)
+      + `<button type="button" class="up-link" data-up-add title="Своя ncnn-модель: файлы .param и .bin (например, из github.com/upscayl/custom-models)">＋ Своя модель</button>`
+      + (pick.model.startsWith("custom:") ? `<button type="button" class="up-link danger" data-up-del>Удалить</button>` : "");
+    box.querySelectorAll("[data-up-model]").forEach(b => b.addEventListener("click", () => { pick.model = b.dataset.upModel; renderModels(); }));
+    box.querySelector("[data-up-add]").addEventListener("click", addModel);
+    box.querySelector("[data-up-del]")?.addEventListener("click", removeModel);
+  }
+  async function addModel() {
+    const paths = await pickInputFiles({ multiple: true, filters: [{ name: "Модель ncnn (.param и .bin)", extensions: ["param", "bin"] }] });
+    if (!paths.length) return;
+    try {
+      const before = new Set(custom);
+      custom = await invoke("upscale_model_add", { paths });
+      const added = custom.find(n => !before.has(n));
+      if (added) pick.model = `custom:${added}`;
+      renderModels();
+      toast(added ? `Модель «${added}» добавлена.` : "Модель обновлена.");
+    } catch (e) {
+      toast(String(e), "error");
+    }
+  }
+  async function removeModel() {
+    const name = pick.model.slice("custom:".length);
+    if (!await askConfirm(`Удалить свою модель «${name}»?`, { yes: "Удалить" })) return;
+    try {
+      custom = await invoke("upscale_model_remove", { name });
+      pick.model = "anime";
+      renderModels();
+    } catch (e) {
+      toast(String(e), "error");
+    }
+  }
+  renderModels();
+  invoke("upscale_models").then(list => { custom = list || []; renderModels(); }).catch(() => {});
   overlay.querySelectorAll("[data-up-size]").forEach(b => b.addEventListener("click", () => { pick.size = b.dataset.upSize; selectSeg("data-up-size", pick.size); showDims(); }));
   overlay.querySelectorAll("[data-up-src]").forEach(b => b.addEventListener("click", () => chooseSource(b.dataset.upSrc)));
 

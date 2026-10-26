@@ -7,6 +7,10 @@
 //! сверяем SHA-256, зашитую в приложение, и складываем в %LOCALAPPDATA%\Project Desktop\tools\upscayl — рядом с
 //! докачанным ffmpeg (audio_qc::downloaded_tools_dir).
 //!
+//! Свои модели: любые ncnn-модели (.param + .bin) — пользователь выбирает файлы, мы проверяем и копируем их в
+//! tools\upscayl\custom\models (движок требует, чтобы папка называлась именно «models»). Масштаб модели (×2/×3/×4)
+//! угадываем по имени файла — его движку надо сказать (-z), иначе он считает модель ×4.
+//!
 //! Картинку присылает вебвью байтами, результат (PNG) уходит обратно сырым ответом IPC — для превью «до/после»;
 //! сохраняется он отдельной командой, только в путь, выбранный в диалоге сохранения (file_scope).
 
@@ -100,7 +104,7 @@ async fn download(
 }
 
 /// Докачивает движок и нужную модель, если их ещё нет. Возвращает папку движка.
-async fn ensure(app: &tauri::AppHandle, client: &reqwest::Client, model: &Model) -> Result<PathBuf, String> {
+async fn ensure(app: &tauri::AppHandle, client: &reqwest::Client, model: Option<&Model>) -> Result<PathBuf, String> {
     let dir = engine_dir().ok_or("Не найдена папка пользователя для движка апскейла.")?;
     let models = dir.join("models");
     std::fs::create_dir_all(&models).map_err(|e| format!("Не удалось создать папку {dir:?}: {e}"))?;
@@ -112,6 +116,7 @@ async fn ensure(app: &tauri::AppHandle, client: &reqwest::Client, model: &Model)
             .await
             .map_err(|e| format!("Распаковка движка не завершилась: {e}"))??;
     }
+    let Some(model) = model else { return Ok(dir) };   // своя модель — нужен только движок
     for (ext, sha, span) in [("param", model.param_sha, (0.08, 0.1)), ("bin", model.bin_sha, (0.1, 0.45))] {
         let path = models.join(format!("{}.{ext}", model.name));
         if !path.is_file() {
@@ -210,8 +215,19 @@ pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Ve
     if bytes.is_empty() || bytes.len() > MAX_INPUT {
         return Err("Картинка пустая или слишком большая (больше 25 МБ).".into());
     }
-    let model = MODELS.iter().find(|m| m.key == mode).unwrap_or(&MODELS[0]);
-    let dir = ensure(app, client, model).await?;
+    // встроенная модель — по ключу, своя — «custom:имя»
+    let (name, models_dir, model_scale): (String, PathBuf, u32) = if let Some(own) = mode.strip_prefix("custom:") {
+        if !list_custom().iter().any(|m| m == own) {
+            return Err("Такой своей модели нет — добавьте её заново.".into());
+        }
+        ensure(app, client, None).await?;
+        (own.to_string(), custom_dir().ok_or("Нет папки своих моделей.")?, guess_scale(own))
+    } else {
+        let model = MODELS.iter().find(|m| m.key == mode).unwrap_or(&MODELS[0]);
+        let dir = ensure(app, client, Some(model)).await?;
+        (model.name.to_string(), dir.join("models"), 4)
+    };
+    let dir = engine_dir().ok_or("Не найдена папка движка.")?;
     let work = std::env::temp_dir().join("project-desktop-upscale");
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let input = work.join("in.img");
@@ -220,16 +236,16 @@ pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Ve
     progress(app, 0.45, "Нейросеть увеличивает картинку…");
 
     let app2 = app.clone();
-    let (input2, output2, name, size_args) = (input.clone(), output.clone(), model.name, size.args());
+    let (input2, output2, size_args) = (input.clone(), output.clone(), size.args());
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         let mut child = hidden_command(dir.join(EXE))
             .current_dir(&dir)
             .arg("-i").arg(&input2)
             .arg("-o").arg(&output2)
-            .args(["-n", name])
+            .args(["-n", name.as_str(), "-z", &model_scale.to_string()])
             .args(&size_args)
             .args(["-f", "png", "-m"])
-            .arg(dir.join("models"))
+            .arg(&models_dir)
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
@@ -274,6 +290,101 @@ pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Ve
     Ok(png)
 }
 
+fn custom_dir() -> Option<PathBuf> {
+    engine_dir().map(|d| d.join("custom").join("models"))
+}
+
+/// Свои модели — имена, у которых есть оба файла.
+pub fn list_custom() -> Vec<String> {
+    let Some(dir) = custom_dir() else { return Vec::new() };
+    let mut out: Vec<String> = std::fs::read_dir(&dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|e| e.path().file_name()?.to_str()?.strip_suffix(".param").map(str::to_string))
+                .filter(|n| dir.join(format!("{n}.bin")).is_file())
+                .collect()
+        })
+        .unwrap_or_default();
+    out.sort_by_key(|n| n.to_lowercase());
+    out
+}
+
+/// Масштаб модели по имени: «2x-…», «…_x3», «realesr-animevideov3-x2». Не нашли — ×4 (так у большинства моделей).
+fn guess_scale(name: &str) -> u32 {
+    let b = name.to_lowercase().into_bytes();
+    for i in 0..b.len() {
+        let digit = |j: usize| b.get(j).filter(|c| (b'2'..=b'4').contains(c)).map(|c| u32::from(c - b'0'));
+        let boundary = |j: Option<usize>| j.and_then(|j| b.get(j)).is_none_or(|c| !c.is_ascii_alphanumeric());
+        if b[i] == b'x' {
+            // «x2» — цифра сразу после x, за ней не буква/цифра, перед x не цифра
+            if let Some(d) = digit(i + 1) {
+                if boundary(Some(i + 2)) && !(i > 0 && b[i - 1].is_ascii_digit()) {
+                    return d;
+                }
+            }
+            // «2x» — цифра прямо перед x
+            if let Some(d) = i.checked_sub(1).and_then(digit) {
+                if boundary(i.checked_sub(2)) {
+                    return d;
+                }
+            }
+        }
+    }
+    4
+}
+
+/// Добавляет свои модели из выбранных файлов: для каждой нужны .param и .bin, .param — настоящий ncnn (первая строка
+/// 7767517). Имя чистим до безопасных символов. Возвращает новый список своих моделей.
+pub fn add_custom(app: &tauri::AppHandle, paths: &[String]) -> Result<Vec<String>, String> {
+    use std::collections::BTreeMap;
+    use tauri::Manager;
+    let scope = app.state::<crate::file_scope::FileScope>();
+    let mut groups: BTreeMap<String, (Option<PathBuf>, Option<PathBuf>)> = BTreeMap::new();
+    for p in paths {
+        let path = scope.check_read(p)?;
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+        let entry = groups.entry(stem).or_default();
+        match ext.as_str() {
+            "param" => entry.0 = Some(path),
+            "bin" => entry.1 = Some(path),
+            _ => return Err("Нужны файлы модели ncnn: .param и .bin.".into()),
+        }
+    }
+    let dir = custom_dir().ok_or("Не найдена папка для своих моделей.")?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    for (stem, files) in groups {
+        let (Some(param), Some(bin)) = files else {
+            return Err(format!("Для модели «{stem}» нужны оба файла: {stem}.param и {stem}.bin — выберите их вместе."));
+        };
+        let head = std::fs::read(&param).map_err(|e| e.to_string())?;
+        if !String::from_utf8_lossy(&head[..head.len().min(64)]).trim_start().starts_with("7767517") {
+            return Err(format!("«{stem}» — не ncnn-модель. Модели .pth/.safetensors сначала переведите в ncnn (.param + .bin)."));
+        }
+        if std::fs::metadata(&bin).map_err(|e| e.to_string())?.len() > 400 * 1024 * 1024 {
+            return Err(format!("Модель «{stem}» больше 400 МБ."));
+        }
+        let safe: String = stem.chars().map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '_' }).take(80).collect();
+        if safe.is_empty() || MODELS.iter().any(|m| m.name == safe) {
+            return Err(format!("Модель с именем «{stem}» уже есть — переименуйте файлы."));
+        }
+        std::fs::write(dir.join(format!("{safe}.param")), &head).map_err(|e| e.to_string())?;
+        std::fs::copy(&bin, dir.join(format!("{safe}.bin"))).map_err(|e| format!("Не удалось скопировать модель: {e}"))?;
+    }
+    Ok(list_custom())
+}
+
+pub fn remove_custom(name: &str) -> Result<Vec<String>, String> {
+    if !list_custom().iter().any(|m| m == name) {
+        return Err("Такой модели нет.".into());
+    }
+    let dir = custom_dir().ok_or("Нет папки своих моделей.")?;
+    for ext in ["param", "bin"] {
+        let _ = std::fs::remove_file(dir.join(format!("{name}.{ext}")));
+    }
+    Ok(list_custom())
+}
+
 /// Копирует последний результат в путь, выбранный пользователем в диалоге сохранения.
 pub fn save(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
     use tauri::Manager;
@@ -284,7 +395,18 @@ pub fn save(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_percent, Size, MODELS};
+    use super::{guess_scale, parse_percent, Size, MODELS};
+
+    #[test]
+    fn model_scale_from_name() {
+        assert_eq!(guess_scale("realesr-animevideov3-x2"), 2);
+        assert_eq!(guess_scale("2x-AnimeSharpV2"), 2);
+        assert_eq!(guess_scale("4xHFA2k"), 4);
+        assert_eq!(guess_scale("RealESRGAN_General_x4_v3"), 4);
+        assert_eq!(guess_scale("3x_something"), 3);
+        assert_eq!(guess_scale("uniscale_restore"), 4);
+        assert_eq!(guess_scale("4x_NMKD-Siax_200k"), 4);
+    }
 
     #[test]
     fn size_args() {

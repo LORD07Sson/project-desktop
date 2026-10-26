@@ -765,6 +765,22 @@ fn upscale_read(app: tauri::AppHandle, path: String) -> Result<tauri::ipc::Respo
     upscale::read_input(&app, &path).map(tauri::ipc::Response::new)
 }
 
+/// Свои модели апскейла (ncnn): список, добавление из выбранных файлов, удаление.
+#[tauri::command(async)]
+fn upscale_models() -> Vec<String> {
+    upscale::list_custom()
+}
+
+#[tauri::command(async)]
+fn upscale_model_add(app: tauri::AppHandle, paths: Vec<String>) -> Result<Vec<String>, String> {
+    upscale::add_custom(&app, &paths)
+}
+
+#[tauri::command(async)]
+fn upscale_model_remove(name: String) -> Result<Vec<String>, String> {
+    upscale::remove_custom(&name)
+}
+
 /// Сохраняет последний результат апскейла — только в путь из диалога сохранения.
 #[tauri::command(async)]
 fn upscale_save(app: tauri::AppHandle, path: String) -> Result<(), String> {
@@ -1515,6 +1531,9 @@ fn main() {
             local_render_prepare,
             upscale_image,
             upscale_read,
+            upscale_models,
+            upscale_model_add,
+            upscale_model_remove,
             upscale_save,
             local_render_encoders,
             local_render_run,
