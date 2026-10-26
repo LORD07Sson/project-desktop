@@ -4440,8 +4440,8 @@ td.row-actions { opacity: 1; transition: none; }
 .season-fx[hidden] { display: none; }
 .season-fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .season-fx::before { content: ""; position: absolute; inset: 0; mix-blend-mode: screen; }
-:root[data-season="winter"] .season-fx::before { background: radial-gradient(120% 60% at 50% -10%, rgba(90, 160, 255, .2), transparent 62%),
-  radial-gradient(45% 60% at 0% 100%, rgba(60, 120, 255, .12), transparent 70%), radial-gradient(45% 60% at 100% 100%, rgba(60, 120, 255, .12), transparent 70%); }
+:root[data-season="winter"] .season-fx::before { background: radial-gradient(120% 60% at 50% -10%, rgba(120, 180, 255, .12), transparent 60%),
+  radial-gradient(40% 50% at 0% 100%, rgba(150, 200, 255, .06), transparent 70%), radial-gradient(40% 50% at 100% 100%, rgba(150, 200, 255, .06), transparent 70%); }
 :root[data-season="spring"] .season-fx::before { background: radial-gradient(100% 55% at 85% -10%, rgba(255, 150, 190, .12), transparent 60%),
   radial-gradient(50% 50% at 0% 100%, rgba(255, 190, 210, .06), transparent 70%); }
 :root[data-season="summer"] .season-fx::before { background: radial-gradient(70% 60% at 95% -15%, rgba(255, 205, 100, .15), transparent 60%),
@@ -4449,17 +4449,13 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-season="autumn"] .season-fx::before { background: radial-gradient(110% 55% at 20% -10%, rgba(255, 140, 50, .11), transparent 60%),
   radial-gradient(60% 45% at 80% 110%, rgba(200, 80, 20, .09), transparent 70%); }
 :root[data-theme="light"] .season-fx::before { mix-blend-mode: multiply; opacity: .5; }
-/* Новогодняя гирлянда зимой (season.js): голубые микро-огоньки с «сосульками» из-под вкладок, команды, поиска
-   и «Смотреть», ёлка из огоньков в заголовке и холодная светодиодная лента под заголовком, как подсветка потолка. */
+/* Новогодняя гирлянда зимой (season.js): синие микро-огоньки с «сосульками» из-под вкладок, команды, поиска
+   и «Смотреть» и ёлка из огоньков в заголовке. Мерцают медленно и не гаснут совсем — без мельтешения. */
 .season-garland { position: absolute; left: 0; right: 0; top: 0; }
 .season-garland svg { position: relative; display: block; overflow: visible; }
-.sg-cove { position: absolute; left: 0; right: 0; top: var(--titlebar-h); height: 140px; pointer-events: none;
-  background: linear-gradient(rgba(90, 170, 255, .16), rgba(60, 130, 255, .05) 40%, transparent); }
-.sg-cove::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1.5px;
-  background: linear-gradient(90deg, transparent, rgba(150, 190, 255, .7) 8%, rgba(200, 220, 255, .8) 50%, rgba(150, 190, 255, .7) 92%, transparent); box-shadow: 0 0 6px 1px rgba(80, 140, 255, .6), 0 0 18px 2px rgba(50, 100, 255, .35); }
 .sg-wire { fill: none; stroke: rgba(30, 50, 70, .85); stroke-width: .9; }
 .sg-led { animation: sg-twinkle var(--t, 2.4s) var(--d, 0s) ease-in-out infinite; }
-@keyframes sg-twinkle { 0%, 100% { opacity: 1; } 45% { opacity: .35; } 55% { opacity: .9; } }
+@keyframes sg-twinkle { 0%, 100% { opacity: .95; } 50% { opacity: .6; } }
 .sg-tree { fill: none; stroke: rgba(30, 50, 70, .7); stroke-width: .7; }
 .sg-trunk { fill: #3a4a5c; }
 .sg-star { fill: #eaf6ff; filter: drop-shadow(0 0 3px #8fd0ff) drop-shadow(0 0 7px #3d9bff); animation: sg-star 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }

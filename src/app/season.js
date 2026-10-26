@@ -122,7 +122,7 @@ function spawn(w, h, fresh) {
 
 function density(w, h) {
   const area = (w * h) / 1e6;
-  return Math.round(area * ({ winter: 85, spring: 30, autumn: 16, summer: 26 }[kind] || 0));
+  return Math.round(area * ({ winter: 50, spring: 30, autumn: 16, summer: 26 }[kind] || 0));
 }
 
 function frame(t) {
@@ -172,15 +172,15 @@ function frame(t) {
 }
 
 // Новогодняя гирлянда — синие «сосульки» на окнах: тонкий провод провисает дугами из-под вкладок, команды,
-// поиска и «Смотреть», по нему густо идут микро-огоньки, вниз свисают короткие нити с огоньками; по боковым
-// краям окна — «занавес» из вертикальных нитей. Ещё ёлка из огоньков со звездой в свободном месте заголовка. Свечение — радиальный градиент (без blur: огоньков сотни),
+// поиска и «Смотреть», по нему идут микро-огоньки, вниз свисают короткие нити с огоньками. Ещё ёлка из огоньков
+// со звездой в свободном месте заголовка. Сдержанно: не на краю зрения и без ярких полос — работать не мешает. Свечение — радиальный градиент (без blur: огоньков сотни),
 // мерцают вразнобой.
 const HANG_FROM = ["#tabstrip", "#titlebar-team", "#open-cmdk", "#open-watch"];
 const LED = ["#8fbcff", "#4a84ff", "#2f63ff", "#d6e6ff"];
 let hangObs = null;
 function led(x, y, k) {
   const r = rand(0.9, 1.3);
-  return `<g class="sg-led" style="--d:${(-rand(0, 3)).toFixed(2)}s;--t:${rand(1.6, 3.4).toFixed(2)}s"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(5.5 * r).toFixed(1)}" fill="url(#sg-halo)"/>`
+  return `<g class="sg-led" style="--d:${(-rand(0, 3)).toFixed(2)}s;--t:${rand(3.5, 6.5).toFixed(2)}s"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(5.5 * r).toFixed(1)}" fill="url(#sg-halo)"/>`
     + `<circle class="sg-core" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(1.25 * r).toFixed(2)}" fill="${LED[k % LED.length]}"/></g>`;
 }
 function drawGarland() {
@@ -212,18 +212,6 @@ function drawGarland() {
     const n = Math.max(1, Math.round((R - L) / 210));
     for (let i = 0; i < n; i++) arc(L + i * (R - L) / n, L + (i + 1) * (R - L) / n, y0);
   }
-  // «Занавес» по боковым краям окна: вертикальные нити огоньков в полях слева и справа от содержимого.
-  const h = window.innerHeight, top0 = 52;
-  for (const x of [9, 19, w - 26, w - 36]) {
-    let d = `M${x} ${top0}`;
-    for (let y = top0; y < h - 4; y += 16) {
-      const xx = x + Math.sin(y / 37 + x) * 1.6;
-      d += ` L${xx.toFixed(1)} ${y}`;
-      leds += led(xx, y, k++);
-    }
-    wire += d + " ";
-  }
-  bottom = Math.max(bottom, h);
   // Ёлка из огоньков — в просвете между вкладками и командой.
   let tree = "";
   const a = document.querySelector("#tabstrip"), b = document.querySelector("#titlebar-team");
@@ -249,7 +237,7 @@ function drawGarland() {
       + `<path class="sg-star" d="M${cx} ${top - 4} l1.6 3.3 3.6 .5 -2.6 2.5 .6 3.6 -3.2 -1.7 -3.2 1.7 .6 -3.6 -2.6 -2.5 3.6 -.5Z"/>`;
     bottom = Math.max(bottom, top + H + 4);
   }
-  garland.innerHTML = (wire || tree) ? `<div class="sg-cove"></div><svg width="${w}" height="${bottom.toFixed(0)}">
+  garland.innerHTML = (wire || tree) ? `<svg width="${w}" height="${bottom.toFixed(0)}">
     <defs><radialGradient id="sg-halo"><stop offset="0" stop-color="#8fb4ff" stop-opacity=".95"/><stop offset=".35" stop-color="#2f63ff" stop-opacity=".5"/><stop offset="1" stop-color="#1a3cff" stop-opacity="0"/></radialGradient></defs>
     <path class="sg-wire" d="${wire}"/>${leds}${tree}</svg>` : "";
 }
