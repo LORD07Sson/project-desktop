@@ -1,5 +1,5 @@
 // Сезонное оформление (Настройки → Внешний вид): за интерфейсом — зимой снег и новогодняя гирлянда сверху,
-// весной лепестки сакуры, летом светлячки, осенью листопад, на Хэллоуин (24.10–2.11) летучие мыши и гирлянда
+// весной лепестки сакуры и бабочки, летом светлячки, осенью листопад, на Хэллоуин (24.10–2.11) летучие мыши и гирлянда
 // с тыквами, плюс свечение сезона по краям окна
 // (kadr.css, :root[data-season]). Слой лежит сразу за фоном из обложки и под окном приложения — сквозь стекло
 // видно, но поверх карточек не летает. «Авто» берёт сезон по дате; при выключенных анимациях и свёрнутом окне — стоит.
@@ -127,7 +127,37 @@ function makeSprites() {
     g.moveTo(3, -4); g.lineTo(2.4, -9); g.lineTo(0.8, -5);
     g.fill();
   }));
-  return { flake, petal, leaf, fly, bat };
+  // Бабочка с раскрытыми крыльями; взмах — сжатие по ширине при отрисовке.
+  const bfly = [["#ffd84d", "#ff9f1a"], ["#9fd8ff", "#3d8bff"], ["#ffc4e1", "#ff5fa8"], ["#fff6e0", "#c9b07a"]].map(([a, b]) => sprite(48, (g, s) => {
+    g.translate(s / 2, s / 2);
+    for (const side of [1, -1]) {
+      const gr = g.createLinearGradient(0, 0, side * 16, 0);
+      gr.addColorStop(0, b);
+      gr.addColorStop(1, a);
+      g.fillStyle = gr;
+      g.beginPath();
+      g.ellipse(side * 8, -5, 8.5, 7, side * -0.5, 0, Math.PI * 2);   // верхнее крыло
+      g.fill();
+      g.beginPath();
+      g.ellipse(side * 6.5, 6, 5.5, 5, side * 0.6, 0, Math.PI * 2);   // нижнее крыло
+      g.fill();
+      g.fillStyle = "rgba(255,255,255,.55)";
+      g.beginPath();
+      g.arc(side * 10, -6, 1.6, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.fillStyle = "#2a1d14";
+    g.beginPath();
+    g.ellipse(0, 1, 1.4, 8, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = "#2a1d14";
+    g.lineWidth = 0.8;
+    g.beginPath();
+    g.moveTo(-0.5, -6); g.quadraticCurveTo(-3, -11, -5, -12);
+    g.moveTo(0.5, -6); g.quadraticCurveTo(3, -11, 5, -12);
+    g.stroke();
+  }));
+  return { flake, petal, leaf, fly, bat, bfly };
 }
 
 function spawn(w, h, fresh) {
@@ -135,6 +165,10 @@ function spawn(w, h, fresh) {
   if (kind === "winter") {
     const z = rand(0.35, 1);   // глубина: дальние снежинки мельче, медленнее и бледнее
     return { x: rand(0, w), y: y0, z, size: 4 + z * 9, vy: 22 + z * 48, sway: rand(10, 30), ph: rand(0, 6.3), sp: rand(0.4, 1.1), a: 0.35 + z * 0.6 };
+  }
+  if (kind === "spring" && Math.random() < 0.14) {
+    // бабочка: порхает по экрану, а не падает
+    return { bf: true, img: pick(sprites.bfly), x: rand(0, w), y: fresh ? rand(h * 0.15, h * 0.85) : h + 30, size: rand(22, 32), vx: rand(-20, 20), vy: rand(-22, -8), ph: rand(0, 6.3), sp: rand(0.6, 1.2), flap: rand(0, 6.3), a: 0.9 };
   }
   if (kind === "spring") {
     const z = rand(0.5, 1);
@@ -181,6 +215,22 @@ function frame(t) {
       ctx.drawImage(sprites.fly, p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
       continue;
     }
+    if (p.bf) {
+      p.vx = Math.max(-30, Math.min(30, p.vx + rand(-40, 40) * dt));
+      p.vy = Math.max(-30, Math.min(14, p.vy + rand(-40, 40) * dt));
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.flap += dt * 16;
+      if (p.y < -40 || p.x < -40 || p.x > w + 40) { parts[i] = spawn(w, h, false); continue; }
+      ctx.globalAlpha = p.a;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.vx * 0.012);
+      ctx.scale(0.25 + 0.75 * Math.abs(Math.sin(p.flap)), 1);   // взмах крыльев
+      ctx.drawImage(p.img, -p.size / 2, -p.size / 2, p.size, p.size);
+      ctx.restore();
+      continue;
+    }
     if (kind === "halloween") {
       p.x += p.vx * dt;
       p.flap += dt * 14;
@@ -216,11 +266,28 @@ function frame(t) {
 }
 
 // Гирлянда внутри панелей: по верхнему краю панели вкладок, поиска и «Смотреть», над надписями. Зимой — мелкие
-// разноцветные огоньки, на Хэллоуин — мини-тыквы-фонарики. SVG кладём прямо в панель (кликам не мешает), поэтому
+// разноцветные огоньки, на Хэллоуин — мини-тыквы-фонарики, осенью — кленовые листья на бечёвке, весной — цветки
+// сакуры на веточке, летом — разноцветные флажки. SVG кладём прямо в панель (кликам не мешает), поэтому
 // она сидит над стеклом панели, а не размывается за ним. Ровный ряд без провода; светятся ровно и дышат все разом —
 // вразнобой тусклые выпадали, и ряд выглядел кривым.
 const HANG_IN = ["#tabstrip", "#open-cmdk", "#open-watch"];
-const PALETTE = { winter: ["#ff4d4d", "#ffc83d", "#3ddc6e", "#4a8cff", "#ff5fc8", "#3de0e0"], halloween: ["#ff7a1a"] };
+const PALETTE = {
+  winter: ["#ff4d4d", "#ffc83d", "#3ddc6e", "#4a8cff", "#ff5fc8", "#3de0e0"],
+  halloween: ["#ff7a1a"],
+  autumn: ["#d9541e", "#e8892b", "#b8321a", "#f0b33a", "#a8461a"],   // кленовые листья на бечёвке
+  spring: ["#ffc4d6", "#ffffff", "#ffb0c8", "#ffe1ea"],              // цветки сакуры на веточке
+  summer: ["#ff5a5a", "#ffc23d", "#3ddc84", "#3db4ff", "#b46bff", "#ff7ac8"],   // флажки
+};
+// Осенью, весной и летом подвески качаются на ветру волной — задержка растёт вдоль ряда, без разнобоя.
+const sway = (j, inner) => `<g class="sg-sway" style="--d:${(-j * 0.22).toFixed(2)}s">${inner}</g>`;
+const leafEl = (x, y, k, col) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})"><path d="M0 0 L0 1.6" stroke="#6b4a2a" stroke-width=".6"/>`
+  + `<path d="M0 1.5 C-1 2.5 -4 2 -4.5 4 C-3 4.2 -3.5 5.5 -4.8 6.5 C-2.8 6.6 -1.6 7.4 -1.2 8.8 L0 7.6 L1.2 8.8 C1.6 7.4 2.8 6.6 4.8 6.5 C3.5 5.5 3 4.2 4.5 4 C4 2 1 2.5 0 1.5Z" fill="${col}"/>`
+  + `<path d="M0 2.4 L0 7.4 M0 4.6 L-2.4 3.6 M0 4.6 L2.4 3.6" stroke="rgba(70,25,5,.45)" stroke-width=".35" fill="none"/></g>`;
+const flowerEl = (x, y, k, col) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})">`
+  + [0, 72, 144, 216, 288].map(a => `<ellipse cx="0" cy="-2.2" rx="1.6" ry="2.3" fill="${col}" stroke="rgba(230,120,160,.55)" stroke-width=".3" transform="translate(0 3.6) rotate(${a})"/>`).join("")
+  + `<circle cx="0" cy="3.6" r="1.1" fill="#ffd54d"/></g>`;
+const sprigEl = (x, y, k) => `<ellipse cx="${x.toFixed(1)}" cy="${(y + 1.4 * k).toFixed(1)}" rx="${(1.9 * k).toFixed(2)}" ry="${(0.9 * k).toFixed(2)}" fill="#6fbf5a" transform="rotate(-20 ${x.toFixed(1)} ${(y + 1.4 * k).toFixed(1)})"/>`;
+const flagEl = (x, y, k, col) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})"><path d="M-3.6 0 L3.6 0 L0 8.2Z" fill="${col}"/><path d="M-3.6 0 L3.6 0 L3.1 1.1 L-3.1 1.1Z" fill="rgba(255,255,255,.35)"/></g>`;
 let hangObs = null;
 
 function led(id, x, y, c, col) {
@@ -254,16 +321,23 @@ function drawGarland() {
     }
     // Ровный ряд без провода: одинаковый шаг и одинаковые поля слева и справа, все на одной высоте.
     const id = `sg${n}`, small = el.clientHeight < 40, y0 = small ? 3 : 2.5;
-    const stepWant = kind === "halloween" ? (small ? 20 : 24) : 13;
+    const stepWant = { halloween: small ? 20 : 24, autumn: small ? 15 : 17, spring: small ? 13 : 15, summer: small ? 12 : 13 }[kind] || 13;
     const m = Math.max(2, Math.floor((w - 32) / stepWant));
     const step = (w - 32) / m;
     let body = "";
     for (let j = 0; j < m; j++) {
       const x = 16 + step * (j + 0.5);
+      const c = j % pal.length, k = small ? 0.82 : 1;
       if (kind === "halloween") body += pumpkin(id, x, y0, small ? 0.46 : 0.58);
-      else { const c = j % pal.length; body += led(id, x, y0 + 3, c, pal[c]); }
+      else if (kind === "autumn") body += sway(j, leafEl(x, y0 + 0.5, k, pal[c]));
+      else if (kind === "spring") body += flowerEl(x, y0 - 0.5, k * 0.9, pal[c]) + (j < m - 1 ? sprigEl(x + step / 2, y0, k) : "");
+      else if (kind === "summer") body += sway(j, flagEl(x, y0 + 0.5, k, pal[c]));
+      else body += led(id, x, y0 + 3, c, pal[c]);
     }
-    const defs = kind === "halloween"
+    // бечёвка у листьев и флажков, зелёная веточка у цветов — ровно от первой подвески до последней
+    const cord = { autumn: "#6b4a2a", summer: "rgba(240,235,225,.7)", spring: "#5f9e4c" }[kind];
+    if (cord) body = `<path d="M${(16 + step / 2 - 3).toFixed(1)} ${y0 + 0.5} L${(w - 16 - step / 2 + 3).toFixed(1)} ${y0 + 0.5}" stroke="${cord}" stroke-width=".8" fill="none"/>` + body;
+    const defs = kind !== "winter" && kind !== "halloween" ? "" : kind === "halloween"
       ? `<radialGradient id="${id}-pk" cx=".5" cy=".45" r=".6"><stop offset="0" stop-color="#ffc163"/><stop offset=".55" stop-color="#ff8a1f"/><stop offset="1" stop-color="#d4540a"/></radialGradient>`
         + `<radialGradient id="${id}-pkh"><stop offset="0" stop-color="#ffb347" stop-opacity=".5"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>`
       : pal.map((col, i) => `<radialGradient id="${id}-h${i}"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".3" stop-color="${col}" stop-opacity=".5"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient>`).join("");
@@ -279,12 +353,17 @@ function watchHangers() {
   for (const sel of HANG_IN) { const el = document.querySelector(sel); if (el) hangObs.observe(el); }
 }
 
-// Шапка Деда Мороза (зимой) и шляпа ведьмы (на Хэллоуин) на логотипе — что видно, решает kadr.css.
+// Шапка на логотипе по сезону: Деда Мороза, ведьмы, вязаная осенняя, венок из цветов весной, соломенная летом —
+// какая видна, решает kadr.css.
+// Венок: пять цветков по дуге над логотипом.
+const CROWN = [[6, 24.2, "#ffc4d6"], [13, 22.4, "#ffffff"], [20, 21.8, "#ff9fbf"], [27, 22.4, "#ffffff"], [34, 24.2, "#ffc4d6"]].map(([x, y, c]) =>
+  [0, 72, 144, 216, 288].map(a => `<ellipse cx="${x}" cy="${y - 2.6}" rx="2" ry="2.8" fill="${c}" stroke="#e98fae" stroke-width=".4" transform="rotate(${a} ${x} ${y})"/>`).join("")
+  + `<circle cx="${x}" cy="${y}" r="1.4" fill="#ffd54d"/>`).join("");
 function putHat() {
   // Не внутрь логотипа: он обрезает всё по краям (там бегает блик) и крутится при наведении.
   const logo = document.querySelector(".titlebar-left .brand-logo");
   if (!logo || logo.parentElement.querySelector(".season-hat")) return;
-  logo.insertAdjacentHTML("afterend", `<svg class="season-hat" viewBox="0 0 40 34" aria-hidden="true">
+  logo.insertAdjacentHTML("afterend", `<svg class="season-hat santa" viewBox="0 0 40 34" aria-hidden="true">
     <defs><linearGradient id="sh-red" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3a3a"/><stop offset="1" stop-color="#a30d16"/></linearGradient>
     <linearGradient id="sh-fur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dee6"/></linearGradient></defs>
     <path d="M5 25 C7 12 16 4 26 5 C33 6 37 11 36 17 C33 13 29 12 27 14 C25 17 30 22 32 25 Z" fill="url(#sh-red)"/>
@@ -294,7 +373,23 @@ function putHat() {
     <defs><linearGradient id="wh-cone" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b5cff"/><stop offset="1" stop-color="#4a1f8a"/></linearGradient></defs>
     <path d="M10 27 C13 19 17 11 20 5 C21.5 1.5 26 0 30 3 C27 3 25.5 5 25.5 8.5 L29.5 27 Z" fill="url(#wh-cone)" stroke="#c9a3ff" stroke-width=".7"/>
     <path d="M11.3 23 L29 23 L29.6 27 L10.5 27 Z" fill="#ff7a1a"/><rect x="18.2" y="22.6" width="4.2" height="4.6" rx=".6" fill="none" stroke="#ffd34d" stroke-width="1.1"/>
-    <ellipse cx="20" cy="28" rx="19" ry="4.2" fill="#5a2aa0" stroke="#c9a3ff" stroke-width=".7"/></svg>`);
+    <ellipse cx="20" cy="28" rx="19" ry="4.2" fill="#5a2aa0" stroke="#c9a3ff" stroke-width=".7"/></svg>
+    <svg class="season-hat beanie" viewBox="0 0 40 34" aria-hidden="true">
+    <defs><linearGradient id="bn-knit" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0a040"/><stop offset="1" stop-color="#b5531a"/></linearGradient></defs>
+    <path d="M5 26 C5 13 12 7 20 7 C28 7 35 13 35 26 Z" fill="url(#bn-knit)"/>
+    <path d="M9 17 C14 15.5 26 15.5 31 17" stroke="#fff3df" stroke-width="2" fill="none" opacity=".85"/>
+    <rect x="3.5" y="22" width="33" height="8.5" rx="3.2" fill="#8a3d14"/>
+    <path d="M8 22.5v7.5M12 22.5v7.5M16 22.5v7.5M20 22.5v7.5M24 22.5v7.5M28 22.5v7.5M32 22.5v7.5" stroke="#6e2e0e" stroke-width="1.1"/>
+    <circle cx="20" cy="6" r="5" fill="#f6e7cf"/><circle cx="18.5" cy="4.8" r="1.6" fill="#fff" opacity=".7"/></svg>
+    <svg class="season-hat crown" viewBox="0 0 40 34" aria-hidden="true">
+    <path d="M3 25 Q20 19 37 25" stroke="#5f9e4c" stroke-width="1.6" fill="none"/>
+    ${CROWN}
+    <ellipse cx="9.5" cy="25.6" rx="2.4" ry="1.1" fill="#6fbf5a" transform="rotate(20 9.5 25.6)"/><ellipse cx="30.5" cy="25.6" rx="2.4" ry="1.1" fill="#6fbf5a" transform="rotate(-20 30.5 25.6)"/></svg>
+    <svg class="season-hat straw" viewBox="0 0 40 34" aria-hidden="true">
+    <ellipse cx="20" cy="27" rx="19" ry="4.6" fill="#e2bd6b" stroke="#b8913f" stroke-width=".6"/>
+    <path d="M10 27 C10 16 14 11 20 11 C26 11 30 16 30 27 Z" fill="#f0d48f" stroke="#b8913f" stroke-width=".6"/>
+    <path d="M10.6 21.5 L29.4 21.5 L29.8 25.5 L10.2 25.5 Z" fill="#e04848"/>
+    <path d="M13 15 L27 15 M11.5 18.5 L28.5 18.5" stroke="#c9a352" stroke-width=".5" opacity=".7"/></svg>`);
 }
 
 function resize() {
