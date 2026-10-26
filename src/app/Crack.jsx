@@ -2,7 +2,7 @@
 // волоски от точки удара, в последний день трещины ползут прямо на глазах (до полуночи), просрочено — разбито.
 // Рисунок у каждой серии свой (зерно — public_id) и не прыгает между перерисовками: растёт только длина линий.
 
-import { For, Show, createSignal, onCleanup } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { apiPost, toast } from "./api.js";
 import { initials } from "./utils.js";
 import { loadAvatars } from "./profile.js";
@@ -559,4 +559,119 @@ export function btnCrackHtml(seed) {
   const chip = `M${W} 0 L${W} ${(H * (0.35 + r() * 0.2)).toFixed(0)} L${(W - 8 - r() * 8).toFixed(0)} 0Z`;
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path class="chip" d="${chip}"/><path class="dk" d="${d}"/><path class="lt" d="${d}"/>`
     + `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.2"/></svg>`;
+}
+
+// Кровь с плашки просроченного слайда — живая, а не CSS-петля: потёк медленно сочится вниз, на кончике
+// набухает капля, отрывается и падает с ускорением в просвет между кнопками, внизу растекается лужицей и сохнет.
+// Слипание капли с потёком и лужицей — «липкий» SVG-фильтр (размытие + резкий порог по прозрачности).
+const NS = "http://www.w3.org/2000/svg";
+const GRAVITY = 1100;   // px/с²
+
+export function BloodDrip(props) {
+  let svg;
+  const id = `kd-goo-${String(props.seed).replace(/\W/g, "")}`;
+  onMount(() => {
+    const strip = svg.parentElement;
+    const slide = strip.closest(".kd-slide");
+    const g = svg.querySelector("g");
+    const shine = svg.querySelector("g.shine");
+    const r = rng(`${props.seed}:blood`);
+    const add = (tag, to = g) => to.appendChild(document.createElementNS(NS, tag));
+    const set = (e, a) => { for (const k in a) e.setAttribute(k, a[k]); };
+    let drips = [], drops = [], pools = [], h = 120, raf = 0, last = 0;
+
+    // Где течь: просвет между кнопками и свободный край плашки правее кнопок — по месту, после вёрстки.
+    const layout = () => {
+      const sr = strip.getBoundingClientRect(), hr = slide.getBoundingClientRect();
+      if (!sr.width) return;
+      h = Math.max(40, hr.bottom - sr.bottom);
+      set(svg, { viewBox: `0 -6 ${sr.width.toFixed(0)} ${(h + 6).toFixed(0)}` });
+      svg.style.height = `${h + 6}px`;
+      const btns = [...slide.querySelectorAll(".kd-acts .btn")].map(b => b.getBoundingClientRect());
+      const xs = [];
+      if (btns.length >= 2) xs.push((btns[0].right + btns[1].left) / 2 - sr.left);
+      const edge = (btns.length ? btns[btns.length - 1].right : sr.left) - sr.left;
+      const free = sr.width - edge;
+      if (free > 34) xs.push(edge + 12 + free * 0.25);
+      if (free > 110) xs.push(sr.width - 30 - r() * 20);
+      for (const d of drips) for (const e of [d.root, d.stem, d.tip, d.hl]) e.remove();
+      drips = xs.map(x => ({ x, len: 3 + r() * 10, max: 16 + r() * 20, v: 2.5 + r() * 4, w: 3.4 + r() * 1.6, back: null,
+        root: add("ellipse"), stem: add("rect"), tip: add("circle"), hl: add("ellipse", shine) }));
+      draw(0);
+    };
+
+    const draw = (dt, t = 0) => {
+      for (const d of drips) {
+        if (d.back !== null) {
+          d.len += (d.back - d.len) * Math.min(1, dt * 9);
+          if (Math.abs(d.len - d.back) < 0.4) d.back = null;
+        } else {
+          d.len += d.v * dt * (0.75 + 0.25 * Math.sin(t / 650 + d.x));
+        }
+        const tip = d.w / 2 + 1 + Math.min(1, d.len / d.max) * 2.8;
+        if (d.back === null && d.len >= d.max) {
+          drops.push({ x: d.x, y: d.len + tip * 0.5, vy: 25, r: tip * 0.95, el: add("ellipse"), hl: add("ellipse", shine) });
+          d.back = d.len * (0.3 + r() * 0.2);
+          d.max = 16 + r() * 22;
+          d.v = 2.5 + r() * 4;
+        }
+        // Наплыв у края плашки, сужающийся потёк и тяжёлая капля на конце; блик — отдельно, без «липкого» фильтра.
+        set(d.root, { cx: d.x.toFixed(1), cy: 0, rx: (d.w * 1.9).toFixed(1), ry: 4.5 });
+        set(d.stem, { x: (d.x - d.w / 2).toFixed(1), y: -6, width: d.w.toFixed(1), height: (d.len + 6).toFixed(1), rx: (d.w / 2).toFixed(1) });
+        set(d.tip, { cx: d.x.toFixed(1), cy: d.len.toFixed(1), r: tip.toFixed(2) });
+        set(d.hl, { cx: (d.x - tip * 0.35).toFixed(1), cy: (d.len - tip * 0.3).toFixed(1), rx: (tip * 0.28).toFixed(2), ry: (tip * 0.42).toFixed(2) });
+      }
+      drops = drops.filter(p => {
+        p.vy += GRAVITY * dt;
+        p.y += p.vy * dt;
+        const s = Math.min(0.7, p.vy / 900);   // на скорости капля вытягивается
+        const ry = p.r * (1 + s), rx = p.r * (1 - s * 0.3);
+        if (p.y + ry >= h) {
+          p.el.remove();
+          p.hl.remove();
+          pools.push({ x: p.x, w: p.r, max: p.r * (2.6 + r() * 1.6), age: 0, el: add("ellipse") });
+          return false;
+        }
+        set(p.el, { cx: p.x.toFixed(1), cy: p.y.toFixed(1), rx: rx.toFixed(2), ry: ry.toFixed(2) });
+        set(p.hl, { cx: (p.x - rx * 0.35).toFixed(1), cy: (p.y - ry * 0.3).toFixed(1), rx: (rx * 0.28).toFixed(2), ry: (ry * 0.4).toFixed(2) });
+        return true;
+      });
+      pools = pools.filter(p => {
+        p.age += dt;
+        p.w += (p.max - p.w) * Math.min(1, dt * 7);
+        const fade = p.age < 3 ? 1 : Math.max(0, 1 - (p.age - 3) / 4);
+        if (!fade) { p.el.remove(); return false; }
+        set(p.el, { cx: p.x.toFixed(1), cy: (h - 1).toFixed(1), rx: p.w.toFixed(2), ry: (2.6 * fade + 0.4).toFixed(2), opacity: fade.toFixed(2) });
+        return true;
+      });
+    };
+
+    const frame = t => {
+      raf = requestAnimationFrame(frame);
+      const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
+      last = t;
+      if (document.hidden || !slide.classList.contains("on")) { last = 0; return; }
+      draw(dt, t);
+    };
+
+    const ro = new ResizeObserver(layout);
+    ro.observe(slide);
+    requestAnimationFrame(() => {
+      layout();
+      if (document.documentElement.dataset.motion !== "off") raf = requestAnimationFrame(frame);
+    });
+    onCleanup(() => { cancelAnimationFrame(raf); ro.disconnect(); });
+  });
+  return (
+    <svg ref={svg} class="kd-blood" aria-hidden="true">
+      <defs>
+        <filter id={id} x="-50%" y="-20%" width="200%" height="140%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2.4" />
+          <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" />
+        </filter>
+      </defs>
+      <g filter={`url(#${id})`} />
+      <g class="shine" />
+    </svg>
+  );
 }

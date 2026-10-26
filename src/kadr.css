@@ -4405,15 +4405,11 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-slide.dead .kd-strip > div { border-left-color: rgba(210, 30, 24, .28); }
 .kd-slide.dead .kd-strip small { color: rgba(255, 120, 108, .6); }
 .kd-slide.dead .kd-strip > div:nth-last-child(2) b { color: #ff3b30; text-shadow: 0 0 10px rgba(255, 30, 20, .7); }
-.kd-blood { position: absolute; left: 0; right: 0; top: 100%; height: 0; pointer-events: none; }
-.kd-blood b { position: absolute; top: -3px; width: 5px; border-radius: 0 0 4px 4px; transform-origin: top;
-  background: linear-gradient(rgb(90, 0, 0), rgb(190, 10, 8)); box-shadow: 0 0 6px rgba(220, 0, 0, .5); animation: kc-drip var(--dd) var(--dl) ease-in infinite; }
-.kd-blood b::after { content: ""; position: absolute; left: -1.5px; bottom: -4px; width: 8px; height: 9px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-  background: rgb(190, 10, 8); animation: kc-drop var(--dd) var(--dl) ease-in infinite; }
-.kd-blood b:nth-child(1) { left: 9%; height: 16px; --dd: 6.5s; --dl: -1s; }
-.kd-blood b:nth-child(2) { left: 31%; height: 26px; --dd: 8.2s; --dl: -5s; }
-.kd-blood b:nth-child(3) { left: 58%; height: 11px; --dd: 5.4s; --dl: -3s; }
-.kd-blood b:nth-child(4) { left: 86%; height: 21px; --dd: 7.3s; --dl: -6.5s; }
+.kd-blood { position: absolute; left: 0; top: calc(100% - 6px); width: 100%; overflow: visible; pointer-events: none; z-index: 0;
+  filter: drop-shadow(0 0 3px rgba(200, 0, 0, .5)) drop-shadow(0 1px 0 rgba(255, 120, 110, .25)); }
+.kd-blood g { fill: rgb(150, 6, 8); }
+.kd-blood g.shine { fill: rgba(255, 190, 180, .45); }
+.kd-slide.dead .kd-acts { position: relative; z-index: 1; }
 /* Кнопки — обычные, но треснувшие (btnCrackHtml в Crack.jsx): тёмный разлом с бликом и отколотый уголок. */
 .kd-slide.dead .kd-acts .btn { position: relative; overflow: hidden; }
 .kd-acts .btn .kd-btn-crack { position: absolute; inset: 0; pointer-events: none; }
@@ -4422,7 +4418,6 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-btn-crack .lt { stroke: rgba(255, 255, 255, .75); stroke-width: .7px; vector-effect: non-scaling-stroke; transform: translate(.4px, -.4px); }
 .kd-btn-crack .chip { fill: rgba(8, 4, 4, .82); stroke: rgba(255, 255, 255, .55); stroke-width: .8px; vector-effect: non-scaling-stroke; }
 .kd-btn-crack circle { display: none; }
-:root[data-motion="off"] .kd-blood b, :root[data-motion="off"] .kd-blood b::after { animation: none !important; }
 .kd-slide.dead .kd-kick { color: #ff3b30; animation: kd-kick-beat var(--beat) infinite; }
 @keyframes kd-kick-beat { 0%, 40%, 100% { text-shadow: 0 0 6px rgba(255, 30, 20, .4); } 8% { text-shadow: 0 0 14px rgba(255, 30, 20, 1), 0 0 2px #fff; } 26% { text-shadow: 0 0 10px rgba(255, 30, 20, .75); } }
 .kd-slide.dead .kd-kick i { background: #ff2a1f; box-shadow: 0 0 0 4px rgba(255, 30, 20, .2), 0 0 12px rgba(255, 30, 20, .8); }
