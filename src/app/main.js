@@ -31,6 +31,7 @@ installWindowChrome();
 startSplash();
 import "./density.js";
 import "./ui-prefs.js";
+import "./season.js";
 import "./tabs.js";
 import "./qc.js";
 import "./media-tools.js";

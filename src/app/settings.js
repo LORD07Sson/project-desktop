@@ -11,6 +11,7 @@ import { isDevModeOn, setDevModeOn } from "./devmode.js";
 import { desktopNotifyEnabled, setDesktopNotifyEnabled, NOTIFY_KINDS, notifyKinds, setNotifyKind, quietHours, setQuietHours } from "./desktop-notify.js";
 import { ACCENTS, SCALES, START_TABS, currentAccent, applyAccent, currentScale, applyScale, currentMotion, applyMotion, backdropOn, applyBackdrop, startTab, setStartTab } from "./ui-prefs.js";
 import { GROUPS as SHORTCUT_GROUPS } from "./shortcuts-help.js";
+import { SEASONS, seasonPref, applySeason } from "./season.js";
 import { avatarHtml, loadAvatars } from "./profile.js";
 import { previewOptionsHtml, setPreviewRole } from "./role-preview.js";
 import { fetchPerson, openPauseDialog } from "./people.js";
@@ -192,6 +193,7 @@ async function openSettings() {
             ${row(ICONS.scale, "Масштаб интерфейса", "Для больших мониторов и 4K", seg("data-st-scale", SCALES.map(v => [v, `${v}%`]), scale), "размер шрифт крупнее")}
             ${row(ICONS.density, "Плотность таблиц", "Сколько строк влезает в «Список»", seg("data-st-density", [["comfortable", "Обычная"], ["compact", "Компактная"]], density))}
             ${row(ICONS.motion, "Анимации", "Выключите на слабом компьютере", seg("data-st-motion", [["on", "Включены"], ["off", "Выключены"]], motion), "движение плавность")}
+            ${row(ICONS.look, "Сезонное оформление", "Снег зимой, сакура весной, светлячки летом, листопад осенью", seg("data-st-season", Object.entries(SEASONS), seasonPref()), "сезон зима весна лето осень снег листья сакура светлячки")}
             ${row(ICONS.backdrop, "Фон из кадра тайтла", "Размытая обложка серии за интерфейсом", sw("s-backdrop", backdropOn()), "фон обложка размытие")}
           </div>
           <div class="st-group" data-st-find="своя тема размытие стекла скругления углы блюр">
@@ -609,6 +611,10 @@ async function openSettings() {
   overlay.querySelectorAll("[data-st-motion]").forEach(b => b.addEventListener("click", () => {
     pick("data-st-motion", null, b.dataset.stMotion);
     applyMotion(b.dataset.stMotion);
+  }));
+  overlay.querySelectorAll("[data-st-season]").forEach(b => b.addEventListener("click", () => {
+    pick("data-st-season", null, b.dataset.stSeason);
+    applySeason(b.dataset.stSeason);
   }));
   overlay.querySelector("#s-backdrop").addEventListener("change", e => applyBackdrop(e.target.checked));
 
