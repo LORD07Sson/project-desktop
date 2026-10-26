@@ -30,7 +30,7 @@ import { openReportDetail } from "./report-detail.js";
 import { state, can } from "./state.js";
 import { ATTACH_EXTENSIONS } from "./file-drop.js";
 import { loadAvatars } from "./profile.js";
-import { doomState, doomPosterHtml, doomCardStyle } from "./Crack.jsx";
+import { doomState, doomPosterHtml, doomCardStyle, deadFxHtml } from "./Crack.jsx";
 
 // Свёрнутые колонки — узкая студия часто держит "Завершено"/"Отменено"
 // сложенными: сами по себе они редко нужны, но занимают на широкой
@@ -194,7 +194,7 @@ function prettyDate(iso) {
   return d.toLocaleDateString("ru-RU", opts).replace(/\s*г\.$/, "");
 }
 
-const doomCardClass = st => ` doom${st.level >= 0.5 ? " dread" : ""}${st.gloom > 0.9 ? " flicker" : ""}`;
+const doomCardClass = st => ` doom${st.level >= 0.5 ? " dread" : ""}${st.gloom > 0.9 ? " flicker" : ""}${st.level >= 1 ? " dead" : ""}`;
 
 // Раз в 20 секунд догоняем время: трещины растут, мрак сгущается, в 0:00 обложка разлетается — без перерисовки доски.
 function tickDoom() {
@@ -205,8 +205,9 @@ function tickDoom() {
     if (!st || !card || st.key === el.dataset.doomKey) continue;
     el.dataset.doomKey = st.key;
     el.innerHTML = doomPosterHtml(card.dataset.id, el.dataset.doomSrc, st);
-    card.classList.remove("dread", "flicker");
+    card.classList.remove("dread", "flicker", "dead");
     card.className += doomCardClass(st).replace(" doom", "");
+    if (st.level >= 1 && !card.querySelector(".kc-dead-fx")) card.insertAdjacentHTML("afterbegin", deadFxHtml(card.dataset.id));
     for (const kv of doomCardStyle(st).split(";")) {
       const [k, v] = kv.split(":");
       card.style.setProperty(k, v);
@@ -259,6 +260,7 @@ export function boardCardHtml(c, status) {
     <div class="board-card${overdue ? " is-overdue" : ""}${c.stale ? " is-stale" : ""}${(c.heat || 0) >= .7 ? " is-hot" : ""}${doom ? doomCardClass(doom) : ""}"
          data-open="${esc(c.publicId)}" data-id="${esc(c.publicId)}" data-status="${esc(status)}"
          style="--accent-dot: var(${STATUS_COLOR_VAR[status] || "--s-draft"});${doom ? doomCardStyle(doom) : ""}">
+      ${doom && doom.level >= 1 ? deadFxHtml(c.publicId) : ""}
       ${c.priority === "urgent" ? `<i class="kc-flag" title="Срочно"></i>` : ""}
       ${posterHtml}
       <span class="kc-id">${esc(c.publicId)}${parts.ep ? ` · ${esc(parts.ep.replace("серия ", "EP "))}` : ""}</span>

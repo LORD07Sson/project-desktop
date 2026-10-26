@@ -4345,6 +4345,46 @@ td.row-actions { opacity: 1; transition: none; }
 .board-card.flicker::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: #000; opacity: 0; pointer-events: none; z-index: 3; animation: kd-flicker 4.7s infinite; }
 :root[data-motion="off"] .kc-chip, :root[data-motion="off"] .board-card.dread, :root[data-motion="off"] .board-card.flicker::before { animation: none !important; }
 :root[data-motion="off"] .kc-chip { display: none; }
+/* Просрочено: карточка тонет во тьме — кровавые прожилки бьются в такт сердцу, сверху сочатся подтёки,
+   из темноты справа смотрит вторая пара глаз, а заголовок иногда «сбоит», как испорченная плёнка. */
+.board-card.dead { position: relative; isolation: isolate; border-color: rgba(190, 20, 20, .55);
+  background: radial-gradient(130% 150% at 0% 50%, rgba(130, 6, 6, .42), transparent 62%), radial-gradient(90% 120% at 100% 100%, rgba(0, 0, 0, .7), transparent 70%), #0d0707; }
+.board-card.dead.dread { animation: kc-dead-beat var(--beat, 1s) infinite; }
+@keyframes kc-dead-beat {
+  0%, 40%, 100% { box-shadow: 0 0 0 1px rgba(255, 30, 20, .3), inset 0 0 22px rgba(120, 0, 0, .35); }
+  8% { box-shadow: 0 0 0 1px rgba(255, 40, 30, .9), 0 0 26px rgba(255, 20, 10, .5), inset 0 0 34px rgba(170, 0, 0, .55); }
+  26% { box-shadow: 0 0 0 1px rgba(255, 40, 30, .7), 0 0 16px rgba(255, 20, 10, .32), inset 0 0 28px rgba(150, 0, 0, .45); } }
+.kc-dead-fx { position: absolute; inset: 0; z-index: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.board-card.dead > :not(.kc-dead-fx) { position: relative; z-index: 1; }
+.board-card.dead > .kc-flag { position: absolute; }
+.kc-dead-fx::after { content: ""; position: absolute; inset: 0; opacity: .5; mix-blend-mode: overlay;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .35) 0 1px, transparent 1px 3px); animation: kc-static .4s steps(2) infinite; }
+@keyframes kc-static { 50% { transform: translateY(1px); } }
+.kc-dead-fx svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.kc-dead-fx path { fill: none; stroke: rgb(200, 14, 14); stroke-width: 1.3; vector-effect: non-scaling-stroke; stroke-linejoin: round;
+  filter: drop-shadow(0 0 2px rgba(255, 20, 10, .9)); opacity: .3; animation: kc-vein var(--beat, 1s) infinite; animation-delay: calc(var(--vd) * -1); }
+@keyframes kc-vein { 0%, 40%, 100% { opacity: .22; } 8% { opacity: .85; } 26% { opacity: .6; } }
+.kc-dead-fx > b { position: absolute; top: -1px; width: 3px; height: var(--dh); border-radius: 0 0 3px 3px;
+  background: linear-gradient(rgba(110, 0, 0, .95), rgb(170, 8, 8)); box-shadow: 0 0 4px rgba(200, 0, 0, .5); transform-origin: top; animation: kc-drip var(--dd) var(--dl) ease-in infinite; }
+.kc-dead-fx > b::after { content: ""; position: absolute; left: -1px; bottom: -3px; width: 5px; height: 6px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: rgb(170, 8, 8);
+  animation: kc-drop var(--dd) var(--dl) ease-in infinite; }
+@keyframes kc-drip { 0% { transform: scaleY(.2); } 70%, 100% { transform: scaleY(1); } }
+@keyframes kc-drop { 0%, 68% { transform: none; opacity: 1; } 69% { transform: translateY(2px); } 100% { transform: translateY(120px); opacity: 0; } }
+.kc-lurk { top: 12%; gap: 7px; opacity: 0; animation: kc-lurk 9s var(--ld) infinite; }
+.kc-lurk i { width: 7px; height: 3px; }
+@keyframes kc-lurk { 0%, 30%, 100% { opacity: 0; } 42%, 70% { opacity: .85; } 72% { opacity: 0; } 74% { opacity: .85; } 86% { opacity: 0; } }
+.board-card.dead .ttl { animation: kc-glitch 5.3s infinite; }
+@keyframes kc-glitch {
+  0%, 88%, 100% { transform: none; text-shadow: none; }
+  89% { transform: translateX(-2px) skewX(-8deg); text-shadow: 2px 0 rgba(255, 0, 40, .9), -2px 0 rgba(0, 220, 255, .55); }
+  90% { transform: translateX(2px); text-shadow: -3px 0 rgba(255, 0, 40, .9), 2px 0 rgba(0, 220, 255, .55); }
+  91% { transform: none; text-shadow: 1px 0 rgba(255, 0, 40, .7); }
+  92% { transform: translateY(-1px) skewX(6deg); text-shadow: -2px 0 rgba(255, 0, 40, .9); } }
+.board-card.dead .kc-sg .hot { color: #ff3b30; text-shadow: 0 0 8px rgba(255, 30, 20, .75); animation: kc-vein var(--beat, 1s) infinite; }
+.board-card.dead .kc-doom > img.kc-ghost { opacity: .22; filter: grayscale(1) brightness(.6) sepia(1) hue-rotate(-30deg) saturate(4) blur(1px); }
+:root[data-motion="off"] .board-card.dead, :root[data-motion="off"] .board-card.dead *, :root[data-motion="off"] .kc-dead-fx::after { animation: none !important; }
+:root[data-motion="off"] .kc-dead-fx > b::after { display: none; }
+:root[data-motion="off"] .kc-lurk { opacity: .7; }
 
 /* Мрак последних 10 часов (--gloom 0…1 на слайде, gloomLevel в Crack.jsx): краски выцветают, свет гаснет,
    тьма смыкается вокруг обложки. В последний час свет мигает, как умирающая лампа. Текст поверх — чтобы читался. */

@@ -509,3 +509,24 @@ export function doomPosterHtml(seed, src, st) {
 export function doomCardStyle(st) {
   return `--gloom:${st.gloom.toFixed(3)};--doom:${st.level.toFixed(3)};--beat:${(1.9 - st.level * 0.9).toFixed(2)}s`;
 }
+
+// Просроченная карточка: поверх неё — кровавые прожилки от обложки, подтёки сверху и вторая пара глаз во тьме справа.
+export function deadFxHtml(seed) {
+  const r = rng(`${seed}:dead`);
+  const veins = [];
+  for (let v = 0; v < 4; v++) {
+    let x = 18, y = 20 + r() * 60;
+    let d = `M${x} ${y.toFixed(1)}`;
+    const reach = 45 + r() * 50;
+    while (x < reach) {
+      x += 4 + r() * 7;
+      y = Math.min(96, Math.max(4, y + (r() - 0.5) * 18));
+      d += ` L${x.toFixed(1)} ${y.toFixed(1)}`;
+    }
+    veins.push(`<path d="${d}" style="--vd:${(r() * 2).toFixed(2)}s"/>`);
+  }
+  const drips = Array.from({ length: 4 }, () =>
+    `<b style="left:${(22 + r() * 72).toFixed(1)}%;--dh:${(6 + r() * 14).toFixed(0)}px;--dd:${(5 + r() * 6).toFixed(1)}s;--dl:${(-r() * 8).toFixed(1)}s"></b>`).join("");
+  return `<i class="kc-dead-fx" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${veins.join("")}</svg>${drips}`
+    + `<span class="kc-eyes red kc-lurk" style="left:${(80 + r() * 10).toFixed(0)}%;--ld:${(-r() * 9).toFixed(1)}s"><i></i><i></i></span></i>`;
+}
