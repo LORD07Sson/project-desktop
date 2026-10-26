@@ -1,40 +1,107 @@
-// «✨ Апскейл» на странице тайтла: обложку или баннер увеличивает ×4 нейросеть (upscale.rs: движок и модели Upscayl) —
-// «Аниме» (digital-art-4x) или «Резко» (ultrasharp-4x). Берём исходник с сервера (?w=0 — без серверного растягивания), при первом запуске движок
-// докачивается сам. Результат — сравнение «до/после» ползунком и сохранение PNG в выбранное место.
+// «✨ Апскейл» на странице тайтла: нейросеть (upscale.rs: движок и модели Upscayl) увеличивает обложку, баннер или
+// свою картинку (файл с диска или Ctrl+V) — «Аниме» (digital-art-4x) или «Резко» (ultrasharp-4x), ×2/×3/×4 или до
+// нужной ширины. Обложку и баннер берём с сервера исходником (?w=0 — без серверного растягивания); при первом запуске
+// движок и модель докачиваются сами. Результат — сравнение «до/после» и сохранение PNG в выбранное место.
 
-import { invoke, listen, pickOutputFile } from "./tauri.js";
+import { invoke, listen, pickInputFile, pickOutputFile } from "./tauri.js";
 import { mediaUrl, openSheet, toast } from "./api.js";
 import { imgProxy } from "./title-page.js";
 import { esc } from "./utils.js";
 
+// Размер результата: во сколько раз или до какой ширины (px).
+const SIZES = [["x2", "×2"], ["x3", "×3"], ["x4", "×4"], ["w1920", "1920 px"], ["w2560", "2560 px"], ["w3840", "4K · 3840"]];
+const IMAGE_TYPES = ["png", "jpg", "jpeg", "webp", "bmp"];
+
 export function openUpscale(d) {
-  const sources = [["poster", "Обложка"], ...(d.has_banner ? [["banner", "Баннер"]] : [])];
-  const pick = { src: "poster", model: "anime" };
+  const sources = [["poster", "Обложка"], ...(d.has_banner ? [["banner", "Баннер"]] : []), ["own", "Своя картинка…"]];
+  const pick = { src: "poster", model: "anime", size: "x4" };
+  // input — то, что увеличиваем: blob, имя для файла и размер исходника
+  let input = null, busy = false, resultUrl = "", inputUrl = "";
   const seg = (attr, items, cur) => `<div class="seg-toggle" role="group">${items.map(([v, l]) => `<button type="button" class="seg-btn${v === cur ? " active" : ""}" ${attr}="${v}">${l}</button>`).join("")}</div>`;
   const overlay = openSheet(`
     <div class="up">
-      <div class="up-head"><h3>✨ Апскейл ×4</h3><span>${esc(d.name)}</span></div>
+      <div class="up-head"><h3>✨ Апскейл</h3><span>${esc(d.name)}</span></div>
       <div class="up-row"><b>Что увеличить</b>${seg("data-up-src", sources, pick.src)}</div>
       <div class="up-row"><b>Нейросеть</b>${seg("data-up-model", [["anime", "Аниме-арт"], ["sharp", "Максимально резко"]], pick.model)}</div>
+      <div class="up-row"><b>Размер <em class="up-dims" data-up-dims></em></b>${seg("data-up-size", SIZES, pick.size)}</div>
       <div class="up-stage" data-up-stage><div class="up-hint">Нейросеть дорисует детали и уберёт мыло и квадратики сжатия. Работает на видеокарте. При первом запуске скачается движок и выбранная модель — один раз: аниме ≈11 МБ, резкая ≈35 МБ.</div></div>
       <div class="up-prog" data-up-prog hidden><i></i><span></span></div>
       <div class="up-acts">
+        <span class="up-tip">Свою картинку можно вставить: Ctrl+V</span>
         <button type="button" class="btn" data-close>Закрыть</button>
         <button type="button" class="btn" data-up-save hidden>Сохранить PNG…</button>
-        <button type="button" class="btn primary" data-up-run>Увеличить ×4</button>
+        <button type="button" class="btn primary" data-up-run>Увеличить</button>
       </div>
     </div>`, "wide");
   overlay.classList.add("up-overlay");
   const $ = sel => overlay.querySelector(sel);
+  const selectSeg = (attr, value) => overlay.querySelectorAll(`[${attr}]`).forEach(x => x.classList.toggle("active", x.getAttribute(attr) === value));
   overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
-  for (const [attr, key] of [["data-up-src", "src"], ["data-up-model", "model"]]) {
-    overlay.querySelectorAll(`[${attr}]`).forEach(b => b.addEventListener("click", () => {
-      overlay.querySelectorAll(`[${attr}]`).forEach(x => x.classList.toggle("active", x === b));
-      pick[key] = b.getAttribute(attr);
-    }));
+  overlay.querySelectorAll("[data-up-model]").forEach(b => b.addEventListener("click", () => { pick.model = b.dataset.upModel; selectSeg("data-up-model", pick.model); }));
+  overlay.querySelectorAll("[data-up-size]").forEach(b => b.addEventListener("click", () => { pick.size = b.dataset.upSize; selectSeg("data-up-size", pick.size); showDims(); }));
+  overlay.querySelectorAll("[data-up-src]").forEach(b => b.addEventListener("click", () => chooseSource(b.dataset.upSrc)));
+
+  const target = () => {
+    if (!input) return null;
+    const { w, h } = input;
+    if (pick.size.startsWith("w")) {
+      const tw = Number(pick.size.slice(1));
+      return { w: tw, h: Math.round(h * tw / w) };
+    }
+    const k = Number(pick.size.slice(1));
+    return { w: w * k, h: h * k };
+  };
+  function showDims() {
+    const t = target();
+    $("[data-up-dims]").textContent = t ? `${input.w}×${input.h} → ${t.w}×${t.h}` : "";
   }
 
-  let busy = false, resultUrl = "", originalUrl = "";
+  // Исходник показываем сразу — видно, что именно будем увеличивать.
+  async function setInput(blob, name) {
+    if (inputUrl) URL.revokeObjectURL(inputUrl);
+    inputUrl = URL.createObjectURL(blob);
+    const { w, h } = await size(inputUrl);
+    if (!w) throw new Error("Это не картинка или формат не поддерживается.");
+    input = { blob, name, w, h };
+    $("[data-up-stage]").innerHTML = `<img class="up-src" src="${inputUrl}" alt="">`;
+    $("[data-up-save]").hidden = true;
+    $("[data-up-run]").textContent = "Увеличить";
+    showDims();
+  }
+
+  async function chooseSource(src) {
+    if (busy) return;
+    try {
+      if (src === "own") {
+        const path = await pickInputFile([{ name: "Картинки", extensions: IMAGE_TYPES }]);
+        if (!path) return;
+        const bytes = await invoke("upscale_read", { path });
+        const name = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
+        await setInput(new Blob([bytes]), name);
+      } else {
+        const url = mediaUrl(`/titles/${d.id}/art/${src}`, { w: 0 }) || (src === "poster" ? imgProxy(d.poster_url) : "");
+        const r = url ? await fetch(url) : null;
+        if (!r || r.status !== 200) throw new Error("Не удалось получить картинку с сервера.");
+        await setInput(await r.blob(), `${String(d.name || "title").slice(0, 80)} — ${src === "banner" ? "баннер" : "обложка"}`);
+      }
+      pick.src = src;
+      selectSeg("data-up-src", src);
+    } catch (e) {
+      toast(String(e && e.message ? e.message : e), "error");
+    }
+  }
+
+  // Ctrl+V — картинка из буфера обмена (скриншот, скопированная из браузера).
+  const onPaste = e => {
+    if (!overlay.isConnected || busy) return;
+    const file = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith("image/"));
+    if (!file) return;
+    e.preventDefault();
+    setInput(file, "картинка из буфера").then(() => { pick.src = "own"; selectSeg("data-up-src", "own"); })
+      .catch(err => toast(String(err && err.message ? err.message : err), "error"));
+  };
+  document.addEventListener("paste", onPaste);
+
   const prog = $("[data-up-prog]");
   const setProg = (fraction, label) => {
     prog.hidden = false;
@@ -42,33 +109,35 @@ export function openUpscale(d) {
     prog.querySelector("span").textContent = label;
   };
   const unlisten = listen("upscale-progress", e => { if (busy) setProg(e.payload.fraction, e.payload.label); });
+  let cleaned = false;
   overlay.addEventListener("sheet-dismissed", cleanup);
   new MutationObserver((_, obs) => { if (!overlay.isConnected) { obs.disconnect(); cleanup(); } }).observe(document.body, { childList: true });
   function cleanup() {
+    if (cleaned) return;
+    cleaned = true;
+    document.removeEventListener("paste", onPaste);
     unlisten.then(f => f());
     if (resultUrl) URL.revokeObjectURL(resultUrl);
-    if (originalUrl) URL.revokeObjectURL(originalUrl);
+    if (inputUrl) URL.revokeObjectURL(inputUrl);
   }
 
+  chooseSource("poster");
+
   $("[data-up-run]").addEventListener("click", async () => {
-    if (busy) return;
+    if (busy || !input) return;
     busy = true;
     const run = $("[data-up-run]");
     run.disabled = true;
     $("[data-up-save]").hidden = true;
-    setProg(0, "Беру оригинал картинки…");
+    setProg(0, "Готовлю картинку…");
     try {
-      const url = mediaUrl(`/titles/${d.id}/art/${pick.src}`, { w: 0 }) || (pick.src === "poster" ? imgProxy(d.poster_url) : "");
-      const r = url ? await fetch(url) : null;
-      if (!r || r.status !== 200) throw new Error("Не удалось получить картинку с сервера.");
-      const blob = await r.blob();
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      const png = await invoke("upscale_image", { bytes: Array.from(bytes), model: pick.model });
+      const bytes = new Uint8Array(await input.blob.arrayBuffer());
+      const sizeArg = pick.size.startsWith("w") ? { width: Number(pick.size.slice(1)) } : { scale: Number(pick.size.slice(1)) };
+      const png = await invoke("upscale_image", { bytes: Array.from(bytes), model: pick.model, ...sizeArg });
       if (resultUrl) URL.revokeObjectURL(resultUrl);
-      if (originalUrl) URL.revokeObjectURL(originalUrl);
       resultUrl = URL.createObjectURL(new Blob([png], { type: "image/png" }));
-      originalUrl = URL.createObjectURL(blob);
-      await showCompare(originalUrl, resultUrl);
+      await showCompare(inputUrl, resultUrl);
+      input.done = pick.size;
       $("[data-up-save]").hidden = false;
       prog.hidden = true;
       run.textContent = "Ещё раз";
@@ -82,7 +151,8 @@ export function openUpscale(d) {
   });
 
   $("[data-up-save]").addEventListener("click", async () => {
-    const name = `${String(d.name || "title").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80)} — ${pick.src === "banner" ? "баннер" : "обложка"} x4.png`;
+    const suffix = (input.done || pick.size).replace(/^x/, "x").replace(/^w(\d+)/, "$1px");
+    const name = `${input.name.replace(/[\\/:*?"<>|]+/g, " ").trim()} ${suffix}.png`;
     const path = await pickOutputFile(name, [{ name: "PNG", extensions: ["png"] }]);
     if (!path) return;
     try {

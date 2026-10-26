@@ -167,8 +167,46 @@ fn parse_percent(line: &str) -> Option<f64> {
     num.trim().replace(',', ".").parse::<f64>().ok().filter(|v| (0.0..=100.0).contains(v))
 }
 
-/// Увеличивает картинку в 4 раза. `mode` — "anime" или "sharp". Возвращает PNG.
-pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Vec<u8>, mode: &str) -> Result<Vec<u8>, String> {
+/// Размер результата: во сколько раз (2–4) или до какой ширины в пикселях. Модели всегда ×4 — движок сам ужимает
+/// до ×2/×3 или подгоняет под ширину после нейросети.
+pub enum Size {
+    Scale(u32),
+    Width(u32),
+}
+
+impl Size {
+    pub fn from(scale: Option<u32>, width: Option<u32>) -> Result<Size, String> {
+        match (scale, width) {
+            (_, Some(w)) if (64..=8192).contains(&w) => Ok(Size::Width(w)),
+            (_, Some(_)) => Err("Ширина — от 64 до 8192 пикселей.".into()),
+            (Some(s), None) if (2..=4).contains(&s) => Ok(Size::Scale(s)),
+            (None, None) => Ok(Size::Scale(4)),
+            _ => Err("Увеличение — ×2, ×3 или ×4.".into()),
+        }
+    }
+
+    fn args(&self) -> Vec<String> {
+        match self {
+            Size::Scale(s) => vec!["-s".into(), s.to_string()],
+            // «-w» вместе с «-s» движок молча игнорирует — только отдельно, с фильтром
+            Size::Width(w) => vec!["-w".into(), format!("{w}:default")],
+        }
+    }
+}
+
+/// Своя картинка с диска — только файл, выбранный в диалоге (file_scope), и не больше 25 МБ.
+pub fn read_input(app: &tauri::AppHandle, path: &str) -> Result<Vec<u8>, String> {
+    use tauri::Manager;
+    let p = app.state::<crate::file_scope::FileScope>().check_read(path)?;
+    let len = std::fs::metadata(&p).map_err(|e| e.to_string())?.len();
+    if len as usize > MAX_INPUT {
+        return Err("Картинка больше 25 МБ.".into());
+    }
+    std::fs::read(p).map_err(|e| format!("Не удалось прочитать картинку: {e}"))
+}
+
+/// Увеличивает картинку. `mode` — "anime" или "sharp", `size` — во сколько раз или до какой ширины. Возвращает PNG.
+pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Vec<u8>, mode: &str, size: Size) -> Result<Vec<u8>, String> {
     if bytes.is_empty() || bytes.len() > MAX_INPUT {
         return Err("Картинка пустая или слишком большая (больше 25 МБ).".into());
     }
@@ -182,13 +220,15 @@ pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Ve
     progress(app, 0.45, "Нейросеть увеличивает картинку…");
 
     let app2 = app.clone();
-    let (input2, output2, name) = (input.clone(), output.clone(), model.name);
+    let (input2, output2, name, size_args) = (input.clone(), output.clone(), model.name, size.args());
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         let mut child = hidden_command(dir.join(EXE))
             .current_dir(&dir)
             .arg("-i").arg(&input2)
             .arg("-o").arg(&output2)
-            .args(["-n", name, "-s", "4", "-f", "png", "-m"])
+            .args(["-n", name])
+            .args(&size_args)
+            .args(["-f", "png", "-m"])
             .arg(dir.join("models"))
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -244,7 +284,16 @@ pub fn save(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_percent, MODELS};
+    use super::{parse_percent, Size, MODELS};
+
+    #[test]
+    fn size_args() {
+        assert_eq!(Size::from(None, None).unwrap().args(), ["-s", "4"]);
+        assert_eq!(Size::from(Some(2), None).unwrap().args(), ["-s", "2"]);
+        assert_eq!(Size::from(Some(4), Some(3840)).unwrap().args(), ["-w", "3840:default"]);
+        assert!(Size::from(Some(5), None).is_err());
+        assert!(Size::from(None, Some(99999)).is_err());
+    }
 
     #[test]
     fn percent_lines() {

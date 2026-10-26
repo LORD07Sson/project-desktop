@@ -748,8 +748,21 @@ fn mt_extract_subtitles(
 
 /// Увеличивает картинку ×4 нейросетью (при первом вызове докачивает движок и модель). PNG уходит сырым ответом — без JSON.
 #[tauri::command]
-async fn upscale_image(app: tauri::AppHandle, bytes: Vec<u8>, model: String) -> Result<tauri::ipc::Response, String> {
-    upscale::upscale(&app, http(), bytes, &model).await.map(tauri::ipc::Response::new)
+async fn upscale_image(
+    app: tauri::AppHandle,
+    bytes: Vec<u8>,
+    model: String,
+    scale: Option<u32>,
+    width: Option<u32>,
+) -> Result<tauri::ipc::Response, String> {
+    let size = upscale::Size::from(scale, width)?;
+    upscale::upscale(&app, http(), bytes, &model, size).await.map(tauri::ipc::Response::new)
+}
+
+/// Своя картинка для апскейла — файл из диалога выбора; байты уходят сырым ответом.
+#[tauri::command(async)]
+fn upscale_read(app: tauri::AppHandle, path: String) -> Result<tauri::ipc::Response, String> {
+    upscale::read_input(&app, &path).map(tauri::ipc::Response::new)
 }
 
 /// Сохраняет последний результат апскейла — только в путь из диалога сохранения.
@@ -1501,6 +1514,7 @@ fn main() {
             desktop_notify::notify_desktop,
             local_render_prepare,
             upscale_image,
+            upscale_read,
             upscale_save,
             local_render_encoders,
             local_render_run,
