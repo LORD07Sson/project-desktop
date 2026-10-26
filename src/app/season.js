@@ -219,9 +219,10 @@ function watchHangers() {
 
 // Шапка Деда Мороза на логотипе (видна только зимой — kadr.css).
 function putHat() {
+  // Не внутрь логотипа: он обрезает всё по краям (там бегает блик) и крутится при наведении.
   const logo = document.querySelector(".titlebar-left .brand-logo");
-  if (!logo || logo.querySelector(".season-hat")) return;
-  logo.insertAdjacentHTML("beforeend", `<svg class="season-hat" viewBox="0 0 40 34" aria-hidden="true">
+  if (!logo || logo.parentElement.querySelector(".season-hat")) return;
+  logo.insertAdjacentHTML("afterend", `<svg class="season-hat" viewBox="0 0 40 34" aria-hidden="true">
     <defs><linearGradient id="sh-red" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3a3a"/><stop offset="1" stop-color="#a30d16"/></linearGradient>
     <linearGradient id="sh-fur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dee6"/></linearGradient></defs>
     <path d="M5 25 C7 12 16 4 26 5 C33 6 37 11 36 17 C33 13 29 12 27 14 C25 17 30 22 32 25 Z" fill="url(#sh-red)"/>
