@@ -1,10 +1,11 @@
 // Сезонное оформление (Настройки → Внешний вид): за интерфейсом — зимой снег и новогодняя гирлянда сверху,
-// весной лепестки сакуры, летом светлячки, осенью листопад, плюс свечение сезона по краям окна
+// весной лепестки сакуры, летом светлячки, осенью листопад, на Хэллоуин (24.10–2.11) летучие мыши и гирлянда
+// с тыквами, плюс свечение сезона по краям окна
 // (kadr.css, :root[data-season]). Слой лежит сразу за фоном из обложки и под окном приложения — сквозь стекло
 // видно, но поверх карточек не летает. «Авто» берёт сезон по дате; при выключенных анимациях и свёрнутом окне — стоит.
 
 const KEY = "project-season";
-export const SEASONS = { auto: "Авто", winter: "Зима", spring: "Весна", summer: "Лето", autumn: "Осень", off: "Выкл." };
+export const SEASONS = { auto: "Авто", winter: "Зима", spring: "Весна", summer: "Лето", autumn: "Осень", halloween: "Хэллоуин", off: "Выкл." };
 
 const root = document.documentElement;
 let layer = null, canvas = null, ctx = null, garland = null, raf = 0, last = 0, parts = [], kind = "", sprites = null;
@@ -16,7 +17,8 @@ export function seasonPref() {
 }
 
 function byDate(d = new Date()) {
-  const m = d.getMonth();
+  const m = d.getMonth(), day = d.getDate();
+  if ((m === 9 && day >= 24) || (m === 10 && day <= 2)) return "halloween";
   return m === 11 || m <= 1 ? "winter" : m <= 4 ? "spring" : m <= 7 ? "summer" : "autumn";
 }
 
@@ -99,7 +101,33 @@ function makeSprites() {
     g.fillStyle = gr;
     g.fillRect(0, 0, s, s);
   });
-  return { flake, petal, leaf, fly };
+  // Летучая мышь — два кадра взмаха: крылья вверх и вниз.
+  const bat = [-1, 1].map(up => sprite(64, (g, s) => {
+    g.translate(s / 2, s / 2);
+    g.fillStyle = "#24133a";
+    g.shadowColor = "rgba(190, 110, 255, .9)";
+    g.shadowBlur = 7;
+    const tip = up * 14;
+    g.beginPath();
+    g.moveTo(0, -4);
+    for (const side of [1, -1]) {
+      g.lineTo(side * 6, -5);
+      g.quadraticCurveTo(side * 16, -6 + tip * 0.5, side * 28, -2 + tip);
+      // нижний край крыла — «фестоны» между пальцами
+      g.quadraticCurveTo(side * 24, 2 + tip * 0.6, side * 20, 4 + tip * 0.4);
+      g.quadraticCurveTo(side * 16, 1 + tip * 0.3, side * 12, 6 + tip * 0.2);
+      g.quadraticCurveTo(side * 9, 3, side * 5, 6);
+      g.lineTo(0, 7);
+      if (side === 1) g.moveTo(0, -4);
+    }
+    g.fill();
+    g.beginPath();
+    g.ellipse(0, 1, 4, 6, 0, 0, Math.PI * 2);   // тельце
+    g.moveTo(-3, -4); g.lineTo(-2.4, -9); g.lineTo(-0.8, -5);   // уши
+    g.moveTo(3, -4); g.lineTo(2.4, -9); g.lineTo(0.8, -5);
+    g.fill();
+  }));
+  return { flake, petal, leaf, fly, bat };
 }
 
 function spawn(w, h, fresh) {
@@ -116,13 +144,17 @@ function spawn(w, h, fresh) {
     const z = rand(0.5, 1);
     return { x: rand(0, w), y: y0, z, img: pick(sprites.leaf), size: 18 + z * 16, vy: 30 + z * 34, sway: rand(30, 70), ph: rand(0, 6.3), sp: rand(0.5, 1.1), rot: rand(0, 6.3), vr: rand(-1.2, 1.2), flip: rand(0, 6.3), vf: rand(1, 2.4), a: 0.6 + z * 0.35 };
   }
+  if (kind === "halloween") {
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    return { x: fresh ? rand(0, w) : dir > 0 ? -50 : w + 50, y: rand(h * 0.08, h * 0.75), size: rand(26, 46), vx: dir * rand(45, 100), sway: rand(10, 26), ph: rand(0, 6.3), sp: rand(1, 2), flap: rand(0, 6.3), a: rand(0.55, 0.85) };
+  }
   // Лето: светлячки не падают, а бродят и мерцают.
   return { x: rand(0, w), y: fresh ? rand(h * 0.2, h) : h + 20, size: rand(16, 30), vx: rand(-12, 12), vy: rand(-14, -4), ph: rand(0, 6.3), sp: rand(0.6, 1.6), a: 1 };
 }
 
 function density(w, h) {
   const area = (w * h) / 1e6;
-  return Math.round(area * ({ winter: 50, spring: 30, autumn: 16, summer: 26 }[kind] || 0));
+  return Math.round(area * ({ winter: 50, spring: 30, autumn: 16, summer: 26, halloween: 5 }[kind] || 0));
 }
 
 function frame(t) {
@@ -147,6 +179,18 @@ function frame(t) {
       if (p.y < -30 || p.x < -30 || p.x > w + 30) parts[i] = spawn(w, h, false);
       ctx.globalAlpha = 0.15 + Math.max(0, Math.sin(p.ph * 1.7)) * 0.85;
       ctx.drawImage(sprites.fly, p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      continue;
+    }
+    if (kind === "halloween") {
+      p.x += p.vx * dt;
+      p.flap += dt * 14;
+      if (p.x < -60 || p.x > w + 60) { parts[i] = spawn(w, h, false); continue; }
+      ctx.globalAlpha = p.a;
+      ctx.save();
+      ctx.translate(p.x, p.y + Math.sin(p.ph) * p.sway);
+      if (p.vx < 0) ctx.scale(-1, 1);
+      ctx.drawImage(sprites.bat[Math.sin(p.flap) > 0 ? 0 : 1], -p.size / 2, -p.size / 2, p.size, p.size);
+      ctx.restore();
       continue;
     }
     p.y += p.vy * dt;
@@ -176,7 +220,8 @@ function frame(t) {
 // зрения и без ярких полос — работать не мешает. Свечение — радиальный градиент (без blur: огоньков сотни),
 // мерцают вразнобой.
 const HANG_FROM = ["#tabstrip", "#titlebar-team", "#open-cmdk", "#open-watch"];
-const LED = ["#ff4d4d", "#ffc83d", "#3ddc6e", "#4a8cff", "#ff5fc8", "#3de0e0"];
+const PALETTE = { winter: ["#ff4d4d", "#ffc83d", "#3ddc6e", "#4a8cff", "#ff5fc8", "#3de0e0"], halloween: ["#ff7a1a", "#ffb02e", "#a64dff", "#7dff3d"] };
+let LED = PALETTE.winter;
 let hangObs = null;
 function led(x, y, k) {
   const r = rand(0.9, 1.3);
@@ -184,9 +229,17 @@ function led(x, y, k) {
   return `<g class="sg-led" style="--d:${(-rand(0, 3)).toFixed(2)}s;--t:${rand(3.5, 6.5).toFixed(2)}s"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(5.5 * r).toFixed(1)}" fill="url(#sg-halo-${c})"/>`
     + `<circle class="sg-core" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(1.25 * r).toFixed(2)}" fill="${LED[c]}"/></g>`;
 }
+function pumpkin(x, y) {
+  const t = `translate(${x.toFixed(1)} ${y.toFixed(1)})`;
+  return `<g class="sg-pumpkin" transform="${t}" style="--d:${(-rand(0, 3)).toFixed(2)}s"><circle cx="0" cy="0" r="10" fill="url(#sg-halo-0)"/>`
+    + `<rect x="-.7" y="-6.4" width="1.4" height="2.6" rx=".6" fill="#3d6b1f"/>`
+    + `<ellipse cx="-2.3" cy="0" rx="2.6" ry="4" fill="#e8650f"/><ellipse cx="2.3" cy="0" rx="2.6" ry="4" fill="#e8650f"/><ellipse cx="0" cy="0" rx="2.4" ry="4.2" fill="#ff8a1f"/>`
+    + `<path class="sg-face" d="M-2.6 -1.2 l1.2 -1.2 1.2 1.2Z M1.4 -1.2 l1.2 -1.2 1.2 1.2Z M-2.6 1.2 Q0 3.4 2.6 1.2 Q0 2.2 -2.6 1.2Z"/></g>`;
+}
 function drawGarland() {
   if (!garland) return;
-  if (kind !== "winter") { garland.innerHTML = ""; return; }
+  if (!PALETTE[kind]) { garland.innerHTML = ""; return; }
+  LED = PALETTE[kind];
   const w = window.innerWidth, sag = 7;
   let wire = "", leds = "", k = 0, bottom = 0;
   const arc = (x0, x1, y0) => {
@@ -200,8 +253,12 @@ function drawGarland() {
       if (j % 2 === 1 && j < m) {
         const len = 1 + Math.floor(rand(0, 3));
         wire += `M${x.toFixed(1)} ${y.toFixed(1)} L${x.toFixed(1)} ${(y + len * 6).toFixed(1)} `;
-        for (let q = 1; q <= len; q++) leds += led(x + rand(-0.6, 0.6), y + q * 6, k++);
-        bottom = Math.max(bottom, y + len * 6 + 8);
+        for (let q = 1; q <= len; q++) {
+          // на Хэллоуин длинные нити заканчиваются светящейся тыковкой
+          if (kind === "halloween" && len === 3 && q === len) leds += pumpkin(x, y + q * 6 + 2);
+          else leds += led(x + rand(-0.6, 0.6), y + q * 6, k++);
+        }
+        bottom = Math.max(bottom, y + len * 6 + 12);
       }
     }
   };
@@ -226,7 +283,7 @@ function watchHangers() {
   for (const sel of HANG_FROM) { const el = document.querySelector(sel); if (el) hangObs.observe(el); }
 }
 
-// Шапка Деда Мороза на логотипе (видна только зимой — kadr.css).
+// Шапка Деда Мороза (зимой) и шляпа ведьмы (на Хэллоуин) на логотипе — что видно, решает kadr.css.
 function putHat() {
   // Не внутрь логотипа: он обрезает всё по краям (там бегает блик) и крутится при наведении.
   const logo = document.querySelector(".titlebar-left .brand-logo");
@@ -236,7 +293,12 @@ function putHat() {
     <linearGradient id="sh-fur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dee6"/></linearGradient></defs>
     <path d="M5 25 C7 12 16 4 26 5 C33 6 37 11 36 17 C33 13 29 12 27 14 C25 17 30 22 32 25 Z" fill="url(#sh-red)"/>
     <rect x="2" y="22.5" width="32" height="8.5" rx="4.2" fill="url(#sh-fur)"/>
-    <circle cx="36" cy="17.5" r="4.6" fill="url(#sh-fur)"/></svg>`);
+    <circle cx="36" cy="17.5" r="4.6" fill="url(#sh-fur)"/></svg>
+    <svg class="season-hat witch" viewBox="0 0 40 34" aria-hidden="true">
+    <defs><linearGradient id="wh-cone" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b5cff"/><stop offset="1" stop-color="#4a1f8a"/></linearGradient></defs>
+    <path d="M10 27 C13 19 17 11 20 5 C21.5 1.5 26 0 30 3 C27 3 25.5 5 25.5 8.5 L29.5 27 Z" fill="url(#wh-cone)" stroke="#c9a3ff" stroke-width=".7"/>
+    <path d="M11.3 23 L29 23 L29.6 27 L10.5 27 Z" fill="#ff7a1a"/><rect x="18.2" y="22.6" width="4.2" height="4.6" rx=".6" fill="none" stroke="#ffd34d" stroke-width="1.1"/>
+    <ellipse cx="20" cy="28" rx="19" ry="4.2" fill="#5a2aa0" stroke="#c9a3ff" stroke-width=".7"/></svg>`);
 }
 
 function resize() {

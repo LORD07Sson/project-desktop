@@ -4448,6 +4448,8 @@ td.row-actions { opacity: 1; transition: none; }
   radial-gradient(60% 40% at 30% 110%, rgba(150, 220, 90, .06), transparent 70%); }
 :root[data-season="autumn"] .season-fx::before { background: radial-gradient(110% 55% at 20% -10%, rgba(255, 140, 50, .11), transparent 60%),
   radial-gradient(60% 45% at 80% 110%, rgba(200, 80, 20, .09), transparent 70%); }
+:root[data-season="halloween"] .season-fx::before { background: radial-gradient(110% 55% at 80% -10%, rgba(150, 70, 255, .13), transparent 60%),
+  radial-gradient(60% 45% at 20% 110%, rgba(255, 110, 20, .12), transparent 70%); }
 :root[data-theme="light"] .season-fx::before { mix-blend-mode: multiply; opacity: .5; }
 /* Новогодняя гирлянда зимой (season.js): разноцветные микро-огоньки с «сосульками» из-под вкладок, команды,
    поиска и «Смотреть». Мерцают медленно и не гаснут совсем — без мельтешения. */
@@ -4456,10 +4458,13 @@ td.row-actions { opacity: 1; transition: none; }
 .sg-wire { fill: none; stroke: rgba(30, 50, 70, .85); stroke-width: .9; }
 .sg-led { animation: sg-twinkle var(--t, 2.4s) var(--d, 0s) ease-in-out infinite; }
 @keyframes sg-twinkle { 0%, 100% { opacity: .95; } 50% { opacity: .6; } }
-:root[data-motion="off"] .sg-led { animation: none; }
+:root[data-motion="off"] .sg-led, :root[data-motion="off"] .sg-pumpkin { animation: none; }
+.sg-pumpkin { animation: sg-twinkle 5s var(--d, 0s) ease-in-out infinite; }
+.sg-face { fill: #ffe066; filter: drop-shadow(0 0 1.5px #ffb02e); }
 :root[data-theme="light"] .sg-wire { stroke: #6a7a8c; }
 /* Шапка Деда Мороза на логотипе — только зимой: опушка ровно по ширине логотипа и садится на его верхний край. */
 .season-hat { display: none; position: absolute; left: 2px; top: -12px; width: 28px; height: 24px; pointer-events: none; transform: rotate(-6deg); transform-origin: 45% 85%;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .45)); z-index: 2; }
 :root[data-season="winter"] .titlebar-left { position: relative; }
-:root[data-season="winter"] .season-hat { display: block; }
+:root[data-season="winter"] .season-hat:not(.witch), :root[data-season="halloween"] .season-hat.witch { display: block; }
+:root[data-season="halloween"] .titlebar-left { position: relative; }
