@@ -531,8 +531,7 @@ export function deadFxHtml(seed, { veins: nVeins = 4, drips: nDrips = 4 } = {}) 
     + `<span class="kc-eyes red kc-lurk" style="left:${(80 + r() * 10).toFixed(0)}%;--ld:${(-r() * 9).toFixed(1)}s"><i></i><i></i></span></i>`;
 }
 
-// Треснувшая кнопка на просроченном слайде: точка удара, рваные лучи от неё, обрывки кольца и отколотый уголок —
-// трещины налиты кровью, у точки удара кровавое пятно.
+// Треснувшая кнопка на просроченном слайде: точка удара, рваные лучи от неё, обрывки кольца и отколотый уголок.
 export function btnCrackHtml(seed) {
   const r = rng(`${seed}:btn`);
   const W = 160, H = 40;
@@ -559,5 +558,5 @@ export function btnCrackHtml(seed) {
   const d = [...rays, ...ring].join(" ");
   const chip = `M${W} 0 L${W} ${(H * (0.35 + r() * 0.2)).toFixed(0)} L${(W - 8 - r() * 8).toFixed(0)} 0Z`;
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path class="chip" d="${chip}"/><path class="dk" d="${d}"/><path class="lt" d="${d}"/>`
-    + `<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="9" ry="6"/></svg>`;
+    + `</svg>`;
 }
