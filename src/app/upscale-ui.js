@@ -192,7 +192,7 @@ export function openUpscale(d) {
   });
 
   $("[data-up-save]").addEventListener("click", async () => {
-    const suffix = (input.done || pick.size).replace(/^x/, "x").replace(/^w(\d+)/, "$1px");
+    const suffix = (input.done || pick.size).replace(/^w(\d+)/, "$1px");
     const name = `${input.name.replace(/[\\/:*?"<>|]+/g, " ").trim()} ${suffix}.png`;
     const path = await pickOutputFile(name, [{ name: "PNG", extensions: ["png"] }]);
     if (!path) return;
