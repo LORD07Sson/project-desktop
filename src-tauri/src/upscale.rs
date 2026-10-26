@@ -385,6 +385,47 @@ pub fn remove_custom(name: &str) -> Result<Vec<String>, String> {
     Ok(list_custom())
 }
 
+fn dir_size(dir: &Path) -> u64 {
+    walk(dir).iter().filter_map(|p| std::fs::metadata(p).ok()).map(|m| m.len()).sum()
+}
+
+#[derive(serde::Serialize)]
+pub struct Storage {
+    /// движок и скачанные модели — их можно удалить, при следующем апскейле скачаются снова
+    pub engine_bytes: u64,
+    /// свои модели — их пользователь ставил сам, очистка их не трогает
+    pub custom_bytes: u64,
+}
+
+/// Сколько места занимает апскейл (Настройки → Диагностика).
+pub fn storage() -> Storage {
+    let Some(dir) = engine_dir() else { return Storage { engine_bytes: 0, custom_bytes: 0 } };
+    let custom = dir.join("custom");
+    let custom_bytes = dir_size(&custom);
+    Storage { engine_bytes: dir_size(&dir).saturating_sub(custom_bytes), custom_bytes }
+}
+
+/// Удаляет движок, скачанные модели и временные файлы; свои модели (custom) оставляет.
+pub fn clear() -> Result<Storage, String> {
+    if let Some(dir) = engine_dir() {
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.file_name().is_some_and(|n| n == "custom") {
+                    continue;
+                }
+                let res = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+                res.map_err(|e| format!("Не удалось удалить {}: {e} — возможно, апскейл сейчас идёт.", p.display()))?;
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(std::env::temp_dir().join("project-desktop-upscale"));
+    if let Ok(mut last) = LAST.lock() {
+        *last = None;
+    }
+    Ok(storage())
+}
+
 /// Копирует последний результат в путь, выбранный пользователем в диалоге сохранения.
 pub fn save(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
     use tauri::Manager;

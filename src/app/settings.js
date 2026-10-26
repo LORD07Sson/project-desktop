@@ -284,6 +284,7 @@ async function openSettings() {
             ${row(ICONS.server, "Проверить компьютер", "ffmpeg, связь с сервером, уведомления, место", `<button type="button" class="btn" id="s-selfcheck">Проверить</button>`, "диагностика проверка ffmpeg микрофон")}
             <div class="st-selfcheck" id="s-selfcheck-out" hidden></div>
             ${row(ICONS.logs, "Кеш дорожек", "Прослушанные дорожки хранятся здесь: открываются сразу и без связи с сервером", `<span class="st-ping" id="s-cache-info"></span><button type="button" class="btn" id="s-cache-clear">Очистить</button>`, "кеш звук оффлайн")}
+            ${row(ICONS.backdrop, "Апскейл картинок", "Нейросеть и её модели (кнопка «✨ Апскейл» в тайтле). Удалить можно — при следующем апскейле скачаются снова; свои модели останутся", `<span class="st-ping" id="s-up-info"></span><button type="button" class="btn" id="s-up-clear">Удалить</button>`, "апскейл нейросеть модели место кеш")}
             ${row(ICONS.copy, "Отчёт для разработчика", "Версия, система, канал, связь с сервером — одним текстом в буфер обмена", `<button class="btn" id="s-copy-report">Скопировать</button>`, "баг ошибка")}
           </div>
         </section>
@@ -371,6 +372,18 @@ async function openSettings() {
   };
   cacheInfo();
   overlay.querySelector("#s-cache-clear").addEventListener("click", async () => { await clearCache(); cacheInfo(); });
+  const mb = b => `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} МБ`;
+  const upInfo = s => {
+    overlay.querySelector("#s-up-info").textContent = !s ? "" : s.engine_bytes
+      ? `${mb(s.engine_bytes)}${s.custom_bytes ? ` · свои модели ${mb(s.custom_bytes)}` : ""}`
+      : s.custom_bytes ? `не скачан · свои модели ${mb(s.custom_bytes)}` : "не скачан";
+    overlay.querySelector("#s-up-clear").disabled = !s || !s.engine_bytes;
+  };
+  invoke("upscale_storage").then(upInfo).catch(() => upInfo(null));
+  overlay.querySelector("#s-up-clear").addEventListener("click", async () => {
+    try { upInfo(await invoke("upscale_clear")); toast("Движок апскейла удалён."); }
+    catch (e) { toast(String(e), "error"); }
+  });
   overlay.querySelector("#s-midi").addEventListener("change", async e => {
     const ok = await setMidiEnabled(e.target.checked);
     if (!ok && e.target.checked) e.target.checked = false;

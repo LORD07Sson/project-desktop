@@ -781,6 +781,17 @@ fn upscale_model_remove(name: String) -> Result<Vec<String>, String> {
     upscale::remove_custom(&name)
 }
 
+/// Сколько места занимает апскейл и очистка (движок и скачанные модели; свои модели остаются).
+#[tauri::command(async)]
+fn upscale_storage() -> upscale::Storage {
+    upscale::storage()
+}
+
+#[tauri::command(async)]
+fn upscale_clear() -> Result<upscale::Storage, String> {
+    upscale::clear()
+}
+
 /// Сохраняет последний результат апскейла — только в путь из диалога сохранения.
 #[tauri::command(async)]
 fn upscale_save(app: tauri::AppHandle, path: String) -> Result<(), String> {
@@ -1531,6 +1542,8 @@ fn main() {
             upscale_models,
             upscale_model_add,
             upscale_model_remove,
+            upscale_storage,
+            upscale_clear,
             upscale_save,
             local_render_encoders,
             local_render_run,
