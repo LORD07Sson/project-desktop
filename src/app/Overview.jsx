@@ -251,8 +251,8 @@ function Hero(props) {
                 </div>
               </Show>
               <div class="kd-slide-fade" />
-              {/* Просрочено — те же кровавые прожилки, подтёки и помехи, что у карточки на «Доске». */}
-              <Show when={broken()}><div class="kd-dead" innerHTML={deadFxHtml(r.public_id, { veins: 8, drips: 9 })} /></Show>
+              {/* Просрочено — подтёки и помехи, как у карточки на «Доске» (без прожилок: на большом слайде они читаются как молнии). */}
+              <Show when={broken()}><div class="kd-dead" innerHTML={deadFxHtml(r.public_id, { veins: 0, drips: 9 })} /></Show>
               <Show when={crack() > 0}><Eyes level={crack} gloom={gloom} active={onSlide} /></Show>
               <div class="kd-slide-tx">
                 <span class={`kd-kick ${it.tone === "red" || left === 0 ? "hot" : ""}`}><i />{heroKick(it)}</span>
@@ -268,6 +268,7 @@ function Hero(props) {
                   </b></div>
                   <div><small>{left === 0 ? "Осталось" : "Срок"}</small>
                     <b class={left !== null && left <= 1 ? "hot" : ""}>{left === 0 ? (liveLeft() < 0 ? "00:00:00" : countdown(now())) : r.deadline ? ddmm(r.deadline) : "—"}</b></div>
+                  <Show when={broken()}><i class="kd-blood" aria-hidden="true"><b /><b /><b /><b /></i></Show>
                 </div>
                 <div class="kd-acts">
                   <button class="btn primary" onClick={() => openReportDetail(r.public_id)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none" /></svg>Открыть серию</button>
