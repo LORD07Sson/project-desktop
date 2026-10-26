@@ -93,22 +93,56 @@ export function openUpscale(d) {
     }
   });
 
-  // «До/после»: оригинал растянут до размера результата, результат поверх и срезан по ползунку.
+  // «До/после»: оригинал растянут до размера результата, результат поверх и срезан по линии. Вписанная в окно
+  // картинка ×4 уменьшается обратно, и разницы почти не видно — поэтому колесо приближает (до ×8) к точке под
+  // курсором, обе половины вместе; правая кнопка двигает приближенную картинку, двойной клик — обратно целиком.
   async function showCompare(before, after) {
     const [a, b] = await Promise.all([size(before), size(after)]);
     const stage = $("[data-up-stage]");
     stage.innerHTML = `
       <div class="up-cmp" style="aspect-ratio:${b.w} / ${b.h}" data-up-cmp>
-        <img src="${before}" alt=""><img class="up-after" src="${after}" alt="">
+        <div class="up-layer"><img src="${before}" alt=""></div><div class="up-layer up-after"><img src="${after}" alt=""></div>
         <i class="up-knob"></i><span class="up-tag l">до · ${a.w}×${a.h}</span><span class="up-tag r">после · ${b.w}×${b.h}</span>
+        <span class="up-zoom" data-up-zoom>колесо — приблизить</span>
       </div>`;
     const cmp = stage.querySelector("[data-up-cmp]");
-    const move = x => {
+    const zoomTag = cmp.querySelector("[data-up-zoom]");
+    const view = { z: 1, x: 0, y: 0 };
+    const apply = () => {
+      const r = cmp.getBoundingClientRect();
+      // не даём увести картинку за край: при ×z сдвиг в пределах [размер·(1−z); 0]
+      view.x = Math.min(0, Math.max(r.width * (1 - view.z), view.x));
+      view.y = Math.min(0, Math.max(r.height * (1 - view.z), view.y));
+      cmp.style.setProperty("--tf", `translate(${view.x.toFixed(1)}px, ${view.y.toFixed(1)}px) scale(${view.z.toFixed(3)})`);
+      zoomTag.textContent = view.z > 1.01 ? `×${view.z.toFixed(1)} · правая кнопка — двигать, двойной клик — целиком` : "колесо — приблизить";
+    };
+    const cut = x => {
       const r = cmp.getBoundingClientRect();
       cmp.style.setProperty("--cut", `${Math.max(0, Math.min(100, ((x - r.left) / r.width) * 100)).toFixed(1)}%`);
     };
-    cmp.addEventListener("pointerdown", e => { cmp.setPointerCapture(e.pointerId); move(e.clientX); });
-    cmp.addEventListener("pointermove", e => { if (e.buttons || e.pointerType === "mouse") move(e.clientX); });
+    cmp.addEventListener("wheel", e => {
+      e.preventDefault();
+      const r = cmp.getBoundingClientRect();
+      const px = e.clientX - r.left, py = e.clientY - r.top;
+      const z = Math.max(1, Math.min(8, view.z * (e.deltaY < 0 ? 1.25 : 0.8)));
+      view.x = px - (px - view.x) * (z / view.z);
+      view.y = py - (py - view.y) * (z / view.z);
+      view.z = z;
+      apply();
+    }, { passive: false });
+    let pan = null;
+    cmp.addEventListener("contextmenu", e => e.preventDefault());
+    cmp.addEventListener("pointerdown", e => {
+      cmp.setPointerCapture(e.pointerId);
+      if (e.button === 2 || e.button === 1) pan = { x: e.clientX - view.x, y: e.clientY - view.y };
+      else cut(e.clientX);
+    });
+    cmp.addEventListener("pointermove", e => {
+      if (pan) { view.x = e.clientX - pan.x; view.y = e.clientY - pan.y; apply(); }
+      else if (e.buttons & 1 || e.pointerType === "mouse") cut(e.clientX);
+    });
+    cmp.addEventListener("pointerup", () => { pan = null; });
+    cmp.addEventListener("dblclick", () => { view.z = 1; view.x = 0; view.y = 0; apply(); });
   }
 }
 
