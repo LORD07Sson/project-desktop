@@ -251,7 +251,7 @@ function drawGarland() {
       el.insertAdjacentHTML("afterbegin", `<svg class="sg-in" aria-hidden="true"></svg>`);
       svg = el.querySelector(":scope > .sg-in");
     }
-    const id = `sg${n}`, x0 = 12, x1 = w - 12, y0 = 3, sag = 2.5;
+    const id = `sg${n}`, x0 = 16, x1 = w - 16, y0 = 4.5, sag = 0;   // ровная линия, мимо скруглённых углов
     const halo = kind === "halloween" ? 22 : 13;   // шаг между фонариками
     const m = Math.max(2, Math.round((x1 - x0) / halo));
     let body = "";
