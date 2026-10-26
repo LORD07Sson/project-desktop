@@ -171,33 +171,62 @@ function frame(t) {
   ctx.globalAlpha = 1;
 }
 
-// Новогодняя гирлянда: провод провисает дугами между крючками, на нём стеклянные лампочки с цоколем.
-// Цвета идут по кругу, мигают группами со сдвигом — как настоящая гирлянда в режиме «волна».
+// Новогодняя гирлянда: свисает из-под вкладок, аватарок команды, поиска и кнопки «Смотреть» — провод провисает
+// дугами, на нём стеклянные лампочки с цоколем. Цвета по кругу, мигают группами со сдвигом — «волна».
 const BULBS = ["#ff3b3b", "#ffc93b", "#3bdc6a", "#3ba4ff", "#ff5fc8"];
+const HANG_FROM = ["#tabstrip", "#titlebar-team", "#open-cmdk", "#open-watch"];
+let hangObs = null;
 function drawGarland() {
   if (!garland) return;
   if (kind !== "winter") { garland.innerHTML = ""; return; }
-  const w = window.innerWidth, span = 200, sag = 9, y0 = 4;
-  const n = Math.max(2, Math.round(w / span));
-  const step = w / n;
-  let wire = "", bulbs = "", k = 0;
-  for (let i = 0; i < n; i++) {
-    const x0 = i * step, x1 = x0 + step, cx = x0 + step / 2;
-    wire += `M${x0.toFixed(1)} ${y0} Q${cx.toFixed(1)} ${y0 + sag * 2} ${x1.toFixed(1)} ${y0} `;
-    for (const t of [0.16, 0.38, 0.62, 0.84]) {
-      // точка и наклон на квадратичной кривой Безье
-      const x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1;
-      const y = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * (y0 + sag * 2) + t * t * y0;
-      const dy = 2 * (1 - t) * (sag * 2) - 2 * t * (sag * 2);
-      const tilt = Math.atan2(dy, step) * 180 / Math.PI;
-      const col = BULBS[k % BULBS.length];
-      bulbs += `<g class="sg-bulb" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${tilt.toFixed(1)}) scale(.82)" style="--c:${col};--d:${((k % 5) * 0.32).toFixed(2)}s">`
-        + `<circle class="sg-glow" cx="0" cy="13" r="15"/><rect class="sg-cap" x="-3.2" y="0" width="6.4" height="5.5" rx="1.2"/>`
-        + `<path class="sg-glass" d="M-4.6 5.5 C-6.6 10 -5.8 17 0 21 C5.8 17 6.6 10 4.6 5.5Z"/><ellipse class="sg-shine" cx="-1.8" cy="10" rx="1.2" ry="3"/></g>`;
-      k++;
+  const w = window.innerWidth, sag = 7;
+  let wire = "", bulbs = "", k = 0, bottom = 0;
+  for (const sel of HANG_FROM) {
+    const el = document.querySelector(sel);
+    const r = el && el.getBoundingClientRect();
+    if (!r || r.width < 30 || !el.offsetParent) continue;
+    const L = r.left + 8, R = r.right - 8, y0 = r.bottom - 2;
+    bottom = Math.max(bottom, y0 + sag + 24);
+    const n = Math.max(1, Math.round((R - L) / 210));
+    const step = (R - L) / n;
+    for (let i = 0; i < n; i++) {
+      const x0 = L + i * step, x1 = x0 + step, cx = x0 + step / 2;
+      wire += `M${x0.toFixed(1)} ${y0.toFixed(1)} Q${cx.toFixed(1)} ${(y0 + sag * 2).toFixed(1)} ${x1.toFixed(1)} ${y0.toFixed(1)} `;
+      const m = Math.max(2, Math.round(step / 34));
+      for (let j = 0; j < m; j++) {
+        const t = (j + 0.5) / m;
+        // точка и наклон на квадратичной кривой Безье
+        const x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1;
+        const y = y0 + 2 * (1 - t) * t * sag * 2;
+        const tilt = Math.atan2(2 * (1 - t) * sag * 2 - 2 * t * sag * 2, step) * 180 / Math.PI;
+        const col = BULBS[k % BULBS.length];
+        bulbs += `<g class="sg-bulb" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${tilt.toFixed(1)}) scale(.78)" style="--c:${col};--d:${((k % 5) * 0.32).toFixed(2)}s">`
+          + `<circle class="sg-glow" cx="0" cy="13" r="15"/><rect class="sg-cap" x="-3.2" y="0" width="6.4" height="5.5" rx="1.2"/>`
+          + `<path class="sg-glass" d="M-4.6 5.5 C-6.6 10 -5.8 17 0 21 C5.8 17 6.6 10 4.6 5.5Z"/><ellipse class="sg-shine" cx="-1.8" cy="10" rx="1.2" ry="3"/></g>`;
+        k++;
+      }
     }
   }
-  garland.innerHTML = `<svg width="${w}" height="${y0 + sag * 2 + 40}" viewBox="0 0 ${w} ${y0 + sag * 2 + 40}"><path class="sg-wire" d="${wire}"/>${bulbs}</svg>`;
+  garland.innerHTML = wire ? `<svg width="${w}" height="${bottom.toFixed(0)}"><path class="sg-wire" d="${wire}"/>${bulbs}</svg>` : "";
+}
+
+// Аватарки команды и вкладки меняют ширину — гирлянда перевешивается следом.
+function watchHangers() {
+  if (hangObs || typeof ResizeObserver === "undefined") return;
+  hangObs = new ResizeObserver(() => drawGarland());
+  for (const sel of HANG_FROM) { const el = document.querySelector(sel); if (el) hangObs.observe(el); }
+}
+
+// Шапка Деда Мороза на логотипе (видна только зимой — kadr.css).
+function putHat() {
+  const logo = document.querySelector(".titlebar-left .brand-logo");
+  if (!logo || logo.querySelector(".season-hat")) return;
+  logo.insertAdjacentHTML("beforeend", `<svg class="season-hat" viewBox="0 0 40 34" aria-hidden="true">
+    <defs><linearGradient id="sh-red" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3a3a"/><stop offset="1" stop-color="#a30d16"/></linearGradient>
+    <linearGradient id="sh-fur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dee6"/></linearGradient></defs>
+    <path d="M5 25 C7 12 16 4 26 5 C33 6 37 11 36 17 C33 13 29 12 27 14 C25 17 30 22 32 25 Z" fill="url(#sh-red)"/>
+    <rect x="2" y="22.5" width="32" height="8.5" rx="4.2" fill="url(#sh-fur)"/>
+    <circle cx="36" cy="17.5" r="4.6" fill="url(#sh-fur)"/></svg>`);
 }
 
 function resize() {
@@ -240,7 +269,10 @@ function restart() {
     window.addEventListener("resize", resize);
   }
   layer.hidden = false;
+  putHat();
+  watchHangers();
   drawGarland();
+  setTimeout(drawGarland, 1500);   // вкладки и аватарки команды дорисовываются после входа
   if (root.dataset.motion === "off") return;   // свечение и гирлянда остаются, частицы стоят
   sprites ||= makeSprites();
   resize();

@@ -4449,8 +4449,8 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-season="autumn"] .season-fx::before { background: radial-gradient(110% 55% at 20% -10%, rgba(255, 140, 50, .11), transparent 60%),
   radial-gradient(60% 45% at 80% 110%, rgba(200, 80, 20, .09), transparent 70%); }
 :root[data-theme="light"] .season-fx::before { mix-blend-mode: multiply; opacity: .5; }
-/* Новогодняя гирлянда зимой — узкой полосой между заголовком окна и содержимым. Лампочки мигают волной (--d — сдвиг). */
-.season-garland { position: absolute; left: 0; right: 0; top: calc(var(--titlebar-h) - 3px); }
+/* Новогодняя гирлянда зимой — свисает из-под вкладок, команды, поиска и «Смотреть». Лампочки мигают волной (--d — сдвиг). */
+.season-garland { position: absolute; left: 0; right: 0; top: 0; }
 .season-garland svg { display: block; overflow: visible; }
 .sg-wire { fill: none; stroke: #1d2a1f; stroke-width: 2; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6)); }
 .sg-cap { fill: #3a4a3c; stroke: #121a13; stroke-width: .6; }
@@ -4463,3 +4463,8 @@ td.row-actions { opacity: 1; transition: none; }
 @keyframes sg-lit { 0%, 100% { filter: brightness(1.25) drop-shadow(0 0 4px var(--c)); } 50% { filter: brightness(.55); } }
 :root[data-motion="off"] .sg-bulb, :root[data-motion="off"] .sg-bulb .sg-glass { animation: none; }
 :root[data-theme="light"] .sg-wire { stroke: #4a5a4c; }
+/* Шапка Деда Мороза на логотипе — только зимой. */
+.season-hat { display: none; position: absolute; left: -7px; top: -15px; width: 32px; height: 28px; pointer-events: none; transform: rotate(-14deg);
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .45)); z-index: 2; }
+:root[data-season="winter"] .brand-logo { position: relative; overflow: visible; }
+:root[data-season="winter"] .season-hat { display: block; }
