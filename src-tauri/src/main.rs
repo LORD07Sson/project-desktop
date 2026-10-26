@@ -746,7 +746,7 @@ fn mt_extract_subtitles(
 
 // ---------- Апскейл картинок (upscale.rs) ----------
 
-/// Увеличивает картинку ×4 нейросетью (при первом вызове докачивает движок). PNG уходит сырым ответом — без JSON.
+/// Увеличивает картинку ×4 нейросетью (при первом вызове докачивает движок и модель). PNG уходит сырым ответом — без JSON.
 #[tauri::command]
 async fn upscale_image(app: tauri::AppHandle, bytes: Vec<u8>, model: String) -> Result<tauri::ipc::Response, String> {
     upscale::upscale(&app, http(), bytes, &model).await.map(tauri::ipc::Response::new)

@@ -1,5 +1,5 @@
-// «✨ Апскейл» на странице тайтла: обложку или баннер увеличивает ×4 нейросеть Real-ESRGAN (upscale.rs) — модель под
-// аниме или под фото. Берём исходник с сервера (?w=0 — без серверного растягивания), при первом запуске движок
+// «✨ Апскейл» на странице тайтла: обложку или баннер увеличивает ×4 нейросеть (upscale.rs: движок и модели Upscayl) —
+// «Аниме» (digital-art-4x), «Резко» (ultrasharp-4x) или «Фото» (high-fidelity-4x). Берём исходник с сервера (?w=0 — без серверного растягивания), при первом запуске движок
 // докачивается сам. Результат — сравнение «до/после» ползунком и сохранение PNG в выбранное место.
 
 import { invoke, listen, pickOutputFile } from "./tauri.js";
@@ -15,8 +15,8 @@ export function openUpscale(d) {
     <div class="up">
       <div class="up-head"><h3>✨ Апскейл ×4</h3><span>${esc(d.name)}</span></div>
       <div class="up-row"><b>Что увеличить</b>${seg("data-up-src", sources, pick.src)}</div>
-      <div class="up-row"><b>Нейросеть</b>${seg("data-up-model", [["anime", "Аниме-арт"], ["photo", "Фото / реализм"]], pick.model)}</div>
-      <div class="up-stage" data-up-stage><div class="up-hint">Нейросеть Real-ESRGAN дорисует детали и уберёт мыло и квадратики сжатия. Работает на видеокарте; при первом запуске скачается движок (≈45 МБ, один раз).</div></div>
+      <div class="up-row"><b>Нейросеть</b>${seg("data-up-model", [["anime", "Аниме-арт"], ["sharp", "Максимально резко"], ["photo", "Фото / реализм"]], pick.model)}</div>
+      <div class="up-stage" data-up-stage><div class="up-hint">Нейросеть дорисует детали и уберёт мыло и квадратики сжатия. Работает на видеокарте. При первом запуске скачается движок и выбранная модель — один раз: аниме ≈11 МБ, резкая или фото ≈35 МБ.</div></div>
       <div class="up-prog" data-up-prog hidden><i></i><span></span></div>
       <div class="up-acts">
         <button type="button" class="btn" data-close>Закрыть</button>

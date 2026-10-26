@@ -1,8 +1,10 @@
-//! Апскейл картинок (обложка/баннер тайтла) нейросетью Real-ESRGAN: ×4 с моделью под аниме или под фото.
+//! Апскейл картинок (обложка/баннер тайтла) нейросетью ×4.
 //!
-//! Движок — официальная сборка realesrgan-ncnn-vulkan (работает на любой видеокарте с Vulkan). В установщик его не
-//! кладём (45 МБ ради одной кнопки): при первом апскейле докачиваем закреплённый релиз с GitHub, сверяем SHA-256,
-//! зашитую в приложение, и распаковываем нужное в %LOCALAPPDATA%\Project Desktop\tools\realesrgan — рядом с
+//! Движок — upscayl-bin (поддерживаемый форк realesrgan-ncnn-vulkan от проекта Upscayl: свежий Vulkan, исправления;
+//! работает на любой видеокарте с Vulkan). Модели — из Upscayl: digital-art-4x под аниме и рисунки, ultrasharp-4x —
+//! самая резкая, high-fidelity-4x — бережно к текстуре, под реалистичные картинки. В установщик ничего не кладём:
+//! при первом апскейле докачиваем закреплённый релиз движка и только выбранную модель (по закреплённому коммиту),
+//! сверяем SHA-256, зашитую в приложение, и складываем в %LOCALAPPDATA%\Project Desktop\tools\upscayl — рядом с
 //! докачанным ffmpeg (audio_qc::downloaded_tools_dir).
 //!
 //! Картинку присылает вебвью байтами, результат (PNG) уходит обратно сырым ответом IPC — для превью «до/после»;
@@ -11,18 +13,46 @@
 use crate::audio_qc::hidden_command;
 use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::Instant;
 use tauri::Emitter;
 
 const ENGINE_URL: &str =
-    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip";
-const ENGINE_SHA256: &str = "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d";
-const EXE: &str = "realesrgan-ncnn-vulkan.exe";
-/// Модели, которые разрешено запускать (имя файла без .param/.bin).
-const MODELS: [&str; 2] = ["realesrgan-x4plus-anime", "realesrgan-x4plus"];
+    "https://github.com/upscayl/upscayl-ncnn/releases/download/20251207-174704/upscayl-bin-20251207-174704-windows.zip";
+const ENGINE_SHA256: &str = "1f0f65c5d2ade866555e2ac467d35952c35a47080a4060fe56a1ab028f67258a";
+const EXE: &str = "upscayl-bin.exe";
+/// Модели Upscayl по закреплённому коммиту (resources/models).
+const MODELS_URL: &str = "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models";
+
+struct Model {
+    key: &'static str,
+    name: &'static str,
+    param_sha: &'static str,
+    bin_sha: &'static str,
+}
+
+const MODELS: [Model; 3] = [
+    Model {
+        key: "anime",
+        name: "digital-art-4x",
+        param_sha: "2b8fb6e0ae4d2d85704ca08c119a2f5ea40add4f2ecd512eb7f4cd44b6127ed4",
+        bin_sha: "fe01c269cfd10cdef8e018ab66ebe750cf79c7af4d1f9c16c737e1295229bacc",
+    },
+    Model {
+        key: "sharp",
+        name: "ultrasharp-4x",
+        param_sha: "0136ca83686809a8f17f7111f11b951e8db93610e24b7f4137c9ffe4dbc4a806",
+        bin_sha: "fb3e279d40d4cddb44db4e684d59e68d0aa39852c8cc14dc3f23ccc7e6eee9c1",
+    },
+    Model {
+        key: "photo",
+        name: "high-fidelity-4x",
+        param_sha: "4576ed5c2fc5fa250d3c3d585ef02248f26abdfc1867088078f501fe71e5d61e",
+        bin_sha: "8a135402b4f39286121b76abb47601a6b7b7e8d4f3e999a5aaa45ed277824fb4",
+    },
+];
 /// Больше — не обложка, а что-то не то; и памяти видеокарте хватит не на всё.
 const MAX_INPUT: usize = 25 * 1024 * 1024;
 
@@ -30,62 +60,76 @@ const MAX_INPUT: usize = 25 * 1024 * 1024;
 static LAST: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 fn engine_dir() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(|l| PathBuf::from(l).join("Project Desktop").join("tools").join("realesrgan"))
-}
-
-fn engine_ready(dir: &std::path::Path) -> bool {
-    dir.join(EXE).is_file() && MODELS.iter().all(|m| dir.join("models").join(format!("{m}.bin")).is_file())
+    std::env::var_os("LOCALAPPDATA").map(|l| PathBuf::from(l).join("Project Desktop").join("tools").join("upscayl"))
 }
 
 fn progress(app: &tauri::AppHandle, fraction: f64, label: &str) {
     let _ = app.emit("upscale-progress", serde_json::json!({ "fraction": fraction, "label": label }));
 }
 
-/// Докачивает движок, если его ещё нет. Возвращает папку с ним.
-async fn ensure_engine(app: &tauri::AppHandle, client: &reqwest::Client) -> Result<PathBuf, String> {
-    let dir = engine_dir().ok_or("Не найдена папка пользователя для движка апскейла.")?;
-    if engine_ready(&dir) {
-        return Ok(dir);
-    }
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Не удалось создать папку {dir:?}: {e}"))?;
-    let zip_path = dir.join("engine.zip");
-    let mut resp = client.get(ENGINE_URL).send().await.map_err(|e| format!("Не удалось скачать движок апскейла: {e}"))?;
+/// Скачивает файл, на лету считая SHA-256; при несовпадении суммы удаляет его. `span` — доля общей полосы прогресса.
+async fn download(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    sha: &str,
+    to: &Path,
+    label: &str,
+    span: (f64, f64),
+) -> Result<(), String> {
+    let mut resp = client.get(url).send().await.map_err(|e| format!("Не удалось скачать {label}: {e}"))?;
     if !resp.status().is_success() {
-        return Err(format!("Не удалось скачать движок апскейла: сервер ответил {}", resp.status()));
+        return Err(format!("Не удалось скачать {label}: сервер ответил {}", resp.status()));
     }
     let total = resp.content_length().unwrap_or(0);
-    let mut file = std::fs::File::create(&zip_path).map_err(|e| format!("Не удалось создать файл загрузки: {e}"))?;
+    let tmp = to.with_extension("part");
+    let mut file = std::fs::File::create(&tmp).map_err(|e| format!("Не удалось создать файл загрузки: {e}"))?;
     let mut hasher = Sha256::new();
     let (mut done, mut last) = (0u64, Instant::now());
-    while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Обрыв при скачивании движка: {e}"))? {
-        file.write_all(&chunk).map_err(|e| format!("Не удалось записать движок: {e}"))?;
+    while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Обрыв при скачивании {label}: {e}"))? {
+        file.write_all(&chunk).map_err(|e| format!("Не удалось записать {label}: {e}"))?;
         hasher.update(&chunk);
         done += chunk.len() as u64;
         if last.elapsed().as_millis() > 300 {
             last = Instant::now();
             let frac = if total > 0 { done as f64 / total as f64 } else { 0.0 };
-            progress(app, frac * 0.5, &format!("Скачиваю движок апскейла (один раз): {} из {} МБ", done / 1_048_576, total / 1_048_576));
+            progress(app, span.0 + (span.1 - span.0) * frac, &format!("Скачиваю {label} (один раз): {:.1} из {:.1} МБ", done as f64 / 1_048_576.0, total as f64 / 1_048_576.0));
         }
     }
     drop(file);
     let hash = format!("{:x}", hasher.finalize());
-    if hash != ENGINE_SHA256 {
-        let _ = std::fs::remove_file(&zip_path);
-        return Err(format!("Сумма SHA-256 скачанного движка не совпала (получено {hash}) — файл удалён."));
+    if hash != sha {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("Сумма SHA-256 скачанного файла ({label}) не совпала — файл удалён."));
     }
-    progress(app, 0.5, "Распаковываю движок…");
-    let dir2 = dir.clone();
-    tauri::async_runtime::spawn_blocking(move || extract(&dir2, &zip_path))
-        .await
-        .map_err(|e| format!("Распаковка движка не завершилась: {e}"))??;
-    if !engine_ready(&dir) {
-        return Err("В скачанном архиве не нашлось движка или моделей.".into());
+    std::fs::rename(&tmp, to).map_err(|e| format!("Не удалось сохранить {label}: {e}"))
+}
+
+/// Докачивает движок и нужную модель, если их ещё нет. Возвращает папку движка.
+async fn ensure(app: &tauri::AppHandle, client: &reqwest::Client, model: &Model) -> Result<PathBuf, String> {
+    let dir = engine_dir().ok_or("Не найдена папка пользователя для движка апскейла.")?;
+    let models = dir.join("models");
+    std::fs::create_dir_all(&models).map_err(|e| format!("Не удалось создать папку {dir:?}: {e}"))?;
+    if !dir.join(EXE).is_file() {
+        let zip = dir.join("engine.zip");
+        download(app, client, ENGINE_URL, ENGINE_SHA256, &zip, "движок апскейла", (0.0, 0.08)).await?;
+        let dir2 = dir.clone();
+        tauri::async_runtime::spawn_blocking(move || extract(&dir2, &zip))
+            .await
+            .map_err(|e| format!("Распаковка движка не завершилась: {e}"))??;
+    }
+    for (ext, sha, span) in [("param", model.param_sha, (0.08, 0.1)), ("bin", model.bin_sha, (0.1, 0.45))] {
+        let path = models.join(format!("{}.{ext}", model.name));
+        if !path.is_file() {
+            let url = format!("{MODELS_URL}/{}.{ext}", model.name);
+            download(app, client, &url, sha, &path, &format!("модель «{}»", model.name), span).await?;
+        }
     }
     Ok(dir)
 }
 
-/// Распаковывает архив и оставляет только нужное: сам движок, его библиотеку и две модели (без демо-видео и картинок).
-fn extract(dir: &std::path::Path, zip: &std::path::Path) -> Result<(), String> {
+/// Распаковывает архив движка и оставляет только сам движок.
+fn extract(dir: &Path, zip: &Path) -> Result<(), String> {
     let tmp = dir.join("x");
     let out = hidden_command("powershell")
         .args([
@@ -98,24 +142,17 @@ fn extract(dir: &std::path::Path, zip: &std::path::Path) -> Result<(), String> {
     if !out.status.success() {
         return Err(format!("Не удалось распаковать движок: {}", String::from_utf8_lossy(&out.stderr).trim()));
     }
-    std::fs::create_dir_all(dir.join("models")).map_err(|e| e.to_string())?;
-    for path in walk(&tmp) {
-        let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let target = if name == EXE || name.ends_with(".dll") {
-            dir.join(&name)
-        } else if MODELS.iter().any(|m| name == format!("{m}.param") || name == format!("{m}.bin")) {
-            dir.join("models").join(&name)
-        } else {
-            continue;
-        };
-        std::fs::copy(&path, &target).map_err(|e| format!("Не удалось скопировать {name}: {e}"))?;
-    }
+    let exe = walk(&tmp).into_iter().find(|p| p.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(EXE)));
+    let result = match exe {
+        Some(p) => std::fs::copy(p, dir.join(EXE)).map(|_| ()).map_err(|e| format!("Не удалось скопировать движок: {e}")),
+        None => Err("В скачанном архиве нет движка.".into()),
+    };
     let _ = std::fs::remove_dir_all(&tmp);
     let _ = std::fs::remove_file(zip);
-    Ok(())
+    result
 }
 
-fn walk(dir: &std::path::Path) -> Vec<PathBuf> {
+fn walk(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Ok(rd) = std::fs::read_dir(dir) {
         for e in rd.flatten() {
@@ -132,35 +169,33 @@ fn walk(dir: &std::path::Path) -> Vec<PathBuf> {
 
 /// Строка прогресса движка: «57.14%».
 fn parse_percent(line: &str) -> Option<f64> {
-    let t = line.trim();
-    let num = t.strip_suffix('%')?;
+    let num = line.trim().strip_suffix('%')?;
     num.trim().replace(',', ".").parse::<f64>().ok().filter(|v| (0.0..=100.0).contains(v))
 }
 
-/// Увеличивает картинку в 4 раза. `model` — "anime" или "photo". Возвращает PNG.
-pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Vec<u8>, model: &str) -> Result<Vec<u8>, String> {
+/// Увеличивает картинку в 4 раза. `mode` — "anime", "sharp" или "photo". Возвращает PNG.
+pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Vec<u8>, mode: &str) -> Result<Vec<u8>, String> {
     if bytes.is_empty() || bytes.len() > MAX_INPUT {
         return Err("Картинка пустая или слишком большая (больше 25 МБ).".into());
     }
-    let model = if model == "photo" { MODELS[1] } else { MODELS[0] };
-    let dir = ensure_engine(app, client).await?;
+    let model = MODELS.iter().find(|m| m.key == mode).unwrap_or(&MODELS[0]);
+    let dir = ensure(app, client, model).await?;
     let work = std::env::temp_dir().join("project-desktop-upscale");
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let input = work.join("in.img");
     let output = work.join(format!("out-{}.png", std::process::id()));
     std::fs::write(&input, &bytes).map_err(|e| format!("Не удалось сохранить картинку для обработки: {e}"))?;
-    progress(app, 0.5, "Нейросеть увеличивает картинку…");
+    progress(app, 0.45, "Нейросеть увеличивает картинку…");
 
     let app2 = app.clone();
-    let (dir2, input2, output2) = (dir.clone(), input.clone(), output.clone());
-    let model = model.to_string();
+    let (input2, output2, name) = (input.clone(), output.clone(), model.name);
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        let mut child = hidden_command(dir2.join(EXE))
-            .current_dir(&dir2)
+        let mut child = hidden_command(dir.join(EXE))
+            .current_dir(&dir)
             .arg("-i").arg(&input2)
             .arg("-o").arg(&output2)
-            .args(["-n", &model, "-s", "4", "-f", "png", "-m"])
-            .arg(dir2.join("models"))
+            .args(["-n", name, "-s", "4", "-f", "png", "-m"])
+            .arg(dir.join("models"))
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
@@ -169,7 +204,7 @@ pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Ve
         if let Some(err) = child.stderr.take() {
             for line in BufReader::new(err).lines().map_while(Result::ok) {
                 if let Some(p) = parse_percent(&line) {
-                    progress(&app2, 0.5 + p / 200.0, &format!("Нейросеть увеличивает картинку: {p:.0}%"));
+                    progress(&app2, 0.45 + p / 100.0 * 0.55, &format!("Нейросеть увеличивает картинку: {p:.0}%"));
                 } else if !line.trim().is_empty() {
                     tail.push(line);
                     if tail.len() > 6 {
@@ -181,7 +216,8 @@ pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Ve
         let status = child.wait().map_err(|e| e.to_string())?;
         if !status.success() || !output2.is_file() {
             let why = tail.join(" ");
-            let hint = if why.to_lowercase().contains("vulkan") || why.to_lowercase().contains("gpu") {
+            let low = why.to_lowercase();
+            let hint = if low.contains("vulkan") || low.contains("gpu") {
                 " Похоже, видеокарта или её драйвер не поддерживают Vulkan — обновите драйвер видеокарты."
             } else {
                 ""
@@ -214,7 +250,7 @@ pub fn save(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_percent;
+    use super::{parse_percent, MODELS};
 
     #[test]
     fn percent_lines() {
@@ -222,5 +258,13 @@ mod tests {
         assert_eq!(parse_percent(" 0,00% "), Some(0.0));
         assert_eq!(parse_percent("[0 NVIDIA GeForce RTX 3070]  queueC=2[8]"), None);
         assert_eq!(parse_percent("150%"), None);
+    }
+
+    #[test]
+    fn models_pinned() {
+        for m in MODELS {
+            assert_eq!(m.param_sha.len(), 64);
+            assert_eq!(m.bin_sha.len(), 64);
+        }
     }
 }
