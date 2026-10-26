@@ -1,12 +1,13 @@
-// Сезонное оформление (Настройки → Внешний вид): поверх интерфейса — зимой снег, весной лепестки сакуры,
-// летом светлячки, осенью листопад, плюс лёгкое свечение сезона по краям окна (kadr.css, :root[data-season]).
-// «Авто» берёт сезон по дате. Слой не ловит клики; при выключенных анимациях и свёрнутом окне — стоит.
+// Сезонное оформление (Настройки → Внешний вид): за интерфейсом — зимой снег и новогодняя гирлянда сверху,
+// весной лепестки сакуры, летом светлячки, осенью листопад, плюс свечение сезона по краям окна
+// (kadr.css, :root[data-season]). Слой лежит сразу за фоном из обложки и под окном приложения — сквозь стекло
+// видно, но поверх карточек не летает. «Авто» берёт сезон по дате; при выключенных анимациях и свёрнутом окне — стоит.
 
 const KEY = "project-season";
 export const SEASONS = { auto: "Авто", winter: "Зима", spring: "Весна", summer: "Лето", autumn: "Осень", off: "Выкл." };
 
 const root = document.documentElement;
-let layer = null, canvas = null, ctx = null, raf = 0, last = 0, parts = [], kind = "", sprites = null;
+let layer = null, canvas = null, ctx = null, garland = null, raf = 0, last = 0, parts = [], kind = "", sprites = null;
 
 export function seasonPref() {
   let v = "auto";
@@ -170,7 +171,37 @@ function frame(t) {
   ctx.globalAlpha = 1;
 }
 
+// Новогодняя гирлянда: провод провисает дугами между крючками, на нём стеклянные лампочки с цоколем.
+// Цвета идут по кругу, мигают группами со сдвигом — как настоящая гирлянда в режиме «волна».
+const BULBS = ["#ff3b3b", "#ffc93b", "#3bdc6a", "#3ba4ff", "#ff5fc8"];
+function drawGarland() {
+  if (!garland) return;
+  if (kind !== "winter") { garland.innerHTML = ""; return; }
+  const w = window.innerWidth, span = 200, sag = 9, y0 = 4;
+  const n = Math.max(2, Math.round(w / span));
+  const step = w / n;
+  let wire = "", bulbs = "", k = 0;
+  for (let i = 0; i < n; i++) {
+    const x0 = i * step, x1 = x0 + step, cx = x0 + step / 2;
+    wire += `M${x0.toFixed(1)} ${y0} Q${cx.toFixed(1)} ${y0 + sag * 2} ${x1.toFixed(1)} ${y0} `;
+    for (const t of [0.16, 0.38, 0.62, 0.84]) {
+      // точка и наклон на квадратичной кривой Безье
+      const x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1;
+      const y = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * (y0 + sag * 2) + t * t * y0;
+      const dy = 2 * (1 - t) * (sag * 2) - 2 * t * (sag * 2);
+      const tilt = Math.atan2(dy, step) * 180 / Math.PI;
+      const col = BULBS[k % BULBS.length];
+      bulbs += `<g class="sg-bulb" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${tilt.toFixed(1)}) scale(.82)" style="--c:${col};--d:${((k % 5) * 0.32).toFixed(2)}s">`
+        + `<circle class="sg-glow" cx="0" cy="13" r="15"/><rect class="sg-cap" x="-3.2" y="0" width="6.4" height="5.5" rx="1.2"/>`
+        + `<path class="sg-glass" d="M-4.6 5.5 C-6.6 10 -5.8 17 0 21 C5.8 17 6.6 10 4.6 5.5Z"/><ellipse class="sg-shine" cx="-1.8" cy="10" rx="1.2" ry="3"/></g>`;
+      k++;
+    }
+  }
+  garland.innerHTML = `<svg width="${w}" height="${y0 + sag * 2 + 40}" viewBox="0 0 ${w} ${y0 + sag * 2 + 40}"><path class="sg-wire" d="${wire}"/>${bulbs}</svg>`;
+}
+
 function resize() {
+  drawGarland();
   if (!canvas) return;
   const w = window.innerWidth, h = window.innerHeight;
   canvas.width = Math.round(w * window.devicePixelRatio);
@@ -198,12 +229,19 @@ function restart() {
     layer.setAttribute("aria-hidden", "true");
     canvas = document.createElement("canvas");
     layer.appendChild(canvas);
-    document.body.appendChild(layer);
+    garland = document.createElement("div");
+    garland.className = "season-garland";
+    layer.appendChild(garland);
+    // Сразу за фоном из обложки (#app-backdrop) — под окном приложения.
+    const bd = document.getElementById("app-backdrop");
+    if (bd) bd.after(layer);
+    else document.body.prepend(layer);
     ctx = canvas.getContext("2d");
     window.addEventListener("resize", resize);
   }
   layer.hidden = false;
-  if (root.dataset.motion === "off") return;   // свечение сезона остаётся, частицы стоят
+  drawGarland();
+  if (root.dataset.motion === "off") return;   // свечение и гирлянда остаются, частицы стоят
   sprites ||= makeSprites();
   resize();
   raf = requestAnimationFrame(frame);

@@ -4434,9 +4434,9 @@ td.row-actions { opacity: 1; transition: none; }
   animation: kd-heart var(--beat) infinite; }
 @keyframes kd-heart { 0%, 40%, 100% { filter: brightness(1); transform: scale(1); } 8% { filter: brightness(1.6); transform: scale(1.015); } 18% { filter: brightness(1.15); } 26% { filter: brightness(1.45); transform: scale(1.01); } }
 
-/* Сезонное оформление (app/season.js): частицы на холсте поверх интерфейса — ниже окон и шторок (999+),
-   клики проходят насквозь. Свечение сезона по краям окна — ::before. */
-.season-fx { position: fixed; inset: 0; z-index: 900; pointer-events: none; }
+/* Сезонное оформление (app/season.js): частицы на холсте за интерфейсом — сразу за фоном из обложки
+   (#app-backdrop, z 0) и под окном приложения (z 1), видны сквозь стекло. Свечение сезона по краям — ::before. */
+.season-fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 .season-fx[hidden] { display: none; }
 .season-fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .season-fx::before { content: ""; position: absolute; inset: 0; mix-blend-mode: screen; }
@@ -4449,3 +4449,17 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-season="autumn"] .season-fx::before { background: radial-gradient(110% 55% at 20% -10%, rgba(255, 140, 50, .11), transparent 60%),
   radial-gradient(60% 45% at 80% 110%, rgba(200, 80, 20, .09), transparent 70%); }
 :root[data-theme="light"] .season-fx::before { mix-blend-mode: multiply; opacity: .5; }
+/* Новогодняя гирлянда зимой — узкой полосой между заголовком окна и содержимым. Лампочки мигают волной (--d — сдвиг). */
+.season-garland { position: absolute; left: 0; right: 0; top: calc(var(--titlebar-h) - 3px); }
+.season-garland svg { display: block; overflow: visible; }
+.sg-wire { fill: none; stroke: #1d2a1f; stroke-width: 2; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6)); }
+.sg-cap { fill: #3a4a3c; stroke: #121a13; stroke-width: .6; }
+.sg-glass { fill: var(--c); stroke: rgba(255, 255, 255, .25); stroke-width: .6; }
+.sg-shine { fill: rgba(255, 255, 255, .55); }
+.sg-glow { fill: var(--c); opacity: .35; filter: blur(7px); }
+.sg-bulb { animation: sg-twinkle 1.6s var(--d) ease-in-out infinite; }
+@keyframes sg-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.sg-bulb .sg-glass { animation: sg-lit 1.6s var(--d) ease-in-out infinite; }
+@keyframes sg-lit { 0%, 100% { filter: brightness(1.25) drop-shadow(0 0 4px var(--c)); } 50% { filter: brightness(.55); } }
+:root[data-motion="off"] .sg-bulb, :root[data-motion="off"] .sg-bulb .sg-glass { animation: none; }
+:root[data-theme="light"] .sg-wire { stroke: #4a5a4c; }
