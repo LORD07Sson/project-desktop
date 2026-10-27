@@ -4,7 +4,7 @@
 
 import { rollText } from "./roll-digits.js";
 import { state } from "./state.js";
-import { apiGet, apiPost, tabSkeleton, toast } from "./api.js";
+import { apiGet, apiPost, tabSkeleton, toast, openSheet, dismissSheet } from "./api.js";
 import { $, esc } from "./utils.js";
 import { imgProxy, titleArt } from "./title-page.js";
 import { openReportDetail } from "./report-detail.js";
@@ -234,15 +234,17 @@ function renderPersonalStatuses(root, data) {
         ${poster}<small class="my-status-id">${esc(item.public_id + episode)}</small><b class="my-status-name">${esc(title)}</b>
         <span class="my-status-meta">${esc(item.role ? `Моя роль — ${item.role}` : item.global_status || "")}</span><span class="my-status-due">${due}</span>
         <div class="my-status-actions"><select data-q-status-move="${esc(item.public_id)}" aria-label="Переместить в группу">${options}</select>
-          ${column.is_done ? "" : `<button type="button" class="btn primary" data-q-status-done="${esc(item.public_id)}">Я сдала</button>`}</div></article>`;
+          ${column.is_done ? "" : `<button type="button" class="btn primary" data-q-status-done="${esc(item.public_id)}">Я сдала</button>`}
+          ${item.is_manual ? `<button type="button" class="btn" data-q-status-remove="${esc(item.public_id)}" title="Убрать только с моей доски">Убрать</button>` : ""}</div></article>`;
     }).join("") || `<div class="my-status-empty">Пока пусто</div>`;
     return `<section class="my-status-column${column.is_done ? " is-done" : ""}" data-q-status-col="${column.id}">
       <header class="my-status-head"><b>${esc(column.name)}${column.is_done ? " ✓" : ""}</b><span>${cards.length}</span></header>
       <div class="my-status-cards">${cardHtml}</div></section>`;
   }).join("");
-  root.innerHTML = `${head}${viewSwitch()}<div class="my-status-toolbar"><span>Три фиксированные группы. Перемещайте карточки списком или перетаскиванием.</span></div>
+  root.innerHTML = `${head}${viewSwitch()}<div class="my-status-toolbar"><span>Назначенные серии появляются в «Очереди» автоматически. Остальные серии, которые вам доступны, можно добавить сюда вручную.</span><button type="button" class="btn" data-q-status-add>+ Добавить серию</button></div>
     ${columns.length ? `<div class="my-status-board">${columnsHtml}</div>` : `<div class="q-empty">Групп пока нет.</div>`}`;
   bindViewSwitch(root);
+  root.querySelector("[data-q-status-add]")?.addEventListener("click", openAvailableReports);
   root.querySelectorAll("[data-q-status-open]").forEach(card => {
     const open = () => openReportDetail(card.dataset.qStatusOpen);
     card.addEventListener("click", event => {
@@ -261,6 +263,14 @@ function renderPersonalStatuses(root, data) {
     if (!doneColumn) { toast("Сначала отметьте группу «Сдано» в настройках группы.", "error"); return; }
     moveStatusCard(button.dataset.qStatusDone, doneColumn.id);
   }));
+  root.querySelectorAll("[data-q-status-remove]").forEach(button => button.addEventListener("click", async event => {
+    event.stopPropagation();
+    try {
+      await apiPost(`/me/board/items/${encodeURIComponent(button.dataset.qStatusRemove)}/remove`, {});
+      toast("Карточка убрана с вашей доски.", "success");
+      await loadQueue();
+    } catch (error) { toast(`Не удалось убрать карточку: ${error.message}`, "error"); }
+  }));
   root.querySelectorAll("[data-q-status-col]").forEach(column => {
     column.addEventListener("dragover", event => { event.preventDefault(); column.classList.add("drag-over"); });
     column.addEventListener("dragleave", event => { if (!column.contains(event.relatedTarget)) column.classList.remove("drag-over"); });
@@ -271,6 +281,47 @@ function renderPersonalStatuses(root, data) {
       if (publicId) moveStatusCard(publicId, column.dataset.qStatusCol);
     });
   });
+}
+
+async function openAvailableReports() {
+  const overlay = openSheet(`<h2>Добавить серию</h2><p class="my-status-picker-hint">Серия появится в «Очереди» только на вашей доске. Общий статус и назначения не изменятся.</p><input class="my-status-picker-search" type="search" placeholder="Название или номер серии" aria-label="Поиск серии"><div class="my-status-picker-list"><div class="my-status-empty">Загружаю серии…</div></div>`, "wide");
+  const input = overlay.querySelector(".my-status-picker-search");
+  const list = overlay.querySelector(".my-status-picker-list");
+  let timer;
+  let request = 0;
+  const render = async () => {
+    const current = ++request;
+    list.innerHTML = `<div class="my-status-empty">Загружаю серии…</div>`;
+    try {
+      const data = await apiGet(`/me/board/available?q=${encodeURIComponent(input.value.trim())}`);
+      if (current !== request || !overlay.isConnected) return;
+      const items = data.items || [];
+      if (!items.length) {
+        list.innerHTML = `<div class="my-status-empty">Нет доступных серий для добавления.</div>`;
+        return;
+      }
+      list.innerHTML = items.map(item => {
+        const poster = item.poster_url ? `<img src="${esc(imgProxy(item.poster_url))}" alt="" loading="lazy">` : `<span class="my-status-picker-poster"></span>`;
+        return `<button type="button" class="my-status-picker-item" data-q-status-add-item="${esc(item.public_id)}">${poster}<span><small>${esc(item.public_id)}${item.deadline ? ` · срок ${esc(item.deadline.slice(8, 10))}.${esc(item.deadline.slice(5, 7))}` : " · без срока"}</small><b>${esc(item.title_name || item.title || "Без названия")}</b><span>${esc(item.title)}</span></span><strong>Добавить</strong></button>`;
+      }).join("");
+      list.querySelectorAll("[data-q-status-add-item]").forEach(button => button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await apiPost(`/me/board/items/${encodeURIComponent(button.dataset.qStatusAddItem)}/add`, {});
+          dismissSheet(overlay);
+          toast("Серия добавлена в «Очередь».", "success");
+          await loadQueue();
+        } catch (error) {
+          button.disabled = false;
+          toast(`Не удалось добавить серию: ${error.message}`, "error");
+        }
+      }));
+    } catch (error) {
+      if (current === request) list.innerHTML = `<div class="my-status-empty">Не удалось загрузить серии: ${esc(error.message)}</div>`;
+    }
+  };
+  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(render, 180); });
+  render();
 }
 
 async function moveStatusCard(publicId, columnId) {
