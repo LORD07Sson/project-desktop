@@ -21,7 +21,7 @@ import { midiEnabled, setMidiEnabled } from "./midi-control.js";
 import { trackingOn, setTracking } from "./telemetry.js";
 import { currentTune, applyTune } from "./tune.js";
 import { cacheSummary, clearCache } from "./audio-cache.js";
-import { checkTool, checkServer, checkStorage, checkNotify, summarize } from "./selfcheck-core.js";
+import { checkTool, checkEncoder, checkServer, checkStorage, checkNotify, summarize } from "./selfcheck-core.js";
 import { TUNE_DEFAULT, TUNE_LIMITS } from "./tune-core.js";
 import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints, resetTourProgress } from "./tour.js";
 
@@ -48,6 +48,7 @@ function commitFromVersion(version) {
 
 async function openSettings() {
   let autostartOn = false;
+  let lastFfmpegCheck = null;
   try { autostartOn = await invoke("is_autostart"); } catch (_) {}
   let updateChannel = "stable";
   try { updateChannel = await invoke("get_update_channel"); } catch (_) {}
@@ -356,11 +357,22 @@ async function openSettings() {
   overlay.querySelector("#s-selfcheck").addEventListener("click", async e => {
     const btn = e.currentTarget, out = overlay.querySelector("#s-selfcheck-out");
     btn.disabled = true; btn.textContent = "Проверяю…";
-    const tools = await invoke("mt_tool_status").catch(() => ({}));
+    const [tools, encoders] = await Promise.all([
+      invoke("mt_tool_status").catch(() => ({})),
+      invoke("local_render_encoders").catch(() => ({})),
+    ]);
     const estimate = await (navigator.storage?.estimate?.() ?? Promise.resolve(null)).catch(() => null);
     const results = [
       checkServer(lastPing), checkTool("ffmpeg", tools.ffmpeg), checkTool("ffprobe", tools.ffprobe),
+      checkEncoder("NVENC H.264", !!encoders.nvenc_h264, encoders.nvenc_h264_error, !!encoders.soft_h264),
+      checkEncoder("NVENC H.265", !!encoders.nvenc_h265, encoders.nvenc_h265_error, !!encoders.soft_h265),
       checkNotify(window.Notification ? window.Notification.permission : "default"), checkStorage(estimate),
+    ];
+    lastFfmpegCheck = [
+      `FFmpeg: ${tools.ffmpeg || "не найден"}`,
+      `FFprobe: ${tools.ffprobe || "не найден"}`,
+      `NVENC H.264: ${encoders.nvenc_h264 ? "готов" : encoders.nvenc_h264_error || "не работает"}`,
+      `NVENC H.265: ${encoders.nvenc_h265 ? "готов" : encoders.nvenc_h265_error || "не работает"}`,
     ];
     out.hidden = false;
     out.innerHTML = `<b>${esc(summarize(results))}</b>` + results.map(r => `<div class="sc-row ${r.status}"><i></i><span>${esc(r.label)}</span><em>${esc(r.detail)}</em></div>`).join("");
@@ -684,6 +696,7 @@ async function openSettings() {
       `Сервер: ${API_BASE} · ${lastPing == null ? "нет связи" : `${lastPing} мс`}`,
       `Роль: ${state.isAdmin ? "админ" : "участник"} · вкладка: ${state.activeTab}`,
       `Тема: ${document.documentElement.dataset.theme}/${document.documentElement.dataset.look} · масштаб ${currentScale()}%`,
+      ...(lastFfmpegCheck || ["FFmpeg и NVENC: диагностика ещё не запускалась"]),
       `Время: ${new Date().toISOString()}`,
     ];
     try {

@@ -1493,9 +1493,9 @@ fn main() {
         // добавления этого плагина). Webview-таргет зеркалит и то, что
         // шлёт console.* из JS (media-tools.js и т.д.), в тот же файл —
         // не только в devtools-консоль, которую пользователь не откроет
-        // сам. Info по умолчанию (сторонние крейты — reqwest/tauri сами
-        // не должны заваливать файл своим trace/debug), Debug — для
-        // собственного кода (level_for), максимум 5 МБ на файл, храним
+        // сам. Error по умолчанию; Info включён только для модулей FFmpeg,
+        // чтобы видеть этап и последний подтверждённый прогресс без шума
+        // сторонних библиотек. Максимум 5 МБ на файл, храним
         // 3 последних ротации, остального обычно достаточно, чтобы
         // покрыть один сеанс работы студии.
         .plugin(
@@ -1507,8 +1507,10 @@ fn main() {
                 .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview))
                 .max_file_size(5_000_000)
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
-                .level(log::LevelFilter::Off)
-                .level_for("project_desktop", log::LevelFilter::Off)
+                .level(log::LevelFilter::Info)
+                .level_for("project_desktop", log::LevelFilter::Error)
+                .level_for("project_desktop::media_tools", log::LevelFilter::Info)
+                .level_for("project_desktop::local_render", log::LevelFilter::Info)
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())

@@ -1228,6 +1228,8 @@ pub(crate) fn run_ffmpeg_in(
     let mut child = command
         .spawn()
         .map_err(|e| format!("ffmpeg не найден или не запустился ({ffmpeg}): {e}."))?;
+    let started = std::time::Instant::now();
+    log::info!(target: "project_desktop::media_tools", "FFmpeg запущен: {} (шаг занимает {:.0}%–{:.0}% общего прогресса).", stage.label, stage.base * 100.0, (stage.base + stage.span) * 100.0);
 
     let stderr = child.stderr.take().ok_or("не удалось получить поток ошибок ffmpeg")?;
     CANCEL_REQUESTED.store(false, Ordering::SeqCst);
@@ -1238,6 +1240,7 @@ pub(crate) fn run_ffmpeg_in(
 
     progress.report(stage.base, &stage.label);
     let mut stderr_text = String::new();
+    let mut next_log_percent = 5_u8;
     for line in BufReader::new(stderr).lines().map_while(Result::ok) {
         if let Some(us) = line.strip_prefix("out_time_ms=").and_then(|v| v.trim().parse::<f64>().ok()) {
             // Название поля у ffmpeg историческое: значение в
@@ -1246,6 +1249,11 @@ pub(crate) fn run_ffmpeg_in(
             if stage.duration > 0.0 {
                 let frac = ((us / 1_000_000.0) / stage.duration).clamp(0.0, 1.0);
                 progress.report(stage.base + frac * stage.span, &stage.label);
+                let percent = (frac * 100.0).floor() as u8;
+                if percent >= next_log_percent {
+                    log::info!(target: "project_desktop::media_tools", "FFmpeg: шаг выполнен на {percent}%, время {:.0} с.", started.elapsed().as_secs_f64());
+                    next_log_percent = percent.saturating_add(5);
+                }
             }
         } else if !is_progress_line(&line) {
             // Ошибка на повреждённом файле умеет быть многотысячной —
@@ -1283,8 +1291,15 @@ pub(crate) fn run_ffmpeg_in(
         if !existed_before {
             let _ = std::fs::remove_file(out_path);
         }
-        return Err(format!("ffmpeg завершился с ошибкой: {}", stderr_text.trim()));
+        let details = stderr_text.trim();
+        let code = status.code().map_or("неизвестен".into(), |c| c.to_string());
+        return Err(if details.is_empty() {
+            format!("ffmpeg завершился с кодом {code}, но не сообщил причину; откройте логи приложения.")
+        } else {
+            format!("ffmpeg завершился с кодом {code}: {details}")
+        });
     }
+    log::info!(target: "project_desktop::media_tools", "FFmpeg завершён успешно за {:.0} с.", started.elapsed().as_secs_f64());
     progress.report(stage.base + stage.span, &stage.label);
     Ok(())
 }

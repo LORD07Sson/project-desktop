@@ -9,8 +9,9 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -78,6 +79,8 @@ pub struct EncoderStatus {
     pub nvenc_h265: bool,
     pub soft_h264: bool,
     pub soft_h265: bool,
+    pub nvenc_h264_error: Option<String>,
+    pub nvenc_h265_error: Option<String>,
 }
 
 /// Закреплённая сборка ffmpeg (LGPL, с NVENC) в нашем же релизе на GitHub — тот же файл и та же сумма, что в CI.
@@ -100,6 +103,8 @@ pub struct ToolsStatus {
     pub nvenc_h265: bool,
     pub soft_h264: bool,
     pub soft_h265: bool,
+    pub nvenc_h264_error: Option<String>,
+    pub nvenc_h265_error: Option<String>,
     pub error: Option<String>,
 }
 
@@ -274,18 +279,36 @@ pub async fn prepare(app: &tauri::AppHandle, client: &reqwest::Client) -> ToolsS
     if !binary_runs(std::path::Path::new(resolve_ffmpeg())) {
         match download_ffmpeg(app, client).await {
             Ok(()) => downloaded_now = true,
-            Err(e) => error = Some(e),
+            Err(e) => {
+                log::error!("[ffmpeg-prepare] {e}");
+                error = Some(e);
+            }
         }
     }
     let path = resolve_ffmpeg().to_string();
     let ffmpeg_ok = binary_runs(std::path::Path::new(&path));
     let ffprobe_ok = binary_runs(std::path::Path::new(crate::media_tools::resolve_ffprobe()));
     if !ffmpeg_ok && error.is_none() {
-        error = Some("ffmpeg не найден и не скачался.".into());
+        let message = "ffmpeg не найден и не скачался.";
+        log::error!("[ffmpeg-prepare] {message}");
+        error = Some(message.into());
+    }
+    if !ffprobe_ok {
+        log::error!("[ffmpeg-prepare] ffprobe не найден или не запускается.");
     }
     let (enc, gpu) = tauri::async_runtime::spawn_blocking(|| (encoder_status(), gpu_names()))
         .await
-        .unwrap_or_else(|_| (EncoderStatus { nvenc_h264: false, nvenc_h265: false, soft_h264: false, soft_h265: false }, String::new()));
+        .unwrap_or_else(|_| (
+            EncoderStatus {
+                nvenc_h264: false,
+                nvenc_h265: false,
+                soft_h264: false,
+                soft_h265: false,
+                nvenc_h264_error: Some("проверка кодировщика аварийно завершилась".into()),
+                nvenc_h265_error: Some("проверка кодировщика аварийно завершилась".into()),
+            },
+            String::new(),
+        ));
     ToolsStatus {
         ffmpeg_ok,
         ffprobe_ok,
@@ -297,6 +320,8 @@ pub async fn prepare(app: &tauri::AppHandle, client: &reqwest::Client) -> ToolsS
         nvenc_h265: enc.nvenc_h265,
         soft_h264: enc.soft_h264,
         soft_h265: enc.soft_h265,
+        nvenc_h264_error: enc.nvenc_h264_error,
+        nvenc_h265_error: enc.nvenc_h265_error,
         error,
     }
 }
@@ -330,24 +355,70 @@ fn safe_name(name: &str) -> Result<&str, String> {
     Ok(name)
 }
 
-fn encoders_text() -> String {
-    hidden_command(resolve_ffmpeg())
+fn encoders_text() -> Result<String, String> {
+    let output = hidden_command(resolve_ffmpeg())
         .args(["-hide_banner", "-encoders"])
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-        .unwrap_or_default()
+        .map_err(|e| format!("не удалось запустить ffmpeg для проверки кодировщиков: {e}"))?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if detail.is_empty() {
+            format!("ffmpeg -encoders завершился с кодом {}", output.status.code().map_or("неизвестен".into(), |c| c.to_string()))
+        } else {
+            detail.chars().take(360).collect()
+        });
+    }
+    let encoders = String::from_utf8_lossy(&output.stdout).into_owned();
+    if encoders.trim().is_empty() {
+        return Err("ffmpeg вернул пустой список кодировщиков".into());
+    }
+    Ok(encoders)
 }
 
 /// Кодировщик есть в сборке и реально работает (на машине без видеокарты NVENC в списке есть, но не запускается).
-fn encoder_works(list: &str, name: &str) -> bool {
+fn encoder_works(list: &str, name: &str) -> Result<(), String> {
     if !list.contains(name) {
-        return false;
+        return Err(format!("в этой сборке FFmpeg нет кодировщика {name}"));
     }
-    hidden_command(resolve_ffmpeg())
+    let mut command = hidden_command(resolve_ffmpeg());
+    command
         .args(["-v", "error", "-f", "lavfi", "-i", "color=c=black:s=256x144:d=0.2", "-c:v", name, "-f", "null", "-"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|e| format!("не удалось запустить короткую проверку {name}: {e}"))?;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(100)),
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("проверка {name} длится больше 20 секунд; возможно, завис видеодрайвер"));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("не удалось проверить {name}: {e}"));
+            }
+        }
+    }
+    let output = child.wait_with_output().map_err(|e| format!("не удалось прочитать результат проверки {name}: {e}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let detail = String::from_utf8_lossy(&output.stderr)
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .take(3)
+        .collect::<Vec<_>>()
+        .join("; ");
+    let detail = if detail.is_empty() {
+        format!("процесс завершился с кодом {}", output.status.code().map_or("неизвестно".into(), |c| c.to_string()))
+    } else {
+        detail.chars().take(360).collect()
+    };
+    Err(detail)
 }
 
 /// Проверка кодировщиков — это несколько запусков ffmpeg (и инициализация драйвера NVENC, секунды), поэтому
@@ -357,22 +428,39 @@ pub fn encoder_status() -> EncoderStatus {
     if let Some(cached) = CACHE.get() {
         return cached.clone();
     }
-    let list = encoders_text();
+    let list = match encoders_text() {
+        Ok(list) => list,
+        Err(error) => {
+            log::info!("FFmpeg encoder list check failed: {error}");
+            return EncoderStatus {
+                nvenc_h264: false,
+                nvenc_h265: false,
+                soft_h264: false,
+                soft_h265: false,
+                nvenc_h264_error: Some(error.clone()),
+                nvenc_h265_error: Some(error),
+            };
+        }
+    };
     let (h264, h265) = std::thread::scope(|sc| {
         let a = sc.spawn(|| encoder_works(&list, "h264_nvenc"));
         let b = sc.spawn(|| encoder_works(&list, "hevc_nvenc"));
-        (a.join().unwrap_or(false), b.join().unwrap_or(false))
+        (
+            a.join().unwrap_or_else(|_| Err("проверка кодировщика аварийно завершилась".into())),
+            b.join().unwrap_or_else(|_| Err("проверка кодировщика аварийно завершилась".into())),
+        )
     });
     let status = EncoderStatus {
-        nvenc_h264: h264,
-        nvenc_h265: h265,
+        nvenc_h264: h264.is_ok(),
+        nvenc_h265: h265.is_ok(),
         soft_h264: list.contains("libx264"),
         soft_h265: list.contains("libx265"),
+        nvenc_h264_error: h264.err(),
+        nvenc_h265_error: h265.err(),
     };
-    // Пустой список — ffmpeg ещё не докачан: не запоминаем, чтобы следующий вызов проверил заново.
-    if !list.is_empty() {
-        let _ = CACHE.set(status.clone());
-    }
+    log::info!("FFmpeg NVENC H.264 check: {}", status.nvenc_h264_error.as_deref().unwrap_or("готов"));
+    log::info!("FFmpeg NVENC H.265 check: {}", status.nvenc_h265_error.as_deref().unwrap_or("готов"));
+    let _ = CACHE.set(status.clone());
     status
 }
 

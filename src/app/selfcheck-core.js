@@ -12,7 +12,15 @@ export function shortVersion(line) {
 export function checkTool(name, version) {
   return version
     ? { label: name, status: OK, detail: shortVersion(version) }
-    : { label: name, status: BAD, detail: "не найден — сборка финала у себя не заработает" };
+    : { label: name, status: BAD, detail: "не найден или не запускается — проверьте логи приложения" };
+}
+
+export function checkEncoder(label, available, reason, softwareFallback) {
+  if (available) return { label, status: OK, detail: "короткий тестовый рендер прошёл" };
+  const why = String(reason || "кодировщик не запустился").slice(0, 360);
+  return softwareFallback
+    ? { label, status: WARN, detail: `${why}; будет использоваться процессор` }
+    : { label, status: BAD, detail: `${why}; программной замены нет` };
 }
 
 export function checkServer(pingMs) {
