@@ -90,12 +90,10 @@ tauri-plugin-opener = "2.5.5"
 
 # windows-rs — только на Windows: mpv_embed.rs создаёт нативное child-окно
 # (CreateWindowExW) под видео mpv (--wid) и двигает его SetWindowPos при
-# ресайзе. Версия "0.61" — специально совпадает с тем, что резолвит сам
-# tauri (Cargo.lock: "tauri" -> "windows 0.61.3") — WebviewWindow::hwnd()
-# отдаёт HWND именно из этой версии крейта, и нужно принимать его без
-# конвертаций через raw isize.
+# ресайзе. Версия "0.62" совпадает с Tauri/Wry (Cargo.lock: tauri ->
+# windows 0.62.2), поэтому HWND из WebviewWindow::hwnd() совместим с API.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
     "Win32_Foundation",
     # DwmSetWindowAttribute — скругление углов и цвет рамки окна под
     # Windows 11 (main.rs: apply_windows_11_chrome). Системный заголовок
@@ -117,12 +115,10 @@ windows = { version = "0.61", features = [
 # Тосты под своим AUMID (desktop_notify.rs) — та же версия, что тянет
 # tauri-plugin-notification, отдельной копии крейта не появляется.
 tauri-winrt-notification = "0.7"
-# Только для disable_browser_accelerator_keys (main.rs) — версия "0.38"
-# специально совпадает с тем, что резолвит сам tauri/wry (Cargo.lock:
-# "webview2-com-sys" -> "windows 0.61.3"), чтобы ICoreWebView2Settings3
-# и windows::core::Interface были из одного и того же экземпляра крейта
-# windows-core, а не двух несовместимых версий одновременно.
-webview2-com = "0.38"
+# Только для disable_browser_accelerator_keys (main.rs). Должна совпадать
+# с Tauri/Wry: их WebView2 controller использует webview2-com 0.39.1 и
+# windows-core 0.62.2; старый 0.38 создаёт несовместимые COM-типы.
+webview2-com = "0.39.1"
 
 [profile.release]
 panic = "abort"

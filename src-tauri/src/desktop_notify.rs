@@ -55,7 +55,11 @@ fn ensure_shortcut() -> windows::core::Result<()> {
     use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
     use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
 
-    let exe = std::env::current_exe().map_err(|_| windows::core::Error::from_win32())?;
+    let exe = std::env::current_exe().map_err(|error| {
+        windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(
+            error.raw_os_error().unwrap_or(1) as u32,
+        ))
+    })?;
     let Some(appdata) = std::env::var_os("APPDATA") else { return Ok(()) };
     let lnk = std::path::Path::new(&appdata).join(r"Microsoft\Windows\Start Menu\Programs\Project Desktop.lnk");
 
