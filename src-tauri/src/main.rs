@@ -119,7 +119,53 @@ struct CachedUpdateCheck {
 // Альфа-релиз alpha-latest на каждую сборку удаляется и публикуется заново — на минуту фид и пакет дают 404, а клиент,
 // успевший увидеть старый фид, получает 404 на скачивании. Это временный сбой: ждём и пробуем снова с новым фидом.
 fn is_transient_update_error(text: &str) -> bool {
-    text.contains("404") || text.contains("502") || text.contains("503") || text.contains("504") || text.contains("timed out") || text.contains("Network error")
+    let text = text.to_ascii_lowercase();
+    [
+        "404",
+        "502",
+        "503",
+        "504",
+        "timed out",
+        "timeout",
+        "network error",
+        "peer disconnected",
+        "connection reset",
+        "connection closed",
+        "connection aborted",
+        "broken pipe",
+        "unexpected eof",
+        "temporarily unavailable",
+    ]
+    .iter()
+    .any(|marker| text.contains(marker))
+}
+
+fn update_retry_reason(text: &str) -> &'static str {
+    let text = text.to_ascii_lowercase();
+    if text.contains("404") || text.contains("502") || text.contains("503") || text.contains("504") {
+        "GitHub временно не отдаёт релиз"
+    } else if text.contains("peer disconnected")
+        || text.contains("connection reset")
+        || text.contains("connection closed")
+        || text.contains("connection aborted")
+        || text.contains("broken pipe")
+        || text.contains("unexpected eof")
+    {
+        "Соединение с GitHub прервалось"
+    } else {
+        "Временная ошибка сети"
+    }
+}
+
+fn describe_update_error(text: &str) -> String {
+    if is_transient_update_error(text) {
+        format!(
+            "{} после нескольких попыток. Проверьте интернет/VPN и повторите скачивание. Исходная ошибка: {text}",
+            update_retry_reason(text)
+        )
+    } else {
+        text.to_string()
+    }
 }
 
 const UPDATE_RETRIES: u32 = 6;
@@ -314,11 +360,11 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
                 Err(e) if is_transient_update_error(&e) && attempt < UPDATE_RETRIES => {
                     attempt += 1;
                     log::info!("download_and_apply_update: фид недоступен ({e}), повтор {attempt}/{UPDATE_RETRIES}");
-                    let _ = app.emit("update-retry", attempt);
+                    let _ = app.emit("update-retry", serde_json::json!({ "attempt": attempt, "reason": update_retry_reason(&e) }));
                     update_retry_pause(attempt);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => return Err(describe_update_error(&e)),
             };
             log::info!("download_and_apply_update: качаем {}", info.TargetFullRelease.Version);
 
@@ -335,11 +381,11 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
                 if is_transient_update_error(&text) && attempt < UPDATE_RETRIES {
                     attempt += 1;
                     log::info!("download_and_apply_update: пакет недоступен ({text}), повтор {attempt}/{UPDATE_RETRIES}");
-                    let _ = app.emit("update-retry", attempt);
+                    let _ = app.emit("update-retry", serde_json::json!({ "attempt": attempt, "reason": update_retry_reason(&text) }));
                     update_retry_pause(attempt);
                     continue;
                 }
-                return Err(text);
+                return Err(describe_update_error(&text));
             }
             // apply_updates_and_restart сама завершает процесс — строка ниже
             // в норме никогда не выполняется до конца, но если она вообще

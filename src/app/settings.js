@@ -828,8 +828,11 @@ export async function installUpdate() {
     statusEl.textContent = pct < 100 ? `Скачано ${pct}%` : "Устанавливаю…";
   });
   const unlistenRetry = await listen("update-retry", event => {
+    const retry = event.payload;
+    const attempt = typeof retry === "object" && retry ? retry.attempt : retry;
+    const reason = typeof retry === "object" && retry ? retry.reason : "Временный сбой сети";
     fill.style.width = "0%";
-    statusEl.textContent = `Релиз как раз обновляется на GitHub — жду и пробую снова (${event.payload}/6)…`;
+    statusEl.textContent = `${reason}. Повторная попытка ${attempt}/6…`;
   });
   try {
     // При успехе download_and_apply_update завершает процесс изнутри
@@ -841,7 +844,16 @@ export async function installUpdate() {
     unlisten();
     unlistenRetry();
     updateInstalling = false;
-    statusEl.textContent = `Ошибка: ${e}`;
+    statusEl.textContent = `Не удалось завершить обновление: ${e}`;
     statusEl.style.color = "var(--s-stop)";
+    const actions = document.createElement("div");
+    actions.className = "sheet-actions";
+    actions.innerHTML = `<button type="button" class="btn primary" data-update-retry>Повторить скачивание</button><button type="button" class="btn" data-update-close>Закрыть</button>`;
+    statusEl.after(actions);
+    actions.querySelector("[data-update-retry]").addEventListener("click", () => {
+      dismissSheet(overlay);
+      installUpdate();
+    });
+    actions.querySelector("[data-update-close]").addEventListener("click", () => dismissSheet(overlay));
   }
 }
