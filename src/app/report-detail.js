@@ -716,6 +716,35 @@ export async function openReportDetail(publicId) {
           : `report/${publicId}/raws/${btn.dataset.rawDl}/file`;
       downloadAttachment(path, btn.dataset.rawName);
     }));
+    sheet.querySelectorAll("[data-raw-delete]").forEach(btn => btn.addEventListener("click", async () => {
+      const label = btn.dataset.fileName || "файл";
+      if (!await askConfirm(`Удалить «${label}» из отчёта?`)) return;
+      btn.disabled = true;
+      const path = btn.dataset.rawId
+        ? `/report/${publicId}/raws/files/${btn.dataset.rawId}/delete`
+        : `/report/${publicId}/raws/legacy/${btn.dataset.rawKind}/${btn.dataset.rawCharacter}/delete`;
+      try {
+        await apiPost(path, {});
+        toast("Файл удалён.", "success");
+        await render();
+      } catch (err) {
+        toast(`Не удалось удалить файл: ${err.message}`, "error");
+        btn.disabled = false;
+      }
+    }));
+    sheet.querySelectorAll("[data-source-delete]").forEach(btn => btn.addEventListener("click", async () => {
+      const label = btn.dataset.fileName || "исходник";
+      if (!await askConfirm(`Удалить общий исходник «${label}» для этой серии?`)) return;
+      btn.disabled = true;
+      try {
+        await apiPost(`/report/${publicId}/sources/files/${btn.dataset.sourceDelete}/delete`, {});
+        toast("Исходник удалён.", "success");
+        await render();
+      } catch (err) {
+        toast(`Не удалось удалить исходник: ${err.message}`, "error");
+        btn.disabled = false;
+      }
+    }));
     sheet.querySelector("#report-file-add")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       const filesToAdd = await pickFiles("*/*");
@@ -1193,11 +1222,13 @@ function rawKindsHtml(kinds, { canAdd, addAttr, dlAttr }) {
         <span class="raw-name">${esc(f.name || "файл")}${f.character_name ? ` · ${esc(f.character_name)}` : (f.character_id ? ` · персонаж #${Number(f.character_id)}` : "")}</span>
         <button class="icon-btn" data-raw-dl="${esc(k.kind)}" data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-legacy="${f.legacy || f.id == null ? "1" : "0"}" data-raw-character="${Number(f.character_id || 0)}" data-raw-name="${esc(f.name || k.kind)}" title="Скачать">⬇️</button>
         <button class="icon-btn" data-media-send="${f.id == null ? (f.legacy || f.id == null ? `raws/legacy/${esc(k.kind)}/${Number(f.character_id || 0)}` : `raws/${esc(k.kind)}`) : `raws/files/${esc(f.id)}`}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">📤</button>
+        ${f.can_delete ? `<button class="icon-btn danger-zone" data-raw-delete data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-kind="${esc(k.kind)}" data-raw-character="${Number(f.character_id || 0)}" data-file-name="${esc(f.name || k.kind)}" title="Удалить файл" aria-label="Удалить ${esc(f.name || k.kind)}">🗑</button>` : ""}
       </div>`
     : `<div class="raw-row on">
         <span class="raw-name">${esc(f.name || "файл")}</span>
         <button class="icon-btn" data-source-dl="${esc(f.id)}" data-source-name="${esc(f.name || k.kind)}" title="Скачать">⬇️</button>
         <button class="icon-btn" data-media-send="sources/files/${esc(f.id)}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">📤</button>
+        ${f.can_delete ? `<button class="icon-btn danger-zone" data-source-delete="${esc(f.id)}" data-file-name="${esc(f.name || k.kind)}" title="Удалить общий исходник" aria-label="Удалить ${esc(f.name || k.kind)}">🗑</button>` : ""}
       </div>`;
   return `
   <div class="raw-list">${filled.map(k => `
@@ -1217,6 +1248,7 @@ function rawKindsHtml(kinds, { canAdd, addAttr, dlAttr }) {
 function fileHtml(f, canEdit = true) {
   const audioRe = AUDIO_RE;
   const isAudio = audioRe.test(f.file_type || "") || audioRe.test(f.file_name || "");
+  const canDelete = f.can_delete === undefined ? canEdit : !!f.can_delete;
   return `<div class="file-item">
     <div>${esc(FILE_ICONS[f.file_type] || "📎")} ${esc(f.file_name || f.file_type)} <span class="meta">${esc(f.file_size_label || "")}</span>${f.uploaded_by ? `
       <span class="file-by"><span class="avatar-bubble" data-avatar-for="${esc(f.uploaded_by.telegram_id || "")}">${esc(initials(f.uploaded_by.name || "?"))}</span><b>${esc(f.uploaded_by.name || "")}</b>${f.created_at ? `<em>${esc(submittedWhen(f.created_at))}</em>` : ""}</span>` : ""}</div>
@@ -1224,7 +1256,7 @@ function fileHtml(f, canEdit = true) {
     ${isAudio && canEdit ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-qc-file="${f.id}">AI-проверка</button>` : ""}
     <button class="icon-btn" data-send-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Прислать кому-то">📤</button>
     <button class="icon-btn" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать">⬇️</button>
-    <button class="icon-btn" data-delete-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Удалить файл" aria-label="Удалить файл">🗑</button>
+    ${canDelete ? `<button class="icon-btn danger-zone" data-delete-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Удалить файл" aria-label="Удалить файл">🗑</button>` : ""}
     <div id="qc-result-${f.id}" style="width:100%;"></div>
   </div>`;
 }
