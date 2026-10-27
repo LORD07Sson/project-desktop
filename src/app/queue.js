@@ -4,7 +4,7 @@
 
 import { rollText } from "./roll-digits.js";
 import { state } from "./state.js";
-import { apiGet, tabSkeleton } from "./api.js";
+import { apiGet, apiPost, tabSkeleton, openSheet, dismissSheet, toast, askConfirm } from "./api.js";
 import { $, esc } from "./utils.js";
 import { imgProxy, titleArt } from "./title-page.js";
 import { openReportDetail } from "./report-detail.js";
@@ -46,6 +46,23 @@ const WEEKDAYS = ["воскресенье", "понедельник", "втор�
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const pad2 = n => String(n).padStart(2, "0");
 const cleanLabel = s => String(s || "").replace(/^[^\p{L}\p{N}]+/u, "");
+const QUEUE_MODE_KEY = "project.queue.view";
+let queueMode = localStorage.getItem(QUEUE_MODE_KEY) === "statuses" ? "statuses" : "deadlines";
+
+function viewSwitch() {
+  return `<div class="q-view-switch" role="tablist" aria-label="Вид очереди">
+    <button type="button" class="qf-chip${queueMode === "deadlines" ? " active" : ""}" data-q-mode="deadlines">По срокам</button>
+    <button type="button" class="qf-chip${queueMode === "statuses" ? " active" : ""}" data-q-mode="statuses">Мои статусы</button>
+  </div>`;
+}
+
+function bindViewSwitch(root) {
+  root.querySelectorAll("[data-q-mode]").forEach(button => button.addEventListener("click", () => {
+    queueMode = button.dataset.qMode;
+    localStorage.setItem(QUEUE_MODE_KEY, queueMode);
+    loadQueue();
+  }));
+}
 
 // Сколько осталось до конца дня срока — для серий «сегодня».
 function countdown() {
@@ -102,6 +119,7 @@ function startTicker(root) {
 }
 
 export async function loadQueue() {
+  if (queueMode === "statuses") return loadPersonalStatuses();
   const root = $("#queue-body");
   if (!root) return;
   tabSkeleton(root, `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`);
@@ -128,7 +146,7 @@ export async function loadQueue() {
       <div>
         <span class="kd-label">Моё · ${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}</span>
         <h1>Моя очередь</h1>
-        ${state.isAdmin ? "" : `<div class="sub">Карточка отчёта открывается здесь; сдать работу можно в боте: «📋 Мои задачи».</div>`}
+        ${state.isAdmin ? "" : `<div class="sub">Отметить, что вы сдали серию, можно во вкладке «Мои статусы».</div>`}
       </div>
       <div class="kd-sum">
         <div class="kd-now"><small>Сейчас</small><b class="q-clock" data-q-clock></b></div>
@@ -141,13 +159,14 @@ export async function loadQueue() {
 
   if (!items.length) {
     clearTimeout(tickTimer);
-    root.innerHTML = head + `
+    root.innerHTML = head + viewSwitch() + `
       <div class="q-empty">
         <div class="q-empty-ic">☕</div>
         <b>На руках пусто</b>
         <p>Когда вам назначат серию, она появится здесь с обратным отсчётом до срока.</p>
         <button class="btn" data-q-titles>Проголосовать за тайтлы</button>
       </div>`;
+    bindViewSwitch(root);
     root.querySelector("[data-q-titles]").addEventListener("click", () => switchTab("titles"));
     startTicker(root);
     return;
@@ -160,7 +179,8 @@ export async function loadQueue() {
       <div class="kd-sh"><h2>${col.label}</h2><span class="kd-label">${list.length} · ${col.hint}</span><span class="kd-orn"></span></div>
       <div class="kd-qlist">${list.map(it => rowHtml(it, today)).join("")}</div>`;
   }).join("");
-  root.innerHTML = head + `<div class="kd-queue">${groups}</div>`;
+  root.innerHTML = head + viewSwitch() + `<div class="kd-queue">${groups}</div>`;
+  bindViewSwitch(root);
   startTicker(root);
   refreshQueueBadge();
   root.querySelectorAll("[data-q-open]").forEach(el => {
@@ -169,6 +189,153 @@ export async function loadQueue() {
     el.addEventListener("keydown", e => { if (e.target.closest("button")) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
     el.querySelector("button")?.addEventListener("click", open);
   });
+}
+
+async function loadPersonalStatuses() {
+  const root = $("#queue-body");
+  if (!root) return;
+  clearTimeout(tickTimer);
+  tabSkeleton(root, `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`);
+  try {
+    const data = await apiGet("/me/board");
+    renderPersonalStatuses(root, data);
+  } catch (error) {
+    root.innerHTML = `${viewSwitch()}<div class="bento-empty">Не удалось загрузить личные статусы: ${esc(error.message)}</div>`;
+    bindViewSwitch(root);
+  }
+}
+
+function renderPersonalStatuses(root, data) {
+  const columns = data.columns || [];
+  const items = data.items || [];
+  const byColumn = Object.fromEntries(columns.map(column => [column.id, []]));
+  items.forEach(item => { if (byColumn[item.column_id]) byColumn[item.column_id].push(item); });
+  const done = items.filter(item => item.is_done).length;
+  const overdue = items.filter(item => item.is_overdue).length;
+  const lead = items.find(item => item.title_id || item.poster_url);
+  if (lead) setBackdrop(titleArt(lead.title_id, "banner", 1440), imgProxy(lead.poster_url));
+  const now = new Date();
+  const head = `<div class="page-header">
+    <div><span class="kd-label">Моё · рабочие статусы видны только вам</span><h1>Мои статусы</h1>
+      <div class="sub">Отметка «Я сдала» не меняет общий статус серии и убирает её из моих просрочек.</div></div>
+    <div class="kd-sum"><div class="kd-now"><small>Сейчас</small><b>${pad2(now.getHours())}:${pad2(now.getMinutes())}</b></div>
+      <div><small>Мои серии</small><b>${items.length}</b></div><div><small>Сдано</small><b>${done}</b></div>
+      <div><small>Просрочено у меня</small><b class="${overdue ? "hot" : ""}">${overdue}</b></div></div></div>`;
+  const columnsHtml = columns.map((column, index) => {
+    const cards = byColumn[column.id] || [];
+    const cardHtml = cards.map(item => {
+      const poster = item.poster_url ? `<img class="my-status-poster" src="${esc(imgProxy(item.poster_url))}" alt="" loading="lazy">` : `<span class="my-status-poster my-status-placeholder"></span>`;
+      const title = item.title_name || item.title || "Без названия";
+      const episode = item.title_name && item.episode ? ` · ${String(item.episode).toUpperCase()}` : "";
+      const due = item.is_done ? "Отмечено сданным" : item.deadline ? `${item.is_overdue ? "Просрочено · " : "Срок · "}${item.deadline.slice(8, 10)}.${item.deadline.slice(5, 7)}` : "Без срока";
+      const options = columns.map(target => `<option value="${target.id}"${target.id === column.id ? " selected" : ""}>${esc(target.name)}</option>`).join("");
+      return `<article class="kd-gl my-status-card${item.is_overdue ? " overdue" : ""}" data-q-status-open="${esc(item.public_id)}" tabindex="0" role="button">
+        ${poster}<small class="my-status-id">${esc(item.public_id + episode)}</small><b class="my-status-name">${esc(title)}</b>
+        <span class="my-status-meta">${esc(item.role ? `Моя роль — ${item.role}` : item.global_status || "")}</span><span class="my-status-due">${due}</span>
+        <div class="my-status-actions"><select data-q-status-move="${esc(item.public_id)}" aria-label="Переместить в группу">${options}</select>
+          ${column.is_done ? "" : `<button type="button" class="btn primary" data-q-status-done="${esc(item.public_id)}">Я сдала</button>`}</div></article>`;
+    }).join("") || `<div class="my-status-empty">Пока пусто</div>`;
+    return `<section class="my-status-column${column.is_done ? " is-done" : ""}">
+      <header class="my-status-head"><b>${esc(column.name)}${column.is_done ? " ✓" : ""}</b><span>${cards.length}</span>
+        <button type="button" class="btn ghost sm" title="Выше" aria-label="Переместить группу выше" data-q-status-order="up" data-column-id="${column.id}"${index === 0 ? " disabled" : ""}>↑</button>
+        <button type="button" class="btn ghost sm" title="Ниже" aria-label="Переместить группу ниже" data-q-status-order="down" data-column-id="${column.id}"${index === columns.length - 1 ? " disabled" : ""}>↓</button>
+        <button type="button" class="btn ghost sm" title="Настройки группы" aria-label="Настройки группы" data-q-status-edit="${column.id}">⋯</button></header>
+      <div class="my-status-cards">${cardHtml}</div></section>`;
+  }).join("");
+  root.innerHTML = `${head}${viewSwitch()}<div class="my-status-toolbar"><span>Отметки видны только вам</span><button type="button" class="btn" data-q-status-add>＋ Группа</button></div>
+    ${columns.length ? `<div class="my-status-board">${columnsHtml}</div>` : `<div class="q-empty">Групп пока нет.</div>`}`;
+  bindViewSwitch(root);
+  root.querySelectorAll("[data-q-status-open]").forEach(card => {
+    const open = () => openReportDetail(card.dataset.qStatusOpen);
+    card.addEventListener("click", event => { if (!event.target.closest("button,select")) open(); });
+    card.addEventListener("keydown", event => { if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button,select")) { event.preventDefault(); open(); } });
+  });
+  root.querySelectorAll("[data-q-status-move]").forEach(select => select.addEventListener("change", () => moveStatusCard(select.dataset.qStatusMove, select.value)));
+  root.querySelectorAll("[data-q-status-done]").forEach(button => button.addEventListener("click", () => {
+    const doneColumn = columns.find(column => column.is_done);
+    if (!doneColumn) { toast("Сначала отметьте группу «Сдано» в настройках группы.", "error"); return; }
+    moveStatusCard(button.dataset.qStatusDone, doneColumn.id);
+  }));
+  root.querySelectorAll("[data-q-status-order]").forEach(button => button.addEventListener("click", async () => {
+    const ids = columns.map(column => column.id);
+    const index = ids.indexOf(Number(button.dataset.columnId));
+    const target = index + (button.dataset.qStatusOrder === "up" ? -1 : 1);
+    if (target < 0 || target >= ids.length) return;
+    ids.splice(target, 0, ids.splice(index, 1)[0]);
+    try { await apiPost("/me/board/columns/reorder", { ids }); await loadQueue(); }
+    catch (error) { toast(`Не удалось изменить порядок: ${error.message}`, "error"); }
+  }));
+  root.querySelectorAll("[data-q-status-edit]").forEach(button => button.addEventListener("click", () => editStatusColumn(columns, byColumn, Number(button.dataset.qStatusEdit))));
+  root.querySelector("[data-q-status-add]")?.addEventListener("click", addStatusColumn);
+}
+
+async function moveStatusCard(publicId, columnId) {
+  try {
+    await apiPost(`/me/board/items/${encodeURIComponent(publicId)}/move`, { column_id: Number(columnId) });
+    toast("Статус обновлён. Общий статус серии не изменился.", "success");
+    await loadQueue();
+    refreshQueueBadge();
+  } catch (error) { toast(`Не удалось переместить серию: ${error.message}`, "error"); }
+}
+
+function addStatusColumn() {
+  const overlay = openSheet(`<h2>Новая группа</h2><form data-q-status-add-form>
+    <label class="field-label" for="q-status-name">Название</label><input class="field-input" id="q-status-name" maxlength="40" required placeholder="Например, «На проверке»">
+    <div class="sheet-actions"><button type="button" class="btn ghost" data-q-status-cancel>Отмена</button><button class="btn primary" type="submit">Добавить</button></div></form>`);
+  const input = overlay.querySelector("#q-status-name"); input.focus();
+  overlay.querySelector("[data-q-status-cancel]").addEventListener("click", () => dismissSheet(overlay));
+  overlay.querySelector("form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = event.submitter;
+    button.disabled = true;
+    try { await apiPost("/me/board/columns", { name: input.value.trim() }); dismissSheet(overlay); toast("Группа добавлена.", "success"); await loadQueue(); }
+    catch (error) { toast(`Не удалось добавить группу: ${error.message}`, "error"); button.disabled = false; }
+  });
+}
+
+function editStatusColumn(columns, byColumn, columnId) {
+  const column = columns.find(item => item.id === columnId);
+  if (!column) return;
+  const overlay = openSheet(`<h2>Группа «${esc(column.name)}»</h2>
+    <div class="my-status-menu"><button type="button" class="btn" data-q-status-rename>Переименовать</button>
+    <button type="button" class="btn" data-q-status-done-flag>${column.is_done ? "Снять отметку «Сдано»" : "Считать группой «Сдано»"}</button>
+    <button type="button" class="btn danger" data-q-status-delete>Удалить группу</button></div>`);
+  overlay.querySelector("[data-q-status-rename]").addEventListener("click", () => renameStatusColumn(overlay, column));
+  overlay.querySelector("[data-q-status-done-flag]").addEventListener("click", async () => {
+    dismissSheet(overlay);
+    try { await apiPost(`/me/board/columns/${column.id}/edit`, { is_done: !column.is_done }); toast("Настройка группы обновлена.", "success"); await loadQueue(); }
+    catch (error) { toast(`Не удалось обновить группу: ${error.message}`, "error"); }
+  });
+  overlay.querySelector("[data-q-status-delete]").addEventListener("click", () => deleteStatusColumn(overlay, columns, byColumn, column));
+}
+
+function renameStatusColumn(parent, column) {
+  dismissSheet(parent);
+  const overlay = openSheet(`<h2>Переименовать группу</h2><form data-q-status-rename-form>
+    <label class="field-label" for="q-status-rename">Название</label><input class="field-input" id="q-status-rename" maxlength="40" required value="${esc(column.name)}">
+    <div class="sheet-actions"><button type="button" class="btn ghost" data-q-status-cancel>Отмена</button><button class="btn primary" type="submit">Сохранить</button></div></form>`);
+  const input = overlay.querySelector("#q-status-rename"); input.focus(); input.select();
+  overlay.querySelector("[data-q-status-cancel]").addEventListener("click", () => dismissSheet(overlay));
+  overlay.querySelector("form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = event.submitter; button.disabled = true;
+    try { await apiPost(`/me/board/columns/${column.id}/edit`, { name: input.value.trim() }); dismissSheet(overlay); toast("Название обновлено.", "success"); await loadQueue(); }
+    catch (error) { toast(`Не удалось переименовать группу: ${error.message}`, "error"); button.disabled = false; }
+  });
+}
+
+async function deleteStatusColumn(parent, columns, byColumn, column) {
+  if (columns.length < 2) { toast("Должна остаться хотя бы одна группа.", "error"); return; }
+  const targets = columns.filter(item => item.id !== column.id);
+  dismissSheet(parent);
+  const cards = byColumn[column.id] || [];
+  if (!await askConfirm(cards.length
+    ? `Удалить группу «${column.name}»? ${cards.length} ${plural(cards.length, "серия будет перенесена", "серии будут перенесены", "серий будут перенесены")} в первую группу «${targets[0].name}».`
+    : `Удалить пустую группу «${column.name}»?`, { yes: "Удалить" })) return;
+  try {
+    await apiPost(`/me/board/columns/${column.id}/delete`, { move_to: targets[0].id });
+    toast("Группа удалена.", "success"); await loadQueue();
+  } catch (error) { toast(`Не удалось удалить группу: ${error.message}`, "error"); }
 }
 
 // Счётчик на пункте меню — сколько серий горит (просрочено, сегодня, завтра).
