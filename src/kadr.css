@@ -2917,7 +2917,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-tl-ent { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
 .rd-tl-ent + .rd-tl-ent { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, .12); width: 100%; }
 .rd-tl-par { margin-top: 8px; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--gold); background: rgba(var(--gold-rgb), .12); }
-/* «Я сдал(а)» в пайплайне: кнопка у своего звена, галочка и время у сдавших. */
+/* Отметка о сдаче в пайплайне: кнопка у своего звена, галочка и время после сдачи. */
 .rd-tl-sub { margin-top: 8px; padding: 6px 14px; font-size: 12px; }
 .rd-tl-mark, .rd-tl-undo { margin-top: 6px; font-size: 11px; }
 .rd-tl-undo { margin: 0 0 0 6px; color: var(--ink-dim); }

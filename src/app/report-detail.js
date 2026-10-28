@@ -656,7 +656,7 @@ export async function openReportDetail(publicId) {
         await render();
       } catch (e) { toast(`Не удалось снять пайплайн: ${e.message}`, "error"); }
     });
-    // «Я сдал(а)» / отметить за человека / снять отметку. Сдали все — сервер сам откроет следующий этап.
+    // Отметка о сдаче / отметить за человека / снять отметку. Сдали все — сервер сам откроет следующий этап.
     sheet.querySelectorAll("[data-pipe-submit], [data-pipe-undo]").forEach(b => b.addEventListener("click", async () => {
       const undo = b.hasAttribute("data-pipe-undo");
       const index = Number(undo ? b.dataset.pipeUndo : b.dataset.pipeSubmit);
@@ -1084,7 +1084,7 @@ function pipelineGroups(pipeline, parallel) {
   return groups;
 }
 
-// Когда отмечено «сдал(а)»: время по-местному, для не сегодняшнего — ещё и дата.
+// После отметки о сдаче показываем местное время, а для прошлых дат — ещё и дату.
 function submittedWhen(at) {
   const d = new Date(String(at).replace(" ", "T") + "Z");
   if (Number.isNaN(d.getTime())) return "";
@@ -1092,15 +1092,15 @@ function submittedWhen(at) {
   return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} ${time}`;
 }
 
-// Звено текущего этапа: «Я сдал(а)» у своего, у админа — отметить за человека или снять отметку.
+// Звено текущего этапа: участник отмечает сдачу, админ может отметить за человека или снять отметку.
 function pipelineEntryActs(s, i, canManage) {
   const inStage = s.current || s.submitted_at;
   if (!inStage) return "";
   if (s.submitted_at) {
     const undo = s.mine || canManage ? `<button type="button" class="pf-link rd-tl-undo" data-pipe-undo="${i}">снять</button>` : "";
-    return `<div class="rd-tl-ok">✓ сдал(а) · ${esc(submittedWhen(s.submitted_at))}${s.submitted_by && s.submitted_by !== s.user_name ? ` · отметил(а) ${esc(s.submitted_by)}` : ""} ${undo}</div>`;
+    return `<div class="rd-tl-ok">✓ Сдано · ${esc(submittedWhen(s.submitted_at))}${s.submitted_by && s.submitted_by !== s.user_name ? ` · кто отметил: ${esc(s.submitted_by)}` : ""} ${undo}</div>`;
   }
-  if (s.mine) return `<button type="button" class="btn primary rd-tl-sub" data-pipe-submit="${i}">Я сдал(а)</button>`;
+  if (s.mine) return `<button type="button" class="btn primary rd-tl-sub" data-pipe-submit="${i}">Отметить сдачу</button>`;
   return canManage ? `<button type="button" class="pf-link rd-tl-mark" data-pipe-submit="${i}">отметить сдачу</button>` : "";
 }
 

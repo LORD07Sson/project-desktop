@@ -218,7 +218,7 @@ function renderPersonalStatuses(root, data) {
   const now = new Date();
   const head = `<div class="page-header">
     <div><span class="kd-label">Моё · рабочие статусы видны только вам</span><h1>Мои статусы</h1>
-      <div class="sub">Отметка «Я сдала» не меняет общий статус серии и убирает её из моих просрочек.</div></div>
+      <div class="sub">Отметка о сдаче не меняет общий статус серии и убирает её из списка просроченных у вас.</div></div>
     <div class="kd-sum"><div class="kd-now"><small>Сейчас</small><b>${pad2(now.getHours())}:${pad2(now.getMinutes())}</b></div>
       <div><small>Мои серии</small><b>${items.length}</b></div><div><small>Сдано</small><b>${done}</b></div>
       <div><small>Просрочено у меня</small><b class="${overdue ? "hot" : ""}">${overdue}</b></div></div></div>`;
@@ -234,7 +234,7 @@ function renderPersonalStatuses(root, data) {
         ${poster}<small class="my-status-id">${esc(item.public_id + episode)}</small><b class="my-status-name">${esc(title)}</b>
         <span class="my-status-meta">${esc(item.role ? `Моя роль — ${item.role}` : item.global_status || "")}</span><span class="my-status-due">${due}</span>
         <div class="my-status-actions"><select data-q-status-move="${esc(item.public_id)}" aria-label="Переместить в группу">${options}</select>
-          ${column.is_done ? "" : `<button type="button" class="btn primary" data-q-status-done="${esc(item.public_id)}">Я сдала</button>`}
+          ${column.is_done ? "" : `<button type="button" class="btn primary" data-q-status-done="${esc(item.public_id)}">Отметить сдачу</button>`}
           ${item.is_manual ? `<button type="button" class="btn" data-q-status-remove="${esc(item.public_id)}" title="Убрать только с моей доски">Убрать</button>` : ""}</div></article>`;
     }).join("") || `<div class="my-status-empty">Пока пусто</div>`;
     return `<section class="my-status-column${column.is_done ? " is-done" : ""}" data-q-status-col="${column.id}">
