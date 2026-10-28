@@ -224,7 +224,7 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
           ${never.length ? `<div class="tm-never"><span>Ещё ни разу не заходили</span><div>${never.map(p => `<button type="button" class="tm-chip" data-p="${esc(p.name)}" ${filterAttrs(p)}>${av(p.name, "xs")}${esc(p.name)}</button>`).join("")}</div></div>` : ""}
           <p class="tm-muted tm-none" hidden>Никого под этот фильтр.</p>
         </section>
-        ${errs ? `<section class="tm-errs"><h2>Ошибки <span>${errs.total}</span><small>${errs.days} дн · у тех, кто включил статистику</small></h2>
+        ${errs ? `<section class="tm-errs"><h2>Ошибки <span>${errs.total}</span><small>${errs.retention_hours || 24} ч · у тех, кто включил статистику</small></h2>
           ${errs.groups.length ? `<div class="tm-elist">${errs.groups.map(errHtml).join("")}</div>` : `<p class="tm-muted">Ошибок не было.</p>`}
         </section>` : ""}
         <section><h2>Кто что делал <span>${sess.length}</span></h2>
