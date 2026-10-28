@@ -384,7 +384,7 @@ input, select, textarea { font-family: inherit; }
 .kd-slide-amb { position: absolute; inset: -40px; background-size: cover; background-position: center; filter: blur(34px) saturate(1.2) brightness(.55); transform: scale(1.1); }
 .kd-slide-ban { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 28%; transform: scale(1.07); transition: transform 9s linear; }
 .kd-slide.on .kd-slide-ban { transform: scale(1); }
-.kd-slide-art { display: none; position: absolute; right: 290px; top: 34px; height: calc(100% - 68px); aspect-ratio: 3 / 4.2; object-fit: cover; border-radius: 16px;
+.kd-slide-art { display: block; position: absolute; right: 290px; top: 34px; height: calc(100% - 68px); aspect-ratio: 3 / 4.2; object-fit: cover; border-radius: 16px;
   box-shadow: 0 30px 60px -20px #000, 0 0 0 1px rgba(255, 255, 255, .12); transform: rotate(2deg) translateY(8px); opacity: 0; transition: transform .9s var(--kadr-ease), opacity .9s var(--kadr-ease); }
 .kd-slide.no-ban .kd-slide-ban { display: none; }
 .kd-slide.no-ban .kd-slide-art { display: block; }
