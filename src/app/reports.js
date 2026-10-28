@@ -100,6 +100,83 @@ function savePresets(list) {
   try { localStorage.setItem(presetsKey(), JSON.stringify(list)); } catch (_) { /* не критично */ }
 }
 
+const LIST_VIEW_COLUMNS = [
+  ["status", "Статус"], ["stage", "Этап"], ["deadline", "Срок"],
+  ["progress", "Готовность"], ["team", "Команда"], ["actions", "Быстрые действия"],
+];
+const DEFAULT_LIST_VIEW = {
+  visibleColumns: ["select", "series", ...LIST_VIEW_COLUMNS.map(([key]) => key)],
+  density: "comfortable",
+};
+const LIST_SORT_FIELDS = new Set(["public_id", "status", "pipeline_stage", "deadline"]);
+
+function listViewKey() { return `project_list_view_${state.telegramId || "anon"}`; }
+function normalizeListView(view = {}) {
+  const available = new Set(["select", "series", ...LIST_VIEW_COLUMNS.map(([key]) => key)]);
+  const requested = Array.isArray(view.visibleColumns) ? view.visibleColumns : DEFAULT_LIST_VIEW.visibleColumns;
+  const visibleColumns = [...new Set(["select", "series", ...requested.filter(key => available.has(key))])];
+  return { visibleColumns, density: view.density === "compact" ? "compact" : "comfortable" };
+}
+function loadListView() {
+  try { return normalizeListView(JSON.parse(localStorage.getItem(listViewKey()) || "null") || DEFAULT_LIST_VIEW); }
+  catch (_) { return { ...DEFAULT_LIST_VIEW, visibleColumns: [...DEFAULT_LIST_VIEW.visibleColumns] }; }
+}
+function saveListView(view) {
+  const normalized = normalizeListView(view);
+  try { localStorage.setItem(listViewKey(), JSON.stringify(normalized)); } catch (_) { /* необязательная настройка */ }
+  return normalized;
+}
+function applyListView(view = loadListView()) {
+  const normalized = normalizeListView(view);
+  const table = $(".tab-panel[data-panel='list'] .content table");
+  if (!table) return;
+  table.dataset.density = normalized.density;
+  const visible = new Set(normalized.visibleColumns);
+  table.querySelectorAll("[data-list-col]").forEach(cell => {
+    cell.hidden = !visible.has(cell.dataset.listCol);
+  });
+}
+
+function listViewDialog() {
+  const current = loadListView();
+  const visible = new Set(current.visibleColumns);
+  const overlay = openSheet(`
+    <h2>Вид списка</h2>
+    <p class="list-view-hint">Настройки сохраняются на этом компьютере отдельно для каждого аккаунта.</p>
+    <div class="list-view-options">
+      ${LIST_VIEW_COLUMNS.map(([key, label]) => `
+        <label class="list-view-option"><input type="checkbox" data-view-column="${key}" ${visible.has(key) ? "checked" : ""}><span>${label}</span></label>
+      `).join("")}
+    </div>
+    <label class="field-label" for="list-view-density">Плотность строк</label>
+    <select class="field-input" id="list-view-density">
+      <option value="comfortable" ${current.density === "comfortable" ? "selected" : ""}>Обычная</option>
+      <option value="compact" ${current.density === "compact" ? "selected" : ""}>Компактная</option>
+    </select>
+    <div class="sheet-actions list-view-actions">
+      <button class="btn ghost" id="list-view-reset">Сбросить</button>
+      <button class="btn ghost" data-close>Отмена</button>
+      <button class="btn primary" id="list-view-apply">Применить</button>
+    </div>
+  `);
+  const close = () => overlay.remove();
+  overlay.querySelector("[data-close]").addEventListener("click", close);
+  overlay.querySelector("#list-view-apply").addEventListener("click", () => {
+    const next = {
+      visibleColumns: ["select", "series", ...[...overlay.querySelectorAll("[data-view-column]:checked")].map(input => input.dataset.viewColumn)],
+      density: overlay.querySelector("#list-view-density").value,
+    };
+    applyListView(saveListView(next));
+    close();
+    toast("Вид списка сохранён.", "success");
+  });
+  overlay.querySelector("#list-view-reset").addEventListener("click", () => {
+    applyListView(saveListView(DEFAULT_LIST_VIEW));
+    close();
+    toast("Настройки вида сброшены.", "success");
+  });
+}
+
 function filterSnapshot() {
   return {
     q: $("#search-input").value.trim(),
@@ -109,6 +186,8 @@ function filterSnapshot() {
     seasonId: $("#season-filter").value,
     titleId: $("#title-filter").value,
     quick: state.quickFilter,
+    sort: { ...state.sort },
+    view: loadListView(),
   };
 }
 
@@ -120,6 +199,11 @@ async function applySnapshot(f) {
   $("#season-filter").value = f.seasonId || "";
   await fillTitleFilter(f.seasonId || "", f.titleId || "");
   setQuickFilter(f.quick || null);
+  if (f.sort && LIST_SORT_FIELDS.has(f.sort.field)) {
+    state.sort = { field: f.sort.field, dir: f.sort.dir === "desc" ? "desc" : "asc" };
+    updateSortHeaders();
+  }
+  if (f.view) applyListView(saveListView(f.view));
   await loadReports();
 }
 
@@ -132,9 +216,9 @@ export function renderPresetChips() {
   const root = $("#preset-chips");
   if (!root) return;
   root.innerHTML = loadPresets().map(p => `
-    <span class="qf-chip preset-chip" data-preset="${esc(p.id)}" title="Применить фильтр «${esc(p.name)}» · правый клик — удалить">
+    <span class="qf-chip preset-chip" data-preset="${esc(p.id)}" title="Применить представление «${esc(p.name)}» · правый клик — удалить">
       <span class="preset-chip-name">${esc(p.name)}</span>
-      <button type="button" class="preset-chip-del" data-preset-del="${esc(p.id)}" title="Удалить фильтр" aria-label="Удалить фильтр «${esc(p.name)}»">×</button>
+      <button type="button" class="preset-chip-del" data-preset-del="${esc(p.id)}" title="Удалить представление" aria-label="Удалить представление «${esc(p.name)}»">×</button>
     </span>`).join("");
   root.querySelectorAll("[data-preset]").forEach(chip => {
     const preset = loadPresets().find(p => p.id === chip.dataset.preset);
@@ -142,7 +226,7 @@ export function renderPresetChips() {
     chip.addEventListener("click", e => {
       if (e.target.closest("[data-preset-del]")) return;
       applySnapshot(preset.filters);
-      toast(`Фильтр «${preset.name}» применён.`);
+      toast(`Представление «${preset.name}» применено.`);
     });
     chip.addEventListener("contextmenu", e => {
       e.preventDefault();
@@ -162,7 +246,7 @@ export function renderPresetChips() {
 
 function savePresetDialog() {
   const overlay = openSheet(`
-    <h2>Сохранить фильтр</h2>
+    <h2>Сохранить представление</h2>
     <label class="field-label" for="dlg-preset-name">Название</label>
     <div class="row"><input type="text" id="dlg-preset-name" maxlength="40" placeholder="Например: мои срочные"></div>
     <div class="sheet-actions">
@@ -180,7 +264,7 @@ function savePresetDialog() {
     savePresets(list);
     renderPresetChips();
     overlay.remove();
-    toast(`Фильтр «${name}» сохранён.`, "success");
+    toast(`Представление «${name}» сохранено.`, "success");
   };
   overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
   overlay.querySelector("#dlg-apply").addEventListener("click", save);
@@ -342,6 +426,14 @@ export function sortLocally() {
   });
 }
 
+function updateSortHeaders() {
+  $all("thead th[data-sort]").forEach(th => {
+    const active = th.dataset.sort === state.sort.field;
+    th.classList.toggle("sorted", active);
+    th.classList.toggle("asc", active && state.sort.dir === "asc");
+  });
+}
+
 export function assigneesHtml(list) {
   if (!list || !list.length) return `<span class="no-assignee">не назначен</span>`;
   const shown = list.slice(0, 3);
@@ -399,8 +491,8 @@ export function renderReports() {
     const fav = isFavorite(r.public_id);
     const t = seriesParts(r);
     tr.innerHTML = `
-      <td class="col-check"><input type="checkbox" class="row-check" ${state.selected.has(r.public_id) ? "checked" : ""}></td>
-      <td class="ls-series">
+      <td class="col-check" data-list-col="select"><input type="checkbox" class="row-check" ${state.selected.has(r.public_id) ? "checked" : ""}></td>
+      <td class="ls-series" data-list-col="series">
         <div class="ls-series-in">
           <span class="ls-poster"${posterSrc(r.poster_url) ? ` style="background-image:url('${esc(posterSrc(r.poster_url))}')"` : ""}>${posterSrc(r.poster_url) ? "" : esc(initials(t.name))}</span>
           <div class="ls-names">
@@ -409,12 +501,12 @@ export function renderReports() {
           </div>
         </div>
       </td>
-      <td><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(cleanStatus(r.status_label))}</span>${r.stuck ? `<span class="ls-stuck" title="Статус не менялся 3+ дня">застряло</span>` : ""}</td>
-      <td class="ls-stage">${esc(stageLabel(r))}</td>
-      <td class="ls-dl">${deadlineCellHtml(r, overdue)}</td>
-      <td class="ls-prog"><span class="kd-track"><i style="width:${progressPct(r)}%; background:var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"></i></span></td>
-      <td>${assigneesHtml(r.assignees)}</td>
-      <td class="row-actions">
+      <td data-list-col="status"><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(cleanStatus(r.status_label))}</span>${r.stuck ? `<span class="ls-stuck" title="Статус не менялся 3+ дня">застряло</span>` : ""}</td>
+      <td class="ls-stage" data-list-col="stage">${esc(stageLabel(r))}</td>
+      <td class="ls-dl" data-list-col="deadline">${deadlineCellHtml(r, overdue)}</td>
+      <td class="ls-prog" data-list-col="progress"><span class="kd-track"><i style="width:${progressPct(r)}%; background:var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"></i></span></td>
+      <td data-list-col="team">${assigneesHtml(r.assignees)}</td>
+      <td class="row-actions" data-list-col="actions">
         <button class="icon-btn" data-quick-assign title="Назначить">👤</button>
         <button class="icon-btn" data-quick-status title="Сменить статус">✓</button>
       </td>
@@ -493,6 +585,7 @@ export function renderReports() {
     });
     tbody.appendChild(tr);
   });
+  applyListView();
 
   const truncated = state.quickFilter !== "favorites" && state.total > state.reports.length;
   const moreBtn = $("#list-more");
@@ -558,6 +651,7 @@ $("#season-filter").addEventListener("change", async () => {
 $("#title-filter").addEventListener("change", loadReports);
 $("#list-more").addEventListener("click", loadMoreReports);
 $("#preset-save").addEventListener("click", savePresetDialog);
+$("#list-view-settings").addEventListener("click", listViewDialog);
 renderPresetChips();
 
 // Установка быстрого фильтра без загрузки — списку её зовёт обработчик
@@ -568,7 +662,7 @@ export function setQuickFilter(key) {
   $all(".qf-chip").forEach(c => c.classList.toggle("active", c.dataset.qf === key));
 }
 
-$all(".qf-chip").forEach(chip => {
+$all(".qf-chip[data-qf]").forEach(chip => {
   chip.addEventListener("click", () => {
     const key = chip.dataset.qf;
     setQuickFilter(state.quickFilter === key ? null : key);
@@ -600,9 +694,7 @@ $all("thead th[data-sort]").forEach(th => {
     } else {
       state.sort = { field, dir: "asc" };
     }
-    $all("thead th").forEach(t => t.classList.remove("sorted", "asc"));
-    th.classList.add("sorted");
-    if (state.sort.dir === "asc") th.classList.add("asc");
+    updateSortHeaders();
     sortLocally();
     renderReports();
   });

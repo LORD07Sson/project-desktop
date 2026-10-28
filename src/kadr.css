@@ -865,6 +865,14 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .qf-chip:hover { color: var(--ink-soft); border-color: rgba(255, 255, 255, .16); }
 .qf-chip.active, .qf-chip.on { background: rgba(var(--fire-rgb), .13); border-color: rgba(var(--fire-rgb), .35); color: var(--gold); }
 .qf-chip-add { border-style: dashed; }
+.tab-panel[data-panel="list"] .list-view-settings { border-style: solid; }
+.list-view-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.list-view-option { display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--surface-2) 42%, transparent); color: var(--ink-soft); font-size: 12px; font-weight: 650; cursor: pointer; }
+.list-view-option input { width: 16px; height: 16px; accent-color: var(--fire); }
+.list-view-option:has(input:checked) { border-color: color-mix(in srgb, var(--fire) 35%, var(--line)); color: var(--ink); }
+.list-view-hint { margin: -4px 0 12px; color: var(--ink-dim); font-size: 12px; line-height: 1.5; }
+.list-view-actions { align-items: center; justify-content: flex-end; }
+.list-view-actions #list-view-reset { margin-right: auto; }
 .tab-panel[data-panel="list"] .content {
   border-radius: var(--radius-lg); padding: 0; overflow: auto;
   background: var(--glass-bg); backdrop-filter: blur(26px) saturate(1.2); -webkit-backdrop-filter: blur(26px) saturate(1.2);
@@ -878,6 +886,9 @@ button.kd-tile:hover { transform: translateY(-2px); }
   border-bottom: 1px solid var(--line);
 }
 .tab-panel[data-panel="list"] tbody td { padding: 11px 16px; border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent); font-size: 13px; }
+.tab-panel[data-panel="list"] table[data-density="compact"] tbody td { padding-top: 6px; padding-bottom: 6px; }
+.tab-panel[data-panel="list"] table[data-density="compact"] .ls-poster { width: 28px; height: 38px; border-radius: 6px; }
+.tab-panel[data-panel="list"] [data-list-col][hidden] { display: none !important; }
 .tab-panel[data-panel="list"] tbody tr { transition: background .2s; }
 .tab-panel[data-panel="list"] tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 26%, transparent); }
 .tab-panel[data-panel="list"] tbody tr:hover td { background: color-mix(in srgb, var(--fire) 7%, var(--surface-2)); }

@@ -248,21 +248,22 @@
       <button class="qf-chip" data-qf="favorites">★ Избранное</button>
       <span class="qf-sep" aria-hidden="true"></span>
       <span class="preset-chips" id="preset-chips"></span>
-      <button class="qf-chip qf-chip-add" id="preset-save" title="Сохранить текущие фильтры под именем">+ Сохранить фильтр</button>
+      <button class="qf-chip qf-chip-add" id="preset-save" title="Сохранить текущие фильтры, сортировку и видимые столбцы">+ Сохранить представление</button>
+      <button class="qf-chip list-view-settings" id="list-view-settings" title="Настроить столбцы и плотность строк">⚙ Вид списка</button>
     </div>
 
     <div class="content">
       <table>
         <thead>
           <tr>
-            <th class="col-check"><input type="checkbox" id="select-all"></th>
-            <th data-sort="public_id" class="sorted asc">Серия</th>
-            <th data-sort="status">Статус</th>
-            <th data-sort="pipeline_stage">Этап</th>
-            <th data-sort="deadline">Срок</th>
-            <th class="col-prog">Готовность</th>
-            <th>Команда</th>
-            <th class="col-actions"></th>
+            <th class="col-check" data-list-col="select"><input type="checkbox" id="select-all"></th>
+            <th data-sort="public_id" data-list-col="series" class="sorted asc">Серия</th>
+            <th data-sort="status" data-list-col="status">Статус</th>
+            <th data-sort="pipeline_stage" data-list-col="stage">Этап</th>
+            <th data-sort="deadline" data-list-col="deadline">Срок</th>
+            <th class="col-prog" data-list-col="progress">Готовность</th>
+            <th data-list-col="team">Команда</th>
+            <th class="col-actions" data-list-col="actions"></th>
           </tr>
         </thead>
         <tbody id="reports-body"></tbody>
