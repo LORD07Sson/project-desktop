@@ -41,15 +41,15 @@ function ensure() {
 }
 
 function avatarHtml(src, name) {
-  return `<i class="sp-ava">${src ? `<img src="${esc(src)}" alt="" draggable="false">` : `<span>${esc(initials2(name))}</span>`}</i>`;
+  return `<i class="space-choice-avatar">${src ? `<img src="${esc(src)}" alt="" draggable="false">` : `<span>${esc(initials2(name))}</span>`}</i>`;
 }
 
 function render() {
   const el = ensure();
   const accs = (cache && cache.accounts) || [];
   const cards = [
-    `<button type="button" class="sp-card${space === "work" ? " cur" : ""}" data-sp="work"><span class="sp-glow"></span>${avatarHtml("", state.name)}<b>${esc(state.name || "Project")}</b><small>Project · рабочий режим</small></button>`,
-    ...accs.map(a => `<button type="button" class="sp-card steam${space === "games" && cache.steamid === a.steamid ? " cur" : ""}" data-sp="games" data-sid="${esc(a.steamid)}"><span class="sp-glow"></span>${avatarHtml(a.avatar ? mediaUrl("/img_proxy", { url: a.avatar }) : "", a.name)}<b>${esc(a.name || a.steamid)}</b><small>Steam · игры</small></button>`),
+    `<button type="button" class="sp-card${space === "work" ? " cur" : ""}" data-sp="work">${avatarHtml("", state.name)}<b>${esc(state.name || "Project")}</b><small>Project · рабочий режим</small></button>`,
+    ...accs.map(a => `<button type="button" class="sp-card steam${space === "games" && cache.steamid === a.steamid ? " cur" : ""}" data-sp="games" data-sid="${esc(a.steamid)}">${avatarHtml(a.avatar ? mediaUrl("/img_proxy", { url: a.avatar }) : "", a.name)}<b>${esc(a.name || a.steamid)}</b><small>Steam · игры</small></button>`),
     `<button type="button" class="sp-card add" data-sp-add><span class="sp-plus">+</span><b>Добавить Steam</b><small>вход через сайт Steam</small></button>`,
   ];
   el.innerHTML = `
