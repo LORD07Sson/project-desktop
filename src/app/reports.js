@@ -216,9 +216,9 @@ export function renderPresetChips() {
   const root = $("#preset-chips");
   if (!root) return;
   root.innerHTML = loadPresets().map(p => `
-    <span class="qf-chip preset-chip" data-preset="${esc(p.id)}" title="Применить представление «${esc(p.name)}» · правый клик — удалить">
+    <span class="qf-chip preset-chip" data-preset="${esc(p.id)}" title="Применить фильтр «${esc(p.name)}» · правый клик — удалить">
       <span class="preset-chip-name">${esc(p.name)}</span>
-      <button type="button" class="preset-chip-del" data-preset-del="${esc(p.id)}" title="Удалить представление" aria-label="Удалить представление «${esc(p.name)}»">×</button>
+      <button type="button" class="preset-chip-del" data-preset-del="${esc(p.id)}" title="Удалить фильтр" aria-label="Удалить фильтр «${esc(p.name)}»">×</button>
     </span>`).join("");
   root.querySelectorAll("[data-preset]").forEach(chip => {
     const preset = loadPresets().find(p => p.id === chip.dataset.preset);
@@ -226,7 +226,7 @@ export function renderPresetChips() {
     chip.addEventListener("click", e => {
       if (e.target.closest("[data-preset-del]")) return;
       applySnapshot(preset.filters);
-      toast(`Представление «${preset.name}» применено.`);
+      toast(`Фильтр «${preset.name}» применён.`);
     });
     chip.addEventListener("contextmenu", e => {
       e.preventDefault();
@@ -246,7 +246,7 @@ export function renderPresetChips() {
 
 function savePresetDialog() {
   const overlay = openSheet(`
-    <h2>Сохранить представление</h2>
+    <h2>Сохранить фильтр</h2>
     <label class="field-label" for="dlg-preset-name">Название</label>
     <div class="row"><input type="text" id="dlg-preset-name" maxlength="40" placeholder="Например: мои срочные"></div>
     <div class="sheet-actions">
@@ -264,7 +264,7 @@ function savePresetDialog() {
     savePresets(list);
     renderPresetChips();
     overlay.remove();
-    toast(`Представление «${name}» сохранено.`, "success");
+    toast(`Фильтр «${name}» сохранён.`, "success");
   };
   overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
   overlay.querySelector("#dlg-apply").addEventListener("click", save);
