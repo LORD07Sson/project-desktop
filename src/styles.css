@@ -4492,6 +4492,43 @@ body.focus-mode .report-detail-overlay .sheet {
 .a3-bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 2px 0; }
 .a3-bar i { display: block; height: 100%; background: var(--s-work); transition: width .4s; }
 .a3-link { background: none; border: 0; padding: 0; color: var(--accent, var(--s-done)); font-size: 11.5px; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+/* Anime 365: шапка, поиск, легенда, новая версия, страховка */
+.a3-hero { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.a3-acc { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px; }
+.a3-acc > i { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--s-stop); box-shadow: 0 0 0 4px color-mix(in srgb, var(--s-stop) 18%, transparent); }
+.a3-acc.ok > i { background: var(--s-done); box-shadow: 0 0 0 4px color-mix(in srgb, var(--s-done) 18%, transparent); }
+.a3-acc div { display: flex; flex-direction: column; min-width: 0; }
+.a3-acc b { font-size: 14px; }
+.a3-acc span { font-size: 11.5px; color: var(--ink-dim); }
+.a3-facts { display: flex; gap: 6px; flex-wrap: wrap; }
+.a3-facts span { font-size: 11.5px; color: var(--ink-soft); padding: 5px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
+.a3-search { display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-dim); min-width: 220px; }
+.a3-search:focus-within { border-color: var(--accent, var(--s-done)); }
+.a3-search input { all: unset; flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink); }
+.a3-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: -2px 0 12px; font-size: 11px; color: var(--ink-dim); }
+.a3-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.a3-legend .a3-chip { min-width: 22px; height: 20px; font-size: 10.5px; cursor: default; font-style: normal; }
+.a3-empty { padding: 28px 12px; text-align: center; color: var(--ink-dim); font-size: 13px; border: 1px dashed var(--line); border-radius: 12px; }
+.a3-pill.warn, .a3-tag.warn { background: color-mix(in srgb, var(--s-work) 18%, var(--surface)); color: var(--s-work); }
+.a3-note.warn { color: var(--s-work); }
+.a3-chip.warn { background: color-mix(in srgb, var(--s-work) 16%, transparent); border-color: color-mix(in srgb, var(--s-work) 55%, transparent); color: var(--s-work); }
+.a3-row { border-left: 3px solid transparent; transition: background .15s; }
+.a3-row:hover { background: color-mix(in srgb, var(--surface-2) 80%, var(--ink-dim) 6%); }
+.a3-row.is-done, .a3-row.is-elsewhere { border-left-color: color-mix(in srgb, var(--s-done) 70%, transparent); }
+.a3-row.is-newer, .a3-row.is-queue { border-left-color: var(--s-work); }
+.a3-row.is-ready { border-left-color: var(--accent, #3aa0ff); }
+.a3-row.is-bad { border-left-color: var(--s-stop); }
+.a3-rposter { width: 36px; height: 50px; flex: none; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--ink-dim) 18%, var(--surface)); display: grid; place-items: center; }
+.a3-rposter img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.a3-rposter span { font-size: 15px; font-weight: 800; color: var(--ink-dim); }
+.a3-tcard { transition: border-color .15s, transform .15s, box-shadow .15s; }
+.a3-tcard:hover { border-color: color-mix(in srgb, var(--ink-dim) 40%, var(--line)); box-shadow: 0 6px 20px -12px rgba(0, 0, 0, .5); }
+.a3-tcard.complete { border-color: color-mix(in srgb, var(--s-done) 35%, var(--line)); }
+.a3-tcard.has-newer { border-color: color-mix(in srgb, var(--s-work) 55%, var(--line)); }
+.a3-tposter { position: relative; width: 84px; height: 118px; }
+.a3-tpct { position: absolute; left: 4px; bottom: 4px; font-style: normal; font-size: 10.5px; font-weight: 800; padding: 1px 6px; border-radius: 999px; color: #fff; background: rgba(0, 0, 0, .62); font-variant-numeric: tabular-nums; }
+.a3-tcard.complete .a3-tpct { background: color-mix(in srgb, var(--s-done) 85%, #000); }
+@media (max-width: 700px) { .a3-search { min-width: 0; flex: 1 1 100%; } }
 
 /* Список на упоминание */
 .sheet.mn-sheet { width: min(720px, calc(100vw - 48px)); max-width: none; }

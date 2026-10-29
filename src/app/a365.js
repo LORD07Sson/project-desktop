@@ -6,6 +6,9 @@
 //   «Вручную» — как форма «Добавить перевод» на сайте: аниме, серия, тип, авторы, свой файл (и субтитры). Файл грузит
 //              сам десктоп по tus прямо на сервер загрузки 365; сервер проверяет до загрузки и создаёт перевод после.
 // Проверки обязательные и на сервере: сезон (номер, сезон выхода, число серий) и дубль нашей озвучки на 365.
+// Страховка: после «Залить» серия ждёт минуту (grace с сервера) — «Отменить»; идущую заливку можно «Остановить»
+// (на 365 ничего не создаётся). Залито не то видео (пост исправили, финал пересобрали) — «Перезалить»: новый перевод
+// встаёт рядом с прежним, а прежний удаляется на сайте (API 365 удалять не умеет).
 
 import { apiGet, apiPost, askConfirm, openSheet, dismissSheet, toast } from "./api.js";
 import { $, esc, relTime } from "./utils.js";
@@ -16,6 +19,7 @@ let view = "finals";
 let finalsFilter = "todo";
 let archFilter = "missing";
 let openEp = null; // какая серия в карточке архива раскрыта
+let query = "";    // поиск по названию в «Финалах» и «Архиве»
 let pollTimer = null;
 let last = null;
 const manual = { series: null, episodes: null, check: null, busy: false };
@@ -25,7 +29,7 @@ const canUpload = () => can("a365.upload");
 // ---------- общее ----------
 
 function kindOf(it) {
-  if (it.stage === "done") return "done";
+  if (it.stage === "done") return it.newer ? "newer" : "done";
   if (it.stage === "queued" || it.stage === "uploading") return "queue";
   if (it.stage === "failed" && !(it.check && it.check.dup)) return "bad";
   if (!it.check) return it.unbound ? "unbound" : "unchecked";
@@ -33,15 +37,19 @@ function kindOf(it) {
   if (it.unbound) return "unbound";
   return it.check.ok ? "ready" : "bad";
 }
-const isOn365 = it => ["done", "elsewhere"].includes(kindOf(it));
+const isOn365 = it => ["done", "newer", "elsewhere"].includes(kindOf(it));
 const fmtSize = n => (n ? `${(n / 1048576).toFixed(0)} МБ` : "");
+const matches = (...texts) => !query || texts.some(t => String(t || "").toLowerCase().includes(query));
 
 function pillHtml(it) {
   const k = kindOf(it);
-  if (it.stage === "done") return `<span class="a3-pill ok">Залито</span>`;
+  if (k === "newer") return `<span class="a3-pill warn">Есть новая версия</span>`;
+  if (it.stage === "done") return `<span class="a3-pill ok">Залито${it.mbit ? ` · ${Math.round(it.mbit)} Мбит/с` : ""}</span>`;
   if (k === "elsewhere") return `<span class="a3-pill ok">Уже на 365</span>`;
-  if (it.stage === "uploading") return `<span class="a3-pill run">Заливается ${Math.max(0, Math.min(100, it.progress || 0))}%</span>`;
-  if (it.stage === "queued") return `<span class="a3-pill run">В очереди${it.queue_pos ? ` №${it.queue_pos}` : ""}</span>`;
+  if (it.stage === "uploading") return `<span class="a3-pill run">${it.replaces ? "Перезаливается" : "Заливается"} ${Math.max(0, Math.min(100, it.progress || 0))}%</span>`;
+  if (it.stage === "queued" && it.start_in && !it.attempt) return `<span class="a3-pill run">Старт через ${it.start_in} с</span>`;
+  if (it.stage === "queued" && it.attempt) return `<span class="a3-pill warn">Повтор ${it.attempt + 1}</span>`;
+  if (it.stage === "queued") return `<span class="a3-pill run">${it.replaces ? "Перезаливка" : "В очереди"}${it.queue_pos ? ` №${it.queue_pos}` : ""}</span>`;
   if (k === "unbound") return `<span class="a3-pill">Не привязано</span>`;
   if (it.stage === "failed") return `<span class="a3-pill bad">Не залилось</span>`;
   if (k === "ready") return `<span class="a3-pill ready">Нет на 365 · готово</span>`;
@@ -52,15 +60,22 @@ function pillHtml(it) {
 function detailHtml(it) {
   const k = kindOf(it);
   const link = url => `<button type="button" class="a3-link" data-a3-open="${esc(url)}">${esc(url)}</button>`;
-  if (it.stage === "done") return link(it.url);
+  if (it.stage === "done") {
+    return link(it.url)
+      + (it.newer ? `<div class="a3-note warn">На 365 лежит прежняя версия: видео изменилось (${esc(it.newer.file || "новый файл")}${it.newer.size ? ` · ${fmtSize(it.newer.size)}` : ""}). Перезалейте новую.</div>` : "")
+      + (it.replaced_url ? `<div class="a3-note warn">Это перезаливка — прежний перевод удалите на сайте 365: ${link(it.replaced_url)}</div>` : "")
+      + (it.reupload_error ? `<div class="a3-note bad">Перезалить не вышло: ${esc(it.reupload_error)}</div>` : "")
+      + (it.done_at ? `<div class="a3-note">залито ${esc(relTime(it.done_at))}</div>` : "");
+  }
+  const replacing = it.replaces ? `<div class="a3-note warn">Перезаливка — прежний перевод потом удалите на сайте: ${link(it.replaces)}</div>` : "";
   if (it.stage === "uploading") {
     const pct = Math.max(0, Math.min(100, it.progress || 0));
-    return `<div class="a3-bar"><i style="width:${pct}%"></i></div><div class="a3-note">${esc(it.text || "")}</div>`;
+    return `<div class="a3-bar"><i style="width:${pct}%"></i></div><div class="a3-note">${esc(it.text || "")}</div>${replacing}`;
   }
-  if (it.stage === "queued") return `<div class="a3-note">${esc(it.text || "Ждёт своей очереди — перед заливкой проверки пройдут ещё раз")}</div>`;
+  if (it.stage === "queued") return `<div class="a3-note">${esc(it.text || "Ждёт своей очереди — перед заливкой проверки пройдут ещё раз")}</div>${replacing}`;
   const c = it.check;
   if (k === "elsewhere") return `<div class="a3-note">Наша озвучка этой серии уже есть на 365 — второй раз не зальётся.</div>${link(c.dup)}`;
-  if (it.stage === "failed") return `<div class="a3-note bad">${esc(it.error || "")}</div>`;
+  if (it.stage === "failed") return `<div class="a3-note bad">${esc(it.error || "")}</div>${it.hint ? `<div class="a3-note">${esc(it.hint)}</div>` : ""}`;
   if (!c) return `<div class="a3-note">${it.unbound ? "Привяжите тайтл к аниме на 365 — тогда можно проверить." : "Сезон и дубли ещё не проверялись."}</div>`;
   if (!c.ok) return `<div class="a3-note bad">${esc(c.error)}</div><div class="a3-note">проверено ${esc(relTime(c.at))}</div>`;
   return `<div class="a3-note">${(c.lines || []).map(esc).join(" · ")}</div>
@@ -69,18 +84,30 @@ function detailHtml(it) {
 
 function actionsHtml(it) {
   const key = esc(it.key);
-  if (it.stage === "done" || it.stage === "uploading") return "";
-  if (it.stage === "queued") return canUpload() ? `<button type="button" class="btn ghost sm" data-a3-cancel="${key}">Убрать</button>` : "";
+  const label = esc(it.label || it.public_id || "");
+  if (it.stage === "done") {
+    if (!canUpload()) return "";
+    return it.newer
+      ? `<button type="button" class="btn primary sm" data-a3-reupload="${esc(it.newer.key)}" data-a3-replaces="${key}" data-a3-url="${esc(it.url || "")}" data-a3-label="${label}">Перезалить новую версию</button>`
+      : `<button type="button" class="btn ghost sm" data-a3-reupload="${key}" data-a3-replaces="${key}" data-a3-url="${esc(it.url || "")}" data-a3-label="${label}" title="Залито не то видео или перевод удалили на 365">Перезалить</button>`;
+  }
+  if (it.stage === "uploading") return canUpload() ? `<button type="button" class="btn ghost sm danger" data-a3-cancel="${key}" data-a3-stop="1">Остановить</button>` : "";
+  if (it.stage === "queued") return canUpload() ? `<button type="button" class="btn ghost sm" data-a3-cancel="${key}">Отменить</button>` : "";
   const k = kindOf(it);
   if (k === "unbound") return "";
   const check = `<button type="button" class="btn ghost sm" data-a3-check="${key}">${it.check ? "Проверить снова" : "Проверить"}</button>`;
+  if (it.stage === "failed" && canUpload() && !(it.check && it.check.dup)) {
+    return `${check}<button type="button" class="btn primary sm" data-a3-upload="${key}" data-a3-label="${label}">Повторить</button>`;
+  }
   // «Залить» — только после пройденной проверки (сервер всё равно проверит ещё раз).
-  return k === "ready" && canUpload() ? `${check}<button type="button" class="btn primary sm" data-a3-upload="${key}" data-a3-label="${esc(it.label || it.public_id || "")}">Залить</button>` : check;
+  return k === "ready" && canUpload() ? `${check}<button type="button" class="btn primary sm" data-a3-upload="${key}" data-a3-label="${label}">Залить</button>` : check;
 }
 
-function rowHtml(it, title, meta) {
+function rowHtml(it, title, meta, poster) {
+  const k = kindOf(it);
   return `
-    <div class="a3-row">
+    <div class="a3-row is-${k}">
+      ${poster === undefined ? "" : `<div class="a3-rposter">${poster ? `<img src="${esc(poster)}" alt="" loading="lazy">` : `<span>${esc(String(it.title || "?").slice(0, 1).toUpperCase())}</span>`}</div>`}
       <div class="a3-main">
         <div class="a3-title">${title}</div>
         <div class="a3-meta">${meta}</div>
@@ -98,24 +125,35 @@ const filtersHtml = (list, current, attr) =>
 
 // ---------- «Финалы» ----------
 
+function searchHtml() {
+  return `<label class="a3-search"><span aria-hidden="true">⌕</span><input type="search" id="a3-query" placeholder="Название или номер серии" value="${esc(query)}" autocomplete="off"></label>`;
+}
+
 function finalsHtml(d) {
-  const items = d.items || [];
+  const all = d.items || [];
+  const items = all.filter(it => matches(it.title, it.public_id, it.series_title, it.file));
   const count = k => items.filter(it => kindOf(it) === k).length;
+  const todo = it => !isOn365(it) && kindOf(it) !== "queue";
   const shown = items.filter(it => finalsFilter === "all" ? true
     : finalsFilter === "done" ? isOn365(it)
       : finalsFilter === "queue" ? kindOf(it) === "queue"
-        : !isOn365(it) && kindOf(it) !== "queue");
-  const empty = { todo: "Всё собранное уже на 365 🎉", queue: "Очередь пуста", done: "На 365 пока ничего нет", all: "Собранных финалов пока нет" }[finalsFilter];
+        : finalsFilter === "newer" ? kindOf(it) === "newer"
+          : todo(it));
+  const empty = query ? "Ничего не нашлось" : { todo: "Всё собранное уже на 365 🎉", queue: "Очередь пуста", done: "На 365 пока ничего нет",
+    newer: "Все залитые серии — в последней версии", all: "Собранных финалов пока нет" }[finalsFilter];
   return `
     <div class="a3-tools">
-      ${filtersHtml([["todo", "Не залито", items.filter(it => !isOn365(it) && kindOf(it) !== "queue").length], ["queue", "Очередь", count("queue")],
+      ${filtersHtml([["todo", "Не залито", items.filter(todo).length], ["queue", "Очередь", count("queue")],
+        ...(count("newer") ? [["newer", "Новая версия", count("newer")]] : []),
         ["done", "На 365", items.filter(isOn365).length], ["all", "Все", items.length]], finalsFilter, "a3-ff")}
       <span style="flex:1"></span>
+      ${searchHtml()}
       <button type="button" class="btn ghost sm" data-a3-checkall>Проверить всё</button>
     </div>
     <div class="a3-list">${shown.map(it => rowHtml({ ...it, label: it.public_id },
       `${esc(it.title)} <b>· серия ${esc(String(it.episode ?? "?"))}</b>`,
-      `${esc(it.public_id)} · ${esc(it.file || "")}${it.size ? ` · ${fmtSize(it.size)}` : ""}`)).join("") || `<div class="no-assignee">${empty}</div>`}</div>`;
+      `${esc(it.public_id)} · ${esc(it.file || "")}${it.size ? ` · ${fmtSize(it.size)}` : ""}${it.series_title ? ` · на 365: ${esc(it.series_title)}` : ""}`,
+      it.poster || "")).join("") || `<div class="a3-empty">${empty}</div>`}</div>`;
 }
 
 // ---------- «Архив» ----------
@@ -124,7 +162,8 @@ function archiveHtml(d) {
   const a = d.archive || { items: [] };
   const items = a.items || [];
   const missing = it => !isOn365(it) && kindOf(it) !== "queue" && kindOf(it) !== "unbound";
-  const pick = { missing, on: isOn365, queue: it => kindOf(it) === "queue", unbound: it => kindOf(it) === "unbound", all: () => true }[archFilter] || missing;
+  const pick = { missing, on: isOn365, queue: it => kindOf(it) === "queue", newer: it => kindOf(it) === "newer",
+    unbound: it => kindOf(it) === "unbound", all: () => true }[archFilter] || missing;
   // Карточка на тайтл (тег + сезон): постер, название, привязка и серии кнопками-номерами по цвету статуса.
   // Фильтр выбирает тайтлы, где есть хоть одна подходящая серия; серии в карточке видны все — картина целиком.
   const groups = new Map();
@@ -133,16 +172,29 @@ function archiveHtml(d) {
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g).push(it);
   }
-  const shown = [...groups.values()].filter(list => list.some(pick));
-  return toolsHtml(a, items, missing) + `<div class="a3-cards">${shown.map(cardHtml).join("") || `<div class="no-assignee">${emptyText(items)}</div>`}</div>`;
+  // Сначала то, что требует внимания: идёт заливка, новая версия, проблемы, можно залить; затем остальное по названию.
+  const weight = list => (list.some(it => kindOf(it) === "queue") ? 0 : list.some(it => kindOf(it) === "newer") ? 1
+    : list.some(it => kindOf(it) === "bad") ? 2 : list.some(it => kindOf(it) === "ready") ? 3 : 4);
+  const shown = [...groups.values()]
+    .filter(list => list.some(pick) && matches(list[0].title, list[0].tag, list[0].series_title))
+    .sort((x, y) => weight(x) - weight(y));
+  return toolsHtml(a, items, missing) + legendHtml()
+    + `<div class="a3-cards">${shown.map(cardHtml).join("") || `<div class="a3-empty">${query ? "Ничего не нашлось" : emptyText(items)}</div>`}</div>`;
 }
 
-const CHIP = { done: ["ok", "✓"], elsewhere: ["ok", "✓"], ready: ["ready", "↑"], queue: ["run", "…"], bad: ["bad", "!"], unchecked: ["", ""], unbound: ["", ""] };
+const CHIP = { done: ["ok", "✓"], newer: ["warn", "↻"], elsewhere: ["ok", "✓"], ready: ["ready", "↑"], queue: ["run", "…"], bad: ["bad", "!"], unchecked: ["", ""], unbound: ["", ""] };
+
+function legendHtml() {
+  return `<div class="a3-legend">${[["ok", "✓", "на 365"], ["warn", "↻", "новая версия"], ["ready", "↑", "можно залить"],
+    ["run", "…", "в очереди"], ["bad", "!", "проблема"], ["", "", "не проверено"]]
+    .map(([tone, mark, text]) => `<span><i class="a3-chip ${tone}">${mark || "1"}</i>${text}</span>`).join("")}</div>`;
+}
 
 function chipTitle(it) {
   const k = kindOf(it);
   const c = it.check || {};
   if (k === "done") return "Залито отсюда";
+  if (k === "newer") return "На 365 прежняя версия — есть новое видео";
   if (k === "elsewhere") return "Наша озвучка уже на 365";
   if (k === "ready") return "Нет на 365 — можно залить";
   if (it.stage === "uploading") return `Заливается ${it.progress || 0}%`;
@@ -160,6 +212,7 @@ function cardHtml(list) {
   const on = list.filter(isOn365).length;
   const ready = list.filter(it => kindOf(it) === "ready");
   const bad = count("bad");
+  const newer = count("newer");
   const unbound = !first.studio && !first.bound;
   const where = first.studio ? "тайтл студии"
     : first.bound ? (first.auto ? "подобрано автоматически — проверьте" : "привязан вручную")
@@ -171,8 +224,9 @@ function cardHtml(list) {
   const open = list.find(it => it.key === openEp);
   const sorted = list.slice().sort((x, y) => Number(x.episode) - Number(y.episode));
   return `
-    <div class="a3-tcard${unbound ? " unbound" : ""}">
-      <div class="a3-tposter">${withPoster.poster ? `<img src="${esc(withPoster.poster)}" alt="" loading="lazy">` : `<span>${esc(name.slice(0, 1).toUpperCase())}</span>`}</div>
+    <div class="a3-tcard${unbound ? " unbound" : ""}${progress === 100 && !newer ? " complete" : ""}${newer ? " has-newer" : ""}">
+      <div class="a3-tposter">${withPoster.poster ? `<img src="${esc(withPoster.poster)}" alt="" loading="lazy">` : `<span>${esc(name.slice(0, 1).toUpperCase())}</span>`}
+        <em class="a3-tpct">${progress}%</em></div>
       <div class="a3-tbody">
         <div class="a3-thead">
           <div class="a3-tname" title="${esc(name)}">${esc(name)}</div>
@@ -188,6 +242,7 @@ function cardHtml(list) {
           <b>${on}</b><span>из ${list.length} на 365</span>
           ${ready.length ? `<span class="a3-tag ready">${ready.length} можно залить</span>` : ""}
           ${count("queue") ? `<span class="a3-tag run">${count("queue")} в очереди</span>` : ""}
+          ${newer ? `<span class="a3-tag warn">${newer} новая версия</span>` : ""}
           ${bad ? `<span class="a3-tag bad">${bad} с проблемой</span>` : ""}
         </div>
         <div class="a3-chips">${sorted.map(it => {
@@ -208,9 +263,12 @@ function toolsHtml(a, items, missing) {
   return `
     <div class="a3-tools">
       ${filtersHtml([["missing", "Нет на 365", items.filter(missing).length], ["on", "На 365", items.filter(isOn365).length],
-        ["queue", "Очередь", items.filter(it => kindOf(it) === "queue").length], ["unbound", "Не привязано", items.filter(it => kindOf(it) === "unbound").length],
+        ["queue", "Очередь", items.filter(it => kindOf(it) === "queue").length],
+        ...(items.some(it => kindOf(it) === "newer") ? [["newer", "Новая версия", items.filter(it => kindOf(it) === "newer").length]] : []),
+        ["unbound", "Не привязано", items.filter(it => kindOf(it) === "unbound").length],
         ["all", "Все", items.length]], archFilter, "a3-af")}
       <span style="flex:1"></span>
+      ${searchHtml()}
       ${canUpload() ? `<button type="button" class="btn ghost sm" data-a3-scan ${a.scanning ? "disabled" : ""}>Обновить архив</button>` : ""}
       <button type="button" class="btn ghost sm" data-a3-checkarch ${a.checking ? "disabled" : ""}>${a.checking ? "Сверяю…" : "Проверить весь архив"}</button>
     </div>
@@ -270,9 +328,9 @@ function manualHtml() {
     </div>`;
 }
 
-// tus 1.0.0 прямо из десктопа на сервер загрузки 365: адреса по очереди, куски по 8 МБ, при обрыве — докачка с места,
+// tus 1.0.0 прямо из десктопа на сервер загрузки 365: адреса по очереди, куски по 32 МБ (Cloudflare пускает до 100), при обрыве — докачка с места,
 // которое назовёт сервер (HEAD). Возвращает {serverId, uuid}.
-const TUS_CHUNK = 8 * 1024 * 1024;
+const TUS_CHUNK = 32 * 1024 * 1024;
 async function tusUpload(file, point, onProgress) {
   const meta = "filename " + btoa(String.fromCharCode(...new TextEncoder().encode(file.name)));
   let created = null;
@@ -435,17 +493,27 @@ function paint(root) {
   const tabs = [["finals", "Финалы", (d.items || []).filter(it => !isOn365(it)).length],
     ["archive", "Архив", ((d.archive || {}).items || []).filter(it => !isOn365(it) && kindOf(it) !== "unbound").length], ...(canUpload() ? [["manual", "Вручную", null]] : [])];
   if (view === "manual" && !canUpload()) view = "finals";
+  // Поиск переживает перерисовку: фокус и курсор возвращаются в поле.
+  const focused = document.activeElement && document.activeElement.id === "a3-query" ? document.activeElement.selectionStart : null;
+  const speed = d.speed && d.speed.best ? `до ${Math.round(d.speed.best)} Мбит/с` : "замер при первой заливке";
+  const newer = every.filter(it => kindOf(it) === "newer").length;
   root.innerHTML = `
     <div class="page-header">
       <div><span class="kd-label">Публикация · smotret-anime.org</span><h1>Anime 365</h1></div>
     </div>
     <div class="bcell a3-card">
-      <div class="dash-cell-head">
-        <span class="dash-cell-title">${acc.ok ? `Аккаунт ${esc(acc.name || "")}` : "Нет входа на 365"}</span>
-        <span class="dash-cell-hint">${acc.ok ? `подпись «${esc(acc.authors || "")}» · заливает бот, по одной` : `<span class="a3-bad">${esc(acc.error || "аккаунт не принят")}</span>`}</span>
+      <div class="a3-hero">
+        <div class="a3-acc ${acc.ok ? "ok" : "bad"}"><i></i><div>
+          <b>${acc.ok ? `Аккаунт ${esc(acc.name || "")}` : "Нет входа на 365"}</b>
+          <span>${acc.ok ? `подпись «${esc(acc.authors || "")}» · заливает бот, по одной` : `<span class="a3-bad">${esc(acc.error || "аккаунт не принят")}</span>`}</span>
+        </div></div>
+        <div class="a3-facts">
+          <span title="Самый быстрый адрес загрузки 365 по последнему замеру">⚡ ${esc(speed)}</span>
+          <span title="После «Залить» серия ждёт — можно передумать">🛡 ${d.grace ? `старт через ${d.grace} с, можно отменить` : "старт сразу"}</span>
+        </div>
       </div>
       <div class="bs-grid">
-        ${cell("На 365", every.filter(isOn365).length, "залито отсюда и найдено на сайте")}
+        ${cell("На 365", every.filter(isOn365).length, newer ? `${newer} — с новой версией видео` : "залито отсюда и найдено на сайте", newer ? "warn" : "")}
         ${cell("В очереди", queue, d.uploading ? `сейчас: ${d.uploading}` : "по одной, с проверками", queue ? "warn" : "")}
         ${cell("Нет на 365", every.filter(it => kindOf(it) === "ready").length, "проверено — можно заливать")}
         ${cell("Проблемы", every.filter(it => kindOf(it) === "bad").length, `${every.filter(it => ["unchecked", "unbound"].includes(kindOf(it))).length} не проверено или не привязано`, every.some(it => kindOf(it) === "bad") ? "danger" : "")}
@@ -453,6 +521,10 @@ function paint(root) {
       ${filtersHtml(tabs, view, "a3-view").replace("a3-filters", "a3-filters a3-tabs")}
       <div class="a3-body">${view === "finals" ? finalsHtml(d) : view === "archive" ? archiveHtml(d) : manualHtml()}</div>
     </div>`;
+  if (focused != null) {
+    const input = root.querySelector("#a3-query");
+    if (input) { input.focus(); input.setSelectionRange(focused, focused); }
+  }
   if (view === "manual" && !manual.series) {
     const input = root.querySelector("#a3-msearch");
     searchSeries(input, root.querySelector("#a3-mresults"), s => {
@@ -530,12 +602,24 @@ function bind(root) {
         const r = await apiPost("/a365/check", { key: b.dataset.a3Check });
         toast(r.ok ? "Проверки пройдены — можно заливать." : (r.dup ? "Наша озвучка этой серии уже есть на 365." : `Проверка не пройдена: ${r.error}`), r.ok ? "ok" : "error");
       } else if (b.dataset.a3Upload) {
+        const grace = (last && last.grace) || 0;
         const ok = await askConfirm(`Залить ${b.dataset.a3Label || "серию"} на Anime 365?\n\nПеревод появится на публичном сайте после модерации 365. `
-          + "Перед заливкой сервер ещё раз проверит сезон и дубли нашей озвучки — если что-то не так, не зальёт.", { yes: "Залить" });
+          + "Перед заливкой сервер ещё раз проверит сезон и дубли нашей озвучки — если что-то не так, не зальёт."
+          + (grace ? `\n\nСтарт — через ${grace} с: до этого можно отменить, а идущую заливку — остановить.` : ""), { yes: "Залить" });
         if (!ok) return;
         busy("Проверяю…");
         await apiPost("/a365/upload", { key: b.dataset.a3Upload });
-        toast("Поставлено в очередь — бот заливает по одной.", "ok");
+        toast(grace ? `Поставлено в очередь — старт через ${grace} с, можно отменить.` : "Поставлено в очередь — бот заливает по одной.", "ok");
+      } else if (b.dataset.a3Reupload) {
+        const sameFile = b.dataset.a3Reupload === b.dataset.a3Replaces;
+        const ok = await askConfirm(`Перезалить ${b.dataset.a3Label || "серию"} на Anime 365?\n\n`
+          + (sameFile ? "Уйдёт текущий файл серии. " : "Уйдёт новая версия видео. ")
+          + "Новый перевод встанет рядом с прежним: API 365 не умеет удалять — прежний перевод удалите на сайте сами"
+          + (b.dataset.a3Url ? ` (${b.dataset.a3Url})` : "") + ".\n\nПроверки сезона пройдут снова; до старта можно отменить.", { yes: "Перезалить" });
+        if (!ok) return;
+        busy("Проверяю…");
+        await apiPost("/a365/reupload", { key: b.dataset.a3Reupload, replaces: b.dataset.a3Replaces });
+        toast("Перезаливка в очереди — до старта можно отменить.", "ok");
       } else if (b.dataset.a3Upall) {
         const keys = b.dataset.a3Upall.split(",").filter(Boolean);
         const ok = await askConfirm(`Залить на Anime 365 недостающие серии «${b.dataset.a3Name}» — ${keys.length} шт.?\n\n`
@@ -549,8 +633,10 @@ function bind(root) {
         }
         toast(`В очереди: ${put} из ${keys.length}.${fails.length ? ` Не поставлено: ${fails[0]}` : ""}`, fails.length ? "error" : "ok");
       } else if (b.dataset.a3Cancel) {
-        busy("Убираю…");
-        await apiPost("/a365/cancel", { key: b.dataset.a3Cancel });
+        if (b.dataset.a3Stop && !await askConfirm("Остановить заливку на Anime 365?\n\nНедогруженный файл сотрётся с сервера 365, перевод не создастся.", { yes: "Остановить" })) return;
+        busy(b.dataset.a3Stop ? "Останавливаю…" : "Отменяю…");
+        const r = await apiPost("/a365/cancel", { key: b.dataset.a3Cancel });
+        toast(r.how === "stopping" ? "Останавливаю — на 365 ничего не создастся." : "Отменено — на 365 ничего не залито.", "ok");
       } else {
         return;
       }
@@ -558,6 +644,13 @@ function bind(root) {
       toast(err.message, "error");
     }
     refresh(root);
+  });
+  // Поиск по названию — без запроса к серверу, по уже загруженному.
+  let searchTimer = null;
+  root.addEventListener("input", e => {
+    if (e.target.id !== "a3-query") return;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { query = e.target.value.trim().toLowerCase(); paint(root); }, 150); // DevSkim: ignore DS172411 — функция, не строка
   });
   // Смена серии, типа или подписи — прежняя проверка уже не про то, что будет загружено.
   root.addEventListener("input", e => {
