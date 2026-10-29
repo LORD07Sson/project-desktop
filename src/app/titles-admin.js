@@ -165,7 +165,7 @@ async function openSeasonDetailAdmin(seasonId) {
     const rows = (d.titles || []).map(t => `
       <div class="mini-row" data-open-title="${t.id}" style="cursor:pointer;">
         <span class="name">${esc(t.name)}</span>
-        <span class="val" title="Серии, заведённые студией (отчёты), — не сколько вышло в эфире">${t.pct != null ? `${t.pct}%` : "—"} · ${seriesCount(t.episodes_count)} в работе · ${t.crew_count} в составе</span>
+        <span class="val" title="Серии, заведённые студией (отчёты), — не сколько вышло в эфире">${t.pct != null ? `${t.pct}%` : "—"} · ${seriesCount(t.episodes_count)} у студии · ${t.crew_count} в составе</span>
       </div>
     `).join("");
     sheet.innerHTML = `
