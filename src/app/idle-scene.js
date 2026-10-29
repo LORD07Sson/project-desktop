@@ -5,6 +5,8 @@
 // изгиб считает вершинный шейдер), след курсора — маленькая текстура «примятости», которую обновляет JS.
 // Сцена не стартует, пока окно свёрнуто, не в фокусе или играет видео/звук, а без фокуса замирает.
 
+import { API_BASE } from "./api.js";
+
 const PREF_KEY = "project-idle-scene";
 export const IDLE_CHOICES = [["off", "Выключен"], ["5", "5 мин"], ["10", "10 мин"], ["15", "15 мин"]];
 
@@ -35,6 +37,8 @@ const EYE = [0, 0.8, 6];
 const TARGET = [0, 4.2, -16];
 const FOV = Math.PI / 4;
 const TREE = [1.8, -16.5];
+// Где сидит героиня (idle-heroine.js): справа на переднем плане, вполоборота к нам; трава под ней примята
+const HERO = { x: 1.1, z: 1.7, yaw: -0.5 };
 const BLADES = 80000;
 const FLIES = 220;
 // Текстура примятости покрывает луг: x ∈ [-22, 22], z ∈ [-20, 4]
@@ -141,6 +145,7 @@ uniform float uTime;
 uniform sampler2D uTrample;
 uniform vec4 uTrRect;
 uniform vec4 uCursor; // x, z, сила, радиус
+uniform vec3 uSeat;   // x, z, радиус: где сидит героиня
 out float vT;
 out float vSeed;
 out float vPress;
@@ -152,6 +157,7 @@ void main() {
   float d = distance(base.xz, uEye.xz);
   float seed = aInst.z;
   float h = (0.3 + 0.32 * fract(seed * 7.13)) * (1.0 + d * 0.02);
+  h *= mix(0.12, 1.0, smoothstep(uSeat.z * 0.5, uSeat.z, length((base.xz - uSeat.xy) * vec2(1.0, 0.55))));
   float w = (0.03 + d * 0.0035) * (1.0 - t * 0.85);
   vec2 side = vec2(cos(aInst.w), sin(aInst.w));
 
@@ -237,95 +243,6 @@ void main() {
   vec3 leaf = mix(vec3(0.1, 0.22, 0.07), vec3(0.3, 0.48, 0.16), smoothstep(0.5, 1.0, p.y + fbm(p * 14.0) * 0.3));
   vec3 c = crown < trunk ? leaf : vec3(0.22, 0.15, 0.1);
   o = vec4(fog(nightTint(c), vD), a);
-}`;
-
-// Девушка в худи и наушниках сидит в траве спиной к нам и смотрит на холм. Рисунок — SVG в три слоя
-// (тело, волосы, голова) в одной текстуре: шейдер раскачивает волосы ветром, тело чуть дышит.
-// Нижнюю часть закрывает трава — она рисуется после и стоит перед плоскостью персонажа.
-const CHAR_W = 360, CHAR_H = 480;
-const CHAR_POS = [1.15, 0.6];
-const CHAR_SIZE = [1.05, 1.4];
-const CHAR_LAYERS = [
-  `<defs><linearGradient id="hd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a99ad9"/><stop offset="1" stop-color="#6f5fae"/></linearGradient></defs>
-   <path d="M165 205h30v50h-30z" fill="#f1cfc0"/>
-   <path d="M100 290Q72 360 60 445L94 450Q102 372 124 318Z" fill="url(#hd)"/>
-   <path d="M260 290Q288 360 300 445L266 450Q258 372 236 318Z" fill="url(#hd)"/>
-   <path d="M95 302Q100 254 150 244L210 244Q260 254 265 302L285 472L75 472Z" fill="url(#hd)"/>
-   <path d="M128 250Q180 228 232 250Q238 302 180 318Q122 302 128 250Z" fill="#8a7bc4"/>
-   <path d="M142 256Q180 242 218 256Q214 290 180 298Q146 290 142 256Z" fill="#54468c"/>
-   <path d="M100 300Q96 390 92 470" stroke="#5c4d98" stroke-width="3" fill="none" opacity=".5"/>
-   <path d="M260 300Q264 390 268 470" stroke="#5c4d98" stroke-width="3" fill="none" opacity=".5"/>`,
-  `<defs><linearGradient id="hr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6bfd0"/><stop offset="1" stop-color="#e38aab"/></linearGradient></defs>
-   <path d="M122 150Q114 236 124 290Q132 340 152 372Q164 352 176 376Q190 352 204 378Q222 348 236 368Q248 330 240 286Q246 220 238 150Z" fill="url(#hr)"/>
-   <g stroke="#cf7896" stroke-width="2.4" fill="none" opacity=".55">
-     <path d="M152 190Q144 280 158 350"/><path d="M180 200Q176 290 188 360"/><path d="M210 190Q220 280 212 355"/><path d="M136 220Q130 290 142 330"/><path d="M226 220Q234 290 228 330"/>
-   </g>`,
-  `<path d="M182 84Q170 46 202 28Q186 56 194 86Z" fill="#f2b3c6"/>
-   <path d="M124 160Q98 196 106 232Q120 206 132 188ZM236 160Q262 196 254 232Q240 206 228 188Z" fill="#eea6bd"/>
-   <circle cx="180" cy="142" r="62" fill="#f4b9cb"/>
-   <path d="M150 196Q160 214 170 200Q180 218 190 200Q200 214 210 196Z" fill="#f4b9cb"/>
-   <path d="M126 128Q180 96 234 128" stroke="#ffe1ea" stroke-width="7" fill="none" opacity=".75" stroke-linecap="round"/>
-   <path d="M118 150Q120 180 132 196M242 150Q240 180 228 196" stroke="#e38aab" stroke-width="10" fill="none" stroke-linecap="round"/>
-   <path d="M118 146Q118 64 180 62Q242 64 242 146" stroke="#2a2833" stroke-width="11" fill="none" stroke-linecap="round"/>
-   <rect x="102" y="118" width="28" height="54" rx="12" fill="#2a2833"/><rect x="230" y="118" width="28" height="54" rx="12" fill="#2a2833"/>
-   <rect x="106" y="132" width="5" height="26" rx="2.5" fill="#ff7a3d"/><rect x="249" y="132" width="5" height="26" rx="2.5" fill="#ff7a3d"/>`,
-];
-
-function loadCharacter() {
-  const atlas = document.createElement("canvas");
-  atlas.width = CHAR_W * 3;
-  atlas.height = CHAR_H;
-  const ctx = atlas.getContext("2d");
-  return Promise.all(CHAR_LAYERS.map((body, i) => new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.onload = () => { ctx.drawImage(img, i * CHAR_W, 0, CHAR_W, CHAR_H); resolve(); };
-    img.onerror = reject;
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${CHAR_W}" height="${CHAR_H}" viewBox="0 0 ${CHAR_W} ${CHAR_H}">${body}</svg>`)}`;
-  }))).then(() => atlas);
-}
-
-const CHAR_VS = `#version 300 es
-in vec2 aCorner;
-uniform mat4 uVP;
-uniform vec3 uEye;
-uniform vec3 uPos;
-uniform vec2 uSize;
-uniform float uTime;
-out vec2 vUv;
-out float vD;
-void main() {
-  float breathe = 1.0 + 0.008 * sin(uTime * 1.5);
-  vUv = vec2(aCorner.x * 0.5 + 0.5, 1.0 - aCorner.y);
-  vec3 p = uPos + vec3(aCorner.x * uSize.x * 0.5, aCorner.y * uSize.y * breathe + 0.22, 0.0);
-  vD = distance(p, uEye);
-  gl_Position = uVP * vec4(p, 1.0);
-}`;
-const CHAR_FS = `#version 300 es
-precision highp float;
-in vec2 vUv;
-in float vD;
-out vec4 o;
-uniform sampler2D uTex;
-uniform float uTime;
-${SHADE_GLSL}
-vec4 layer(float i, vec2 uv) {
-  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
-  return texture(uTex, vec2((uv.x + i) / 3.0, uv.y));
-}
-void main() {
-  // Волосы: кончики сносит ветром вправо и волной, у макушки они неподвижны
-  float tip = smoothstep(0.3, 0.95, vUv.y);
-  vec2 hairUv = vUv - vec2((0.012 + 0.01 * sin(uTime * 0.9)) * tip + sin(vUv.y * 9.0 - uTime * 2.2) * 0.007 * tip, 0.0);
-  vec2 headUv = vUv - vec2(0.0, 0.003 * sin(uTime * 1.5));
-  vec4 body = layer(0.0, vUv), hair = layer(1.0, hairUv), head = layer(2.0, headUv);
-  vec3 c = body.rgb;
-  float a = body.a;
-  c = mix(c, hair.rgb, hair.a); a = max(a, hair.a);
-  c = mix(c, head.rgb, head.a); a = max(a, head.a);
-  if (a < 0.05) discard;
-  // Ночью — лунный свет по краю справа
-  c = mix(c, nightTint(c), 0.75) + uNight * vec3(0.16, 0.2, 0.34) * smoothstep(0.55, 1.0, vUv.x);
-  o = vec4(fog(c, vD), a);
 }`;
 
 const FLY_VS = `#version 300 es
@@ -422,7 +339,7 @@ function buildScene(canvas) {
   const grass = program(gl, GRASS_VS, GRASS_FS);
   const tree = program(gl, TREE_VS, TREE_FS);
   const flies = program(gl, FLY_VS, FLY_FS);
-  const girl = program(gl, CHAR_VS, CHAR_FS);
+
 
   const skyVao = gl.createVertexArray();
 
@@ -456,20 +373,6 @@ function buildScene(canvas) {
   const treeVao = gl.createVertexArray();
   gl.bindVertexArray(treeVao);
   buffer(gl, tree, "aCorner", new Float32Array([-1, 0, 1, 0, -1, 1, 1, 1]), 2);
-
-  const girlVao = gl.createVertexArray();
-  gl.bindVertexArray(girlVao);
-  buffer(gl, girl, "aCorner", new Float32Array([-1, 0, 1, 0, -1, 1, 1, 1]), 2);
-  let girlTex = null;
-  loadCharacter().then(atlas => {
-    if (gl.isContextLost()) return;
-    girlTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, girlTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  }).catch(error => console.warn("Экран ожидания: персонаж не нарисовался", error));
 
   const flyVao = gl.createVertexArray();
   gl.bindVertexArray(flyVao);
@@ -550,7 +453,7 @@ function buildScene(canvas) {
     return null;
   }
 
-  function draw(time, dt, night, cursor) {
+  function draw(time, dt, night, cursor, heroine) {
     uploadTrample(dt);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 1);
@@ -583,21 +486,12 @@ function buildScene(canvas) {
     gl.uniform1f(tree.u.uNight, night);
     gl.bindVertexArray(treeVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    if (girlTex) {
-      gl.useProgram(girl.p);
-      gl.uniformMatrix4fv(girl.u.uVP, false, cam.vp);
-      gl.uniform3fv(girl.u.uEye, EYE);
-      gl.uniform3f(girl.u.uPos, CHAR_POS[0], hill(CHAR_POS[0], CHAR_POS[1]), CHAR_POS[1]);
-      gl.uniform2fv(girl.u.uSize, CHAR_SIZE);
-      gl.uniform1f(girl.u.uTime, time);
-      gl.uniform1f(girl.u.uNight, night);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, girlTex);
-      gl.uniform1i(girl.u.uTex, 0);
-      gl.bindVertexArray(girlVao);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    }
     gl.disable(gl.BLEND);
+
+    if (heroine) {
+      heroine.render(canvas.width, canvas.height);
+      gl.enable(gl.DEPTH_TEST);
+    }
 
     gl.useProgram(grass.p);
     gl.uniformMatrix4fv(grass.u.uVP, false, cam.vp);
@@ -605,6 +499,7 @@ function buildScene(canvas) {
     gl.uniform1f(grass.u.uTime, time);
     gl.uniform1f(grass.u.uNight, night);
     gl.uniform4f(grass.u.uTrRect, ...TR_RECT);
+    gl.uniform3f(grass.u.uSeat, HERO.x, HERO.z + 0.45, 1.05);
     gl.uniform4f(grass.u.uCursor, cursor ? cursor[0] : 999, cursor ? cursor[1] : 999, cursor ? 1 : 0, 0.9);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, trTex);
@@ -630,7 +525,7 @@ function buildScene(canvas) {
 
   function dispose() { gl.getExtension("WEBGL_lose_context")?.loseContext(); }
 
-  return { resize, pick, stamp, draw, dispose };
+  return { gl, resize, pick, stamp, draw, dispose };
 }
 
 // ---------- экран ----------
@@ -661,6 +556,12 @@ export function showIdleScene() {
   try { scene = buildScene(canvas); } catch (error) { console.warn("Экран ожидания: WebGL не поднялся", error); }
   if (!scene) { box.remove(); return; }
 
+  let heroine = null;
+  import("./idle-heroine.js")
+    .then(m => m.loadHeroine({ gl: scene.gl, canvas, url: `${API_BASE}/desktop/idle-model`, place: { x: HERO.x, y: hill(HERO.x, HERO.z), z: HERO.z, yaw: HERO.yaw }, eye: EYE, target: TARGET }))
+    .then(h => { if (current) heroine = h; else h.dispose(); })
+    .catch(error => console.warn("Экран ожидания: героиня не загрузилась", error));
+
   const since = lastActive;
   let night = nightByClock() ? 1 : 0, nightGoal = night;
   let cursor = null, lastHit = null, raf = 0, prev = window.performance.now(), t0 = prev;
@@ -680,7 +581,9 @@ export function showIdleScene() {
     const dt = Math.min(0.1, (now - prev) / 1000);
     prev = now;
     night += (nightGoal - night) * Math.min(1, dt * 1.6);
-    scene.draw((now - t0) / 1000, dt, night, cursor);
+    const time = (now - t0) / 1000;
+    heroine?.update(dt, time, night, cursor, hill);
+    scene.draw(time, dt, night, cursor, heroine);
     raf = document.hidden || !document.hasFocus() ? 0 : requestAnimationFrame(frame);
   };
   const resume = () => { if (!raf && current) { prev = window.performance.now(); raf = requestAnimationFrame(frame); } };
@@ -706,7 +609,7 @@ export function showIdleScene() {
     document.removeEventListener("visibilitychange", resume);
     lastActive = Date.now();
     box.classList.remove("on");
-    setTimeout(() => { scene.dispose(); box.remove(); }, 600);
+    setTimeout(() => { heroine?.dispose(); scene.dispose(); box.remove(); }, 600);
   }
 
   box.addEventListener("pointermove", onMove);
