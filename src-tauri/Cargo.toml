@@ -111,6 +111,8 @@ windows = { version = "0.62", features = [
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Variant",
     "Win32_Storage_EnhancedStorage",
+    # installs.rs: цель ярлыка (IShellLinkW::GetPath) и тип диска при поиске старых копий программы.
+    "Win32_Storage_FileSystem",
 ] }
 # Тосты под своим AUMID (desktop_notify.rs) — та же версия, что тянет
 # tauri-plugin-notification, отдельной копии крейта не появляется.

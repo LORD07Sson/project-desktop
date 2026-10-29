@@ -2,7 +2,7 @@
 
 import { invoke, listen } from "./tauri.js";
 import { state, can } from "./state.js";
-import { apiGet, openSheet, toast, dismissSheet, API_BASE } from "./api.js";
+import { apiGet, askConfirm, openSheet, toast, dismissSheet, API_BASE } from "./api.js";
 import { $, esc } from "./utils.js";
 import { applyTheme, applyLook } from "./theme.js";
 import { applyDensity, currentDensity } from "./density.js";
@@ -52,6 +52,8 @@ async function openSettings() {
   try { autostartOn = await invoke("is_autostart"); } catch (_) {}
   let updateChannel = "stable";
   try { updateChannel = await invoke("get_update_channel"); } catch (_) {}
+  let updateSource = "auto";
+  try { updateSource = await invoke("get_update_source"); } catch (_) {}
 
   // Переключатель dev-режима виден только реальным разработчикам студии
   // (state.isDeveloper — из /api/me, is_developer сервер сам проверяет
@@ -241,7 +243,7 @@ async function openSettings() {
         </section>
 
         <section class="st-sec" id="st-update">
-          <h3>Обновления</h3><p class="st-lead">Версия приложения и канал обновлений.</p>
+          <h3>Обновления</h3><p class="st-lead">Версия приложения, канал и откуда скачивать обновления.</p>
           <div class="st-group">
             <div class="st-version">
               <div class="st-version-logo">${ic('<path d="M5 5L19 19M19 5L5 19"/>')}</div>
@@ -249,6 +251,11 @@ async function openSettings() {
               <button class="btn primary" id="s-check-update">Проверить обновления</button>
             </div>
             ${row(ICONS.update, "Канал обновлений", updateChannel === "alpha" ? "Альфа-сборка получает только обновления alpha" : "Стабильная сборка получает только официальные релизы", `<span class="st-ping">${updateChannel === "alpha" ? "Альфа" : "Стабильный"}</span>`, "альфа стабильный")}
+            ${row(ICONS.update, "Источник обновлений", `<span id="s-upd-source-hint">${esc(UPDATE_SOURCE_HINT[updateSource] || UPDATE_SOURCE_HINT.auto)}</span>`,
+              `<select id="s-upd-source" aria-label="Источник обновлений">${Object.entries(UPDATE_SOURCES).map(([k, v]) => `<option value="${k}"${k === updateSource ? " selected" : ""}>${v}</option>`).join("")}</select>`,
+              "github сервер источник россия vpn зеркало")}
+            ${row(ICONS.update, "Копии программы", "Старые копии рядом (портативная папка, распакованный архив, прежняя установка) мешают обновлениям — найдите и уберите их", `<button class="btn ghost" id="s-installs">Найти копии</button>`, "копии старые папка портативная удалить переустановить")}
+            ${row(ICONS.update, "Переустановить начисто", "Программа не обновляется или папку переносили вручную — скачать установщик и поставить в обычное место. Настройки и вход сохранятся", `<button class="btn ghost" id="s-reinstall">Переустановить</button>`, "переустановить починить зависло установка")}
             <div id="s-alpha-block" hidden>
               <div class="alpha-warn">Альфа-сборки собираются на каждый коммит в main и не являются стабильными релизами — автоматического отката нет.</div>
               <div class="st-commits">
@@ -415,6 +422,16 @@ async function openSettings() {
     await checkForUpdates(false);
     refreshAlphaBlock(updateChannel);
   });
+  overlay.querySelector("#s-upd-source").addEventListener("change", async e => {
+    try {
+      await invoke("set_update_source", { source: e.target.value });
+      const hint = overlay.querySelector("#s-upd-source-hint");
+      if (hint) hint.textContent = UPDATE_SOURCE_HINT[e.target.value];
+      toast(`Источник обновлений: ${UPDATE_SOURCES[e.target.value]}.`, "success");
+    } catch (err) { toast(`Не удалось сменить источник: ${err}`, "error"); }
+  });
+  overlay.querySelector("#s-installs").addEventListener("click", () => openInstallsSheet());
+  overlay.querySelector("#s-reinstall").addEventListener("click", () => reinstallApp());
 
   // Блок "текущий/последний коммит" — только для альфа-канала (у
   // стабильных сборок нет вшитого коммита, см. commitFromVersion).
@@ -709,6 +726,107 @@ async function openSettings() {
 }
 $("#open-settings").addEventListener("click", openSettings);
 
+// ---------- источник обновлений, копии программы, переустановка ----------
+// У части студии GitHub не открывается: бот держит зеркало релизов на сервере (voice_report_bot/desktop_updates.py,
+// <сервер>/updates/…) и шлёт установщик в Telegram. «Авто» — GitHub, при сбое сам переходит на сервер.
+
+const UPDATE_SOURCES = { auto: "Авто", github: "GitHub", server: "Сервер студии" };
+const UPDATE_SOURCE_HINT = {
+  auto: "Сначала GitHub, а если он не открывается — сервер студии",
+  github: "Только GitHub",
+  server: "Только сервер студии — если GitHub у вас не открывается",
+};
+const SOURCE_LABEL = { github: "GitHub", server: "сервер студии" };
+
+export async function openInstallsSheet() {
+  const overlay = openSheet(`<h2>Копии программы</h2>
+    <p class="inst-lead">Ищу Project Desktop на этом компьютере — в обычном месте, в папках пользователя и на дисках…</p>
+    <div class="inst-list"><div class="skeleton-row"></div></div>
+    <div class="sheet-actions"><button class="btn ghost" data-inst-reinstall>Переустановить начисто</button><button class="btn" data-close>Закрыть</button></div>`, "wide");
+  overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
+  overlay.querySelector("[data-inst-reinstall]").addEventListener("click", () => { dismissSheet(overlay); reinstallApp(); });
+  const render = async () => {
+    let list = [];
+    try { list = await invoke("find_installs"); } catch (e) {
+      overlay.querySelector(".inst-list").innerHTML = `<div class="inst-note bad">Не удалось поискать: ${esc(String(e))}</div>`;
+      return;
+    }
+    const others = list.filter(it => !it.current);
+    const current = list.find(it => it.current);
+    overlay.querySelector(".inst-lead").textContent = others.length
+      ? `Найдено копий: ${list.length}. Запущена отмеченная; остальные — лишние: из-за них открывают не ту программу, а ярлык ведёт на старую.`
+      : current && !current.standard
+        ? "Других копий нет, но эта лежит не в обычном месте (папку переносили или это портативная копия) — такая хуже обновляется. «Переустановить начисто» поставит программу как положено."
+        : "Других копий нет — всё в порядке.";
+    overlay.querySelector(".inst-list").innerHTML = list.map(it => `
+      <div class="inst-row${it.current ? " cur" : ""}">
+        <div class="inst-main">
+          <b>${esc(it.version)}${it.channel === "alpha" ? " · альфа" : ""}</b>
+          <span>${esc(it.path)}</span>
+          <em>${it.current ? "запущена сейчас" : ""}${it.standard ? `${it.current ? " · " : ""}обычная установка` : it.portable ? `${it.current ? " · " : ""}портативная папка` : `${it.current ? " · " : ""}папка перенесена вручную`}</em>
+        </div>
+        ${it.current ? `<span class="inst-tag">эта</span>` : `<button class="btn ghost danger" data-inst-remove="${esc(it.path)}">Удалить</button>`}
+      </div>`).join("") || `<div class="inst-note">Не нашлось ни одной копии — похоже, программа запущена из папки разработки.</div>`;
+    overlay.querySelectorAll("[data-inst-remove]").forEach(btn => btn.addEventListener("click", async () => {
+      const path = btn.dataset.instRemove;
+      if (!await askConfirm(`Удалить копию программы?\n\n${path}\n\nПапка удалится вместе с ярлыками, которые на неё ведут. Ваши настройки и вход общие для всех копий — они останутся.`, { yes: "Удалить" })) return;
+      btn.disabled = true; btn.textContent = "Удаляю…";
+      try {
+        const shortcuts = await invoke("remove_install", { path });
+        toast(`Копия удалена${shortcuts ? `, ярлыков убрано: ${shortcuts}` : ""}.`, "success");
+      } catch (e) { toast(String(e), "error"); }
+      render();
+    }));
+  };
+  render();
+}
+
+export async function reinstallApp() {
+  if (!await askConfirm("Переустановить программу начисто?\n\nСкачаю установщик (GitHub или сервер студии — как выбрано в «Источник обновлений»), программа закроется, установится в обычное место и откроется сама. Настройки и вход сохранятся.", { yes: "Переустановить" })) return;
+  const overlay = openSheet(`<h2>Переустановка…</h2>
+    <div class="update-progress-track"><div class="update-progress-fill" id="rei-fill"></div></div>
+    <div id="rei-status" style="color:var(--ink-soft); font-size:12.5px;">Скачиваю установщик…</div>`);
+  const fill = overlay.querySelector("#rei-fill");
+  const status = overlay.querySelector("#rei-status");
+  let from = "";
+  const unSource = await listen("update-source", e => { from = e.payload; status.textContent = `Скачиваю установщик (${from})…`; });
+  const unProgress = await listen("update-progress", e => {
+    const pct = Math.max(0, Math.min(100, e.payload));
+    fill.style.width = pct + "%";
+    status.textContent = pct < 100 ? `Скачано ${pct}%${from ? ` · ${from}` : ""}` : "Запускаю установщик — программа закроется и откроется снова…";
+  });
+  try {
+    await invoke("reinstall_app");
+  } catch (e) {
+    unSource(); unProgress();
+    status.textContent = `Не получилось: ${e}`;
+    status.style.color = "var(--s-stop)";
+    const actions = document.createElement("div");
+    actions.className = "sheet-actions";
+    actions.innerHTML = `<button type="button" class="btn" data-close>Закрыть</button>`;
+    status.after(actions);
+    actions.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
+  }
+}
+
+// Раз в неделю: есть лишние копии или эта стоит не на своём месте — подсказываем открыть список.
+const INSTALLS_HINT_KEY = "project_installs_hint_at";
+async function maybeHintInstalls() {
+  try {
+    if (Date.now() - Number(localStorage.getItem(INSTALLS_HINT_KEY) || 0) < 7 * 24 * 60 * 60 * 1000) return;
+    localStorage.setItem(INSTALLS_HINT_KEY, String(Date.now()));
+  } catch (_) { return; }
+  let list = [];
+  try { list = await invoke("find_installs"); } catch (_) { return; }
+  const others = list.filter(it => !it.current).length;
+  if (!others) return;
+  const overlay = openSheet(`<h2>Найдены другие копии программы</h2>
+    <p style="color:var(--ink-soft); font-size:13px;">На компьютере ещё ${others} ${others === 1 ? "копия" : "копии"} Project Desktop. Из-за них легко открыть старую версию, и она не обновится. Посмотрите список и уберите лишние.</p>
+    <div class="sheet-actions"><button class="btn ghost" data-no>Не сейчас</button><button class="btn primary" data-yes>Показать копии</button></div>`);
+  overlay.querySelector("[data-no]").addEventListener("click", () => dismissSheet(overlay));
+  overlay.querySelector("[data-yes]").addEventListener("click", () => { dismissSheet(overlay); openInstallsSheet(); });
+}
+
 // ---------- автообновление (Velopack) ----------
 // Апдейтер целиком на Rust-стороне (см. check_for_update/
 // download_and_apply_update в main.rs, Velopack + HttpSource читает
@@ -738,6 +856,7 @@ async function reportFailedUpdate() {
 export function maybeAutoCheckUpdates() {
   reportFailedUpdate();
   autoCheckIfDue();
+  setTimeout(maybeHintInstalls, 20000); // DevSkim: ignore DS172411 — функция, не строка
 }
 
 function autoCheckIfDue() {
@@ -792,6 +911,7 @@ function confirmUpdateSheet(update) {
   return new Promise(resolve => {
     const overlay = openSheet(`
       <h2>Доступно обновление ${esc(update.version)}</h2>
+      ${update.source ? `<div style="color:var(--ink-dim); font-size:12px; margin:-4px 0 8px;">Скачается с: ${esc(SOURCE_LABEL[update.source] || update.source)}</div>` : ""}
       <div style="color:var(--ink-soft); font-size:13px; white-space:pre-wrap; max-height:200px; overflow:auto; margin-bottom:6px;">${esc(update.notes || "Без описания изменений.")}</div>
       <div class="sheet-actions">
         <button class="btn ghost" data-no>Позже</button>
@@ -830,9 +950,14 @@ export async function installUpdate() {
   const unlistenRetry = await listen("update-retry", event => {
     const retry = event.payload;
     const attempt = typeof retry === "object" && retry ? retry.attempt : retry;
+    const of = typeof retry === "object" && retry && retry.of ? retry.of : 6;
     const reason = typeof retry === "object" && retry ? retry.reason : "Временный сбой сети";
     fill.style.width = "0%";
-    statusEl.textContent = `${reason}. Повторная попытка ${attempt}/6…`;
+    statusEl.textContent = `${reason}. Повторная попытка ${attempt}/${of}…`;
+  });
+  const unlistenSource = await listen("update-source", event => {
+    fill.style.width = "0%";
+    statusEl.textContent = `Скачиваю с: ${event.payload}…`;
   });
   try {
     // При успехе download_and_apply_update завершает процесс изнутри
@@ -843,16 +968,30 @@ export async function installUpdate() {
   } catch (e) {
     unlisten();
     unlistenRetry();
+    unlistenSource();
     updateInstalling = false;
     statusEl.textContent = `Не удалось завершить обновление: ${e}`;
     statusEl.style.color = "var(--s-stop)";
+    statusEl.style.whiteSpace = "pre-wrap";
     const actions = document.createElement("div");
     actions.className = "sheet-actions";
-    actions.innerHTML = `<button type="button" class="btn primary" data-update-retry>Повторить скачивание</button><button type="button" class="btn" data-update-close>Закрыть</button>`;
+    actions.innerHTML = `<button type="button" class="btn primary" data-update-retry>Повторить скачивание</button>`
+      + `<button type="button" class="btn" data-update-server>Скачать с сервера студии</button>`
+      + `<button type="button" class="btn ghost" data-update-reinstall>Переустановить начисто</button>`
+      + `<button type="button" class="btn" data-update-close>Закрыть</button>`;
     statusEl.after(actions);
     actions.querySelector("[data-update-retry]").addEventListener("click", () => {
       dismissSheet(overlay);
       installUpdate();
+    });
+    actions.querySelector("[data-update-server]").addEventListener("click", async () => {
+      try { await invoke("set_update_source", { source: "server" }); } catch (_) { /* старая сборка без выбора источника */ }
+      dismissSheet(overlay);
+      installUpdate();
+    });
+    actions.querySelector("[data-update-reinstall]").addEventListener("click", () => {
+      dismissSheet(overlay);
+      reinstallApp();
     });
     actions.querySelector("[data-update-close]").addEventListener("click", () => dismissSheet(overlay));
   }

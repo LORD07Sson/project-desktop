@@ -14,6 +14,7 @@ mod behavior;
 mod board;
 mod desktop_notify;
 mod file_scope;
+mod installs;
 mod library;
 mod local_render;
 mod nyaa;
@@ -42,6 +43,94 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 // релизе лежат и фид, и полный пакет этой версии.
 const UPDATE_STABLE_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/latest/download";
 const UPDATE_ALPHA_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/alpha-latest";
+// Зеркало тех же файлов на сервере студии (voice_report_bot/desktop_updates.py): у части людей GitHub не открывается.
+const SERVER_STABLE_URL: &str = concat!(env!("SERVER_ORIGIN"), "/updates/stable");
+const SERVER_ALPHA_URL: &str = concat!(env!("SERVER_ORIGIN"), "/updates/alpha");
+
+/// Откуда брать обновления. «Авто» — GitHub, а если он не отвечает — сервер студии (и в следующий раз сначала тот,
+/// что сработал). Выбор человека хранится в %APPDATA%\com.project.desktop\update_source.txt.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum UpdateSource {
+    Github,
+    Server,
+}
+
+impl UpdateSource {
+    fn key(self) -> &'static str {
+        match self {
+            UpdateSource::Github => "github",
+            UpdateSource::Server => "server",
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            UpdateSource::Github => "GitHub",
+            UpdateSource::Server => "сервер студии",
+        }
+    }
+    fn base(self) -> &'static str {
+        let alpha = build_update_channel() == ALPHA_CHANNEL;
+        match (self, alpha) {
+            (UpdateSource::Github, false) => UPDATE_STABLE_URL,
+            (UpdateSource::Github, true) => UPDATE_ALPHA_URL,
+            (UpdateSource::Server, false) => SERVER_STABLE_URL,
+            (UpdateSource::Server, true) => SERVER_ALPHA_URL,
+        }
+    }
+    fn setup_url(self) -> String {
+        let name = if build_update_channel() == ALPHA_CHANNEL { "ProjectDesktop-alpha-Setup.exe" } else { "ProjectDesktop-win-Setup.exe" };
+        format!("{}/{name}", self.base())
+    }
+}
+
+fn update_source_path() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("com.project.desktop").join("update_source.txt"))
+}
+
+fn update_source_pref() -> String {
+    let saved = update_source_path().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    match saved.trim() {
+        "github" | "server" => saved.trim().to_string(),
+        _ => "auto".to_string(),
+    }
+}
+
+fn last_good_source() -> &'static Mutex<Option<UpdateSource>> {
+    static LAST: OnceLock<Mutex<Option<UpdateSource>>> = OnceLock::new();
+    LAST.get_or_init(|| Mutex::new(None))
+}
+
+/// Источники по порядку попыток.
+fn update_sources() -> Vec<UpdateSource> {
+    match update_source_pref().as_str() {
+        "github" => vec![UpdateSource::Github],
+        "server" => vec![UpdateSource::Server],
+        _ => match *last_good_source().lock().unwrap() {
+            Some(UpdateSource::Server) => vec![UpdateSource::Server, UpdateSource::Github],
+            _ => vec![UpdateSource::Github, UpdateSource::Server],
+        },
+    }
+}
+
+#[tauri::command]
+fn get_update_source() -> String {
+    update_source_pref()
+}
+
+#[tauri::command]
+fn set_update_source(source: String) -> Result<(), String> {
+    if !matches!(source.as_str(), "auto" | "github" | "server") {
+        return Err("Источник: auto, github или server.".into());
+    }
+    let path = update_source_path().ok_or("Не найдена папка данных программы")?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, &source).map_err(|e| e.to_string())?;
+    *update_check_cache().lock().unwrap() = None; // прежний ответ был от другого источника
+    *last_good_source().lock().unwrap() = None;
+    Ok(())
+}
 
 // Канал задаётся типом сборки в workflow, а не пользовательской настройкой.
 // Это не даёт стабильному клиенту начать получать alpha-релизы из-за старого
@@ -65,10 +154,14 @@ fn set_update_channel(channel: String) -> Result<(), String> {
 }
 
 fn velopack_update_manager(app: &tauri::AppHandle) -> Result<velopack::UpdateManager, String> {
+    velopack_update_manager_for(app, UpdateSource::Github)
+}
+
+fn velopack_update_manager_for(app: &tauri::AppHandle, from: UpdateSource) -> Result<velopack::UpdateManager, String> {
     let is_alpha = build_update_channel() == ALPHA_CHANNEL;
     // Альфа публикуется отдельным pre-release с постоянным тегом
-    // alpha-latest (build-alpha.yml), стабильная — обычными релизами.
-    let source = velopack::sources::HttpSource::new(if is_alpha { UPDATE_ALPHA_URL } else { UPDATE_STABLE_URL });
+    // alpha-latest (build-alpha.yml), стабильная — обычными релизами; на сервере студии — та же раскладка.
+    let source = velopack::sources::HttpSource::new(from.base());
     // Стабильная prerelease-сборка может принять stable-версию ниже по номеру.
     // Alpha при этом всё равно остаётся закреплена за alpha-фидом: выбор
     // stable здесь не меняет ни источник, ни канал обновлений.
@@ -85,6 +178,8 @@ fn velopack_update_manager(app: &tauri::AppHandle) -> Result<velopack::UpdateMan
 struct UpdateInfoOut {
     version: String,
     notes: String,
+    /// Откуда пришло: "github" или "server".
+    source: String,
 }
 
 // 403/429 от GitHub возможны и на прямых ссылках (временные ограничения
@@ -140,10 +235,11 @@ fn is_transient_update_error(text: &str) -> bool {
     .any(|marker| text.contains(marker))
 }
 
-fn update_retry_reason(text: &str) -> &'static str {
+fn update_retry_reason(text: &str, from: UpdateSource) -> String {
     let text = text.to_ascii_lowercase();
+    let who = from.label();
     if text.contains("404") || text.contains("502") || text.contains("503") || text.contains("504") {
-        "GitHub временно не отдаёт релиз"
+        format!("{who} временно не отдаёт релиз")
     } else if text.contains("peer disconnected")
         || text.contains("connection reset")
         || text.contains("connection closed")
@@ -151,21 +247,27 @@ fn update_retry_reason(text: &str) -> &'static str {
         || text.contains("broken pipe")
         || text.contains("unexpected eof")
     {
-        "Соединение с GitHub прервалось"
+        format!("Соединение с {who} прервалось")
     } else {
-        "Временная ошибка сети"
+        format!("Временная ошибка сети ({who})")
     }
 }
 
-fn describe_update_error(text: &str) -> String {
+fn describe_update_error(text: &str, from: UpdateSource) -> String {
     if is_transient_update_error(text) {
         format!(
-            "{} после нескольких попыток. Проверьте интернет/VPN и повторите скачивание. Исходная ошибка: {text}",
-            update_retry_reason(text)
+            "{} после нескольких попыток. Проверьте интернет или выберите другой источник обновлений (Настройки → Обновления). Исходная ошибка: {text}",
+            update_retry_reason(text, from)
         )
     } else {
         text.to_string()
     }
+}
+
+/// Сколько повторов давать источнику: если за ним есть запасной — один (не держим человека две минуты на мёртвом
+/// GitHub), последнему — все.
+fn retries_for(index: usize, total: usize) -> u32 {
+    if index + 1 < total { 1 } else { UPDATE_RETRIES }
 }
 
 const UPDATE_RETRIES: u32 = 6;
@@ -194,26 +296,53 @@ fn check_for_update_cached(app: &tauri::AppHandle, force: bool) -> Result<Option
         }
     }
 
-    let um = velopack_update_manager(app)?;
-    let mut attempt = 0;
-    let result = loop {
-        let one = match um.check_for_updates().map_err(friendly_update_error) {
-            Ok(velopack::UpdateCheck::UpdateAvailable(info)) => Ok(Some(UpdateInfoOut {
-                version: info.TargetFullRelease.Version.clone(),
-                notes: info.TargetFullRelease.NotesMarkdown.clone(),
-            })),
-            Ok(_) => Ok(None),
-            Err(e) => Err(e),
-        };
-        match &one {
-            Err(e) if is_transient_update_error(e) && attempt < UPDATE_RETRIES => {
-                attempt += 1;
-                log::info!("check_for_update: фид недоступен ({e}), повтор {attempt}/{UPDATE_RETRIES}");
-                update_retry_pause(attempt);
+    let sources = update_sources();
+    let mut errors = Vec::new();
+    let mut result = Err(String::new());
+    for (index, from) in sources.iter().copied().enumerate() {
+        let retries = retries_for(index, sources.len());
+        let um = match velopack_update_manager_for(app, from) {
+            Ok(um) => um,
+            Err(e) => {
+                errors.push(format!("{}: {e}", from.label()));
+                continue;
             }
-            _ => break one,
+        };
+        let mut attempt = 0;
+        let one = loop {
+            let one = match um.check_for_updates().map_err(friendly_update_error) {
+                Ok(velopack::UpdateCheck::UpdateAvailable(info)) => Ok(Some(UpdateInfoOut {
+                    version: info.TargetFullRelease.Version.clone(),
+                    notes: info.TargetFullRelease.NotesMarkdown.clone(),
+                    source: from.key().to_string(),
+                })),
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            };
+            match &one {
+                Err(e) if is_transient_update_error(e) && attempt < retries => {
+                    attempt += 1;
+                    log::info!("check_for_update ({}): фид недоступен ({e}), повтор {attempt}/{retries}", from.key());
+                    update_retry_pause(attempt);
+                }
+                _ => break one,
+            }
+        };
+        match one {
+            Ok(found) => {
+                *last_good_source().lock().unwrap() = Some(from);
+                result = Ok(found);
+                break;
+            }
+            Err(e) => {
+                log::info!("check_for_update: {} не ответил ({e}) — пробую следующий источник", from.key());
+                errors.push(format!("{}: {e}", from.label()));
+            }
         }
-    };
+    }
+    if result.is_err() {
+        result = Err(errors.join("; "));
+    }
     // Ошибку не запоминаем: иначе следующая проверка в течение пяти минут снова покажет тот же сбой.
     if result.is_ok() {
         *cache.lock().unwrap() = Some(CachedUpdateCheck { at: std::time::Instant::now(), channel, result: result.clone() });
@@ -329,7 +458,7 @@ fn update_failure(app: tauri::AppHandle) -> Option<String> {
         return None;
     }
     log::error!("update_failure: ставили {target}, но запущена {current}");
-    Some(format!("Обновление до {target} не установилось: Windows не дала заменить файлы программы. Закройте программу полностью (трей → Выход) и нажмите «Установить обновление» ещё раз."))
+    Some(format!("Обновление до {target} не установилось: Windows не дала заменить файлы программы. Закройте программу полностью (трей → Выход) и обновитесь ещё раз. Не помогает — «Настройки → Обновления → Переустановить начисто»."))
 }
 
 /// Качает и сразу ставит обновление, перезапуская приложение —
@@ -351,60 +480,104 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
         // `.partial` пакет, и вторая падает с «файл занят другим процессом»
         // (os error 32), а первая тем временем спокойно докачивается.
         let _guard = UpdateDownloadGuard::acquire()?;
-        let um = velopack_update_manager(&app)?;
-        let mut attempt = 0;
-        loop {
-            let info = match um.check_for_updates().map_err(friendly_update_error) {
-                Ok(velopack::UpdateCheck::UpdateAvailable(info)) => *info,
-                Ok(_) => return Err("Обновление больше не доступно — кто-то уже обновился раньше вас?".into()),
-                Err(e) if is_transient_update_error(&e) && attempt < UPDATE_RETRIES => {
-                    attempt += 1;
-                    log::info!("download_and_apply_update: фид недоступен ({e}), повтор {attempt}/{UPDATE_RETRIES}");
-                    let _ = app.emit("update-retry", serde_json::json!({ "attempt": attempt, "reason": update_retry_reason(&e) }));
-                    update_retry_pause(attempt);
+        // Источники по очереди: GitHub не отдал фид или оборвал пакет — тот же пакет берём с сервера студии.
+        let sources = update_sources();
+        let mut errors = Vec::new();
+        let mut picked = None;
+        'sources: for (index, from) in sources.iter().copied().enumerate() {
+            let retries = retries_for(index, sources.len());
+            let _ = app.emit("update-source", from.label());
+            let um = match velopack_update_manager_for(&app, from) {
+                Ok(um) => um,
+                Err(e) => {
+                    errors.push(format!("{}: {e}", from.label()));
                     continue;
                 }
-                Err(e) => return Err(describe_update_error(&e)),
             };
-            log::info!("download_and_apply_update: качаем {}", info.TargetFullRelease.Version);
+            let mut attempt = 0;
+            loop {
+                let info = match um.check_for_updates().map_err(friendly_update_error) {
+                    Ok(velopack::UpdateCheck::UpdateAvailable(info)) => *info,
+                    Ok(_) => return Err("Обновление больше не доступно — кто-то уже обновился раньше вас?".into()),
+                    Err(e) if is_transient_update_error(&e) && attempt < retries => {
+                        attempt += 1;
+                        log::info!("download_and_apply_update ({}): фид недоступен ({e}), повтор {attempt}/{retries}", from.key());
+                        let _ = app.emit("update-retry", serde_json::json!({ "attempt": attempt, "of": retries, "reason": update_retry_reason(&e, from) }));
+                        update_retry_pause(attempt);
+                        continue;
+                    }
+                    Err(e) => {
+                        errors.push(describe_update_error(&e, from));
+                        continue 'sources;
+                    }
+                };
+                log::info!("download_and_apply_update: качаем {} ({})", info.TargetFullRelease.Version, from.key());
 
-            let (tx, rx) = std::sync::mpsc::channel::<i16>();
-            let progress_app = app.clone();
-            std::thread::spawn(move || {
-                for pct in rx {
-                    let _ = progress_app.emit("update-progress", pct);
-                }
-            });
+                let (tx, rx) = std::sync::mpsc::channel::<i16>();
+                let progress_app = app.clone();
+                std::thread::spawn(move || {
+                    for pct in rx {
+                        let _ = progress_app.emit("update-progress", pct);
+                    }
+                });
 
-            if let Err(e) = um.download_updates(&info, Some(tx)) {
-                let text = e.to_string();
-                if is_transient_update_error(&text) && attempt < UPDATE_RETRIES {
-                    attempt += 1;
-                    log::info!("download_and_apply_update: пакет недоступен ({text}), повтор {attempt}/{UPDATE_RETRIES}");
-                    let _ = app.emit("update-retry", serde_json::json!({ "attempt": attempt, "reason": update_retry_reason(&text) }));
-                    update_retry_pause(attempt);
-                    continue;
+                if let Err(e) = um.download_updates(&info, Some(tx)) {
+                    let text = e.to_string();
+                    if is_transient_update_error(&text) && attempt < retries {
+                        attempt += 1;
+                        log::info!("download_and_apply_update ({}): пакет недоступен ({text}), повтор {attempt}/{retries}", from.key());
+                        let _ = app.emit("update-retry", serde_json::json!({ "attempt": attempt, "of": retries, "reason": update_retry_reason(&text, from) }));
+                        update_retry_pause(attempt);
+                        continue;
+                    }
+                    errors.push(describe_update_error(&text, from));
+                    continue 'sources;
                 }
-                return Err(describe_update_error(&text));
+                *last_good_source().lock().unwrap() = Some(from);
+                picked = Some((um, info));
+                break 'sources;
             }
-            // apply_updates_and_restart сама завершает процесс — строка ниже
-            // в норме никогда не выполняется до конца, но если она вообще
-            // вернула управление, это уже само по себе ошибка на стороне ОС.
-            // Раньше тут был apply_updates_and_restart — он завершает процесс жёстким exit(0), без штатного
-            // закрытия окна. Дочерние процессы WebView2 после этого висели ещё секунды и держали папку
-            // `current`, а Update.exe не мог её переименовать («файл занят», 10 повторов и отказ): версия
-            // оставалась старой. Теперь Update.exe запускается и ждёт, а мы выходим штатно, закрывая webview.
-            um.wait_exit_then_apply_updates(&info.TargetFullRelease, false, true, Vec::<String>::new())
-                .map_err(|e| e.to_string())?;
-            if let Ok(dir) = app.path().app_data_dir() {
-                let _ = std::fs::create_dir_all(&dir);
-                let _ = std::fs::write(dir.join("update_pending.txt"), info.TargetFullRelease.Version.to_string());
-            }
-            log::info!("download_and_apply_update: Update.exe запущен, выходим для установки");
-            app.exit(0);
-            return Ok(());
         }
+        let Some((um, info)) = picked else {
+            return Err(errors.join("\n"));
+        };
+        // apply_updates_and_restart сама завершает процесс — строка ниже
+        // в норме никогда не выполняется до конца, но если она вообще
+        // вернула управление, это уже само по себе ошибка на стороне ОС.
+        // Раньше тут был apply_updates_and_restart — он завершает процесс жёстким exit(0), без штатного
+        // закрытия окна. Дочерние процессы WebView2 после этого висели ещё секунды и держали папку
+        // `current`, а Update.exe не мог её переименовать («файл занят», 10 повторов и отказ): версия
+        // оставалась старой. Теперь Update.exe запускается и ждёт, а мы выходим штатно, закрывая webview.
+        um.wait_exit_then_apply_updates(&info.TargetFullRelease, false, true, Vec::<String>::new())
+            .map_err(|e| e.to_string())?;
+        if let Ok(dir) = app.path().app_data_dir() {
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join("update_pending.txt"), info.TargetFullRelease.Version.to_string());
+        }
+        log::info!("download_and_apply_update: Update.exe запущен, выходим для установки");
+        app.exit(0);
+        Ok(())
     })())
+}
+
+/// «Переустановить начисто»: зависшая установка, перенесённая руками папка, портативная копия — скачиваем установщик
+/// (источники — как у обновлений) и ставим программу в обычное место. Setup.exe запускается, когда мы уже вышли:
+/// иначе он не заменит файлы запущенной программы. Старые копии потом видны в «Копии программы» — их можно убрать.
+#[tauri::command]
+async fn reinstall_app(app: tauri::AppHandle) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    let _guard = UpdateDownloadGuard::acquire()?;
+    let urls: Vec<(String, String)> = update_sources().into_iter().map(|s| (s.label().to_string(), s.setup_url())).collect();
+    let setup = installs::download_setup(&app, &urls).await.map_err(|e| { log::error!("[reinstall_app] {e}"); e })?;
+    let script = format!("Start-Sleep -Seconds 3; Start-Process -FilePath '{}'", antivirus::ps_quote(&setup.to_string_lossy()));
+    std::process::Command::new("powershell")
+        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    log::info!("reinstall_app: установщик {} запустится после выхода", setup.display());
+    app.exit(0);
+    Ok(())
 }
 
 // Логирует Err любой команды с её именем перед тем, как отдать наружу —
@@ -1471,6 +1644,7 @@ fn drop_installed_package() {
     use velopack::locator::{auto_locate_app_manifest, find_local_full_packages, LocationContext};
     let Ok(locator) = auto_locate_app_manifest(LocationContext::FromCurrentExe) else { return };
     let current = locator.get_manifest_version();
+    installs::drop_partial_packages(&locator.get_packages_dir());
     for (path, manifest) in find_local_full_packages(&locator.get_packages_dir()) {
         if manifest.version > current {
             continue;
@@ -1647,6 +1821,11 @@ fn main() {
             download_report_file,
             get_update_channel,
             set_update_channel,
+            get_update_source,
+            set_update_source,
+            reinstall_app,
+            installs::find_installs,
+            installs::remove_install,
             board_layout,
             pick_input_files,
             pick_output_file,
