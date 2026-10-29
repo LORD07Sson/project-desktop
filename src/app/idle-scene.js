@@ -36,7 +36,8 @@ const EYE = [0, 0.8, 6];
 const TARGET = [0, 4.2, -16];
 const FOV = Math.PI / 4;
 const TREE = [1.8, -16.5];
-const BLADES = 80000;
+const BLADES = 150000;
+const SEGMENTS = 7;   // звеньев в травинке — изгиб плавный, без изломов
 
 // Сезон — тот же, что в Настройках → Внешний вид (season.js, :root[data-season]); «Выкл.» — лето.
 // Цвета травы, земли и кроны, снег, высота травы, доля цветов, оттенок неба и что летает:
@@ -164,11 +165,16 @@ void main() {
   c += (1.0 - uNight) * vec3(1.0, 0.95, 0.85) * (0.15 / (sd * 3.0 + 0.4) + rays * 0.12 * smoothstep(0.9, 0.0, sd));
   // Облака
   vec2 cp = vec2(sp.x * 1.6 + uTime * 0.008, sp.y * 3.2);
-  float cl = fbm(cp * 1.4) * 0.65 + fbm(cp * 3.3 + 7.0) * 0.35;
+  float cl = fbm(cp * 1.4) * 0.6 + fbm(cp * 3.3 + 7.0) * 0.28 + fbm(cp * 9.0 + 3.0) * 0.12;
   float cover = smoothstep(0.5, 0.78, cl) * smoothstep(0.02, 0.25, h);
-  vec3 cloud = mix(vec3(1.0, 1.0, 1.0), vec3(0.22, 0.29, 0.48), uNight);
+  // Объём: сдвинутая к свету выборка — где облако тоньше со стороны света, край светится; низ темнее
+  float toLight = fbm((cp + vec2(-0.04, 0.05)) * 1.4) * 0.6 + fbm((cp + vec2(-0.04, 0.05)) * 3.3 + 7.0) * 0.28;
+  float lightEdge = clamp((cl - toLight) * 4.0, 0.0, 1.0);
+  vec3 cloudLit = mix(vec3(1.0, 0.99, 0.97), vec3(0.3, 0.37, 0.58), uNight);
+  vec3 cloudDark = mix(vec3(0.72, 0.77, 0.86), vec3(0.12, 0.16, 0.3), uNight);
+  vec3 cloud = mix(cloudDark, cloudLit, 0.45 + 0.55 * lightEdge);
   float rim = uNight * (0.25 + 0.75 * lit) * smoothstep(0.35, 0.0, length(sp - moon)) * smoothstep(0.85, 0.5, cover) * cover;
-  c = mix(c, cloud * (0.86 + 0.14 * cl), cover * mix(0.9, 0.55, uNight));
+  c = mix(c, cloud * (0.9 + 0.1 * cl), cover * mix(0.92, 0.6, uNight));
   c += vec3(0.55, 0.62, 0.8) * rim * 0.9;
   // Дальние холмы в дымке у горизонта
   float far = uHorizon + 0.025 + 0.02 * fbm(vec2(sp.x * 2.5, 1.0)) + 0.012 * sin(sp.x * 3.0);
@@ -199,7 +205,7 @@ uniform float uTime;
 ${NOISE_GLSL}
 ${SHADE_GLSL}
 void main() {
-  vec3 c = uGround * (0.75 + 0.5 * noise(vXZ * 0.8));
+  vec3 c = uGround * (0.7 + 0.4 * noise(vXZ * 0.8) + 0.15 * noise(vXZ * 6.0) + 0.08 * noise(vXZ * 25.0));
   // Снег: сугробы (мягкие тени) и искорки, которые вспыхивают на солнце и под луной
   float drift = fbm(vXZ * 0.35);
   vec3 snow = vec3(0.9, 0.94, 1.0) * (0.82 + 0.25 * drift) + vec3(0.0, 0.02, 0.06) * (1.0 - drift);
@@ -227,6 +233,8 @@ out float vT;
 out float vSeed;
 out float vPress;
 out float vD;
+out vec3 vN;
+out vec3 vW;
 ${HILL_GLSL}
 void main() {
   float t = aVert.x;
@@ -235,7 +243,8 @@ void main() {
   float seed = aInst.z;
   float h = (0.3 + 0.32 * fract(seed * 7.13)) * (1.0 + d * 0.02) * uHeight;
   for (int i = 0; i < 8; i++) if (uClear[i].z > 0.0) h *= mix(0.18, 1.0, smoothstep(uClear[i].z * 0.45, uClear[i].z, distance(base.xz, uClear[i].xy)));
-  float w = (0.03 + d * 0.0035) * (1.0 - t * 0.85);
+  // Ширина: у основания чуть уже, в середине шире, к кончику сходится — как у настоящего листа
+  float w = (0.03 + d * 0.0035) * (1.0 - t * 0.85) * (0.85 + 0.5 * sin(t * 3.1416) * (1.0 - t));
   vec2 side = vec2(cos(aInst.w), sin(aInst.w));
 
   float gust = 0.25 + 0.2 * sin(uTime * 0.6 + base.x * 0.12 - base.z * 0.05) + 0.12 * sin(uTime * 2.3 + seed * 12.0);
@@ -254,6 +263,8 @@ void main() {
   if (ll > 1.25) lean *= 1.25 / ll;
 
   float bend = min(length(lean), 1.0);
+  // Собственный изгиб травинки (даже в штиль) — каждая гнётся в свою сторону
+  lean += side.yx * vec2(-1.0, 1.0) * (0.15 + 0.25 * fract(seed * 5.7));
   vec2 horiz = lean * t * t * h;
   float up = h * t * (1.0 - 0.4 * bend * t);
   vec3 p = base + vec3(side.x * w * aVert.y, 0.0, side.y * w * aVert.y) + vec3(horiz.x, up, horiz.y);
@@ -262,6 +273,10 @@ void main() {
   vSeed = seed;
   vPress = max(press, push);
   vD = distance(p, uEye);
+  // Нормаль плоскости травинки, наклонённая вместе с изгибом
+  vec3 n = normalize(vec3(-side.y, 0.0, side.x));
+  vN = normalize(n + vec3(lean.x, 0.0, lean.y) * 0.4 * t);
+  vW = p;
   gl_Position = uVP * vec4(p, 1.0);
 }`;
 const GRASS_FS = `#version 300 es
@@ -270,7 +285,11 @@ in float vT;
 in float vSeed;
 in float vPress;
 in float vD;
+in vec3 vN;
+in vec3 vW;
 out vec4 o;
+uniform vec3 uEye;
+${NOISE_GLSL}
 ${SHADE_GLSL}
 void main() {
   vec3 root = uRoot;
@@ -281,6 +300,20 @@ void main() {
     c = k < 0.4 ? vec3(0.92, 0.55, 0.75) : k < 0.75 ? vec3(0.7, 0.55, 0.95) : vec3(0.98, 0.88, 0.4);
   }
   c *= 0.92 + 0.16 * fract(vSeed * 3.1);
+  // Пятна по полю: где-то трава гуще и темнее, где-то выгорела и светлее
+  float field = noise(vW.xz * 0.18) * 0.65 + noise(vW.xz * 0.7) * 0.35;
+  c *= 0.82 + 0.36 * field;
+  c = mix(c, c * vec3(1.08, 1.04, 0.85), smoothstep(0.55, 0.85, field) * 0.5);
+  // Свет: днём солнце сзади слева, ночью луна справа. Рассеянный свет, просвет насквозь против света, блик на кончиках
+  vec3 L = normalize(mix(vec3(-0.45, 0.75, -0.5), vec3(0.55, 0.6, -0.6), uNight));
+  vec3 V = normalize(uEye - vW);
+  vec3 N = faceforward(vN, -V, vN);
+  float diff = 0.55 + 0.45 * max(dot(N, L), 0.0);
+  float trans = pow(max(dot(-V, L), 0.0), 3.0) * vT * 0.55;
+  float spec = pow(max(dot(reflect(-L, N), V), 0.0), 24.0) * vT * vT * 0.35;
+  c = c * diff + c * vec3(1.1, 1.2, 0.7) * trans + vec3(1.0, 0.98, 0.9) * spec * (1.0 - uSnow * 0.5);
+  // Тень у корней: внизу травинки темнее (свет не доходит сквозь густую траву)
+  c *= mix(0.45, 1.0, smoothstep(0.0, 0.45, vT));
   // Осень: у корней опавшие листья; зима: иней по кончикам; Хэллоуин: туман стелется по земле
   c = mix(c, mix(uLeaf, uLeafHi, fract(vSeed * 29.0)), uFallen * step(0.72, fract(vSeed * 7.7)) * (1.0 - smoothstep(0.12, 0.35, vT)));
   c = mix(c, vec3(0.95, 0.97, 1.0), uSnow * smoothstep(0.7, 1.0, vT) * step(0.4, fract(vSeed * 5.3)) * 0.6);
@@ -377,7 +410,8 @@ void main() {
   }
   vec3 leaf = mix(uLeaf, uLeafHi, smoothstep(-0.4, 0.9, shade + (rustle - 0.5) * 0.6));
   leaf *= 0.78 + 0.3 * smoothstep(0.4, 1.0, p.y);
-  vec3 bark = vec3(0.22, 0.15, 0.1) * (0.8 + 0.4 * noise(p * vec2(30.0, 6.0)));
+  vec3 bark = vec3(0.22, 0.15, 0.1) * (0.75 + 0.35 * noise(p * vec2(30.0, 6.0)) + 0.2 * noise(p * vec2(120.0, 14.0)));
+  bark *= 1.0 - 0.35 * smoothstep(0.55, 0.75, noise(p * vec2(90.0, 5.0)));   // трещины вдоль ствола
   vec3 c = crown < wood ? leaf : bark;
   // Снег лежит на верхней стороне веток и кроны
   float topSide = smoothstep(0.0, -0.02, crown < wood ? crown + 0.03 : wood + 0.012 * asp.y);
@@ -561,7 +595,7 @@ function buffer(gl, prog, name, data, size, divisor = 0) {
 }
 
 function buildScene(canvas) {
-  const gl = canvas.getContext("webgl2", { antialias: true, alpha: false, powerPreference: "low-power" });
+  const gl = canvas.getContext("webgl2", { antialias: true, alpha: false, powerPreference: "high-performance" });
   if (!gl) return null;
   const sky = program(gl, SKY_VS, SKY_FS);
   const ground = program(gl, GROUND_VS, GROUND_FS);
@@ -587,7 +621,7 @@ function buildScene(canvas) {
   const grassVao = gl.createVertexArray();
   gl.bindVertexArray(grassVao);
   const blade = [];
-  for (let k = 0; k < 5; k++) { const t = k / 5; blade.push(t, -1, t, 1); }
+  for (let k = 0; k < SEGMENTS; k++) { const t = k / SEGMENTS; blade.push(t, -1, t, 1); }
   blade.push(1, 0);
   buffer(gl, grass, "aVert", new Float32Array(blade), 2);
   const inst = new Float32Array(BLADES * 4);
@@ -671,9 +705,12 @@ function buildScene(canvas) {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TR_W, TR_H, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
   }
 
+  // Качество: 1 — родное разрешение экрана; если видеокарта не успевает, плавно опускается (до 0.5)
+  let quality = 1;
+  function setQuality(q) { quality = Math.max(0.5, Math.min(1, q)); resize(); }
   let cam = camera(1), aspect = 1, horizon = 0.42;
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * quality;
     canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
     canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
     aspect = canvas.width / canvas.height;
@@ -770,7 +807,7 @@ function buildScene(canvas) {
     gl.bindTexture(gl.TEXTURE_2D, trTex);
     gl.uniform1i(grass.u.uTrample, 0);
     gl.bindVertexArray(grassVao);
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 11, BLADES);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, SEGMENTS * 2 + 1, BLADES);
 
     gl.enable(gl.BLEND);
     gl.depthMask(false);
@@ -798,7 +835,7 @@ function buildScene(canvas) {
 
   function dispose() { gl.getExtension("WEBGL_lose_context")?.loseContext(); }
 
-  return { resize, pick, stamp, draw, dispose };
+  return { resize, pick, stamp, draw, dispose, setQuality, quality: () => quality };
 }
 
 // ---------- экран ----------
@@ -844,10 +881,17 @@ export function showIdleScene() {
   tickText();
   const textTimer = setInterval(tickText, 15000);
 
+  let frameAvg = 1 / 60, qualityAt = window.performance.now();
   const frame = now => {
     const dt = Math.min(0.1, (now - prev) / 1000);
     prev = now;
     night += (nightGoal - night) * Math.min(1, dt * 1.6);
+    // Автоподстройка: средний кадр дольше 25 мс — снижаем разрешение, быстрее 14 мс — поднимаем обратно
+    frameAvg += (dt - frameAvg) * 0.05;
+    if (now - qualityAt > 2500) {
+      if (frameAvg > 0.025 && scene.quality() > 0.5) { scene.setQuality(scene.quality() - 0.15); qualityAt = now; }
+      else if (frameAvg < 0.014 && scene.quality() < 1) { scene.setQuality(scene.quality() + 0.1); qualityAt = now; }
+    }
     scene.draw((now - t0) / 1000, dt, night, cursor);
     raf = document.hidden || !document.hasFocus() ? 0 : requestAnimationFrame(frame);
   };
