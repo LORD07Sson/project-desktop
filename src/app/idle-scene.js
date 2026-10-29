@@ -46,32 +46,41 @@ const SEASON_LOOKS = {
     root: [0.07, 0.18, 0.04], tip: [0.42, 0.7, 0.2], tip2: [0.6, 0.78, 0.28], ground: [0.09, 0.2, 0.05],
     leaf: [0.1, 0.22, 0.07], leafHi: [0.3, 0.48, 0.16], snow: 0, height: 1, flowers: 0.014, sky: [1, 1, 1],
     fall: 0, flyDay: [1, 1, 0.92], flyNight: [0.85, 1, 0.45], flySize: [0.035, 0.11],
+    crown: 1, fallen: 0, mist: 0, layers: [[0, 220, "field"], [3, 14, "near"]],
   },
   spring: {
     root: [0.08, 0.2, 0.05], tip: [0.5, 0.8, 0.28], tip2: [0.66, 0.86, 0.36], ground: [0.11, 0.23, 0.06],
     leaf: [0.9, 0.58, 0.7], leafHi: [1, 0.84, 0.9], snow: 0, height: 0.85, flowers: 0.045, sky: [1.02, 1, 1.03],
     fall: 2, flyDay: [1, 0.76, 0.86], flyNight: [0.8, 0.6, 0.75], flySize: [0.05, 0.05],
+    crown: 1, fallen: 0, mist: 0, layers: [[2, 150, "field"], [2, 70, "tree"], [3, 16, "near"]],
   },
   autumn: {
     root: [0.12, 0.13, 0.04], tip: [0.74, 0.6, 0.22], tip2: [0.62, 0.42, 0.14], ground: [0.17, 0.15, 0.06],
     leaf: [0.78, 0.3, 0.08], leafHi: [0.96, 0.64, 0.16], snow: 0, height: 0.9, flowers: 0, sky: [1.05, 0.98, 0.9],
     fall: 2, flyDay: [0.95, 0.52, 0.16], flyNight: [0.6, 0.32, 0.14], flySize: [0.065, 0.065],
+    crown: 0.72, fallen: 1, mist: 0, layers: [[2, 130, "field"], [2, 80, "tree"]],
   },
   winter: {
     root: [0.3, 0.36, 0.32], tip: [0.86, 0.9, 0.95], tip2: [0.76, 0.83, 0.87], ground: [0.86, 0.9, 0.96],
     leaf: [0.2, 0.21, 0.23], leafHi: [0.95, 0.97, 1], snow: 0.8, height: 0.45, flowers: 0, sky: [0.92, 0.97, 1.06],
     fall: 1, flyDay: [1, 1, 1], flyNight: [0.82, 0.88, 1], flySize: [0.045, 0.045],
+    crown: 0, fallen: 0, mist: 0, layers: [[1, 400, "field"]],
   },
   halloween: {
     root: [0.1, 0.1, 0.04], tip: [0.55, 0.45, 0.18], tip2: [0.45, 0.3, 0.12], ground: [0.13, 0.11, 0.06],
     leaf: [0.34, 0.06, 0.08], leafHi: [0.62, 0.16, 0.1], snow: 0, height: 0.9, flowers: 0, sky: [1, 0.86, 1.1],
     fall: 0, flyDay: [1, 0.72, 0.32], flyNight: [1, 0.55, 0.15], flySize: [0.04, 0.12],
+    crown: 0.5, fallen: 1, mist: 1, layers: [[0, 160, "field"], [4, 14, "pumpkins"]],
   },
 };
+function moonPhase(date = new Date()) {
+  const days = (date.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
+  return ((days / 29.530588) % 1 + 1) % 1;   // 0 — новолуние, 0.5 — полнолуние
+}
 function seasonLook() {
   return SEASON_LOOKS[document.documentElement.dataset.season] || SEASON_LOOKS.summer;
 }
-const FLIES = 220;
+const FLIES = 400;
 // Текстура примятости покрывает луг: x ∈ [-22, 22], z ∈ [-20, 4]
 const TR_W = 192, TR_H = 96, TR_RECT = [-22, -20, 44, 24];
 
@@ -90,7 +99,7 @@ float fbm(vec2 p) {
 
 // Общий хвост фрагментных шейдеров: ночной тон и дымка к горизонту.
 const SHADE_GLSL = `
-uniform float uNight, uSnow, uFlowers;
+uniform float uNight, uSnow, uFlowers, uFallen, uMist;
 uniform vec3 uGround, uRoot, uTip, uTip2, uLeaf, uLeafHi;
 vec3 nightTint(vec3 c) { return mix(c, c * vec3(0.22, 0.4, 0.62) + vec3(0.0, 0.02, 0.05), uNight); }
 vec3 fog(vec3 c, float d) {
@@ -109,7 +118,7 @@ const SKY_FS = `#version 300 es
 precision highp float;
 in vec2 vUv;
 out vec4 o;
-uniform float uTime, uNight, uAspect, uHorizon, uSnow;
+uniform float uTime, uNight, uAspect, uHorizon, uSnow, uPhase;
 uniform vec3 uSkyTint;
 ${NOISE_GLSL}
 void main() {
@@ -124,19 +133,40 @@ void main() {
   vec2 inCell = fract(sp * 90.0) - 0.5 - (vec2(hash(cell + 1.7), hash(cell + 5.3)) - 0.5) * 0.6;
   float star = step(0.993, hash(cell)) * smoothstep(0.16, 0.0, length(inCell)) * (0.6 + 0.4 * sin(uTime * 2.0 + hash(cell + 3.0) * 30.0));
   c += vec3(0.8, 0.85, 1.0) * star * uNight * smoothstep(0.05, 0.3, h);
-  // Луна ночью, мягкое солнце днём
-  vec2 moon = vec2(0.66 * uAspect, uHorizon + 0.2);
+  // Луна: настоящая фаза по дате, моря и кратеры, пепельный свет на тёмной стороне, ореол; медленно плывёт
+  vec2 moon = vec2((0.66 + 0.012 * sin(uTime * 0.013)) * uAspect, uHorizon + 0.2 + 0.006 * sin(uTime * 0.011));
+  float R = 0.026;
+  vec2 q = (sp - moon) / R;
+  float r2 = dot(q, q);
+  float lit = 0.5 + 0.5 * cos((uPhase - 0.5) * 6.2832);   // доля освещённого диска
+  if (r2 < 1.0) {
+    vec3 n = vec3(q, sqrt(1.0 - r2));
+    float a = uPhase * 6.2832;
+    vec3 L = vec3(sin(a), 0.0, -cos(a));
+    float day = smoothstep(-0.06, 0.06, dot(n, L));
+    float maria = smoothstep(0.45, 0.7, fbm(q * 1.7 + 3.0));
+    float craters = smoothstep(0.62, 0.7, noise(q * 6.0 + 11.0)) * 0.5;
+    vec3 surf = vec3(0.96, 0.95, 0.9) * (1.0 - 0.28 * maria - 0.15 * craters) * (0.75 + 0.25 * n.z);
+    vec3 m = mix(vec3(0.07, 0.09, 0.14), surf, day);
+    c = mix(c, m, uNight * smoothstep(1.0, 0.94, r2));
+  }
   float md = length(sp - moon);
-  c += uNight * (vec3(0.95, 0.97, 1.0) * smoothstep(0.022, 0.018, md) + vec3(0.35, 0.45, 0.75) * 0.06 / (md * 6.0 + 0.05) * 0.4);
+  c += uNight * vec3(0.35, 0.45, 0.75) * (0.03 / (md * 5.0 + 0.04)) * (0.3 + 0.7 * lit) * (0.92 + 0.08 * sin(uTime * 0.7));
+  // Солнце днём: мягкое сияние и медленно вращающиеся лучи
   vec2 sun = vec2(0.18 * uAspect, 1.05);
-  float sd = length(sp - sun);
-  c += (1.0 - uNight) * vec3(1.0, 0.95, 0.85) * 0.25 / (sd * 3.0 + 0.4) * 0.6;
+  vec2 sv = sp - sun;
+  float sd = length(sv);
+  float ang = atan(sv.y, sv.x);
+  float rays = pow(0.5 + 0.5 * sin(ang * 14.0 + uTime * 0.05), 6.0) * 0.5 + pow(0.5 + 0.5 * sin(ang * 9.0 - uTime * 0.04 + 1.0), 8.0) * 0.4;
+  c += (1.0 - uNight) * vec3(1.0, 0.95, 0.85) * (0.15 / (sd * 3.0 + 0.4) + rays * 0.12 * smoothstep(0.9, 0.0, sd));
   // Облака
   vec2 cp = vec2(sp.x * 1.6 + uTime * 0.008, sp.y * 3.2);
   float cl = fbm(cp * 1.4) * 0.65 + fbm(cp * 3.3 + 7.0) * 0.35;
   float cover = smoothstep(0.5, 0.78, cl) * smoothstep(0.02, 0.25, h);
   vec3 cloud = mix(vec3(1.0, 1.0, 1.0), vec3(0.22, 0.29, 0.48), uNight);
+  float rim = uNight * (0.25 + 0.75 * lit) * smoothstep(0.35, 0.0, length(sp - moon)) * smoothstep(0.85, 0.5, cover) * cover;
   c = mix(c, cloud * (0.86 + 0.14 * cl), cover * mix(0.9, 0.55, uNight));
+  c += vec3(0.55, 0.62, 0.8) * rim * 0.9;
   // Дальние холмы в дымке у горизонта
   float far = uHorizon + 0.025 + 0.02 * fbm(vec2(sp.x * 2.5, 1.0)) + 0.012 * sin(sp.x * 3.0);
   vec3 farc = mix(mix(vec3(0.50, 0.66, 0.52), vec3(0.86, 0.9, 0.95), uSnow) * mix(vec3(1.0), uSkyTint, 2.0), vec3(0.06, 0.12, 0.2), uNight);
@@ -162,12 +192,21 @@ precision highp float;
 in float vD;
 in vec2 vXZ;
 out vec4 o;
+uniform float uTime;
 ${NOISE_GLSL}
 ${SHADE_GLSL}
 void main() {
   vec3 c = uGround * (0.75 + 0.5 * noise(vXZ * 0.8));
-  c = mix(c, vec3(0.9, 0.94, 1.0) * (0.9 + 0.1 * noise(vXZ * 3.0)), uSnow);
-  o = vec4(fog(nightTint(c), vD), 1.0);
+  // Снег: сугробы (мягкие тени) и искорки, которые вспыхивают на солнце и под луной
+  float drift = fbm(vXZ * 0.35);
+  vec3 snow = vec3(0.9, 0.94, 1.0) * (0.82 + 0.25 * drift) + vec3(0.0, 0.02, 0.06) * (1.0 - drift);
+  vec2 g = floor(vXZ * 45.0);
+  float glint = step(0.994, hash(g)) * pow(0.5 + 0.5 * sin(uTime * 2.5 + hash(g + 4.0) * 40.0), 8.0);
+  c = mix(c, snow + glint * 0.8, uSnow);
+  c = mix(c, mix(uLeaf, uLeafHi, noise(vXZ * 4.0)), uFallen * step(0.62, noise(vXZ * 5.0)) * 0.8);
+  c = nightTint(c);
+  c = mix(c, mix(vec3(0.62, 0.58, 0.7), vec3(0.16, 0.13, 0.24), uNight), uMist * 0.6);
+  o = vec4(fog(c, vD), 1.0);
 }`;
 
 const GRASS_VS = `#version 300 es
@@ -237,7 +276,11 @@ void main() {
     c = k < 0.4 ? vec3(0.92, 0.55, 0.75) : k < 0.75 ? vec3(0.7, 0.55, 0.95) : vec3(0.98, 0.88, 0.4);
   }
   c *= 0.92 + 0.16 * fract(vSeed * 3.1);
+  // Осень: у корней опавшие листья; зима: иней по кончикам; Хэллоуин: туман стелется по земле
+  c = mix(c, mix(uLeaf, uLeafHi, fract(vSeed * 29.0)), uFallen * step(0.72, fract(vSeed * 7.7)) * (1.0 - smoothstep(0.12, 0.35, vT)));
+  c = mix(c, vec3(0.95, 0.97, 1.0), uSnow * smoothstep(0.7, 1.0, vT) * step(0.4, fract(vSeed * 5.3)) * 0.6);
   c = nightTint(c);
+  c = mix(c, mix(vec3(0.62, 0.58, 0.7), vec3(0.16, 0.13, 0.24), uNight), uMist * (1.0 - smoothstep(0.0, 0.75, vT)) * 0.65);
   // Примятая трава подсвечивается: днём чуть светлее, ночью — мерцающим светом
   c += vPress * vT * mix(vec3(0.08, 0.1, 0.04), vec3(0.35, 0.7, 0.4), uNight);
   o = vec4(fog(c, vD), 1.0);
@@ -248,11 +291,15 @@ in vec2 aCorner;
 uniform mat4 uVP;
 uniform vec3 uEye;
 uniform vec3 uTree;
+uniform float uTime;
 out vec2 vUv;
 out float vD;
 void main() {
   vUv = aCorner;
-  vec3 p = uTree + vec3(aCorner.x * 1.9, aCorner.y * 4.2 - 0.2, 0.0);
+  // Всё дерево чуть гнётся по ветру: верх сильнее, порывы волнами
+  float gust = 0.5 + 0.5 * sin(uTime * 0.6 + 1.3) * sin(uTime * 0.23);
+  float bendX = (sin(uTime * 0.9) * 0.05 + gust * 0.09) * aCorner.y * aCorner.y;
+  vec3 p = uTree + vec3(aCorner.x * 1.9 + bendX, aCorner.y * 4.2 - 0.2, 0.0);
   vD = distance(p, uEye);
   gl_Position = uVP * vec4(p, 1.0);
 }`;
@@ -261,67 +308,146 @@ precision highp float;
 in vec2 vUv;
 in float vD;
 out vec4 o;
+uniform float uTime, uCrown;
 ${NOISE_GLSL}
 ${SHADE_GLSL}
+float seg(vec2 p, vec2 a, vec2 b, float ra, float rb) {
+  vec2 pa = p - a, ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h) - mix(ra, rb, h);
+}
 void main() {
   vec2 p = vUv;
-  float trunk = max(abs(p.x + 0.04 * sin(p.y * 6.0)) - 0.05 * (1.25 - p.y), p.y - 0.7);
-  float crown = min(min(length((p - vec2(0.0, 0.74)) * vec2(0.8, 1.3)) - 0.3,
-                        length((p - vec2(-0.45, 0.66)) * vec2(1.0, 1.6)) - 0.24),
-                    min(length((p - vec2(0.46, 0.68)) * vec2(1.0, 1.6)) - 0.24,
-                        length((p - vec2(0.08, 0.88)) * vec2(1.0, 1.5)) - 0.2));
-  crown += (fbm(p * 9.0) - 0.5) * 0.12;
-  float a = smoothstep(0.012, -0.012, min(trunk, crown));
+  vec2 asp = vec2(1.0, 2.2);   // квадрат 3.8 × 4.2 м — круг в мировых единицах
+  // Ветки качаются: чем выше и дальше от ствола, тем сильнее; у каждой свой ритм
+  vec2 sw = vec2(sin(uTime * 1.3 + p.y * 3.0) * 0.012, 0.0) * p.y;
+  vec2 q = p - sw;
+  float wood = seg(q * asp, vec2(0.0, 0.0), vec2(0.03, 0.62) * asp, 0.09, 0.04);
+  wood = min(wood, seg(q * asp, vec2(0.0, 0.42) * asp, vec2(-0.42, 0.72) * asp, 0.035, 0.012));
+  wood = min(wood, seg(q * asp, vec2(0.02, 0.48) * asp, vec2(0.44, 0.76) * asp, 0.035, 0.012));
+  wood = min(wood, seg(q * asp, vec2(0.02, 0.58) * asp, vec2(-0.16, 0.94) * asp, 0.03, 0.01));
+  wood = min(wood, seg(q * asp, vec2(0.03, 0.6) * asp, vec2(0.22, 0.92) * asp, 0.03, 0.01));
+  wood = min(wood, seg(q * asp, vec2(-0.24, 0.6) * asp, vec2(-0.62, 0.66) * asp, 0.018, 0.007));
+  wood = min(wood, seg(q * asp, vec2(0.26, 0.64) * asp, vec2(0.6, 0.63) * asp, 0.018, 0.007));
+  wood = min(wood, seg(q * asp, vec2(-0.3, 0.66) * asp, vec2(-0.36, 0.86) * asp, 0.012, 0.005));
+  wood = min(wood, seg(q * asp, vec2(0.3, 0.7) * asp, vec2(0.4, 0.88) * asp, 0.012, 0.005));
+  // Крона — грозди листвы, каждая качается со своим запаздыванием; листья шелестят (шум бежит по времени)
+  float crown = 1e3, shade = 0.0;
+  vec3 C[9] = vec3[9](vec3(0.0, 0.74, 0.3), vec3(-0.42, 0.68, 0.22), vec3(0.44, 0.7, 0.22), vec3(0.1, 0.9, 0.2),
+                      vec3(-0.2, 0.86, 0.2), vec3(0.3, 0.84, 0.19), vec3(-0.6, 0.64, 0.14), vec3(0.6, 0.64, 0.14), vec3(0.0, 0.6, 0.2));
+  for (int i = 0; i < 9; i++) {
+    float fi = float(i);
+    vec2 c = C[i].xy + vec2(sin(uTime * (1.1 + fi * 0.13) + fi * 1.7), cos(uTime * (0.9 + fi * 0.11) + fi)) * vec2(0.018, 0.006) * C[i].y;
+    vec2 d = (p - c) * vec2(1.0, 1.55);
+    float k = length(d) - C[i].z * (0.55 + 0.45 * uCrown);
+    if (k < crown) { crown = k; shade = dot(normalize(d + 1e-4), normalize(vec2(-0.5, 0.85))); }
+  }
+  float rustle = fbm(p * 11.0 + vec2(uTime * 0.35, uTime * 0.12));
+  crown += (rustle - 0.5) * 0.14 + (1.0 - uCrown) * 0.06;
+  // Осенью и в Хэллоуин крона редкая — сквозь неё видны ветки
+  crown += step(uCrown, fbm(p * 7.0 + 5.0) * 1.2) * 0.2 * (1.0 - uCrown);
+  if (uCrown < 0.01) crown = 1e3;
+  float a = smoothstep(0.012, -0.012, min(wood, crown));
   if (a < 0.02) discard;
-  vec3 leaf = mix(uLeaf, uLeafHi, smoothstep(0.5, 1.0, p.y + fbm(p * 14.0) * 0.3));
-  leaf = mix(leaf, vec3(0.93, 0.96, 1.0), uSnow * smoothstep(0.55, 0.9, p.y + fbm(p * 11.0) * 0.25));
-  vec3 c = crown < trunk ? leaf : vec3(0.22, 0.15, 0.1);
+  vec3 leaf = mix(uLeaf, uLeafHi, smoothstep(-0.4, 0.9, shade + (rustle - 0.5) * 0.6));
+  leaf *= 0.78 + 0.3 * smoothstep(0.4, 1.0, p.y);
+  vec3 bark = vec3(0.22, 0.15, 0.1) * (0.8 + 0.4 * noise(p * vec2(30.0, 6.0)));
+  vec3 c = crown < wood ? leaf : bark;
+  // Снег лежит на верхней стороне веток и кроны
+  float topSide = smoothstep(0.0, -0.02, crown < wood ? crown + 0.03 : wood + 0.012 * asp.y);
+  c = mix(c, vec3(0.94, 0.96, 1.0), uSnow * (crown < wood ? smoothstep(0.55, 0.9, p.y + fbm(p * 11.0) * 0.25) : step(0.5, noise(p * 40.0)) * 0.9));
   o = vec4(fog(nightTint(c), vD), a);
 }`;
 
 const FLY_VS = `#version 300 es
-in vec4 aFly;   // x, z, высота над травой, случайное число
+in vec4 aFly;   // x ∈ [-12, 12], z ∈ [-15, 3], высота над травой, случайное число
 uniform mat4 uVP;
 uniform vec3 uEye;
 uniform float uTime, uNight, uPx, uFall;
 uniform vec2 uFlySize;
+uniform vec4 uArea;   // центр x, z и масштаб по x, z — куда сжать облако частиц (у дерева, у камеры)
 out float vGlow;
 out float vSeed;
+out float vFlap;
 ${HILL_GLSL}
 void main() {
   float s = aFly.w;
-  vec3 p = vec3(aFly.x, 0.0, aFly.y);
-  p += vec3(sin(uTime * 0.3 + s * 10.0) * 0.7, 0.0, cos(uTime * 0.27 + s * 5.0) * 0.7);
-  p.y = hill(p.xz) + aFly.z + sin(uTime * 0.5 + s * 7.0) * 0.25;
-  if (uFall > 0.5) {
-    // Падают сверху и кружатся; снег медленнее и прямее, листья и лепестки качает сильнее
+  vec3 p = vec3(uArea.x + aFly.x / 12.0 * uArea.z * 12.0, 0.0, uArea.y + (aFly.y + 6.0) / 9.0 * uArea.w * 9.0);
+  float size = mix(uFlySize.x, uFlySize.y, uNight);
+  if (uFall < 0.5) {
+    // Светлячки ночью, пыльца днём: плавают над травой
+    p += vec3(sin(uTime * 0.3 + s * 10.0) * 0.7, 0.0, cos(uTime * 0.27 + s * 5.0) * 0.7);
+    p.y = hill(p.xz) + aFly.z + sin(uTime * 0.5 + s * 7.0) * 0.25;
+    float blink = pow(0.5 + 0.5 * sin(uTime * (0.8 + s) + s * 20.0), 3.0);
+    vGlow = mix(0.3, blink, uNight);
+  } else if (uFall < 2.5) {
+    // Падают и кружатся: снег медленнее и прямее, листья и лепестки качает сильнее
     float sway = uFall > 1.5 ? 0.6 : 0.25;
     p.x += sin(uTime * (1.1 + s) + s * 9.0) * sway;
+    p.z += cos(uTime * (0.7 + s) + s * 4.0) * sway * 0.5;
     p.y = hill(p.xz) + 4.0 - mod(uTime * (uFall > 1.5 ? 0.45 : 0.32) * (0.7 + 0.6 * s) + s * 9.0, 4.2);
+    size *= 0.6 + 0.8 * fract(s * 17.0);
+    vGlow = mix(0.95, 0.7, uNight);
+  } else if (uFall < 3.5) {
+    // Бабочки: порхают над травой днём, ночью прячутся
+    p += vec3(sin(uTime * 0.35 + s * 10.0) * 1.6, 0.0, cos(uTime * 0.29 + s * 7.0) * 1.2);
+    p.y = hill(p.xz) + 0.35 + 0.25 * sin(uTime * 1.7 + s * 3.0) + abs(sin(uTime * 3.1 + s * 9.0)) * 0.12;
+    size = 0.09;
+    vGlow = 1.0 - uNight;
+  } else {
+    // Тыквы: стоят в траве, ночью внутри горит свеча
+    p.y = hill(p.xz) + 0.34;
+    size = 0.6;
+    vGlow = 1.0;
   }
   float d = distance(p, uEye);
-  float blink = pow(0.5 + 0.5 * sin(uTime * (0.8 + s) + s * 20.0), 3.0);
-  float size = mix(uFlySize.x, uFlySize.y, uNight);
-  vGlow = uFall > 0.5 ? mix(0.95, 0.7, uNight) : mix(0.3, blink, uNight);
   vSeed = s;
-  gl_PointSize = clamp(size * uPx / d, 1.0, 40.0);
+  vFlap = abs(sin(uTime * 13.0 + s * 40.0));
+  gl_PointSize = clamp(size * uPx / d, 1.0, 90.0);
   gl_Position = uVP * vec4(p, 1.0);
 }`;
 const FLY_FS = `#version 300 es
 precision highp float;
 in float vGlow;
 in float vSeed;
+in float vFlap;
 out vec4 o;
 uniform float uNight, uFall;
 uniform vec3 uFlyDay, uFlyNight;
 void main() {
-  float r = length(gl_PointCoord - 0.5) * 2.0;
+  vec2 q = gl_PointCoord - 0.5;
+  float r = length(q) * 2.0;
   vec3 c = mix(uFlyDay, uFlyNight, uNight);
   float a;
-  if (uFall > 1.5) {
+  if (uFall > 3.5) {
+    // Тыква: рёбра, хвостик, ночью — светящиеся глаза и улыбка
+    vec2 b = q * vec2(2.0, 2.5) + vec2(0.0, 0.12);
+    float body = smoothstep(1.0, 0.92, length(b * vec2(0.8, 1.0)));
+    float ribs = 0.75 + 0.25 * abs(sin(b.x * 6.0));
+    vec3 pumpkin = vec3(0.95, 0.45, 0.08) * ribs * mix(1.0, 0.35, uNight);
+    float stem = step(abs(q.x + 0.02), 0.04) * step(q.y, -0.28) * step(-0.42, q.y);
+    vec2 e = abs(q - vec2(0.0, -0.02)) - vec2(0.13, 0.0);
+    float eyes = smoothstep(0.07, 0.05, length(e));
+    float mouth = step(abs(q.y - 0.14), 0.035 + 0.02 * sin(q.x * 40.0)) * step(abs(q.x), 0.2);
+    float face = max(eyes, mouth) * body;
+    c = mix(pumpkin, vec3(0.2, 0.4, 0.1), stem);
+    c = mix(c, vec3(1.0, 0.8, 0.3), face * (0.4 + 0.6 * uNight));
+    a = max(body, stem);
+    c += vec3(1.0, 0.5, 0.1) * uNight * 0.25 * smoothstep(1.0, 0.0, r);
+    a = max(a, uNight * 0.3 * smoothstep(1.0, 0.3, r));
+  } else if (uFall > 2.5) {
+    // Бабочка: два крыла, складываются в такт взмаху; окраска своя у каждой
+    float k = fract(vSeed * 7.0);
+    vec3 wing = k < 0.3 ? vec3(1.0, 0.98, 0.9) : k < 0.55 ? vec3(1.0, 0.82, 0.25) : k < 0.8 ? vec3(0.98, 0.55, 0.2) : vec3(0.45, 0.7, 1.0);
+    vec2 w = vec2(abs(q.x) / (0.12 + 0.88 * vFlap), q.y);
+    float wings = smoothstep(0.5, 0.42, length((w - vec2(0.25, -0.05)) * vec2(1.0, 1.3))) + smoothstep(0.32, 0.25, length(w - vec2(0.2, 0.22)));
+    float body = step(abs(q.x), 0.03) * step(abs(q.y), 0.22);
+    c = mix(wing * (0.85 + 0.3 * smoothstep(0.4, 0.0, length(w - vec2(0.25, 0.0)))), vec3(0.15, 0.12, 0.1), body);
+    a = min(1.0, wings + body) * vGlow;
+  } else if (uFall > 1.5) {
     // Лепесток или лист: плотная капля, у каждого свой оттенок
-    vec2 q = (gl_PointCoord - 0.5) * vec2(2.0, 3.2);
-    a = smoothstep(1.0, 0.8, length(q)) * vGlow;
+    vec2 l = q * vec2(2.0, 3.2);
+    a = smoothstep(1.0, 0.8, length(l)) * vGlow;
     c *= 0.75 + 0.5 * fract(vSeed * 13.0);
   } else if (uFall > 0.5) {
     a = smoothstep(1.0, 0.35, r) * vGlow;   // снежинка — мягкая
@@ -509,6 +635,9 @@ function buildScene(canvas) {
 
   // Юниформы сезона: каждой программе — те, что у неё есть
   const look = seasonLook();
+  const phase = moonPhase();
+  // Где роятся частицы слоя: всё поле, у дерева (сыплется с кроны), рядом с камерой (бабочки), тыквы в траве
+  const AREAS = { field: [0, -6, 1, 1], tree: [TREE[0], TREE[1], 0.12, 0.2], near: [0.3, -1, 0.35, 0.3], pumpkins: [0, -3, 0.6, 0.6] };
   function seasonUniforms(prog) {
     const u = prog.u;
     const v3 = { uRoot: look.root, uTip: look.tip, uTip2: look.tip2, uGround: look.ground, uLeaf: look.leaf, uLeafHi: look.leafHi, uSkyTint: look.sky, uFlyDay: look.flyDay, uFlyNight: look.flyNight };
@@ -518,6 +647,10 @@ function buildScene(canvas) {
     if (u.uHeight) gl.uniform1f(u.uHeight, look.height);
     if (u.uFall) gl.uniform1f(u.uFall, look.fall);
     if (u.uFlySize) gl.uniform2fv(u.uFlySize, look.flySize);
+    if (u.uCrown) gl.uniform1f(u.uCrown, look.crown);
+    if (u.uFallen) gl.uniform1f(u.uFallen, look.fallen);
+    if (u.uMist) gl.uniform1f(u.uMist, look.mist);
+    if (u.uPhase) gl.uniform1f(u.uPhase, phase);
   }
 
   function draw(time, dt, night, cursor) {
@@ -543,6 +676,7 @@ function buildScene(canvas) {
     gl.uniformMatrix4fv(ground.u.uVP, false, cam.vp);
     gl.uniform3fv(ground.u.uEye, EYE);
     gl.uniform1f(ground.u.uNight, night);
+    gl.uniform1f(ground.u.uTime, time);
     gl.bindVertexArray(groundVao);
     gl.drawElements(gl.TRIANGLES, groundCount, gl.UNSIGNED_INT, 0);
 
@@ -554,6 +688,7 @@ function buildScene(canvas) {
     gl.uniform3fv(tree.u.uEye, EYE);
     gl.uniform3f(tree.u.uTree, TREE[0], hill(TREE[0], TREE[1]), TREE[1]);
     gl.uniform1f(tree.u.uNight, night);
+    gl.uniform1f(tree.u.uTime, time);
     gl.bindVertexArray(treeVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.disable(gl.BLEND);
@@ -573,7 +708,6 @@ function buildScene(canvas) {
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 11, BLADES);
 
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     gl.depthMask(false);
     gl.useProgram(flies.p);
     seasonUniforms(flies);
@@ -583,7 +717,15 @@ function buildScene(canvas) {
     gl.uniform1f(flies.u.uNight, night);
     gl.uniform1f(flies.u.uPx, canvas.height / (2 * Math.tan(FOV / 2)));
     gl.bindVertexArray(flyVao);
-    gl.drawArrays(gl.POINTS, 0, FLIES);
+    let first = 0;
+    for (const [mode, count, area] of look.layers) {
+      // Светлячки и снег светятся (сложение), листья, бабочки и тыквы — обычная прозрачность
+      if (mode === 0 || mode === 1) gl.blendFunc(gl.SRC_ALPHA, gl.ONE); else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform1f(flies.u.uFall, mode);
+      gl.uniform4fv(flies.u.uArea, AREAS[area]);
+      gl.drawArrays(gl.POINTS, first, Math.min(count, FLIES - first));
+      first = (first + count) % FLIES;
+    }
     gl.depthMask(true);
     gl.disable(gl.BLEND);
     gl.bindVertexArray(null);
