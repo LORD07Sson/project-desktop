@@ -47,13 +47,13 @@ const SEASON_LOOKS = {
     root: [0.07, 0.18, 0.04], tip: [0.42, 0.7, 0.2], tip2: [0.6, 0.78, 0.28], ground: [0.09, 0.2, 0.05],
     leaf: [0.1, 0.22, 0.07], leafHi: [0.3, 0.48, 0.16], snow: 0, height: 1, flowers: 0.014, sky: [1, 1, 1],
     fall: 0, flyDay: [1, 1, 0.92], flyNight: [0.85, 1, 0.45], flySize: [0.035, 0.11],
-    crown: 1, fallen: 0, mist: 0, layers: [[0, 220, "field"], [3, 14, "near"]],
+    crown: 1, fallen: 0, mist: 0, layers: [[0, 220, "field"]],
   },
   spring: {
     root: [0.08, 0.2, 0.05], tip: [0.5, 0.8, 0.28], tip2: [0.66, 0.86, 0.36], ground: [0.11, 0.23, 0.06],
     leaf: [0.9, 0.58, 0.7], leafHi: [1, 0.84, 0.9], snow: 0, height: 0.85, flowers: 0.045, sky: [1.02, 1, 1.03],
     fall: 2, flyDay: [1, 0.76, 0.86], flyNight: [0.8, 0.6, 0.75], flySize: [0.05, 0.05],
-    crown: 1, fallen: 0, mist: 0, layers: [[2, 150, "field"], [2, 70, "tree"], [3, 16, "near"]],
+    crown: 1, fallen: 0, mist: 0, layers: [[2, 150, "field"], [2, 70, "tree"]],
   },
   autumn: {
     root: [0.12, 0.13, 0.04], tip: [0.74, 0.6, 0.22], tip2: [0.62, 0.42, 0.14], ground: [0.17, 0.15, 0.06],
@@ -74,8 +74,8 @@ const SEASON_LOOKS = {
     crown: 0.5, fallen: 1, mist: 1, hat: 1, layers: [[0, 140, "field"], [4, 7, "field"], [5, 10, "bats"]],
   },
 };
-// Где роятся частицы слоя: всё поле, у дерева (сыплется с кроны), рядом с камерой (бабочки), тыквы у камеры, мыши у дерева
-const AREAS_INIT = { field: [0, -6, 1, 1], tree: [1.8, -16.5, 0.12, 0.2], near: [0.3, -1, 0.35, 0.3], bats: [1.8, -16.5, 1, 1] };
+// Где роятся частицы слоя: всё поле, у дерева (сыплется с кроны), тыквы у камеры, мыши у дерева
+const AREAS_INIT = { field: [0, -6, 1, 1], tree: [1.8, -16.5, 0.12, 0.2], bats: [1.8, -16.5, 1, 1] };
 
 function moonPhase(date = new Date()) {
   const days = (date.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
@@ -429,11 +429,9 @@ uniform vec4 uArea;   // центр x, z и масштаб по x, z — куд�
 out float vGlow;
 out float vSeed;
 out float vFlap;
-out float vAngle;
 ${HILL_GLSL}
 void main() {
   float s = aFly.w;
-  vAngle = 0.0;
   vec3 p = vec3(uArea.x + aFly.x / 12.0 * uArea.z * 12.0, 0.0, uArea.y + (aFly.y + 6.0) / 9.0 * uArea.w * 9.0);
   float size = mix(uFlySize.x, uFlySize.y, uNight);
   if (uFall < 0.5) {
@@ -450,18 +448,6 @@ void main() {
     p.y = hill(p.xz) + 4.0 - mod(uTime * (uFall > 1.5 ? 0.45 : 0.32) * (0.7 + 0.6 * s) + s * 9.0, 4.2);
     size *= 0.6 + 0.8 * fract(s * 17.0);
     vGlow = mix(0.95, 0.7, uNight);
-  } else if (uFall < 3.5) {
-    // Бабочки: порхают над травой днём, ночью прячутся. Путь — сумма несоизмеримых синусов (не повторяется),
-    // скорость «дышит»: то рывок, то почти зависает над цветком; каждый взмах подбрасывает чуть вверх
-    float t = uTime * (0.8 + 0.4 * s) + s * 50.0;
-    float tt = t + 0.35 * sin(t * 0.9) + 0.2 * sin(t * 2.3);
-    vec2 path = vec2(sin(tt * 0.31) * 1.7 + sin(tt * 0.83 + 1.0) * 0.5, cos(tt * 0.27) * 1.3 + sin(tt * 0.71) * 0.45);
-    vec2 vel = vec2(cos(tt * 0.31) * 0.53 + cos(tt * 0.83 + 1.0) * 0.41, -sin(tt * 0.27) * 0.35 + cos(tt * 0.71) * 0.32);
-    p.xz += path;
-    p.y = hill(p.xz) + 0.38 + 0.2 * sin(tt * 0.6 + s * 3.0) + abs(sin(uTime * 9.0 + s * 30.0)) * 0.05;
-    size = 0.22;
-    vGlow = 1.0 - uNight;
-    vAngle = clamp(vel.x * 0.5, -0.5, 0.5);
   } else if (uFall > 4.5) {
     // Летучие мыши: кружат над деревом рваными петлями, иногда пролетают на фоне луны
     float w = 0.55 + 0.35 * s;
@@ -481,9 +467,7 @@ void main() {
   }
   float d = distance(p, uEye);
   vSeed = s;
-  // Взмах: у бабочки — быстрые взмахи сериями с короткими планированиями (крылья раскрыты)
-  float glide = smoothstep(0.75, 0.95, sin(uTime * 0.9 + s * 17.0));
-  vFlap = uFall > 4.5 ? sin(uTime * 16.0 + s * 40.0) : mix(abs(cos(uTime * 11.0 + s * 40.0)), 0.92, glide);
+  vFlap = sin(uTime * 16.0 + s * 40.0);   // взмах крыльев летучей мыши
   gl_PointSize = clamp(size * uPx / d, 1.0, 90.0);
   gl_Position = uVP * vec4(p, 1.0);
 }`;
@@ -492,7 +476,6 @@ precision highp float;
 in float vGlow;
 in float vSeed;
 in float vFlap;
-in float vAngle;
 out vec4 o;
 uniform float uNight, uFall;
 uniform vec3 uFlyDay, uFlyNight;
@@ -528,56 +511,6 @@ void main() {
     a = max(body, stem);
     c += vec3(1.0, 0.5, 0.1) * uNight * 0.25 * smoothstep(1.0, 0.0, r);
     a = max(a, uNight * 0.3 * smoothstep(1.0, 0.3, r));
-  } else if (uFall > 2.5) {
-    // Бабочка. Крылья раскрываются в перспективе: при взмахе их ширина сжимается к телу (cos угла раскрытия).
-    // Пять окрасок: белая с пятнышками, лимонная, оранжевая с тёмными жилками, голубая с бахромой, красная с «глазками»
-    float ca = cos(vAngle), sa = sin(vAngle);
-    vec2 b = mat2(ca, sa, -sa, ca) * q * 2.0;               // −1..1, наклон по ходу полёта
-    float span = 0.12 + 0.88 * vFlap;
-    vec2 w = vec2(abs(b.x) / span, b.y);
-    float aa = fwidth(w.x) * 1.5 + 0.01;
-    // Переднее крыло: вытянутое, заострённое к верхнему краю; заднее — округлое, ниже
-    vec2 f = w - vec2(0.42, -0.2);
-    f = mat2(0.86, 0.5, -0.5, 0.86) * f;
-    float fore = length(f / vec2(0.44, 0.28)) - 1.0;
-    vec2 h = w - vec2(0.3, 0.26);
-    h = mat2(0.94, -0.34, 0.34, 0.94) * h;
-    float hind = length(h / vec2(0.3, 0.26)) - 1.0;
-    float wing = min(fore, hind);
-    float wingA = smoothstep(aa * 4.0, -aa * 4.0, wing) * step(0.035, abs(b.x));
-    float k = fract(vSeed * 7.3);
-    int kind = int(k * 5.0);
-    vec3 base = kind == 0 ? vec3(0.97, 0.96, 0.9) : kind == 1 ? vec3(1.0, 0.86, 0.28) : kind == 2 ? vec3(0.98, 0.5, 0.12)
-      : kind == 3 ? vec3(0.36, 0.62, 1.0) : vec3(0.78, 0.16, 0.12);
-    vec3 col = base * (0.75 + 0.25 * smoothstep(0.0, 0.7, w.x));   // к телу темнее
-    // Кайма по краю крыла
-    float edge = smoothstep(-0.28, -0.05, wing);
-    vec3 border = kind == 3 ? vec3(0.08, 0.1, 0.2) : vec3(0.1, 0.08, 0.07);
-    col = mix(col, border, edge * (kind == 0 || kind == 1 ? 0.35 : 0.85));
-    if (kind == 3) col = mix(col, vec3(1.0), smoothstep(-0.06, -0.01, wing) * 0.9);        // белая бахрома
-    // Жилки — тонкие тёмные лучи от тела
-    float ang = atan(w.y + 0.05, w.x);
-    float vein = smoothstep(0.86, 0.98, abs(sin(ang * 7.0))) * smoothstep(0.08, 0.3, w.x);
-    col = mix(col, border, vein * (kind == 2 ? 0.8 : 0.3));
-    // Пятна: белые точки у кончика переднего крыла, у белой — чёрные, у красной — «глазок» на переднем крыле
-    float tipSpot = smoothstep(0.06, 0.04, length(w - vec2(0.66, -0.42))) + smoothstep(0.045, 0.03, length(w - vec2(0.55, -0.5)));
-    if (kind == 0) col = mix(col, vec3(0.12), smoothstep(0.07, 0.05, length(w - vec2(0.45, -0.18))));
-    else if (kind == 4) {
-      float eye = length(w - vec2(0.55, -0.3));
-      col = mix(col, vec3(0.1, 0.12, 0.3), smoothstep(0.13, 0.11, eye));
-      col = mix(col, vec3(0.3, 0.5, 0.9), smoothstep(0.08, 0.06, eye));
-      col = mix(col, vec3(1.0, 0.9, 0.6), smoothstep(0.035, 0.02, eye));
-    } else if (kind == 2) col = mix(col, vec3(1.0), tipSpot * edge);
-    else if (kind == 1) col = mix(col, vec3(1.0, 0.45, 0.1), smoothstep(0.045, 0.03, length(w - vec2(0.38, -0.12))));
-    // Тело: брюшко, грудь, голова; усики с булавами
-    float body = smoothstep(0.012, 0.0, length(b / vec2(0.045, 0.3)) - 1.0 + 0.0) ;
-    body = max(body, smoothstep(0.01, 0.0, length(b - vec2(0.0, -0.33)) - 0.05));
-    vec2 an = vec2(abs(b.x), b.y);
-    float antenna = smoothstep(0.018, 0.0, abs(an.x - (-(an.y + 0.36) * 0.45)) ) * step(an.y, -0.36) * step(-0.62, an.y);
-    antenna = max(antenna, smoothstep(0.03, 0.015, length(an - vec2(0.12, -0.63))));
-    float bodyA = max(body, antenna);
-    c = mix(col, vec3(0.1, 0.08, 0.07), bodyA);
-    a = max(wingA, bodyA) * vGlow;
   } else if (uFall > 1.5) {
     // Лепесток или лист: плотная капля, у каждого свой оттенок
     vec2 l = q * vec2(2.0, 3.2);
@@ -873,7 +806,7 @@ function buildScene(canvas) {
     gl.bindVertexArray(flyVao);
     let first = 0;
     for (const [mode, count, area] of look.layers) {
-      // Светлячки и снег светятся (сложение), листья, бабочки и тыквы — обычная прозрачность
+      // Светлячки и снег светятся (сложение), листья, мыши и тыквы — обычная прозрачность
       if (mode === 0 || mode === 1) gl.blendFunc(gl.SRC_ALPHA, gl.ONE); else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.uniform1f(flies.u.uFall, mode);
       gl.uniform4fv(flies.u.uArea, AREAS[area]);
