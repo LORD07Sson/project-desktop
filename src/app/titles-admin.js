@@ -19,6 +19,12 @@ function seriesCount(n) {
   return `${n} ${word}`;
 }
 
+// «вышло 4 / 25 эп.» — как на карточке тайтла; сервер постарше этих полей не шлёт.
+function airedText(t) {
+  if (t.episodes_aired == null && t.episodes_total == null) return "";
+  return `вышло ${t.episodes_aired ?? 0} / ${t.episodes_total ?? "?"} эп. · `;
+}
+
 function imgProxy(url) {
   return url ? mediaUrl("/img_proxy", { url }) : "";
 }
@@ -165,7 +171,7 @@ async function openSeasonDetailAdmin(seasonId) {
     const rows = (d.titles || []).map(t => `
       <div class="mini-row" data-open-title="${t.id}" style="cursor:pointer;">
         <span class="name">${esc(t.name)}</span>
-        <span class="val" title="Серии, заведённые студией (отчёты), — не сколько вышло в эфире">${t.pct != null ? `${t.pct}%` : "—"} · ${seriesCount(t.episodes_count)} у студии · ${t.crew_count} в составе</span>
+        <span class="val" title="Вышло в эфире (Shikimori) · серии, заведённые студией · состав">${airedText(t)}${t.pct != null ? `${t.pct}%` : "—"} · ${seriesCount(t.episodes_count)} у студии · ${t.crew_count} в составе</span>
       </div>
     `).join("");
     sheet.innerHTML = `
