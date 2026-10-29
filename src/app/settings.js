@@ -7,6 +7,7 @@ import { $, esc } from "./utils.js";
 import { applyTheme, applyLook } from "./theme.js";
 import { applyDensity, currentDensity } from "./density.js";
 import { focusModePreferred, setFocusModePreferred } from "./focus-mode.js";
+import { IDLE_CHOICES, idleSceneMinutes, setIdleSceneMinutes, showIdleScene } from "./idle-scene.js";
 import { isDevModeOn, setDevModeOn } from "./devmode.js";
 import { desktopNotifyEnabled, setDesktopNotifyEnabled, NOTIFY_KINDS, notifyKinds, setNotifyKind, quietHours, setQuietHours } from "./desktop-notify.js";
 import { ACCENTS, SCALES, START_TABS, currentAccent, applyAccent, currentScale, applyScale, currentMotion, applyMotion, backdropOn, applyBackdrop, startTab, setStartTab } from "./ui-prefs.js";
@@ -229,6 +230,7 @@ async function openSettings() {
           <div class="st-group">
             ${row(ICONS.power, "Запускать при старте системы", "Окно сразу уходит в трей и следит за назначениями", sw("s-autostart", autostartOn), "автозапуск windows")}
             ${row(ICONS.home, "Стартовый раздел", "Что открывать при запуске", seg("data-st-start", Object.entries(START_TABS), start), "запуск вкладка")}
+            ${row(ICONS.motion, "Экран ожидания", "Луг с травой, если программой не пользуются. Не включается, пока играет видео или окно не в фокусе", `${seg("data-st-idle", IDLE_CHOICES, idleSceneMinutes())}<button type="button" class="btn" id="s-idle-preview">Показать</button>`, "заставка ожидание трава простой")}
             ${row(ICONS.focus, "MIDI-контроллер для плеера", "До — пауза, Си и Ре — назад и вперёд на 5 с, ручка CC 7 — громкость, колесо CC 1 — перемотка", sw("s-midi", midiEnabled()), "midi клавиатура контроллер")}
             ${row(ICONS.focus, "Помогать строить карту работы", "Какие экраны и кнопки вы открываете и сколько смотрите — без текста, сообщений и файлов. Видит только владелец", sw("s-telemetry", trackingOn()), "статистика телеметрия карта работы")}
             ${row(ICONS.trash || ICONS.focus, "Удалить мою статистику", "Стирает всё, что уже собрано о вас для карты работы", `<button type="button" class="btn" id="s-telemetry-forget">Удалить</button>`, "статистика телеметрия удалить")}
@@ -650,6 +652,11 @@ async function openSettings() {
     pick("data-st-scale", null, b.dataset.stScale);
     applyScale(Number(b.dataset.stScale));
   }));
+  overlay.querySelectorAll("[data-st-idle]").forEach(b => b.addEventListener("click", () => {
+    pick("data-st-idle", null, b.dataset.stIdle);
+    setIdleSceneMinutes(b.dataset.stIdle);
+  }));
+  overlay.querySelector("#s-idle-preview").addEventListener("click", () => showIdleScene());
   overlay.querySelectorAll("[data-st-motion]").forEach(b => b.addEventListener("click", () => {
     pick("data-st-motion", null, b.dataset.stMotion);
     applyMotion(b.dataset.stMotion);

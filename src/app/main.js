@@ -47,6 +47,7 @@ import "./command-palette.js";
 import "./titlebar-menus.js";
 import "./shortcuts-help.js";
 import "./focus-mode.js";
+import "./idle-scene.js";
 import "./file-drop.js";
 import "./force-update.js";
 import "./lofi.js";

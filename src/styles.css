@@ -6357,3 +6357,19 @@ html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), 
 .force-update-src { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft); }
 .force-update-src select { max-width: 260px; }
 .force-update-more { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 2px; }
+
+/* Экран ожидания (idle-scene.js): сцена на весь экран, поверх всего, плавное появление */
+.idle-scene { position: fixed; inset: 0; z-index: 9000; background: #0b1530; opacity: 0; transition: opacity .6s ease; }
+.idle-scene.on { opacity: 1; }
+.idle-scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+.idle-top, .idle-bottom { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; color: #fff; font-size: 13px; }
+.idle-top { top: 46px; padding: 6px 6px 6px 16px; border-radius: 999px; background: rgba(10, 18, 40, .32); border: 1px solid rgba(255, 255, 255, .22); backdrop-filter: blur(10px); }
+.idle-top b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.idle-top span { opacity: .8; }
+.idle-back { height: 30px; padding: 0 14px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, .9); color: #10203a; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+.idle-back:hover { background: #fff; }
+.idle-bottom { bottom: 34px; flex-direction: column; gap: 10px; }
+.idle-seg { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(10, 18, 40, .32); border: 1px solid rgba(255, 255, 255, .22); backdrop-filter: blur(10px); }
+.idle-seg button { height: 30px; padding: 0 14px; border-radius: 999px; border: 0; background: transparent; color: rgba(255, 255, 255, .85); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.idle-seg button.on { background: rgba(255, 255, 255, .9); color: #10203a; }
+.idle-hint { font-size: 12px; opacity: .75; text-shadow: 0 1px 6px rgba(0, 0, 0, .5); }
