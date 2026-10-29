@@ -730,13 +730,13 @@ $("#open-settings").addEventListener("click", openSettings);
 // У части студии GitHub не открывается: бот держит зеркало релизов на сервере (voice_report_bot/desktop_updates.py,
 // <сервер>/updates/…) и шлёт установщик в Telegram. «Авто» — GitHub, при сбое сам переходит на сервер.
 
-const UPDATE_SOURCES = { auto: "Авто", github: "GitHub", server: "Сервер студии" };
+const UPDATE_SOURCES = { auto: "Авто", github: "GitHub", server: "Сервер" };
 const UPDATE_SOURCE_HINT = {
-  auto: "Сначала GitHub, а если он не открывается — сервер студии",
+  auto: "Сначала GitHub, а если он не открывается — сервер",
   github: "Только GitHub",
-  server: "Только сервер студии — если GitHub у вас не открывается",
+  server: "Только сервер — если GitHub у вас не открывается",
 };
-const SOURCE_LABEL = { github: "GitHub", server: "сервер студии" };
+const SOURCE_LABEL = { github: "GitHub", server: "сервер" };
 
 export async function openInstallsSheet() {
   const overlay = openSheet(`<h2>Копии программы</h2>
@@ -782,7 +782,7 @@ export async function openInstallsSheet() {
 }
 
 export async function reinstallApp() {
-  if (!await askConfirm("Переустановить программу начисто?\n\nСкачаю установщик (GitHub или сервер студии — как выбрано в «Источник обновлений»), программа закроется, установится в обычное место и откроется сама. Настройки и вход сохранятся.", { yes: "Переустановить" })) return;
+  if (!await askConfirm("Переустановить программу начисто?\n\nСкачаю установщик (GitHub или сервер — как выбрано в «Источник обновлений»), программа закроется, установится в обычное место и откроется сама. Настройки и вход сохранятся.", { yes: "Переустановить" })) return;
   const overlay = openSheet(`<h2>Переустановка…</h2>
     <div class="update-progress-track"><div class="update-progress-fill" id="rei-fill"></div></div>
     <div id="rei-status" style="color:var(--ink-soft); font-size:12.5px;">Скачиваю установщик…</div>`);
@@ -976,7 +976,7 @@ export async function installUpdate() {
     const actions = document.createElement("div");
     actions.className = "sheet-actions";
     actions.innerHTML = `<button type="button" class="btn primary" data-update-retry>Повторить скачивание</button>`
-      + `<button type="button" class="btn" data-update-server>Скачать с сервера студии</button>`
+      + `<button type="button" class="btn" data-update-server>Скачать с сервера</button>`
       + `<button type="button" class="btn ghost" data-update-reinstall>Переустановить начисто</button>`
       + `<button type="button" class="btn" data-update-close>Закрыть</button>`;
     statusEl.after(actions);

@@ -43,11 +43,11 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 // релизе лежат и фид, и полный пакет этой версии.
 const UPDATE_STABLE_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/latest/download";
 const UPDATE_ALPHA_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/alpha-latest";
-// Зеркало тех же файлов на сервере студии (voice_report_bot/desktop_updates.py): у части людей GitHub не открывается.
+// Зеркало тех же файлов на нашем сервере (voice_report_bot/desktop_updates.py): у части людей GitHub не открывается.
 const SERVER_STABLE_URL: &str = concat!(env!("SERVER_ORIGIN"), "/updates/stable");
 const SERVER_ALPHA_URL: &str = concat!(env!("SERVER_ORIGIN"), "/updates/alpha");
 
-/// Откуда брать обновления. «Авто» — GitHub, а если он не отвечает — сервер студии (и в следующий раз сначала тот,
+/// Откуда брать обновления. «Авто» — GitHub, а если он не отвечает — сервер (и в следующий раз сначала тот,
 /// что сработал). Выбор человека хранится в %APPDATA%\com.project.desktop\update_source.txt.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum UpdateSource {
@@ -65,7 +65,7 @@ impl UpdateSource {
     fn label(self) -> &'static str {
         match self {
             UpdateSource::Github => "GitHub",
-            UpdateSource::Server => "сервер студии",
+            UpdateSource::Server => "сервер",
         }
     }
     fn base(self) -> &'static str {
@@ -160,7 +160,7 @@ fn velopack_update_manager(app: &tauri::AppHandle) -> Result<velopack::UpdateMan
 fn velopack_update_manager_for(app: &tauri::AppHandle, from: UpdateSource) -> Result<velopack::UpdateManager, String> {
     let is_alpha = build_update_channel() == ALPHA_CHANNEL;
     // Альфа публикуется отдельным pre-release с постоянным тегом
-    // alpha-latest (build-alpha.yml), стабильная — обычными релизами; на сервере студии — та же раскладка.
+    // alpha-latest (build-alpha.yml), стабильная — обычными релизами; на нашем сервере — та же раскладка.
     let source = velopack::sources::HttpSource::new(from.base());
     // Стабильная prerelease-сборка может принять stable-версию ниже по номеру.
     // Alpha при этом всё равно остаётся закреплена за alpha-фидом: выбор
@@ -480,7 +480,7 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
         // `.partial` пакет, и вторая падает с «файл занят другим процессом»
         // (os error 32), а первая тем временем спокойно докачивается.
         let _guard = UpdateDownloadGuard::acquire()?;
-        // Источники по очереди: GitHub не отдал фид или оборвал пакет — тот же пакет берём с сервера студии.
+        // Источники по очереди: GitHub не отдал фид или оборвал пакет — тот же пакет берём с сервера.
         let sources = update_sources();
         let mut errors = Vec::new();
         let mut picked = None;
