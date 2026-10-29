@@ -12,6 +12,13 @@ import { pauseSuffix } from "./people.js";
 import { esc } from "./utils.js";
 import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./watermark-editor.js";
 
+// «1 серия», «3 серии», «5 серий» — серии студии (отчёты по тайтлу), а не вышедшие в эфире эпизоды с карточки.
+function seriesCount(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  const word = mod10 === 1 && mod100 !== 11 ? "серия" : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "серии" : "серий";
+  return `${n} ${word}`;
+}
+
 function imgProxy(url) {
   return url ? mediaUrl("/img_proxy", { url }) : "";
 }
@@ -158,7 +165,7 @@ async function openSeasonDetailAdmin(seasonId) {
     const rows = (d.titles || []).map(t => `
       <div class="mini-row" data-open-title="${t.id}" style="cursor:pointer;">
         <span class="name">${esc(t.name)}</span>
-        <span class="val">${t.pct != null ? `${t.pct}%` : "—"} · ${t.episodes_count} эп. · ${t.crew_count} в составе</span>
+        <span class="val" title="Серии, заведённые студией (отчёты), — не сколько вышло в эфире">${t.pct != null ? `${t.pct}%` : "—"} · ${seriesCount(t.episodes_count)} в работе · ${t.crew_count} в составе</span>
       </div>
     `).join("");
     sheet.innerHTML = `
