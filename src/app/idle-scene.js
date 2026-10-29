@@ -600,8 +600,9 @@ export function showIdleScene() {
       // Камера: пока она идёт к нам и здоровается — чуть выше и смотрит ей в лицо; потом обратно к общему виду
       const k = heroine.focus();
       const headPos = heroine.headPosition();
-      camEye = EYE.map((v, i) => v + ([EYE[0], 1.05, EYE[2]][i] - v) * k);
-      scene.setView(camEye, TARGET.map((v, i) => v + ([headPos[0], headPos[1] - 0.18, headPos[2]][i] - v) * k));
+      const near = heroine.closeness();   // при поцелуе камера на уровне её лица и смотрит прямо в лицо
+      camEye = EYE.map((v, i) => v + ([EYE[0], 1.05 + (headPos[1] - 0.02 - 1.05) * near, EYE[2]][i] - v) * k);
+      scene.setView(camEye, TARGET.map((v, i) => v + ([headPos[0], headPos[1] - 0.18 * (1 - near), headPos[2]][i] - v) * k));
       // Следы: где она идёт, трава приминается
       const hp = heroine.position();
       if (heroPrev && heroine.walking()) scene.stamp(hp[0], hp[1], hp[0] - heroPrev[0], hp[1] - heroPrev[1]);

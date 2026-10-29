@@ -158,7 +158,7 @@ const STAND = {
 };
 const WALK_SPEED = 0.62;     // м/с — неторопливо
 const STEP_HZ = 0.9;         // полных циклов шага в секунду
-const STAND_UP = 2.0, SIT_DOWN = 2.1, GREET = 6.5, GREET_NIGHT = 9.5;
+const STAND_UP = 2.0, SIT_DOWN = 2.1, GREET = 6.5, GREET_NIGHT = 12;
 
 export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, approach }) {
   const res = await fetch(url);
@@ -230,6 +230,7 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
   const seat = { x: place.x, z: place.z };
   const pos = { x: place.x, z: place.z };
   const yaw = new Spring([place.yaw, 0, 0]);
+  let lensStep = 0;
   let state = "sit", stT = 0, dest = null, phase = 0, walkK = 0, focus = 0, wantYaw = place.yaw;
   let nextBlink = 2, blinkT = -1, nextGlance = 0, nextGaze = 0, gazeKind = "moon";
   let lastCursor = null, cursorAt = -10;
@@ -258,6 +259,7 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
 
     // ----- сценарий -----
     let standK = 0, crouch = 0, wave = 0, slide = 0, kissT = -1;
+    lensStep = 0;
     if (state === "stand") {
       const p = stT / STAND_UP;
       standK = ease((p - 0.25) / 0.75);
@@ -403,10 +405,29 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
       face.happy += 0.3 * wave;
       face.relaxed += 0.25 * wave;
     }
-    if (kissT >= 0 && kissT < 5.6) {
-      // 0–1.3 с: пальцы к губам, губы трубочкой; 1.3–2.2: рука уходит к камере, подмигивает; потом — счастливая улыбка
-      const toLips = ease(kissT / 0.9) * (1 - ease((kissT - 1.3) / 0.5));
-      const blow = ease((kissT - 1.3) / 0.5) * (1 - ease((kissT - 3.4) / 1.2));
+    let kissClose = 0;
+    if (kissT >= 0 && kissT < 3.4) {
+      // 0–1.2 с: шагает к объективу и наклоняется; 1.2–2.1: поцелуй (глаза закрыты, губы); 2.1–3.2: отходит
+      const lean = ease(kissT / 1.2) * (1 - ease((kissT - 2.1) / 1.0));
+      lensStep = 0.95 * lean;
+      add(t, "spine", [0.1 * lean, 0, 0]);
+      add(t, "chest", [0.04 * lean, 0, 0]);
+      add(t, "head", [-0.1 * lean, 0, 0.18 * lean]);
+      add(t, "leftLowerLeg", [0.12 * lean, 0, 0]);
+      add(t, "rightLowerLeg", [0.05 * lean, 0, 0]);
+      mix(t, "leftUpperArm", [0.35, 0, -1.2], lean);     // руки сцеплены за спиной
+      mix(t, "rightUpperArm", [0.35, 0, 1.2], lean);
+      mix(t, "leftLowerArm", [0, -0.6, 0], lean);
+      mix(t, "rightLowerArm", [0, 0.6, 0], lean);
+      kissClose = ease((kissT - 0.8) / 0.3) * (1 - ease((kissT - 2.1) / 0.25));
+      face.ou += 0.75 * ease((kissT - 0.7) / 0.4) * (1 - ease((kissT - 2.1) / 0.3));
+      face.relaxed += 0.3 * lean;
+    }
+    if (kissT >= 3.0 && kissT < 8.6) {
+      // Потом — воздушный поцелуй: пальцы к губам, подмигивает, рука уходит к камере; счастливая улыбка
+      const kt = kissT - 3.0;
+      const toLips = ease(kt / 0.9) * (1 - ease((kt - 1.3) / 0.5));
+      const blow = ease((kt - 1.3) / 0.5) * (1 - ease((kt - 3.4) / 1.2));
       const k = Math.max(toLips, blow);
       mix(t, "rightUpperArm", toLips >= blow ? [-0.25, 1.05, 0.5] : [0, 1.15, 0.25], k);
       mix(t, "rightLowerArm", toLips >= blow ? [0, 2.5, 0] : [0, 0.55, 0], k);
@@ -417,7 +438,7 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
       add(t, "spine", [0.08 * blow, 0, 0]);
       add(t, "head", [0.04 * toLips, 0, -0.12 * blow]);
       face.ou += 0.55 * toLips;
-      face.blinkLeft += Math.sin(Math.min(1, Math.max(0, (kissT - 1.35) / 0.5)) * Math.PI);
+      face.blinkLeft += Math.sin(Math.min(1, Math.max(0, (kt - 1.35) / 0.5)) * Math.PI);
       face.happy += 0.35 * blow;
       face.relaxed += 0.3 * (1 - toLips);
     }
@@ -440,8 +461,11 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
     eyes.lerp(tmp, Math.min(1, dt * 14));
     lookTarget.position.copy(eyes);
 
-    // Корень модели: на земле, развёрнут по направлению тела; таз — сидя у земли, стоя — на своей высоте
-    vrm.scene.position.set(pos.x, hill(pos.x, pos.z), pos.z);
+    // Корень модели: на земле, развёрнут по направлению тела; таз — сидя у земли, стоя — на своей высоте.
+    // При поцелуе она шагает к объективу (lensStep метров в сторону камеры)
+    const toCam = Math.hypot(camEye[0] - pos.x, camEye[2] - pos.z) || 1;
+    const rx = pos.x + (camEye[0] - pos.x) / toCam * lensStep, rz = pos.z + (camEye[2] - pos.z) / toCam * lensStep;
+    vrm.scene.position.set(rx, hill(rx, rz), rz);
     vrm.scene.rotation.y = yaw.x[0];
     hips.position.set(hipsRest.x, hipsRest.y - sitDrop * (1 - standK) - 0.12 * crouch * standK + bob, hipsRest.z);
     vrm.scene.updateMatrixWorld(true);
@@ -470,6 +494,7 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
       face.blink = Math.sin(Math.min(1, blinkT / 0.15) * Math.PI);
       if (blinkT > 0.15) { blinkT = -1; nextBlink = time + (Math.random() < 0.2 ? 0.25 : 2 + Math.random() * 4); }
     }
+    face.blink = Math.max(face.blink, kissClose);
     face.relaxed += 0.25;
     for (const k of Object.keys(face)) {
       faceNow[k] = k === "blink" ? face.blink : faceNow[k] + (Math.min(1, face[k]) - faceNow[k]) * Math.min(1, dt * 6);
@@ -497,6 +522,8 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
     visit,
     // Насколько камере смотреть на неё (0 — общий вид, 1 — она перед камерой)
     focus: () => focus,
+    // Насколько она сейчас у самого объектива (поцелуй): 0..1 — камера поднимается на уровень лица
+    closeness: () => lensStep / 0.95,
     sitting: () => state === "sit",
     position: () => [pos.x, pos.z],
     walking: () => walkK > 0.1,
