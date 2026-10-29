@@ -429,9 +429,11 @@ uniform vec4 uArea;   // центр x, z и масштаб по x, z — куд�
 out float vGlow;
 out float vSeed;
 out float vFlap;
+out float vAngle;
 ${HILL_GLSL}
 void main() {
   float s = aFly.w;
+  vAngle = 0.0;
   vec3 p = vec3(uArea.x + aFly.x / 12.0 * uArea.z * 12.0, 0.0, uArea.y + (aFly.y + 6.0) / 9.0 * uArea.w * 9.0);
   float size = mix(uFlySize.x, uFlySize.y, uNight);
   if (uFall < 0.5) {
@@ -449,11 +451,17 @@ void main() {
     size *= 0.6 + 0.8 * fract(s * 17.0);
     vGlow = mix(0.95, 0.7, uNight);
   } else if (uFall < 3.5) {
-    // Бабочки: порхают над травой днём, ночью прячутся
-    p += vec3(sin(uTime * 0.35 + s * 10.0) * 1.6, 0.0, cos(uTime * 0.29 + s * 7.0) * 1.2);
-    p.y = hill(p.xz) + 0.35 + 0.25 * sin(uTime * 1.7 + s * 3.0) + abs(sin(uTime * 3.1 + s * 9.0)) * 0.12;
-    size = 0.09;
+    // Бабочки: порхают над травой днём, ночью прячутся. Путь — сумма несоизмеримых синусов (не повторяется),
+    // скорость «дышит»: то рывок, то почти зависает над цветком; каждый взмах подбрасывает чуть вверх
+    float t = uTime * (0.8 + 0.4 * s) + s * 50.0;
+    float tt = t + 0.35 * sin(t * 0.9) + 0.2 * sin(t * 2.3);
+    vec2 path = vec2(sin(tt * 0.31) * 1.7 + sin(tt * 0.83 + 1.0) * 0.5, cos(tt * 0.27) * 1.3 + sin(tt * 0.71) * 0.45);
+    vec2 vel = vec2(cos(tt * 0.31) * 0.53 + cos(tt * 0.83 + 1.0) * 0.41, -sin(tt * 0.27) * 0.35 + cos(tt * 0.71) * 0.32);
+    p.xz += path;
+    p.y = hill(p.xz) + 0.38 + 0.2 * sin(tt * 0.6 + s * 3.0) + abs(sin(uTime * 9.0 + s * 30.0)) * 0.05;
+    size = 0.22;
     vGlow = 1.0 - uNight;
+    vAngle = clamp(vel.x * 0.5, -0.5, 0.5);
   } else if (uFall > 4.5) {
     // Летучие мыши: кружат над деревом рваными петлями, иногда пролетают на фоне луны
     float w = 0.55 + 0.35 * s;
@@ -473,7 +481,9 @@ void main() {
   }
   float d = distance(p, uEye);
   vSeed = s;
-  vFlap = uFall > 4.5 ? sin(uTime * 16.0 + s * 40.0) : abs(sin(uTime * 13.0 + s * 40.0));
+  // Взмах: у бабочки — быстрые взмахи сериями с короткими планированиями (крылья раскрыты)
+  float glide = smoothstep(0.75, 0.95, sin(uTime * 0.9 + s * 17.0));
+  vFlap = uFall > 4.5 ? sin(uTime * 16.0 + s * 40.0) : mix(abs(cos(uTime * 11.0 + s * 40.0)), 0.92, glide);
   gl_PointSize = clamp(size * uPx / d, 1.0, 90.0);
   gl_Position = uVP * vec4(p, 1.0);
 }`;
@@ -482,6 +492,7 @@ precision highp float;
 in float vGlow;
 in float vSeed;
 in float vFlap;
+in float vAngle;
 out vec4 o;
 uniform float uNight, uFall;
 uniform vec3 uFlyDay, uFlyNight;
@@ -518,14 +529,55 @@ void main() {
     c += vec3(1.0, 0.5, 0.1) * uNight * 0.25 * smoothstep(1.0, 0.0, r);
     a = max(a, uNight * 0.3 * smoothstep(1.0, 0.3, r));
   } else if (uFall > 2.5) {
-    // Бабочка: два крыла, складываются в такт взмаху; окраска своя у каждой
-    float k = fract(vSeed * 7.0);
-    vec3 wing = k < 0.3 ? vec3(1.0, 0.98, 0.9) : k < 0.55 ? vec3(1.0, 0.82, 0.25) : k < 0.8 ? vec3(0.98, 0.55, 0.2) : vec3(0.45, 0.7, 1.0);
-    vec2 w = vec2(abs(q.x) / (0.12 + 0.88 * vFlap), q.y);
-    float wings = smoothstep(0.5, 0.42, length((w - vec2(0.25, -0.05)) * vec2(1.0, 1.3))) + smoothstep(0.32, 0.25, length(w - vec2(0.2, 0.22)));
-    float body = step(abs(q.x), 0.03) * step(abs(q.y), 0.22);
-    c = mix(wing * (0.85 + 0.3 * smoothstep(0.4, 0.0, length(w - vec2(0.25, 0.0)))), vec3(0.15, 0.12, 0.1), body);
-    a = min(1.0, wings + body) * vGlow;
+    // Бабочка. Крылья раскрываются в перспективе: при взмахе их ширина сжимается к телу (cos угла раскрытия).
+    // Пять окрасок: белая с пятнышками, лимонная, оранжевая с тёмными жилками, голубая с бахромой, красная с «глазками»
+    float ca = cos(vAngle), sa = sin(vAngle);
+    vec2 b = mat2(ca, sa, -sa, ca) * q * 2.0;               // −1..1, наклон по ходу полёта
+    float span = 0.12 + 0.88 * vFlap;
+    vec2 w = vec2(abs(b.x) / span, b.y);
+    float aa = fwidth(w.x) * 1.5 + 0.01;
+    // Переднее крыло: вытянутое, заострённое к верхнему краю; заднее — округлое, ниже
+    vec2 f = w - vec2(0.42, -0.2);
+    f = mat2(0.86, 0.5, -0.5, 0.86) * f;
+    float fore = length(f / vec2(0.44, 0.28)) - 1.0;
+    vec2 h = w - vec2(0.3, 0.26);
+    h = mat2(0.94, -0.34, 0.34, 0.94) * h;
+    float hind = length(h / vec2(0.3, 0.26)) - 1.0;
+    float wing = min(fore, hind);
+    float wingA = smoothstep(aa * 4.0, -aa * 4.0, wing) * step(0.035, abs(b.x));
+    float k = fract(vSeed * 7.3);
+    int kind = int(k * 5.0);
+    vec3 base = kind == 0 ? vec3(0.97, 0.96, 0.9) : kind == 1 ? vec3(1.0, 0.86, 0.28) : kind == 2 ? vec3(0.98, 0.5, 0.12)
+      : kind == 3 ? vec3(0.36, 0.62, 1.0) : vec3(0.78, 0.16, 0.12);
+    vec3 col = base * (0.75 + 0.25 * smoothstep(0.0, 0.7, w.x));   // к телу темнее
+    // Кайма по краю крыла
+    float edge = smoothstep(-0.28, -0.05, wing);
+    vec3 border = kind == 3 ? vec3(0.08, 0.1, 0.2) : vec3(0.1, 0.08, 0.07);
+    col = mix(col, border, edge * (kind == 0 || kind == 1 ? 0.35 : 0.85));
+    if (kind == 3) col = mix(col, vec3(1.0), smoothstep(-0.06, -0.01, wing) * 0.9);        // белая бахрома
+    // Жилки — тонкие тёмные лучи от тела
+    float ang = atan(w.y + 0.05, w.x);
+    float vein = smoothstep(0.86, 0.98, abs(sin(ang * 7.0))) * smoothstep(0.08, 0.3, w.x);
+    col = mix(col, border, vein * (kind == 2 ? 0.8 : 0.3));
+    // Пятна: белые точки у кончика переднего крыла, у белой — чёрные, у красной — «глазок» на переднем крыле
+    float tipSpot = smoothstep(0.06, 0.04, length(w - vec2(0.66, -0.42))) + smoothstep(0.045, 0.03, length(w - vec2(0.55, -0.5)));
+    if (kind == 0) col = mix(col, vec3(0.12), smoothstep(0.07, 0.05, length(w - vec2(0.45, -0.18))));
+    else if (kind == 4) {
+      float eye = length(w - vec2(0.55, -0.3));
+      col = mix(col, vec3(0.1, 0.12, 0.3), smoothstep(0.13, 0.11, eye));
+      col = mix(col, vec3(0.3, 0.5, 0.9), smoothstep(0.08, 0.06, eye));
+      col = mix(col, vec3(1.0, 0.9, 0.6), smoothstep(0.035, 0.02, eye));
+    } else if (kind == 2) col = mix(col, vec3(1.0), tipSpot * edge);
+    else if (kind == 1) col = mix(col, vec3(1.0, 0.45, 0.1), smoothstep(0.045, 0.03, length(w - vec2(0.38, -0.12))));
+    // Тело: брюшко, грудь, голова; усики с булавами
+    float body = smoothstep(0.012, 0.0, length(b / vec2(0.045, 0.3)) - 1.0 + 0.0) ;
+    body = max(body, smoothstep(0.01, 0.0, length(b - vec2(0.0, -0.33)) - 0.05));
+    vec2 an = vec2(abs(b.x), b.y);
+    float antenna = smoothstep(0.018, 0.0, abs(an.x - (-(an.y + 0.36) * 0.45)) ) * step(an.y, -0.36) * step(-0.62, an.y);
+    antenna = max(antenna, smoothstep(0.03, 0.015, length(an - vec2(0.12, -0.63))));
+    float bodyA = max(body, antenna);
+    c = mix(col, vec3(0.1, 0.08, 0.07), bodyA);
+    a = max(wingA, bodyA) * vGlow;
   } else if (uFall > 1.5) {
     // Лепесток или лист: плотная капля, у каждого свой оттенок
     vec2 l = q * vec2(2.0, 3.2);
