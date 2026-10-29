@@ -207,6 +207,28 @@ async function loadPersonalStatuses() {
   }
 }
 
+// Колонки личной доски: цвет, подпись и пустое состояние — по смыслу колонки (их три и они фиксированные).
+const STATUS_LOOK = {
+  "Очередь": { tone: "queue", hint: "ещё не начато", empty: "Назначенные вам серии появятся здесь сами", next: "В работе", nextLabel: "→ В работу" },
+  "В работе": { tone: "work", hint: "делаю сейчас", empty: "Перетащите сюда серию, за которую взялись", next: "Сдано", nextLabel: "✓ Сдано" },
+  "Сдано": { tone: "done", hint: "отмечено сданным", empty: "Сданные серии — здесь. Общий статус серии это не меняет" },
+};
+
+// Срок по-человечески: «просрочено 2 дн», «сегодня», «завтра», «через 5 дн», «12.11».
+function dueChip(item) {
+  if (item.is_done) return `<span class="psb-due done">сдано</span>`;
+  if (!item.deadline) return `<span class="psb-due">без срока</span>`;
+  const [y, m, d] = item.deadline.slice(0, 10).split("-").map(Number);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.round((new Date(y, m - 1, d) - today) / DAY_MS);
+  const date = `${pad2(d)}.${pad2(m)}`;
+  if (days < 0) return `<span class="psb-due hot" title="Срок ${date}">просрочено ${-days} дн</span>`;
+  if (days === 0) return `<span class="psb-due hot" title="Срок ${date}">сегодня</span>`;
+  if (days === 1) return `<span class="psb-due warn" title="Срок ${date}">завтра</span>`;
+  if (days <= 7) return `<span class="psb-due warn" title="Срок ${date}">через ${days} дн</span>`;
+  return `<span class="psb-due">до ${date}</span>`;
+}
+
 function renderPersonalStatuses(root, data) {
   const columns = data.columns || [];
   const items = data.items || [];
@@ -214,55 +236,69 @@ function renderPersonalStatuses(root, data) {
   items.forEach(item => { if (byColumn[item.column_id]) byColumn[item.column_id].push(item); });
   const done = items.filter(item => item.is_done).length;
   const overdue = items.filter(item => item.is_overdue).length;
+  const working = columns.filter(c => (STATUS_LOOK[c.name] || {}).tone === "work").reduce((n, c) => n + (byColumn[c.id] || []).length, 0);
+  const pct = items.length ? Math.round(done * 100 / items.length) : 0;
   const lead = items.find(item => item.title_id || item.poster_url);
   if (lead) setBackdrop(titleArt(lead.title_id, "banner", 1440), imgProxy(lead.poster_url));
-  const now = new Date();
-  const head = `<div class="page-header">
-    <div><span class="kd-label">Моё · рабочие статусы видны только вам</span><h1>Мои статусы</h1>
-      <div class="sub">Отметка о сдаче не меняет общий статус серии и убирает её из списка просроченных у вас.</div></div>
-    <div class="kd-sum"><div class="kd-now"><small>Сейчас</small><b>${pad2(now.getHours())}:${pad2(now.getMinutes())}</b></div>
-      <div><small>Мои серии</small><b>${items.length}</b></div><div><small>Сдано</small><b>${done}</b></div>
-      <div><small>Просрочено у меня</small><b class="${overdue ? "hot" : ""}">${overdue}</b></div></div></div>`;
+  const columnByName = Object.fromEntries(columns.map(c => [c.name, c]));
+  const head = `<div class="page-header psb-head">
+    <div><span class="kd-label">Моё · видно только вам</span><h1>Мои статусы</h1>
+      <div class="sub">Отмечайте, что взяли и что сдали. Общий статус серии в студии от этого не меняется.</div></div>
+    <div class="kd-sum">
+      <div><small>Мои серии</small><b>${items.length}</b></div>
+      <div><small>В работе</small><b>${working}</b></div>
+      <div><small>Сдано</small><b>${done}</b><i class="psb-sum-bar"><em style="width:${pct}%"></em></i></div>
+      <div><small>Просрочено</small><b class="${overdue ? "hot" : ""}">${overdue}</b></div></div></div>`;
   const columnsHtml = columns.map(column => {
+    const look = STATUS_LOOK[column.name] || { tone: column.is_done ? "done" : "queue", hint: "", empty: "Пока пусто" };
     const cards = byColumn[column.id] || [];
+    const next = look.next && columnByName[look.next];
     const cardHtml = cards.map(item => {
-      const poster = item.poster_url ? `<img class="my-status-poster" src="${esc(imgProxy(item.poster_url))}" alt="" loading="lazy">` : `<span class="my-status-poster my-status-placeholder"></span>`;
+      const poster = item.poster_url ? `<img class="psb-poster" src="${esc(imgProxy(item.poster_url))}" alt="" loading="lazy">` : `<span class="psb-poster psb-poster-empty">${esc(String(item.title_name || item.title || "?").slice(0, 1).toUpperCase())}</span>`;
       const title = item.title_name || item.title || "Без названия";
-      const episode = item.title_name && item.episode ? ` · ${String(item.episode).toUpperCase()}` : "";
-      const due = item.is_done ? "Отмечено сданным" : item.deadline ? `${item.is_overdue ? "Просрочено · " : "Срок · "}${item.deadline.slice(8, 10)}.${item.deadline.slice(5, 7)}` : "Без срока";
-      const options = columns.map(target => `<option value="${target.id}"${target.id === column.id ? " selected" : ""}>${esc(target.name)}</option>`).join("");
-      return `<article class="kd-gl my-status-card${item.is_overdue ? " overdue" : ""}" data-q-status-open="${esc(item.public_id)}" draggable="true" tabindex="0" role="button">
-        ${poster}<small class="my-status-id">${esc(item.public_id + episode)}</small><b class="my-status-name">${esc(title)}</b>
-        <span class="my-status-meta">${esc(item.role ? `Моя роль — ${item.role}` : item.global_status || "")}</span><span class="my-status-due">${due}</span>
-        <div class="my-status-actions"><select data-q-status-move="${esc(item.public_id)}" aria-label="Переместить в группу">${options}</select>
-          ${column.is_done ? "" : `<button type="button" class="btn primary" data-q-status-done="${esc(item.public_id)}">Отметить сдачу</button>`}
-          ${item.is_manual ? `<button type="button" class="btn" data-q-status-remove="${esc(item.public_id)}" title="Убрать только с моей доски">Убрать</button>` : ""}</div></article>`;
-    }).join("") || `<div class="my-status-empty">Пока пусто</div>`;
-    return `<section class="my-status-column${column.is_done ? " is-done" : ""}" data-q-status-col="${column.id}">
-      <header class="my-status-head"><b>${esc(column.name)}${column.is_done ? " ✓" : ""}</b><span>${cards.length}</span></header>
-      <div class="my-status-cards">${cardHtml}</div></section>`;
+      const episode = item.title_name && item.episode ? String(item.episode) : "";
+      return `<article class="psb-card${item.is_overdue ? " overdue" : ""}" data-q-status-open="${esc(item.public_id)}" draggable="true" tabindex="0" role="button" title="Открыть ${esc(item.public_id)}">
+        ${poster}
+        <div class="psb-body">
+          <b class="psb-name">${esc(title)}</b>
+          <span class="psb-sub">${esc([episode, item.role].filter(Boolean).join(" · ") || item.global_status || "")}</span>
+          <div class="psb-foot">${dueChip(item)}<small class="psb-id">${esc(item.public_id)}</small></div>
+        </div>
+        <div class="psb-actions">
+          ${next ? `<button type="button" class="psb-act primary" data-q-status-move="${esc(item.public_id)}" data-to="${next.id}">${esc(look.nextLabel)}</button>` : ""}
+          ${look.tone === "work" && columnByName["Очередь"] ? `<button type="button" class="psb-act" data-q-status-move="${esc(item.public_id)}" data-to="${columnByName["Очередь"].id}" title="Вернуть в очередь">↩ В очередь</button>` : ""}
+          ${look.tone === "done" && columnByName["В работе"] ? `<button type="button" class="psb-act" data-q-status-move="${esc(item.public_id)}" data-to="${columnByName["В работе"].id}" title="Снять отметку о сдаче">↩ Вернуть в работу</button>` : ""}
+          ${item.is_manual ? `<button type="button" class="psb-act ghost" data-q-status-remove="${esc(item.public_id)}" title="Убрать только с моей доски">Убрать</button>` : ""}
+        </div></article>`;
+    }).join("");
+    const empty = `<div class="psb-empty"><span>${esc(look.empty)}</span>${look.tone === "queue" ? `<button type="button" class="psb-act" data-q-status-add>+ Добавить серию</button>` : ""}</div>`;
+    return `<section class="psb-col tone-${look.tone}" data-q-status-col="${column.id}">
+      <header class="psb-col-head"><i class="psb-dot"></i><b>${esc(column.name)}</b><span class="psb-count">${cards.length}</span><small>${esc(look.hint)}</small></header>
+      <div class="psb-cards">${cardHtml || empty}</div></section>`;
   }).join("");
-  root.innerHTML = `${head}${viewSwitch()}<div class="my-status-toolbar"><span>Назначенные серии появляются в «Очереди» автоматически. Остальные серии, которые вам доступны, можно добавить сюда вручную.</span><button type="button" class="btn" data-q-status-add>+ Добавить серию</button></div>
-    ${columns.length ? `<div class="my-status-board">${columnsHtml}</div>` : `<div class="q-empty">Групп пока нет.</div>`}`;
+  root.innerHTML = `${head}<div class="psb-toolbar">${viewSwitch()}<span class="psb-tip">Перетаскивайте карточки между колонками или жмите кнопки на них</span>
+      <button type="button" class="btn primary" data-q-status-add>+ Добавить серию</button></div>
+    ${columns.length ? `<div class="psb-board">${columnsHtml}</div>` : `<div class="q-empty">Групп пока нет.</div>`}`;
   bindViewSwitch(root);
-  root.querySelector("[data-q-status-add]")?.addEventListener("click", openAvailableReports);
+  root.querySelectorAll("[data-q-status-add]").forEach(button => button.addEventListener("click", openAvailableReports));
   root.querySelectorAll("[data-q-status-open]").forEach(card => {
     const open = () => openReportDetail(card.dataset.qStatusOpen);
     card.addEventListener("click", event => {
       if (Date.now() < skipStatusOpenUntil) { skipStatusOpenUntil = 0; return; }
-      if (!event.target.closest("button,select")) open();
+      if (!event.target.closest("button")) open();
     });
-    card.addEventListener("keydown", event => { if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button,select")) { event.preventDefault(); open(); } });
+    card.addEventListener("keydown", event => { if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button")) { event.preventDefault(); open(); } });
     card.addEventListener("dragstart", event => {
+      card.classList.add("dragging");
       event.dataTransfer.setData("text/plain", card.dataset.qStatusOpen);
       event.dataTransfer.effectAllowed = "move";
     });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
   });
-  root.querySelectorAll("[data-q-status-move]").forEach(select => select.addEventListener("change", () => moveStatusCard(select.dataset.qStatusMove, select.value)));
-  root.querySelectorAll("[data-q-status-done]").forEach(button => button.addEventListener("click", () => {
-    const doneColumn = columns.find(column => column.is_done);
-    if (!doneColumn) { toast("Группа «Сдано» не найдена — обновите вкладку.", "error"); return; }
-    moveStatusCard(button.dataset.qStatusDone, doneColumn.id);
+  root.querySelectorAll("[data-q-status-move]").forEach(button => button.addEventListener("click", event => {
+    event.stopPropagation();
+    button.disabled = true;
+    moveStatusCard(button.dataset.qStatusMove, button.dataset.to);
   }));
   root.querySelectorAll("[data-q-status-remove]").forEach(button => button.addEventListener("click", async event => {
     event.stopPropagation();
