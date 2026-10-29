@@ -291,11 +291,11 @@ function mul(a, b) {
   }
   return o;
 }
-function camera(aspect) {
-  const z = norm(sub(EYE, TARGET));
+function camera(aspect, eye, target) {
+  const z = norm(sub(eye, target));
   const x = norm(cross([0, 1, 0], z));
   const y = cross(z, x);
-  const view = [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, EYE), -dot(y, EYE), -dot(z, EYE), 1];
+  const view = [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1];
   const f = 1 / Math.tan(FOV / 2), near = 0.1, far = 120;
   const proj = [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, (2 * far * near) / (near - far), 0];
   return { vp: mul(proj, view), x, y, z };
@@ -427,18 +427,25 @@ function buildScene(canvas) {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TR_W, TR_H, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
   }
 
-  let cam = camera(1), aspect = 1, horizon = 0.42;
+  // Камера подвижна: приветствие героини наезжает к ней и отъезжает обратно (showIdleScene → setView)
+  const view = { eye: [...EYE], target: [...TARGET] };
+  let cam = camera(1, view.eye, view.target), aspect = 1, horizon = 0.42;
+  function setView(eye, target) {
+    view.eye = eye;
+    view.target = target;
+    cam = camera(aspect, eye, target);
+    const crest = [0, hill(0, -16), -16, 1];
+    const v = cam.vp;
+    const cy = v[1] * crest[0] + v[5] * crest[1] + v[9] * crest[2] + v[13];
+    const cw = v[3] * crest[0] + v[7] * crest[1] + v[11] * crest[2] + v[15];
+    horizon = cw > 0 ? (cy / cw) * 0.5 + 0.5 : -1;
+  }
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
     canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
     aspect = canvas.width / canvas.height;
-    cam = camera(aspect);
-    const crest = [0, hill(0, -16), -16, 1];
-    const v = cam.vp;
-    const cy = v[1] * crest[0] + v[5] * crest[1] + v[9] * crest[2] + v[13];
-    const cw = v[3] * crest[0] + v[7] * crest[1] + v[11] * crest[2] + v[15];
-    horizon = (cy / cw) * 0.5 + 0.5;
+    setView(view.eye, view.target);
   }
 
   // Луч из камеры через точку экрана (0..1) — до пересечения с холмом
@@ -447,7 +454,7 @@ function buildScene(canvas) {
     const nx = (sx * 2 - 1) * t * aspect, ny = (1 - sy * 2) * t;
     const dir = norm([cam.x[0] * nx + cam.y[0] * ny - cam.z[0], cam.x[1] * nx + cam.y[1] * ny - cam.z[1], cam.x[2] * nx + cam.y[2] * ny - cam.z[2]]);
     for (let s = 0.5; s < 40; s += 0.05) {
-      const px = EYE[0] + dir[0] * s, py = EYE[1] + dir[1] * s, pz = EYE[2] + dir[2] * s;
+      const px = view.eye[0] + dir[0] * s, py = view.eye[1] + dir[1] * s, pz = view.eye[2] + dir[2] * s;
       if (py <= hill(px, pz) + 0.15) return [px, pz];
     }
     return null;
@@ -472,7 +479,7 @@ function buildScene(canvas) {
     gl.depthMask(true);
     gl.useProgram(ground.p);
     gl.uniformMatrix4fv(ground.u.uVP, false, cam.vp);
-    gl.uniform3fv(ground.u.uEye, EYE);
+    gl.uniform3fv(ground.u.uEye, view.eye);
     gl.uniform1f(ground.u.uNight, night);
     gl.bindVertexArray(groundVao);
     gl.drawElements(gl.TRIANGLES, groundCount, gl.UNSIGNED_INT, 0);
@@ -481,7 +488,7 @@ function buildScene(canvas) {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(tree.p);
     gl.uniformMatrix4fv(tree.u.uVP, false, cam.vp);
-    gl.uniform3fv(tree.u.uEye, EYE);
+    gl.uniform3fv(tree.u.uEye, view.eye);
     gl.uniform3f(tree.u.uTree, TREE[0], hill(TREE[0], TREE[1]), TREE[1]);
     gl.uniform1f(tree.u.uNight, night);
     gl.bindVertexArray(treeVao);
@@ -489,13 +496,13 @@ function buildScene(canvas) {
     gl.disable(gl.BLEND);
 
     if (heroine) {
-      heroine.render(canvas.width, canvas.height);
+      heroine.render(canvas.width, canvas.height, view.eye, view.target);
       gl.enable(gl.DEPTH_TEST);
     }
 
     gl.useProgram(grass.p);
     gl.uniformMatrix4fv(grass.u.uVP, false, cam.vp);
-    gl.uniform3fv(grass.u.uEye, EYE);
+    gl.uniform3fv(grass.u.uEye, view.eye);
     gl.uniform1f(grass.u.uTime, time);
     gl.uniform1f(grass.u.uNight, night);
     gl.uniform4f(grass.u.uTrRect, ...TR_RECT);
@@ -512,7 +519,7 @@ function buildScene(canvas) {
     gl.depthMask(false);
     gl.useProgram(flies.p);
     gl.uniformMatrix4fv(flies.u.uVP, false, cam.vp);
-    gl.uniform3fv(flies.u.uEye, EYE);
+    gl.uniform3fv(flies.u.uEye, view.eye);
     gl.uniform1f(flies.u.uTime, time);
     gl.uniform1f(flies.u.uNight, night);
     gl.uniform1f(flies.u.uPx, canvas.height / (2 * Math.tan(FOV / 2)));
@@ -525,7 +532,7 @@ function buildScene(canvas) {
 
   function dispose() { gl.getExtension("WEBGL_lose_context")?.loseContext(); }
 
-  return { gl, resize, pick, stamp, draw, dispose };
+  return { gl, resize, setView, pick, stamp, draw, dispose };
 }
 
 // ---------- экран ----------
@@ -557,9 +564,11 @@ export function showIdleScene() {
   if (!scene) { box.remove(); return; }
 
   let heroine = null;
+  let camEye = [...EYE];
+  let greetT = -1;   // сколько секунд героиня здоровается (по кадрам; -1 — не здоровается). Камера наезжает, она машет, отъезжает
   import("./idle-heroine.js")
     .then(m => m.loadHeroine({ gl: scene.gl, canvas, url: `${API_BASE}/desktop/idle-model`, place: { x: HERO.x, y: hill(HERO.x, HERO.z), z: HERO.z, yaw: HERO.yaw }, eye: EYE, target: TARGET }))
-    .then(h => { if (current) heroine = h; else h.dispose(); })
+    .then(h => { if (current) { heroine = h; greetT = 0; } else h.dispose(); })
     .catch(error => console.warn("Экран ожидания: героиня не загрузилась", error));
 
   const since = lastActive;
@@ -582,7 +591,21 @@ export function showIdleScene() {
     prev = now;
     night += (nightGoal - night) * Math.min(1, dt * 1.6);
     const time = (now - t0) / 1000;
-    heroine?.update(dt, time, night, cursor, hill);
+    let greet = null;
+    if (heroine && greetT >= 0) {
+      const g = greetT += dt;
+      const ease = x => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); };
+      const near = g < 1.4 ? ease(g / 1.4) : g < 5 ? 1 : 1 - ease((g - 5) / 2.6);
+      greet = { t: g, w: g < 4.6 ? ease((g - 0.9) / 0.5) : 1 - ease((g - 4.6) / 0.8), eye: camEye };
+      // Крупный план: камера в метре перед лицом, чуть сбоку, смотрит в лицо
+      const headPos = heroine.headPosition();
+      const close = [headPos[0] - 0.36, headPos[1] - 0.04, headPos[2] + 1.25];
+      const face = [headPos[0] + 0.05, headPos[1] - 0.12, headPos[2]];
+      camEye = EYE.map((v, i) => v + (close[i] - v) * near);
+      scene.setView(camEye, TARGET.map((v, i) => v + (face[i] - v) * near));
+      if (g > 7.8) { greetT = -1; camEye = [...EYE]; scene.setView(camEye, [...TARGET]); }
+    }
+    heroine?.update(dt, time, night, cursor, hill, greet);
     scene.draw(time, dt, night, cursor, heroine);
     raf = document.hidden || !document.hasFocus() ? 0 : requestAnimationFrame(frame);
   };
@@ -613,6 +636,12 @@ export function showIdleScene() {
   }
 
   box.addEventListener("pointermove", onMove);
+  canvas.addEventListener("pointerdown", e => {
+    if (!heroine || greetT >= 0) return;
+    const r = canvas.getBoundingClientRect();
+    const hit = scene.pick((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    if (hit && Math.hypot(hit[0] - HERO.x, hit[1] - HERO.z) < 0.9) greetT = 0;
+  });
   box.addEventListener("pointerleave", () => { cursor = null; lastHit = null; });
   box.addEventListener("wheel", close, { passive: true });
   box.querySelector("[data-idle-back]").addEventListener("click", close);

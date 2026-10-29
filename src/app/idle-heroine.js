@@ -3,6 +3,7 @@
 // лениво вместе с three.js, только когда сцена показана. Рисует в тот же WebGL-контекст, что и луг: общий
 // буфер глубины, поэтому трава перед ней закрывает ноги. Сидит в траве, обхватив колени: дышит, моргает,
 // волосы и юбку колышет ветер (пружины VRM), голова следит за курсором, без курсора — смотрит на луну.
+// При появлении (и по клику) здоровается: поворачивается к камере, улыбается и машет рукой.
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -26,6 +27,13 @@ const POSE = {
   leftLowerArm: [0, -1.1, 0],
   rightLowerArm: [0, 1.1, 0],
 };
+// Приветствие: правая рука поднята, предплечье машет; корпус чуть повёрнут к камере
+const WAVE = {
+  rightUpperArm: [0, 0.45, -0.25],
+  rightLowerArm: [0, 0, -1.55],
+  rightHand: [0, 0, 0],
+};
+const lerp3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 
 export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
   const res = await fetch(url);
@@ -68,9 +76,12 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
   const baseGravity = joints.map(j => j.settings.gravityPower);
   let nextBlink = 2, blinkT = -1;
 
-  function update(dt, time, night, cursor, hill) {
-    // Куда смотреть: на курсор (точка над травой) или на луну; плавно
-    if (cursor) want.set(cursor[0], hill(cursor[0], cursor[1]) + 0.5, cursor[1]); else want.copy(MOON);
+  // greet: { w — сила приветствия 0..1, t — секунды с его начала, eye — где камера }
+  function update(dt, time, night, cursor, hill, greet) {
+    const w = greet ? greet.w : 0;
+    // Куда смотреть: в камеру, пока здоровается; иначе на курсор (точка над травой) или на луну; плавно
+    if (w > 0.2) want.set(greet.eye[0], greet.eye[1], greet.eye[2]);
+    else if (cursor) want.set(cursor[0], hill(cursor[0], cursor[1]) + 0.5, cursor[1]); else want.copy(MOON);
     lookTarget.position.lerp(want, Math.min(1, dt * 3));
     // Голова и шея поворачиваются к цели в пределах шеи, остальное доводят глаза
     head.getWorldPosition(tmp);
@@ -82,6 +93,13 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
     neck.rotation.y = head.rotation.y * 0.5;
     neck.rotation.x = head.rotation.x * 0.4;
     chest.rotation.x = POSE.chest[0] + Math.sin(time * 1.6) * 0.025;
+    bone("spine").rotation.y = w * -0.3;
+    // Машет: рука поднимается, предплечье качается из стороны в сторону
+    const sway = Math.sin((greet ? greet.t : 0) * 9) * 0.45;
+    for (const name of Object.keys(WAVE)) {
+      const target = name === "rightLowerArm" ? [WAVE[name][0], WAVE[name][1], WAVE[name][2] + sway] : name === "rightHand" ? [0, 0, sway * 0.5] : WAVE[name];
+      bone(name)?.rotation.set(...lerp3(POSE[name] || [0, 0, 0], target, w));
+    }
 
     // Моргание раз в 2–6 с, иногда двойное
     if (time > nextBlink && blinkT < 0) blinkT = 0;
@@ -91,8 +109,10 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
       blink = Math.sin(Math.min(1, blinkT / 0.16) * Math.PI);
       if (blinkT > 0.16) { blinkT = -1; nextBlink = time + (Math.random() < 0.2 ? 0.25 : 2 + Math.random() * 4); }
     }
-    vrm.expressionManager?.setValue("blink", blink);
-    vrm.expressionManager?.setValue("relaxed", 0.35);
+    // Улыбка: при приветствии — широкая («happy», глаза дугой), в остальное время — лёгкая
+    vrm.expressionManager?.setValue("blink", blink * (1 - w));
+    vrm.expressionManager?.setValue("happy", 0.9 * w);
+    vrm.expressionManager?.setValue("relaxed", 0.35 * (1 - w));
 
     // Ветер: пружины волос и юбки тянет вбок волнами
     const gust = 0.5 + 0.5 * Math.sin(time * 0.6) * Math.sin(time * 1.7 + 1);
@@ -110,9 +130,15 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
     fill.intensity = 0.8 - 0.35 * night;
   }
 
-  function render(width, height) {
+  function headPosition() {
+    return head.getWorldPosition(new THREE.Vector3()).toArray();
+  }
+
+  function render(width, height, eyeNow, targetNow) {
     renderer.resetState();
     renderer.setViewport(0, 0, width, height);
+    camera.position.set(...eyeNow);
+    camera.lookAt(...targetNow);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
@@ -124,5 +150,5 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
     renderer.dispose();
   }
 
-  return { update, render, dispose };
+  return { update, render, headPosition, dispose };
 }
