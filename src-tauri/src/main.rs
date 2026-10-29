@@ -1553,7 +1553,7 @@ fn main() {
                 .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview))
                 .max_file_size(5_000_000)
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
-                .level(log::LevelFilter::Info)
+                .level(log::LevelFilter::Error)
                 .level_for("project_desktop", log::LevelFilter::Error)
                 .level_for("project_desktop::media_tools", log::LevelFilter::Info)
                 .level_for("project_desktop::local_render", log::LevelFilter::Info)

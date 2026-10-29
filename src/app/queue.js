@@ -48,7 +48,8 @@ const MONTHS = ["января", "февраля", "марта", "апреля", 
 const pad2 = n => String(n).padStart(2, "0");
 const cleanLabel = s => String(s || "").replace(/^[^\p{L}\p{N}]+/u, "");
 const QUEUE_MODE_KEY = "project.queue.view";
-let queueMode = localStorage.getItem(QUEUE_MODE_KEY) === "statuses" ? "statuses" : "deadlines";
+let queueMode = "deadlines";
+try { if (localStorage.getItem(QUEUE_MODE_KEY) === "statuses") queueMode = "statuses"; } catch (_) { /* без хранилища — вид по умолчанию */ }
 
 function viewSwitch() {
   return `<div class="q-view-switch" role="tablist" aria-label="Вид очереди">
@@ -60,7 +61,7 @@ function viewSwitch() {
 function bindViewSwitch(root) {
   root.querySelectorAll("[data-q-mode]").forEach(button => button.addEventListener("click", () => {
     queueMode = button.dataset.qMode;
-    localStorage.setItem(QUEUE_MODE_KEY, queueMode);
+    try { localStorage.setItem(QUEUE_MODE_KEY, queueMode); } catch (_) { /* не критично */ }
     loadQueue();
   }));
 }
@@ -260,7 +261,7 @@ function renderPersonalStatuses(root, data) {
   root.querySelectorAll("[data-q-status-move]").forEach(select => select.addEventListener("change", () => moveStatusCard(select.dataset.qStatusMove, select.value)));
   root.querySelectorAll("[data-q-status-done]").forEach(button => button.addEventListener("click", () => {
     const doneColumn = columns.find(column => column.is_done);
-    if (!doneColumn) { toast("Сначала отметьте группу «Сдано» в настройках группы.", "error"); return; }
+    if (!doneColumn) { toast("Группа «Сдано» не найдена — обновите вкладку.", "error"); return; }
     moveStatusCard(button.dataset.qStatusDone, doneColumn.id);
   }));
   root.querySelectorAll("[data-q-status-remove]").forEach(button => button.addEventListener("click", async event => {
