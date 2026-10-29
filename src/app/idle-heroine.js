@@ -31,7 +31,7 @@ const POSE = {
 const WAVE = {
   rightUpperArm: [0, 0.45, -0.25],
   rightLowerArm: [0, 0, -1.55],
-  rightHand: [0, 0, 0],
+  rightHand: [0, -0.35, 0.1],
 };
 const lerp3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 
@@ -74,7 +74,8 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
   const tmp = new THREE.Vector3();
   const joints = vrm.springBoneManager ? [...vrm.springBoneManager.joints] : [];
   const baseGravity = joints.map(j => j.settings.gravityPower);
-  let nextBlink = 2, blinkT = -1;
+  let nextBlink = 2, blinkT = -1, nextGlance = 0;
+  const glance = new THREE.Vector3();
 
   // greet: { w — сила приветствия 0..1, t — секунды с его начала, eye — где камера }
   function update(dt, time, night, cursor, hill, greet) {
@@ -82,22 +83,35 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
     // Куда смотреть: в камеру, пока здоровается; иначе на курсор (точка над травой) или на луну; плавно
     if (w > 0.2) want.set(greet.eye[0], greet.eye[1], greet.eye[2]);
     else if (cursor) want.set(cursor[0], hill(cursor[0], cursor[1]) + 0.5, cursor[1]); else want.copy(MOON);
-    lookTarget.position.lerp(want, Math.min(1, dt * 3));
+    // Живой взгляд: глаза то и дело чуть перескакивают по лицу собеседника (саккады)
+    if (time > nextGlance) {
+      glance.set((Math.random() - 0.5) * 0.06, (Math.random() - 0.5) * 0.04, 0);
+      nextGlance = time + 0.7 + Math.random() * 1.8;
+    }
+    want.add(glance);
+    lookTarget.position.lerp(want, Math.min(1, dt * (w > 0.2 ? 10 : 3)));
     // Голова и шея поворачиваются к цели в пределах шеи, остальное доводят глаза
     head.getWorldPosition(tmp);
     const local = vrm.scene.worldToLocal(lookTarget.position.clone()).sub(vrm.scene.worldToLocal(tmp.clone()));
     const yaw = THREE.MathUtils.clamp(Math.atan2(local.x, local.z), -0.9, 0.9);
     const pitch = THREE.MathUtils.clamp(-Math.atan2(local.y, Math.hypot(local.x, local.z)), -0.6, 0.35);
-    head.rotation.y += (yaw * 0.6 - head.rotation.y) * Math.min(1, dt * 4);
-    head.rotation.x += (pitch * 0.6 - head.rotation.x) * Math.min(1, dt * 4);
+    const turn = 0.6 + 0.35 * w;   // здороваясь, поворачивается к камере почти всей головой
+    head.rotation.y += (yaw * turn - head.rotation.y) * Math.min(1, dt * 5);
+    head.rotation.x += (pitch * turn - head.rotation.x) * Math.min(1, dt * 5);
+    head.rotation.z = w * 0.12;   // и чуть наклоняет голову
     neck.rotation.y = head.rotation.y * 0.5;
     neck.rotation.x = head.rotation.x * 0.4;
     chest.rotation.x = POSE.chest[0] + Math.sin(time * 1.6) * 0.025;
-    bone("spine").rotation.y = w * -0.3;
-    // Машет: рука поднимается, предплечье качается из стороны в сторону
-    const sway = Math.sin((greet ? greet.t : 0) * 9) * 0.45;
+    bone("spine").rotation.y = w * 0.22;   // корпус чуть разворачивается к камере
+    // Машет спокойно: предплечье мягко качается, кисть запаздывает за ним, плечо чуть пружинит
+    const gt = greet ? greet.t : 0;
+    const sway = Math.sin(gt * 4.2) * 0.22;
+    const lag = Math.sin(gt * 4.2 - 0.9) * 0.18;
     for (const name of Object.keys(WAVE)) {
-      const target = name === "rightLowerArm" ? [WAVE[name][0], WAVE[name][1], WAVE[name][2] + sway] : name === "rightHand" ? [0, 0, sway * 0.5] : WAVE[name];
+      const [x, y, z] = WAVE[name];
+      const target = name === "rightLowerArm" ? [x, y, z + sway]
+        : name === "rightHand" ? [x, y, z + lag]
+        : [x, y, z + Math.sin(gt * 4.2 + 0.6) * 0.04];
       bone(name)?.rotation.set(...lerp3(POSE[name] || [0, 0, 0], target, w));
     }
 
@@ -109,10 +123,11 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
       blink = Math.sin(Math.min(1, blinkT / 0.16) * Math.PI);
       if (blinkT > 0.16) { blinkT = -1; nextBlink = time + (Math.random() < 0.2 ? 0.25 : 2 + Math.random() * 4); }
     }
-    // Улыбка: при приветствии — широкая («happy», глаза дугой), в остальное время — лёгкая
-    vrm.expressionManager?.setValue("blink", blink * (1 - w));
-    vrm.expressionManager?.setValue("happy", 0.9 * w);
-    vrm.expressionManager?.setValue("relaxed", 0.35 * (1 - w));
+    // Улыбка с открытыми глазами: мягкое «relaxed» и чуть приоткрытый рот; моргает и во время приветствия
+    vrm.expressionManager?.setValue("blink", blink);
+    vrm.expressionManager?.setValue("happy", 0.38 * w);   // больше — глаза закрываются дугой
+    vrm.expressionManager?.setValue("relaxed", 0.3 - 0.1 * w);
+    vrm.expressionManager?.setValue("ih", 0.12 * w);
 
     // Ветер: пружины волос и юбки тянет вбок волнами
     const gust = 0.5 + 0.5 * Math.sin(time * 0.6) * Math.sin(time * 1.7 + 1);
