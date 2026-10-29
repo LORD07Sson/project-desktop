@@ -1,5 +1,6 @@
 // Экран ожидания: если программой не пользуются N минут (по умолчанию 5), поверх всего встаёт живая сцена —
-// холм с травой под небом, днём облака и солнце, ночью луна и светлячки. Трава качается от ветра и
+// холм с травой под небом, днём облака и солнце, ночью луна и светлячки. Сезон — из настроек оформления:
+// зимой снег, весной сакура и лепестки, осенью листопад, на Хэллоуин — багровое дерево и оранжевые огоньки. Трава качается от ветра и
 // расступается под курсором, примятая полоса медленно выпрямляется. Любая клавиша или «Вернуться» — назад.
 // Всё рисуется WebGL2 без библиотек: небо — полноэкранный треугольник, трава — инстансы лезвий (позиции и
 // изгиб считает вершинный шейдер), след курсора — маленькая текстура «примятости», которую обновляет JS.
@@ -36,6 +37,40 @@ const TARGET = [0, 4.2, -16];
 const FOV = Math.PI / 4;
 const TREE = [1.8, -16.5];
 const BLADES = 80000;
+
+// Сезон — тот же, что в Настройках → Внешний вид (season.js, :root[data-season]); «Выкл.» — лето.
+// Цвета травы, земли и кроны, снег, высота травы, доля цветов, оттенок неба и что летает:
+// fall 0 — светлячки и пыльца, 1 — снег, 2 — лепестки или листья (кружатся и падают).
+const SEASON_LOOKS = {
+  summer: {
+    root: [0.07, 0.18, 0.04], tip: [0.42, 0.7, 0.2], tip2: [0.6, 0.78, 0.28], ground: [0.09, 0.2, 0.05],
+    leaf: [0.1, 0.22, 0.07], leafHi: [0.3, 0.48, 0.16], snow: 0, height: 1, flowers: 0.014, sky: [1, 1, 1],
+    fall: 0, flyDay: [1, 1, 0.92], flyNight: [0.85, 1, 0.45], flySize: [0.035, 0.11],
+  },
+  spring: {
+    root: [0.08, 0.2, 0.05], tip: [0.5, 0.8, 0.28], tip2: [0.66, 0.86, 0.36], ground: [0.11, 0.23, 0.06],
+    leaf: [0.9, 0.58, 0.7], leafHi: [1, 0.84, 0.9], snow: 0, height: 0.85, flowers: 0.045, sky: [1.02, 1, 1.03],
+    fall: 2, flyDay: [1, 0.76, 0.86], flyNight: [0.8, 0.6, 0.75], flySize: [0.05, 0.05],
+  },
+  autumn: {
+    root: [0.12, 0.13, 0.04], tip: [0.74, 0.6, 0.22], tip2: [0.62, 0.42, 0.14], ground: [0.17, 0.15, 0.06],
+    leaf: [0.78, 0.3, 0.08], leafHi: [0.96, 0.64, 0.16], snow: 0, height: 0.9, flowers: 0, sky: [1.05, 0.98, 0.9],
+    fall: 2, flyDay: [0.95, 0.52, 0.16], flyNight: [0.6, 0.32, 0.14], flySize: [0.065, 0.065],
+  },
+  winter: {
+    root: [0.3, 0.36, 0.32], tip: [0.86, 0.9, 0.95], tip2: [0.76, 0.83, 0.87], ground: [0.86, 0.9, 0.96],
+    leaf: [0.2, 0.21, 0.23], leafHi: [0.95, 0.97, 1], snow: 0.8, height: 0.45, flowers: 0, sky: [0.92, 0.97, 1.06],
+    fall: 1, flyDay: [1, 1, 1], flyNight: [0.82, 0.88, 1], flySize: [0.045, 0.045],
+  },
+  halloween: {
+    root: [0.1, 0.1, 0.04], tip: [0.55, 0.45, 0.18], tip2: [0.45, 0.3, 0.12], ground: [0.13, 0.11, 0.06],
+    leaf: [0.34, 0.06, 0.08], leafHi: [0.62, 0.16, 0.1], snow: 0, height: 0.9, flowers: 0, sky: [1, 0.86, 1.1],
+    fall: 0, flyDay: [1, 0.72, 0.32], flyNight: [1, 0.55, 0.15], flySize: [0.04, 0.12],
+  },
+};
+function seasonLook() {
+  return SEASON_LOOKS[document.documentElement.dataset.season] || SEASON_LOOKS.summer;
+}
 const FLIES = 220;
 // Текстура примятости покрывает луг: x ∈ [-22, 22], z ∈ [-20, 4]
 const TR_W = 192, TR_H = 96, TR_RECT = [-22, -20, 44, 24];
@@ -55,7 +90,8 @@ float fbm(vec2 p) {
 
 // Общий хвост фрагментных шейдеров: ночной тон и дымка к горизонту.
 const SHADE_GLSL = `
-uniform float uNight;
+uniform float uNight, uSnow, uFlowers;
+uniform vec3 uGround, uRoot, uTip, uTip2, uLeaf, uLeafHi;
 vec3 nightTint(vec3 c) { return mix(c, c * vec3(0.22, 0.4, 0.62) + vec3(0.0, 0.02, 0.05), uNight); }
 vec3 fog(vec3 c, float d) {
   vec3 haze = mix(vec3(0.78, 0.86, 0.93), vec3(0.08, 0.13, 0.27), uNight);
@@ -73,13 +109,14 @@ const SKY_FS = `#version 300 es
 precision highp float;
 in vec2 vUv;
 out vec4 o;
-uniform float uTime, uNight, uAspect, uHorizon;
+uniform float uTime, uNight, uAspect, uHorizon, uSnow;
+uniform vec3 uSkyTint;
 ${NOISE_GLSL}
 void main() {
   vec2 uv = vUv;
   float h = clamp((uv.y - uHorizon) / (1.0 - uHorizon), 0.0, 1.0);
-  vec3 day = mix(vec3(0.80, 0.88, 0.95), vec3(0.30, 0.56, 0.88), pow(h, 0.7));
-  vec3 night = mix(vec3(0.10, 0.17, 0.36), vec3(0.02, 0.05, 0.15), pow(h, 0.8));
+  vec3 day = mix(vec3(0.80, 0.88, 0.95), vec3(0.30, 0.56, 0.88), pow(h, 0.7)) * uSkyTint;
+  vec3 night = mix(vec3(0.10, 0.17, 0.36), vec3(0.02, 0.05, 0.15), pow(h, 0.8)) * mix(vec3(1.0), uSkyTint, 0.6);
   vec3 c = mix(day, night, uNight);
   vec2 sp = vec2(uv.x * uAspect, uv.y);
   // Звёзды
@@ -102,7 +139,7 @@ void main() {
   c = mix(c, cloud * (0.86 + 0.14 * cl), cover * mix(0.9, 0.55, uNight));
   // Дальние холмы в дымке у горизонта
   float far = uHorizon + 0.025 + 0.02 * fbm(vec2(sp.x * 2.5, 1.0)) + 0.012 * sin(sp.x * 3.0);
-  vec3 farc = mix(vec3(0.50, 0.66, 0.52), vec3(0.06, 0.12, 0.2), uNight);
+  vec3 farc = mix(mix(vec3(0.50, 0.66, 0.52), vec3(0.86, 0.9, 0.95), uSnow) * mix(vec3(1.0), uSkyTint, 2.0), vec3(0.06, 0.12, 0.2), uNight);
   c = mix(c, farc, smoothstep(far + 0.006, far - 0.01, uv.y) * 0.6);
   o = vec4(c, 1.0);
 }`;
@@ -128,7 +165,8 @@ out vec4 o;
 ${NOISE_GLSL}
 ${SHADE_GLSL}
 void main() {
-  vec3 c = vec3(0.09, 0.2, 0.05) * (0.75 + 0.5 * noise(vXZ * 0.8));
+  vec3 c = uGround * (0.75 + 0.5 * noise(vXZ * 0.8));
+  c = mix(c, vec3(0.9, 0.94, 1.0) * (0.9 + 0.1 * noise(vXZ * 3.0)), uSnow);
   o = vec4(fog(nightTint(c), vD), 1.0);
 }`;
 
@@ -141,6 +179,7 @@ uniform float uTime;
 uniform sampler2D uTrample;
 uniform vec4 uTrRect;
 uniform vec4 uCursor; // x, z, сила, радиус
+uniform float uHeight;
 out float vT;
 out float vSeed;
 out float vPress;
@@ -151,7 +190,7 @@ void main() {
   vec3 base = vec3(aInst.x, hill(aInst.xy), aInst.y);
   float d = distance(base.xz, uEye.xz);
   float seed = aInst.z;
-  float h = (0.3 + 0.32 * fract(seed * 7.13)) * (1.0 + d * 0.02);
+  float h = (0.3 + 0.32 * fract(seed * 7.13)) * (1.0 + d * 0.02) * uHeight;
   float w = (0.03 + d * 0.0035) * (1.0 - t * 0.85);
   vec2 side = vec2(cos(aInst.w), sin(aInst.w));
 
@@ -190,10 +229,10 @@ in float vD;
 out vec4 o;
 ${SHADE_GLSL}
 void main() {
-  vec3 root = vec3(0.07, 0.18, 0.04);
-  vec3 tip = mix(vec3(0.42, 0.7, 0.2), vec3(0.6, 0.78, 0.28), fract(vSeed * 13.7));
+  vec3 root = uRoot;
+  vec3 tip = mix(uTip, uTip2, fract(vSeed * 13.7));
   vec3 c = mix(root, tip, smoothstep(0.0, 1.0, vT));
-  if (vSeed > 0.986 && vT > 0.82) {
+  if (vSeed > 1.0 - uFlowers && vT > 0.82) {
     float k = fract(vSeed * 91.0);
     c = k < 0.4 ? vec3(0.92, 0.55, 0.75) : k < 0.75 ? vec3(0.7, 0.55, 0.95) : vec3(0.98, 0.88, 0.4);
   }
@@ -234,7 +273,8 @@ void main() {
   crown += (fbm(p * 9.0) - 0.5) * 0.12;
   float a = smoothstep(0.012, -0.012, min(trunk, crown));
   if (a < 0.02) discard;
-  vec3 leaf = mix(vec3(0.1, 0.22, 0.07), vec3(0.3, 0.48, 0.16), smoothstep(0.5, 1.0, p.y + fbm(p * 14.0) * 0.3));
+  vec3 leaf = mix(uLeaf, uLeafHi, smoothstep(0.5, 1.0, p.y + fbm(p * 14.0) * 0.3));
+  leaf = mix(leaf, vec3(0.93, 0.96, 1.0), uSnow * smoothstep(0.55, 0.9, p.y + fbm(p * 11.0) * 0.25));
   vec3 c = crown < trunk ? leaf : vec3(0.22, 0.15, 0.1);
   o = vec4(fog(nightTint(c), vD), a);
 }`;
@@ -243,30 +283,51 @@ const FLY_VS = `#version 300 es
 in vec4 aFly;   // x, z, высота над травой, случайное число
 uniform mat4 uVP;
 uniform vec3 uEye;
-uniform float uTime, uNight, uPx;
+uniform float uTime, uNight, uPx, uFall;
+uniform vec2 uFlySize;
 out float vGlow;
+out float vSeed;
 ${HILL_GLSL}
 void main() {
   float s = aFly.w;
   vec3 p = vec3(aFly.x, 0.0, aFly.y);
   p += vec3(sin(uTime * 0.3 + s * 10.0) * 0.7, 0.0, cos(uTime * 0.27 + s * 5.0) * 0.7);
   p.y = hill(p.xz) + aFly.z + sin(uTime * 0.5 + s * 7.0) * 0.25;
+  if (uFall > 0.5) {
+    // Падают сверху и кружатся; снег медленнее и прямее, листья и лепестки качает сильнее
+    float sway = uFall > 1.5 ? 0.6 : 0.25;
+    p.x += sin(uTime * (1.1 + s) + s * 9.0) * sway;
+    p.y = hill(p.xz) + 4.0 - mod(uTime * (uFall > 1.5 ? 0.45 : 0.32) * (0.7 + 0.6 * s) + s * 9.0, 4.2);
+  }
   float d = distance(p, uEye);
   float blink = pow(0.5 + 0.5 * sin(uTime * (0.8 + s) + s * 20.0), 3.0);
-  float size = mix(0.035, 0.11, uNight);
-  vGlow = mix(0.3, blink, uNight);
+  float size = mix(uFlySize.x, uFlySize.y, uNight);
+  vGlow = uFall > 0.5 ? mix(0.95, 0.7, uNight) : mix(0.3, blink, uNight);
+  vSeed = s;
   gl_PointSize = clamp(size * uPx / d, 1.0, 40.0);
   gl_Position = uVP * vec4(p, 1.0);
 }`;
 const FLY_FS = `#version 300 es
 precision highp float;
 in float vGlow;
+in float vSeed;
 out vec4 o;
-uniform float uNight;
+uniform float uNight, uFall;
+uniform vec3 uFlyDay, uFlyNight;
 void main() {
   float r = length(gl_PointCoord - 0.5) * 2.0;
-  float a = pow(max(1.0 - r, 0.0), 2.2) * vGlow;
-  vec3 c = mix(vec3(1.0, 1.0, 0.92), vec3(0.85, 1.0, 0.45), uNight);
+  vec3 c = mix(uFlyDay, uFlyNight, uNight);
+  float a;
+  if (uFall > 1.5) {
+    // Лепесток или лист: плотная капля, у каждого свой оттенок
+    vec2 q = (gl_PointCoord - 0.5) * vec2(2.0, 3.2);
+    a = smoothstep(1.0, 0.8, length(q)) * vGlow;
+    c *= 0.75 + 0.5 * fract(vSeed * 13.0);
+  } else if (uFall > 0.5) {
+    a = smoothstep(1.0, 0.35, r) * vGlow;   // снежинка — мягкая
+  } else {
+    a = pow(max(1.0 - r, 0.0), 2.2) * vGlow;   // светлячок — свечение
+  }
   o = vec4(c, a);
 }`;
 
@@ -446,6 +507,19 @@ function buildScene(canvas) {
     return null;
   }
 
+  // Юниформы сезона: каждой программе — те, что у неё есть
+  const look = seasonLook();
+  function seasonUniforms(prog) {
+    const u = prog.u;
+    const v3 = { uRoot: look.root, uTip: look.tip, uTip2: look.tip2, uGround: look.ground, uLeaf: look.leaf, uLeafHi: look.leafHi, uSkyTint: look.sky, uFlyDay: look.flyDay, uFlyNight: look.flyNight };
+    for (const [name, v] of Object.entries(v3)) if (u[name]) gl.uniform3fv(u[name], v);
+    if (u.uSnow) gl.uniform1f(u.uSnow, look.snow);
+    if (u.uFlowers) gl.uniform1f(u.uFlowers, look.flowers);
+    if (u.uHeight) gl.uniform1f(u.uHeight, look.height);
+    if (u.uFall) gl.uniform1f(u.uFall, look.fall);
+    if (u.uFlySize) gl.uniform2fv(u.uFlySize, look.flySize);
+  }
+
   function draw(time, dt, night, cursor) {
     uploadTrample(dt);
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -454,6 +528,7 @@ function buildScene(canvas) {
 
     gl.disable(gl.DEPTH_TEST);
     gl.useProgram(sky.p);
+    seasonUniforms(sky);
     gl.uniform1f(sky.u.uTime, time);
     gl.uniform1f(sky.u.uNight, night);
     gl.uniform1f(sky.u.uAspect, aspect);
@@ -464,6 +539,7 @@ function buildScene(canvas) {
     gl.enable(gl.DEPTH_TEST);
     gl.depthMask(true);
     gl.useProgram(ground.p);
+    seasonUniforms(ground);
     gl.uniformMatrix4fv(ground.u.uVP, false, cam.vp);
     gl.uniform3fv(ground.u.uEye, EYE);
     gl.uniform1f(ground.u.uNight, night);
@@ -473,6 +549,7 @@ function buildScene(canvas) {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(tree.p);
+    seasonUniforms(tree);
     gl.uniformMatrix4fv(tree.u.uVP, false, cam.vp);
     gl.uniform3fv(tree.u.uEye, EYE);
     gl.uniform3f(tree.u.uTree, TREE[0], hill(TREE[0], TREE[1]), TREE[1]);
@@ -482,6 +559,7 @@ function buildScene(canvas) {
     gl.disable(gl.BLEND);
 
     gl.useProgram(grass.p);
+    seasonUniforms(grass);
     gl.uniformMatrix4fv(grass.u.uVP, false, cam.vp);
     gl.uniform3fv(grass.u.uEye, EYE);
     gl.uniform1f(grass.u.uTime, time);
@@ -498,6 +576,7 @@ function buildScene(canvas) {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     gl.depthMask(false);
     gl.useProgram(flies.p);
+    seasonUniforms(flies);
     gl.uniformMatrix4fv(flies.u.uVP, false, cam.vp);
     gl.uniform3fv(flies.u.uEye, EYE);
     gl.uniform1f(flies.u.uTime, time);
