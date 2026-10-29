@@ -45,15 +45,18 @@ const BASE = {
 };
 
 // Насколько согнуты пальцы (0 — прямые, 1 — кулак). Левая кисть сгибается вокруг Z в минус, правая — в плюс.
+const CASCADE = [0.78, 0.95, 1.08, 1.2];   // указательный ... мизинец
 function curlFingers(t, side, amount, spread = 0) {
   const s = side === "left" ? -1 : 1;
+  const relaxed = 0.12;   // живая кисть никогда не бывает совсем прямой
   FINGERS.forEach((f, i) => {
-    const k = amount * (1 + i * 0.08);
-    t[`${side}${f}Proximal`] = [0, (i - 1.5) * spread * 0.12 * -s, s * k * 0.9];
-    t[`${side}${f}Intermediate`] = [0, 0, s * k * 1.1];
-    t[`${side}${f}Distal`] = [0, 0, s * k * 0.8];
+    const k = relaxed + amount * CASCADE[i];
+    t[`${side}${f}Proximal`] = [0, (i - 1.5) * spread * 0.14 * -s, s * k * 0.8];
+    t[`${side}${f}Intermediate`] = [0, 0, s * k * 1.15];
+    t[`${side}${f}Distal`] = [0, 0, s * k * 0.7];
   });
-  t[`${side}ThumbProximal`] = [0, s * -0.35 * amount, s * 0.25 * amount];
+  t[`${side}ThumbMetacarpal`] = [0, s * (-0.25 - 0.3 * amount), s * 0.12];
+  t[`${side}ThumbProximal`] = [0, s * -0.25 * amount, s * 0.2 * amount];
   t[`${side}ThumbDistal`] = [0, s * -0.3 * amount, 0];
 }
 
@@ -155,7 +158,7 @@ const STAND = {
 };
 const WALK_SPEED = 0.62;     // м/с — неторопливо
 const STEP_HZ = 0.9;         // полных циклов шага в секунду
-const STAND_UP = 2.0, SIT_DOWN = 2.1, GREET = 6.5;
+const STAND_UP = 2.0, SIT_DOWN = 2.1, GREET = 6.5, GREET_NIGHT = 9.5;
 
 export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, approach }) {
   const res = await fetch(url);
@@ -220,7 +223,7 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
   const glance = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   const headLook = new Spring([0, 0, 0]);
-  const face = { blink: 0, happy: 0, relaxed: 0, ih: 0, oh: 0, aa: 0 };
+  const face = { blink: 0, blinkLeft: 0, happy: 0, relaxed: 0, ih: 0, oh: 0, aa: 0, ou: 0 };
   const faceNow = { ...face };
 
   // Где она и куда идёт. seat — место на траве, approach — точка перед камерой
@@ -254,7 +257,7 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
     for (const k of Object.keys(face)) face[k] = 0;
 
     // ----- сценарий -----
-    let standK = 0, crouch = 0, wave = 0, slide = 0;
+    let standK = 0, crouch = 0, wave = 0, slide = 0, kissT = -1;
     if (state === "stand") {
       const p = stT / STAND_UP;
       standK = ease((p - 0.25) / 0.75);
@@ -280,8 +283,10 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
     } else if (state === "greet") {
       standK = 1;
       wantYaw = shortest(yaw.x[0], Math.atan2(camEye[0] - pos.x, camEye[2] - pos.z));
-      wave = envelope(stT, GREET, 0.9, 1.1);
-      if (stT >= GREET) {
+      const len = night > 0.5 ? GREET_NIGHT : GREET;
+      wave = night > 0.5 ? envelope(stT, 4.2, 0.9, 0.9) : envelope(stT, len, 0.9, 1.1);
+      if (night > 0.5) kissT = stT - 3.6;
+      if (stT >= len) {
         dest = { x: seat.x + Math.sin(place.yaw) * 0.32, z: seat.z + Math.cos(place.yaw) * 0.32 };
         wantYaw = shortest(yaw.x[0], headingTo(dest));
         go("turnBack");
@@ -333,6 +338,14 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
     const fidget = 0.08 * Math.max(0, Math.sin(time * 0.7)) * Math.sin(time * 6);
     add(t, "leftIndexProximal", [0, 0, -fidget]);
     add(t, "rightMiddleProximal", [0, 0, fidget]);
+    // Микродвижения: живое тело никогда не стоит идеально неподвижно
+    const n = (a, b, c) => (Math.sin(time * a + c) * 0.6 + Math.sin(time * b + c * 1.7) * 0.4);
+    add(t, "neck", [0.015 * n(0.53, 1.31, 0.2), 0.02 * n(0.41, 0.97, 1.1), 0.012 * n(0.37, 1.13, 2.3)]);
+    add(t, "upperChest", [0.008 * n(0.61, 1.7, 0.5), 0.012 * n(0.29, 0.83, 3.1), 0]);
+    add(t, "leftUpperArm", [0.02 * n(0.47, 1.21, 0.9), 0, 0.015 * n(0.33, 0.9, 1.7)]);
+    add(t, "rightUpperArm", [0.02 * n(0.43, 1.37, 2.9), 0, 0.015 * n(0.39, 1.05, 0.4)]);
+    add(t, "leftHand", [0.03 * n(0.71, 1.9, 0.3), 0.02 * n(0.57, 1.4, 2.2), 0]);
+    add(t, "rightHand", [0.03 * n(0.67, 1.8, 1.4), 0.02 * n(0.51, 1.6, 0.8), 0]);
     // Стоя на месте — переносит вес с ноги на ногу
     if (standK > 0.9 && walkK < 0.1) {
       const shift = Math.sin(time * 0.5) * 0.035;
@@ -387,11 +400,28 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, a
       mix(t, "leftLowerArm", [0, -1.6, 0], wave * 0.6);
       add(t, "spine", [0.1 * wave, 0, -0.04 * wave]);
       add(t, "head", [0, 0, 0.14 * wave]);
-      face.happy += 0.4 * wave;
-      face.ih += 0.14 * wave;
-      face.relaxed += 0.12 * wave;
+      face.happy += 0.3 * wave;
+      face.relaxed += 0.25 * wave;
     }
-    if (comingToMe && state === "walk") { face.relaxed += 0.25; face.happy += 0.15; }
+    if (kissT >= 0 && kissT < 5.6) {
+      // 0–1.3 с: пальцы к губам, губы трубочкой; 1.3–2.2: рука уходит к камере, подмигивает; потом — счастливая улыбка
+      const toLips = ease(kissT / 0.9) * (1 - ease((kissT - 1.3) / 0.5));
+      const blow = ease((kissT - 1.3) / 0.5) * (1 - ease((kissT - 3.4) / 1.2));
+      const k = Math.max(toLips, blow);
+      mix(t, "rightUpperArm", toLips >= blow ? [-0.25, 1.05, 0.5] : [0, 1.15, 0.25], k);
+      mix(t, "rightLowerArm", toLips >= blow ? [0, 2.5, 0] : [0, 0.55, 0], k);
+      mix(t, "rightHand", toLips >= blow ? [0, 0.2, 0.25] : [0, -0.2, -0.15], k);
+      curlFingers(t, "right", toLips >= blow ? 0.25 : 0.05, toLips >= blow ? 0 : 0.5);
+      mix(t, "leftUpperArm", [0.2, 0.3, -1.15], k * 0.6);
+      mix(t, "leftLowerArm", [0, -1.5, 0], k * 0.6);
+      add(t, "spine", [0.08 * blow, 0, 0]);
+      add(t, "head", [0.04 * toLips, 0, -0.12 * blow]);
+      face.ou += 0.55 * toLips;
+      face.blinkLeft += Math.sin(Math.min(1, Math.max(0, (kissT - 1.35) / 0.5)) * Math.PI);
+      face.happy += 0.35 * blow;
+      face.relaxed += 0.3 * (1 - toLips);
+    }
+    if (comingToMe && state === "walk") { face.relaxed += 0.3; face.happy += 0.12; }
 
     // ----- взгляд -----
     if (cursor && (!lastCursor || Math.hypot(cursor[0] - lastCursor[0], cursor[1] - lastCursor[1]) > 0.02)) { cursorAt = time; lastCursor = cursor; }
