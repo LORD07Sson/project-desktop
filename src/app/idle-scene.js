@@ -70,9 +70,12 @@ const SEASON_LOOKS = {
     root: [0.1, 0.1, 0.04], tip: [0.55, 0.45, 0.18], tip2: [0.45, 0.3, 0.12], ground: [0.13, 0.11, 0.06],
     leaf: [0.34, 0.06, 0.08], leafHi: [0.62, 0.16, 0.1], snow: 0, height: 0.9, flowers: 0, sky: [1, 0.86, 1.1],
     fall: 0, flyDay: [1, 0.72, 0.32], flyNight: [1, 0.55, 0.15], flySize: [0.04, 0.12],
-    crown: 0.5, fallen: 1, mist: 1, layers: [[0, 160, "field"], [4, 14, "pumpkins"]],
+    crown: 0.5, fallen: 1, mist: 1, hat: 1, layers: [[0, 140, "field"], [4, 7, "field"], [5, 10, "bats"]],
   },
 };
+// Где роятся частицы слоя: всё поле, у дерева (сыплется с кроны), рядом с камерой (бабочки), тыквы у камеры, мыши у дерева
+const AREAS_INIT = { field: [0, -6, 1, 1], tree: [1.8, -16.5, 0.12, 0.2], near: [0.3, -1, 0.35, 0.3], bats: [1.8, -16.5, 1, 1] };
+
 function moonPhase(date = new Date()) {
   const days = (date.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
   return ((days / 29.530588) % 1 + 1) % 1;   // 0 — новолуние, 0.5 — полнолуние
@@ -219,6 +222,7 @@ uniform sampler2D uTrample;
 uniform vec4 uTrRect;
 uniform vec4 uCursor; // x, z, сила, радиус
 uniform float uHeight;
+uniform vec3 uClear[8];   // x, z, радиус: где трава примята (тыквы)
 out float vT;
 out float vSeed;
 out float vPress;
@@ -230,6 +234,7 @@ void main() {
   float d = distance(base.xz, uEye.xz);
   float seed = aInst.z;
   float h = (0.3 + 0.32 * fract(seed * 7.13)) * (1.0 + d * 0.02) * uHeight;
+  for (int i = 0; i < 8; i++) if (uClear[i].z > 0.0) h *= mix(0.18, 1.0, smoothstep(uClear[i].z * 0.45, uClear[i].z, distance(base.xz, uClear[i].xy)));
   float w = (0.03 + d * 0.0035) * (1.0 - t * 0.85);
   vec2 side = vec2(cos(aInst.w), sin(aInst.w));
 
@@ -308,7 +313,7 @@ precision highp float;
 in vec2 vUv;
 in float vD;
 out vec4 o;
-uniform float uTime, uCrown;
+uniform float uTime, uCrown, uHat;
 ${NOISE_GLSL}
 ${SHADE_GLSL}
 float seg(vec2 p, vec2 a, vec2 b, float ra, float rb) {
@@ -347,8 +352,29 @@ void main() {
   // Осенью и в Хэллоуин крона редкая — сквозь неё видны ветки
   crown += step(uCrown, fbm(p * 7.0 + 5.0) * 1.2) * 0.2 * (1.0 - uCrown);
   if (uCrown < 0.01) crown = 1e3;
-  float a = smoothstep(0.012, -0.012, min(wood, crown));
+  // Шляпа ведьмы: нитка от ветки, острый конус с загнутой вниз-вбок макушкой, широкие поля, оранжевая лента
+  float hat = 1e3, band = 0.0, thread = 1e3;
+  if (uHat > 0.5) {
+    vec2 pivot = vec2(0.44, 0.76) * asp;
+    float th = sin(uTime * 1.2) * 0.18 + sin(uTime * 0.47) * 0.08;
+    vec2 l = q * asp - pivot;
+    l = mat2(cos(th), -sin(th), sin(th), cos(th)) * l / 1.8;
+    thread = abs(l.x) - 0.004 + step(0.0, l.y) + step(l.y, -0.14);
+    vec2 h = l - vec2(0.0, -0.36);   // центр полей
+    float cone = max(abs(h.x) - mix(0.085, 0.006, clamp((h.y) / 0.22, 0.0, 1.0)), max(-h.y, h.y - 0.22));
+    float tip = length((h - vec2(0.03, 0.235)) * vec2(1.0, 1.4)) - 0.02;
+    float brim = length(h * vec2(1.0, 5.5)) - 0.17;
+    hat = min(min(cone, tip), brim);
+    band = step(0.018, h.y) * step(h.y, 0.045) * step(cone, 0.0);
+  }
+  float a = smoothstep(0.012, -0.012, min(min(wood, crown), min(hat, thread)));
   if (a < 0.02) discard;
+  if (min(hat, thread) < min(wood, crown)) {
+    vec3 hc = thread < hat ? vec3(0.75, 0.72, 0.65) : mix(vec3(0.24, 0.1, 0.34), vec3(1.0, 0.55, 0.12), band);
+    hc *= 0.85 + 0.25 * smoothstep(-0.1, 0.1, (q.x - 0.44) * asp.x);
+    o = vec4(fog(mix(hc, nightTint(hc), 0.6) + band * uNight * vec3(0.45, 0.2, 0.0), vD), a);
+    return;
+  }
   vec3 leaf = mix(uLeaf, uLeafHi, smoothstep(-0.4, 0.9, shade + (rustle - 0.5) * 0.6));
   leaf *= 0.78 + 0.3 * smoothstep(0.4, 1.0, p.y);
   vec3 bark = vec3(0.22, 0.15, 0.1) * (0.8 + 0.4 * noise(p * vec2(30.0, 6.0)));
@@ -394,15 +420,26 @@ void main() {
     p.y = hill(p.xz) + 0.35 + 0.25 * sin(uTime * 1.7 + s * 3.0) + abs(sin(uTime * 3.1 + s * 9.0)) * 0.12;
     size = 0.09;
     vGlow = 1.0 - uNight;
+  } else if (uFall > 4.5) {
+    // Летучие мыши: кружат над деревом рваными петлями, иногда пролетают на фоне луны
+    float w = 0.55 + 0.35 * s;
+    float a = uTime * w + s * 6.2832;
+    float R = 1.8 + 2.5 * fract(s * 7.0);
+    p = vec3(uArea.x + cos(a) * R + sin(uTime * 1.7 + s * 9.0) * 0.4,
+             0.0,
+             uArea.y + sin(a) * R * 0.7);
+    p.y = hill(uArea.xy) + 3.6 + sin(a * 2.0 + s * 3.0) * 0.9 + sin(uTime * 3.1 + s * 11.0) * 0.15;
+    size = 0.42;
+    vGlow = 1.0;
   } else {
     // Тыквы: стоят в траве, ночью внутри горит свеча
     p.y = hill(p.xz) + 0.34;
-    size = 0.6;
+    size = 0.75;
     vGlow = 1.0;
   }
   float d = distance(p, uEye);
   vSeed = s;
-  vFlap = abs(sin(uTime * 13.0 + s * 40.0));
+  vFlap = uFall > 4.5 ? sin(uTime * 16.0 + s * 40.0) : abs(sin(uTime * 13.0 + s * 40.0));
   gl_PointSize = clamp(size * uPx / d, 1.0, 90.0);
   gl_Position = uVP * vec4(p, 1.0);
 }`;
@@ -419,7 +456,18 @@ void main() {
   float r = length(q) * 2.0;
   vec3 c = mix(uFlyDay, uFlyNight, uNight);
   float a;
-  if (uFall > 3.5) {
+  if (uFall > 4.5) {
+    // Летучая мышь: тело, уши, крылья с зубчатым краем, машут вверх-вниз
+    vec2 b = q * 2.0;
+    float flap = vFlap;
+    float ax = abs(b.x);
+    float wingY = flap * 0.35 * ax;
+    float wing = step(ax, 0.95) * step(b.y, 0.12 + wingY - 0.18 * ax) * step(-0.05 + wingY - 0.25 * ax + 0.08 * abs(sin(ax * 14.0)), b.y);
+    float body = smoothstep(0.2, 0.16, length(b * vec2(1.6, 1.0)));
+    float ears = step(abs(ax - 0.07), 0.035) * step(b.y, -0.12) * step(-0.26, b.y);
+    a = min(1.0, wing + body + ears);
+    c = mix(vec3(0.06, 0.04, 0.08), vec3(0.03, 0.02, 0.05), uNight);
+  } else if (uFall > 3.5) {
     // Тыква: рёбра, хвостик, ночью — светящиеся глаза и улыбка
     vec2 b = q * vec2(2.0, 2.5) + vec2(0.0, 0.12);
     float body = smoothstep(1.0, 0.92, length(b * vec2(0.8, 1.0)));
@@ -558,6 +606,22 @@ function buildScene(canvas) {
   gl.bindVertexArray(flyVao);
   const fl = new Float32Array(FLIES * 4);
   for (let i = 0; i < FLIES; i++) fl.set([(Math.random() * 2 - 1) * 12, 3 - Math.random() * 18, 0.15 + Math.random() * 1.4, Math.random()], i * 4);
+  // Тыквы стоят на заранее выбранных местах переднего плана (в кадре, не друг за другом); трава вокруг примята
+  const PUMPKINS = [[-1.7, 1.9], [1.5, 2.3], [-0.3, 0.7], [2.7, 0.1], [-2.9, -0.5], [0.9, -1.3], [-1.3, -2.7]];
+  const clear = new Float32Array(24);
+  {
+    let first = 0;
+    for (const [mode, count] of seasonLook().layers) {
+      if (mode === 4) {
+        PUMPKINS.slice(0, count).forEach(([x, z], i) => {
+          const j = (first + i) % FLIES;
+          fl[j * 4] = x; fl[j * 4 + 1] = z;
+          clear.set([x, z, 1.0], i * 3);
+        });
+      }
+      first = (first + count) % FLIES;
+    }
+  }
   buffer(gl, flies, "aFly", fl, 4);
   gl.bindVertexArray(null);
 
@@ -636,8 +700,7 @@ function buildScene(canvas) {
   // Юниформы сезона: каждой программе — те, что у неё есть
   const look = seasonLook();
   const phase = moonPhase();
-  // Где роятся частицы слоя: всё поле, у дерева (сыплется с кроны), рядом с камерой (бабочки), тыквы в траве
-  const AREAS = { field: [0, -6, 1, 1], tree: [TREE[0], TREE[1], 0.12, 0.2], near: [0.3, -1, 0.35, 0.3], pumpkins: [0, -3, 0.6, 0.6] };
+  const AREAS = AREAS_INIT;
   function seasonUniforms(prog) {
     const u = prog.u;
     const v3 = { uRoot: look.root, uTip: look.tip, uTip2: look.tip2, uGround: look.ground, uLeaf: look.leaf, uLeafHi: look.leafHi, uSkyTint: look.sky, uFlyDay: look.flyDay, uFlyNight: look.flyNight };
@@ -650,6 +713,7 @@ function buildScene(canvas) {
     if (u.uCrown) gl.uniform1f(u.uCrown, look.crown);
     if (u.uFallen) gl.uniform1f(u.uFallen, look.fallen);
     if (u.uMist) gl.uniform1f(u.uMist, look.mist);
+    if (u.uHat) gl.uniform1f(u.uHat, look.hat || 0);
     if (u.uPhase) gl.uniform1f(u.uPhase, phase);
   }
 
@@ -700,6 +764,7 @@ function buildScene(canvas) {
     gl.uniform1f(grass.u.uTime, time);
     gl.uniform1f(grass.u.uNight, night);
     gl.uniform4f(grass.u.uTrRect, ...TR_RECT);
+    if (grass.u["uClear[0]"]) gl.uniform3fv(grass.u["uClear[0]"], clear);
     gl.uniform4f(grass.u.uCursor, cursor ? cursor[0] : 999, cursor ? cursor[1] : 999, cursor ? 1 : 0, 0.9);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, trTex);
