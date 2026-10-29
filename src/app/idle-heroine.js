@@ -3,6 +3,9 @@
 // лениво вместе с three.js, только когда сцена показана. Рисует в тот же WebGL-контекст, что и луг: общий
 // буфер глубины, поэтому трава перед ней закрывает ноги.
 //
+// Сценарий: сидит в траве; при появлении экрана (и по клику) встаёт, подходит к камере, машет и улыбается,
+// потом возвращается и садится. Ткань и волосы — пружины VRM, мягче и тяжелее, чем в модели по умолчанию.
+//
 // Анимация процедурная, слоями: базовая поза сидя → «жизнь» (дыхание, покачивание, пальцы) → случайное
 // действие (потянуться, покачаться, наклонить голову, поболтать ногами, оглянуться на луну) → приветствие.
 // Итог по каждой кости ведёт пружина (вторая производная, с перелётом и затуханием) — поэтому движения
@@ -140,7 +143,21 @@ const ACTIONS = {
 };
 const ACTION_NAMES = Object.keys(ACTIONS);
 
-export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
+// Стоя: руки вдоль тела, локти чуть согнуты, ноги прямые
+const STAND = {
+  hips: [0, 0, 0], spine: [0.03, 0, 0], chest: [0, 0, 0], upperChest: [0, 0, 0], neck: [0, 0, 0], head: [0, 0, 0],
+  leftShoulder: [0, 0, 0], rightShoulder: [0, 0, 0],
+  leftUpperLeg: [-0.03, 0, 0.03], rightUpperLeg: [-0.03, 0, -0.03],
+  leftLowerLeg: [0.06, 0, 0], rightLowerLeg: [0.06, 0, 0], leftFoot: [-0.03, 0, 0], rightFoot: [-0.03, 0, 0],
+  leftUpperArm: [0.06, 0, -1.22], rightUpperArm: [0.06, 0, 1.22],
+  leftLowerArm: [0, -0.28, 0], rightLowerArm: [0, 0.28, 0],
+  leftHand: [0, 0, -0.08], rightHand: [0, 0, 0.08],
+};
+const WALK_SPEED = 0.62;     // м/с — неторопливо
+const STEP_HZ = 0.9;         // полных циклов шага в секунду
+const STAND_UP = 2.0, SIT_DOWN = 2.1, GREET = 6.5;
+
+export async function loadHeroine({ gl, canvas, url, place, eye, target, hill, approach }) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`модель не скачалась: ${res.status}`);
   const loader = new GLTFLoader();
@@ -163,128 +180,251 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
   scene.add(key, fill, vrm.scene);
 
   const bone = name => vrm.humanoid.getNormalizedBoneNode(name);
-  const base = { ...BASE };
-  curlFingers(base, "left", 0.55);
-  curlFingers(base, "right", 0.55);
-  for (const [name, r] of Object.entries(base)) bone(name)?.rotation.set(...r);
-  // Опустить таз на землю: в T-позе он стоит на высоте ног
+  const sit = { ...BASE };
+  curlFingers(sit, "left", 0.55);
+  curlFingers(sit, "right", 0.55);
+  const stand = { ...STAND };
+  curlFingers(stand, "left", 0.35);
+  curlFingers(stand, "right", 0.35);
+  for (const [name, r] of Object.entries(sit)) bone(name)?.rotation.set(...r);
+  // Сидя таз опускается к земле: в T-позе он на высоте ног
+  const hips = bone("hips");
+  const hipsRest = hips.position.clone();
   vrm.scene.updateMatrixWorld(true);
-  const hipsY = bone("hips").getWorldPosition(new THREE.Vector3()).y;
-  vrm.scene.position.set(place.x, place.y - hipsY + 0.1, place.z);
-  vrm.scene.rotation.y = place.yaw;
+  const sitDrop = hips.getWorldPosition(new THREE.Vector3()).y - 0.1;
 
   // Пружины по костям: корпус — медленные и мягкие, руки — живее, кисти и пальцы — быстрые
   const springs = {};
   const tuning = name => /Thumb|Index|Middle|Ring|Little/.test(name) ? [4.5, 0.75]
-    : /Hand/.test(name) ? [3.2, 0.55]
-    : /Arm/.test(name) ? [2.2, 0.55]
-    : /head|neck/.test(name) ? [1.8, 0.8]
-    : [1.4, 0.75];
+    : /Hand/.test(name) ? [3.4, 0.6]
+    : /Arm/.test(name) ? [2.6, 0.6]
+    : /Leg|Foot/.test(name) ? [3.2, 0.8]
+    : /head|neck/.test(name) ? [1.9, 0.8]
+    : [1.8, 0.75];
+
+  // Ткань и волосы: пружины VRM мягче и тяжелее — юбка и пряди качаются от шагов и ветра, а не дрожат
+  const joints = vrm.springBoneManager ? [...vrm.springBoneManager.joints] : [];
+  joints.forEach(j => {
+    j.settings.stiffness *= 0.7;
+    j.settings.dragForce = Math.min(0.6, Math.max(j.settings.dragForce, 0.35));
+  });
+  const baseGravity = joints.map(j => j.settings.gravityPower);
 
   const lookTarget = new THREE.Object3D();
   lookTarget.position.copy(MOON);
   scene.add(lookTarget);
   if (vrm.lookAt) vrm.lookAt.target = lookTarget;
   const head = bone("head");
-  const gaze = new THREE.Vector3().copy(MOON);    // куда она решила смотреть
-  const eyes = new THREE.Vector3().copy(MOON);    // куда смотрят глаза (быстро догоняют gaze)
+  const gaze = new THREE.Vector3().copy(MOON);
+  const eyes = new THREE.Vector3().copy(MOON);
   const glance = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   const headLook = new Spring([0, 0, 0]);
-  const joints = vrm.springBoneManager ? [...vrm.springBoneManager.joints] : [];
-  const baseGravity = joints.map(j => j.settings.gravityPower);
   const face = { blink: 0, happy: 0, relaxed: 0, ih: 0, oh: 0, aa: 0 };
   const faceNow = { ...face };
 
+  // Где она и куда идёт. seat — место на траве, approach — точка перед камерой
+  const seat = { x: place.x, z: place.z };
+  const pos = { x: place.x, z: place.z };
+  const yaw = new Spring([place.yaw, 0, 0]);
+  let state = "sit", stT = 0, dest = null, phase = 0, walkK = 0, focus = 0, wantYaw = place.yaw;
   let nextBlink = 2, blinkT = -1, nextGlance = 0, nextGaze = 0, gazeKind = "moon";
   let lastCursor = null, cursorAt = -10;
-  let action = null, actionT = 0, nextAction = 6 + Math.random() * 4;
+  let action = null, actionT = 0, nextAction = 9 + Math.random() * 4;
   const firefly = new THREE.Vector3();
+  const go = s => { state = s; stT = 0; };
+  const headingTo = p => Math.atan2(p.x - pos.x, p.z - pos.z);
+  const shortest = (from, to) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));
 
   function chooseGaze(time, cursorFresh) {
     if (cursorFresh) { gazeKind = "cursor"; return; }
     const r = Math.random();
     gazeKind = r < 0.35 ? "moon" : r < 0.55 ? "camera" : r < 0.8 ? "field" : "firefly";
-    if (gazeKind === "field") firefly.set(place.x + (Math.random() - 0.3) * 6, place.y + Math.random() * 0.5, place.z - 2 - Math.random() * 8);
-    if (gazeKind === "firefly") firefly.set(place.x + (Math.random() - 0.5) * 3, place.y + 0.6 + Math.random() * 1.2, place.z - 0.5 - Math.random() * 2.5);
+    if (gazeKind === "field") firefly.set(pos.x + (Math.random() - 0.3) * 6, place.y + Math.random() * 0.5, pos.z - 2 - Math.random() * 8);
+    if (gazeKind === "firefly") firefly.set(pos.x + (Math.random() - 0.5) * 3, place.y + 0.6 + Math.random() * 1.2, pos.z - 0.5 - Math.random() * 2.5);
     nextGaze = time + 2.5 + Math.random() * 4;
   }
 
-  // greet: { w — сила приветствия 0..1, t — секунды с его начала, eye — где камера }
-  function update(dt, time, night, cursor, hill, greet) {
-    dt = Math.min(dt, 1 / 30);
-    const w = greet ? greet.w : 0;
-    for (const k of Object.keys(face)) face[k] = 0;
-    const t = {};
-    for (const [name, r] of Object.entries(base)) t[name] = [...r];
+  // Подойти к камере: встать → повернуться → пройти → поздороваться → вернуться и сесть
+  function visit() { if (state === "sit") { action = null; go("stand"); } }
 
-    // Жизнь: дыхание (грудь и плечи), медленное покачивание, лёгкое шевеление пальцев
-    const breath = Math.sin(time * 1.45);
+  function update(dt, time, night, cursor, camEye) {
+    dt = Math.min(dt, 1 / 30);
+    stT += dt;
+    for (const k of Object.keys(face)) face[k] = 0;
+
+    // ----- сценарий -----
+    let standK = 0, crouch = 0, wave = 0, slide = 0;
+    if (state === "stand") {
+      const p = stT / STAND_UP;
+      standK = ease((p - 0.25) / 0.75);
+      crouch = Math.sin(Math.min(1, p) * Math.PI);
+      slide = ease(p);
+      if (p >= 1) { dest = approach; wantYaw = shortest(yaw.x[0], headingTo(dest)); go("turn"); }
+    } else if (state === "turn" || state === "turnBack" || state === "face") {
+      standK = 1;
+      if (Math.abs(yaw.x[0] - wantYaw) < 0.06 && stT > 0.5) go(state === "face" ? "sitDown" : "walk");
+    } else if (state === "walk") {
+      standK = 1;
+      wantYaw = shortest(yaw.x[0], headingTo(dest));
+      const d = Math.hypot(dest.x - pos.x, dest.z - pos.z);
+      walkK += (Math.min(1, d / 0.45) - walkK) * Math.min(1, dt * 3);
+      const step = Math.min(d, WALK_SPEED * walkK * dt);
+      pos.x += (dest.x - pos.x) / (d || 1) * step;
+      pos.z += (dest.z - pos.z) / (d || 1) * step;
+      if (d < 0.02 && walkK < 0.08) {
+        walkK = 0;
+        if (dest === approach) { wantYaw = shortest(yaw.x[0], Math.atan2(camEye[0] - pos.x, camEye[2] - pos.z)); go("greet"); }
+        else { wantYaw = shortest(yaw.x[0], place.yaw); go("face"); }
+      }
+    } else if (state === "greet") {
+      standK = 1;
+      wantYaw = shortest(yaw.x[0], Math.atan2(camEye[0] - pos.x, camEye[2] - pos.z));
+      wave = envelope(stT, GREET, 0.9, 1.1);
+      if (stT >= GREET) {
+        dest = { x: seat.x + Math.sin(place.yaw) * 0.32, z: seat.z + Math.cos(place.yaw) * 0.32 };
+        wantYaw = shortest(yaw.x[0], headingTo(dest));
+        go("turnBack");
+      }
+    } else if (state === "sitDown") {
+      const p = stT / SIT_DOWN;
+      standK = 1 - ease(p / 0.8);
+      crouch = Math.sin(Math.min(1, p) * Math.PI);
+      slide = 1 - ease(p);
+      if (p >= 1) { pos.x = seat.x; pos.z = seat.z; go("sit"); nextAction = time + 8 + Math.random() * 6; }
+    }
+    if (state === "stand" || state === "sitDown") {
+      // Пока встаёт и садится, ступни на месте, а таз уезжает вперёд над ними
+      pos.x = seat.x + Math.sin(place.yaw) * 0.32 * slide;
+      pos.z = seat.z + Math.cos(place.yaw) * 0.32 * slide;
+    }
+    if (state !== "walk") walkK += (0 - walkK) * Math.min(1, dt * 4);
+    yaw.step([wantYaw, 0, 0], dt, state === "walk" ? 1.2 : 0.9, 0.85);
+    const comingToMe = (state === "walk" && dest === approach) || state === "greet" || state === "turn";
+    focus += ((comingToMe ? 1 : 0) - focus) * Math.min(1, dt * 0.9);
+
+    // ----- позы -----
+    const t = {};
+    for (const name of new Set([...Object.keys(sit), ...Object.keys(stand)])) {
+      const a = sit[name] || [0, 0, 0], b = stand[name] || [0, 0, 0];
+      t[name] = [a[0] + (b[0] - a[0]) * standK, a[1] + (b[1] - a[1]) * standK, a[2] + (b[2] - a[2]) * standK];
+    }
+    // Вставая и садясь: присед, наклон вперёд, руки упираются в землю
+    if (crouch > 0) {
+      add(t, "spine", [0.45 * crouch, 0, 0]);
+      add(t, "chest", [0.15 * crouch, 0, 0]);
+      add(t, "head", [-0.3 * crouch, 0, 0]);
+      add(t, "leftUpperLeg", [-0.9 * crouch * standK, 0, 0]);
+      add(t, "rightUpperLeg", [-0.9 * crouch * standK, 0, 0]);
+      add(t, "leftLowerLeg", [1.3 * crouch * standK, 0, 0]);
+      add(t, "rightLowerLeg", [1.3 * crouch * standK, 0, 0]);
+      mix(t, "leftUpperArm", [0.6, 0, -1.3], crouch * 0.7);
+      mix(t, "rightUpperArm", [0.6, 0, 1.3], crouch * 0.7);
+    }
+
+    // Жизнь: дыхание, покачивание, пальцы — всегда
+    const breath = Math.sin(time * (1.45 + walkK * 0.8));
     add(t, "chest", [0.025 * breath, 0, 0]);
     add(t, "upperChest", [0.015 * breath, 0, 0]);
     add(t, "leftShoulder", [0, 0, 0.03 * breath]);
     add(t, "rightShoulder", [0, 0, -0.03 * breath]);
-    add(t, "spine", [0.02 * Math.sin(time * 0.23 + 1), 0.03 * Math.sin(time * 0.17), 0.025 * Math.sin(time * 0.31)]);
-    add(t, "hips", [0, 0, 0.012 * Math.sin(time * 0.31 + 0.5)]);
+    const calm = 1 - walkK;
+    add(t, "spine", [0.02 * Math.sin(time * 0.23 + 1) * calm, 0.03 * Math.sin(time * 0.17) * calm, 0.025 * Math.sin(time * 0.31) * calm]);
     const fidget = 0.08 * Math.max(0, Math.sin(time * 0.7)) * Math.sin(time * 6);
     add(t, "leftIndexProximal", [0, 0, -fidget]);
     add(t, "rightMiddleProximal", [0, 0, fidget]);
+    // Стоя на месте — переносит вес с ноги на ногу
+    if (standK > 0.9 && walkK < 0.1) {
+      const shift = Math.sin(time * 0.5) * 0.035;
+      add(t, "hips", [0, 0, shift]);
+      add(t, "leftUpperLeg", [0, 0, -shift]);
+      add(t, "rightUpperLeg", [0, 0, -shift]);
+      add(t, "spine", [0, 0, -shift * 0.6]);
+    }
 
-    // Случайное действие, если не здоровается
+    // Шаг: бёдра в противофазе, колено сгибается на переносе, таз качается и поворачивается, руки — навстречу ногам
+    let bob = 0;
+    if (walkK > 0.01) {
+      phase += dt * TAU * STEP_HZ * (0.4 + 0.6 * walkK);
+      const s = Math.sin(phase), c = Math.cos(phase), k = walkK;
+      add(t, "leftUpperLeg", [-0.42 * s * k, 0, 0]);
+      add(t, "rightUpperLeg", [0.42 * s * k, 0, 0]);
+      add(t, "leftLowerLeg", [(0.95 * Math.pow(Math.max(0, c), 1.4) + 0.06) * k, 0, 0]);
+      add(t, "rightLowerLeg", [(0.95 * Math.pow(Math.max(0, -c), 1.4) + 0.06) * k, 0, 0]);
+      add(t, "leftFoot", [(-0.25 * Math.max(0, c) + 0.2 * Math.max(0, -s)) * k, 0, 0]);
+      add(t, "rightFoot", [(-0.25 * Math.max(0, -c) + 0.2 * Math.max(0, s)) * k, 0, 0]);
+      add(t, "hips", [0.03 * k, 0.08 * s * k, 0.045 * c * k]);
+      add(t, "spine", [0.04 * k, -0.06 * s * k, -0.03 * c * k]);
+      add(t, "chest", [0, -0.04 * s * k, 0]);
+      add(t, "head", [0, 0.05 * s * k, 0.02 * c * k]);
+      add(t, "leftUpperArm", [0.32 * s * k, 0, 0.06 * k]);
+      add(t, "rightUpperArm", [-0.32 * s * k, 0, -0.06 * k]);
+      add(t, "leftLowerArm", [0, -0.22 * Math.max(0, -s) * k, 0]);
+      add(t, "rightLowerArm", [0, 0.22 * Math.max(0, s) * k, 0]);
+      bob = -0.035 * Math.abs(s) * k;
+    }
+
+    // Случайные действия — только сидя
     let actionOut = {};
-    if (!action && w < 0.05 && time > nextAction) { action = ACTIONS[ACTION_NAMES[Math.floor(Math.random() * ACTION_NAMES.length)]]; actionT = 0; }
-    if (action) {
-      actionT += dt;
-      const k = envelope(actionT, action.len) * (1 - w);
-      actionOut = action.apply(t, actionT / action.len, k, face) || {};
-      if (actionT >= action.len) { action = null; nextAction = time + 7 + Math.random() * 8; }
+    if (state === "sit") {
+      if (!action && time > nextAction) { action = ACTIONS[ACTION_NAMES[Math.floor(Math.random() * ACTION_NAMES.length)]]; actionT = 0; }
+      if (action) {
+        actionT += dt;
+        actionOut = action.apply(t, actionT / action.len, envelope(actionT, action.len), face) || {};
+        if (actionT >= action.len) { action = null; nextAction = time + 7 + Math.random() * 8; }
+      }
     }
 
-    // Приветствие: замах, рука взлетает и мягко машет раскрытой ладонью; корпус подаётся к камере
-    if (w > 0) {
-      const gt = greet.t;
-      const wave = Math.sin(gt * 5.2) * 0.32;
-      const wrist = Math.sin(gt * 5.2 - 1.1) * 0.25;
-      mix(t, "rightUpperArm", [0, 0.5, -0.32 + Math.sin(gt * 5.2 + 0.7) * 0.05], w);
-      mix(t, "rightLowerArm", [0, -0.1, -1.5 + wave], w);
-      mix(t, "rightHand", [0.15, -0.4, wrist], w);
-      mix(t, "rightShoulder", [0, 0, -0.12], w);
-      curlFingers(t, "right", 0.08 * w + 0.55 * (1 - w), 0.6 * w);
-      add(t, "spine", [0.08 * w, 0.22 * w, -0.04 * w]);
-      add(t, "head", [0, 0, 0.14 * w]);
-      face.happy += 0.38 * w;
-      face.ih += 0.14 * w;
-      face.relaxed += 0.12 * w;
+    // Приветствие стоя: рука взлетает и мягко машет раскрытой ладонью, она подаётся к камере и улыбается
+    if (wave > 0) {
+      const wt = stT;
+      mix(t, "rightUpperArm", [0, 0.45, -0.25 + Math.sin(wt * 5.2 + 0.7) * 0.05], wave);
+      mix(t, "rightLowerArm", [0, -0.1, -1.55 + Math.sin(wt * 5.2) * 0.32], wave);
+      mix(t, "rightHand", [0.15, -0.4, Math.sin(wt * 5.2 - 1.1) * 0.25], wave);
+      mix(t, "rightShoulder", [0, 0, -0.12], wave);
+      curlFingers(t, "right", 0.08 * wave + 0.35 * (1 - wave), 0.6 * wave);
+      mix(t, "leftUpperArm", [0.25, 0.3, -1.15], wave * 0.6);   // левая рука — к груди, чуть смущённо
+      mix(t, "leftLowerArm", [0, -1.6, 0], wave * 0.6);
+      add(t, "spine", [0.1 * wave, 0, -0.04 * wave]);
+      add(t, "head", [0, 0, 0.14 * wave]);
+      face.happy += 0.4 * wave;
+      face.ih += 0.14 * wave;
+      face.relaxed += 0.12 * wave;
     }
+    if (comingToMe && state === "walk") { face.relaxed += 0.25; face.happy += 0.15; }
 
-    // Взгляд: курсор (если двигался последние 2 с), камера при приветствии, иначе — сама выбирает
+    // ----- взгляд -----
     if (cursor && (!lastCursor || Math.hypot(cursor[0] - lastCursor[0], cursor[1] - lastCursor[1]) > 0.02)) { cursorAt = time; lastCursor = cursor; }
     const cursorFresh = cursor && time - cursorAt < 2;
     if (time > nextGaze || (cursorFresh && gazeKind !== "cursor")) chooseGaze(time, cursorFresh);
-    if (w > 0.15 && greet.eye) gaze.set(...greet.eye);
+    if (comingToMe) gaze.set(...camEye);
+    else if (state === "walk" || state === "turnBack" || state === "face") gaze.set(seat.x, place.y + 0.2, seat.z - 1.5);
     else if (actionOut.forceLook) gaze.copy(actionOut.forceLook);
     else if (gazeKind === "cursor" && lastCursor) gaze.set(lastCursor[0], hill(lastCursor[0], lastCursor[1]) + 0.45, lastCursor[1]);
-    else if (gazeKind === "camera") gaze.set(...(greet?.eye || eye));
+    else if (gazeKind === "camera") gaze.set(...camEye);
     else if (gazeKind === "moon") gaze.copy(MOON);
     else gaze.copy(firefly);
     if (actionOut.lookUp) gaze.y += 6 * actionOut.lookUp;
-    // Саккады: глаза то и дело чуть перескакивают
     if (time > nextGlance) { glance.set((Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.05, 0); nextGlance = time + 0.5 + Math.random() * 1.6; }
     tmp.copy(gaze).add(glance);
     eyes.lerp(tmp, Math.min(1, dt * 14));
     lookTarget.position.copy(eyes);
 
-    // Голова догоняет взгляд пружиной (с лёгким перелётом), шея берёт часть поворота
+    // Корень модели: на земле, развёрнут по направлению тела; таз — сидя у земли, стоя — на своей высоте
+    vrm.scene.position.set(pos.x, hill(pos.x, pos.z), pos.z);
+    vrm.scene.rotation.y = yaw.x[0];
+    hips.position.set(hipsRest.x, hipsRest.y - sitDrop * (1 - standK) - 0.12 * crouch * standK + bob, hipsRest.z);
+    vrm.scene.updateMatrixWorld(true);
+
     head.getWorldPosition(tmp);
     const local = vrm.scene.worldToLocal(gaze.clone()).sub(vrm.scene.worldToLocal(tmp.clone()));
-    const yaw = THREE.MathUtils.clamp(Math.atan2(local.x, local.z), -1, 1);
-    const pitch = THREE.MathUtils.clamp(-Math.atan2(local.y, Math.hypot(local.x, local.z)), -0.7, 0.4);
-    const turn = 0.55 + 0.4 * w;
-    const hl = headLook.step([pitch * turn, yaw * turn, 0], dt, 1.3, 0.72);
+    const lyaw = THREE.MathUtils.clamp(Math.atan2(local.x, local.z), -1, 1);
+    const pitch = THREE.MathUtils.clamp(-Math.atan2(local.y, Math.hypot(local.x, local.z)), -0.7, 0.45);
+    const turn = 0.55 + 0.4 * Math.max(wave, focus);
+    const hl = headLook.step([pitch * turn, lyaw * turn, 0], dt, 1.3, 0.72);
     add(t, "head", [hl[0] * 0.65, hl[1] * 0.6, 0]);
     add(t, "neck", [hl[0] * 0.35, hl[1] * 0.4, 0]);
 
-    // Пружины → кости
     for (const [name, target] of Object.entries(t)) {
       const node = bone(name);
       if (!node) continue;
@@ -301,7 +441,6 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
       if (blinkT > 0.15) { blinkT = -1; nextBlink = time + (Math.random() < 0.2 ? 0.25 : 2 + Math.random() * 4); }
     }
     face.relaxed += 0.25;
-    // Лицо меняется плавно (кроме моргания)
     for (const k of Object.keys(face)) {
       faceNow[k] = k === "blink" ? face.blink : faceNow[k] + (Math.min(1, face[k]) - faceNow[k]) * Math.min(1, dt * 6);
       vrm.expressionManager?.setValue(k, faceNow[k]);
@@ -311,7 +450,7 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
     const gust = 0.5 + 0.5 * Math.sin(time * 0.6) * Math.sin(time * 1.7 + 1);
     joints.forEach((j, i) => {
       j.settings.gravityDir.set(0.9 * gust, -1, -0.3 * gust).normalize();
-      j.settings.gravityPower = baseGravity[i] + 0.25 * gust;
+      j.settings.gravityPower = baseGravity[i] + 0.2 * gust;
     });
     vrm.update(dt);
 
@@ -323,25 +462,26 @@ export async function loadHeroine({ gl, canvas, url, place, eye, target }) {
     fill.intensity = 0.8 - 0.35 * night;
   }
 
-  function headPosition() {
-    return head.getWorldPosition(new THREE.Vector3()).toArray();
-  }
-
-  function render(width, height, eyeNow, targetNow) {
-    renderer.resetState();
-    renderer.setViewport(0, 0, width, height);
-    camera.position.set(...eyeNow);
-    camera.lookAt(...targetNow);
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.render(scene, camera);
-    renderer.resetState();
-  }
-
-  function dispose() {
-    VRMUtils.deepDispose(vrm.scene);
-    renderer.dispose();
-  }
-
-  return { update, render, headPosition, dispose, debug: { start: name => { action = ACTIONS[name]; actionT = 0; } } };
+  return {
+    update,
+    visit,
+    // Насколько камере смотреть на неё (0 — общий вид, 1 — она перед камерой)
+    focus: () => focus,
+    sitting: () => state === "sit",
+    position: () => [pos.x, pos.z],
+    walking: () => walkK > 0.1,
+    headPosition: () => head.getWorldPosition(new THREE.Vector3()).toArray(),
+    render(width, height, eyeNow, targetNow) {
+      renderer.resetState();
+      renderer.setViewport(0, 0, width, height);
+      camera.position.set(...eyeNow);
+      camera.lookAt(...targetNow);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
+      renderer.resetState();
+    },
+    dispose() { VRMUtils.deepDispose(vrm.scene); renderer.dispose(); },
+    debug: { start: name => { action = ACTIONS[name]; actionT = 0; }, visit },
+  };
 }

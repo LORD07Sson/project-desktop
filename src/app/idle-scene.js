@@ -39,6 +39,8 @@ const FOV = Math.PI / 4;
 const TREE = [1.8, -16.5];
 // Где сидит героиня (idle-heroine.js): справа на переднем плане, вполоборота к нам; трава под ней примята
 const HERO = { x: 1.1, z: 1.7, yaw: -0.5 };
+// Куда она подходит, чтобы поздороваться: метр с небольшим перед камерой, чуть правее центра
+const APPROACH = { x: 0.3, z: 4.5 };
 const BLADES = 80000;
 const FLIES = 220;
 // Текстура примятости покрывает луг: x ∈ [-22, 22], z ∈ [-20, 4]
@@ -565,10 +567,11 @@ export function showIdleScene() {
 
   let heroine = null;
   let camEye = [...EYE];
-  let greetT = -1;   // сколько секунд героиня здоровается (по кадрам; -1 — не здоровается). Камера наезжает, она машет, отъезжает
+  let visitIn = 1.5;   // через сколько секунд после загрузки она встанет и подойдёт
+  let heroPrev = null;
   import("./idle-heroine.js")
-    .then(m => m.loadHeroine({ gl: scene.gl, canvas, url: `${API_BASE}/desktop/idle-model`, place: { x: HERO.x, y: hill(HERO.x, HERO.z), z: HERO.z, yaw: HERO.yaw }, eye: EYE, target: TARGET }))
-    .then(h => { if (current) { heroine = h; greetT = 0; } else h.dispose(); })
+    .then(m => m.loadHeroine({ gl: scene.gl, canvas, url: `${API_BASE}/desktop/idle-model`, place: { x: HERO.x, y: hill(HERO.x, HERO.z), z: HERO.z, yaw: HERO.yaw }, eye: EYE, target: TARGET, hill, approach: APPROACH }))
+    .then(h => { if (current) heroine = h; else h.dispose(); })
     .catch(error => console.warn("Экран ожидания: героиня не загрузилась", error));
 
   const since = lastActive;
@@ -591,21 +594,19 @@ export function showIdleScene() {
     prev = now;
     night += (nightGoal - night) * Math.min(1, dt * 1.6);
     const time = (now - t0) / 1000;
-    let greet = null;
-    if (heroine && greetT >= 0) {
-      const g = greetT += dt;
-      const ease = x => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); };
-      const near = g < 1.4 ? ease(g / 1.4) : g < 5 ? 1 : 1 - ease((g - 5) / 2.6);
-      greet = { t: g, w: g < 4.6 ? ease((g - 0.9) / 0.5) : 1 - ease((g - 4.6) / 0.8), eye: camEye };
-      // Крупный план: камера в метре перед лицом, чуть сбоку, смотрит в лицо
+    if (heroine) {
+      if (visitIn > 0 && (visitIn -= dt) <= 0) heroine.visit();
+      heroine.update(dt, time, night, cursor, camEye);
+      // Камера: пока она идёт к нам и здоровается — чуть выше и смотрит ей в лицо; потом обратно к общему виду
+      const k = heroine.focus();
       const headPos = heroine.headPosition();
-      const close = [headPos[0] - 0.36, headPos[1] - 0.04, headPos[2] + 1.25];
-      const face = [headPos[0] + 0.05, headPos[1] - 0.12, headPos[2]];
-      camEye = EYE.map((v, i) => v + (close[i] - v) * near);
-      scene.setView(camEye, TARGET.map((v, i) => v + (face[i] - v) * near));
-      if (g > 7.8) { greetT = -1; camEye = [...EYE]; scene.setView(camEye, [...TARGET]); }
+      camEye = EYE.map((v, i) => v + ([EYE[0], 1.05, EYE[2]][i] - v) * k);
+      scene.setView(camEye, TARGET.map((v, i) => v + ([headPos[0], headPos[1] - 0.18, headPos[2]][i] - v) * k));
+      // Следы: где она идёт, трава приминается
+      const hp = heroine.position();
+      if (heroPrev && heroine.walking()) scene.stamp(hp[0], hp[1], hp[0] - heroPrev[0], hp[1] - heroPrev[1]);
+      heroPrev = hp;
     }
-    heroine?.update(dt, time, night, cursor, hill, greet);
     scene.draw(time, dt, night, cursor, heroine);
     raf = document.hidden || !document.hasFocus() ? 0 : requestAnimationFrame(frame);
   };
@@ -637,10 +638,10 @@ export function showIdleScene() {
 
   box.addEventListener("pointermove", onMove);
   canvas.addEventListener("pointerdown", e => {
-    if (!heroine || greetT >= 0) return;
+    if (!heroine || !heroine.sitting()) return;
     const r = canvas.getBoundingClientRect();
     const hit = scene.pick((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
-    if (hit && Math.hypot(hit[0] - HERO.x, hit[1] - HERO.z) < 0.9) greetT = 0;
+    if (hit && Math.hypot(hit[0] - HERO.x, hit[1] - HERO.z) < 0.9) heroine.visit();
   });
   box.addEventListener("pointerleave", () => { cursor = null; lastHit = null; });
   box.addEventListener("wheel", close, { passive: true });
