@@ -600,7 +600,12 @@ async fn reinstall_app(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Перед установкой: закрыть окна и дождаться (до 10 с), пока завершатся все дочерние процессы программы —
 /// WebView2 и запущенные ffmpeg/ffprobe держат папку программы (рабочая папка, сами exe), и установщик не может её заменить.
+// Пока идёт передача установщику, закрытие последнего окна не должно завершать программу: Tauri по умолчанию
+// выходит, когда окон не осталось, и процесс умирал раньше, чем успевал запустить Update.exe — окно пропадало, обновления не было.
+static HANDING_OFF_UPDATE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn release_program_files(app: &tauri::AppHandle) {
+    HANDING_OFF_UPDATE.store(true, std::sync::atomic::Ordering::SeqCst);
     for (_, window) in app.webview_windows() {
         let _ = window.destroy();
     }
@@ -2024,8 +2029,16 @@ fn main() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_, event| {
+            // Выход «окон не осталось» (code: None) во время передачи установщику держим; явный app.exit(0) проходит.
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = event {
+                if HANDING_OFF_UPDATE.load(std::sync::atomic::Ordering::SeqCst) {
+                    api.prevent_exit();
+                }
+            }
+        });
 }
 
 #[cfg(test)]
