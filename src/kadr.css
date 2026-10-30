@@ -768,8 +768,8 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .board-col-head:hover .board-col-fold { opacity: 1; background: rgba(255, 255, 255, .07); }
 .board-col-head .board-col-collapse { order: 3; margin-left: 0; }
 .board-col.folded .board-col-fold { transform: rotate(-90deg); }
-.board-col.folded .board-col-head { padding-bottom: 2px; }
-.board-col.folded .board-col-head .cnt::after { content: " · скрыто"; font-weight: 500; }
+.board-col.folded:not(.collapsed) .board-col-head { padding-bottom: 2px; }
+.board-col.folded:not(.collapsed) .board-col-head .cnt::after { content: " · скрыто"; font-weight: 500; }
 .board-cards { gap: 8px; }
 .board-col-empty { padding: 18px 0; text-align: center; font-size: 12px; color: var(--ink-dim); }
 .board-col-more { margin-top: 8px; width: 100%; justify-content: center; }

@@ -561,6 +561,10 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
         // закрытия окна. Дочерние процессы WebView2 после этого висели ещё секунды и держали папку
         // `current`, а Update.exe не мог её переименовать («файл занят», 10 повторов и отказ): версия
         // оставалась старой. Теперь Update.exe запускается и ждёт, а мы выходим штатно, закрывая webview.
+        // Сначала закрываем окна и ждём, пока завершатся процессы WebView2 программы: их рабочая папка — `current`,
+        // и пока они живы, Windows не даёт Update.exe её переименовать («Access is denied», 10 повторов и отказ —
+        // версия остаётся старой). Update.exe к тому же не всегда может дождаться нашего процесса сам.
+        release_program_files(&app);
         um.wait_exit_then_apply_updates(&info.TargetFullRelease, false, true, Vec::<String>::new())
             .map_err(|e| e.to_string())?;
         if let Ok(dir) = app.path().app_data_dir() {
@@ -589,8 +593,47 @@ async fn reinstall_app(app: tauri::AppHandle) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     log::info!("reinstall_app: установщик {} запустится после выхода", setup.display());
+    release_program_files(&app);
     app.exit(0);
     Ok(())
+}
+
+/// Перед установкой: закрыть окна и дождаться (до 10 с), пока завершатся все дочерние процессы программы —
+/// WebView2 и запущенные ffmpeg/ffprobe держат папку программы (рабочая папка, сами exe), и установщик не может её заменить.
+fn release_program_files(app: &tauri::AppHandle) {
+    for (_, window) in app.webview_windows() {
+        let _ = window.destroy();
+    }
+    let me = sysinfo::Pid::from_u32(std::process::id());
+    let started = std::time::Instant::now();
+    let mut sys = sysinfo::System::new();
+    loop {
+        sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        // Потомки нашего процесса на любую глубину (браузерный процесс WebView2 → его рендеры и GPU)
+        let mut family = vec![me];
+        let mut i = 0;
+        while i < family.len() {
+            let parent = family[i];
+            family.extend(sys.processes().iter().filter(|(_, p)| p.parent() == Some(parent)).map(|(pid, _)| *pid));
+            i += 1;
+        }
+        let left = family.len() - 1;
+        if left == 0 {
+            log::info!("release_program_files: дочерние процессы завершились за {:?}", started.elapsed());
+            return;
+        }
+        if started.elapsed() > std::time::Duration::from_secs(10) {
+            log::warn!("release_program_files: за 10 с не завершились {left} дочерних процессов — завершаем их");
+            for pid in &family[1..] {
+                if let Some(p) = sys.process(*pid) {
+                    p.kill();
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
 }
 
 // Логирует Err любой команды с её именем перед тем, как отдать наружу —
