@@ -1161,7 +1161,7 @@ tbody tr:hover { background: var(--surface-2); }
    нужны (тот же приём, что кнопка "показать пароль" в полях ввода). */
 td.row-actions { opacity: 0; transition: opacity .12s ease; white-space: nowrap; }
 tbody tr:hover td.row-actions { opacity: 1; }
-td.row-actions .icon-btn { padding: 4px 6px; font-size: 12px; margin-right: 4px; }
+td.row-actions .icon-btn { padding: 4px 6px; font-size: 12px; margin-right: 4px; vertical-align: middle; }
 tbody tr.selected { background: var(--accent-soft); }
 tbody td { padding: 10px; border-bottom: 1px solid var(--line-soft); }
 
