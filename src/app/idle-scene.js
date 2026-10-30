@@ -71,7 +71,7 @@ const SEASON_LOOKS = {
     root: [0.1, 0.1, 0.04], tip: [0.55, 0.45, 0.18], tip2: [0.45, 0.3, 0.12], ground: [0.13, 0.11, 0.06],
     leaf: [0.34, 0.06, 0.08], leafHi: [0.62, 0.16, 0.1], snow: 0, height: 0.9, flowers: 0, sky: [1, 0.86, 1.1],
     fall: 0, flyDay: [1, 0.72, 0.32], flyNight: [1, 0.55, 0.15], flySize: [0.04, 0.12],
-    crown: 0.5, fallen: 1, mist: 1, hat: 1, layers: [[0, 140, "field"], [4, 7, "field"], [5, 10, "bats"]],
+    crown: 0.5, fallen: 1, mist: 1, scare: 1, layers: [[0, 140, "field"], [4, 7, "field"], [5, 10, "bats"]],
   },
 };
 // Где роятся частицы слоя: всё поле, у дерева (сыплется с кроны), тыквы у камеры, мыши у дерева
@@ -346,7 +346,7 @@ precision highp float;
 in vec2 vUv;
 in float vD;
 out vec4 o;
-uniform float uTime, uCrown, uHat;
+uniform float uTime, uCrown, uScare;
 ${NOISE_GLSL}
 ${SHADE_GLSL}
 float seg(vec2 p, vec2 a, vec2 b, float ra, float rb) {
@@ -354,8 +354,91 @@ float seg(vec2 p, vec2 a, vec2 b, float ra, float rb) {
   float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
   return length(pa - ba * h) - mix(ra, rb, h);
 }
+float box(vec2 p, vec2 b) { vec2 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
+float h1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
+// Слой рисунка: кладёт фигуру с расстоянием d поверх уже нарисованного; края сглажены по пикселю, по кромке — тонкий контур
+void lay(inout vec4 acc, float d, vec3 c) {
+  float fw = max(fwidth(d), 1e-4);
+  float k = smoothstep(fw, -fw, d);
+  float inner = smoothstep(-2.6 * fw, -1.2 * fw, d);
+  c = mix(c, c * 0.3, inner);
+  acc.rgb = mix(acc.rgb, c, k);
+  acc.a = max(acc.a, k);
+}
+
+// Пугало (Хэллоуин): шест с перекладиной, рубаха в клетку с заплаткой и рваным низом, солома из рукавов и из-под
+// рубахи, голова-мешок с вышитым лицом (ночью глаза и рот светятся), шляпа ведьмы набекрень. Всё в метрах, от земли.
+vec4 scarecrow(vec2 m, float t, out float glow) {
+  vec4 acc = vec4(0.0);
+  float sway = sin(t * 0.9) * 0.035 + sin(t * 2.3) * 0.012;
+  m.x -= sway * max(m.y - 0.3, 0.0);
+  vec3 wood = vec3(0.36, 0.24, 0.13) * (0.85 + 0.25 * noise(m * vec2(40.0, 4.0)));
+  vec3 straw = vec3(0.93, 0.78, 0.36);
+  lay(acc, seg(m, vec2(0.0, -0.3), vec2(0.0, 2.0), 0.055, 0.045), wood);
+  lay(acc, seg(m, vec2(-0.8, 1.58), vec2(0.8, 1.58), 0.04, 0.04), wood * 0.9);
+  // Солома: веером из рукавов, пучком из-под рубахи и у шеи; кончики треплет ветер
+  float wind = sin(t * 3.0) * 0.04;
+  float st = 1e3;
+  for (int i = 0; i < 2; i++) {
+    float side = i == 0 ? -1.0 : 1.0;
+    vec2 sp = vec2(m.x * side, m.y) - vec2(0.64, 1.53);
+    float ang = atan(sp.y, sp.x);
+    float r = length(sp);
+    st = min(st, max(r - 0.2 - 0.06 * sin(ang * 23.0 + t * 2.0 + side) - wind * side * sp.y * 4.0, max(-sp.x, abs(ang) - 1.0)));
+  }
+  vec2 bp = m - vec2(0.0, 1.02);
+  st = min(st, max(length(bp * vec2(1.0, 1.8)) - 0.26 - 0.05 * sin(atan(bp.y, bp.x) * 31.0 + t), bp.y));
+  lay(acc, st, straw * (0.85 + 0.2 * sin(m.x * 90.0 + m.y * 40.0)));
+  // Рубаха: корпус и рукава вдоль перекладины, рукава провисают и колышутся; низ рваный
+  float fl = sin(t * 3.1 + m.x * 6.0) * 0.025 * abs(m.x);
+  float sleeve = box(vec2(m.x, m.y - 1.56 + 0.05 * abs(m.x) - fl), vec2(0.66, 0.1 + 0.035 * abs(m.x)));
+  float body = box(m - vec2(0.0, 1.3), vec2(0.27 + 0.04 * (1.5 - m.y), 0.31));
+  body = max(body, (1.03 + 0.045 * abs(sin(m.x * 26.0 + sin(t * 2.0)))) - m.y);
+  float cloth = min(body, sleeve);
+  float checks = step(0.5, fract(m.x * 7.0)) + step(0.5, fract(m.y * 7.0));
+  vec3 shirt = vec3(0.62, 0.15, 0.11) * (checks == 1.0 ? 0.72 : 1.0);
+  shirt = mix(shirt, vec3(0.95, 0.75, 0.3), (1.0 - smoothstep(0.0, 0.03, abs(fract(m.x * 7.0 + 0.25) - 0.5))) * 0.25);
+  shirt *= mix(0.8, 1.05, smoothstep(-0.02, 0.02, m.x + 0.05));   // свет слева, тень справа
+  lay(acc, cloth, shirt);
+  lay(acc, box(m - vec2(0.13, 1.22), vec2(0.075, 0.07)), vec3(0.32, 0.42, 0.62));   // заплатка
+  lay(acc, box(m - vec2(0.0, 1.69), vec2(0.075, 0.02)), vec3(0.62, 0.5, 0.3));       // верёвка на шее
+  // Голова-мешок: мешковина в мелкую клетку, вышитые глаза-треугольники и рот стежками
+  vec2 hp = (m - vec2(0.0, 1.88)) * vec2(1.0, 0.92);
+  vec3 burlap = vec3(0.8, 0.67, 0.45) * (0.9 + 0.08 * sin(m.x * 160.0) * sin(m.y * 160.0));
+  burlap *= mix(0.82, 1.05, smoothstep(-0.05, 0.05, m.x + 0.06));
+  lay(acc, length(hp) - 0.2, burlap);
+  float eyes = 1e3;
+  for (int i = 0; i < 2; i++) {
+    vec2 e = m - vec2(i == 0 ? -0.078 : 0.078, 1.915);
+    eyes = min(eyes, max(abs(e.x) * 1.7 + e.y - 0.035, -e.y - 0.03));
+  }
+  float mouth = max(abs(m.y - 1.805 - 0.014 * sin(m.x * 70.0)) - 0.011, abs(m.x) - 0.11);
+  float face = min(eyes, mouth);
+  vec3 dark = vec3(0.12, 0.07, 0.05);
+  lay(acc, face, mix(dark, vec3(1.0, 0.62, 0.15), uNight));
+  glow = uNight * smoothstep(0.02, -0.01, face);
+  // Шляпа ведьмы набекрень: поля, конус с загнутой макушкой, оранжевая лента с пряжкой
+  float th = 0.16 + sin(t * 1.1) * 0.03;
+  vec2 h = mat2(cos(th), sin(th), -sin(th), cos(th)) * (m - vec2(0.03, 2.04));
+  float brim = length(h * vec2(1.0, 6.0)) - 0.36;
+  float cone = max(abs(h.x) - mix(0.19, 0.025, clamp(h.y / 0.5, 0.0, 1.0)), max(-h.y, h.y - 0.5));
+  float tip = length((h - vec2(0.07, 0.5)) * vec2(1.0, 1.3)) - 0.045;
+  vec3 hatc = vec3(0.28, 0.12, 0.4) * mix(0.75, 1.1, smoothstep(-0.03, 0.03, h.x + 0.04));
+  lay(acc, min(min(cone, tip), brim), hatc);
+  lay(acc, max(cone, abs(h.y - 0.075) - 0.035), vec3(1.0, 0.55, 0.12));
+  lay(acc, box(h - vec2(0.0, 0.075), vec2(0.03, 0.028)), vec3(0.95, 0.85, 0.3));
+  return acc;
+}
+
 void main() {
   vec2 p = vUv;
+  if (uScare > 0.5) {
+    float glow;
+    vec4 sc = scarecrow(vec2(p.x * 1.9, p.y * 4.2 - 0.2) / 1.45, uTime, glow);
+    if (sc.a < 0.02) discard;
+    o = vec4(fog(nightTint(sc.rgb) + vec3(1.0, 0.55, 0.12) * glow * 0.9, vD), sc.a);
+    return;
+  }
   vec2 asp = vec2(1.0, 2.2);   // квадрат 3.8 × 4.2 м — круг в мировых единицах
   // Ветки качаются: чем выше и дальше от ствола, тем сильнее; у каждой свой ритм
   vec2 sw = vec2(sin(uTime * 1.3 + p.y * 3.0) * 0.012, 0.0) * p.y;
@@ -369,60 +452,37 @@ void main() {
   wood = min(wood, seg(q * asp, vec2(0.26, 0.64) * asp, vec2(0.6, 0.63) * asp, 0.018, 0.007));
   wood = min(wood, seg(q * asp, vec2(-0.3, 0.66) * asp, vec2(-0.36, 0.86) * asp, 0.012, 0.005));
   wood = min(wood, seg(q * asp, vec2(0.3, 0.7) * asp, vec2(0.4, 0.88) * asp, 0.012, 0.005));
-  // Крона — грозди листвы, каждая качается со своим запаздыванием; листья шелестят (шум бежит по времени)
-  float crown = 1e3, shade = 0.0;
-  vec3 C[9] = vec3[9](vec3(0.0, 0.74, 0.3), vec3(-0.42, 0.68, 0.22), vec3(0.44, 0.7, 0.22), vec3(0.1, 0.9, 0.2),
-                      vec3(-0.2, 0.86, 0.2), vec3(0.3, 0.84, 0.19), vec3(-0.6, 0.64, 0.14), vec3(0.6, 0.64, 0.14), vec3(0.0, 0.6, 0.2));
-  for (int i = 0; i < 9; i++) {
+  // Крона: ~30 гроздей листвы внутри общего силуэта (эллипс над стволом); каждая качается со своим запаздыванием.
+  // Внутренние и нижние грозди в тени, верхние и наружные на свету — получается объём, а не набор шаров
+  float crown = 1e3, shade = 0.0, depth = 0.0;
+  for (int i = 0; i < 30; i++) {
     float fi = float(i);
-    vec2 c = C[i].xy + vec2(sin(uTime * (1.1 + fi * 0.13) + fi * 1.7), cos(uTime * (0.9 + fi * 0.11) + fi)) * vec2(0.018, 0.006) * C[i].y;
+    float ang = h1(fi + 1.0) * 6.2832, rad = sqrt(h1(fi + 7.0));
+    vec2 c = vec2(0.0, 0.76) + vec2(cos(ang) * 0.5, sin(ang) * 0.17) * rad;
+    c += vec2(sin(uTime * (1.0 + h1(fi + 3.0) * 0.6) + fi * 1.7), cos(uTime * (0.8 + h1(fi + 5.0) * 0.5) + fi)) * vec2(0.012, 0.005) * c.y;
+    float r = mix(0.07, 0.13, h1(fi + 11.0)) * (0.55 + 0.45 * uCrown);
     vec2 d = (p - c) * vec2(1.0, 1.55);
-    float k = length(d) - C[i].z * (0.55 + 0.45 * uCrown);
-    if (k < crown) { crown = k; shade = dot(normalize(d + 1e-4), normalize(vec2(-0.5, 0.85))); }
+    float k = length(d) - r;
+    if (k < crown) { crown = k; shade = dot(normalize(d + 1e-4), normalize(vec2(-0.5, 0.85))); depth = 1.0 - rad; }
   }
   float rustle = fbm(p * 11.0 + vec2(uTime * 0.35, uTime * 0.12));
-  crown += (rustle - 0.5) * 0.07 + (1.0 - uCrown) * 0.06;
-  // Осенью и в Хэллоуин крона редкая — сквозь неё видны ветки
+  crown += (rustle - 0.5) * 0.05 + (1.0 - uCrown) * 0.06;
+  // Осенью крона редкая — сквозь неё видны ветки
   crown += step(uCrown, fbm(p * 3.5 + 5.0) * 1.2) * 0.2 * (1.0 - uCrown);
   if (uCrown < 0.01) crown = 1e3;
-  // Шляпа ведьмы: нитка от ветки, острый конус с загнутой вниз-вбок макушкой, широкие поля, оранжевая лента
-  float hat = 1e3, band = 0.0, thread = 1e3;
-  if (uHat > 0.5) {
-    vec2 pivot = vec2(0.44, 0.76) * asp;
-    float th = sin(uTime * 1.2) * 0.18 + sin(uTime * 0.47) * 0.08;
-    vec2 l = q * asp - pivot;
-    l = mat2(cos(th), -sin(th), sin(th), cos(th)) * l / 1.8;
-    thread = abs(l.x) - 0.004 + step(0.0, l.y) + step(l.y, -0.14);
-    vec2 h = l - vec2(0.0, -0.36);   // центр полей
-    float cone = max(abs(h.x) - mix(0.085, 0.006, clamp((h.y) / 0.22, 0.0, 1.0)), max(-h.y, h.y - 0.22));
-    float tip = length((h - vec2(0.03, 0.235)) * vec2(1.0, 1.4)) - 0.02;
-    float brim = length(h * vec2(1.0, 5.5)) - 0.17;
-    hat = min(min(cone, tip), brim) * 1.8;   // обратно в масштаб дерева — для ровного сглаживания
-    thread *= 1.8;
-    band = step(0.018, h.y) * step(h.y, 0.045) * step(cone, 0.0);
-  }
-  // Сглаживание по размеру пикселя на экране: края чёткие при любом разрешении и масштабе (шляпа, ветки, крона)
-  float dd = min(min(wood, crown), min(hat, thread));
+  float dd = min(wood, crown);
   float fw = max(fwidth(dd), 1e-4);
   float a = smoothstep(fw, -fw, dd);
   if (a < 0.02) discard;
   float outline = 1.0 - smoothstep(-2.6 * fw, -1.2 * fw, dd);   // 1 внутри, 0 на кромке шириной ~1.5 пикселя
-  if (min(hat, thread) < min(wood, crown)) {
-    vec3 hc = thread < hat ? vec3(0.75, 0.72, 0.65) : mix(vec3(0.24, 0.1, 0.34), vec3(1.0, 0.55, 0.12), band);
-    hc *= mix(0.78, 1.08, smoothstep(-0.01, 0.01, (q.x - 0.44) * asp.x + 0.02));
-    hc = mix(vec3(0.08, 0.04, 0.1), hc, mix(0.25, 1.0, outline));
-    o = vec4(fog(mix(hc, nightTint(hc), 0.6) + band * uNight * vec3(0.45, 0.2, 0.0), vD), a);
-    return;
-  }
-  float lightK = shade + (rustle - 0.5) * 0.35;
-  float tone = smoothstep(-0.12, -0.06, lightK) * 0.55 + smoothstep(0.42, 0.48, lightK) * 0.45;
-  vec3 leaf = mix(uLeaf, uLeafHi, tone);
-  leaf *= 0.78 + 0.3 * smoothstep(0.4, 1.0, p.y);
+  float lightK = shade + (rustle - 0.5) * 0.3 - depth * 0.35;
+  float tone = smoothstep(-0.18, -0.12, lightK) * 0.55 + smoothstep(0.38, 0.44, lightK) * 0.45;
+  vec3 leaf = mix(uLeaf * 0.8, uLeafHi, tone);
+  leaf *= 0.82 + 0.25 * smoothstep(0.55, 0.95, p.y);
   vec3 bark = vec3(0.22, 0.15, 0.1) * (0.75 + 0.35 * noise(p * vec2(30.0, 6.0)) + 0.2 * noise(p * vec2(120.0, 14.0)));
   bark *= 1.0 - 0.35 * smoothstep(0.55, 0.75, noise(p * vec2(90.0, 5.0)));   // трещины вдоль ствола
   vec3 c = crown < wood ? leaf : bark;
   // Снег лежит на верхней стороне веток и кроны
-  float topSide = smoothstep(0.0, -0.02, crown < wood ? crown + 0.03 : wood + 0.012 * asp.y);
   c = mix(c, vec3(0.94, 0.96, 1.0), uSnow * (crown < wood ? smoothstep(0.55, 0.9, p.y + fbm(p * 11.0) * 0.25) : step(0.5, noise(p * 40.0)) * 0.9));
   c = mix(c * 0.35, c, mix(0.3, 1.0, outline));
   o = vec4(fog(nightTint(c), vD), a);
@@ -744,7 +804,7 @@ function buildScene(canvas) {
     if (u.uCrown) gl.uniform1f(u.uCrown, look.crown);
     if (u.uFallen) gl.uniform1f(u.uFallen, look.fallen);
     if (u.uMist) gl.uniform1f(u.uMist, look.mist);
-    if (u.uHat) gl.uniform1f(u.uHat, look.hat || 0);
+    if (u.uScare) gl.uniform1f(u.uScare, look.scare || 0);
     if (u.uPhase) gl.uniform1f(u.uPhase, phase);
   }
 
