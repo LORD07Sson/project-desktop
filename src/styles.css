@@ -2112,7 +2112,6 @@ kbd {
 .board-col-head .board-col-collapse { margin-left: auto; }
 /* Свёрнутый список (board.js: data-fold): заголовок — кнопка, стрелка повёрнута, карточки и «Показать ещё» спрятаны */
 .board-col:not(.collapsed) .board-col-head { cursor: pointer; border-radius: 8px; user-select: none; }
-.board-col:not(.collapsed) .board-col-head:hover { background: color-mix(in srgb, var(--col-accent) 8%, transparent); }
 .board-col-fold { flex: none; color: var(--ink-dim); transition: transform .18s ease; }
 .board-col.collapsed .board-col-fold { display: none; }
 .board-col.folded .board-col-fold { transform: rotate(-90deg); }
