@@ -54,6 +54,15 @@ function readExpanded() {
 function writeExpanded(set) {
   try { localStorage.setItem(expandedKey(), JSON.stringify([...set])); } catch (_) { /* не критично */ }
 }
+// Свёрнутый список: колонка остаётся на месте с заголовком и счётчиком, карточки спрятаны (клик по заголовку).
+// В отличие от «свернуть в полоску» место по ширине не освобождается — просто не мешают длинные списки.
+function foldedKey() { return `project_board_folded_${state.telegramId || "anon"}`; }
+function readFolded() {
+  try { return new Set(JSON.parse(localStorage.getItem(foldedKey()) || "[]")); } catch (_) { return new Set(); }
+}
+function writeFolded(set) {
+  try { localStorage.setItem(foldedKey(), JSON.stringify([...set])); } catch (_) { /* не критично */ }
+}
 const autoCollapsed = col => (col.status === "cancelled" || !col.total) && !boardView.query;
 function isCollapsed(col, collapsed, expanded) {
   return collapsed.has(col.status) || (autoCollapsed(col) && !expanded.has(col.status));
@@ -536,14 +545,16 @@ function boardToolbarHtml() {
     </div>`;
 }
 
-function columnHtml(col, collapsed, expanded) {
+function columnHtml(col, collapsed, expanded, folded) {
   const colorVar = STATUS_COLOR_VAR[col.status] || "--s-draft";
   // Широкая колонка (много карточек) раскладывает их в два ряда.
   const wide = col.cards.length >= 4;
+  const isFolded = folded.has(col.status);
   return `
-    <div class="board-col ${isCollapsed(col, collapsed, expanded) ? "collapsed" : ""}${col.overWip ? " over-wip" : ""}${wide ? " wide" : ""}"
+    <div class="board-col ${isCollapsed(col, collapsed, expanded) ? "collapsed" : ""}${col.overWip ? " over-wip" : ""}${wide ? " wide" : ""}${isFolded ? " folded" : ""}"
          data-status="${esc(col.status)}" style="--col-accent: var(${colorVar});">
-      <div class="board-col-head">
+      <div class="board-col-head" data-fold="${esc(col.status)}" role="button" tabindex="0" aria-expanded="${isFolded ? "false" : "true"}" title="${isFolded ? "Показать карточки" : "Скрыть карточки"}">
+        <svg class="board-col-fold" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
         <span class="lb" title="${esc(cleanLabel(col.label))}"><span class="dot ${STATUS_DOT_CLASS[col.status] || "draft"}"></span>${esc(cleanLabel(col.label).split("/")[0])}</span>
         <span class="cnt${col.overWip ? " over" : ""}" title="${col.overWip ? `Серий в этом статусе больше, чем ${col.wipLimit} — команда может не успевать` : "Всего в статусе"}">${col.total}${col.overWip ? ` · больше ${col.wipLimit}` : ""}</span>
         <button class="board-col-collapse" data-collapse="${esc(col.status)}" title="Свернуть/развернуть колонку" aria-label="Свернуть/развернуть колонку"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
@@ -686,6 +697,7 @@ async function renderBoard(root) {
   }
   const collapsed = readCollapsed();
   const expanded = readExpanded();
+  const folded = readFolded();
   rememberSeries(lastBoardData.statuses);
   const stats = boardStats(layout);
   const active = layout.columns.filter(c => c.status !== "completed" && c.status !== "cancelled").reduce((n, c) => n + (c.total || 0), 0);
@@ -709,7 +721,7 @@ async function renderBoard(root) {
     </div>
     ${boardToolbarHtml()}
     ${timeline ? `<div class="board-top-row${timelineCell ? "" : " single"}">${timelineCell}${performanceHtml(stats)}</div>` : ""}
-    <div class="board">${layout.columns.map(col => columnHtml(col, collapsed, expanded)).join("")}</div>
+    <div class="board">${layout.columns.map(col => columnHtml(col, collapsed, expanded, folded)).join("")}</div>
   `;
   root.querySelectorAll("[data-board-mode]").forEach(b => b.addEventListener("click", () => {
     setBoardMode(b.dataset.boardMode);
@@ -788,6 +800,21 @@ function wireBoardToolbar(root) {
 }
 
 function wireColumnButtons(root) {
+  // Клик по заголовку развёрнутой колонки прячет и показывает её карточки (у полоски заголовок не трогаем)
+  root.querySelectorAll("[data-fold]").forEach(head => {
+    const toggle = () => {
+      const colEl = head.closest(".board-col");
+      if (colEl.classList.contains("collapsed")) return;
+      const set = readFolded();
+      const now = colEl.classList.toggle("folded");
+      if (now) set.add(head.dataset.fold); else set.delete(head.dataset.fold);
+      writeFolded(set);
+      head.setAttribute("aria-expanded", now ? "false" : "true");
+      head.title = now ? "Показать карточки" : "Скрыть карточки";
+    };
+    head.addEventListener("click", e => { if (!e.target.closest("button")) toggle(); });
+    head.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target === head) { e.preventDefault(); toggle(); } });
+  });
   root.querySelectorAll("[data-collapse]").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
