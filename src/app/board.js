@@ -470,7 +470,9 @@ function wireBoardScroll(boardEl) {
   let startX = 0;
   let startScroll = 0;
   boardEl.addEventListener("pointerdown", e => {
-    if (e.button !== 0 || e.target.closest(".board-card")) return;
+    // Заголовок колонки и кнопки — не «тянуть доску»: захват указателя ниже уводит их click на саму доску,
+    // и клик по заголовку (свернуть список карточек) не срабатывал
+    if (e.button !== 0 || e.target.closest(".board-card, .board-col-head, button")) return;
     panning = true;
     panPointerId = e.pointerId;
     startX = e.clientX;

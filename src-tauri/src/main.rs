@@ -290,7 +290,9 @@ fn check_for_update_cached(app: &tauri::AppHandle, force: bool) -> Result<Option
     let cache = update_check_cache();
     if !force {
         if let Some(cached) = cache.lock().unwrap().as_ref() {
-            if cached.channel == channel && cached.at.elapsed() < UPDATE_CHECK_CACHE_TTL {
+            // «Нового нет» держим минуту, а не весь TTL: иначе только что вышедшая сборка ещё пять минут не видна
+            let ttl = if matches!(cached.result, Ok(None)) { std::time::Duration::from_secs(60) } else { UPDATE_CHECK_CACHE_TTL };
+            if cached.channel == channel && cached.at.elapsed() < ttl {
                 return cached.result.clone();
             }
         }
@@ -329,10 +331,17 @@ fn check_for_update_cached(app: &tauri::AppHandle, force: bool) -> Result<Option
             }
         };
         match one {
-            Ok(found) => {
+            Ok(Some(found)) => {
                 *last_good_source().lock().unwrap() = Some(from);
-                result = Ok(found);
+                result = Ok(Some(found));
                 break;
+            }
+            // «Нового нет» — спрашиваем и следующий источник: GitHub отдаёт фид через кэш и несколько минут после
+            // сборки отвечает по-старому, а зеркало на сервере уже могло подтянуть новую версию (и наоборот)
+            Ok(None) => {
+                if result.is_err() {
+                    result = Ok(None);
+                }
             }
             Err(e) => {
                 log::info!("check_for_update: {} не ответил ({e}) — пробую следующий источник", from.key());
@@ -498,7 +507,11 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
             loop {
                 let info = match um.check_for_updates().map_err(friendly_update_error) {
                     Ok(velopack::UpdateCheck::UpdateAvailable(info)) => *info,
-                    Ok(_) => return Err("Обновление больше не доступно — кто-то уже обновился раньше вас?".into()),
+                    // В этом источнике новой версии ещё нет (кэш GitHub, зеркало не успело) — пробуем следующий
+                    Ok(_) => {
+                        errors.push(format!("{}: новой версии там пока нет", from.label()));
+                        continue 'sources;
+                    }
                     Err(e) if is_transient_update_error(&e) && attempt < retries => {
                         attempt += 1;
                         log::info!("download_and_apply_update ({}): фид недоступен ({e}), повтор {attempt}/{retries}", from.key());
