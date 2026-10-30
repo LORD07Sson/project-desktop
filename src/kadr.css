@@ -3478,7 +3478,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .board-col:not(.collapsed) { flex: 1 0 268px; max-width: 440px; }
 /* Колонка, где идёт работа, забирает освободившееся место и раскладывает карточки в два ряда. */
 .board-col.wide:not(.collapsed) { flex: 2.4 0 560px; max-width: none; }
-.board-col.wide:not(.collapsed) > .board-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); align-items: start; }
+.board-col.wide:not(.collapsed):not(.folded) > .board-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); align-items: start; }
 /* Пайплайн на карточке: по звену на человека, сдавшие закрашены. */
 .kc-pipe { flex: 1; min-width: 0; display: grid; gap: 5px; }
 .kc-pipe-seg { display: flex; gap: 3px; }
