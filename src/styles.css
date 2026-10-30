@@ -5850,6 +5850,7 @@ body.focus-mode .report-detail-overlay .sheet {
 .psb-card:hover { border-color: color-mix(in srgb, var(--tone) 50%, var(--line)); box-shadow: 0 8px 22px -14px rgba(0, 0, 0, .6); }
 .psb-card:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
 .psb-card.dragging { opacity: .45; }
+.psb-card.board-card-ghost { background: var(--surface); border-color: var(--tone, rgba(255, 255, 255, .3)); }
 .psb-card.overdue { border-color: color-mix(in srgb, var(--s-stop) 45%, var(--line)); }
 .psb-poster { grid-row: 1 / span 2; width: 48px; height: 68px; border-radius: 8px; object-fit: cover; background: var(--surface-3); }
 .psb-poster-empty { display: grid; place-items: center; font-weight: 800; color: var(--ink-dim); }

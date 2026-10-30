@@ -257,7 +257,7 @@ function renderPersonalStatuses(root, data) {
       const poster = item.poster_url ? `<img class="psb-poster" src="${esc(imgProxy(item.poster_url))}" alt="" loading="lazy">` : `<span class="psb-poster psb-poster-empty">${esc(String(item.title_name || item.title || "?").slice(0, 1).toUpperCase())}</span>`;
       const title = item.title_name || item.title || "Без названия";
       const episode = item.title_name && item.episode ? String(item.episode) : "";
-      return `<article class="psb-card${item.is_overdue ? " overdue" : ""}" data-q-status-open="${esc(item.public_id)}" draggable="true" tabindex="0" role="button" title="Открыть ${esc(item.public_id)}">
+      return `<article class="psb-card${item.is_overdue ? " overdue" : ""}" data-q-status-open="${esc(item.public_id)}" tabindex="0" role="button" title="Открыть ${esc(item.public_id)}">
         ${poster}
         <div class="psb-body">
           <b class="psb-name">${esc(title)}</b>
@@ -288,12 +288,7 @@ function renderPersonalStatuses(root, data) {
       if (!event.target.closest("button")) open();
     });
     card.addEventListener("keydown", event => { if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button")) { event.preventDefault(); open(); } });
-    card.addEventListener("dragstart", event => {
-      card.classList.add("dragging");
-      event.dataTransfer.setData("text/plain", card.dataset.qStatusOpen);
-      event.dataTransfer.effectAllowed = "move";
-    });
-    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    wireStatusDrag(card);
   });
   root.querySelectorAll("[data-q-status-move]").forEach(button => button.addEventListener("click", event => {
     event.stopPropagation();
@@ -308,15 +303,56 @@ function renderPersonalStatuses(root, data) {
       await loadQueue();
     } catch (error) { toast(`Не удалось убрать карточку: ${error.message}`, "error"); }
   }));
-  root.querySelectorAll("[data-q-status-col]").forEach(column => {
-    column.addEventListener("dragover", event => { event.preventDefault(); column.classList.add("drag-over"); });
-    column.addEventListener("dragleave", event => { if (!column.contains(event.relatedTarget)) column.classList.remove("drag-over"); });
-    column.addEventListener("drop", event => {
-      event.preventDefault(); event.stopPropagation(); column.classList.remove("drag-over");
-      skipStatusOpenUntil = Date.now() + 500;
-      const publicId = event.dataTransfer.getData("text/plain");
-      if (publicId) moveStatusCard(publicId, column.dataset.qStatusCol);
-    });
+}
+
+// Перенос карточки между колонками — на Pointer Events, как на общей доске (board.js: wireCardDrag): нативный
+// HTML5 drag&drop в WebView2 программы не доставляет dragover/drop, и карточка просто не перетаскивалась.
+// До 6 px сдвига — обычный клик (открыть серию), дальше за курсором едет копия карточки, колонка под ней подсвечена.
+function wireStatusDrag(card) {
+  card.addEventListener("pointerdown", down => {
+    if (down.button !== 0 || down.target.closest("button")) return;
+    const startX = down.clientX, startY = down.clientY;
+    let ghost = null, overCol = null;
+    card.setPointerCapture(down.pointerId);
+    const move = e => {
+      if (e.pointerId !== down.pointerId) return;
+      if (!ghost) {
+        if (Math.hypot(e.clientX - startX, e.clientY - startY) < 6) return;
+        const rect = card.getBoundingClientRect();
+        ghost = card.cloneNode(true);
+        ghost.classList.add("board-card-ghost");
+        ghost.style.width = `${rect.width}px`;
+        document.body.appendChild(ghost);
+        card.classList.add("dragging");
+        document.body.style.cursor = "grabbing";
+      }
+      ghost.style.left = `${e.clientX + 14}px`;
+      ghost.style.top = `${e.clientY + 14}px`;
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const col = under && under.closest("[data-q-status-col]");
+      if (col !== overCol) {
+        overCol?.classList.remove("drag-over");
+        overCol = col;
+        overCol?.classList.add("drag-over");
+      }
+    };
+    const up = e => {
+      if (e.pointerId !== down.pointerId) return;
+      card.removeEventListener("pointermove", move);
+      card.removeEventListener("pointerup", up);
+      card.removeEventListener("pointercancel", up);
+      if (!ghost) return;   // не сдвинули — это клик, его обработает click
+      ghost.remove();
+      card.classList.remove("dragging");
+      document.body.style.cursor = "";
+      overCol?.classList.remove("drag-over");
+      skipStatusOpenUntil = Date.now() + 500;   // click после отпускания не должен открывать серию
+      const from = card.closest("[data-q-status-col]");
+      if (e.type === "pointerup" && overCol && overCol !== from) moveStatusCard(card.dataset.qStatusOpen, overCol.dataset.qStatusCol);
+    };
+    card.addEventListener("pointermove", move);
+    card.addEventListener("pointerup", up);
+    card.addEventListener("pointercancel", up);
   });
 }
 
