@@ -77,6 +77,8 @@ document.addEventListener("mouseover", e => {
   // .xl — большой аватар на самой странице открытого профиля: все эти
   // данные там и так уже на экране целиком, подсказка ни к чему.
   if (!el || el.classList.contains("xl") || !el.dataset.avatarFor) return;
+  // Аватар в шапке открывает меню профиля — пока оно открыто, вторая карточка рядом только мешает.
+  if (el.closest(".tb-menu-wrap")?.querySelector(".tb-menu:not([hidden])")) return;
   clearTimeout(hideTimer);
   if (currentId === el.dataset.avatarFor) return;
   clearTimeout(showTimer);
@@ -92,3 +94,11 @@ document.addEventListener("mouseout", e => {
   clearTimeout(showTimer);
   scheduleHide();
 });
+
+// Клик по аватару — уже действие (меню, профиль): подсказку убираем сразу, а не ждём ухода курсора.
+document.addEventListener("pointerdown", () => {
+  clearTimeout(showTimer);
+  clearTimeout(hideTimer);
+  if (popoverEl) popoverEl.hidden = true;
+  currentId = null;
+}, true);
