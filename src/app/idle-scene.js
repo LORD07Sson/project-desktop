@@ -381,9 +381,9 @@ void main() {
     if (k < crown) { crown = k; shade = dot(normalize(d + 1e-4), normalize(vec2(-0.5, 0.85))); }
   }
   float rustle = fbm(p * 11.0 + vec2(uTime * 0.35, uTime * 0.12));
-  crown += (rustle - 0.5) * 0.14 + (1.0 - uCrown) * 0.06;
+  crown += (rustle - 0.5) * 0.07 + (1.0 - uCrown) * 0.06;
   // Осенью и в Хэллоуин крона редкая — сквозь неё видны ветки
-  crown += step(uCrown, fbm(p * 7.0 + 5.0) * 1.2) * 0.2 * (1.0 - uCrown);
+  crown += step(uCrown, fbm(p * 3.5 + 5.0) * 1.2) * 0.2 * (1.0 - uCrown);
   if (uCrown < 0.01) crown = 1e3;
   // Шляпа ведьмы: нитка от ветки, острый конус с загнутой вниз-вбок макушкой, широкие поля, оранжевая лента
   float hat = 1e3, band = 0.0, thread = 1e3;
@@ -406,13 +406,17 @@ void main() {
   float fw = max(fwidth(dd), 1e-4);
   float a = smoothstep(fw, -fw, dd);
   if (a < 0.02) discard;
+  float outline = 1.0 - smoothstep(-2.6 * fw, -1.2 * fw, dd);   // 1 внутри, 0 на кромке шириной ~1.5 пикселя
   if (min(hat, thread) < min(wood, crown)) {
     vec3 hc = thread < hat ? vec3(0.75, 0.72, 0.65) : mix(vec3(0.24, 0.1, 0.34), vec3(1.0, 0.55, 0.12), band);
-    hc *= 0.85 + 0.25 * smoothstep(-0.1, 0.1, (q.x - 0.44) * asp.x);
+    hc *= mix(0.78, 1.08, smoothstep(-0.01, 0.01, (q.x - 0.44) * asp.x + 0.02));
+    hc = mix(vec3(0.08, 0.04, 0.1), hc, mix(0.25, 1.0, outline));
     o = vec4(fog(mix(hc, nightTint(hc), 0.6) + band * uNight * vec3(0.45, 0.2, 0.0), vD), a);
     return;
   }
-  vec3 leaf = mix(uLeaf, uLeafHi, smoothstep(-0.4, 0.9, shade + (rustle - 0.5) * 0.6));
+  float lightK = shade + (rustle - 0.5) * 0.35;
+  float tone = smoothstep(-0.12, -0.06, lightK) * 0.55 + smoothstep(0.42, 0.48, lightK) * 0.45;
+  vec3 leaf = mix(uLeaf, uLeafHi, tone);
   leaf *= 0.78 + 0.3 * smoothstep(0.4, 1.0, p.y);
   vec3 bark = vec3(0.22, 0.15, 0.1) * (0.75 + 0.35 * noise(p * vec2(30.0, 6.0)) + 0.2 * noise(p * vec2(120.0, 14.0)));
   bark *= 1.0 - 0.35 * smoothstep(0.55, 0.75, noise(p * vec2(90.0, 5.0)));   // трещины вдоль ствола
@@ -420,6 +424,7 @@ void main() {
   // Снег лежит на верхней стороне веток и кроны
   float topSide = smoothstep(0.0, -0.02, crown < wood ? crown + 0.03 : wood + 0.012 * asp.y);
   c = mix(c, vec3(0.94, 0.96, 1.0), uSnow * (crown < wood ? smoothstep(0.55, 0.9, p.y + fbm(p * 11.0) * 0.25) : step(0.5, noise(p * 40.0)) * 0.9));
+  c = mix(c * 0.35, c, mix(0.3, 1.0, outline));
   o = vec4(fog(nightTint(c), vD), a);
 }`;
 
