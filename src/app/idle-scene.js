@@ -397,10 +397,14 @@ void main() {
     float cone = max(abs(h.x) - mix(0.085, 0.006, clamp((h.y) / 0.22, 0.0, 1.0)), max(-h.y, h.y - 0.22));
     float tip = length((h - vec2(0.03, 0.235)) * vec2(1.0, 1.4)) - 0.02;
     float brim = length(h * vec2(1.0, 5.5)) - 0.17;
-    hat = min(min(cone, tip), brim);
+    hat = min(min(cone, tip), brim) * 1.8;   // обратно в масштаб дерева — для ровного сглаживания
+    thread *= 1.8;
     band = step(0.018, h.y) * step(h.y, 0.045) * step(cone, 0.0);
   }
-  float a = smoothstep(0.012, -0.012, min(min(wood, crown), min(hat, thread)));
+  // Сглаживание по размеру пикселя на экране: края чёткие при любом разрешении и масштабе (шляпа, ветки, крона)
+  float dd = min(min(wood, crown), min(hat, thread));
+  float fw = max(fwidth(dd), 1e-4);
+  float a = smoothstep(fw, -fw, dd);
   if (a < 0.02) discard;
   if (min(hat, thread) < min(wood, crown)) {
     vec3 hc = thread < hat ? vec3(0.75, 0.72, 0.65) : mix(vec3(0.24, 0.1, 0.34), vec3(1.0, 0.55, 0.12), band);
