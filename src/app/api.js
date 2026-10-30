@@ -33,7 +33,7 @@ export const API_BASE = `${SERVER_ORIGIN}/api`;
 // зависшего интерфейса. 20с — заметно больше обычного отклика (доли
 // секунды — единицы секунд), но не бесконечность.
 const REQUEST_TIMEOUT_MS = 20_000;
-const NET_RETRY_MS = 1500;
+const NET_RETRY_MS = [1500, 3000, 5000];   // паузы между повторами при обрыве связи (перезапуск сервера — до ~10 с)
 const BLOB_STALL_MS = 30_000;
 // Файла может не быть в кэше сервера (кэш чистится через час): сервер сначала достаёт его из Telegram и только потом начинает отвечать.
 const BLOB_START_MS = 300_000;
@@ -123,15 +123,19 @@ export async function api(method, path, body) {
     signal: controller.signal,
   };
   netStart();
+  // Оборвалось соединение или nginx ответил 502–504 (сервер перезапускается при обновлении — до нескольких секунд,
+  // мигнул VPN): чтение и пинг присутствия повторяем с нарастающей паузой, всего ~10 с. Запись не повторяем —
+  // сервер мог её уже выполнить. 502 от nginx приходит без CORS-заголовков и в браузере выглядит как «Failed to fetch».
+  const retryable = method === "GET" || path === "/presence/ping";
   try {
-    try {
-      resp = await fetch(url, init);
-    } catch (e) {
-      // Оборвалось соединение (перезапуск сервера при обновлении — около секунды, мигнул VPN): чтение повторяем один раз.
-      // Запись не повторяем — сервер мог её уже выполнить.
-      if (method !== "GET" || e.name === "AbortError") throw e;
-      await new Promise(r => setTimeout(r, NET_RETRY_MS)); // DevSkim: ignore DS172411 — функция, не строка
-      resp = await fetch(url, init);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        resp = await fetch(url, init);
+        if (!(retryable && resp.status >= 502 && resp.status <= 504 && attempt < NET_RETRY_MS.length)) break;
+      } catch (e) {
+        if (!retryable || e.name === "AbortError" || attempt >= NET_RETRY_MS.length) throw e;
+      }
+      await new Promise(r => setTimeout(r, NET_RETRY_MS[attempt])); // DevSkim: ignore DS172411 — функция, не строка
     }
   } catch (e) {
     // network: ошибка транспорта, а не ответ сервера — токен тут ни при чём (см. tryRestoreSession).
