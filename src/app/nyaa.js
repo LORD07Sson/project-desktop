@@ -348,7 +348,9 @@ function listHtml() {
   const now = Date.now();
   const body = prefs.group ? groupReleases(list).map(g => g.kind === "item" ? rowHtml(g.item, maxSeed, now) : groupHtml(g, maxSeed, now)).join("") : rowsByDay(list, maxSeed, now);
   const sortBtn = (k, label, cls = "") => `<button type="button" class="ny-sorth${prefs.sort === k ? " on" : ""} ${cls}" data-sort="${k}" aria-label="Сортировать: ${label}">${label}${prefs.sort === k ? " ↓" : ""}</button>`;
-  return `<div class="ny-head"><span></span><span></span><span>Название</span><span class="r">${sortBtn("size", "Размер")}${sortBtn("date", "Дата")}</span><span class="r">${sortBtn("seeders", "Раздают")}<span class="ny-h2">Качают</span>${sortBtn("downloads", "Скачали")}</span><span></span></div>`
+  // Каждая колонка — своя ячейка сетки, той же, что у .ny-row (размер, дата, ↑, ↓, ✓ — по отдельности),
+  // чтобы подпись стояла ровно над своими цифрами.
+  return `<div class="ny-head"><span></span><span></span><span>Название</span>${sortBtn("size", "Размер", "r")}${sortBtn("date", "Дата", "r")}${sortBtn("seeders", "Раздают", "r")}<span class="ny-h2 r">Качают</span>${sortBtn("downloads", "Скачали", "r")}<span></span></div>`
     + (stale ? `<div class="ny-stale">Сайт не отвечает — показаны сохранённые данные (${esc(relTime(stale))}). <button type="button" class="ny-link" id="ny-retry">Обновить</button></div>` : "")
     + body
     + `<div class="ny-more-wrap">${hidden ? `<span class="ny-hint">фильтры скрывают ${hidden}</span>` : ""}${hasMore ? `<button type="button" class="btn" data-more>${moreBusy ? "Загружаю…" : "Показать ещё"}</button>` : `<span class="ny-hint">это всё, что отдал сайт</span>`}</div>`;
@@ -406,7 +408,7 @@ function shellHtml() {
         </div>
         <section class="ny-filters" id="ny-filters" hidden></section>
         <div class="ny-status" id="ny-status" data-open-sources title="Нажмите, чтобы открыть «Источники и зеркала»"></div>
-        <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — диапазон</span><span class="ny-sp"></span><span id="ny-upd"></span></div>
+        <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — диапазон</span></div>
         <div class="ny-list" id="ny-list"></div>
         <div class="ny-bar" id="ny-bar" hidden></div>
       </main>
@@ -633,35 +635,42 @@ function paintStatic() {
 }
 
 // ---------- строка состояния: что грузится и как отвечают ПК и сервер ----------
+// На виду — одна короткая строка («Лента обновлена только что · 621 мс»); путь, зеркало и замеры ПК/сервера —
+// в подсказке: раньше то же самое дублировалось справа и ещё раз строкой «обновлено …» под ней.
 const pathLabel = (path, via) => (path === "server" ? `сервер (${via || "—"})` : "этот компьютер");
-function pingInline(url, path, label) {
+function pingText(url, path, label) {
   const arr = health.m[url] ? health.m[url][path] : [];
   const last = arr.length ? arr[arr.length - 1] : null;
-  if (isPending(url, path)) return `<span class="ny-pi pend"><span class="ny-spin sm"></span>${esc(label)}: проверяю…</span>`;
-  if (!last) return `<span class="ny-pi">${esc(label)}: не проверялось</span>`;
-  const cls = last.ms == null ? "bad" : last.ms > SLOW_MS ? "slow" : "ok";
-  return `<span class="ny-pi ${cls}">${esc(label)}: <b>${last.ms == null ? "нет ответа напрямую" : esc(durText(last.ms))}</b> <em>${esc(ageText(Date.now(), last.t))}</em></span>`;
+  if (isPending(url, path)) return `${label}: проверяю…`;
+  if (!last) return `${label}: не проверялось`;
+  return `${label}: ${last.ms == null ? "нет ответа напрямую" : durText(last.ms)}, ${ageText(Date.now(), last.t)}`;
 }
 function statusHtml() {
   const now = Date.now();
-  let left;
   if (loadNow) {
     const sec = Math.max(0, Math.round((now - loadNow.since) / 1000));
     const fail = loadNow.tried.length ? `${loadNow.tried.includes("pc") ? "Напрямую не получилось — " : "Через сервер не получилось — "}` : "";
-    left = `<span class="ny-spin"></span><span>${esc(fail)}Загружаю ${esc(loadNow.what)} · ${esc(pathLabel(loadNow.path, loadNow.via))} · ${sec} с</span>`;
-  } else if (lastLoad) {
-    left = lastLoad.ok
-      ? `<i class="ok"></i><span>${esc(lastLoad.what)} загружена за <b>${esc(durText(lastLoad.ms))}</b> · ${esc(pathLabel(lastLoad.path, lastLoad.via))} · ${esc(hostOf(lastLoad.url))} · ${esc(ageText(now, lastLoad.at))}</span>`
-      : `<i class="bad"></i><span>${esc(lastLoad.what)} не загрузилась · ${esc(pathLabel(lastLoad.path, lastLoad.via))} · ${esc(ageText(now, lastLoad.at))}</span>`;
-  } else {
-    left = `<i></i><span>Загрузка ещё не выполнялась</span>`;
+    return `<span class="ny-spin"></span><span>${esc(fail)}Загружаю ${esc(loadNow.what)} · ${esc(pathLabel(loadNow.path, loadNow.via))} · ${sec} с</span>`;
   }
-  const base = prefs.base;
-  return `${left}<span class="ny-sp"></span><span class="ny-pis">${pingInline(base, "pc", "ПК")}${pingInline(base, "server", `Сервер · ${exitName("nyaa")}`)}</span>`;
+  if (lastLoad) {
+    return lastLoad.ok
+      ? `<i class="ok"></i><span>${esc(lastLoad.what)} обновлена ${esc(ageText(now, lastLoad.at))} · <b>${esc(durText(lastLoad.ms))}</b></span>`
+      : `<i class="bad"></i><span>${esc(lastLoad.what)} не загрузилась · ${esc(pathLabel(lastLoad.path, lastLoad.via))} · ${esc(ageText(now, lastLoad.at))}</span>`;
+  }
+  return `<i></i><span>Загрузка ещё не выполнялась</span>`;
+}
+function statusTitle() {
+  const lines = [];
+  if (lastLoad && lastLoad.ok) lines.push(`${lastLoad.what}: ${durText(lastLoad.ms)} · ${pathLabel(lastLoad.path, lastLoad.via)} · ${hostOf(lastLoad.url)}`);
+  lines.push(pingText(prefs.base, "pc", "ПК"), pingText(prefs.base, "server", `Сервер · ${exitName("nyaa")}`));
+  lines.push("Нажмите, чтобы открыть «Источники и зеркала»");
+  return lines.join("\n");
 }
 function paintStatus() {
   const el = $("#ny-status");
-  if (el) el.innerHTML = statusHtml();
+  if (!el) return;
+  el.innerHTML = statusHtml();
+  el.title = statusTitle();
 }
 
 function paintSourceChip() {
@@ -690,8 +699,6 @@ function paintList() {
   bar.hidden = !selected.size;
   const all = $("#ny-all");
   if (all) all.checked = !!list.length && list.every(i => selected.has(i.id));
-  const upd = $("#ny-upd");
-  if (upd) upd.textContent = fetchedAt ? `обновлено ${relTime(fetchedAt)}` : "";
   loadListCovers();
   const sb = $('[data-toggle="onlySeadex"]');
   if (sb) { sb.textContent = sdLabel(); sb.classList.toggle("dim", !sdCount()); }

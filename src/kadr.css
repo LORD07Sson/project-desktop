@@ -1861,13 +1861,15 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-flt-btn { border-radius: 6px; height: 28px; }
 .ny-status { padding: 6px 10px; margin: 0 0 8px; border: 0; border-radius: 6px; background: var(--n-hover); font-size: 12px; color: var(--n-t2); }
 .ny-status:hover { background: var(--n-press); }
-.ny-sel-all { font-size: 12px; color: var(--n-t3); margin: 8px 0 4px; }
+.ny-sel-all { justify-content: flex-start; font-size: 12px; color: var(--n-t3); margin: 8px 0 4px; }
 
 /* таблица раздач */
 .ny-list { gap: 0; }
-.ny-head, .ny-row { grid-template-columns: 24px 40px minmax(0, 1fr) 112px 168px 64px; gap: 0 12px; }
-.ny-head { display: grid; align-items: center; padding: 0 8px; height: 32px; font-size: 12px; color: var(--n-t3); border-bottom: 1px solid var(--n-line); position: sticky; top: 0; background: var(--bg, #0f0a08); z-index: 2; }
-.ny-head .r { display: flex; justify-content: flex-end; gap: 12px; }
+/* размер · дата · ↑ · ↓ · ✓ — пять отдельных колонок; заголовок (nyaa.js listHtml) идёт по той же сетке */
+.ny-head, .ny-row { grid-template-columns: 24px 40px minmax(0, 1fr) 72px 84px 56px 48px 60px 56px; gap: 0 10px; }
+/* Липкие заголовок и подпись дня — стекло в тон фона, а не сплошная чёрная полоса поверх полупрозрачной страницы */
+.ny-head { display: grid; align-items: center; padding: 0 8px; height: 32px; font-size: 12px; color: var(--n-t3); border-bottom: 1px solid var(--n-line); position: sticky; top: 0; background: color-mix(in srgb, var(--bg, #0f0a08) 55%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 2; }
+.ny-head .r { justify-self: end; text-align: right; }
 .ny-h2 { cursor: default; }
 .ny-sorth { border: 0; background: none; padding: 0; font: inherit; color: var(--n-t3); cursor: pointer; white-space: nowrap; }
 .ny-head span { white-space: nowrap; }
@@ -1894,14 +1896,16 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-tags i.ok svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .ny-tags i.warn { color: #e58a8a; background: none; }
 .ny-tags i.sd-b { color: #7cc8ff; } .ny-tags i.sd-a { color: #e8b565; } .ny-tags i.have-i { color: #8fd8a0; }
-.ny-meta { text-align: right; }
+/* обёртки .ny-meta/.ny-health/.ny-nums растворяются: их дети становятся ячейками сетки строки */
+.ny-meta, .ny-health, .ny-nums { display: contents; }
+.ny-meta b, .ny-meta span, .ny-nums span { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ny-meta b { font-size: 13px; font-weight: 500; }
 .ny-meta span { font-size: 12px; color: var(--n-t3); }
 .ny-bar-bg { display: none; }
-.ny-health { display: block; }
-.ny-nums { justify-content: flex-end; gap: 12px; font-size: 13px; }
+.ny-nums span { font-size: 13px; }
 .ny-nums .se { color: var(--n-t1); font-weight: 500; } .ny-nums .le, .ny-nums .dl { color: var(--n-t3); font-weight: 400; }
-.ny-act { opacity: 0; justify-content: flex-end; gap: 0; transition: opacity .1s; }
+/* кнопки строки видны всегда, но приглушённо — колонка справа не выглядит пустой полосой */
+.ny-act { opacity: .3; justify-content: flex-end; gap: 0; transition: opacity .1s; }
 .ny-row:hover .ny-act, .ny-row.sel .ny-act, .ny-row:focus-within .ny-act { opacity: 1; }
 .ny-grp { border-radius: 8px; background: transparent; border: 1px solid var(--n-line); margin-bottom: 8px; }
 .ny-more-wrap { margin-top: 8px; }
@@ -1979,8 +1983,12 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-side-btn .ny-badge:empty { display: none; }
 .ny-main-col { min-width: 0; }
 .ny-main-col .ny-search { margin-bottom: 8px; }
-.ny-day { position: sticky; top: 32px; z-index: 1; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; color: var(--n-t2); background: var(--bg, #0f0a08); }
+.ny-day { position: sticky; top: 32px; z-index: 1; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; color: var(--n-t2); background: color-mix(in srgb, var(--bg, #0f0a08) 55%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--n-line); }
 .ny-head { top: 0; }
+@media (max-width: 900px) {
+  .ny-head, .ny-row { grid-template-columns: 24px 40px minmax(0, 1fr) 56px; }
+  .ny-head > :nth-child(n+4):not(:last-child), .ny-meta, .ny-health { display: none; }
+}
 .ny-hero { margin-bottom: 16px; }
 @media (max-width: 900px) {
   .ny-layout { grid-template-columns: 1fr; }
