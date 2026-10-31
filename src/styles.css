@@ -4463,6 +4463,7 @@ body.focus-mode .report-detail-overlay .sheet {
 .a3-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 10px; align-items: start; }
 .a3-tcard { display: flex; flex-wrap: wrap; gap: 14px; padding: 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
 .a3-tcard.unbound { border-style: dashed; }
+.bcell.a3-still { animation: none; opacity: 1; }
 .a3-tposter { width: 74px; height: 104px; flex: none; border-radius: 9px; overflow: hidden; background: color-mix(in srgb, var(--ink-dim) 18%, var(--surface)); display: grid; place-items: center; }
 .a3-tposter img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .a3-tposter span { font-size: 28px; font-weight: 800; color: var(--ink-dim); }

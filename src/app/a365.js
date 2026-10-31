@@ -508,11 +508,21 @@ function paint(root) {
   const focused = document.activeElement && document.activeElement.id === "a3-query" ? document.activeElement.selectionStart : null;
   const speed = d.speed && d.speed.best ? `до ${Math.round(d.speed.best)} Мбит/с` : "замер при первой заливке";
   const newer = every.filter(it => kindOf(it) === "newer").length;
+  // Страница перерисовывается целиком (щелчок по серии, фильтр, поиск): уже загруженные постеры переносим
+  // в новую разметку, иначе каждая картинка на миг пустеет и экран моргает.
+  // Анимация появления блока (bcell-in) — только при первом показе, а не на каждой перерисовке.
+  const again = !!root.querySelector(".a3-card");
+  const posters = new Map();
+  for (const img of root.querySelectorAll("img[src]")) {
+    if (!img.complete || !img.naturalWidth) continue;
+    const src = img.getAttribute("src");
+    posters.set(src, [...(posters.get(src) || []), img]);
+  }
   root.innerHTML = `
     <div class="page-header">
       <div><span class="kd-label">Публикация · smotret-anime.org</span><h1>Anime 365</h1></div>
     </div>
-    <div class="bcell a3-card">
+    <div class="bcell a3-card${again ? " a3-still" : ""}">
       <div class="a3-hero">
         <div class="a3-acc ${acc.ok ? "ok" : "bad"}"><i></i><div>
           <b>${acc.ok ? `Аккаунт ${esc(acc.name || "")}` : "Нет входа на 365"}</b>
@@ -532,6 +542,10 @@ function paint(root) {
       ${filtersHtml(tabs, view, "a3-view").replace("a3-filters", "a3-filters a3-tabs")}
       <div class="a3-body">${view === "finals" ? finalsHtml(d) : view === "archive" ? archiveHtml(d) : manualHtml()}</div>
     </div>`;
+  for (const img of root.querySelectorAll("img[src]")) {
+    const old = (posters.get(img.getAttribute("src")) || []).shift();
+    if (old) { old.className = img.className; img.replaceWith(old); }
+  }
   if (focused != null) {
     const input = root.querySelector("#a3-query");
     if (input) { input.focus(); input.setSelectionRange(focused, focused); }
