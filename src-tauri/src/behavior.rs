@@ -29,6 +29,9 @@ const CPU_ALERT_PERCENT: f32 = 25.0; // от всего процессора
 const NET_EVERY: u64 = 3; // раз в 3 выборки (15 с)
 const AUTORUN_EVERY: u64 = 24; // раз в 2 минуты
 const MAX_SIGCHECKS_PER_CYCLE: usize = 2;
+/// Одно и то же правило по одной и той же программе — не чаще раза в 10 минут. id тревоги содержит PID, а
+/// у каждого запуска он новый: без паузы скрипт, который дёргает powershell -EncodedCommand в цикле, давал тост на каждый вызов.
+const REPEAT_SECS: u64 = 600;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static STOP: AtomicBool = AtomicBool::new(false);
@@ -198,6 +201,8 @@ pub struct Evaluator {
     /// exe → подписан ли (true = подпись Windows подтверждена). Нет записи — ещё не проверяли.
     pub signed: HashMap<String, bool>,
     fired: HashSet<String>,
+    /// «правило:программа» → когда последний раз показали (см. REPEAT_SECS).
+    last_shown: HashMap<String, u64>,
     pub trusted: HashSet<String>,
 }
 
@@ -208,10 +213,16 @@ impl Evaluator {
     }
 
     fn once(&mut self, a: Alert) -> Option<Alert> {
-        if self.fired.insert(a.id.clone()) {
-            Some(a)
-        } else {
-            None
+        if !self.fired.insert(a.id.clone()) {
+            return None;
+        }
+        let key = format!("{}:{}", a.rule, a.path.as_deref().map(lower).unwrap_or_else(|| stem(&a.name)));
+        match self.last_shown.get(&key) {
+            Some(&t) if a.at.saturating_sub(t) < REPEAT_SECS => None,
+            _ => {
+                self.last_shown.insert(key, a.at);
+                Some(a)
+            }
         }
     }
 
@@ -838,6 +849,25 @@ mod tests {
         assert!(lolbin_abuse("certutil.exe", "certutil -hashfile a.exe SHA256").is_none());
         assert!(lolbin_abuse("mshta.exe", "mshta http://x/a.hta").is_some());
         assert!(lolbin_abuse("notepad.exe", "notepad a.txt").is_none());
+    }
+
+    #[test]
+    fn repeated_lolbin_from_new_pids_is_throttled() {
+        let mut ev = Evaluator::default();
+        let ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+        let mut run = |pid| {
+            let mut x = s("powershell.exe", ps, "powershell -NoProfile -EncodedCommand SQBFAFgA", "node.exe", 1.0);
+            x.pid = pid;
+            ev.evaluate(&x)
+        };
+        assert_eq!(run(1).len(), 1);
+        // каждый вызов — новый PID, но это та же программа и то же правило: второй тост не нужен
+        for pid in 2..30 {
+            assert!(run(pid).is_empty());
+        }
+        let mut cert = s("certutil.exe", "C:\\Windows\\System32\\certutil.exe", "certutil -urlcache -f http://x/a.exe a.exe", "cmd.exe", 1.0);
+        cert.pid = 31;
+        assert_eq!(ev.evaluate(&cert).len(), 1); // другая программа — свой тост
     }
 
     #[test]
