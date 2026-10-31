@@ -270,7 +270,7 @@ export function boardCardHtml(c, status) {
          data-open="${esc(c.publicId)}" data-id="${esc(c.publicId)}" data-status="${esc(status)}"
          style="--accent-dot: var(${STATUS_COLOR_VAR[status] || "--s-draft"});${doom ? doomCardStyle(doom) : ""}">
       ${doom && doom.level >= 1 ? deadFxHtml(c.publicId) : ""}
-      ${c.priority === "urgent" ? `<i class="kc-flag" title="Срочно"></i>` : ""}
+      ${c.priority === "urgent" && !closed ? `<i class="kc-flag" title="Срочно"></i>` : ""}
       ${posterHtml}
       <span class="kc-id">${esc(c.publicId)}${parts.ep ? ` · ${esc(parts.ep.replace("серия ", "EP "))}` : ""}</span>
       <b class="ttl">${esc(parts.name)}</b>
@@ -566,8 +566,9 @@ function boardToolbarHtml() {
 
 function columnHtml(col, collapsed, expanded, folded) {
   const colorVar = STATUS_COLOR_VAR[col.status] || "--s-draft";
-  // Широкая колонка (много карточек) раскладывает их в два ряда.
-  const wide = col.cards.length >= 4;
+  // Широкая колонка (много карточек) раскладывает их в два ряда. Закрытые серии место не отбирают:
+  // «Завершено» и «Отменено» всегда в один ряд, ширина — тем, что в работе.
+  const wide = col.cards.length >= 4 && col.status !== "completed" && col.status !== "cancelled";
   const isFolded = folded.has(col.status);
   return `
     <div class="board-col ${isCollapsed(col, collapsed, expanded) ? "collapsed" : ""}${col.overWip ? " over-wip" : ""}${wide ? " wide" : ""}${isFolded ? " folded" : ""}"
@@ -575,7 +576,7 @@ function columnHtml(col, collapsed, expanded, folded) {
       <div class="board-col-head" data-fold="${esc(col.status)}" role="button" tabindex="0" aria-expanded="${isFolded ? "false" : "true"}" title="${isFolded ? "Показать карточки" : "Скрыть карточки"}">
         <svg class="board-col-fold" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
         <span class="lb" title="${esc(cleanLabel(col.label))}"><span class="dot ${STATUS_DOT_CLASS[col.status] || "draft"}"></span>${esc(cleanLabel(col.label).split("/")[0])}</span>
-        <span class="cnt${col.overWip ? " over" : ""}" title="${col.overWip ? `Серий в этом статусе больше, чем ${col.wipLimit} — команда может не успевать` : "Всего в статусе"}">${col.total}${col.overWip ? ` · больше ${col.wipLimit}` : ""}</span>
+        <span class="cnt${col.overWip ? " over" : ""}" title="${col.overWip ? `Серий в этом статусе больше, чем ${col.wipLimit} — команда может не успевать` : "Всего в статусе"}">${col.total}${col.overWip ? ` · лимит ${col.wipLimit}` : ""}</span>
         <button class="board-col-collapse" data-collapse="${esc(col.status)}" title="Свернуть/развернуть колонку" aria-label="Свернуть/развернуть колонку"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
       </div>
       <div class="board-cards" data-count="${col.cards.length}">

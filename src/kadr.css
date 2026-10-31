@@ -799,7 +799,8 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .kc-ft .avatar-bubble:first-child { margin-left: 0; }
 :root[data-theme="light"] .kc-ft .avatar-bubble { box-shadow: 0 0 0 2px #fff; }
 .kc-none { font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
-.kc-flag { position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--fire); box-shadow: 0 0 0 3px rgba(var(--fire-rgb), .18); }
+/* «Срочно» — тёплая точка: синий акцент темы читался как «непрочитано». */
+.kc-flag { position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--s-work); box-shadow: 0 0 0 3px color-mix(in srgb, var(--s-work) 22%, transparent); }
 :root[data-theme="light"] .board-card { background: rgba(255, 255, 255, .75); }
 :root[data-theme="light"] .kc-ft .board-card-progress-track { background: rgba(80, 40, 20, .08); }
 .board-top-row { margin-bottom: 16px; }

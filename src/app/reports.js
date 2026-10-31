@@ -286,15 +286,24 @@ export function listNeighbors(publicId) {
 // «Фрирен 2, серия 7» → имя тайтла + «серия 7» отдельно. Если отчёт
 // привязан к тайтлу (title_name), имя берём оттуда, а свободный текст
 // отчёта остаётся подписью — у старых отчётов он бывает любым.
+// Серию в названии пишут по-разному: «Фрирен, серия 7», «Кредит - 05»,
+// «5 серия», «серия 5» — все дают номер (без ведущих нулей).
+const EP_FORMS = [
+  /^(.*?)[,\s—–-]+(?:серия|эп\.?|ep\.?)\s*(\d+)\s*$/i,
+  /^(.*?)\s[—–-]\s*(\d+)\s*$/,
+  /^()(\d+)(?:-?я)?\s*серия\s*$/i,
+  /^()(?:серия|эп\.?|ep\.?)\s*(\d+)\s*$/i,
+];
 export function seriesParts(r) {
   const raw = String(r.title || "").trim();
-  const m = raw.match(/^(.*?)[,\s—-]+(серия|эп\.?|ep\.?)\s*(\d+)\s*$/i);
+  const m = EP_FORMS.map(re => raw.match(re)).find(Boolean);
+  const num = m ? Number(m[2]) : null;
   if (r.title_name) {
-    const ep = r.episode ? `серия ${r.episode}` : m ? `серия ${m[3]}` : "";
-    const sub = m && m[1].trim() === r.title_name ? "" : (m ? "" : raw);
+    const ep = r.episode ? `серия ${r.episode}` : m ? `серия ${num}` : "";
+    const sub = m ? "" : raw;
     return { name: r.title_name, ep, sub: sub && sub !== r.title_name ? sub : "" };
   }
-  if (m && m[1].trim()) return { name: m[1].trim(), ep: `серия ${m[3]}`, sub: "" };
+  if (m && m[1].trim()) return { name: m[1].trim(), ep: `серия ${num}`, sub: "" };
   return { name: raw || r.public_id, ep: "", sub: "" };
 }
 
