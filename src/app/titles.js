@@ -249,14 +249,15 @@ function votesWord(n) {
   return "голосов";
 }
 
-function voteCardHtml(t, rank, isLeader) {
+// showWork — метка «В работе» различает карточки, только когда в работе не все: если взяты все 12 из 12, она шум.
+function voteCardHtml(t, rank, isLeader, showWork = true) {
   const posterSrc = imgProxy(t.poster_url);
   const pct = approvalPct(t);
   const total = voteActivity(t);
   return `
     <div class="af-card${isLeader ? " lead" : ""}${t.in_work ? " in-work" : ""}" data-open-title-detail="${t.id}" data-af="${t.id}">
       ${posterSrc ? `<img class="af-poster" ${hdPosterAttrs(t.id, t.poster_url, 320)} alt="" loading="lazy">` : `<div class="af-poster af-poster-ph">🎬</div>`}
-      <div class="af-tags">${isLeader ? `<span class="af-tag lead">★ Лидер</span>` : ""}${t.in_work ? `<span class="af-tag work">● В работе</span>` : ""}</div>
+      <div class="af-tags">${isLeader ? `<span class="af-tag lead">★ Лидер</span>` : ""}${t.in_work && showWork ? `<span class="af-tag work">● В работе</span>` : ""}</div>
       <span class="af-rank">${rank}</span>
       <div class="af-body">
         <h3 class="af-name">${esc(t.name)}</h3>
@@ -452,7 +453,7 @@ function renderTitlesBody(wrap) {
     ? `<button type="button" class="af-add" data-af-add><b>＋</b><span>Добавить тайтл</span><em>сезоны и тайтлы — в «Управлении»</em></button>` : "";
   wrap.innerHTML = voteHeroHtml(currentTitles, currentSeasonName) + toolbarHtml() + (!shown.length ? empty : view === "table"
     ? titlesTableHtml(shown)
-    : `<div class="af-grid">${shown.map(t => voteCardHtml(t, rankOf.get(t.id), t.id === leader)).join("")}${addCard}</div>`);
+    : `<div class="af-grid">${shown.map(t => voteCardHtml(t, rankOf.get(t.id), t.id === leader, !shown.every(x => x.in_work))).join("")}${addCard}</div>`);
   wrap.querySelector("[data-af-add]")?.addEventListener("click", () => openSeasonsAdminSheet(() => loadTitlesTab()));
   if (rospisTitles.length) {
     const bar = document.createElement("div");

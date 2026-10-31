@@ -117,6 +117,13 @@ function chatAvatarHtml(c, lg) {
   return `<span class="ms-chat-av${cls}">${HASH_ICON}</span>`;
 }
 
+// Сервер подписывает «ID 5418693033» того, кого уже нет в команде (имени он не знает). Номер ничего не говорит людям —
+// пишем «не из команды», а номер оставляем в подсказке.
+function authorHtml(author) {
+  const id = /^ID (\d+)$/.exec(String(author || ""));
+  return id ? `<b class="ms-gone" title="Telegram ID ${id[1]}">не из команды</b>` : `<b>${esc(author)}</b>`;
+}
+
 function lastLine(c) {
   const l = c.last;
   if (!l) return "пока тихо";
@@ -252,7 +259,7 @@ function messagesHtml(c) {
       <div class="ms-msg ${m.mine ? "out" : "in"}${grouped ? " grouped" : ""}${m.pinned ? " pinned" : ""}" data-mid="${m.id}">
         ${m.mine ? "" : `<span class="avatar-bubble ms-av" data-avatar-for="${m.author_telegram_id || ""}"${grouped ? ' style="visibility:hidden"' : ""}>${initial(m.author)}</span>`}
         <div class="ms-msg-col">
-          ${grouped && !m.pinned ? "" : `<div class="ms-meta">${m.mine ? "" : `<b>${esc(m.author)}</b>`}<time>${hhmm(d)}</time>${m.pinned ? `<span class="ms-pinned-mark" title="Закреплено">${PIN_ICON}</span>` : ""}</div>`}
+          ${grouped && !m.pinned ? "" : `<div class="ms-meta">${m.mine ? "" : authorHtml(m.author)}<time>${hhmm(d)}</time>${m.pinned ? `<span class="ms-pinned-mark" title="Закреплено">${PIN_ICON}</span>` : ""}</div>`}
           <div class="ms-bubble-row">
             <div class="ms-bubble${m.attach ? " has-att" : ""}${m.attach && !m.text ? " att-only" : ""}">${m.reply ? `<button type="button" class="ms-quote" data-goto="${m.reply.id}"><b>${esc(m.reply.author)}</b><span>${esc(m.reply.text)}</span></button>` : ""}${m.attach ? attachHtml(m.attach) : ""}${m.text ? `<div class="ms-text">${richText(m.text)}</div>` : ""}</div>
             <div class="ms-acts">

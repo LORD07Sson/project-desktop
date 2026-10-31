@@ -211,11 +211,13 @@ function ganttHtml(data) {
     const st = Math.max(0, Math.min(created, end));
     const cut = created < 0;
     const left = dayDiff(parseDay(r.deadline), today);
+    // Срок прошёл, а серия не сдана — полоса красная и говорит, на сколько опаздываем (раньше была как все).
+    const late = left < 0 && r.status !== "completed";
     const ep = epOf(r);
     const poster = r.poster_url ? mediaUrl("/img_proxy", { url: r.poster_url }) : "";
     return `<div class="kcal-r">
       <div class="kcal-who">${poster ? `<img src="${poster}" alt="" loading="lazy">` : `<span class="kcal-ph"></span>`}<div><b>${esc(seriesName(r))}</b><span>${esc(r.public_id)}${ep != null ? ` · EP ${pad2(ep)}` : ""}</span></div></div>
-      <button type="button" class="kcal-bar${cut ? " cut" : ""}${left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}"><span>${esc(stageOf(r))}</span><em></em></button>
+      <button type="button" class="kcal-bar${cut ? " cut" : ""}${late ? " late" : left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${late ? "--s-stop" : STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}"><span>${esc(stageOf(r))}${late ? ` · просрочено ${-left} дн.` : ""}</span><em></em></button>
     </div>`;
   }).join("");
   const undatedBody = undated.map(r => {

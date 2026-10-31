@@ -428,15 +428,40 @@ export function startPulse(DATA) {
     // прямоугольники подписей тайтлов — чтобы бейджи серий, имена людей и всплывашки не налезали на текст
     // сторона подписи считается здесь один раз — по ней же и рисуем, и обходим текст бейджами/всплывашками
     const titleFont = n => `600 ${Math.round(11 + 3 * n.pd)}px Segoe UI, system-ui, sans-serif`;
-    const tRects = titleNodes.map(n => {
+    // Длинное название («Я очнулся будучи пилотом…») — не шире MAX_LABEL: целиком оно перечёркивало полкарты и уходило
+    // под правую колонку. Полное — во всплывашке при наведении.
+    const MAX_LABEL = 260;
+    const fit = (txt, maxW) => {
+      if (g.measureText(txt).width <= maxW) return txt;
+      let s = txt;
+      while (s.length > 4 && g.measureText(s + "…").width > maxW) s = s.slice(0, -1);
+      return s.trimEnd() + "…";
+    };
+    const rectOf = (n, right, w, rr) => ({ x: right ? n.px + rr - 8 : n.px - rr - w, y: n.py - 18, w: w + 8, h: hasAir(n) ? 52 : 40 });
+    const hits = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    const placed = [];
+    // Подписи раскладываются по очереди: сначала горящие и самые готовые. Наехала на уже стоящую — пробуем другую сторону,
+    // не вышло — прячем подпись (узел остаётся; при наведении подпись видна всегда). Раньше они ложились друг на друга.
+    const burning = n => n.eps.some(e => late(epNodes.find(x => x.tn === n && x.e === e)));
+    const labelOrder = titleNodes.filter(n => bornK(n) > 0).sort((a, b) => (burning(b) ? 1 : 0) - (burning(a) ? 1 : 0) || b.pct - a.pct);
+    for (const n of labelOrder) {
       g.font = titleFont(n);
-      const w = Math.max(g.measureText(n.t.name).width, 150 * n.pd) + 4, rr = (10 + 7) * n.pd + 8;
+      n.lName = fit(n.t.name, MAX_LABEL * n.pd);
+      const w = Math.max(g.measureText(n.lName).width, 150 * n.pd) + 4, rr = (10 + 7) * n.pd + 8;
       let right = n.px >= CX - 10;
       if (right && n.px + rr + w > wR && n.px - rr - w >= wL) right = false;     // не под правую колонку
       else if (!right && n.px - rr - w < wL && n.px + rr + w <= wR) right = true;   // и не за левый край
+      let rect = rectOf(n, right, w, rr);
+      if (placed.some(p => hits(rect, p))) {
+        const other = rectOf(n, !right, w, rr);
+        const fits = !right ? other.x + other.w <= wR : other.x >= wL;
+        if (fits && !placed.some(p => hits(other, p))) { right = !right; rect = other; }
+      }
       n.lRight = right;
-      return { x: right ? n.px + rr - 8 : n.px - rr - w, y: n.py - 18, w: w + 8, h: hasAir(n) ? 52 : 40 };
-    });
+      n.lHidden = placed.some(p => hits(rect, p));
+      if (!n.lHidden) placed.push(rect);
+    }
+    const tRects = placed;
     const inTitle = (x, y, w = 40, h = 12) => tRects.some(r => x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y);
     // шар центра и подпись «Project · N тайтлов» — имена людей поверх них не пишем
     const inHub = (x, y, w, h) => x < CX + 200 && x + w > CX - 40 && y < CY + 40 && y + h > CY - 40;
@@ -463,8 +488,9 @@ export function startPulse(DATA) {
         if (hot) { g.strokeStyle = `rgba(255,90,100,${.45 + .35 * Math.sin(t / 260)})`; g.lineWidth = 1.4; g.beginPath(); g.arc(n.px, n.py, rr + 5 + Math.sin(t / 260) * 1.5, 0, 7); g.stroke(); }
         const nameFont = titleFont(n), right = n.lRight;
         const lx = n.px + (right ? rr + 8 : -rr - 8), al = c01((b - .4) / .6) * (.35 + .65 * dA);
+        if (n.lHidden && n.i !== hoverTitle) return;
         deferred.push(() => {
-          label(n.t.name, lx, n.py - 1, nameFont, n.i === hoverTitle ? "#ffd99a" : "#f6ece6", al * (.3 + .7 * n.alpha), right ? "left" : "right");
+          label(n.i === hoverTitle ? n.t.name : n.lName, lx, n.py - 1, nameFont, n.i === hoverTitle ? "#ffd99a" : "#f6ece6", al * (.3 + .7 * n.alpha), right ? "left" : "right");
           const sub = `${n.pct}% готово${hot ? " · просрочка" : ""}`;
           label(sub, lx, n.py + 13, `700 ${Math.round(8 + 2 * n.pd)}px ui-monospace, Consolas, monospace`, hot ? "#ff8a8a" : "#ffc46a", al * .9 * n.alpha, right ? "left" : "right");
           if (hasAir(n)) label(`${n.nextEp} серия · эфир ${airText(n.air)}`, lx, n.py + 25, `600 ${Math.round(8 + 2 * n.pd)}px Segoe UI, system-ui, sans-serif`, n.air <= 1 ? "#ffb070" : "#a8968c", al * .85 * n.alpha, right ? "left" : "right");

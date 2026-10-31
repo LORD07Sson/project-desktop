@@ -505,7 +505,7 @@ export function renderReports() {
         <div class="ls-series-in">
           <span class="ls-poster"${posterSrc(r.poster_url) ? ` style="background-image:url('${esc(posterSrc(r.poster_url))}')"` : ""}>${posterSrc(r.poster_url) ? "" : esc(initials(t.name))}</span>
           <div class="ls-names">
-            <div class="ls-name">${esc(t.name)}${t.ep ? `<span class="ls-ep">${esc(t.ep)}</span>` : ""}${priorityFlagHtml(r.priority)}</div>
+            <div class="ls-name"><span class="ls-name-t">${esc(t.name)}</span>${t.ep ? `<span class="ls-ep">${esc(t.ep)}</span>` : ""}${priorityFlagHtml(r.priority)}</div>
             <div class="ls-id"><button class="fav-star ${fav ? "on" : ""}" data-fav title="${fav ? "Убрать из избранного" : "В избранное"}">${fav ? "★" : "☆"}</button>${esc(r.public_id)}${t.sub ? ` · ${esc(t.sub)}` : ""}${r.files_count ? ` · 📎${r.files_count}` : ""}${r.notes_count ? ` · 💬${r.notes_count}` : ""}</div>
           </div>
         </div>

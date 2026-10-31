@@ -54,6 +54,7 @@ import "./lofi.js";
 import "./avatar-hover.js";
 import "./feed-badge.js";
 import "./title-hover.js";
+import "./clip-title.js";
 import "./watch.js";
 import { installLiquidNav } from "./nyaa-fx.js";
 import { startEmojiIcons } from "./icons.js";
