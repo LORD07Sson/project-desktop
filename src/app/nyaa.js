@@ -373,7 +373,7 @@ function shellHtml() {
   <div class="ny">
     <header class="ny-hero">
       <div class="ny-hero-t"><h2>Nyaa <span class="ny-beta">Beta</span></h2>
-        <p>Свежие раздачи из публичной ленты. Щелчок по строке открывает страницу раздачи (отметить — галочка слева или Shift/Ctrl + щелчок): описание, картинки, файлы.</p></div>
+        <p>Свежие раздачи из публичной ленты. Щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p></div>
       <div class="ny-stats" id="ny-stats"></div>
     </header>
     <section class="ny-sources" id="ny-sources" hidden></section>
@@ -408,7 +408,7 @@ function shellHtml() {
         </div>
         <section class="ny-filters" id="ny-filters" hidden></section>
         <div class="ny-status" id="ny-status" data-open-sources title="Нажмите, чтобы открыть «Источники и зеркала»"></div>
-        <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button><span class="ny-hint">Shift + щелчок — диапазон</span></div>
+        <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button></div>
         <div class="ny-list" id="ny-list"></div>
         <div class="ny-bar" id="ny-bar" hidden></div>
       </main>
