@@ -13,6 +13,7 @@ import { fetchReminders, openRemindersSheet } from "./reminders.js";
 import { apiGet, dialogSkeletonHtml, mediaUrl } from "./api.js";
 import { $, esc, STATUS_COLOR_VAR } from "./utils.js";
 import { openReportDetail } from "./report-detail.js";
+import { seriesParts } from "./reports.js";
 import { switchTab } from "./tabs.js";
 import { openBirthdaysSheet } from "./birthdays.js";
 
@@ -168,7 +169,8 @@ function stageOf(r) {
   return cleanLabel(r.status_label) || "";
 }
 function seriesName(r) { return r.title_name || String(r.title || "").replace(/\s*[,—–-]\s*сери[яи].*$/i, ""); }
-function epOf(r) { const m = String(r.title || "").match(/сери[яи]\s*(\d+)/i); return m ? Number(m[1]) : null; }
+// Номер серии — тем же разбором, что на «Доске» и в «Списке»: отчёты пишут и «4 серия», и «Кредит - 05».
+function epOf(r) { const m = /(\d+)$/.exec(seriesParts(r).ep); return m ? Number(m[1]) : null; }
 function dueWords(n) { return n < 0 ? "просрочено" : n === 0 ? "сегодня" : n === 1 ? "завтра" : `через ${n} дн.`; }
 
 function headerHtml() {

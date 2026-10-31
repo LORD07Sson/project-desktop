@@ -929,6 +929,12 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .statusbar { border-top: 0; background: transparent; color: var(--ink-dim); padding: 10px 4px 14px; }
 .tab-panel[data-panel="list"] .statusbar { color: var(--ink-soft); }
 @media (max-width: 1100px) { .tab-panel[data-panel="list"] .col-prog, .tab-panel[data-panel="list"] .ls-prog { display: none; } }
+/* Узкое окно (от 760 px): «Срок» и кнопки не сжимаются и раньше съедали всю ширину — у «Серии» оставался один постер,
+ * а названий не было видно вовсе. Даём названию минимум и убираем «Этап» и быстрые кнопки (всё это есть в карточке серии). */
+@media (max-width: 900px) {
+  .tab-panel[data-panel="list"] .content td.ls-series, .content td.ls-series { min-width: 200px; }
+  .tab-panel[data-panel="list"] [data-list-col="stage"], .tab-panel[data-panel="list"] [data-list-col="actions"] { display: none; }
+}
 
 /* ================================================================
    Общие чипы и переключатели старых экранов — под «Кадр»
