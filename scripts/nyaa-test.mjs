@@ -258,6 +258,15 @@ console.log("nyaa-test: ok");
   // название «иероглифы / английское / ромадзи»: ищем по латинскому варианту
   assert.equal(coverKey("[LoliHouse] 与暗黑召唤师秘密恋爱中(无修版) / Dark Summoner to Dekiteiru (UNCENSORED) - 03 [WebRip 1080p HEVC-10bit AAC][无字幕]"), "dark summoner to dekiteiru");
   assert.equal(coverKey("[ANi] Ao Ashi S02 / 青之蘆葦 第二季 - 03 [1080P][Baha][WEB-DL]"), "ao ashi");
+  // строки, оставшиеся без обложки в живой ленте: дефис после группы, четырёхзначная серия, пачка, «20th Remaster»
+  assert.equal(coverKey("[Doomdos] - Meitantei Conan - S01E1278 [Chinese Dub] [1080p BILIBILI COM WEB-DL] [Case Closed]"), "meitantei conan");
+  assert.equal(coverKey("[Doomdos] - Jueshi Zhan Hun - S02E37 [1080p IQIYI WEB-DL] [Super Heroic Spirit]"), "jueshi zhan hun");
+  assert.equal(coverKey("[NanakoRaws] Bleach Sennen Kessen-hen 41-50 (TVA TV 1080p HEVC AAC)"), "bleach sennen kessen-hen");
+  assert.equal(coverKey("[JibaRAWS] Yu-Gi-Oh! Duel Monsters GX 20th Remaster - 081 (TX 1280x720) (Yugioh)"), "yu-gi-oh! duel monsters gx");
+  const { coverAltKeys } = await import("../src/app/nyaa-core.js");
+  assert.deepEqual(coverAltKeys("[ToonsHub] Little Mouses Red Vest S01E18 1080p AMZN WEB-DL DDP2.0 H.264 (Nezumi-kun no Chokki (TV))"), ["nezumi-kun no chokki"]);
+  assert.deepEqual(coverAltKeys("[Gecko] Babies of Bread - S01E18 (パンの赤ちゃん; Pan no Akachan (TV)) [TVER.WEB-DL 1080P AVC, AAC]"), ["pan no akachan"]);
+  assert.deepEqual(coverAltKeys("[SubsPlease] Sousou no Frieren - 05 (1080p) [ABC]"), [], "техтеги в скобках — не название");
 }
 
 {

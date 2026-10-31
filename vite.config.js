@@ -25,6 +25,11 @@ export default defineConfig({
   build: {
     outDir: "../dist",
     emptyOutDir: true,
+    // Программа живёт только в WebView2 (Chromium, Windows). Минификатор (lightningcss) сводил пару
+    // «backdrop-filter + -webkit-backdrop-filter» к одному префиксному варианту, которого Chromium не понимает, —
+    // стеклянное размытие молча пропадало в 44 местах (шапка Nyaa просвечивала строками). Поэтому в исходниках
+    // пишем только backdrop-filter без префикса, а цель — Chromium, чтобы префикс не дописывался обратно.
+    cssTarget: "chrome120",
     // Второй вход — src/pin.html (окно «📌 Открепить в окне», см.
     // src-tauri/src/main.rs нет, чисто JS/Rust-multiwebview: окно
     // создаёт WebviewWindow из app/tauri.js). Без явного input сюда

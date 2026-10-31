@@ -30,7 +30,7 @@ import {
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
-  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey,
+  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey, coverAltKeys,
   seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
   parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, libraryKeys,
 } from "./nyaa-core.js";
@@ -248,16 +248,27 @@ function paintCover(key) {
   });
 }
 
-async function fetchCover(key) {
+// «Не нашлось» помним 3 дня, а не навсегда: новый тайтл появляется на AniList через день-другой после премьеры,
+// а раньше один промах оставлял строку без обложки насовсем. Старое «» (до этой правки) считаем просроченным.
+const MISS_TTL = 3 * 24 * 3600_000;
+const missedRecently = v => typeof v === "string" && v.startsWith("miss:") && Date.now() - Number(v.slice(5)) < MISS_TTL;
+const hasUrl = v => typeof v === "string" && v.startsWith("https://");
+
+async function fetchCover(key, alts = []) {
   if (coverBusy.has(key) || coverData.has(key)) return;
   coverBusy.add(key);
   try {
     let url = coverUrls[key];
-    if (url === undefined) {
-      url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s: key } }));
-      coverUrls[key] = url; saveCovers();
+    if (!hasUrl(url) && !missedRecently(url)) {
+      url = "";
+      // по основному названию, потом по запасным из скобок («(Nezumi-kun no Chokki (TV))»)
+      for (const s of [key, ...alts]) {
+        url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s } }));
+        if (url) break;
+      }
+      coverUrls[key] = url || `miss:${Date.now()}`; saveCovers();
     }
-    if (url) { coverData.set(key, await fetchPic(url)); paintCover(key); }
+    if (hasUrl(url)) { coverData.set(key, await fetchPic(url)); paintCover(key); }
   } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
   coverBusy.delete(key);
 }
@@ -267,11 +278,14 @@ async function loadListCovers() {
   if (coverQueueOn) return;
   coverQueueOn = true;
   try {
-    const vis = view().slice(0, 60);
+    // Вся лента, а не первые 60 строк: раньше всё, что ниже, так и оставалось со значком.
+    const vis = view();
     const isAudio = i => categoryKind(i.categoryId) === "audio";
-    const keys = [...new Set(vis.filter(i => !isAudio(i)).map(i => coverKey(i.title)).filter(k => k && !coverData.has(k) && coverUrls[k] !== ""))].slice(0, 30);
+    const altsOf = new Map();
+    for (const i of vis) if (!isAudio(i)) { const k = coverKey(i.title); if (k && !altsOf.has(k)) altsOf.set(k, coverAltKeys(i.title)); }
+    const keys = [...altsOf.keys()].filter(k => !coverData.has(k) && !missedRecently(coverUrls[k])).slice(0, 80);
     const thumbs = vis.filter(i => isAudio(i) && !thumbData.has(i.id) && thumbUrls[i.id] !== "").slice(0, 30);
-    const jobs = [...keys.map(k => () => fetchCover(k)), ...thumbs.map(i => () => fetchThumb(i))];
+    const jobs = [...keys.map(k => () => fetchCover(k, altsOf.get(k))), ...thumbs.map(i => () => fetchThumb(i))];
     let next = 0;
     const worker = async () => { while (next < jobs.length) await jobs[next++](); };
     await Promise.all([worker(), worker()]);

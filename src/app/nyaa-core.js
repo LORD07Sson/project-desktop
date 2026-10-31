@@ -462,12 +462,31 @@ function fmtBytesEn(b) {
 export function cleanTitleForSearch(title) {
   let t = String(title || "");
   t = t.replace(/^\s*\[[^\]]*\]\s*/, "");                 // [Группа]
+  t = t.replace(/^[\s\-–—]+/, "");                          // «[Doomdos] - Meitantei Conan»: дефис после группы
   t = t.replace(/[[(][^\])]*[\])]/g, " ");                 // любые скобки: [FLAC], (1080p), [ABCD1234]
   t = t.replace(/\.(mkv|mp4|avi|flac|mp3|zip|rar|7z)$/i, " ");
   t = t.replace(/\b(\d{3,4}p|HEVC|x26[45]|AVC|AV1|FLAC|BD(?:Rip)?|WEB(?:-?DL|Rip)?|Batch|Remux|Dual[- ]Audio|Multi[- ]?Subs?)\b/gi, " ");
   t = t.replace(/\s-\s*\d{1,3}(v\d)?\b.*$/i, " ");        // « - 09»
-  t = t.replace(/\bS\d{1,2}E\d{1,3}\b.*$/i, " ");          // S02E05
-  return t.replace(/[_.]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+  t = t.replace(/\bS\d{1,2}E\d{1,4}\b.*$/i, " ");          // S02E05, у долгих сериалов S01E1278
+  t = t.replace(/\s\d{1,4}\s*[-~]\s*\d{1,4}\s*$/, " ");    // пачка серий: «Bleach Sennen Kessen-hen 41-50»
+  // хвост-разделитель, оставшийся от отрезанной серии: «Meitantei Conan -»
+  return t.replace(/[_.]+/g, " ").replace(/\s+/g, " ").trim().replace(/[\s\-–—:,]+$/, "").slice(0, 120);
+}
+
+/** Запасные названия для поиска обложки: в скобках раздачи часто стоит ромадзи — «Little Mouses Red Vest (Nezumi-kun no Chokki (TV))». */
+export function coverAltKeys(title) {
+  const out = [];
+  for (const m of String(title || "").matchAll(/\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g)) {
+    // Части через «,» и «;» по отдельности: «Romelia Senki: …, Japanese Sub» — техтег отбрасываем,
+    // «パンの赤ちゃん; Pan no Akachan» — берём латинскую часть. Одиночные слова названием не считаем.
+    const tech = /\b(\d{3,4}p|sub|subs|dub|hevc|avc|aac|web|batch)\b/i;
+    for (const part of m[1].replace(/\([^()]*\)/g, " ").split(/[;,]/)) {
+      const alt = part.replace(/\s+/g, " ").trim();
+      if (tech.test(alt) || alt.split(" ").length < 2 || !/[A-Za-z]{3,}/.test(alt) || /[぀-ヿ㐀-鿿]/.test(alt)) continue;
+      out.push(alt.toLowerCase().slice(0, 80));
+    }
+  }
+  return out;
 }
 
 export const SIMILAR_QUERY = `query($s:String){Media(search:$s,type:ANIME){id siteUrl format seasonYear averageScore genres title{romaji english native} coverImage{medium}
@@ -489,11 +508,12 @@ export const coverKey = title => {
   const r = parseRelease(title);
   const base = r.episode != null && r.show ? r.show : cleanTitleForSearch(title);
   // «Китайское / английское / ромадзи» название: ищем по латинскому варианту — AniList не находит ряд из иероглифов и слэшей
-  let text = String(base || "").replace(/：/g, ":");
+  let text = String(base || "").replace(/：/g, ":").replace(/^[\s\-–—]+/, "");   // «[Doomdos] - Jueshi Zhan Hun»
   if (/\s[/|]\s/.test(text)) {
     const latin = text.split(/\s[/|]\s/).map(x => x.trim()).find(x => /[A-Za-z]{3,}/.test(x) && !/[぀-ヿ㐀-鿿]/.test(x));
     if (latin) text = latin.replace(/\s+s\d+$/i, "");
   }
+  text = text.replace(/\b\d+(st|nd|rd|th)\s+remaster(ed)?\b|\bremaster(ed)?\b/gi, " ");   // «Yu-Gi-Oh! … GX 20th Remaster» — на AniList без пометки
   return text.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 80);
 };
 
