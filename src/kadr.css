@@ -1985,6 +1985,25 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-main-col .ny-search { margin-bottom: 8px; }
 .ny-day { position: sticky; top: 32px; z-index: 1; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; color: var(--n-t2); background: color-mix(in srgb, var(--bg, #0f0a08) 55%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--n-line); }
 .ny-head { top: 0; }
+/* «Источники и зеркала» */
+/* Карточки разной высоты (у Nyaa шесть зеркал, у AniList два) — колонками «кирпичиками», без общей высоты ряда:
+   иначе под короткими карточками оставались дыры в пол-экрана. */
+.ny-src-grid { display: block; columns: 3 340px; column-gap: 12px; }
+.ny-src-grid > .ny-svc { break-inside: avoid; margin: 0 0 12px; width: 100%; }
+/* Колонки зеркал фиксированной ширины во всех карточках: раньше последняя была auto, и цифры у строк с разным
+   числом кнопок (активное зеркало — одна, остальные — две, свои — три) съезжали. */
+.ny-mir2, .ny-cols { grid-template-columns: 10px minmax(0, 1fr) 64px 64px 60px; }
+.ny-svc.wide-act .ny-mir2, .ny-svc.wide-act .ny-cols { grid-template-columns: 10px minmax(0, 1fr) 64px 64px 88px; }
+.ny-cols span:nth-child(3), .ny-cols span:nth-child(4) { text-align: right; }
+.ny-c { justify-content: flex-end; text-align: right; }
+.ny-c.has-ping { align-items: flex-end; }
+.ny-mir2-t b { white-space: normal; }   /* «minitg…:84…» — порт важнее всего: не обрезаем, переносим по точкам и перед портом (<wbr>) */
+.ny-mir2-a .ny-ib { color: var(--n-t2); }
+.ny-top.busy b { color: var(--n-t1); }
+.ny-top > .ny-spin { flex: none; }
+.ny-info { margin-left: 6px; text-decoration: underline dotted; text-underline-offset: 3px; color: var(--n-t2); cursor: help; white-space: nowrap; }
+@media (max-width: 760px) { .ny-mir2, .ny-cols, .ny-svc.wide-act .ny-mir2, .ny-svc.wide-act .ny-cols { grid-template-columns: 10px minmax(0, 1fr) 56px 56px auto; } }
+
 @media (max-width: 900px) {
   .ny-head, .ny-row { grid-template-columns: 24px 40px minmax(0, 1fr) 56px; }
   .ny-head > :nth-child(n+4):not(:last-child), .ny-meta, .ny-health { display: none; }
@@ -4496,7 +4515,11 @@ td.row-actions { opacity: 1; transition: none; }
    (#app-backdrop, z 0) и под окном приложения (z 1), видны сквозь стекло. Свечение сезона по краям — ::before. */
 .season-fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 .season-fx[hidden] { display: none; }
-.season-fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Частицы (летучие мыши, снег, листья) видны только на полях: колонка контента (~1280 px по центру) их гасит.
+   Окно стеклянное — без этого мыши летали прямо по цифрам таблиц и тексту карточек. */
+.season-fx canvas { position: absolute; inset: 0; width: 100%; height: 100%;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(50% - 700px), transparent calc(50% - 630px), transparent calc(50% + 630px), #000 calc(50% + 700px));
+  mask-image: linear-gradient(to right, #000 calc(50% - 700px), transparent calc(50% - 630px), transparent calc(50% + 630px), #000 calc(50% + 700px)); }
 .season-fx::before { content: ""; position: absolute; inset: 0; mix-blend-mode: screen; }
 :root[data-season="winter"] .season-fx::before { background: radial-gradient(120% 60% at 50% -10%, rgba(120, 180, 255, .12), transparent 60%),
   radial-gradient(40% 50% at 0% 100%, rgba(150, 200, 255, .06), transparent 70%), radial-gradient(40% 50% at 100% 100%, rgba(150, 200, 255, .06), transparent 70%); }

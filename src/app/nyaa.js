@@ -1277,8 +1277,12 @@ function pingCell(url, path, who) {
   // Под полным временем ответа — настоящий пинг: только установка соединения (один проход туда-обратно).
   // Полное время больше в 4–5 раз: туда входят ещё поиск адреса, шифрование и ответ самого сайта.
   const chk = !pend && last && last.ms != null ? (path === "pc" ? localChecks[url] : serverChecks[url]) : null;
-  const ping = chk && typeof chk.ping === "number" ? chk.ping : null;
-  const tip = ping != null ? `${who}: полный ответ ${durText(last.ms)}, пинг ${ping} мс (только соединение) · ${age}` : `${who}: ${age}`;
+  // Соединение за 0–1 мс до сайта в интернете не бывает: его «отвечает» VPN/прокси в режиме TUN на самом компьютере.
+  // Такую цифру не показываем — она про VPN, а не про зеркало.
+  const tunneled = chk && typeof chk.ping === "number" && chk.ping < 2;
+  const ping = chk && typeof chk.ping === "number" && !tunneled ? chk.ping : null;
+  const tip = ping != null ? `${who}: полный ответ ${durText(last.ms)}, пинг ${ping} мс (только соединение) · ${age}`
+    : tunneled ? `${who}: полный ответ ${durText(last.ms)} · пинг не измерить — соединение перехватывает VPN или прокси · ${age}` : `${who}: ${age}`;
   return `<span class="ny-c ${cls}${ping != null ? " has-ping" : ""}" title="${esc(tip)}">${val}${ping != null ? `<small class="ny-rtt">пинг ${ping} мс</small>` : ""}</span>`;
 }
 
@@ -1291,7 +1295,7 @@ function mirrorRow(sv, m) {
   const who = `С сервера студии (${exitName(sv.id)})`;
   return `<div class="ny-mir2${active ? " act" : ""}">
     <i class="${lvl === "idle" ? "" : lvl}"></i>
-    <div class="ny-mir2-t"><b>${esc(hostOf(m))}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
+    <div class="ny-mir2-t"><b title="${esc(hostOf(m))}">${esc(hostOf(m)).replace(/([.:])/g, "<wbr>$1")}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
     ${pingCell(m, "pc", "С этого компьютера")}${own ? `<span class="ny-c" title="Сервер студии проверяется только с компьютера"></span>` : pingCell(m, "server", who)}
     <span class="ny-mir2-a">
       <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
@@ -1308,36 +1312,40 @@ function healthStrip() {
   const path = routeOf("nyaa") === "server" ? "server" : routeOf("nyaa") === "pc" ? "pc" : bestPath(health, base);
   const where = path === "server" ? `через сервер (${exitName("nyaa")})` : path === "pc" ? "напрямую с ПК" : "путь выбирается по замерам";
   const pcDead = health.m[base] && health.m[base].pc.length > 0 && statsOf(health.m[base].pc).median == null;
-  const title = lvl === "ok" ? "Всё работает" : lvl === "slow" ? "Работает медленно" : lvl === "bad" ? "Есть проблема" : "Ещё не проверялось";
-  const dot = lvl === "ok" ? "ok" : lvl === "slow" ? "slow" : lvl === "bad" ? "bad" : "";
+  // Пока идёт проверка, вывод «всё работает / есть проблема» ещё не сделан — заголовок говорит, что проверяем.
+  const title = checking ? `Проверяю зеркала · ${checkDone} из ${checkTotal}`
+    : lvl === "ok" ? "Всё работает" : lvl === "slow" ? "Работает медленно" : lvl === "bad" ? "Есть проблема" : "Ещё не проверялось";
+  const dot = checking ? "" : lvl === "ok" ? "ok" : lvl === "slow" ? "slow" : lvl === "bad" ? "bad" : "";
   const lastAny = Math.max(0, ...allMirrorUrls().map(lastSampleAt));
   const nextMs = nextCheckIn(now, lastSampleAt(base));
-  const when = checking
-    ? `Проверяю ${checkDone} из ${checkTotal}…`
-    : `проверка ${ageText(now, lastAny)}, следующая ${nextMs > 0 ? `через ~${Math.max(1, Math.ceil(nextMs / 60000))} мин` : "скоро"}`;
+  const when = checking ? "" : ` · проверка ${ageText(now, lastAny)}, следующая ${nextMs > 0 ? `через ~${Math.max(1, Math.ceil(nextMs / 60000))} мин` : "скоро"}`;
   const pct = checkTotal ? Math.round(100 * checkDone / checkTotal) : 0;
-  return `<div class="ny-top ${dot}"><i class="${dot}"></i>
-    <div><b>${title}</b><span>Nyaa: ${esc(hostOf(base))}, ${esc(where)}${pcDead ? " (с ПК закрыт)" : ""} · ${esc(when)}</span></div>
+  // «Починить» нужен, только когда есть что чинить
+  const heal = !checking && lvl !== "ok" ? `<button type="button" class="btn" data-heal title="Выбрать лучшее зеркало и путь по замерам">Починить</button>` : "";
+  return `<div class="ny-top ${dot}${checking ? " busy" : ""}">${checking ? `<span class="ny-spin"></span>` : `<i class="${dot}"></i>`}
+    <div><b>${title}</b><span>Nyaa: ${esc(hostOf(base))}, ${esc(where)}${pcDead ? " (с ПК закрыт)" : ""}${esc(when)}</span></div>
     <span class="ny-sp"></span>
-    <button type="button" class="btn" data-heal title="Выбрать лучшее зеркало и путь по замерам">Починить</button>
-    <button type="button" class="btn primary" id="ny-check-all">${checking ? "Проверяю…" : "Проверить"}</button>
-    ${checking ? `<div class="ny-prog"><i style="width:${pct}%"></i></div>` : ""}</div>
-    <p class="ny-legend"><b>С ПК</b> — с этого компьютера · <b>С сервера</b> — через сервер студии в выбранной стране · возраст замера — во всплывающей подсказке</p>`;
+    ${heal}
+    <button type="button" class="btn${checking ? "" : " primary"}" id="ny-check-all" ${checking ? "disabled" : ""}>${checking ? "Проверяю…" : "Проверить"}</button>
+    ${checking ? `<div class="ny-prog"><i style="width:${pct}%"></i></div>` : ""}</div>`;
 }
 
 // ---------- источники и зеркала ----------
 function sourcesHtml() {
   const services = allServices();
   return `
-    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>«Авто» само выбирает лучший путь и зеркало по замерам, а сбойные ставит на паузу. Свой выбор можно закрепить для каждого сервиса.</span></div>
+    <div class="ny-src-head"><div><b>Источники и зеркала</b><span>«Авто» само выбирает лучший путь и зеркало по замерам, а сбойные ставит на паузу. Свой выбор можно закрепить для каждого сервиса.
+      <u class="ny-info" title="С ПК — запрос с этого компьютера. Сервер — через сервер студии в выбранной стране выхода.&#10;Возраст замера и пинг — во всплывающей подсказке у цифры.&#10;Страна выхода влияет на проверку сайта с сервера; режим «Смотреть» берёт данные по настройке самого сервера.">Как читать</u></span></div>
       <div><button type="button" class="ny-ib wide" data-close-sources title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
     ${healthStrip()}
     <div class="ny-src-grid">${services.map(sv => {
       const dead = sv.mirrors.filter(m => isDead(m) && m !== prefs.base);
       const shown = showHidden ? sv.mirrors : sv.mirrors.filter(m => !dead.includes(m));
       const autoOn = routeOf(sv.id) === "auto" && sv.id !== "server" && sv.mirrors.some(m => health.m[m]);
+      // Свои зеркала Nyaa — третья кнопка (×) в строке: колонке действий нужна ширина на три кнопки
+      const wide = sv.id === "nyaa" && prefs.custom.length;
       return `
-      <div class="ny-svc">
+      <div class="ny-svc${wide ? " wide-act" : ""}">
         <div class="ny-svc-h"><b>${esc(sv.name)}${autoOn ? ` <u class="ny-tag-auto">путь выбран сам</u>` : ""}</b><span>${esc(sv.note)}</span></div>
         ${sv.id === "server" ? "" : `<div class="ny-route" role="group" aria-label="Соединение">${ROUTES.map(([k, t]) => `<button type="button" class="${routeOf(sv.id) === k ? "on" : ""}" data-route="${sv.id}:${k}">${t}</button>`).join("")}</div>
         <label class="ny-exit" title="Из какой страны сервер студии ходит на эти сайты (когда запросы идут через сервер)"><span>Страна выхода сервера</span>
@@ -1348,7 +1356,6 @@ function sourcesHtml() {
         ${dead.length && showHidden ? `<p class="ny-hint"><button type="button" class="ny-link" data-show-hidden>скрыть неотвечающие</button></p>` : ""}
         ${sv.id === "nyaa" ? `<div class="ny-mir-add"><input id="ny-mir-in" type="text" placeholder="Своё зеркало, например nyaa.example" spellcheck="false"><button type="button" class="btn" id="ny-mir-add">Добавить</button></div>` : ""}
         ${sv.id === "nyaa" ? `<label class="ny-auto-sw"><input type="checkbox" data-auto-mirror ${prefs.autoMirror === false ? "" : "checked"}> Переключать зеркало само, если текущее на паузе или медленное</label>` : ""}
-        ${!sv.apply && sv.id !== "server" && sv.id !== "sources" ? `<p class="ny-hint">Страна выхода влияет на проверку этого сайта с сервера. Режим «Смотреть» берёт данные по настройке самого сервера.</p>` : ""}
       </div>`;
     }).join("")}</div>
     <details class="ny-log" ${sourcesLogOpen ? "open" : ""}><summary data-log-toggle>Журнал проверок и загрузок (${activity.length})</summary>
