@@ -1231,8 +1231,8 @@ function mirrorNote(url) {
   else main = "нет данных";
   const loss = Math.round(Math.max(pc.loss, sv.loss) * 100);
   const bits = [main];
+  // «потерь 0%» — пустая информация, да ещё и обрезалась в узких карточках: показываем только настоящие потери
   if (!pcDead && !svDead && loss > 0) bits.push(`потерь ${loss}%`);
-  else if (!pcDead && !svDead && (e.pc.length > 1 || e.server.length > 1)) bits.push("потерь 0%");
   return bits.join(" · ");
 }
 
@@ -1295,7 +1295,7 @@ function mirrorRow(sv, m) {
   const who = `С сервера студии (${exitName(sv.id)})`;
   return `<div class="ny-mir2${active ? " act" : ""}">
     <i class="${lvl === "idle" ? "" : lvl}"></i>
-    <div class="ny-mir2-t"><b title="${esc(hostOf(m))}">${esc(hostOf(m)).replace(/([.:])/g, "<wbr>$1")}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
+    <div class="ny-mir2-t"><b title="${esc(hostOf(m))}">${esc(hostOf(m)).replace(/\./g, ".<wbr>").replace(/:/g, "<wbr>:")}</b><span>${esc(mirrorNote(m))}${pause ? ` <u class="ny-pause ${lvl === "bad" ? "r" : "o"}">${esc(pause)}</u>` : ""}</span></div>
     ${pingCell(m, "pc", "С этого компьютера")}${own ? `<span class="ny-c" title="Сервер студии проверяется только с компьютера"></span>` : pingCell(m, "server", who)}
     <span class="ny-mir2-a">
       <button type="button" class="ny-ib" data-check="${esc(m)}" title="Проверить" aria-label="Проверить">${ICONS.refresh}</button>
