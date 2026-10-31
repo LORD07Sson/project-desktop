@@ -455,12 +455,29 @@ function wireCardDrag(card) {
 // скролл колеса в горизонтальный (как в Trello/Notion), плюс drag
 // пустого места доски левой кнопкой — тоже горизонтальный скролл, не
 // перенос карточки (обработчик карточек — отдельный, wireCardDrag).
+// Ближайший предок, который сам прокручивается по вертикали и ещё может сдвинуться в сторону dy.
+function canScrollVertically(from, dy) {
+  for (let el = from; el && el !== document.documentElement; el = el.parentElement) {
+    const oy = getComputedStyle(el).overflowY;
+    if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 1) {
+      if (dy > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0) return true;
+    }
+  }
+  const page = document.scrollingElement;
+  return !!page && (dy > 0 ? page.scrollTop + page.clientHeight < page.scrollHeight - 1 : page.scrollTop > 0);
+}
+
 function wireBoardScroll(boardEl) {
   if (!boardEl) return;
   boardEl.addEventListener("wheel", e => {
     if (e.deltaY === 0) return;
     // Трекпад с горизонтальным жестом шлёт deltaX сам — не мешаем ему.
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    // Колонки влезли по ширине — крутить вбок нечего. А длинная колонка (Озвучка на 14 карточек) уходит ниже
+    // окна: колесо обязано остаться вертикальным, иначе вниз было не прокрутить ничем, кроме зажатого колеса.
+    if (boardEl.scrollWidth <= boardEl.clientWidth + 1) return;
+    // Пока вниз/вверх ещё есть куда — тоже обычная прокрутка; вбок уводим только упёршись.
+    if (canScrollVertically(e.target, e.deltaY)) return;
     e.preventDefault();
     boardEl.scrollLeft += e.deltaY;
   }, { passive: false });
