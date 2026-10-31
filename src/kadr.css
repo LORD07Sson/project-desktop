@@ -2988,6 +2988,13 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 /* Пайплайн: несколько человек в одном этапе (Даббер → Даббер → Даббер) стоят друг под другом — «одновременно» */
 .rd-tl-ent { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
 .rd-tl-ent + .rd-tl-ent { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, .12); width: 100%; }
+/* Этап «одновременно»: участники плитками в сетку, а не столбиком по центру — втрое ниже при тех же данных. */
+.rd-tl-ents { display: contents; }
+.rd-tl-ents.many { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; width: 100%; margin-top: 12px; }
+.rd-tl-ents.many .rd-tl-ent { margin: 0; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: rgba(255, 255, 255, .02); width: auto; }
+.rd-tl-ents.many .rd-tl-ent + .rd-tl-ent { margin: 0; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .08); }
+.rd-tl-ents.many .rd-tl-ent.sub { border-color: color-mix(in srgb, var(--s-done) 35%, transparent); }
+.rd-tl-ents.many .rd-tl-t { margin-top: 0; }
 .rd-tl-par { margin-top: 8px; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--gold); background: rgba(var(--gold-rgb), .12); }
 /* Отметка о сдаче в пайплайне: кнопка у своего звена, галочка и время после сдачи. */
 .rd-tl-sub { margin-top: 8px; padding: 6px 14px; font-size: 12px; }

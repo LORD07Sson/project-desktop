@@ -396,7 +396,7 @@ export async function openReportDetail(publicId) {
               <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди · " : ""}${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}${detail.pipeline.every(s => s.done) ? " · пройден" : ""}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? (pipeEdit ? "отмена" : "изменить") : ""}</button>` : ""}</h3>
               <div id="pipe-view"${pipeEdit ? " hidden" : ""}>
-              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, !!state.isAdmin) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
+              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, !!state.isAdmin, detail.assignees) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
               </div>
               ${canEdit ? `<div id="pipe-editor"${pipeEdit ? "" : " hidden"}>
                 <div id="pipeline-draft-list"></div>
@@ -464,7 +464,7 @@ export async function openReportDetail(publicId) {
 
         <aside class="rd-side">
           <div class="rd-summary">
-            <div><b>${doneItems}/${checklist.items.length}</b><span>пунктов чек-листа</span></div>
+            <div><b>${checklist.items.length ? `${doneItems}/${checklist.items.length}` : "—"}</b><span>пунктов чек-листа</span></div>
             <div><b>${files.files.length}</b><span>файлов</span></div>
             <div><b>${notes.notes.length}</b><span>заметок</span></div>
           </div>
@@ -1104,7 +1104,14 @@ function pipelineEntryActs(s, i, canManage) {
   return canManage ? `<button type="button" class="pf-link rd-tl-mark" data-pipe-submit="${i}">отметить сдачу</button>` : "";
 }
 
-function pipelineTimelineHtml(pipeline, parallel = false, canManage = false) {
+// Имя участника этапа — как в «Исполнителях» справа (Ren, а не Ewaii_Ren); ник остаётся в подсказке.
+function pipelineTimelineHtml(pipeline, parallel = false, canManage = false, assignees = []) {
+  const shown = new Map((assignees || []).map(a => [String(a.telegram_id), a.first_name || a.username || ""]));
+  const who = s => {
+    const name = (s.telegram_id && shown.get(String(s.telegram_id))) || s.user_name;
+    if (!name) return "не выбран";
+    return name !== s.user_name && s.user_name ? `<span title="${esc(s.user_name)}">${esc(name)}</span>` : esc(name);
+  };
   const groups = pipelineGroups(pipeline, parallel);
   const curGroup = groups.findIndex(g => g.some(i => pipeline[i].current));
   const at = curGroup !== -1 ? curGroup : groups.filter(g => g.every(i => pipeline[i].done)).length;
@@ -1116,11 +1123,14 @@ function pipelineTimelineHtml(pipeline, parallel = false, canManage = false) {
     return `
     <div class="rd-tl${done ? " done" : ""}${cur ? " cur" : ""}">
       <span class="rd-tl-dot">${done ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : gi + 1}</span>
-      ${g.map(i => `<div class="rd-tl-ent${pipeline[i].submitted_at ? " sub" : ""}"><div class="rd-tl-t">${esc(pipeline[i].role)}</div><div class="rd-tl-p">${pipeline[i].user_name ? esc(pipeline[i].user_name) : "не выбран"}</div>${pipelineEntryActs(pipeline[i], i, canManage)}</div>`).join("")}
-      ${g.length > 1 ? `<div class="rd-tl-par">одновременно${cur || marked ? ` · сдали ${marked} из ${g.length}` : ""}</div>` : ""}
+      <div class="rd-tl-ents${g.length > 1 ? " many" : ""}">${g.map(i => `<div class="rd-tl-ent${pipeline[i].submitted_at ? " sub" : ""}"><div class="rd-tl-t">${esc(pipeline[i].role)}</div><div class="rd-tl-p">${who(pipeline[i])}</div>${pipelineEntryActs(pipeline[i], i, canManage)}</div>`).join("")}</div>
+      ${g.length > 1 ? `<div class="rd-tl-par">одновременно${(cur || marked) && groups.length > 1 ? ` · сдали ${marked} из ${g.length}` : ""}</div>` : ""}
     </div>`;
   }).join("")}</div>`;
 }
+
+// Сервер подписывает источник то «(desktop)», то «(десктоп)» — в ленте одним словом.
+const actionLabel = action => String(action || "").replace(/\(desktop\)/gi, "(десктоп)");
 
 // История и активность — прямо во вкладке карточки: первые 20 событий,
 // дальше — прежняя отдельная шторка с «Показать ещё».
@@ -1130,7 +1140,8 @@ async function fillLogPanel(panel, publicId, kind) {
   panel.innerHTML = dialogSkeletonHtml(4);
   let res;
   try {
-    res = await apiGet(`/report/${publicId}/${kind}`, { offset: 0, page_size: 20 });
+    // Уведомления — сразу пачкой побольше: недоставленные показываются первыми, и они не должны прятаться за «показать ещё».
+    res = await apiGet(`/report/${publicId}/${kind}`, { offset: 0, page_size: kind === "notifications" ? 100 : 20 });
   } catch (e) {
     panel.innerHTML = `<div class="no-assignee">Не удалось загрузить: ${esc(e.message)}</div>`;
     delete panel.dataset.loaded;
@@ -1140,8 +1151,8 @@ async function fillLogPanel(panel, publicId, kind) {
   if (kind === "notifications") { renderNotifications(panel, publicId, res); return; }
   panel.innerHTML = `<div class="pf-acts">${evs.map(ev => `
     <div class="pf-act"><i></i><div>
-      <div class="a">${kind === "history" ? esc(ev.new_status_label || "") + (ev.comment ? ` <span>· ${esc(ev.comment)}</span>` : "") : esc(ev.action || "") + (ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : "")}</div>
-      <div class="m">${esc(ev.actor || "")} · ${esc(String(ev.created_at || "").slice(0, 16))}</div>
+      <div class="a">${kind === "history" ? esc(ev.new_status_label || "") + (ev.comment ? ` <span>· ${esc(ev.comment)}</span>` : "") : esc(actionLabel(ev.action)) + (ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : "")}</div>
+      <div class="m">${[ev.actor || "бот", String(ev.created_at || "").slice(0, 16)].filter(Boolean).map(esc).join(" · ")}</div>
     </div></div>`).join("") || `<div class="pf-quiet">Пока пусто</div>`}</div>
     ${res.has_more ? `<button class="pf-link" data-log-more style="margin-top:10px;">показать всё →</button>` : ""}`;
   panel.querySelector("[data-log-more]")?.addEventListener("click", () => openReportLogSheet(publicId, kind));
@@ -1150,8 +1161,10 @@ async function fillLogPanel(panel, publicId, kind) {
 // «Уведомления»: кому уходили сообщения по отчёту и дошли ли (журнал delivery_log на сервере).
 function renderNotifications(panel, publicId, res) {
   const evs = res.events || [];
+  // Недоставленные — наверх: ради них вкладку и открывают (красная цифра на ней).
+  const sorted = [...evs.filter(ev => !ev.ok), ...evs.filter(ev => ev.ok)];
   panel.innerHTML = `${res.total ? `<div class="rd-nt-sum"><span class="ok">✓ доставлено ${res.total - res.failed}</span>${res.failed ? `<span class="bad">✗ не доставлено ${res.failed}</span>` : ""}</div>` : ""}
-    <div class="rd-nt">${evs.map(ev => `
+    <div class="rd-nt">${sorted.map(ev => `
     <div class="rd-nt-row ${ev.ok ? "ok" : "bad"}"><i aria-hidden="true">${ev.ok ? "✓" : "✗"}</i><div>
       <div class="a">${esc(ev.title || "Уведомление")}</div>
       <div class="m">${ev.to ? `→ ${esc(ev.to)}` : "→ никому"}${ev.ok ? " · доставлено" : ` · <b>${esc(ev.error || "не доставлено")}</b>`}</div>
@@ -1188,6 +1201,9 @@ function productionHtml(detail, fileList) {
   const hasVideo = hasFinal || list.some(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
   const hasSubs = list.some(f => /\.(ass|ssa|srt)$/i.test(f.file_name || ""));
   const hasAudio = list.some(f => AUDIO_RE.test(f.file_type || "") || AUDIO_RE.test(f.file_name || ""));
+  // Звук готов, когда пройден пайплайн, а не когда лёг первый файл: иначе галочка стоит, пока звукарь ещё работает.
+  const pipe = detail.pipeline || [];
+  const pipeLeft = pipe.length && !pipe.every(s => s.done) ? `сдали ${pipe.filter(s => s.done || s.submitted_at).length} из ${pipe.length}` : "";
   const step = (n, title, state, label, body) => `
     <div class="rd-fs ${state}">
       <span class="rd-fs-n">${state === "done" ? "✓" : n}</span>
@@ -1198,14 +1214,16 @@ function productionHtml(detail, fileList) {
   const sendFile = [...list].reverse().find(isFinalFile) || [...list].reverse().find(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
   const nyaa = can("reports.files") ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l1">⚠ Опасная зона</span><span class="dz-l2">Видео с Nyaa</span></button>` : "";
-  const assemble = can("reports.assemble") ? `<button class="rd-add primary" id="report-assemble">🎬 Собрать финал</button>` : "";
+  // Яркая — только когда собирать уже есть из чего; пока ждём видео, кнопка спокойная (окно сборки само скажет, чего не хватает).
+  const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal ? " primary" : ""}" id="report-assemble">🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
   return `
   <div class="rd-sec rd-prod" id="rd-prod">
     <h3>Производство финала</h3>
     <div class="rd-flow">
       ${step(1, "Видео", hasVideo ? "done" : "todo", hasFinal ? "финал есть" : hasVideo ? "прикреплено" : "нужно", `${sendBtn}${nyaa}`)}
-      ${step(2, "Субтитры и звук", hasSubs || hasAudio ? "done" : "opt", [hasSubs ? "субтитры" : "", hasAudio ? "озвучка" : ""].filter(Boolean).join(" · ") || "необязательно", "")}
+      ${step(2, "Субтитры и звук", pipeLeft ? "todo" : hasSubs || hasAudio ? "done" : "opt",
+        [hasSubs ? "субтитры" : "", hasAudio || pipeLeft ? "озвучка" : "", pipeLeft].filter(Boolean).join(" · ") || "необязательно", "")}
       ${step(3, "Сборка", hasFinal ? "done" : hasVideo ? "todo" : "wait", hasFinal ? "готово" : hasVideo ? "можно собирать" : "ждёт видео", assemble)}
       ${step(4, "Пост", hasFinal ? "todo" : "wait", hasFinal ? "можно готовить" : "после сборки", post)}
     </div>
@@ -1252,7 +1270,7 @@ function fileHtml(f, canEdit = true) {
   return `<div class="file-item">
     <div>${esc(FILE_ICONS[f.file_type] || "📎")} ${esc(f.file_name || f.file_type)} <span class="meta">${esc(f.file_size_label || "")}</span>${f.uploaded_by ? `
       <span class="file-by"><span class="avatar-bubble" data-avatar-for="${esc(f.uploaded_by.telegram_id || "")}">${esc(initials(f.uploaded_by.name || "?"))}</span><b>${esc(f.uploaded_by.name || "")}</b>${f.created_at ? `<em>${esc(submittedWhen(f.created_at))}</em>` : ""}</span>` : ""}</div>
-    ${isAudio ? `<button class="btn primary" style="padding:4px 10px; font-size:12px;" data-play-file="${f.id}">▶ Слушать</button>` : ""}
+    ${isAudio ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-play-file="${f.id}">▶ Слушать</button>` : ""}
     ${isAudio && canEdit ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-qc-file="${f.id}">AI-проверка</button>` : ""}
     <button class="icon-btn" data-send-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Прислать кому-то">📤</button>
     <button class="icon-btn" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать">⬇️</button>
