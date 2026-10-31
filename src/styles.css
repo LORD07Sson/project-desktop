@@ -1337,6 +1337,11 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   .team-teaser .stack .avatar {
     animation: none !important;
   }
+  /* Эти элементы стартуют с opacity: 0 и проявляются только своей
+     анимацией (forwards). Анимацию выше гасим — значит, конечное
+     состояние надо выставить руками, иначе карточки (Сервисы, Аналитика)
+     и строки Ганта остаются невидимыми при выключенных эффектах Windows. */
+  .bcell, .gantt-row, .gantt-tag { opacity: 1 !important; }
   .board-card-progress-track i::after { display: none; }
   .gantt-row { opacity: 1 !important; transform: none !important; }
   .gantt-tag { opacity: 1 !important; transform: translateX(-2px) !important; }
