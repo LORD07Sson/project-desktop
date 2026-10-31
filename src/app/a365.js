@@ -31,6 +31,7 @@ const canUpload = () => can("a365.upload");
 function kindOf(it) {
   if (it.stage === "done") return it.newer ? "newer" : "done";
   if (it.stage === "queued" || it.stage === "uploading") return "queue";
+  if (it.twin) return "elsewhere"; // финал, который уже залили из «Архива»
   if (it.stage === "failed" && !(it.check && it.check.dup)) return "bad";
   if (!it.check) return it.unbound ? "unbound" : "unchecked";
   if (!it.check.ok && it.check.dup) return "elsewhere"; // наша озвучка уже на 365 (залита не отсюда или вручную)
@@ -74,6 +75,7 @@ function detailHtml(it) {
   }
   if (it.stage === "queued") return `<div class="a3-note">${esc(it.text || "Ждёт своей очереди — перед заливкой проверки пройдут ещё раз")}</div>${replacing}`;
   const c = it.check;
+  if (k === "elsewhere" && it.twin) return `<div class="a3-note">Эта серия уже залита из «Архива» — второй раз не зальётся.</div>${it.twin.url ? link(it.twin.url) : ""}`;
   if (k === "elsewhere") return `<div class="a3-note">Наша озвучка этой серии уже есть на 365 — второй раз не зальётся.</div>${link(c.dup)}`;
   if (it.stage === "failed") return `<div class="a3-note bad">${esc(it.error || "")}</div>${it.hint ? `<div class="a3-note">${esc(it.hint)}</div>` : ""}`;
   if (!c) return `<div class="a3-note">${it.unbound ? "Привяжите тайтл к аниме на 365 — тогда можно проверить." : "Сезон и дубли ещё не проверялись."}</div>`;
@@ -215,32 +217,36 @@ function cardHtml(list) {
   const newer = count("newer");
   const unbound = !first.studio && !first.bound;
   const where = first.studio ? "тайтл студии"
-    : first.bound ? (first.auto ? "подобрано автоматически — проверьте" : "привязан вручную")
+    : first.bound ? (first.auto ? "подобрано авто" : "привязан вручную")
       : "не привязан к 365";
+  // «Привязать» у непривязанного — главное действие карточки; «Сменить» у привязанного — ссылка рядом с привязкой.
+  const bindAttrs = `data-a3-bind="${esc(first.tag || "")}" data-a3-season="${esc(String(first.season))}" data-a3-name="${esc(name)}"`;
   const bindBtn = first.studio || !canUpload() ? ""
-    : `<button type="button" class="btn ${first.bound ? "ghost" : "primary"} sm" data-a3-bind="${esc(first.tag || "")}" data-a3-season="${esc(String(first.season))}" data-a3-name="${esc(name)}">${first.bound ? "Сменить" : "Привязать"}</button>`;
-  const upAll = ready.length && canUpload() ? `<button type="button" class="btn primary sm" data-a3-upall="${esc(ready.map(it => it.key).join(","))}" data-a3-name="${esc(name)}">Залить недостающие · ${ready.length}</button>` : "";
+    : first.bound ? `<button type="button" class="a3-tlink" ${bindAttrs}>сменить</button>`
+      : `<button type="button" class="btn primary sm" ${bindAttrs}>Привязать</button>`;
+  // Число «можно залить» — сама кнопка: одна цифра вместо плашки и счётчика на кнопке.
+  const upAll = !ready.length ? ""
+    : canUpload() ? `<button type="button" class="a3-tag ready a3-upall" data-a3-upall="${esc(ready.map(it => it.key).join(","))}" data-a3-name="${esc(name)}" title="Залить все серии, которых нет на 365">↑ Залить ${ready.length}</button>`
+      : `<span class="a3-tag ready">${ready.length} можно залить</span>`;
+  const meta = [`${esc(String(first.season))}-й сезон`,
+    `<span class="${unbound ? "a3-warn" : first.auto ? "a3-auto" : ""}"${first.auto ? ` title="Аниме на 365 подобрано автоматически — проверьте, что это нужное"` : ""}>${esc(where)}</span>${first.bound ? bindBtn : ""}`,
+    withPoster.series_season ? `на 365: ${esc(withPoster.series_season)}` : ""].filter(Boolean);
   const progress = list.length ? Math.round(on * 100 / list.length) : 0;
   const open = list.find(it => it.key === openEp);
   const sorted = list.slice().sort((x, y) => Number(x.episode) - Number(y.episode));
   return `
     <div class="a3-tcard${unbound ? " unbound" : ""}${progress === 100 && !newer ? " complete" : ""}${newer ? " has-newer" : ""}">
-      <div class="a3-tposter">${withPoster.poster ? `<img src="${esc(withPoster.poster)}" alt="" loading="lazy">` : `<span>${esc(name.slice(0, 1).toUpperCase())}</span>`}
-        <em class="a3-tpct">${progress}%</em></div>
+      <div class="a3-tposter">${withPoster.poster ? `<img src="${esc(withPoster.poster)}" alt="" loading="lazy">` : `<span>${esc(name.slice(0, 1).toUpperCase())}</span>`}</div>
       <div class="a3-tbody">
         <div class="a3-thead">
           <div class="a3-tname" title="${esc(name)}">${esc(name)}</div>
-          <div class="a3-tacts">${upAll}${bindBtn}</div>
+          ${first.bound ? "" : bindBtn}
         </div>
-        <div class="a3-tmeta">
-          <span>${esc(String(first.season))}-й сезон</span>
-          <span class="a3-dot"></span><span class="${unbound ? "a3-warn" : first.auto ? "a3-auto" : ""}">${esc(where)}</span>
-          ${withPoster.series_season ? `<span class="a3-dot"></span><span>на 365: ${esc(withPoster.series_season)}</span>` : ""}
-        </div>
+        <div class="a3-tmeta">${meta.map(m => `<span class="a3-mi">${m}</span>`).join("")}</div>
         <div class="a3-tstat">
-          <div class="a3-tprog"><i style="width:${progress}%"></i></div>
+          <div class="a3-tprog" title="${progress}% на 365"><i style="width:${progress}%"></i></div>
           <b>${on}</b><span>из ${list.length} на 365</span>
-          ${ready.length ? `<span class="a3-tag ready">${ready.length} можно залить</span>` : ""}
+          ${upAll}
           ${count("queue") ? `<span class="a3-tag run">${count("queue")} в очереди</span>` : ""}
           ${newer ? `<span class="a3-tag warn">${newer} новая версия</span>` : ""}
           ${bad ? `<span class="a3-tag bad">${bad} с проблемой</span>` : ""}
@@ -488,8 +494,13 @@ function openBind(root, tag, season, name) {
 function paint(root) {
   const d = last || {};
   const acc = d.account || {};
-  const every = [...(d.items || []), ...((d.archive || {}).items || [])];
+  // Сводка — по уникальным сериям: финал, у которого есть копия в архиве, уже посчитан там.
+  const every = [...(d.items || []).filter(it => !it.inArchive), ...((d.archive || {}).items || [])];
   const queue = every.filter(it => kindOf(it) === "queue").length;
+  const unbound = every.filter(it => kindOf(it) === "unbound").length;
+  const unchecked = every.filter(it => kindOf(it) === "unchecked").length;
+  const bad = every.filter(it => kindOf(it) === "bad").length;
+  const rest = [unbound && `${unbound} не привязано`, unchecked && `${unchecked} не проверено`].filter(Boolean).join(" · ");
   const tabs = [["finals", "Финалы", (d.items || []).filter(it => !isOn365(it)).length],
     ["archive", "Архив", ((d.archive || {}).items || []).filter(it => !isOn365(it) && kindOf(it) !== "unbound").length], ...(canUpload() ? [["manual", "Вручную", null]] : [])];
   if (view === "manual" && !canUpload()) view = "finals";
@@ -516,7 +527,7 @@ function paint(root) {
         ${cell("На 365", every.filter(isOn365).length, newer ? `${newer} — с новой версией видео` : "залито отсюда и найдено на сайте", newer ? "warn" : "")}
         ${cell("В очереди", queue, d.uploading ? `сейчас: ${d.uploading}` : "по одной, с проверками", queue ? "warn" : "")}
         ${cell("Нет на 365", every.filter(it => kindOf(it) === "ready").length, "проверено — можно заливать")}
-        ${cell("Проблемы", every.filter(it => kindOf(it) === "bad").length, `${every.filter(it => ["unchecked", "unbound"].includes(kindOf(it))).length} не проверено или не привязано`, every.some(it => kindOf(it) === "bad") ? "danger" : "")}
+        ${cell("Проблемы", bad, [bad ? "проверка не пройдена" : "ошибок проверки нет", rest].filter(Boolean).join(" · "), bad ? "danger" : "")}
       </div>
       ${filtersHtml(tabs, view, "a3-view").replace("a3-filters", "a3-filters a3-tabs")}
       <div class="a3-body">${view === "finals" ? finalsHtml(d) : view === "archive" ? archiveHtml(d) : manualHtml()}</div>
@@ -535,6 +546,18 @@ function paint(root) {
   }
 }
 
+// Серия из «Финалов» обычно лежит и в «Архиве» (это разные записи сервера с разными ключами).
+// twin — её копия в архиве: по ней финал узнаёт, что серию уже залили оттуда, а сводка не считает серию дважды.
+const twinKey = it => `${String(it.title || "").toLowerCase()}|${it.episode}`;
+function linkTwins(d) {
+  const arch = new Map(((d.archive || {}).items || []).map(it => [twinKey(it), it]));
+  for (const it of d.items || []) {
+    const twin = arch.get(twinKey(it));
+    it.inArchive = !!twin;
+    it.twin = twin && !isOn365(it) && isOn365(twin) ? twin : null;
+  }
+}
+
 async function refresh(root) {
   let d;
   try { d = await apiGet("/a365"); } catch (e) {
@@ -542,6 +565,7 @@ async function refresh(root) {
     return false;
   }
   if (!root.isConnected) return true;
+  linkTwins(d);
   last = d;
   if (view === "manual") keepForm(root, () => paint(root)); else paint(root);
   clearTimeout(pollTimer);

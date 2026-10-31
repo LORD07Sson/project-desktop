@@ -4469,9 +4469,12 @@ body.focus-mode .report-detail-overlay .sheet {
 .a3-tbody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .a3-thead { display: flex; align-items: flex-start; gap: 8px; }
 .a3-tname { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.a3-tacts { display: flex; gap: 6px; flex: none; }
 .a3-tmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); }
-.a3-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .6; }
+/* Разделитель «·» едет со следующим пунктом: при переносе строки точка не повисает в конце. */
+.a3-mi + .a3-mi::before { content: "·"; margin-right: 6px; opacity: .6; }
+.a3-tlink { all: unset; cursor: pointer; margin-left: 6px; color: var(--ink-soft); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 2px; }
+.a3-tlink:hover { color: var(--ink); }
+.a3-tlink:focus-visible { outline: 2px solid var(--accent, #3aa0ff); outline-offset: 2px; border-radius: 3px; }
 .a3-warn { color: var(--s-work); }
 .a3-auto { color: var(--s-work); opacity: .85; }
 .a3-tstat { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); flex-wrap: wrap; }
@@ -4480,6 +4483,9 @@ body.focus-mode .report-detail-overlay .sheet {
 .a3-tprog i { display: block; height: 100%; background: var(--s-done); }
 .a3-tag { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
 .a3-tag.ready { background: color-mix(in srgb, var(--accent, #3aa0ff) 18%, transparent); color: var(--accent, #3aa0ff); }
+.a3-upall { border: 1px solid color-mix(in srgb, var(--accent, #3aa0ff) 45%, transparent); font: inherit; font-size: 11px; font-weight: 700; padding: 3px 9px; cursor: pointer; }
+.a3-upall:hover { background: color-mix(in srgb, var(--accent, #3aa0ff) 30%, transparent); }
+.a3-upall:focus-visible { outline: 2px solid var(--accent, #3aa0ff); outline-offset: 2px; }
 .a3-tag.run { background: color-mix(in srgb, var(--s-work) 18%, transparent); color: var(--s-work); }
 .a3-tag.bad { background: color-mix(in srgb, var(--s-stop) 18%, transparent); color: var(--s-stop); }
 .a3-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
@@ -4524,7 +4530,7 @@ body.focus-mode .report-detail-overlay .sheet {
 .a3-acc b { font-size: 14px; }
 .a3-acc span { font-size: 11.5px; color: var(--ink-dim); }
 .a3-facts { display: flex; gap: 6px; flex-wrap: wrap; }
-.a3-facts span { font-size: 11.5px; color: var(--ink-soft); padding: 5px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
+.a3-facts > span { font-size: 11.5px; color: var(--ink-soft); padding: 5px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
 .a3-search { display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-dim); min-width: 220px; }
 .a3-search:focus-within { border-color: var(--accent, var(--s-done)); }
 .a3-search input { all: unset; flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink); }
@@ -4549,8 +4555,6 @@ body.focus-mode .report-detail-overlay .sheet {
 .a3-tcard.complete { border-color: color-mix(in srgb, var(--s-done) 35%, var(--line)); }
 .a3-tcard.has-newer { border-color: color-mix(in srgb, var(--s-work) 55%, var(--line)); }
 .a3-tposter { position: relative; width: 84px; height: 118px; }
-.a3-tpct { position: absolute; left: 4px; bottom: 4px; font-style: normal; font-size: 10.5px; font-weight: 800; padding: 1px 6px; border-radius: 999px; color: #fff; background: rgba(0, 0, 0, .62); font-variant-numeric: tabular-nums; }
-.a3-tcard.complete .a3-tpct { background: color-mix(in srgb, var(--s-done) 85%, #000); }
 @media (max-width: 700px) { .a3-search { min-width: 0; flex: 1 1 100%; } }
 
 /* Список на упоминание */
