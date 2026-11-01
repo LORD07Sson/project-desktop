@@ -266,6 +266,9 @@ console.log("nyaa-test: ok");
   const { coverAltKeys } = await import("../src/app/nyaa-core.js");
   assert.deepEqual(coverAltKeys("[ToonsHub] Little Mouses Red Vest S01E18 1080p AMZN WEB-DL DDP2.0 H.264 (Nezumi-kun no Chokki (TV))"), ["nezumi-kun no chokki"]);
   assert.deepEqual(coverAltKeys("[Gecko] Babies of Bread - S01E18 (パンの赤ちゃん; Pan no Akachan (TV)) [TVER.WEB-DL 1080P AVC, AAC]"), ["pan no akachan"]);
+  assert.deepEqual(coverAltKeys("[Doomdos] - Mushen Ji - S01E107 [1080p BILIBILI COM WEB-DL] [Tales of Herding Gods]"), ["tales of herding gods"]);
+  assert.deepEqual(coverAltKeys("[Doomdos] - Caishen Dou Zhanlong - S01E14 [4K BILIBILI COM WEB-DL] [Golden Curse]"), ["golden curse"]);
+  assert.deepEqual(coverAltKeys("[Gecko] Loveez - S01E59 (らぶいーず) [TVER.WEB-DL 1080P AVC, AAC][D9604825]"), []);
   assert.deepEqual(coverAltKeys("[SubsPlease] Sousou no Frieren - 05 (1080p) [ABC]"), [], "техтеги в скобках — не название");
 }
 

@@ -476,10 +476,13 @@ export function cleanTitleForSearch(title) {
 /** Запасные названия для поиска обложки: в скобках раздачи часто стоит ромадзи — «Little Mouses Red Vest (Nezumi-kun no Chokki (TV))». */
 export function coverAltKeys(title) {
   const out = [];
-  for (const m of String(title || "").matchAll(/\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g)) {
+  const t = String(title || "").replace(/^\s*\[[^\]]*\]/, " ");   // ведущие [скобки] — группа, не название
+  // Английское название бывает и в круглых, и в квадратных скобках: «Mushen Ji - S01E107 [1080p …] [Tales of Herding Gods]»
+  const groups = [...t.matchAll(/\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g), ...t.matchAll(/\[([^[\]]*)\]/g)];
+  for (const m of groups) {
     // Части через «,» и «;» по отдельности: «Romelia Senki: …, Japanese Sub» — техтег отбрасываем,
     // «パンの赤ちゃん; Pan no Akachan» — берём латинскую часть. Одиночные слова названием не считаем.
-    const tech = /\b(\d{3,4}p|sub|subs|dub|hevc|avc|aac|web|batch)\b/i;
+    const tech = /\b(\d{3,4}p|\d+k|sub|subs|dub|hevc|avc|aac|web|batch|bilibili|amzn|x26[45]|flac|dual|multi|uncensored|raw)\b/i;
     for (const part of m[1].replace(/\([^()]*\)/g, " ").split(/[;,]/)) {
       const alt = part.replace(/\s+/g, " ").trim();
       if (tech.test(alt) || alt.split(" ").length < 2 || !/[A-Za-z]{3,}/.test(alt) || /[぀-ヿ㐀-鿿]/.test(alt)) continue;

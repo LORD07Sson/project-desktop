@@ -251,7 +251,8 @@ function paintCover(key) {
 // «Не нашлось» помним 3 дня, а не навсегда: новый тайтл появляется на AniList через день-другой после премьеры,
 // а раньше один промах оставлял строку без обложки насовсем. Старое «» (до этой правки) считаем просроченным.
 const MISS_TTL = 3 * 24 * 3600_000;
-const missedRecently = v => typeof v === "string" && v.startsWith("miss:") && Date.now() - Number(v.slice(5)) < MISS_TTL;
+// «miss2:» — промахи с тех пор, как запасные названия берутся и из [квадратных] скобок; старые «miss:» перепроверяем
+const missedRecently = v => typeof v === "string" && v.startsWith("miss2:") && Date.now() - Number(v.slice(6)) < MISS_TTL;
 const hasUrl = v => typeof v === "string" && v.startsWith("https://");
 
 async function fetchCover(key, alts = []) {
@@ -266,7 +267,7 @@ async function fetchCover(key, alts = []) {
         url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s } }));
         if (url) break;
       }
-      coverUrls[key] = url || `miss:${Date.now()}`; saveCovers();
+      coverUrls[key] = url || `miss2:${Date.now()}`; saveCovers();
     }
     if (hasUrl(url)) { coverData.set(key, await fetchPic(url)); paintCover(key); }
   } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
