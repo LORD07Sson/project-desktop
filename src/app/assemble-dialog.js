@@ -12,6 +12,7 @@ import { localRenderSupport, prepareLocalRender, describeTools } from "./local-r
 // не переключил руками — и ffmpeg кодировал не своим профилем. Теперь: тот, что выбирали в прошлый раз
 // (если он ещё есть), иначе «Свой профиль», иначе первый.
 const LAST_PROFILE_KEY = "project-assemble-profile";
+const LAST_WHERE_KEY = "project-assemble-where";   // «server» / «local» — где собирали в прошлый раз
 function defaultProfile(profiles) {
   let last = null;
   try { last = JSON.parse(localStorage.getItem(LAST_PROFILE_KEY) || "null"); } catch (_) { /* нет памяти — не беда */ }
@@ -76,6 +77,7 @@ export async function openAssembleDialog(publicId) {
           <b>${esc(f.name)}</b>${f.version ? `<span class="ar-meta">v${f.version}</span>` : ""}</label>`).join("")}</div>`;
     };
 
+    sheet.classList.add("ad-sheet");
     sheet.innerHTML = `
       <h2>Собрать финал</h2>
       <div class="ad-body">
@@ -97,6 +99,20 @@ export async function openAssembleDialog(publicId) {
           <button type="button" data-v="replace" class="on">Заменить оригинал<small>слышна только дорожка</small></button>
           <button type="button" data-v="mix">Смешать с оригиналом<small>оба звука вместе</small></button>
         </div>` : `<p class="ar-hint" style="margin:10px 0 0;">Своей озвучки в отчёте нет — звук останется из видео. Чтобы заменить его, прикрепите к отчёту WAV, MP3 или архив с дорожками (раздел «Файлы») — они появятся здесь.</p>`}
+        <span class="ar-label">Где собирать <small>— у себя быстрее: рендер на вашей видеокарте, а не на сервере</small></span>
+        <div class="ar-seg" id="ad-where">
+          <button type="button" class="on" data-where="server">На сервере</button>
+          <button type="button" data-where="local" id="ad-where-local" disabled title="Проверяю видеокарту…">У себя (видеокарта)</button>
+        </div>
+        <p class="ar-hint" id="ad-where-hint"></p>
+        <p class="ar-hint" id="ad-tools-status">Проверяю ffmpeg и видеокарту…</p>
+        <span class="ar-label">Качество и формат <button type="button" class="pf-link ad-prof-edit" id="ad-prof-edit">изменить свой профиль</button></span>
+        <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}"${p.index === defaultProfile(opts.profiles) ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+        <p class="ar-hint" id="ad-profile-desc"></p>
+        <div class="ad-est" id="ad-est"><span>Считаю примерный размер…</span></div>
+        <span class="ar-label">Название файла <small>— как будет называться готовый видеофайл</small></span>
+        <input class="field-input" id="ad-file-name" maxlength="80" placeholder="${esc(publicId)}" autocomplete="off">
+        <p class="ar-hint" id="ad-file-name-hint" style="margin:6px 0 0;"></p>
         <span class="ar-label">Склейка — картинка в начале видео <small>— как карточка с титрами у студии; её кадр станет и превью в Telegram</small></span>
         <div class="ar-fields" id="ad-cover-img">
           <button type="button" class="btn" id="ad-cover-pick">Выбрать картинку…</button>
@@ -111,27 +127,15 @@ export async function openAssembleDialog(publicId) {
         </div>
         <label class="ar-row ad-pick" id="ad-up-raw-row" hidden><input type="checkbox" id="ad-up-raw"><b>Загрузить и равку в отчёт после сборки</b>
           <span class="ar-meta">видео с компьютера уйдёт на сервер отдельным файлом — это долго, зато исходник будет в отчёте</span></label>
-        <span class="ar-label">Кому отправить <small>— готовое видео всегда ложится в отчёт; сюда — кому ещё прислать в личку</small></span>
-        <div class="ar-list" id="ad-recipients">
-          <div class="ar-row ad-pick" style="opacity:.85;"><b>Мне</b><span class="ar-meta">всегда</span></div>
-          ${(opts.people || []).map(p => `<label class="ar-row ad-pick"><input type="checkbox" data-ad-to="${p.telegram_id}"><b>${esc(p.name)}</b></label>`).join("") || `<p class="ar-hint" style="margin:6px 0 0;">Других участников нет.</p>`}
-        </div>
-        <span class="ar-label">Где собирать <small>— у себя быстрее: рендер на вашей видеокарте, а не на сервере</small></span>
-        <div class="ar-seg" id="ad-where">
-          <button type="button" class="on" data-where="server">На сервере</button>
-          <button type="button" data-where="local" id="ad-where-local" disabled title="Проверяю видеокарту…">У себя (видеокарта)</button>
-        </div>
-        <p class="ar-hint" id="ad-where-hint"></p>
-        <p class="ar-hint" id="ad-tools-status">Проверяю ffmpeg и видеокарту…</p>
-        <span class="ar-label">Название файла <small>— как будет называться готовый видеофайл</small></span>
-        <input class="field-input" id="ad-file-name" maxlength="80" placeholder="${esc(publicId)}" autocomplete="off">
-        <p class="ar-hint" id="ad-file-name-hint" style="margin:6px 0 0;"></p>
-        <span class="ar-label">Качество и формат</span>
-        <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}"${p.index === defaultProfile(opts.profiles) ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
-        <p class="ar-hint" id="ad-profile-desc"></p>
-        <div class="ad-est" id="ad-est"><span>Считаю примерный размер…</span></div>
-        <p class="ar-hint">${opts.intro ? `Интро тайтла: ${esc(opts.intro)}.` : "Интро: нет — соберём без него."} ${opts.watermark ? `Водяной знак: ${esc(opts.watermark)}.` : "Водяной знак: нет."}
-          Свой профиль качества настраивается в Настройки → Сборка финала.</p>
+        <!-- Список людей длинный (вся команда) — свёрнут в одну строку, чтобы не отодвигать «Где собирать» и «Качество». -->
+        <details class="ad-to">
+          <summary><span class="ar-label" style="display:inline;">Кому ещё прислать</span> <span class="ad-to-sum" id="ad-to-sum">только мне</span></summary>
+          <p class="ar-hint" style="margin:6px 0;">Готовое видео всегда ложится в отчёт и приходит вам; отметьте, кому ещё прислать в личку.</p>
+          <div class="ar-list" id="ad-recipients">
+            ${(opts.people || []).map(p => `<label class="ar-row ad-pick"><input type="checkbox" data-ad-to="${p.telegram_id}" data-ad-name="${esc(p.name)}"><b>${esc(p.name)}</b></label>`).join("") || `<p class="ar-hint" style="margin:6px 0 0;">Других участников нет.</p>`}
+          </div>
+        </details>
+        <p class="ar-hint">${opts.intro ? `Интро тайтла: ${esc(opts.intro)}.` : "Интро: нет — соберём без него."} ${opts.watermark ? `Водяной знак: ${esc(opts.watermark)}.` : "Водяной знак: нет."}</p>
       </div>
       <div class="sheet-actions">
         <button class="btn" data-close>Отмена</button>
@@ -285,8 +289,45 @@ export async function openAssembleDialog(publicId) {
       if (typeof syncWhere === "function") syncWhere();
     });
     sheet.querySelector("[data-close]").addEventListener("click", () => finish(false));
+    // Свёрнутый список «Кому ещё прислать»: в заголовке — кого отметили.
+    const toSum = sheet.querySelector("#ad-to-sum");
+    const paintTo = () => {
+      const names = [...sheet.querySelectorAll("[data-ad-to]:checked")].map(c => c.dataset.adName);
+      toSum.textContent = names.length ? `мне и ${names.length > 2 ? `ещё ${names.length}` : names.join(", ")}` : "только мне";
+    };
+    sheet.querySelectorAll("[data-ad-to]").forEach(c => c.addEventListener("change", paintTo));
+
+    // «изменить свой профиль» — раздел «Сборка финала» в настройках; когда настройки закроют, список профилей обновится.
+    sheet.querySelector("#ad-prof-edit").addEventListener("click", () => {
+      document.getElementById("open-settings")?.click();
+      setTimeout(() => {
+        const settings = [...document.querySelectorAll(".overlay")].pop();
+        settings?.querySelector('[data-st-go="st-assemble"]')?.click();
+        if (!settings || settings === overlay) return;
+        new MutationObserver((_m, obs) => {
+          if (settings.isConnected) return;
+          obs.disconnect();
+          refreshProfiles();
+        }).observe(document.body, { childList: true });
+      }, 150);
+    });
+    async function refreshProfiles() {
+      try {
+        const fresh = await apiGet(`/report/${publicId}/assemble-options`);
+        if (!overlay.isConnected || !fresh.profiles) return;
+        const keep = profileSel.value;
+        opts.profiles = fresh.profiles;
+        profileSel.innerHTML = opts.profiles.map(p => `<option value="${p.index}">${esc(p.name)}</option>`).join("");
+        profileSel.value = opts.profiles.some(p => String(p.index) === keep) ? keep : String(defaultProfile(opts.profiles));
+        refreshDesc(); paintName(); paintEstimate();
+      } catch (_) { /* старый список остаётся — им тоже можно собрать */ }
+    }
+
     // «У себя»: только в приложении, где нашёлся кодировщик; интро, склейка и архивы с дорожками пока только на сервере.
+    // Выбор запоминается; если его ещё не было, а видеокарта NVIDIA готова — сразу «У себя» (сервер — 2 ядра процессора).
     let where = "server";
+    let wherePicked = false;   // человек сам нажал «На сервере» / «У себя» — больше не переключаем за него
+    const savedWhere = (() => { try { return localStorage.getItem(LAST_WHERE_KEY); } catch (_) { return null; } })();
     let localInfo = { ok: false, nvenc: false, pending: true };
     const whereHint = sheet.querySelector("#ad-where-hint");
     const localBtn = sheet.querySelector("#ad-where-local");
@@ -307,7 +348,7 @@ export async function openAssembleDialog(publicId) {
         : where === "local" ? `Рендер пойдёт на этом компьютере (${localInfo.nvenc ? "видеокарта NVIDIA, NVENC" : "процессор"}). Всё то же, что на сервере: интро, склейка, озвучка, логотип. Файлы скачаются с сервера, готовое видео бот отправит в Telegram и прикрепит к отчёту.`
         : "Рендер пойдёт на сервере (2 ядра процессора).";
     };
-    sheet.querySelectorAll("#ad-where button").forEach(b => b.addEventListener("click", () => { if (!b.disabled) { where = b.dataset.where; syncWhere(); } }));
+    sheet.querySelectorAll("#ad-where button").forEach(b => b.addEventListener("click", () => { if (!b.disabled) { where = b.dataset.where; wherePicked = true; syncWhere(); } }));
     sheet.querySelectorAll("[data-ad-audio]").forEach(c => c.addEventListener("change", syncWhere));
     sheet.querySelectorAll('input[name="ad-video"]').forEach(r => r.addEventListener("change", syncWhere));
     syncWhere();
@@ -320,6 +361,7 @@ export async function openAssembleDialog(publicId) {
         : localRenderSupport(p => { toolsLine.textContent = p.label || "Скачиваю ffmpeg…"; });
       run.then(info => {
         localInfo = info;
+        if (!wherePicked && info.ok) where = savedWhere === "server" ? "server" : savedWhere === "local" || info.nvenc ? "local" : "server";
         localBtn.title = info.ok ? "" : "Не найден рабочий кодировщик";
         toolsLine.textContent = describeTools(info.status);
         if (!info.ok) {
@@ -337,6 +379,7 @@ export async function openAssembleDialog(publicId) {
     const start = async (withPost) => {
       startBtns().forEach(b => { b.disabled = true; });
       rememberProfile(opts.profiles.find(p => String(p.index) === profileSel.value));
+      if (selVideo() !== "local") { try { localStorage.setItem(LAST_WHERE_KEY, where); } catch (_) { /* не запомнится */ } }
       try {
         const body = {
           post: withPost,
