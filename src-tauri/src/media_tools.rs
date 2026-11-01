@@ -1196,7 +1196,31 @@ pub(crate) fn run_ffmpeg(
     out_path: &Path,
     stage: Stage,
 ) -> Result<(), String> {
-    run_ffmpeg_in(progress, args, out_path, stage, None)
+    run_ffmpeg_in(progress, args, out_path, stage, None, None)
+}
+
+/// Куда отдавать живой вывод ffmpeg (вид строки, текст): `cmd` — команда запуска, `stat` — сводка раз в секунду
+/// (кадр, fps, скорость, битрейт), `out` / `warn` / `err` — строки самого ffmpeg. Нужен консоли «Сборки у себя».
+pub(crate) type LineSink<'a> = &'a (dyn Fn(&str, &str) + Sync);
+
+fn line_kind(line: &str) -> &'static str {
+    let low = line.to_ascii_lowercase();
+    if low.contains("error") || low.contains("invalid") || low.contains("failed") || low.contains("cannot") || low.contains("could not") {
+        "err"
+    } else if low.contains("warning") || low.contains("deprecated") || low.contains("past duration") {
+        "warn"
+    } else {
+        "out"
+    }
+}
+
+/// Аргумент для показа: с пробелами — в кавычках, чтобы команду можно было скопировать и повторить.
+fn shell_arg(arg: &str) -> String {
+    if arg.is_empty() || arg.contains(' ') || arg.contains('"') {
+        format!("\"{}\"", arg.replace('"', "\\\""))
+    } else {
+        arg.to_string()
+    }
 }
 
 /// То же, но ffmpeg запускается в рабочей папке `cwd` (если задана): так входные файлы можно называть короткими
@@ -1207,8 +1231,22 @@ pub(crate) fn run_ffmpeg_in(
     out_path: &Path,
     stage: Stage,
     cwd: Option<&Path>,
+    on_line: Option<LineSink>,
 ) -> Result<(), String> {
     let ffmpeg = resolve_ffmpeg();
+    let say = |kind: &str, text: &str| {
+        if let Some(sink) = on_line {
+            sink(kind, text);
+        }
+    };
+    say(
+        "cmd",
+        &format!(
+            "ffmpeg {} -progress pipe:2 -nostats {}",
+            args.iter().map(|a| shell_arg(a)).collect::<Vec<_>>().join(" "),
+            shell_arg(&out_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+        ),
+    );
     // Существовал ли файл ДО запуска: если да, удалять его при ошибке
     // нельзя — это чужой файл, который пользователь выбрал сам (ffmpeg
     // с -y его, к сожалению, уже перезаписал, но убирать ещё и имя —
@@ -1241,7 +1279,26 @@ pub(crate) fn run_ffmpeg_in(
     progress.report(stage.base, &stage.label);
     let mut stderr_text = String::new();
     let mut next_log_percent = 5_u8;
+    // Сводка для консоли: последние значения из блока -progress, отдаётся не чаще раза в секунду.
+    let (mut frame, mut fps, mut speed, mut bitrate) = (String::new(), String::new(), String::new(), String::new());
+    let mut last_stat = std::time::Instant::now();
     for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+        if on_line.is_some() {
+            if let Some((key, value)) = line.split_once('=') {
+                let value = value.trim().to_string();
+                match key {
+                    "frame" => frame = value,
+                    "fps" => fps = value,
+                    "speed" => speed = value,
+                    "bitrate" => bitrate = value,
+                    "progress" if last_stat.elapsed().as_millis() >= 1000 || value == "end" => {
+                        last_stat = std::time::Instant::now();
+                        say("stat", &format!("кадр {frame} · {fps} fps · скорость {speed} · битрейт {bitrate}"));
+                    }
+                    _ => {}
+                }
+            }
+        }
         if let Some(us) = line.strip_prefix("out_time_ms=").and_then(|v| v.trim().parse::<f64>().ok()) {
             // Название поля у ffmpeg историческое: значение в
             // МИКРОсекундах, а не в миллисекундах (рядом лежит
@@ -1256,6 +1313,9 @@ pub(crate) fn run_ffmpeg_in(
                 }
             }
         } else if !is_progress_line(&line) {
+            if !line.trim().is_empty() {
+                say(line_kind(&line), &line);
+            }
             // Ошибка на повреждённом файле умеет быть многотысячной —
             // в сообщение пользователю столько не нужно, а в лог уедет
             // всё равно первая строка, она и информативна.
@@ -1293,6 +1353,7 @@ pub(crate) fn run_ffmpeg_in(
         }
         let details = stderr_text.trim();
         let code = status.code().map_or("неизвестен".into(), |c| c.to_string());
+        say("err", &format!("ffmpeg завершился с кодом {code}"));
         return Err(if details.is_empty() {
             format!("ffmpeg завершился с кодом {code}, но не сообщил причину; откройте логи приложения.")
         } else {
@@ -1300,6 +1361,7 @@ pub(crate) fn run_ffmpeg_in(
         });
     }
     log::info!(target: "project_desktop::media_tools", "FFmpeg завершён успешно за {:.0} с.", started.elapsed().as_secs_f64());
+    say("ok", &format!("Шаг готов за {:.0} с", started.elapsed().as_secs_f64()));
     progress.report(stage.base + stage.span, &stage.label);
     Ok(())
 }

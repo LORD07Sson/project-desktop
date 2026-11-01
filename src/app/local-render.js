@@ -68,13 +68,72 @@ function card(overlay) {
     el = document.createElement("div");
     el.id = "rd-local-card";
     el.className = "rd-asm";
+    // Шапка перерисовывается на каждое событие прогресса; консоль — отдельный постоянный блок,
+    // иначе её прокрутка и раскрытие сбрасывались бы несколько раз в секунду.
+    el.innerHTML = `<div class="lr-head"></div>
+      <details class="lr-console" open>
+        <summary><span>Журнал рендера</span> <em class="lr-count">0 строк</em>
+          <label class="lr-verbose" title="Весь вывод ffmpeg: версия, потоки, параметры кодека"><input type="checkbox" data-lr-verbose> подробно</label>
+          <button type="button" class="pf-link" data-lr-copylog>копировать</button></summary>
+        <div class="lr-log" role="log" aria-live="polite"></div>
+      </details>`;
+    el.querySelector("[data-lr-copylog]").addEventListener("click", e => { e.preventDefault(); copyJournal(); });
+    el.querySelector("[data-lr-verbose]").addEventListener("change", e => el.classList.toggle("lr-show-out", e.target.checked));
     slot.appendChild(el);
   }
   return el;
 }
 
+// ---------- журнал рендера: что сделано, что делается, вывод ffmpeg ----------
+const JOURNAL_MAX = 800;
+let journal = [];        // {at, kind, text}
+let journalEl = null;    // .lr-log текущей карточки
+const KIND_MARK = { step: "▶", ok: "✓", warn: "!", err: "✗", cmd: "$", stat: "⏱", out: "·" };
+
+function journalReset(el) {
+  journal = [];
+  journalEl = el ? el.querySelector(".lr-log") : null;
+  if (journalEl) journalEl.textContent = "";
+}
+
+function journalAdd(kind, text) {
+  const at = new Date();
+  journal.push({ at, kind, text });
+  if (journal.length > JOURNAL_MAX) journal.splice(0, journal.length - JOURNAL_MAX);
+  if (!journalEl || !journalEl.isConnected) return;
+  const atBottom = journalEl.scrollHeight - journalEl.scrollTop - journalEl.clientHeight < 24;
+  // Сводка «кадр · fps · скорость» обновляется на месте, а не сыплется новой строкой раз в секунду.
+  const last = journalEl.lastElementChild;
+  let row = kind === "stat" && last && last.classList.contains("k-stat") ? last : null;
+  if (!row) {
+    row = document.createElement("div");
+    row.className = `lr-line k-${kind}`;
+    journalEl.appendChild(row);
+    while (journalEl.childElementCount > JOURNAL_MAX) journalEl.firstElementChild.remove();
+  }
+  row.textContent = `${at.toLocaleTimeString("ru-RU")}  ${KIND_MARK[kind] || "·"} ${text}`;
+  if (kind === "err") journalEl.closest(".lr-console")?.setAttribute("open", "");
+  const count = journalEl.closest(".lr-console")?.querySelector(".lr-count");
+  if (count) count.textContent = `${journal.length} строк`;
+  if (atBottom) journalEl.scrollTop = journalEl.scrollHeight;
+}
+
+function journalText(limit = JOURNAL_MAX) {
+  return journal.slice(-limit).map(l => `${l.at.toLocaleTimeString("ru-RU")} ${KIND_MARK[l.kind] || "·"} ${redactDiagnosticText(l.text)}`).join("\n");
+}
+
+async function copyJournal() {
+  try {
+    await navigator.clipboard.writeText(journalText() || "Журнал пуст.");
+    toast("Журнал рендера скопирован.", "success");
+  } catch (e) {
+    toast(`Не удалось скопировать журнал: ${String((e && e.message) || e)}`, "error");
+  }
+}
+
 function paint(el, { title, label, fraction, cancel, warning, diagnostic }) {
   const pct = Math.round((fraction || 0) * 100);
+  el = el.querySelector(".lr-head") || el;
   el.innerHTML = `<b>${esc(title)}</b>
     <span class="rd-asm-step">${esc(label || "")}</span>
     <div class="rd-asm-bar"><i style="width:${pct}%"></i><em>${pct}%</em></div>
@@ -107,6 +166,7 @@ function makeRenderDiagnostic(monitor, startedAt, error = "", phase = "") {
     `Длительность операции: ${Math.floor((Date.now() - startedAt) / 1000)} с`,
     error ? `Ошибка: ${redactDiagnosticText(error)}` : "Ошибка: нет; прогресс не обновлялся",
     `Время: ${new Date().toISOString()}`,
+    journal.length ? `\nЖурнал рендера (последние строки):\n${journalText(80)}` : "",
   ].join("\n");
 }
 
@@ -130,8 +190,12 @@ function showRenderFailure(error, monitor, startedAt, phase) {
   const sheet = openSheet(`<h2>Операция не завершилась</h2>
     <p class="lr-error-summary">Этап: ${esc(phase || monitor?.label || monitor?.stage || "подготовка")} · последний прогресс FFmpeg ${Math.round((monitor?.fraction || 0) * 100)}%</p>
     <pre class="lr-error-detail">${esc(detail || "FFmpeg завершился без текста ошибки.")}</pre>
+    ${journal.length ? `<details class="lr-console" open><summary><span>Журнал рендера — последние строки</span></summary><pre class="lr-error-detail lr-error-log">${esc(journalText(60))}</pre></details>` : ""}
     <p class="lr-error-summary">Скопируйте диагностику и отправьте её разработчику. Подробная причина также записана в лог приложения.</p>
     <div class="sheet-actions"><button type="button" class="btn" data-lr-logs>Открыть логи</button><button type="button" class="btn primary" data-lr-copy>Скопировать диагностику</button><button type="button" class="btn" data-lr-close>Закрыть</button></div>`);
+  // Ошибка — в самом конце журнала: показываем его сразу с последних строк.
+  const tail = sheet.querySelector(".lr-error-log");
+  if (tail) tail.scrollTop = tail.scrollHeight;
   sheet.querySelector("[data-lr-copy]")?.addEventListener("click", () => copySupportReport(report));
   sheet.querySelector("[data-lr-logs]")?.addEventListener("click", openAppLogs);
   sheet.querySelector("[data-lr-close]")?.addEventListener("click", () => dismissSheet(sheet));
@@ -197,9 +261,15 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   running = publicId;
   const startedAt = Date.now();
   const el = card(overlay);
+  journalReset(el);
+  journalAdd("step", `Сборка ${publicId} у себя: готовлю план`);
   paint(el, { title: "🖥 Сборка у себя", label: "Готовлю план сборки…", fraction: 0, cancel: false });
   let monitor = null;
   let unlisten = () => {};
+  let unlistenLog = () => {};
+  try {
+    unlistenLog = await listen("localrender-log", ev => { const p = ev.payload || {}; journalAdd(p.kind || "out", String(p.text || "")); });
+  } catch (_) { /* без журнала рендер всё равно идёт; причина ошибки будет в окне ошибки */ }
   let stallTimer = null;
   let warnedMinute = 0;
   let phase = "подготовка";
@@ -256,6 +326,7 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
     paint(el, { title: "🖥 Сборка у себя", label: "Готовлю план сборки…", fraction: 0, cancel: false });
     phase = "запрос плана сборки";
     plan = await apiPost(`/report/${publicId}/local-render/plan`, selection);
+    journalAdd("ok", `План получен с сервера: файлов ${(plan.downloads || []).length}, шагов ffmpeg ${(plan.steps || []).length}`);
     paint(el, { title: "🖥 Сборка у себя", label: "Скачиваю файлы…", fraction: 0, cancel: true });
     phase = "скачивание файлов и рендер";
     monitor = { active: true, stage: "download", label: "Скачиваю файлы…", fraction: 0, lastAdvanceAt: Date.now() };
@@ -273,7 +344,9 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
     phase = "загрузка финала на сервер";
     if (await askSaveCopy(done)) await saveCopy(done);
     paint(el, { title: "⬆ Отправляю готовое видео на сервер", label: `${done.out_name} · ${(done.size / 1048576).toFixed(0)} МБ · ${done.encoder}`, fraction: 1, cancel: false });
+    journalAdd("step", `Отправляю на сервер: ${done.out_name}, ${(done.size / 1048576).toFixed(0)} МБ (${done.encoder})`);
     await invoke("local_render_upload", { publicId, path: done.path, initData: state.token || "" });
+    journalAdd("ok", "Сервер принял видео — дальше бот: обложка, Telegram, отчёт");
     if (uploadRaw && localPath) {
       phase = "загрузка равки в отчёт";
       paint(el, { title: "⬆ Загружаю равку в отчёт", label: `${localPath.split("\\").pop().split("/").pop()} — это может занять время`, fraction: 1, cancel: false });
@@ -290,6 +363,7 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   } catch (e) {
     const text = String((e && e.message) || e);
     if (monitor) monitor.active = false;
+    journalAdd(/отменен/i.test(text) ? "warn" : "err", `${phase}: ${text}`);
     el.remove();
     if (/отменен/i.test(text)) toast("Сборка у себя отменена.", "info");
     else showRenderFailure(text, monitor, startedAt, phase);
@@ -297,6 +371,7 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   } finally {
     if (stallTimer) clearInterval(stallTimer);
     unlisten();
+    unlistenLog();
     running = null;
     try { await invoke("local_render_cleanup", { publicId }); } catch (_) { /* временная папка уберётся сама */ }
   }

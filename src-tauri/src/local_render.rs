@@ -488,6 +488,9 @@ pub async fn run(
             serde_json::json!({ "stage": stage, "fraction": fraction.clamp(0.0, 1.0), "label": label }),
         );
     };
+    // Журнал для консоли в карточке рендера: что сделано и что делается (строки ffmpeg шлёт run_step).
+    let journal = |kind: &str, text: &str| log_line(app, kind, text);
+    journal("step", &format!("Сборка {} у себя: файлов {}, шагов ffmpeg {}", plan.public_id, plan.downloads.len(), plan.steps.len()));
 
     // 1) тексты (надпись) — маленькие файлы рядом с видео
     for (name, content) in &plan.texts {
@@ -503,6 +506,7 @@ pub async fn run(
         if item.local.unwrap_or(false) {
             let src = local_video.as_ref().ok_or("План требует видео с этого компьютера, но файл не выбран.")?;
             emit("download", index as f64 / total_files as f64 * 0.2, &format!("Беру видео с компьютера: {label}"));
+            journal("step", &format!("Видео с компьютера: {label}"));
             let dest = dir.join(name);
             // Жёсткая ссылка не копирует гигабайты (если файл на том же диске, что и Temp); иначе обычное копирование.
             if std::fs::hard_link(src, &dest).is_err() {
@@ -521,14 +525,20 @@ pub async fn run(
         } else {
             format!("{api_base}/report/{}/local-asset?file={}", plan.public_id, item.file.unwrap_or(0))
         };
+        journal("step", &format!("Скачиваю с сервера: {label}"));
         let mut resp = client
             .get(&url)
             .header("X-Init-Data", init_data)
             .send()
             .await
-            .map_err(|e| format!("Не удалось скачать «{label}»: {e}"))?;
+            .map_err(|e| {
+                let text = format!("Не удалось скачать «{label}»: {e}");
+                journal("err", &text);
+                text
+            })?;
         if !resp.status().is_success() {
             let detail = response_detail(resp).await;
+            journal("err", &format!("Сервер не отдал «{label}»: {detail}"));
             return Err(format!("Не удалось скачать «{label}»: {detail}"));
         }
         let total = resp.content_length().unwrap_or(0);
@@ -552,6 +562,7 @@ pub async fn run(
                 );
             }
         }
+        journal("ok", &format!("Скачано: {label} — {}", fmt_mb(done)));
     }
     emit("download", 0.2, "Файлы скачаны");
 
@@ -582,6 +593,7 @@ pub async fn run(
             step.label.clone()
         };
         emit("render", base, &label);
+        journal("step", &format!("Шаг {} из {}: {label} → {out_name}", index + 1, plan.steps.len()));
         let out_path = dir.join(&out_name);
         let mut attempt = run_step(app, &dir, &out_path, args, &label, base, span, step.duration).await;
         if let (Err(first), Some(fb)) = (&attempt, &step.fallback) {
@@ -589,9 +601,13 @@ pub async fn run(
                 // Склейка без перекодирования не вышла — общая перекодировка с фильтром concat.
                 let (fb_args, fb_label) = pick_args(&fb.args, fb.args_nvenc.as_ref(), step.vcodec.as_deref(), &encs)?;
                 let label = format!("{} (запасной путь) — {}", step.label, fb_label);
+                journal("warn", &format!("Не вышло, пробую запасной путь: {label}"));
                 emit("render", base, &label);
                 attempt = run_step(app, &dir, &out_path, fb_args, &label, base, span, 0.0).await;
             }
+        }
+        if let Err(error) = &attempt {
+            journal("err", &format!("Шаг «{}» не выполнен: {error}", step.label));
         }
         attempt?;
         base += span;
@@ -605,6 +621,7 @@ pub async fn run(
         return Err("Рендер дал пустой файл.".into());
     }
     emit("render", 1.0, "Рендер готов");
+    journal("ok", &format!("Рендер готов: {} — {}, {:.0} с", plan.final_name, fmt_mb(size), started.elapsed().as_secs_f64()));
     Ok(RenderResult {
         path: final_path.to_string_lossy().into_owned(),
         out_name: plan.out_name,
@@ -612,6 +629,14 @@ pub async fn run(
         encoder: used_encoder,
         seconds: started.elapsed().as_secs_f64(),
     })
+}
+
+/// Строка журнала «Сборки у себя» в окно (событие localrender-log): kind — step/ok/warn/err/cmd/stat/out.
+/// Длинные строки ffmpeg обрезаются — консоли хватает начала, полный текст всё равно уходит в лог приложения при ошибке.
+fn log_line(app: &tauri::AppHandle, kind: &str, text: &str) {
+    use tauri::Emitter;
+    let text: String = text.chars().take(600).collect();
+    let _ = app.emit("localrender-log", serde_json::json!({ "kind": kind, "text": text }));
 }
 
 /// Выбор аргументов шага: NVENC, если видеокарта его тянет; иначе программный кодек (если он есть); шаги без перекодирования — как есть.
@@ -663,8 +688,9 @@ async fn run_step(
             }
         };
         let progress = Progress(&sink);
+        let lines = |kind: &str, text: &str| log_line(&app, kind, text);
         let stage = Stage { label, base, span, duration };
-        run_ffmpeg_in(&progress, &args, &out_path, stage, Some(&dir))
+        run_ffmpeg_in(&progress, &args, &out_path, stage, Some(&dir), Some(&lines))
     })
     .await
     .map_err(|e| format!("Рендер не завершился: {e}"))?

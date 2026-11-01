@@ -3252,6 +3252,23 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-asm-stall > span, .lr-error-summary { color: var(--ink-soft); line-height: 1.5; }
 .rd-asm-support { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .lr-error-detail { max-height: 32vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .2); white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+/* Журнал «Сборки у себя»: шаги, команда ffmpeg, сводка кадр/fps/скорость, предупреждения и ошибки — как консоль. */
+.lr-console { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .22); }
+.lr-console > summary { display: flex; align-items: center; gap: 10px; padding: 7px 12px; cursor: pointer; font-size: 12px; font-weight: 650; color: var(--ink-soft); list-style: none; }
+.lr-console > summary::-webkit-details-marker { display: none; }
+.lr-console > summary .lr-count { font-style: normal; font-weight: 500; color: var(--ink-dim); }
+.lr-console > summary .lr-verbose { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-weight: 500; color: var(--ink-dim); }
+.lr-log { max-height: 240px; overflow: auto; padding: 6px 12px 10px; font: 11.5px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lr-line { color: var(--ink-soft); }
+.lr-line.k-step { color: var(--ink); font-weight: 650; margin-top: 4px; }
+.lr-line.k-ok { color: var(--s-done); }
+.lr-line.k-warn { color: var(--s-work); }
+.lr-line.k-err { color: var(--s-stop); font-weight: 650; }
+.lr-line.k-cmd { color: var(--ink-dim); }
+.lr-line.k-stat { color: var(--gold, #ffc46a); }
+.lr-line.k-out { display: none; color: var(--ink-dim); }
+.lr-show-out .lr-line.k-out { display: block; }
+.lr-error-log { max-height: 26vh; }
 
 /* Окно «Собрать финал» */
 .ad-body { display: grid; gap: 2px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
