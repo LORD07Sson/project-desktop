@@ -8,6 +8,22 @@ import { can } from "./state.js";
 import { getLocalVideo } from "./local-video.js";
 import { localRenderSupport, prepareLocalRender, describeTools } from "./local-render.js";
 
+// Профиль качества по умолчанию. Раньше всегда стоял первый («Стандарт»), а «Свой профиль» — последним в списке:
+// не переключил руками — и ffmpeg кодировал не своим профилем. Теперь: тот, что выбирали в прошлый раз
+// (если он ещё есть), иначе «Свой профиль», иначе первый.
+const LAST_PROFILE_KEY = "project-assemble-profile";
+function defaultProfile(profiles) {
+  let last = null;
+  try { last = JSON.parse(localStorage.getItem(LAST_PROFILE_KEY) || "null"); } catch (_) { /* нет памяти — не беда */ }
+  const byName = last && profiles.find(p => p.name === last.name);
+  if (byName) return byName.index;
+  const own = profiles.find(p => /^свой профиль/i.test(String(p.name || "")));
+  return (own || profiles[0] || {}).index;
+}
+function rememberProfile(p) {
+  try { if (p) localStorage.setItem(LAST_PROFILE_KEY, JSON.stringify({ name: p.name })); } catch (_) { /* не запомнится */ }
+}
+
 export async function openAssembleDialog(publicId) {
   const overlay = openSheet(`<h2>Собрать финал</h2><div class="no-assignee">Загружаю файлы отчёта…</div>`);
   const sheet = overlay.querySelector(".sheet");
@@ -111,7 +127,7 @@ export async function openAssembleDialog(publicId) {
         <input class="field-input" id="ad-file-name" maxlength="80" placeholder="${esc(publicId)}" autocomplete="off">
         <p class="ar-hint" id="ad-file-name-hint" style="margin:6px 0 0;"></p>
         <span class="ar-label">Качество и формат</span>
-        <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}">${esc(p.name)}</option>`).join("")}</select>
+        <select class="field-input" id="ad-profile">${opts.profiles.map(p => `<option value="${p.index}"${p.index === defaultProfile(opts.profiles) ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
         <p class="ar-hint" id="ad-profile-desc"></p>
         <div class="ad-est" id="ad-est"><span>Считаю примерный размер…</span></div>
         <p class="ar-hint">${opts.intro ? `Интро тайтла: ${esc(opts.intro)}.` : "Интро: нет — соберём без него."} ${opts.watermark ? `Водяной знак: ${esc(opts.watermark)}.` : "Водяной знак: нет."}
@@ -320,6 +336,7 @@ export async function openAssembleDialog(publicId) {
     const startBtns = () => sheet.querySelectorAll("#ad-start, #ad-start-post");
     const start = async (withPost) => {
       startBtns().forEach(b => { b.disabled = true; });
+      rememberProfile(opts.profiles.find(p => String(p.index) === profileSel.value));
       try {
         const body = {
           post: withPost,
