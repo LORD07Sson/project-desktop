@@ -1871,7 +1871,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 /* размер · дата · ↑ · ↓ · ✓ — пять отдельных колонок; заголовок (nyaa.js listHtml) идёт по той же сетке */
 .ny-head, .ny-row { grid-template-columns: 24px 40px minmax(0, 1fr) 72px 84px 56px 48px 60px 56px; gap: 0 10px; }
 /* Липкие заголовок и подпись дня — стекло в тон фона, а не сплошная чёрная полоса поверх полупрозрачной страницы */
-.ny-head { display: grid; align-items: center; padding: 0 8px; height: 32px; font-size: 12px; color: var(--n-t3); border-bottom: 1px solid var(--n-line); position: sticky; top: 0; background: color-mix(in srgb, var(--bg, #0f0a08) 55%, transparent); backdrop-filter: blur(14px); z-index: 2; }
+.ny-head { display: grid; align-items: center; padding: 0 8px; height: 32px; font-size: 12px; color: var(--n-t3); border-bottom: 1px solid var(--n-line); position: sticky; top: 0; background: color-mix(in srgb, var(--bg, #0f0a08) 92%, transparent); backdrop-filter: blur(14px); z-index: 2; }
 .ny-head .r { justify-self: end; text-align: right; }
 .ny-h2 { cursor: default; }
 .ny-sorth { border: 0; background: none; padding: 0; font: inherit; color: var(--n-t3); cursor: pointer; white-space: nowrap; }
@@ -1986,8 +1986,11 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-side-btn .ny-badge:empty { display: none; }
 .ny-main-col { min-width: 0; }
 .ny-main-col .ny-search { margin-bottom: 8px; }
-.ny-day { position: sticky; top: 32px; z-index: 1; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; color: var(--n-t2); background: color-mix(in srgb, var(--bg, #0f0a08) 55%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--n-line); }
-.ny-head { top: 0; }
+.ny-day { position: sticky; top: 22px; z-index: 1; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; color: var(--n-t2); background: color-mix(in srgb, var(--bg, #0f0a08) 92%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--n-line); }
+/* У .scroll-panel сверху 10px отступа, и липкое «top: 0» вставало на 10px ниже края прокрутки — строки ехали в этой
+ * щели над шапкой («убегало за рамку»). Поднимаем шапку на отступ, полосу дня — следом (32 − 10).
+ * Фон шапки и полосы дня почти плотный (92%): размытие WebView2 рисует не везде, а на 55% строки читались сквозь них. */
+.ny-head { top: -10px; }
 /* «Источники и зеркала» */
 /* Карточки разной высоты (у Nyaa шесть зеркал, у AniList два) — колонками «кирпичиками», без общей высоты ряда:
    иначе под короткими карточками оставались дыры в пол-экрана. */
