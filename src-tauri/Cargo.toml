@@ -116,7 +116,7 @@ windows = { version = "0.62", features = [
 ] }
 # Тосты под своим AUMID (desktop_notify.rs) — та же версия, что тянет
 # tauri-plugin-notification, отдельной копии крейта не появляется.
-tauri-winrt-notification = "0.7"
+tauri-winrt-notification = "0.8"
 # Только для disable_browser_accelerator_keys (main.rs). Должна совпадать
 # с Tauri/Wry: их WebView2 controller использует webview2-com 0.39.1 и
 # windows-core 0.62.2; старый 0.38 создаёт несовместимые COM-типы.
