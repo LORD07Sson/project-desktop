@@ -35,9 +35,10 @@ function dueText(left) {
 }
 
 const COLUMNS = [
-  { key: "hot", label: "Горит", hint: "просрочено, сегодня и завтра", test: l => l !== null && l <= 1 },
-  { key: "week", label: "На неделе", hint: "2–7 дней", test: l => l !== null && l > 1 && l <= 7 },
-  { key: "later", label: "Позже", hint: "дальше недели и без срока", test: l => l === null || l > 7 },
+  { key: "submitted", label: "Сдано вовремя", hint: "личная сдача до срока", test: it => it.personal_submitted_by_deadline },
+  { key: "hot", label: "Горит", hint: "просрочено, сегодня и завтра", test: (it, l) => !it.personal_submitted_by_deadline && l !== null && l <= 1 },
+  { key: "week", label: "На неделе", hint: "2–7 дней", test: (it, l) => !it.personal_submitted_by_deadline && l !== null && l > 1 && l <= 7 },
+  { key: "later", label: "Позже", hint: "дальше недели и без срока", test: (it, l) => !it.personal_submitted_by_deadline && (l === null || l > 7) },
 ];
 
 // Готовность по статусу: у серии в очереди нет цепочки этапов, только
@@ -76,12 +77,14 @@ function countdown() {
 }
 
 function rowHtml(it, today) {
+  const submitted = !!it.personal_submitted_by_deadline;
   const left = daysLeft(it.deadline, today);
   const src = it.poster_url ? imgProxy(it.poster_url) : null;
   const head = it.title_name || it.title;
   const ep = it.title_name ? it.episode : "";
   const pct = STATUS_PCT[it.status] ?? 0;
-  const hot = left !== null && left <= 1;
+  const hot = !submitted && left !== null && left <= 1;
+  const due = submitted ? "Сдано вовремя" : left === 0 ? countdown() : dueText(left);
   return `
     <div class="kd-gl kd-qr${hot ? " hot" : ""} q-open" data-q-open="${esc(it.public_id)}" role="button" tabindex="0" aria-label="Открыть отчёт ${esc(it.public_id)}">
       ${src ? `<img class="kd-qr-pc" src="${src}" alt="" loading="lazy">` : `<span class="kd-qr-pc kd-qr-ph"></span>`}
@@ -92,10 +95,10 @@ function rowHtml(it, today) {
       </div>
       <div class="kd-qr-pr"><small><span>Готовность</span><span>${pct}%</span></small><span class="kd-track"><i style="width:${pct}%"></i></span></div>
       <div class="kd-qr-cd">
-        <small>${left === 0 ? "Осталось" : "Срок"}</small>
-        <b ${left === 0 ? "data-q-cd" : ""}>${left === 0 ? countdown() : dueText(left)}</b>
+        <small>${submitted ? "Статус" : left === 0 ? "Осталось" : "Срок"}</small>
+        <b ${!submitted && left === 0 ? "data-q-cd" : ""}>${due}</b>
       </div>
-      <div class="kd-qr-ac"><button class="btn${left !== null && left <= 0 ? " primary" : ""}" type="button">Открыть отчёт</button>${state.isAdmin ? "" : `<span class="kd-qr-bot">сдать работу — в боте</span>`}</div>
+      <div class="kd-qr-ac"><button class="btn${!submitted && left !== null && left <= 0 ? " primary" : ""}" type="button">Открыть отчёт</button>${state.isAdmin ? "" : `<span class="kd-qr-bot">сдать работу — в боте</span>`}</div>
     </div>`;
 }
 
@@ -137,7 +140,8 @@ export async function loadQueue() {
   // Фон окна — обложка первой (самой срочной) серии на руках.
   const lead = items.find(it => it.title_id || it.poster_url);
   if (lead) setBackdrop(titleArt(lead.title_id, "banner", 1440), imgProxy(lead.poster_url));
-  const lefts = items.map(it => daysLeft(it.deadline, today)).filter(l => l !== null);
+  const activeItems = items.filter(it => !it.personal_submitted_by_deadline);
+  const lefts = activeItems.map(it => daysLeft(it.deadline, today)).filter(l => l !== null);
   const nearest = lefts.length ? Math.min(...lefts) : null;
   const overdue = lefts.filter(l => l < 0).length;
 
@@ -175,7 +179,7 @@ export async function loadQueue() {
   }
 
   const groups = COLUMNS.map(col => {
-    const list = items.filter(it => col.test(daysLeft(it.deadline, today)));
+    const list = items.filter(it => col.test(it, daysLeft(it.deadline, today)));
     if (!list.length) return "";
     return `
       <div class="kd-sh"><h2>${col.label}</h2><span class="kd-label">${list.length} · ${col.hint}</span><span class="kd-orn"></span></div>
@@ -217,6 +221,7 @@ const STATUS_LOOK = {
 // Срок по-человечески: «просрочено 2 дн», «сегодня», «завтра», «через 5 дн», «12.11».
 function dueChip(item) {
   if (item.is_done) return `<span class="psb-due done">сдано</span>`;
+  if (item.submitted_by_deadline) return `<span class="psb-due done">сдано вовремя</span>`;
   if (!item.deadline) return `<span class="psb-due">без срока</span>`;
   const [y, m, d] = item.deadline.slice(0, 10).split("-").map(Number);
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -412,7 +417,11 @@ export async function refreshQueueBadge() {
   if (!el) return;
   try {
     const d = await apiGet("/me/queue");
-    const hot = (d.items || []).filter(it => { const l = daysLeft(it.deadline, d.today); return l !== null && l <= 1; }).length;
+    const hot = (d.items || []).filter(it => {
+      if (it.personal_submitted_by_deadline) return false;
+      const l = daysLeft(it.deadline, d.today);
+      return l !== null && l <= 1;
+    }).length;
     el.textContent = String(hot);
     el.hidden = !hot;
   } catch (_) { el.hidden = true; }
