@@ -1,7 +1,7 @@
 // «Взять в работу»: окно поверх «Тайтлов». План с сервера
 // (/titles/{id}/work-plan): расписание серий, текущий состав, настройки,
 // если тайтл уже взят. Сохранение — /titles/{id}/take: состав, дедлайн
-// в часах от выхода, приоритет; вышедшие серии заводятся сразу, новые —
+// в минутах от выхода, приоритет; вышедшие серии заводятся сразу, новые —
 // сервер заводит сам по мере выхода и пишет составу в Telegram.
 
 import { state } from "./state.js";
@@ -11,7 +11,12 @@ import { esc } from "./utils.js";
 import { imgProxy } from "./title-page.js";
 import { loadUsers } from "./tabs.js";
 
-const DEADLINES = [[24, "сутки"], [48, "2 дня"], [72, "3 дня"], [120, "5 дней"], [168, "неделя"]];
+const DEADLINES = [
+  [15, "15 мин"], [30, "30 мин"], [45, "45 мин"],
+  [60, "1 час"], [90, "1,5 часа"], [120, "2 часа"], [180, "3 часа"],
+  [240, "4 часа"], [360, "6 часов"], [480, "8 часов"], [720, "12 часов"],
+  [1440, "сутки"], [2880, "2 дня"], [4320, "3 дня"], [7200, "5 дней"], [10080, "неделя"],
+];
 const PRIORITIES = [["normal", "Обычный"], ["high", "Высокий"], ["urgent", "Срочный"], ["low", "Низкий"]];
 // Названия — как роли студии (Команда → Роли): «Звукарь», а не «Звукорежиссёр», иначе состав тайтла и роли людей расходятся.
 const DEFAULT_ROLES = ["Даббер", "Звукарь", "Роспись", "Переводчик", "Тайминг"];
@@ -104,7 +109,9 @@ export async function openTakeWork(titleId, onDone) {
   let pattern = work && work.nyaa_group ? { group: work.nyaa_group, tags: (work.nyaa_tags || "").split(" ").filter(Boolean), ref: work.nyaa_ref || "" } : null;
   let browseItems = [];
   const crew = plan.crew.length ? plan.crew : DEFAULT_ROLES.map(role => ({ role, telegram_id: null }));
-  const hours = work ? work.deadline_hours : plan.deadline_hours_default;
+  const deadlineMinutes = work
+    ? Number(work.deadline_minutes || (work.deadline_hours * 60))
+    : Number(plan.deadline_minutes_default || (plan.deadline_hours_default * 60));
   const priority = work ? work.priority : "high";
   const poster = plan.poster_url ? imgProxy(plan.poster_url) : null;
   const votes = plan.likes + plan.dislikes;
@@ -127,7 +134,7 @@ export async function openTakeWork(titleId, onDone) {
       </div>
       <div class="tw-field">
         <label><em class="tw-n">2</em>Срок на серию — от её выхода</label>
-        <div class="tw-seg" data-seg="hours">${DEADLINES.map(([h, l]) => `<button type="button" data-v="${h}" class="${h === hours ? "on" : ""}">${l}</button>`).join("")}</div>
+        <div class="tw-seg" data-seg="deadline">${DEADLINES.map(([minutes, label]) => `<button type="button" data-v="${minutes}" class="${minutes === deadlineMinutes ? "on" : ""}">${label}</button>`).join("")}</div>
       </div>
       <div class="tw-field">
         <label>Приоритет задач</label>
@@ -177,7 +184,7 @@ export async function openTakeWork(titleId, onDone) {
       <button class="btn primary" data-save>${work ? "Сохранить" : "⚑ Взять в работу"}</button>
     </div>`;
 
-  const val = { hours, priority };
+  const val = { deadline: deadlineMinutes, priority };
   const backfill = backfillNumbers(plan);
   let queued = [];   // [{episode, kind, file}]
   const epSelect = sheet.querySelector("[data-tf-ep]");
@@ -295,7 +302,7 @@ export async function openTakeWork(titleId, onDone) {
     const b = e.target.closest("button[data-v]");
     if (!b) return;
     seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
-    val[seg.dataset.seg] = seg.dataset.seg === "hours" ? Number(b.dataset.v) : b.dataset.v;
+    val[seg.dataset.seg] = seg.dataset.seg === "deadline" ? Number(b.dataset.v) : b.dataset.v;
   }));
   const crewBox = sheet.querySelector("[data-crew]");
   crewBox.addEventListener("click", e => {
@@ -429,7 +436,7 @@ export async function openTakeWork(titleId, onDone) {
     try {
       const r = await apiPost(`/titles/${titleId}/take`, {
         crew: rows,
-        deadline_hours: val.hours,
+        deadline_minutes: val.deadline,
         priority: val.priority,
         backfill: sheet.querySelector("[data-backfill]").checked,
         nyaa: sheet.querySelector("[data-nyaa]").checked,
