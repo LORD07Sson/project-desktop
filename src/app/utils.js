@@ -15,6 +15,7 @@ export function initials(name) {
 }
 
 export function isOverdue(r) {
+  if (typeof r.personal_overdue === "boolean") return r.personal_overdue;
   if (!r.deadline || r.status === "completed" || r.status === "cancelled") return false;
   return r.deadline < new Date().toISOString().slice(0, 10);
 }

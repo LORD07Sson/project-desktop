@@ -70,7 +70,9 @@ export function workSectionHtml(p) {
       <div class="pp-load">
         <div class="pp-load-title">Сейчас в работе — ${p.load.length}</div>
         ${p.load.map(r => {
-          const late = r.deadline && r.deadline < today;
+          const late = typeof r.personal_overdue === "boolean"
+            ? r.personal_overdue
+            : !!(r.deadline && r.deadline < today);
           return `<button type="button" class="pp-load-row" data-open-report="${esc(r.public_id)}">
             <span class="pp-dot" style="--c: var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"></span>
             <span class="pp-rid">${esc(r.public_id)}</span>
