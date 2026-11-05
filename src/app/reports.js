@@ -340,12 +340,24 @@ function progressPct(r) {
 // то, что горит, видно без подсчёта дат в уме; сама дата мельче рядом.
 export function deadlineCellHtml(r, overdue) {
   if (!r.deadline) return `<span class="ls-dl-none">без срока</span>`;
-  const d = new Date();
-  const today = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-  const days = Math.round((Date.parse(`${r.deadline}T00:00:00Z`) - today) / 86400000);
-  const date = `${r.deadline.slice(8, 10)}.${r.deadline.slice(5, 7)}`;
+  const deadline = String(r.deadline);
+  const dateKey = deadline.slice(0, 10);
+  const time = deadline.match(/[ T](\d{2}:\d{2})/);
+  const now = new Date();
+  const todayParts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const todayPart = key => todayParts.find(part => part.type === key)?.value || "00";
+  const todayKey = `${todayPart("year")}-${todayPart("month")}-${todayPart("day")}`;
+  const today = Date.parse(`${todayKey}T00:00:00Z`);
+  const days = Math.round((Date.parse(`${dateKey}T00:00:00Z`) - today) / 86400000);
+  const date = `${dateKey.slice(8, 10)}.${dateKey.slice(5, 7)}${time ? ` · ${time[1]} МСК` : ""}`;
   if (r.status === "completed" || r.status === "cancelled") return `<span class="ls-dl-none">${date}</span>`;
-  const [txt, cls] = overdue ? [`просрочено ${-days} дн.`, "late"]
+  const dueAt = time
+    ? Date.parse(`${dateKey}T${time[1]}:00+03:00`)
+    : Date.parse(`${dateKey}T23:59:59+03:00`);
+  const lateDays = Math.floor((Date.now() - dueAt) / 86400000);
+  const [txt, cls] = overdue ? [lateDays > 0 ? `просрочено ${lateDays} дн.` : "просрочено", "late"]
     : days === 0 ? ["сегодня", "late"] : days === 1 ? ["завтра", "soon"] : days <= 3 ? [`через ${days} дн.`, "soon"] : [`через ${days} дн.`, "ok"];
   return `<span class="ls-dl-pill ${cls}">${txt}</span><span class="ls-dl-date">${date}</span>`;
 }
@@ -828,9 +840,20 @@ export function priorityDialog(publicId, onDone, current) {
 }
 
 export function deadlineDialog(publicId, current, onDone) {
+  const match = String(current || "").trim().match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/);
+  const currentDate = match?.[1] || "";
+  const currentTime = match?.[2] || "";
   const overlay = openSheet(`
     <h2>Срок — ${esc(publicId)}</h2>
-    <div class="row"><input type="date" id="dlg-deadline" value="${esc(current || "")}"></div>
+    <div class="row deadline-fields">
+      <label class="deadline-field">Дата
+        <input type="date" id="dlg-deadline-date" value="${esc(currentDate)}">
+      </label>
+      <label class="deadline-field">Время (МСК)
+        <input type="time" id="dlg-deadline-time" value="${esc(currentTime)}" step="60">
+      </label>
+    </div>
+    <div class="deadline-note">Если время не указано, срок действует до конца дня по Москве.</div>
     <div class="sheet-actions">
       <button class="btn ghost" id="dlg-clear">Убрать срок</button>
       <button class="btn ghost" data-close>Отмена</button>
@@ -848,8 +871,10 @@ export function deadlineDialog(publicId, current, onDone) {
     } catch (e) { toast(`Не удалось убрать срок: ${e.message}`, "error"); }
   });
   overlay.querySelector("#dlg-apply").addEventListener("click", async () => {
-    const val = overlay.querySelector("#dlg-deadline").value;
-    if (!val) return;
+    const date = overlay.querySelector("#dlg-deadline-date").value;
+    const time = overlay.querySelector("#dlg-deadline-time").value;
+    if (!date) return;
+    const val = time ? `${date} ${time}` : date;
     try {
       await apiPost(`/report/${publicId}/details`, { deadline: val });
       toast("Срок обновлён.", "success");

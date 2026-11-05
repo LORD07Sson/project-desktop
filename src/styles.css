@@ -1414,7 +1414,7 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
 .sheet .row > * { flex: 1; }
 /* select/input/textarea прямо в .row (статус, приоритет, срок, тема
    в настройках и т.п.) — иначе рендерились бы нативным виджетом ОС. */
-.sheet select, .sheet input[type="text"], .sheet input[type="date"],
+.sheet select, .sheet input[type="text"], .sheet input[type="date"], .sheet input[type="time"],
 .sheet input[type="number"], .sheet textarea {
   padding: 8px 12px;
   border-radius: 10px;
@@ -1423,6 +1423,10 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   color: var(--ink);
   font-size: 12.5px;
 }
+.sheet .deadline-fields { align-items: end; gap: 10px; }
+.sheet .deadline-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: var(--ink-dim); font-size: 11px; font-weight: 700; }
+.sheet .deadline-field input { width: 100%; min-width: 0; box-sizing: border-box; }
+.deadline-note { margin-top: -3px; color: var(--ink-dim); font-size: 10.5px; }
 .sheet select:focus, .sheet input:focus, .sheet textarea:focus {
   outline: none; border-color: color-mix(in srgb, var(--fire) 60%, var(--line));
 }

@@ -17,7 +17,12 @@ export function initials(name) {
 export function isOverdue(r) {
   if (typeof r.personal_overdue === "boolean") return r.personal_overdue;
   if (!r.deadline || r.status === "completed" || r.status === "cancelled") return false;
-  return r.deadline < new Date().toISOString().slice(0, 10);
+  const match = String(r.deadline).match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/);
+  if (!match) return false;
+  const dueAt = match[2]
+    ? Date.parse(`${match[1]}T${match[2]}:00+03:00`)
+    : Date.parse(`${match[1]}T23:59:59+03:00`);
+  return Number.isFinite(dueAt) && Date.now() > dueAt;
 }
 
 export function pluralColleagues(n) {
