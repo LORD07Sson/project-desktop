@@ -85,7 +85,7 @@ export async function openAnimePlayer({ shikiId, name }) {
         <button type="button" class="ap-pill" data-ap-panel>${I.list}Серии и озвучка</button>
       </header>
       <button type="button" class="ap-center" data-ap-center aria-label="Пауза/воспроизведение">${I.play}</button>
-      <button type="button" class="ap-skip" data-ap-skip hidden>${I.skip}Пропустить опенинг</button>
+      <button type="button" class="ap-skip" data-ap-skip hidden>${I.skip}<span data-ap-skip-label>Пропустить опенинг</span></button>
       <div class="ap-nextcard" data-ap-nextcard hidden>
         <div><small>Следующая серия</small><b data-ap-next-label></b></div>
         <button type="button" class="ap-nextgo" data-ap-nextgo><i data-ap-next-ring></i>${I.play}<span data-ap-next-sec></span></button>
@@ -93,7 +93,7 @@ export async function openAnimePlayer({ shikiId, name }) {
       </div>
       <div class="ap-controls">
         <div class="ap-seek" data-ap-seek>
-          <div class="ap-seek-track"><i class="ap-buf" data-ap-buf></i><i class="ap-hov" data-ap-hov></i><i class="ap-fill" data-ap-fill></i><i class="ap-op" data-ap-op></i></div>
+          <div class="ap-seek-track"><i class="ap-buf" data-ap-buf></i><i class="ap-hov" data-ap-hov></i><i class="ap-fill" data-ap-fill></i><i class="ap-op" data-ap-op></i><i class="ap-op" data-ap-ed></i></div>
           <span class="ap-thumb" data-ap-thumb></span>
           <span class="ap-tip" data-ap-tip>0:00</span>
         </div>
@@ -194,21 +194,31 @@ function renderEpisodes() {
   box.querySelectorAll("[data-ap-ep-i]").forEach(b => b.addEventListener("click", () => goEpisode(Number(b.dataset.apEpI))));
 }
 
-// Границы опенинга — настоящие, из AniSkip. Нет данных — нет ни кнопки, ни отметки на полосе.
+// Границы опенинга и эндинга — настоящие, из AniSkip. Нет данных — нет ни кнопки, ни отметки на полосе.
 function paintOp() {
   if (!P) return;
-  const op = $r("[data-ap-op]");
   const dur = P.video.duration;
-  const known = P.op && dur > 0;
-  op.hidden = !known;
-  if (known) {
-    op.style.left = `${(P.op.start / dur) * 100}%`;
-    op.style.width = `${((P.op.end - P.op.start) / dur) * 100}%`;
+  for (const [sel, part] of [["[data-ap-op]", P.op], ["[data-ap-ed]", P.ed]]) {
+    const mark = $r(sel);
+    const known = part && dur > 0;
+    mark.hidden = !known;
+    if (known) {
+      mark.style.left = `${(part.start / dur) * 100}%`;
+      mark.style.width = `${((part.end - part.start) / dur) * 100}%`;
+    }
   }
 }
 
+// Что можно пропустить прямо сейчас: опенинг, эндинг или ничего.
+function skipPart(t) {
+  const inside = part => part && t >= part.start && t < part.end - 1;
+  if (inside(P.op)) return { ...P.op, label: "Пропустить опенинг", done: "Опенинг пропущен" };
+  if (inside(P.ed)) return { ...P.ed, label: "Пропустить эндинг", done: "Эндинг пропущен" };
+  return null;
+}
+
 async function loadOp(ep) {
-  P.op = null;
+  P.op = P.ed = null;
   paintOp();
   const number = Number(ep.number);
   if (!Number.isInteger(number) || number < 1) return;
@@ -217,6 +227,7 @@ async function loadOp(ep) {
     const d = await apiGet("/player/skip", { shiki_id: P.shikiId, episode: number });
     if (!P || P.root !== root || P.series.episodes[P.episodeIdx].id !== ep.id) return;
     P.op = d.op;
+    P.ed = d.ed;
     paintOp();
   } catch (_) { /* без кнопки пропуска */ }
 }
@@ -499,7 +510,7 @@ function wireControls() {
   root.querySelector("[data-ap-fwd10]").addEventListener("click", () => seekBy(10));
   root.querySelector("[data-ap-next]").addEventListener("click", () => goEpisode(P.episodeIdx + 1));
   root.querySelector("[data-ap-full]").addEventListener("click", toggleFullscreen);
-  root.querySelector("[data-ap-skip]").addEventListener("click", () => { if (!P || !P.op) return; v.currentTime = Math.min(v.duration - 1, P.op.end); flash(`<span class="ap-flash-txt">Опенинг пропущен</span>`); });
+  root.querySelector("[data-ap-skip]").addEventListener("click", () => { const part = P && skipPart(v.currentTime); if (!part) return; v.currentTime = Math.min(v.duration - 1, part.end); flash(`<span class="ap-flash-txt">${part.done}</span>`); });
   root.querySelector("[data-ap-nextgo]").addEventListener("click", () => { hideNextCard(); goEpisode(P.episodeIdx + 1); });
   root.querySelector("[data-ap-nextno]").addEventListener("click", () => { P.nextCancelled = true; hideNextCard(); });
   const settings = root.querySelector("[data-ap-settings]");
@@ -590,7 +601,9 @@ function wireControls() {
     const p = v.currentTime / v.duration;
     if (!seek.classList.contains("drag")) { fill.style.width = `${p * 100}%`; thumb.style.left = `${p * 100}%`; }
     root.querySelector("[data-ap-cur]").textContent = fmtTime(v.currentTime);
-    root.querySelector("[data-ap-skip]").hidden = !(P && P.op && v.currentTime >= P.op.start && v.currentTime < P.op.end - 1);
+    const part = P && skipPart(v.currentTime);
+    root.querySelector("[data-ap-skip]").hidden = !part;
+    if (part) root.querySelector("[data-ap-skip-label]").textContent = part.label;
     const left = v.duration - v.currentTime;
     if (left < NEXT_CARD_SEC && !P.nextCancelled) showNextCard();
     preloadNext(left, v.duration);
