@@ -354,7 +354,7 @@ export async function openReportDetail(publicId) {
               <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди · " : ""}${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}${detail.pipeline.every(s => s.done) ? " · пройден" : ""}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? (pipeEdit ? "отмена" : "изменить") : ""}</button>` : ""}</h3>
               <div id="pipe-view"${pipeEdit ? " hidden" : ""}>
-              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, !!state.isAdmin, detail.assignees) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
+              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, !!state.isAdmin, detail.assignees) + (detail.dub_only ? "" : pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance)) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
               </div>
               ${canEdit ? `<div id="pipe-editor"${pipeEdit ? "" : " hidden"}>
                 <div id="pipeline-draft-list"></div>
