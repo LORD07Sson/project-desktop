@@ -1228,12 +1228,13 @@ function productionHtml(detail, fileList, pipeInner = "") {
     </div>`;
   const sendFile = [...list].reverse().find(isFinalFile) || [...list].reverse().find(isVideoFile);
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
-  const nyaa = can("reports.files") ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l1">⚠ Опасная зона</span><span class="dz-l2">Видео с Nyaa</span></button>` : "";
+  const nyaa = can("reports.files") && !detail.dub_only ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l1">⚠ Опасная зона</span><span class="dz-l2">Видео с Nyaa</span></button>` : "";
   // Яркая — только когда собирать уже есть из чего; пока ждём видео, кнопка спокойная (окно сборки само скажет, чего не хватает).
   const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal && !pipeLeft && (detail.pipeline_roles || []).length ? " primary" : ""}" id="report-assemble">🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
   // Что мешает сейчас — одной строкой и с кнопкой, а не угадыванием по четырём карточкам этапов.
-  const now = productionNow({ hasVideo, hasFinal, pipeLeft, hasPipeline: !!(detail.pipeline_roles && detail.pipeline_roles.length), canAssemble: can("reports.assemble"), canPost: can("posts.manage") });
+  // Даббер видео не добавляет: подсказка «нет видео» с кнопкой ему ни к чему.
+  const now = detail.dub_only && !hasVideo ? null : productionNow({ hasVideo, hasFinal, pipeLeft, hasPipeline: !!(detail.pipeline_roles && detail.pipeline_roles.length), canAssemble: can("reports.assemble"), canPost: can("posts.manage") });
   const nowAttr = now ? (now.act.jump ? `data-rd-jump="${now.act.jump}"` : `data-rd-click="${now.act.click}"`) : "";
   const nowHtml = now ? `
   <div class="rd-now ${now.tone}"><div><b>${now.title}</b>${now.sub ? `<small>${now.sub}</small>` : ""}</div><button type="button" class="rd-now-go" ${nowAttr}>${now.label}</button></div>` : "";
