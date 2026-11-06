@@ -4741,8 +4741,6 @@ body:has(.report-detail-overlay) .tab-panel *::after { animation: none !importan
 /* ---- Правки по проверке всех панелей ---- */
 /* Сезонные листья: декор не должен спорить с текстом, который просвечивает над ними */
 .season-fx canvas { opacity: .45; }
-/* Меню не прыгает: «Ещё» заранее занимает ширину самого длинного раздела */
-@media (min-width: 1300px) { #more-lbl { display: inline-block; min-width: 92px; text-align: right; } }
 /* Заголовки страниц на одной высоте, фильтры очереди по левому краю заголовка */
 .tab-panel[data-panel="list"] .list-page-header { padding-top: 0; }
 .q-view-switch, .psb-toolbar, .my-status-toolbar { padding-left: 0; padding-right: 0; }
