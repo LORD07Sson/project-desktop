@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { pickSameVoice, preloadFresh, shouldPreload, PRELOAD_TTL_MS } from "../src/app/preload-core.js";
+import { pickSameVoice, preloadFresh, shouldPreload, PRELOAD_TTL_MS, bufferedAhead, startBufferReady, START_BUFFER_MAX_WAIT_MS } from "../src/app/preload-core.js";
 
 const tr = [{ id: 1, kind: "sub", authors: "A" }, { id: 2, kind: "voice", authors: "Студия" }, { id: 3, kind: "voice", authors: "Другие" }];
 assert.equal(pickSameVoice(tr, "Другие").id, 3);
@@ -20,4 +20,14 @@ assert.ok(!shouldPreload({ left: 500, duration: 1400, hasNext: true, alreadyFor:
 assert.ok(!shouldPreload({ left: 100, duration: 1400, hasNext: false, alreadyFor: null, nextId: 8 }), "последняя серия");
 assert.ok(!shouldPreload({ left: 100, duration: 1400, hasNext: true, alreadyFor: 8, nextId: 8 }), "уже грузили");
 assert.ok(!shouldPreload({ left: 100, duration: 30, hasNext: true, alreadyFor: null, nextId: 8 }), "короткий ролик");
+const ranges = list => ({ length: list.length, start: i => list[i][0], end: i => list[i][1] });
+assert.equal(bufferedAhead(ranges([[0, 10], [100, 140]]), 110), 30);
+assert.equal(bufferedAhead(ranges([[100, 140]]), 50), 0, "позиция вне загруженного");
+assert.equal(bufferedAhead(null, 0), 0);
+const base = { ahead: 5, left: 1000, suspended: false, waitedMs: 0 };
+assert.ok(!startBufferReady(base));
+assert.ok(startBufferReady({ ...base, ahead: 30 }));
+assert.ok(startBufferReady({ ...base, ahead: 5, left: 5 }), "до конца меньше 30 с");
+assert.ok(startBufferReady({ ...base, suspended: true }));
+assert.ok(startBufferReady({ ...base, waitedMs: START_BUFFER_MAX_WAIT_MS }), "не ждём вечно");
 console.log("preload-test: ok");

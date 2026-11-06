@@ -24,3 +24,20 @@ export function shouldPreload({ left, duration, hasNext, alreadyFor, nextId }) {
   if (alreadyFor === nextId) return false;
   return left > 0 && left <= PRELOAD_LEFT_SEC;
 }
+
+// Стартовый буфер: показ начинается, когда впереди загружено 30 секунд.
+export const START_BUFFER_SEC = 30;
+export const START_BUFFER_MAX_WAIT_MS = 25_000; // на медленном интернете не держим дольше
+
+/** Сколько секунд загружено впереди позиции t. buffered — как у <video>: length, start(i), end(i). */
+export function bufferedAhead(buffered, t) {
+  for (let i = 0; i < (buffered ? buffered.length : 0); i++) {
+    if (buffered.start(i) <= t + 0.5 && t <= buffered.end(i)) return Math.max(0, buffered.end(i) - t);
+  }
+  return 0;
+}
+
+/** Можно ли начинать: буфер набран, файл загружен до конца, браузер сам приостановил загрузку или вышло время. */
+export function startBufferReady({ ahead, left, suspended, waitedMs }) {
+  return ahead >= START_BUFFER_SEC || (left > 0 && ahead >= left - 0.5) || suspended || waitedMs >= START_BUFFER_MAX_WAIT_MS;
+}

@@ -13,7 +13,7 @@ import { state } from "./state.js";
 import { apiGet, toast, API_BASE } from "./api.js";
 import { esc } from "./utils.js";
 import { appWindow } from "./tauri.js";
-import { pickSameVoice, preloadFresh, shouldPreload } from "./preload-core.js";
+import { pickSameVoice, preloadFresh, shouldPreload, bufferedAhead, startBufferReady, START_BUFFER_SEC } from "./preload-core.js";
 
 const SAVE_EVERY_MS = 5000;
 const HIDE_AFTER_MS = 2600;
@@ -210,6 +210,7 @@ async function goEpisode(idx) {
   $r("[data-ap-ep]").textContent = ep.label;
   $r("[data-ap-next]").disabled = idx === eps.length - 1;
   clearDirectWatch();
+  stopBufferGate();
   P.video.pause();
   P.video.removeAttribute("src");
   P.video.load();
@@ -285,6 +286,35 @@ function switchToRelay() {
   return true;
 }
 
+function stopBufferGate() {
+  if (!P) return;
+  window.clearInterval(P.gateTimer);
+  P.gating = false;
+}
+
+function startWhenBuffered() {
+  stopBufferGate();
+  const v = P.video;
+  const startedAt = Date.now();
+  P.gating = true;
+  P.gateTimer = window.setInterval(() => {
+    if (!P || P.video !== v) return;
+    if (v.error) { stopBufferGate(); return; }
+    if (v.readyState < 2) return;
+    const ahead = bufferedAhead(v.buffered, v.currentTime);
+    const ready = startBufferReady({
+      ahead,
+      left: (v.duration || 0) - v.currentTime,
+      suspended: v.networkState === v.NETWORK_IDLE,
+      waitedMs: Date.now() - startedAt,
+    });
+    if (!ready) { setWait(`Загружаю видео… ${Math.floor(ahead)} из ${START_BUFFER_SEC} с`); return; }
+    stopBufferGate();
+    setWait("");
+    v.play().catch(() => { /* автозапуск запрещён — ждём клика */ });
+  }, 250);
+}
+
 function playSource(src, resumeAt) {
   P.source = src;
   const relay = relayPreferred ? relayUrl(src) : "";
@@ -311,7 +341,7 @@ function playSource(src, resumeAt) {
   v.addEventListener("loadedmetadata", P.onMeta, { once: true });
   v.src = relay || src.url;
   if (relay) clearDirectWatch(); else watchDirect();
-  v.play().catch(() => { /* автозапуск запрещён — ждём клика */ });
+  startWhenBuffered();
   window.clearInterval(P.saveTimer);
   P.saveTimer = window.setInterval(saveProgress, SAVE_EVERY_MS);
   poke();
@@ -521,8 +551,8 @@ function wireControls() {
   v.addEventListener("playing", () => { if (P && !P.watchSince) P.watchSince = Date.now(); });
   v.addEventListener("pause", flushWatch);
   v.addEventListener("waiting", () => { root.classList.add("buffering"); if (P && !P.onRelay && v.getAttribute("src")) watchDirect(); });
-  v.addEventListener("playing", () => { clearDirectWatch(); root.classList.remove("buffering"); setWait(""); });
-  v.addEventListener("canplay", () => { clearDirectWatch(); root.classList.remove("buffering"); setWait(""); });
+  v.addEventListener("playing", () => { clearDirectWatch(); stopBufferGate(); root.classList.remove("buffering"); setWait(""); });
+  v.addEventListener("canplay", () => { clearDirectWatch(); root.classList.remove("buffering"); if (P && !P.gating) setWait(""); });
   v.addEventListener("error", () => { if (!v.getAttribute("src") || switchToRelay()) return; fail("Видео не загрузилось — попробуйте другое качество или озвучку."); });
   v.addEventListener("durationchange", () => { root.querySelector("[data-ap-dur]").textContent = fmtTime(v.duration); });
   v.addEventListener("progress", () => {
@@ -564,6 +594,7 @@ function flushWatch() {
 export function closeAnimePlayer() {
   if (!P) return;
   clearDirectWatch();
+  stopBufferGate();
   flushWatch();
   if (P.watchMs > 5000) {
     const tr = (P.translations || []).find(t => t.id === P.trId);
