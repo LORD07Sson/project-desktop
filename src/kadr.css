@@ -584,7 +584,7 @@ button.kd-tile:hover { transform: translateY(-2px); }
   animation: kadr-pop .5s var(--kadr-ease) both;
 }
 :root[data-theme="light"] .overlay.report-detail-overlay .sheet { background: var(--surface); }
-.rd-hero { padding: 26px 30px 18px; border-bottom: 0; isolation: isolate; }
+.rd-hero { padding: 14px 30px 10px; border-bottom: 0; isolation: isolate; }
 .rd-hero-bg { z-index: -2; opacity: .55; filter: blur(30px) saturate(1.2) brightness(.7); }
 .rd-hero-bg::after { background: none; }
 .rd-ban { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
@@ -592,10 +592,10 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 30%, transparent), color-mix(in srgb, var(--surface) 80%, transparent) 62%, var(--surface)), linear-gradient(90deg, color-mix(in srgb, var(--surface) 80%, transparent), color-mix(in srgb, var(--surface) 10%, transparent) 70%); }
 :root[data-theme="light"] .rd-hero::after { background: linear-gradient(180deg, rgba(255, 252, 249, .25), rgba(255, 252, 249, .82) 62%, rgba(255, 252, 249, .98)), linear-gradient(90deg, rgba(255, 252, 249, .85), rgba(255, 252, 249, .1) 70%); }
-.rd-hero-in { align-items: flex-end; gap: 22px; padding-top: 56px; }
-.rd-poster { width: 104px; height: 144px; border-radius: 16px; box-shadow: 0 24px 40px -16px #000, 0 0 0 1px rgba(255, 255, 255, .12); }
+.rd-hero-in { align-items: flex-end; gap: 16px; padding-top: 34px; }
+.rd-poster { width: 56px; height: 78px; border-radius: 11px; box-shadow: 0 24px 40px -16px #000, 0 0 0 1px rgba(255, 255, 255, .12); }
 .rd-titles { padding-bottom: 4px; }
-.rd-titles h2 { margin: 8px 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -.025em; line-height: 1.1; }
+.rd-titles h2 { margin: 4px 0 4px; font-size: 21px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; }
 .rd-titles h2 .rd-tn { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }   /* длинное название — две строки, целиком в title; флажок приоритета остаётся виден */
 .rd-titles .kd-kick { color: var(--ink-dim); }
 .rd-sub { font-size: 12px; }
@@ -3387,6 +3387,28 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-summary div { display: grid; gap: 2px; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--line-soft); background: rgba(255, 255, 255, .03); text-align: center; }
 .rd-summary b { font-size: 17px; } .rd-summary span { font-size: 10.5px; color: var(--ink-dim); line-height: 1.15; }
 .rd-side { position: sticky; top: 44px; align-self: start; max-height: calc(100vh - 76px); overflow-y: auto; }   /* 44px — высота залипающих вкладок, иначе колонка уходит под них */
+/* Что мешает сейчас: одна строка с кнопкой над этапами (productionHtml). */
+.rd-now { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(255, 176, 32, .5); background: rgba(255, 176, 32, .1); }
+.rd-now b { display: block; font-size: 14px; color: #ffc457; }
+.rd-now small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-soft); }
+.rd-now.go { border-color: rgba(70, 200, 120, .5); background: rgba(70, 200, 120, .09); }
+.rd-now.go b { color: #6fe0a0; }
+.rd-now-go { margin-left: auto; flex: none; padding: 9px 16px; border: 0; border-radius: 10px; font-weight: 800; cursor: pointer; background: linear-gradient(90deg, var(--fire), var(--gold)); color: #1a0f08; }
+.rd-now-go:hover { filter: brightness(1.08); }
+/* Пайплайн внутри «Производства финала». */
+.rd-pipe { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.rd-pipe > h3 { margin-top: 0; font-size: 13px; }
+/* Колонка справа: срок сверху, исполнители аватарками (имя — в подсказке, снять — по наведению). */
+.rd-due { border-color: rgba(255, 90, 80, .35); }
+.rd-people { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0; }
+.rd-people > span:first-child { flex: 0 0 100%; margin-bottom: 8px; }
+.rd-people .rd-person { position: relative; flex: none; width: auto; padding: 0; margin-right: -6px; background: none; border: 0; }
+.rd-people .rd-person > span:not(.avatar-bubble) { display: none; }
+.rd-people .avatar-bubble { box-shadow: 0 0 0 2px var(--surface); }
+.rd-people .rd-person .icon-btn { position: absolute; top: -5px; right: -3px; width: 16px; height: 16px; min-width: 0; padding: 0; font-size: 9px; line-height: 1; opacity: 0; transition: opacity .12s; }
+.rd-people .rd-person:hover .icon-btn, .rd-people .rd-person .icon-btn:focus-visible { opacity: 1; }
+.rd-people .rd-add { flex: none; width: auto; margin-left: 16px; padding: 6px 10px; }
+:root[data-motion="off"] .rd-people .rd-person .icon-btn { transition: none; }
 .rd-more summary { cursor: pointer; list-style: none; padding: 8px 12px; color: var(--ink-dim); font-size: 13px; border-radius: 10px; } .rd-more summary:hover { background: rgba(255, 255, 255, .04); color: var(--ink-soft); }
 .rd-more[open] { display: grid; gap: 4px; }
 @media (max-width: 860px) { .rd-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rd-fs::after { display: none; } }

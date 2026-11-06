@@ -7,6 +7,7 @@ import { track } from "./telemetry.js";
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { can, state } from "./state.js";
+import { productionNow } from "./report-now-core.js";
 import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./tauri.js";
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange, formatWhen } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
@@ -352,6 +353,29 @@ export async function openReportDetail(publicId) {
       caret: oldNote.selectionStart,
     } : null;
 
+    // Пайплайн живёт внутри «Производства финала» (один блок про путь к финалу); без прав на производство — отдельной секцией.
+    const pipeInner = `
+              <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди · " : ""}${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}${detail.pipeline.every(s => s.done) ? " · пройден" : ""}</span>` : ""}
+                ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? (pipeEdit ? "отмена" : "изменить") : ""}</button>` : ""}</h3>
+              <div id="pipe-view"${pipeEdit ? " hidden" : ""}>
+              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, !!state.isAdmin, detail.assignees) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
+              </div>
+              ${canEdit ? `<div id="pipe-editor"${pipeEdit ? "" : " hidden"}>
+                <div id="pipeline-draft-list"></div>
+                <div class="add-row">
+                  <select id="pipeline-role-pick" class="field-input"><option value="">+ роль…</option>${roles.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>
+                  <select id="pipeline-user-pick" class="field-input">${userOptionsHtml(assignable, null)}</select>
+                  <button class="btn" id="pipeline-add-step">+</button>
+                </div>
+                <label class="bc-feature" style="margin-top:10px;" title="Все этапы открыты сразу: даббер, звукарь, тайминг и остальные работают одновременно, никто никого не ждёт"><input type="checkbox" id="pipeline-parallel" ${pipelineParallel ? "checked" : ""}><span><b>Без очереди</b> — все этапы одновременно, не нужно ждать предыдущего</span></label>
+                <div class="sheet-actions" style="margin-top:8px;">
+                  <button class="btn primary" id="btn-pipeline-save">Сохранить пайплайн</button>
+                  ${hasPipe ? `<button class="btn danger" id="btn-pipeline-clear">Снять</button>` : ""}
+                </div>
+              </div>` : ""}
+    `;
+    const prodHtml = productionHtml(detail, files.files, pipeInner);
+
     overlay.querySelector(".sheet").innerHTML = `
       <div class="rd-hero${banner ? "" : " no-ban"}">
         <div class="rd-hero-bg"${poster ? ` style="background-image:url('${esc(poster)}')"` : ""}></div>
@@ -391,28 +415,7 @@ export async function openReportDetail(publicId) {
         <div class="rd-main">
           <div class="rd-panel" data-rd-panel="main">
             <div id="rd-player-host"></div>
-            ${productionHtml(detail, files.files)}
-            <div class="rd-sec">
-              <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди · " : ""}${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}${detail.pipeline.every(s => s.done) ? " · пройден" : ""}</span>` : ""}
-                ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? (pipeEdit ? "отмена" : "изменить") : ""}</button>` : ""}</h3>
-              <div id="pipe-view"${pipeEdit ? " hidden" : ""}>
-              ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, !!state.isAdmin, detail.assignees) + pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
-              </div>
-              ${canEdit ? `<div id="pipe-editor"${pipeEdit ? "" : " hidden"}>
-                <div id="pipeline-draft-list"></div>
-                <div class="add-row">
-                  <select id="pipeline-role-pick" class="field-input"><option value="">+ роль…</option>${roles.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>
-                  <select id="pipeline-user-pick" class="field-input">${userOptionsHtml(assignable, null)}</select>
-                  <button class="btn" id="pipeline-add-step">+</button>
-                </div>
-                <label class="bc-feature" style="margin-top:10px;" title="Все этапы открыты сразу: даббер, звукарь, тайминг и остальные работают одновременно, никто никого не ждёт"><input type="checkbox" id="pipeline-parallel" ${pipelineParallel ? "checked" : ""}><span><b>Без очереди</b> — все этапы одновременно, не нужно ждать предыдущего</span></label>
-                <div class="sheet-actions" style="margin-top:8px;">
-                  <button class="btn primary" id="btn-pipeline-save">Сохранить пайплайн</button>
-                  ${hasPipe ? `<button class="btn danger" id="btn-pipeline-clear">Снять</button>` : ""}
-                </div>
-              </div>` : ""}
-            </div>
-
+            ${prodHtml || `<div class="rd-sec">${pipeInner}</div>`}
             <div class="rd-sec">
               <h3>Чек-лист ${checklist.items.length ? `<span class="n">${doneItems} из ${checklist.items.length}</span>` : ""}</h3>
               <div id="checklist-list">${checklist.items.map(item => checklistItemHtml(item, canEdit)).join("")}</div>
@@ -469,16 +472,16 @@ export async function openReportDetail(publicId) {
             <div><b>${notes.notes.length}</b><span>заметок</span></div>
           </div>
           <div class="rd-meta">
-            <div class="rd-meta-row"><span>Исполнители / кого уведомить</span>
-              ${(detail.assignees || []).map(a => `<div class="rd-person" data-assignee="${a.telegram_id}">
+            <div class="rd-meta-row rd-due"><span>Срок</span>
+              ${canEdit ? `<button class="rd-meta-btn" id="chip-deadline">${detail.deadline ? deadlineCellHtml(detail, overdue) : `<span class="ls-dl-none">без срока — поставить</span>`}</button>` : `<div class="rd-meta-btn" aria-disabled="true">${detail.deadline ? deadlineCellHtml(detail, overdue) : "без срока"}</div>`}</div>
+            <div class="rd-meta-row rd-people"><span>Исполнители / кого уведомить</span>
+              ${(detail.assignees || []).map(a => `<div class="rd-person" data-assignee="${a.telegram_id}" title="${esc(a.first_name || a.username || `ID ${a.telegram_id}`)}">
                 <span class="avatar-bubble" data-avatar-for="${a.telegram_id}">${esc(initials(a.first_name || a.username))}</span>
                 <span>${esc(a.first_name || a.username || `ID ${a.telegram_id}`)}</span>
                 ${canEdit ? `<button class="icon-btn" data-unassign="${a.telegram_id}" title="Снять">✕</button>` : ""}
               </div>`).join("")}
               ${canEdit ? `<button class="rd-add" id="chip-assign">+ ${detail.assignees && detail.assignees.length ? "ещё исполнитель" : "назначить"}</button>` : ""}
             </div>
-            <div class="rd-meta-row"><span>Срок</span>
-              ${canEdit ? `<button class="rd-meta-btn" id="chip-deadline">${detail.deadline ? deadlineCellHtml(detail, overdue) : `<span class="ls-dl-none">без срока — поставить</span>`}</button>` : `<div class="rd-meta-btn" aria-disabled="true">${detail.deadline ? deadlineCellHtml(detail, overdue) : "без срока"}</div>`}</div>
             <div class="rd-meta-row"><span>Приоритет</span>
               ${canEdit ? `<button class="rd-meta-btn" id="chip-priority"><span class="priority-chip ${esc(detail.priority)}"><span class="dot"></span>${esc(detail.priority_label)}</span></button>` : `<div class="rd-meta-btn" aria-disabled="true"><span class="priority-chip ${esc(detail.priority)}"><span class="dot"></span>${esc(detail.priority_label)}</span></div>`}</div>
             <div class="rd-meta-row"><span>Статус</span>
@@ -536,6 +539,8 @@ export async function openReportDetail(publicId) {
     sheet.querySelector("#pipeline-parallel")?.addEventListener("change", e => { if (pipeEdit) pipeEdit.parallel = e.target.checked; });
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
     loadAvatars(sheet);
+    sheet.querySelectorAll("[data-rd-jump]").forEach(b => b.addEventListener("click", () => sheet.querySelector(b.dataset.rdJump)?.scrollIntoView({ block: "start", behavior: "smooth" })));
+    sheet.querySelectorAll("[data-rd-click]").forEach(b => b.addEventListener("click", () => sheet.querySelector(b.dataset.rdClick)?.click()));
     sheet.querySelectorAll("[data-nav]").forEach(b => b.addEventListener("click", () => {
       const nb = listNeighbors(publicId);
       if (nb) goTo(b.dataset.nav === "prev" ? nb.prev : nb.next);
@@ -1193,7 +1198,7 @@ const VIDEO_NAME_RE = /\.(mkv|mp4|mov|avi|webm|m4v|ts)$/i;
 
 // «Производство финала»: четыре шага со статусом и одной кнопкой на шаг. Кнопки сохраняют прежние id —
 // их обработчики (Nyaa, сборка, добавление файла) остались как были.
-function productionHtml(detail, fileList) {
+function productionHtml(detail, fileList, pipeInner = "") {
   if (!can("reports.assemble") && !can("reports.files")) return "";
   const list = fileList || [];
   const isFinalFile = f => !!f.is_final || /_final\./i.test(f.file_name || "");
@@ -1217,7 +1222,12 @@ function productionHtml(detail, fileList) {
   // Яркая — только когда собирать уже есть из чего; пока ждём видео, кнопка спокойная (окно сборки само скажет, чего не хватает).
   const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal ? " primary" : ""}" id="report-assemble">🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
-  return `
+  // Что мешает сейчас — одной строкой и с кнопкой, а не угадыванием по четырём карточкам этапов.
+  const now = productionNow({ hasVideo, hasFinal, pipeLeft, canAssemble: can("reports.assemble"), canPost: can("posts.manage") });
+  const nowAttr = now ? (now.act.jump ? `data-rd-jump="${now.act.jump}"` : `data-rd-click="${now.act.click}"`) : "";
+  const nowHtml = now ? `
+  <div class="rd-now ${now.tone}"><div><b>${now.title}</b>${now.sub ? `<small>${now.sub}</small>` : ""}</div><button type="button" class="rd-now-go" ${nowAttr}>${now.label}</button></div>` : "";
+  return `${nowHtml}
   <div class="rd-sec rd-prod" id="rd-prod">
     <h3>Производство финала</h3>
     <div class="rd-flow">
@@ -1228,6 +1238,7 @@ function productionHtml(detail, fileList) {
       ${step(4, "Пост", hasFinal ? "todo" : "wait", hasFinal ? "можно готовить" : "после сборки", post)}
     </div>
     <div id="rd-prod-asm"></div>
+    ${pipeInner ? `<div class="rd-pipe">${pipeInner}</div>` : ""}
   </div>`;
 }
 
