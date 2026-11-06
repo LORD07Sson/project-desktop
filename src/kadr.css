@@ -4718,3 +4718,11 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .board-card .kc-id { position: relative; z-index: 3; }
 :root[data-role="member"] .pf-card:has(> #idle-slot) { display: none; }
 .ib-panel { width: 450px; }
+
+/* Профиль коллеги — полной страницей, как своя «Я» */
+.overlay.pf-page-overlay { padding: 0; align-items: stretch; justify-content: stretch; }
+.overlay.pf-page-overlay .sheet { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: 20px 28px 32px; border: 0; border-radius: 0; box-shadow: none; background: var(--bg-2); overflow-y: auto; animation: none; }
+.pf-page-overlay .pf-back { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; width: max-content; margin-bottom: 12px; }
+.pf-page-overlay .pf-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pf-manage { display: flex; flex-direction: column; gap: 8px; }
+.pf-manage h3 { margin: 0; }

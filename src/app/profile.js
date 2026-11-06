@@ -6,7 +6,8 @@
 
 import { state } from "./state.js";
 import { fillRemindersCard } from "./reminders.js";
-import { fetchPerson, workSectionHtml, wireWorkSection, fillPauseCard } from "./people.js";
+import { fetchPerson, fmtDay, wireWorkSection, fillPauseCard } from "./people.js";
+import { loadPeopleNames, personName } from "./people-names.js";
 import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken, tabSkeleton, askConfirm } from "./api.js";
 import { $, esc, isOverdue, relTime, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
 import { setQuickFilter, loadReports } from "./reports.js";
@@ -293,152 +294,6 @@ function teamTeaserHtml(me) {
     </div>`;
 }
 
-// «Структура загрузки» — донат по статусам активных отчётов + разбивка
-// по ролям пайплайна, одной озаглавленной карточкой (как в мини-аппе),
-// с явным пустым состоянием вместо того, чтобы просто не показывать
-// раздел при отсутствии данных.
-function loadStructureHtml(me) {
-  const hasReports = me.reports && me.reports.length;
-  const hasRoles = me.role_breakdown && me.role_breakdown.length;
-  if (!hasReports && !hasRoles) {
-    // Раньше тут был статичный текст «пока нечего показать» во всю
-    // ширину экрана. Пустые руки — это повод предложить работу, а не
-    // сообщить о пустоте: свободные серии дозагружаются в fillIdleSlot().
-    return `
-      <div class="bcell profile-section">
-      <h3>Структура загрузки</h3>
-      <div class="idle-card" id="idle-slot">
-        <img class="idle-mascot" src="${mascotUrl}" alt="">
-        <div class="idle-text">
-          <div class="t">На руках пусто</div>
-          <div class="d">смотрю, есть ли свободные серии…</div>
-        </div>
-      </div>
-      </div>
-    `;
-  }
-  const statusCounts = {};
-  for (const r of me.reports || []) statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
-  const segments = Object.entries(STATUS_COLOR_VAR)
-    .filter(([status]) => statusCounts[status])
-    .map(([status, colorVar]) => ({
-      label: state.statusOptions.find(([v]) => v === status)?.[1] || status,
-      count: statusCounts[status],
-      colorVar,
-    }));
-  const donutBlock = hasReports ? `
-    <div class="donut-wrap">
-      ${donutHtml(segments)}
-      <div class="donut-legend">${donutLegendHtml(segments)}</div>
-    </div>` : "";
-  const roleBlock = hasRoles ? `
-    <div class="profile-subtitle" style="margin-top:${hasReports ? "16px" : "0"};">Роли в пайплайне</div>
-    ${me.role_breakdown.map(rb => `
-      <div class="role-bar-row">
-        <div class="label"><span>${esc(rb.role)}</span><span>${rb.count} · ${rb.pct}%</span></div>
-        <div class="role-bar-track"><div class="role-bar-fill" data-pct="${rb.pct}"></div></div>
-      </div>
-    `).join("")}` : "";
-  return `
-    <div class="bcell profile-section">
-      <h3>Структура загрузки</h3>
-      ${donutBlock}${roleBlock}
-    </div>
-  `;
-}
-
-// Шапка + тизер команды + цитата статуса + био + метастрока + «Структура
-// загрузки» — общая часть между своей «Я» и карточкой коллеги.
-// isSelf — показать карандаш редактирования статуса/био (только на
-// собственном профиле, /api/me/profile правит только СВОЙ профиль).
-//
-// asParts=true — вернуть { left, right } отдельно, а не склеенной
-// строкой: на широком окне ПК своя «Я» кладёт карточку человека в левую
-// колонку (прилипает при скролле), а статус/био/структуру загрузки —
-// в правую, пошире (см. loadProfile). Карточка коллеги (sheet, узкая)
-// продолжает звать без asParts и получает прежнюю плоскую разметку.
-function profileHeaderHtml(d, isSelf, asParts) {
-  const tier = tenureTier(d.member_since_days);
-
-  let joinedLine = "";
-  if (d.created_at) {
-    const jd = new Date(d.created_at.replace(" ", "T") + "Z");
-    if (!isNaN(jd.getTime())) {
-      joinedLine = ` · в команде с ${jd.getUTCDate()} ${MONTHS_RU[jd.getUTCMonth() + 1]}. ${jd.getUTCFullYear()}`;
-    }
-  }
-
-  const left = `
-    <div class="profile-banner-wrap" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}"${isSelf ? ' data-editable="1"' : ""}></div>
-    <div class="profile-head-card">
-      <span class="avatar-ring${tier ? " tier-" + tier : ""}">${avatarHtml(d.telegram_id, d.display_name || d.name, "xl")}</span>
-      <div class="nm-row">
-        <span class="nm">${esc(d.display_name || d.name)}</span>
-        ${d.is_developer || d.is_owner ? `<span class="dev-pill">DEV</span>` : ""}
-        ${rankTagHtml(d.studio_rank)}
-      </div>
-      ${d.username ? `<div class="un">@${esc(d.username)}</div>` : ""}
-      ${d.internal_id != null ? `<div class="id-row"><span class="id-chip">#${d.internal_id}</span>${joinedLine}${d.is_online ? ` · <span style="color:var(--s-done); font-weight:600;">в сети</span>` : ""}</div>` : ""}
-      ${profileRolesHtml(d)}
-    </div>
-
-    ${tenureProgressHtml(d.member_since_days)}
-    ${teamTeaserHtml(d)}
-    ${isSelf ? `<button class="btn profile-edit-btn" id="btn-edit-profile" title="Изменить статус и о себе"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/></svg>Изменить профиль</button>` : ""}
-  `;
-
-  const right = `
-    ${d.status_text ? `<div class="status-quote">${esc(d.status_text)}</div>` : ""}
-    ${d.bio ? `<div class="profile-bio">${esc(d.bio)}</div>` : ""}
-
-    ${asParts ? "" : `<div class="bc-meta-line">${d.assigned} на нём сейчас${d.overdue ? ` · <span class="warn">⏰ ${d.overdue} просрочено</span>` : ""}${d.avg_days != null ? ` · ⏱ в среднем ${d.avg_days.toFixed ? d.avg_days.toFixed(1) : d.avg_days} дн.` : ""}</div>`}
-
-    ${loadStructureHtml(d)}
-  `;
-
-  return asParts ? { left, right } : left + right;
-}
-
-// Достижения — общий бенто-блок, тоже переиспользуется для «Я» и чужого профиля.
-//
-// Полученные и неполученные раньше выглядели почти одинаково, а прогресс
-// (current/target сервер присылает по каждой награде) был спрятан в
-// атрибуте title — то есть виден, только если задержать мышь на иконке.
-// Теперь полученные идут чипами сверху, а остальные — строкой с остатком
-// и полоской: «50+ закрыто — 1 / 50» честнее серой иконки без объяснений.
-function badgesBentoHtml(d, delayMs) {
-  const all = (d.badges || []).slice().sort((a, b) => (BADGE_RARITY_ORDER[a.rarity] ?? 9) - (BADGE_RARITY_ORDER[b.rarity] ?? 9));
-  const unlocked = all.filter(b => b.unlocked);
-  const locked = all.filter(b => !b.unlocked);
-
-  const wonHtml = unlocked.map(b => `
-    <span class="badge-chip" title="${esc(b.label)}">
-      ${esc(b.icon)} ${esc(b.label)}
-      ${b.custom && devModeActive() ? `<button class="icon-btn badge-revoke" data-revoke-badge="${b.id}" title="Отозвать награду">✕</button>` : ""}
-    </span>`).join("");
-
-  const lockedHtml = locked.map(b => {
-    const has = b.target ? Math.max(0, Math.min(b.target, b.current || 0)) : null;
-    const pct = b.target ? Math.round((has / b.target) * 100) : 0;
-    return `
-      <div class="badge-todo${b.target ? "" : " no-data"}">
-        <div class="lbl">
-          <span>${esc(b.icon)} ${esc(b.label)}</span>
-          <span class="val">${b.target ? `${has} / ${b.target}` : "нет данных"}</span>
-        </div>
-        <div class="badge-track"><i style="width:${pct}%;"></i></div>
-      </div>`;
-  }).join("");
-
-  return `
-    <div class="bcell wide" style="animation-delay:${delayMs}ms;">
-      <h3>Достижения ${all.length ? `<span style="color:var(--ink-dim); font-weight:400; font-size:12px;">${unlocked.length} из ${all.length}</span>` : ""}</h3>
-      ${wonHtml ? `<div class="badge-chips">${wonHtml}</div>` : ""}
-      ${lockedHtml ? `<div class="badge-todos">${lockedHtml}</div>` : ""}
-      ${!all.length ? `<div class="no-assignee">Пока пусто</div>` : ""}
-    </div>`;
-}
-
 function wireProfileCommon(root, telegramId, onReload) {
   loadAvatars(root);
   loadProfileBanner(root.querySelector('[data-role="profile-banner"]'), telegramId);
@@ -564,7 +419,7 @@ export async function loadProfile() {
 
 // Шапка своей «Я»: баннер во всю ширину, аватар, имя и о себе одним
 // блоком — раньше статус и био жили отдельными полосами под KPI.
-function myHeroHtml(d) {
+function myHeroHtml(d, isSelf = true) {
   const tier = tenureTier(d.member_since_days);
   let joined = "";
   if (d.created_at) {
@@ -581,10 +436,10 @@ function myHeroHtml(d) {
     <div class="pf-about">
       ${d.status_text ? `<div class="st">${esc(d.status_text)}</div>` : ""}
       ${d.bio ? `<div class="bio">${esc(d.bio)}</div>` : ""}
-    </div>` : `<div class="pf-about empty">Статус и пара слов о себе — их видят коллеги в карточке профиля.</div>`;
+    </div>` : isSelf ? `<div class="pf-about empty">Статус и пара слов о себе — их видят коллеги в карточке профиля.</div>` : "";
   return `
     <section class="pf-hero">
-      <div class="pf-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}" data-editable="1"></div>
+      <div class="pf-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}"${isSelf ? ' data-editable="1"' : ""}></div>
       <div class="pf-hero-body">
         <span class="avatar-ring${tier ? " tier-" + tier : ""}">${avatarHtml(d.telegram_id, d.display_name || d.name, "xl")}</span>
         <div class="pf-who">
@@ -597,15 +452,19 @@ function myHeroHtml(d) {
           <div class="pf-meta">${meta}</div>
           ${about}
         </div>
-        <button class="btn pf-edit" id="btn-edit-profile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/></svg>Изменить</button>
+        ${isSelf ? `<button class="btn pf-edit" id="btn-edit-profile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/></svg>Изменить</button>` : ""}
       </div>
     </section>`;
 }
 
 // «Моя работа» — вместо огромного доната на одно значение: тонкая
 // полоска по статусам и сам список того, что на руках.
-function myWorkHtml(me) {
+function myWorkHtml(me, other = false) {
   const reports = me.reports || [];
+  const heading = other ? "Сейчас в работе" : "Моя работа";
+  if (!reports.length && other) {
+    return `<section class="pf-card"><div class="pf-card-head"><h3>${heading}</h3></div><div class="pf-quiet">Сейчас в работе ничего нет</div></section>`;
+  }
   if (!reports.length) {
     return `
       <section class="pf-card">
@@ -622,7 +481,7 @@ function myWorkHtml(me) {
   const segs = Object.entries(STATUS_COLOR_VAR).filter(([st]) => counts[st]);
   const bar = segs.map(([st, c]) => `<i style="flex:${counts[st]}; background:var(${c});" title="${esc(label(st))}: ${counts[st]}"></i>`).join("");
   const legend = segs.map(([st, c]) => `<span><i style="background:var(${c});"></i>${esc(label(st))} <b>${counts[st]}</b></span>`).join("");
-  const rows = reports.slice(0, 6).map(r => {
+  const rows = (other ? reports : reports.slice(0, 6)).map(r => {
     const late = isOverdue(r);
     const c = STATUS_COLOR_VAR[r.status] || "--ink-dim";
     return `
@@ -637,11 +496,11 @@ function myWorkHtml(me) {
   const roles = (me.role_breakdown || []).map(rb => `<span class="pf-role">${esc(rb.role)} <b>${rb.pct}%</b></span>`).join("");
   return `
     <section class="pf-card">
-      <div class="pf-card-head"><h3>Моя работа <span class="n">${reports.length}</span></h3></div>
+      <div class="pf-card-head"><h3>${heading} <span class="n">${reports.length}</span></h3></div>
       <div class="pf-bar">${bar}</div>
       <div class="pf-legend">${legend}</div>
       <div class="pf-reps">${rows}</div>
-      ${reports.length > 6 ? `<div class="pf-quiet">и ещё ${reports.length - 6} — во вкладке «Список»</div>` : ""}
+      ${!other && reports.length > 6 ? `<div class="pf-quiet">и ещё ${reports.length - 6} — во вкладке «Список»</div>` : ""}
       ${roles ? `<div class="pf-roles"><span class="l">Роли в пайплайне</span>${roles}</div>` : ""}
     </section>`;
 }
@@ -944,35 +803,58 @@ async function openTelegramProfile(username) {
 // коллеги, что уже открывается кликом по строке в openTeamSheet.
 export async function openUserProfile(telegramId) {
   const overlay = openSheet(dialogSkeletonHtml(6), "wide");
+  overlay.classList.add("pf-page-overlay");
   let d;
   let person = null;
   try {
     // Карточка «Работа» (загрузка, пауза, передача дел) — отдельным
     // запросом; на старом сервере без /people профиль просто без неё.
-    [d, person] = await Promise.all([apiGet(`/user/${telegramId}`), fetchPerson(telegramId)]);
+    [d, person] = await Promise.all([apiGet(`/user/${telegramId}`), fetchPerson(telegramId), loadPeopleNames()]);
   } catch (e) {
     overlay.querySelector(".sheet").innerHTML = `<div class="bento-empty">Не удалось загрузить профиль: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
     overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
     return;
   }
   d.telegram_id = telegramId;
-  const reportsHtml = (d.reports && d.reports.length) ? `
-    <div class="sec-title" style="margin-top:16px;">Текущие отчёты</div>
-    <div class="mini-list">
-      ${d.reports.map(r => `<div class="mini-row" data-open-report="${esc(r.public_id)}" style="cursor:pointer;"><span class="name">${esc(r.public_id)} · ${esc(r.title)}</span><span class="val">${esc(r.status_label)}</span></div>`).join("")}
-    </div>` : "";
+  // Имя как на карточке команды, а не логин.
+  d.display_name = personName(telegramId, d.display_name || d.name);
+  if (person) d.reports = person.load;
+  const st = (person && person.stats) || {};
+  const avg = st.avg_days ?? d.avg_days;
+  const late = st.overdue_count ?? d.overdue ?? 0;
+  const kpi = (label, val, sub) => `<div class="pf-kpi"><span class="l">${label}</span><b>${val}</b><span class="s">${sub}</span></div>`;
+  const manage = person && (person.can_pause || (person.can_transfer && person.load.length));
 
   const sheet = overlay.querySelector(".sheet");
   sheet.innerHTML = `
-    ${profileHeaderHtml(d)}
-    ${person ? workSectionHtml(person) : ""}
-    ${prepHtml(d)}
-    <div class="bento">${badgesBentoHtml(d, 0)}</div>
-    ${person ? "" : reportsHtml}
-    ${devModeActive() ? devPanelHtml(d) : ""}
-    <div class="sheet-actions">
-      ${state.isDeveloper && String(telegramId) !== String(state.telegramId) ? `<button class="btn danger" data-purge-chats title="Только владелец команды">Удалить личные переписки</button><span style="flex:1"></span>` : ""}
-      <button class="btn" data-close>Закрыть</button>
+    <div class="pf">
+      <button class="btn ghost pf-back" data-close><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H6M11 6l-6 6 6 6"/></svg>Назад</button>
+      ${myHeroHtml(d, false)}
+      <div class="pf-kpis">
+        ${kpi("Сейчас в работе", (d.reports || []).length, late ? `<span class="warn">${late} просрочено</span>` : "всё в сроках")}
+        ${kpi("Закрыто", st.completed_count ?? d.completed_total ?? 0, st.assigned_total != null ? `из ${st.assigned_total} назначенных` : "за всё время")}
+        ${kpi("Просрочено", late, "за всё время")}
+        ${kpi("Средний срок", avg != null ? `${avg.toFixed ? avg.toFixed(1) : avg} дн.` : "пока нет", "на один отчёт")}
+      </div>
+      <div class="pf-grid">
+        <div class="pf-main">
+          ${prepHtml(d)}
+          ${myWorkHtml(d, true)}
+          ${myBadgesHtml(d)}
+        </div>
+        <aside class="pf-side">
+          <section class="pf-card pf-tenure">${tenureProgressHtml(d.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
+          ${manage ? `<section class="pf-card pf-manage">
+            <h3>Управление</h3>
+            <div class="pf-quiet">${person.paused_until ? `На паузе до ${esc(fmtDay(person.paused_until))}` : "Напоминания приходят"}</div>
+            ${person.can_pause ? `<button type="button" class="btn" data-pp-pause>${person.paused_until ? "Изменить паузу" : "Поставить паузу"}</button>` : ""}
+            ${person.can_transfer && person.load.length ? `<button type="button" class="btn" data-pp-transfer>Передать дела · ${person.load.length}</button>` : ""}
+          </section>` : ""}
+          ${teamTeaserHtml(d)}
+        </aside>
+      </div>
+      ${devModeActive() ? devPanelHtml(d) : ""}
+      ${state.isDeveloper && String(telegramId) !== String(state.telegramId) ? `<div class="sheet-actions"><button class="btn danger" data-purge-chats title="Только владелец команды">Удалить личные переписки</button></div>` : ""}
     </div>
   `;
   wireProfileCommon(sheet, telegramId, async () => { await openUserProfile(telegramId); overlay.remove(); });
