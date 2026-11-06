@@ -8,7 +8,7 @@ import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { can, state } from "./state.js";
 import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./tauri.js";
-import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange } from "./utils.js";
+import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange, formatWhen } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, deadlineCellHtml, posterSrc } from "./reports.js";
 import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from "./titles-admin.js";
@@ -360,8 +360,8 @@ export async function openReportDetail(publicId) {
           <span class="rd-poster"${poster ? ` style="background-image:url('${esc(poster)}')"` : ""}>${poster ? "" : esc(initials(t.name))}</span>
           <div class="rd-titles">
             <span class="kd-kick${overdue ? " hot" : ""}"><i></i>${esc(detail.public_id)}${t.ep ? ` · ${esc(t.ep)}` : ""}</span>
-            <h2>${esc(t.name)}${priorityFlagHtml(detail.priority)}</h2>
-            <div class="rd-sub">${t.sub ? `${esc(t.sub)} · ` : ""}создал ${esc(authorName)} · ${esc(String(detail.created_at || "").slice(0, 16))}</div>
+            <h2><span class="rd-tn" title="${esc(t.name)}">${esc(t.name)}</span>${priorityFlagHtml(detail.priority)}</h2>
+            <div class="rd-sub">${t.sub ? `${esc(t.sub)} · ` : ""}создал ${esc(authorName)} · <time title="${esc(String(detail.created_at || ""))} UTC">${esc(formatWhen(detail.created_at))}</time></div>
           </div>
           <div class="detail-head-actions">
             ${nav ? `
@@ -1033,7 +1033,7 @@ function noteHtml(n) {
   const autoCaption = n.attach && n.text === `📎 ${n.attach.name}`;
   const body = autoCaption ? "" : (t ? t.rest : n.text);
   return `<div class="note-item${t ? " timed" : ""}">
-    <div class="meta">${esc(n.author)} · ${esc(n.created_at || "")}</div>
+    <div class="meta">${esc(n.author)} · ${esc(formatWhen(n.created_at))}</div>
     <div class="note-body">
       ${t ? `<span class="note-time" title="время на дорожке">${esc(t.label)}</span>` : ""}
       ${body ? `<span>${linkifyProject(esc(body))}</span>` : ""}
@@ -1152,7 +1152,7 @@ async function fillLogPanel(panel, publicId, kind) {
   panel.innerHTML = `<div class="pf-acts">${evs.map(ev => `
     <div class="pf-act"><i></i><div>
       <div class="a">${kind === "history" ? esc(ev.new_status_label || "") + (ev.comment ? ` <span>· ${esc(ev.comment)}</span>` : "") : esc(actionLabel(ev.action)) + (ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : "")}</div>
-      <div class="m">${[ev.actor || "бот", String(ev.created_at || "").slice(0, 16)].filter(Boolean).map(esc).join(" · ")}</div>
+      <div class="m">${[ev.actor || "бот", formatWhen(ev.created_at)].filter(Boolean).map(esc).join(" · ")}</div>
     </div></div>`).join("") || `<div class="pf-quiet">Пока пусто</div>`}</div>
     ${res.has_more ? `<button class="pf-link" data-log-more style="margin-top:10px;">показать всё →</button>` : ""}`;
   panel.querySelector("[data-log-more]")?.addEventListener("click", () => openReportLogSheet(publicId, kind));
@@ -1168,7 +1168,7 @@ function renderNotifications(panel, publicId, res) {
     <div class="rd-nt-row ${ev.ok ? "ok" : "bad"}"><i aria-hidden="true">${ev.ok ? "✓" : "✗"}</i><div>
       <div class="a">${esc(ev.title || "Уведомление")}</div>
       <div class="m">${ev.to ? `→ ${esc(ev.to)}` : "→ никому"}${ev.ok ? " · доставлено" : ` · <b>${esc(ev.error || "не доставлено")}</b>`}</div>
-      <div class="t">${esc(String(ev.created_at || "").slice(0, 16))}${ev.source ? ` · через ${esc(ev.source)}` : ""}</div>
+      <div class="t">${esc(formatWhen(ev.created_at))}${ev.source ? ` · через ${esc(ev.source)}` : ""}</div>
     </div></div>`).join("") || `<div class="pf-quiet">Уведомлений по этому отчёту ещё не было. Они появятся здесь, когда кто-то сменит статус, загрузит файл, оставит заметку или подойдёт срок.</div>`}</div>
     ${res.has_more ? `<button class="pf-link" data-nt-more style="margin-top:10px;">показать ещё →</button>` : ""}`;
   panel.querySelector("[data-nt-more]")?.addEventListener("click", async e => {
@@ -1294,12 +1294,12 @@ async function openReportLogSheet(publicId, kind) {
   function eventLineHtml(ev) {
     if (kind === "history") {
       return `<div class="note-item">
-        <div class="meta">${esc(ev.actor)} · ${esc(ev.created_at || "")}</div>
+        <div class="meta">${esc(ev.actor)} · ${esc(formatWhen(ev.created_at))}</div>
         <div>${esc(ev.new_status_label || "")}${ev.comment ? `: ${esc(ev.comment)}` : ""}</div>
       </div>`;
     }
     return `<div class="note-item">
-      <div class="meta">${esc(ev.actor)} · ${esc(ev.created_at || "")}</div>
+      <div class="meta">${esc(ev.actor)} · ${esc(formatWhen(ev.created_at))}</div>
       <div>${esc(ev.action || "")}${ev.detail ? ` — ${esc(ev.detail)}` : ""}</div>
     </div>`;
   }

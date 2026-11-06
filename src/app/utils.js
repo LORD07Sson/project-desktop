@@ -47,6 +47,22 @@ export function relTime(iso) {
   return `${diffD} дн назад`;
 }
 
+// Серверная дата «YYYY-MM-DD HH:MM[:SS]» (UTC) → местное время для людей: «сегодня, 17:59»,
+// «вчера, 17:59», «3 нояб., 17:59» (с годом, если он не текущий). Нераспознанное вернём как есть.
+export function formatWhen(iso, now = new Date()) {
+  if (!iso) return "";
+  const s = String(iso);
+  const d = new Date(s.replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? "" : "Z"));
+  if (Number.isNaN(d.getTime())) return s;
+  const time = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff === 0) return `сегодня, ${time}`;
+  if (diff === 1) return `вчера, ${time}`;
+  const date = d.toLocaleDateString("ru-RU", d.getFullYear() === now.getFullYear() ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
+  return `${date}, ${time}`;
+}
+
 export function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);

@@ -596,6 +596,7 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-poster { width: 104px; height: 144px; border-radius: 16px; box-shadow: 0 24px 40px -16px #000, 0 0 0 1px rgba(255, 255, 255, .12); }
 .rd-titles { padding-bottom: 4px; }
 .rd-titles h2 { margin: 8px 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -.025em; line-height: 1.1; }
+.rd-titles h2 .rd-tn { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }   /* длинное название — две строки, целиком в title; флажок приоритета остаётся виден */
 .rd-titles .kd-kick { color: var(--ink-dim); }
 .rd-sub { font-size: 12px; }
 .rd-hero .detail-head-actions { position: absolute; top: -12px; right: -14px; }
@@ -3385,7 +3386,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
 .rd-summary div { display: grid; gap: 2px; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--line-soft); background: rgba(255, 255, 255, .03); text-align: center; }
 .rd-summary b { font-size: 17px; } .rd-summary span { font-size: 10.5px; color: var(--ink-dim); line-height: 1.15; }
-.rd-side { position: sticky; top: 0; align-self: start; max-height: 100%; overflow-y: auto; }
+.rd-side { position: sticky; top: 44px; align-self: start; max-height: calc(100vh - 76px); overflow-y: auto; }   /* 44px — высота залипающих вкладок, иначе колонка уходит под них */
 .rd-more summary { cursor: pointer; list-style: none; padding: 8px 12px; color: var(--ink-dim); font-size: 13px; border-radius: 10px; } .rd-more summary:hover { background: rgba(255, 255, 255, .04); color: var(--ink-soft); }
 .rd-more[open] { display: grid; gap: 4px; }
 @media (max-width: 860px) { .rd-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rd-fs::after { display: none; } }
