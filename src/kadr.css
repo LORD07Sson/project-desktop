@@ -4762,3 +4762,4 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 :root[data-theme="light"] .board-card.dead .kc-sg .hot, :root[data-theme="light"] .board-card.is-overdue .kc-sg .hot { color: #b3261e; text-shadow: none; }
 .board-card .kc-id { position: relative; z-index: 3; }
 :root[data-role="member"] .pf-card:has(> #idle-slot) { display: none; }
+.ib-panel { width: 450px; }

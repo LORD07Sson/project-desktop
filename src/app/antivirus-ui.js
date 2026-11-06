@@ -56,6 +56,7 @@ export function startAntivirusAuto() {
 
 // ---------- экран ----------
 export async function mountAntivirus(root) {
+  let lastScanInfo = null;
   if (!root) return;
   let tab = "results";
   let report = null;
@@ -87,7 +88,7 @@ export async function mountAntivirus(root) {
     else if (age > 3) warns.push(`базы устарели (${Math.floor(age)} дн.)`);
     if (def && def.AntivirusEnabled === false) warns.push("Защитник Windows выключен");
     const level = issues.length ? "bad" : (warns.length ? "warn" : "ok");
-    const title = level === "bad" ? "Найдены угрозы" : (level === "warn" ? "Требуется внимание" : "Вы защищены");
+    const title = level === "bad" ? (found ? "Найдены угрозы" : "Есть тревоги защиты — откройте «Поведение»") : (level === "warn" ? "Требуется внимание" : "Вы защищены");
     const last = st && st.last_scan && st.last_scan.finished ? `последняя проверка ${fmtDate(st.last_scan.finished)}` : "проверок ещё не было";
     const dbText = st ? (age === null ? "встроенные базы" : (age < 1 ? "базы обновлены сегодня" : `базы обновлены ${Math.floor(age)} дн. назад`)) : "";
     const icon = level === "ok"
@@ -123,6 +124,7 @@ export async function mountAntivirus(root) {
 
   async function refreshHeader() {
     const [st, def, bh] = await Promise.all([call("av_status").catch(() => null), call("av_defender", { action: "status" }).catch(() => null), call("bh_status").catch(() => null)]);
+    lastScanInfo = st && st.last_scan ? { finished: st.last_scan.finished, found: st.last_scan.found ?? st.last_scan.detections ?? 0 } : null;
     paintDashboard(st, bh, def);
     const host = root.querySelector("#av-head");
     if (!host) return;
@@ -135,7 +137,7 @@ export async function mountAntivirus(root) {
         <button class="btn" id="av-update">Обновить базы</button></div>
       <div class="av-card"><span class="av-k">Защитник Windows</span>
         <b style="color:${def ? (defOn ? "var(--s-done)" : "var(--s-stop)") : "var(--ink-dim)"}">${def ? (defOn ? "включён" : "выключен") : "нет данных"}</b>
-        <span>${def ? `защита в реальном времени: ${def.RealTimeProtectionEnabled ? "да" : "нет"}` : "доступен только в Windows"}</span>
+        <span>${def ? `защита в реальном времени: ${def.RealTimeProtectionEnabled ? "да" : "нет"}` : "Защитник не ответил: служба выключена или её заменил другой антивирус"}</span>
         <div style="display:flex; gap:6px; flex-wrap:wrap;"><button class="btn" id="av-def-update">Обновить</button><button class="btn" id="av-def-scan">Быстрая</button><button class="btn" id="av-def-full" title="Работает от имени системы и открывает даже закрытые папки; идёт долго">Полная</button></div></div>
       <div class="av-card"><span class="av-k">Последняя проверка</span><b>${st && st.last_scan ? "готово" : "—"}</b><span>${esc(last)}</span>
         <span>Карантин: ${st ? st.quarantine : 0}</span></div>`;
@@ -250,11 +252,12 @@ export async function mountAntivirus(root) {
     } catch (e) { toast(String(e), "error"); btn.disabled = false; }
   }
 
+
   async function paintBody() {
     const host = root.querySelector("#av-body");
     root.querySelectorAll("[data-av-tab]").forEach(b => b.classList.toggle("on", b.dataset.avTab === tab));
     if (tab === "results") {
-      if (!report) { host.innerHTML = `<div class="no-assignee">${busy ? "Идёт проверка…" : "Запустите проверку — результаты появятся здесь."}</div>`; return; }
+      if (!report) { host.innerHTML = `<div class="no-assignee">${busy ? "Идёт проверка…" : (st0 => st0 && st0.finished ? `Подробности прошлой проверки${st0.found ? ` (найдено: ${st0.found})` : ""} не сохраняются после перезапуска. Запустите проверку ещё раз, чтобы увидеть результаты.` : "Запустите проверку — результаты появятся здесь.")(lastScanInfo)}</div>`; return; }
       host.innerHTML = `
         <div class="bc-hint" style="margin:0 0 8px;">Проверено объектов: <b>${report.scanned.toLocaleString("ru-RU")}</b> за ${fmtDur(report.seconds)} · база v${report.db_version}${report.cancelled ? " · <b>остановлено</b>" : ""}</div>
         ${report.coverage && report.coverage.denied_dirs > 0 && !report.coverage.elevated ? `<div class="bc-warn" style="margin:0 0 10px;">Закрытых системой папок: <b>${report.coverage.denied_dirs}</b> — обычному пользователю они недоступны, поэтому их содержимое не проверено.

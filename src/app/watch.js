@@ -317,7 +317,7 @@ function heroTextHtml(t) {
   const words = esc(t.name).split(" ").map((w, i) => `<span class="w" style="animation-delay:${i * 70}ms">${w}</span>`).join(" ");
   const key = `s:${t.id}`;
   const meta = [
-    t.score ? `<span class="sc">★ ${t.score.toFixed(2)}</span>` : "",
+    t.score ? `<span class="sc">★ ${t.score.toFixed(1)}</span>` : "",
     t.aired_on ? `<span>${t.aired_on.slice(0, 4)}</span>` : "",
     KIND[t.kind] ? `<span>${KIND[t.kind]}</span>` : "",
     t.episodes || t.episodes_aired ? `<span>${t.episodes || t.episodes_aired} эп.</span>` : "",
