@@ -14,6 +14,7 @@ import { apiGet, apiPost, askConfirm, openSheet, dismissSheet, toast } from "./a
 import { $, esc, relTime } from "./utils.js";
 import { can } from "./state.js";
 import { openExternal } from "./tauri.js";
+import { kindOf, isOn365, summarize, checkFacts, sameTitle, groupItems } from "./a365-core.js";
 
 let view = "finals";
 let finalsFilter = "todo";
@@ -28,17 +29,6 @@ const canUpload = () => can("a365.upload");
 
 // ---------- общее ----------
 
-function kindOf(it) {
-  if (it.stage === "done") return it.newer ? "newer" : "done";
-  if (it.stage === "queued" || it.stage === "uploading") return "queue";
-  if (it.twin) return "elsewhere"; // финал, который уже залили из «Архива»
-  if (it.stage === "failed" && !(it.check && it.check.dup)) return "bad";
-  if (!it.check) return it.unbound ? "unbound" : "unchecked";
-  if (!it.check.ok && it.check.dup) return "elsewhere"; // наша озвучка уже на 365 (залита не отсюда или вручную)
-  if (it.unbound) return "unbound";
-  return it.check.ok ? "ready" : "bad";
-}
-const isOn365 = it => ["done", "newer", "elsewhere"].includes(kindOf(it));
 const fmtSize = n => (n ? `${(n / 1048576).toFixed(0)} МБ` : "");
 const matches = (...texts) => !query || texts.some(t => String(t || "").toLowerCase().includes(query));
 
@@ -80,8 +70,8 @@ function detailHtml(it) {
   if (it.stage === "failed") return `<div class="a3-note bad">${esc(it.error || "")}</div>${it.hint ? `<div class="a3-note">${esc(it.hint)}</div>` : ""}`;
   if (!c) return `<div class="a3-note">${it.unbound ? "Привяжите тайтл к аниме на 365 — тогда можно проверить." : "Сезон и дубли ещё не проверялись."}</div>`;
   if (!c.ok) return `<div class="a3-note bad">${esc(c.error)}</div><div class="a3-note">проверено ${esc(relTime(c.at))}</div>`;
-  return `<div class="a3-note">${(c.lines || []).map(esc).join(" · ")}</div>
-    <div class="a3-note">на 365: ${esc(c.series || "")} · проверено ${esc(relTime(c.at))}</div>`;
+  const facts = checkFacts(c.lines).map(f => `<span class="a3-ck ${f.tone}">${esc(f.text)}</span>`).join("");
+  return `<div class="a3-checks">${facts}</div>`;
 }
 
 function actionsHtml(it) {
@@ -97,7 +87,7 @@ function actionsHtml(it) {
   if (it.stage === "queued") return canUpload() ? `<button type="button" class="btn ghost sm" data-a3-cancel="${key}">Отменить</button>` : "";
   const k = kindOf(it);
   if (k === "unbound") return "";
-  const check = `<button type="button" class="btn ghost sm" data-a3-check="${key}">${it.check ? "Проверить снова" : "Проверить"}</button>`;
+  const check = `<button type="button" class="btn ${it.check || it.stage === "failed" ? "ghost" : "primary"} sm" data-a3-check="${key}">${it.check ? "Проверить снова" : "Проверить"}</button>`;
   if (it.stage === "failed" && canUpload() && !(it.check && it.check.dup)) {
     return `${check}<button type="button" class="btn primary sm" data-a3-upload="${key}" data-a3-label="${label}">Повторить</button>`;
   }
@@ -107,20 +97,20 @@ function actionsHtml(it) {
 
 function rowHtml(it, title, meta, poster) {
   const k = kindOf(it);
+  // У проверенной серии техническая строка заодно говорит, когда проверяли и как тайтл назван на 365 (если иначе, чем у нас).
+  const c = k === "ready" ? it.check : null;
+  const line = [meta, c && c.series && !sameTitle(c.series, it.title) ? `на 365: ${esc(c.series)}` : "", c ? `проверено ${esc(relTime(c.at))}` : ""].filter(Boolean).join(" · ");
   return `
     <div class="a3-row is-${k}">
       ${poster === undefined ? "" : `<div class="a3-rposter">${poster ? `<img src="${esc(poster)}" alt="" loading="lazy">` : `<span>${esc(String(it.title || "?").slice(0, 1).toUpperCase())}</span>`}</div>`}
       <div class="a3-main">
         <div class="a3-title">${title}</div>
-        <div class="a3-meta">${meta}</div>
         ${detailHtml(it)}
+        ${line ? `<div class="a3-meta">${line}</div>` : ""}
       </div>
       <div class="a3-side">${pillHtml(it)}<div class="a3-actions">${actionsHtml(it)}</div></div>
     </div>`;
 }
-
-const cell = (label, value, sub, tone) =>
-  `<div class="bs-cell"><span>${esc(label)}</span><b class="${tone || ""}">${esc(String(value))}</b>${sub ? `<em>${esc(sub)}</em>` : ""}</div>`;
 
 const filtersHtml = (list, current, attr) =>
   `<div class="a3-filters">${list.map(([k, label, n]) => `<button type="button" class="a3-filter${current === k ? " on" : ""}" data-${attr}="${k}">${label}${n != null ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
@@ -129,6 +119,14 @@ const filtersHtml = (list, current, attr) =>
 
 function searchHtml() {
   return `<label class="a3-search"><span aria-hidden="true">⌕</span><input type="search" id="a3-query" placeholder="Название или номер серии" value="${esc(query)}" autocomplete="off"></label>`;
+}
+
+function finalRowHtml(it) {
+  const other = !it.check && it.series_title && !sameTitle(it.series_title, it.title) ? ` · на 365: ${esc(it.series_title)}` : "";
+  return rowHtml({ ...it, label: it.public_id },
+    `<span class="a3-name">${esc(it.title)}</span><span class="a3-epn">серия ${esc(String(it.episode ?? "?"))}</span>`,
+    `${esc(it.public_id)} · ${esc(it.file || "")}${it.size ? ` · ${fmtSize(it.size)}` : ""}${other}`,
+    it.poster || "");
 }
 
 function finalsHtml(d) {
@@ -141,6 +139,7 @@ function finalsHtml(d) {
       : finalsFilter === "queue" ? kindOf(it) === "queue"
         : finalsFilter === "newer" ? kindOf(it) === "newer"
           : todo(it));
+  const groups = groupItems(shown);
   const empty = query ? "Ничего не нашлось" : { todo: "Всё собранное уже на 365 🎉", queue: "Очередь пуста", done: "На 365 пока ничего нет",
     newer: "Все залитые серии — в последней версии", all: "Собранных финалов пока нет" }[finalsFilter];
   return `
@@ -149,13 +148,13 @@ function finalsHtml(d) {
         ...(count("newer") ? [["newer", "Новая версия", count("newer")]] : []),
         ["done", "На 365", items.filter(isOn365).length], ["all", "Все", items.length]], finalsFilter, "a3-ff")}
       <span style="flex:1"></span>
-      ${searchHtml()}
       <button type="button" class="btn ghost sm" data-a3-checkall>Проверить всё</button>
     </div>
-    <div class="a3-list">${shown.map(it => rowHtml({ ...it, label: it.public_id },
-      `${esc(it.title)} <b>· серия ${esc(String(it.episode ?? "?"))}</b>`,
-      `${esc(it.public_id)} · ${esc(it.file || "")}${it.size ? ` · ${fmtSize(it.size)}` : ""}${it.series_title ? ` · на 365: ${esc(it.series_title)}` : ""}`,
-      it.poster || "")).join("") || `<div class="a3-empty">${empty}</div>`}</div>`;
+    <div class="a3-list">${groups.map(g => `
+      <section class="a3-group">
+        ${groups.length > 1 ? `<div class="a3-ghead"><b>${esc(g.title)}</b><span>${g.items.length}</span></div>` : ""}
+        ${g.items.map(finalRowHtml).join("")}
+      </section>`).join("") || `<div class="a3-empty">${empty}</div>`}</div>`;
 }
 
 // ---------- «Архив» ----------
@@ -274,7 +273,6 @@ function toolsHtml(a, items, missing) {
         ["unbound", "Не привязано", items.filter(it => kindOf(it) === "unbound").length],
         ["all", "Все", items.length]], archFilter, "a3-af")}
       <span style="flex:1"></span>
-      ${searchHtml()}
       ${canUpload() ? `<button type="button" class="btn ghost sm" data-a3-scan ${a.scanning ? "disabled" : ""}>Обновить архив</button>` : ""}
       <button type="button" class="btn ghost sm" data-a3-checkarch ${a.checking ? "disabled" : ""}>${a.checking ? "Сверяю…" : "Проверить весь архив"}</button>
     </div>
@@ -491,27 +489,61 @@ function openBind(root, tag, season, name) {
 
 // ---------- страница ----------
 
+const segHtml = (list, current) =>
+  `<div class="a3-seg" role="tablist">${list.map(([k, label, n]) => `<button type="button" role="tab" aria-selected="${current === k}" class="${current === k ? "on" : ""}" data-a3-view="${k}">${label}${n ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
+
+// Сводка: сколько серий на сайте, полоса всех статусов и главное действие — залить всё, что уже проверено.
+function heroHtml(every) {
+  const s = summarize(every);
+  const readyKeys = every.filter(it => kindOf(it) === "ready").map(it => it.key);
+  const bar = s.segments.map(g => `<i class="${g.key}" style="flex-grow:${g.count}" title="${esc(g.label)}: ${g.count}"></i>`).join("");
+  const legend = s.segments.map(g => `<span><i class="${g.key}"></i>${esc(g.label)} <b>${g.count}</b></span>`).join("");
+  return `
+    <section class="a3-hero">
+      <div class="a3-big"><b>${s.onSite}</b><span>из ${s.total} серий на 365</span></div>
+      <div class="a3-meterwrap">
+        <div class="a3-meter" role="img" aria-label="${s.segments.map(g => `${esc(g.label)}: ${g.count}`).join(", ")}">${bar}</div>
+        <div class="a3-mlegend">${legend}</div>
+      </div>
+      ${readyKeys.length && canUpload() ? `<button type="button" class="btn primary a3-cta" data-a3-upall="${esc(readyKeys.join(","))}">↑ Залить готовые · ${readyKeys.length}</button>` : ""}
+    </section>`;
+}
+
+// Что происходит прямо сейчас: идущая заливка или серия, ждущая старта. Остальная очередь — одной строкой.
+function liveHtml(every) {
+  const queue = every.filter(it => kindOf(it) === "queue");
+  const it = queue.find(x => x.stage === "uploading") || queue.find(x => x.start_in && !x.attempt);
+  if (!it) return "";
+  const running = it.stage === "uploading";
+  const pct = running ? Math.max(0, Math.min(100, it.progress || 0)) : 0;
+  const name = it.label || it.public_id || `«${it.title}», серия ${it.episode}`;
+  const rest = queue.length - 1;
+  return `
+    <section class="a3-live${running ? " running" : ""}">
+      <div class="a3-rposter">${it.poster ? `<img src="${esc(it.poster)}" alt="">` : `<span>${esc(String(it.title || "?").slice(0, 1).toUpperCase())}</span>`}</div>
+      <div class="a3-main">
+        <div class="a3-livekick">${running ? `${it.replaces ? "Перезаливается" : "Заливается"} · ${pct}%` : `Старт через ${it.start_in} с`}${rest > 0 ? ` · ещё ${rest} в очереди` : ""}</div>
+        <div class="a3-title"><span class="a3-name">${esc(it.title || "")}</span><span class="a3-epn">серия ${esc(String(it.episode ?? "?"))}</span></div>
+        ${running ? `<div class="a3-bar"><i style="width:${pct}%"></i></div>` : ""}
+        ${it.text ? `<div class="a3-note">${esc(it.text)}</div>` : ""}
+      </div>
+      <div class="a3-actions">${actionsHtml({ ...it, label: name })}</div>
+    </section>`;
+}
+
 function paint(root) {
   const d = last || {};
   const acc = d.account || {};
   // Сводка — по уникальным сериям: финал, у которого есть копия в архиве, уже посчитан там.
   const every = [...(d.items || []).filter(it => !it.inArchive), ...((d.archive || {}).items || [])];
-  const queue = every.filter(it => kindOf(it) === "queue").length;
-  const unbound = every.filter(it => kindOf(it) === "unbound").length;
-  const unchecked = every.filter(it => kindOf(it) === "unchecked").length;
-  const bad = every.filter(it => kindOf(it) === "bad").length;
-  const rest = [unbound && `${unbound} не привязано`, unchecked && `${unchecked} не проверено`].filter(Boolean).join(" · ");
   const tabs = [["finals", "Финалы", (d.items || []).filter(it => !isOn365(it)).length],
     ["archive", "Архив", ((d.archive || {}).items || []).filter(it => !isOn365(it) && kindOf(it) !== "unbound").length], ...(canUpload() ? [["manual", "Вручную", null]] : [])];
   if (view === "manual" && !canUpload()) view = "finals";
   // Поиск переживает перерисовку: фокус и курсор возвращаются в поле.
   const focused = document.activeElement && document.activeElement.id === "a3-query" ? document.activeElement.selectionStart : null;
   const speed = d.speed && d.speed.best ? `до ${Math.round(d.speed.best)} Мбит/с` : "замер при первой заливке";
-  const newer = every.filter(it => kindOf(it) === "newer").length;
   // Страница перерисовывается целиком (щелчок по серии, фильтр, поиск): уже загруженные постеры переносим
   // в новую разметку, иначе каждая картинка на миг пустеет и экран моргает.
-  // Анимация появления блока (bcell-in) — только при первом показе, а не на каждой перерисовке.
-  const again = !!root.querySelector(".a3-card");
   const posters = new Map();
   for (const img of root.querySelectorAll("img[src]")) {
     if (!img.complete || !img.naturalWidth) continue;
@@ -519,27 +551,24 @@ function paint(root) {
     posters.set(src, [...(posters.get(src) || []), img]);
   }
   root.innerHTML = `
-    <div class="page-header">
-      <div><span class="kd-label">Публикация · smotret-anime.org</span><h1>Anime 365</h1></div>
-    </div>
-    <div class="bcell a3-card${again ? " a3-still" : ""}">
-      <div class="a3-hero">
-        <div class="a3-acc ${acc.ok ? "ok" : "bad"}"><i></i><div>
-          <b>${acc.ok ? `Аккаунт ${esc(acc.name || "")}` : "Нет входа на 365"}</b>
-          <span>${acc.ok ? `подпись «${esc(acc.authors || "")}» · заливает бот, по одной` : `<span class="a3-bad">${esc(acc.error || "аккаунт не принят")}</span>`}</span>
-        </div></div>
-        <div class="a3-facts">
-          <span title="Самый быстрый адрес загрузки 365 по последнему замеру">⚡ ${esc(speed)}</span>
-          <span title="После «Залить» серия ждёт — можно передумать">🛡 ${d.grace ? `старт через ${d.grace} с, можно отменить` : "старт сразу"}</span>
+    <div class="a3-page">
+      <div class="a3-top">
+        <div class="page-header"><div><span class="kd-label">Публикация · smotret-anime.org</span><h1>Anime 365</h1></div></div>
+        <div class="a3-status">
+          <div class="a3-acc ${acc.ok ? "ok" : "bad"}"><i></i><div>
+            <b>${acc.ok ? esc(acc.name || "") : "Нет входа на 365"}</b>
+            <span>${acc.ok ? `подпись «${esc(acc.authors || "")}» · заливает бот` : `<span class="a3-bad">${esc(acc.error || "аккаунт не принят")}</span>`}</span>
+          </div></div>
+          <div class="a3-fact" title="Самый быстрый адрес загрузки 365 по последнему замеру"><b>${esc(speed)}</b><span>скорость</span></div>
+          <div class="a3-fact" title="После «Залить» серия ждёт — можно передумать"><b>${d.grace ? `${d.grace} с` : "сразу"}</b><span>${d.grace ? "на отмену" : "старт заливки"}</span></div>
         </div>
       </div>
-      <div class="bs-grid">
-        ${cell("На 365", every.filter(isOn365).length, newer ? `${newer} — с новой версией видео` : "залито отсюда и найдено на сайте", newer ? "warn" : "")}
-        ${cell("В очереди", queue, d.uploading ? `сейчас: ${d.uploading}` : "по одной, с проверками", queue ? "warn" : "")}
-        ${cell("Нет на 365", every.filter(it => kindOf(it) === "ready").length, "проверено — можно заливать")}
-        ${cell("Проблемы", bad, [bad ? "проверка не пройдена" : "ошибок проверки нет", rest].filter(Boolean).join(" · "), bad ? "danger" : "")}
+      ${heroHtml(every)}
+      ${liveHtml(every)}
+      <div class="a3-nav">
+        ${segHtml(tabs, view)}
+        ${view === "manual" ? "" : searchHtml()}
       </div>
-      ${filtersHtml(tabs, view, "a3-view").replace("a3-filters", "a3-filters a3-tabs")}
       <div class="a3-body">${view === "finals" ? finalsHtml(d) : view === "archive" ? archiveHtml(d) : manualHtml()}</div>
     </div>`;
   for (const img of root.querySelectorAll("img[src]")) {
@@ -660,7 +689,7 @@ function bind(root) {
         toast("Перезаливка в очереди — до старта можно отменить.", "ok");
       } else if (b.dataset.a3Upall) {
         const keys = b.dataset.a3Upall.split(",").filter(Boolean);
-        const ok = await askConfirm(`Залить на Anime 365 недостающие серии «${b.dataset.a3Name}» — ${keys.length} шт.?\n\n`
+        const ok = await askConfirm((b.dataset.a3Name ? `Залить на Anime 365 недостающие серии «${b.dataset.a3Name}» — ${keys.length} шт.?\n\n` : `Залить на Anime 365 все проверенные серии — ${keys.length} шт.?\n\n`)
           + "Встанут в очередь, бот зальёт по одной; перед каждой — ещё раз проверка сезона и дублей.", { yes: "Залить" });
         if (!ok) return;
         busy("Ставлю в очередь…");
