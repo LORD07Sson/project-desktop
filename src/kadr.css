@@ -4669,3 +4669,47 @@ td.row-actions { opacity: 1; transition: none; }
 .up-link.danger { color: var(--s-stop); }
 .up-dims { display: block; font-style: normal; font-weight: 500; font-size: 11.5px; color: var(--ink-dim); margin-top: 2px; }
 .up-src { max-width: 100%; max-height: calc(62vh - 20px); border-radius: 10px; object-fit: contain; }
+
+/* ---- Карточка отчёта: полоса показателей, лента этапов, «Детали» и «Последняя активность» (в конце файла: перебивает прежние .rd-fs) ---- */
+.rd-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.rd-kpi { min-width: 0; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); }
+.rd-kpi h4 { margin: 0 0 8px; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim); }
+.rd-kpi b { display: block; font-size: 22px; line-height: 1.1; font-weight: 800; letter-spacing: -.02em; }
+.rd-kpi small { display: block; margin-top: 5px; overflow: hidden; font-size: 12px; color: var(--ink-soft); text-overflow: ellipsis; white-space: nowrap; }
+.rd-kpi-bar { height: 6px; margin-top: 10px; overflow: hidden; border-radius: 3px; background: rgba(255, 255, 255, .08); }
+.rd-kpi-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--fire), var(--gold)); }
+.rd-kpi.bad { border-color: rgba(255, 90, 80, .5); background: rgba(255, 90, 80, .07); }
+.rd-kpi.bad b { color: #ff8a80; }
+.rd-kpi.soon { border-color: rgba(255, 176, 32, .45); }
+.rd-kpi.soon b { color: #ffc457; }
+:root[data-theme="light"] .rd-kpi { background: rgba(255, 255, 255, .6); }
+:root[data-theme="light"] .rd-kpi-bar { background: rgba(80, 40, 20, .1); }
+@media (max-width: 900px) { .rd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.rd-prod .rd-flow { display: flex; gap: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, .02); }
+.rd-prod .rd-fs { flex: 1 1 0; display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 2px 10px; padding: 12px 14px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; }
+.rd-prod .rd-fs:first-child { border-left: 0; }
+.rd-prod .rd-fs::after { content: ""; position: absolute; top: auto; right: 0; bottom: 0; left: 0; width: auto; height: 3px; background: rgba(255, 255, 255, .08); }
+.rd-prod .rd-fs:last-child::after { display: block; }
+.rd-prod .rd-fs.done::after { background: linear-gradient(90deg, var(--fire), var(--gold)); }
+.rd-prod .rd-fs.todo::after { background: var(--gold); }
+.rd-prod .rd-fs.wait, .rd-prod .rd-fs.opt { opacity: .6; }
+.rd-prod .rd-fs small { order: 3; flex: 1 0 100%; min-height: 0; margin-left: 32px; }
+.rd-prod .rd-fs-act { order: 4; flex: 1 0 100%; margin: 6px 0 0 32px; }
+.rd-prod .rd-fs-act:empty { display: none; }
+.rd-prod .rd-fs-act .rd-add { width: auto; max-width: 100%; padding: 6px 10px; font-size: 11.5px; line-height: 1.25; white-space: normal; }
+@media (max-width: 860px) { .rd-prod .rd-flow { flex-wrap: wrap; } .rd-prod .rd-fs { flex-basis: 50%; } }
+
+.rd-details, .rd-recent { padding: 6px 16px 10px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); }
+.rd-details > h4, .rd-recent > h4 { margin: 10px 0 6px; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim); }
+.rd-details .rd-meta-row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 10px; min-height: 38px; margin: 0; padding: 8px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+.rd-details .rd-meta-row > span:first-child { flex: none; font-size: 12.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink-soft); }
+.rd-dl { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 38px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.rd-dl > span:first-child { flex: none; color: var(--ink-soft); }
+.rd-dl > span:last-child { min-width: 0; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.rd-ev { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.rd-ev:first-child { border-top: 0; }
+.rd-ev i { flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: var(--gold); }
+.rd-ev small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink-dim); }
+.rd-recent .pf-link { margin-top: 6px; }
+:root[data-theme="light"] .rd-details, :root[data-theme="light"] .rd-recent { background: rgba(255, 255, 255, .6); }

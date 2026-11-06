@@ -8,6 +8,7 @@ import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { can, state } from "./state.js";
 import { productionNow } from "./report-now-core.js";
+import { classifyFiles, overviewKpis, isFinalFile, isVideoFile } from "./report-overview-core.js";
 import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./tauri.js";
 import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange, formatWhen } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
@@ -368,6 +369,12 @@ export async function openReportDetail(publicId) {
               </div>` : ""}
     `;
     const prodHtml = productionHtml(detail, files.files, pipeInner);
+    // Полоса показателей: прогресс, срок, озвучка, материалы (расчёт — report-overview-core.js).
+    const assigneeNames = new Map((detail.assignees || []).map(a => [String(a.telegram_id), a.first_name || a.username || ""]));
+    const kpisHtml = `<div class="rd-kpis">${overviewKpis({
+      files: files.files, pipeline: detail.pipeline, status: detail.status, deadline: detail.deadline, overdue,
+      nameOf: s => (s.telegram_id && assigneeNames.get(String(s.telegram_id))) || s.user_name || "",
+    }).map(k => `<div class="rd-kpi${k.tone ? ` ${k.tone}` : ""}"><h4>${esc(k.title)}</h4><b>${esc(k.value)}</b><small>${esc(k.sub)}</small>${k.bar != null ? `<div class="rd-kpi-bar"><i style="width:${k.bar}%"></i></div>` : ""}</div>`).join("")}</div>`;
 
     overlay.querySelector(".sheet").innerHTML = `
       <div class="rd-hero${banner ? "" : " no-ban"}">
@@ -407,6 +414,7 @@ export async function openReportDetail(publicId) {
         <div class="rd-main">
           <div class="rd-panel" data-rd-panel="main">
             <div id="rd-player-host"></div>
+            ${kpisHtml}
             ${prodHtml || `<div class="rd-sec">${pipeInner}</div>`}
             <div class="rd-sec">
               <h3>Чек-лист ${checklist.items.length ? `<span class="n">${doneItems} из ${checklist.items.length}</span>` : ""}</h3>
@@ -458,11 +466,6 @@ export async function openReportDetail(publicId) {
         </div>
 
         <aside class="rd-side">
-          <div class="rd-summary">
-            <div><b>${checklist.items.length ? `${doneItems}/${checklist.items.length}` : "—"}</b><span>пунктов чек-листа</span></div>
-            <div><b>${files.files.length}</b><span>файлов</span></div>
-            <div><b>${notes.notes.length}</b><span>заметок</span></div>
-          </div>
           <div class="rd-meta">
             <div class="rd-meta-row rd-due"><span>Срок</span>
               ${canEdit ? `<button class="rd-meta-btn" id="chip-deadline">${detail.deadline ? deadlineCellHtml(detail, overdue) : `<span class="ls-dl-none">без срока — поставить</span>`}</button>` : `<div class="rd-meta-btn" aria-disabled="true">${detail.deadline ? deadlineCellHtml(detail, overdue) : "без срока"}</div>`}</div>
@@ -474,10 +477,15 @@ export async function openReportDetail(publicId) {
               </div>`).join("")}
               ${canEdit ? `<button class="rd-add" id="chip-assign">+ ${detail.assignees && detail.assignees.length ? "ещё исполнитель" : "назначить"}</button>` : ""}
             </div>
+            <div class="rd-details"><h4>Детали</h4>
             <div class="rd-meta-row"><span>Приоритет</span>
               ${canEdit ? `<button class="rd-meta-btn" id="chip-priority"><span class="priority-chip ${esc(detail.priority)}"><span class="dot"></span>${esc(detail.priority_label)}</span></button>` : `<div class="rd-meta-btn" aria-disabled="true"><span class="priority-chip ${esc(detail.priority)}"><span class="dot"></span>${esc(detail.priority_label)}</span></div>`}</div>
             <div class="rd-meta-row"><span>Статус</span>
               ${canEdit ? `<button class="rd-meta-btn" id="chip-status"><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[detail.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(detail.status_label)}</span></button>` : `<div class="rd-meta-btn" aria-disabled="true"><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[detail.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(detail.status_label)}</span></div>`}</div>
+              <div class="rd-dl"><span>Создан</span><span>${esc(authorName)} · ${esc(formatWhen(detail.created_at))}</span></div>
+              <div class="rd-dl"><span>Команда</span><span>${(detail.assignees || []).length} чел.</span></div>
+            </div>
+            <div class="rd-recent" id="rd-recent"><h4>Последняя активность</h4><div class="rd-recent-list"><div class="pf-quiet">Загружаем…</div></div></div>
           </div>
           <div class="rd-side-foot">
             <button class="btn ghost" id="btn-pin-window">Открепить в окне</button>
@@ -510,6 +518,16 @@ export async function openReportDetail(publicId) {
       const badge = sheet.querySelector(".rd-tab-bad");
       if (badge && r && r.failed) { badge.textContent = r.failed; badge.hidden = false; badge.title = `Не доставлено: ${r.failed}`; }
     }).catch(() => { /* вкладка просто без значка */ });
+    // Последние события отчёта — в боковой колонке; не загрузились — блок просто не показываем.
+    apiGet(`/report/${publicId}/activity`, { offset: 0, page_size: 4 }).then(r => {
+      const box = sheet.querySelector("#rd-recent .rd-recent-list");
+      if (!box) return;
+      const evs = (r && r.events) || [];
+      if (!evs.length) { box.innerHTML = '<div class="pf-quiet">Пока пусто</div>'; return; }
+      box.innerHTML = evs.map(ev => `<div class="rd-ev"><i></i><span>${esc(actionLabel(ev.action))}${ev.detail ? ` · ${esc(ev.detail)}` : ""}<small>${[ev.actor || "бот", formatWhen(ev.created_at)].map(esc).join(" · ")}</small></span></div>`).join("")
+        + '<button type="button" class="pf-link" data-rd-all-activity>вся активность →</button>';
+      box.querySelector("[data-rd-all-activity]")?.addEventListener("click", () => sheet.querySelector('[data-rd-tab="activity"]')?.click());
+    }).catch(() => sheet.querySelector("#rd-recent")?.remove());
     const pipeEditor = sheet.querySelector("#pipe-editor");
     const pipeView = sheet.querySelector("#pipe-view");
     const pipeToggle = sheet.querySelector("#pipe-edit-toggle");
@@ -1186,18 +1204,13 @@ function renderNotifications(panel, publicId, res) {
 // присланного документом, приходит "document" — и mp3 внутри него
 // раньше оставался без кнопки AI-проверки, потому что || до имени
 // просто не доходил.
-const VIDEO_NAME_RE = /\.(mkv|mp4|mov|avi|webm|m4v|ts)$/i;
 
 // «Производство финала»: четыре шага со статусом и одной кнопкой на шаг. Кнопки сохраняют прежние id —
 // их обработчики (Nyaa, сборка, добавление файла) остались как были.
 function productionHtml(detail, fileList, pipeInner = "") {
   if (!can("reports.assemble") && !can("reports.files")) return "";
   const list = fileList || [];
-  const isFinalFile = f => !!f.is_final || /_final\./i.test(f.file_name || "");
-  const hasFinal = list.some(isFinalFile);
-  const hasVideo = hasFinal || list.some(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
-  const hasSubs = list.some(f => /\.(ass|ssa|srt)$/i.test(f.file_name || ""));
-  const hasAudio = list.some(f => AUDIO_RE.test(f.file_type || "") || AUDIO_RE.test(f.file_name || ""));
+  const { hasFinal, hasVideo, hasSubs, hasAudio } = classifyFiles(list);
   // Звук готов, когда пройден пайплайн, а не когда лёг первый файл: иначе галочка стоит, пока звукарь ещё работает.
   const pipe = detail.pipeline || [];
   const pipeLeft = pipe.length && !pipe.every(s => s.done) ? `сдали ${pipe.filter(s => s.done || s.submitted_at).length} из ${pipe.length}` : "";
@@ -1208,7 +1221,7 @@ function productionHtml(detail, fileList, pipeInner = "") {
       <small>${label}</small>
       <div class="rd-fs-act">${body}</div>
     </div>`;
-  const sendFile = [...list].reverse().find(isFinalFile) || [...list].reverse().find(f => f.file_type === "video" || VIDEO_NAME_RE.test(f.file_name || ""));
+  const sendFile = [...list].reverse().find(isFinalFile) || [...list].reverse().find(isVideoFile);
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
   const nyaa = can("reports.files") ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l1">⚠ Опасная зона</span><span class="dz-l2">Видео с Nyaa</span></button>` : "";
   // Яркая — только когда собирать уже есть из чего; пока ждём видео, кнопка спокойная (окно сборки само скажет, чего не хватает).
