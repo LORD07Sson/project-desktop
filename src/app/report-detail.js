@@ -477,9 +477,9 @@ export async function openReportDetail(publicId) {
               ${(detail.assignees || []).map(a => `<div class="rd-person" data-assignee="${a.telegram_id}" title="${esc(a.first_name || a.username || `ID ${a.telegram_id}`)}">
                 <span class="avatar-bubble" data-avatar-for="${a.telegram_id}">${esc(initials(a.first_name || a.username))}</span>
                 <span>${esc(a.first_name || a.username || `ID ${a.telegram_id}`)}</span>
-                ${canEdit ? `<button class="icon-btn" data-unassign="${a.telegram_id}" title="Снять">✕</button>` : ""}
+                ${canEdit && !detail.dub_only ? `<button class="icon-btn" data-unassign="${a.telegram_id}" title="Снять">✕</button>` : ""}
               </div>`).join("")}
-              ${canEdit ? `<button class="rd-add" id="chip-assign">+ ${detail.assignees && detail.assignees.length ? "ещё исполнитель" : "назначить"}</button>` : ""}
+              ${canEdit && !detail.dub_only ? `<button class="rd-add" id="chip-assign">+ ${detail.assignees && detail.assignees.length ? "ещё исполнитель" : "назначить"}</button>` : ""}
             </div>
             <div class="rd-details"><h4>Детали</h4>
             <div class="rd-meta-row"><span>Приоритет</span>
