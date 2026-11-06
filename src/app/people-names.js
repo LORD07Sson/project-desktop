@@ -39,6 +39,8 @@ export async function loadPeopleNames() {
   return names;
 }
 
+export function forgetPeopleNames() { names = null; }
+
 // Журнал отчёта отдаёт только @username, без id.
 export const nameByUsername = username => (names && names.get(`@${username}`)) || username;
 

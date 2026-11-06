@@ -4726,3 +4726,12 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .pf-page-overlay .pf-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pf-manage { display: flex; flex-direction: column; gap: 8px; }
 .pf-manage h3 { margin: 0; }
+
+/* Панель разработчика: действия */
+.dev-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dev-acts { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
+.dev-act { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.dev-act:hover { background: var(--surface-3); }
+.dev-act span { color: var(--ink-soft); }
+.dev-act small { display: block; margin-top: 2px; color: var(--ink-dim); font-size: 11.5px; }
+.dev-bcell input[type="range"] { display: block; width: 100%; margin-bottom: 12px; }

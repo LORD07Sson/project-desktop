@@ -5,8 +5,10 @@
 // (_require_owner) — фронту тут доверять нельзя.
 
 import { state } from "./state.js";
-import { apiPost, toast } from "./api.js";
-import { esc } from "./utils.js";
+import { apiGet, apiPost, toast } from "./api.js";
+import { esc, relTime } from "./utils.js";
+import { actionLabel, forgetPeopleNames } from "./people-names.js";
+import { openExternal } from "./tauri.js";
 
 const DEV_MODE_KEY = "project-dev-mode";
 
@@ -29,6 +31,33 @@ export function devPanelHtml(d) {
           <button class="dev-id" data-copy="${d.internal_id != null ? d.internal_id : ""}" title="Копировать"><span>internal id</span><b>${d.internal_id != null ? d.internal_id : "—"}</b></button>
           <div class="dev-id static"><span>в базе с</span><b class="plain">${esc(d.created_at || "—")}</b></div>
         </div>
+      </div>
+      <div class="dev-bcell wide">
+        <div class="h">Быстрые действия</div>
+        <div class="dev-actions">
+          ${String(d.telegram_id) !== String(state.telegramId) ? `<button class="btn" data-dev-dm>Написать в чате</button>` : ""}
+          ${d.username ? `<button class="btn" data-dev-tg>Открыть в Telegram</button><button class="btn" data-copy="@${esc(d.username)}">Скопировать @${esc(d.username)}</button>` : ""}
+          <button class="btn" data-dev-json>Скопировать все данные</button>
+        </div>
+      </div>
+      <div class="dev-bcell">
+        <div class="h">Имя в команде</div>
+        <input type="text" id="dev-name-input" class="field-input" maxlength="40" placeholder="Пусто — имя из Telegram">
+        <button id="dev-name-save" class="dev-save-btn">Сохранить</button>
+      </div>
+      <div class="dev-bcell">
+        <div class="h">Цель месяца</div>
+        <input type="number" id="dev-goal-input" class="field-input" min="0" max="500" placeholder="0 — без цели">
+        <button id="dev-goal-save" class="dev-save-btn">Сохранить</button>
+      </div>
+      <div class="dev-bcell wide">
+        <div class="h">Положение баннера</div>
+        <input type="range" id="dev-banner-input" min="0" max="100" value="${Number(d.banner_pos_y ?? 50)}" aria-label="Положение баннера по вертикали">
+        <button id="dev-banner-save" class="dev-save-btn">Сохранить</button>
+      </div>
+      <div class="dev-bcell wide">
+        <div class="h">Последние действия</div>
+        <div class="dev-acts" id="dev-acts"><div class="dev-hint">загружаю…</div></div>
       </div>
       <div class="dev-bcell wide">
         <div class="h">Профиль</div>
@@ -54,8 +83,65 @@ export function devPanelHtml(d) {
   `;
 }
 
-export function wireDevPanel(root, telegramId, onSaved) {
-  root.querySelectorAll(".dev-id[data-copy]").forEach(btn => btn.addEventListener("click", async () => {
+async function fillDevExtra(root, telegramId) {
+  const box = root.querySelector("#dev-acts");
+  if (!box) return;
+  let x;
+  try { x = await apiGet(`/dev/user/${telegramId}/extra`); }
+  catch (e) { box.innerHTML = `<div class="dev-hint">Не удалось загрузить: ${esc(e.message)}</div>`; return; }
+  if (!box.isConnected) return;
+  const goal = root.querySelector("#dev-goal-input");
+  if (goal) goal.value = x.monthly_goal || 0;
+  const name = root.querySelector("#dev-name-input");
+  if (name) name.value = x.display_name || "";
+  const evs = x.events || [];
+  box.innerHTML = evs.length ? evs.map(ev => `
+    <button type="button" class="dev-act" data-dev-report="${esc(ev.public_id || "")}">
+      <b>${esc(actionLabel(ev.action))}</b>${ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : ""}
+      <small>${esc(ev.public_id || "")} ${esc(ev.title || "")} · ${esc(relTime(ev.created_at))}</small>
+    </button>`).join("") : `<div class="dev-hint">Действий пока нет.</div>`;
+  box.querySelectorAll("[data-dev-report]").forEach(b => b.addEventListener("click", async () => {
+    const { openReportDetail } = await import("./report-detail.js");
+    openReportDetail(b.dataset.devReport);
+  }));
+}
+
+// Кнопка сохранения: блокировка на время запроса, тост, перерисовка профиля.
+function wireSave(root, sel, send, done, onSaved) {
+  const btn = root.querySelector(sel);
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      await send();
+      toast(done);
+      if (onSaved) await onSaved();
+    } catch (e) { toast(`Не удалось сохранить: ${e.message}`, "error"); }
+    finally { btn.disabled = false; }
+  });
+}
+
+export function wireDevPanel(root, telegramId, onSaved, d) {
+  fillDevExtra(root, telegramId);
+  root.querySelector("[data-dev-dm]")?.addEventListener("click", async () => {
+    const [{ openDmWith }, { switchTab }] = await Promise.all([import("./messages.js"), import("./tabs.js")]);
+    openDmWith(telegramId);
+    switchTab("messages");
+  });
+  root.querySelector("[data-dev-tg]")?.addEventListener("click", () => {
+    openExternal(`https://t.me/${encodeURIComponent(d.username)}`).catch(e => toast(`Не удалось открыть Telegram: ${e}`, "error"));
+  });
+  root.querySelector("[data-dev-json]")?.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(JSON.stringify(d, null, 2)); toast("Данные скопированы."); }
+    catch (_) { toast("Не удалось скопировать.", "error"); }
+  });
+  wireSave(root, "#dev-name-save", async () => {
+    await apiPost(`/dev/user/${telegramId}/profile`, { display_name: root.querySelector("#dev-name-input").value });
+    forgetPeopleNames();
+  }, "Имя сохранено.", onSaved);
+  wireSave(root, "#dev-goal-save", () => apiPost(`/dev/user/${telegramId}/goal`, { goal: Number(root.querySelector("#dev-goal-input").value) || 0 }), "Цель сохранена.", onSaved);
+  wireSave(root, "#dev-banner-save", () => apiPost(`/dev/user/${telegramId}/profile`, { banner_pos_y: Number(root.querySelector("#dev-banner-input").value) }), "Положение сохранено.", onSaved);
+  root.querySelectorAll("[data-copy]").forEach(btn => btn.addEventListener("click", async () => {
     const v = btn.dataset.copy;
     if (!v) return;
     try { await navigator.clipboard.writeText(v); toast("Скопировано."); } catch (_) { toast("Не удалось скопировать.", "error"); }

@@ -413,7 +413,7 @@ export async function loadProfile() {
   root.querySelectorAll("[data-open-report]").forEach(row => {
     row.addEventListener("click", () => openReportDetail(row.dataset.openReport));
   });
-  if (devModeActive()) wireDevPanel(root, me.telegram_id, () => loadProfile());
+  if (devModeActive()) wireDevPanel(root, me.telegram_id, () => loadProfile(), me);
   notifyGoalReachedIfNeeded(me, goalSet, goalOver, goalDone);
 }
 
@@ -873,5 +873,5 @@ export async function openUserProfile(telegramId) {
       toast(r.chats ? `Удалено переписок: ${r.chats}, сообщений: ${r.messages}.` : "Личных переписок у человека не было.");
     } catch (e) { toast(e.message, "error"); purgeBtn.disabled = false; }
   });
-  if (devModeActive()) wireDevPanel(sheet, telegramId, async () => { await openUserProfile(telegramId); overlay.remove(); });
+  if (devModeActive()) wireDevPanel(sheet, telegramId, async () => { await openUserProfile(telegramId); overlay.remove(); }, d);
 }
