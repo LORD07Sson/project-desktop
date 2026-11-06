@@ -3384,7 +3384,10 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
 .rd-summary div { display: grid; gap: 2px; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--line-soft); background: rgba(255, 255, 255, .03); text-align: center; }
 .rd-summary b { font-size: 17px; } .rd-summary span { font-size: 10.5px; color: var(--ink-dim); line-height: 1.15; }
-.rd-side { position: sticky; top: 44px; align-self: start; max-height: calc(100vh - 76px); overflow-y: auto; }   /* 44px — высота залипающих вкладок, иначе колонка уходит под них */
+/* 44px — высота залипающих вкладок. Колонка должна помещаться между ними и низом окна карточки (её max-height минус рамка 2px минус вкладки):
+   выше — её низ обрезается, а в конце прокрутки верх уезжает под вкладки, и до края колонки не долистать. */
+.rd-side { position: sticky; top: 44px; align-self: start; max-height: calc(100vh - var(--titlebar-h) - 20px - 2px - 44px); overflow-y: auto; }
+@media (max-width: 860px) { .rd-side { position: static; max-height: none; overflow-y: visible; } }
 /* Что мешает сейчас: одна строка с кнопкой над этапами (productionHtml). */
 .rd-now { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(255, 176, 32, .5); background: rgba(255, 176, 32, .1); }
 .rd-now b { display: block; font-size: 14px; color: #ffc457; }
