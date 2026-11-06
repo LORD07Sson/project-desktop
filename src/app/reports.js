@@ -357,7 +357,8 @@ export function deadlineCellHtml(r, overdue) {
   const dueAt = time
     ? Date.parse(`${dateKey}T${time[1]}:00+03:00`)
     : Date.parse(`${dateKey}T23:59:59+03:00`);
-  const lateDays = Math.floor((Date.now() - dueAt) / 86400000);
+  // Срок без времени считаем календарными днями, как Доска, Обзор и Календарь; со временем — полными сутками.
+  const lateDays = time ? Math.floor((Date.now() - dueAt) / 86400000) : -days;
   const [txt, cls] = overdue ? [lateDays > 0 ? `просрочено ${lateDays} дн.` : "просрочено", "late"]
     : days === 0 ? ["сегодня", "late"] : days === 1 ? ["завтра", "soon"] : days <= 3 ? [`через ${days} дн.`, "soon"] : [`через ${days} дн.`, "ok"];
   return `<span class="ls-dl-pill ${cls}">${txt}</span><span class="ls-dl-date">${date}</span>`;
