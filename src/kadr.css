@@ -4754,3 +4754,8 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .dev-binding { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 16px; }
 .dev-binding label { display: flex; flex-direction: column; gap: 5px; color: var(--ink-dim); font-size: 11px; font-weight: 700; }
 .dev-binding .field-input { width: 150px; }
+
+/* Страница тайтла: кнопка «Смотреть» */
+.tpg-actions button.tpg-watch { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #10141a; border-color: transparent; font-weight: 700; }
+.tpg-actions button.tpg-watch:hover { background: #e8edf2; border-color: transparent; }
+.tpg-watch svg { width: 15px; height: 15px; fill: currentColor; }

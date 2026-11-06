@@ -209,6 +209,7 @@ export function titlePageHtml(d) {
               ${episodesTile(det)}
             </div>
             <div class="td-vote-cta tpg-actions">
+              ${d.shiki_id ? `<button class="tpg-watch" data-tpg-watch><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>Смотреть</button>` : ""}
               <button class="${d.my_vote === 1 ? "on-like" : ""}" data-vote-title="${d.id}" data-vote-choice="1">👍 Нравится</button>
               <button class="${d.my_vote === -1 ? "on-dislike" : ""}" data-vote-title="${d.id}" data-vote-choice="-1">👎 Не то</button>
               <button class="tpg-upscale" data-tpg-upscale title="Увеличить обложку или баннер ×4 нейросетью">✨ Апскейл</button>
@@ -253,6 +254,10 @@ export function wireTitlePage(root, d, { openProfile } = {}) {
       setBg(fallback);
     }
   }
+  root.querySelector("[data-tpg-watch]")?.addEventListener("click", async () => {
+    const { openAnimePlayer } = await import("./player-anime.js");
+    openAnimePlayer({ shikiId: d.shiki_id, name: d.name });
+  });
   const desc = root.querySelector("[data-tpg-desc]");
   const more = root.querySelector("[data-tpg-more]");
   if (desc && more) {
