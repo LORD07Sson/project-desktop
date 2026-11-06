@@ -6,7 +6,6 @@ import { apiGet, askConfirm, openSheet, toast, dismissSheet, API_BASE } from "./
 import { $, esc } from "./utils.js";
 import { applyTheme, applyLook } from "./theme.js";
 import { applyDensity, currentDensity } from "./density.js";
-import { focusModePreferred, setFocusModePreferred } from "./focus-mode.js";
 import { IDLE_CHOICES, idleSceneMinutes, setIdleSceneMinutes, showIdleScene } from "./idle-scene.js";
 import { isDevModeOn, setDevModeOn } from "./devmode.js";
 import { desktopNotifyEnabled, setDesktopNotifyEnabled, NOTIFY_KINDS, notifyKinds, setNotifyKind, quietHours, setQuietHours } from "./desktop-notify.js";
@@ -234,7 +233,6 @@ async function openSettings() {
             ${row(ICONS.focus, "MIDI-контроллер для плеера", "До — пауза, Си и Ре — назад и вперёд на 5 с, ручка CC 7 — громкость, колесо CC 1 — перемотка", sw("s-midi", midiEnabled()), "midi клавиатура контроллер")}
             ${row(ICONS.focus, "Помогать строить карту работы", "Какие экраны и кнопки вы открываете и сколько смотрите — без текста, сообщений и файлов. Видит только владелец", sw("s-telemetry", trackingOn()), "статистика телеметрия карта работы")}
             ${row(ICONS.trash || ICONS.focus, "Удалить мою статистику", "Стирает всё, что уже собрано о вас для карты работы", `<button type="button" class="btn" id="s-telemetry-forget">Удалить</button>`, "статистика телеметрия удалить")}
-            ${row(ICONS.focus, "Фокус-режим при открытии отчёта", "Карточка отчёта на весь экран, остальное прячется", sw("s-focus-mode", focusModePreferred()))}
             ${state.isDeveloper ? `<div class="dev-pill-toggle">${row(ICONS.dev, "Режим разработчика", "Правка чужих ролей, профиля, даты вступления и наград — на карточке коллеги", sw("s-dev-mode", isDevModeOn()))}</div>` : ""}
           </div>
         </section>
@@ -343,7 +341,6 @@ async function openSettings() {
   overlay.querySelector("#s-theme").addEventListener("change", e => applyTheme(e.target.value));
   overlay.querySelector("#s-density").value = currentDensity();
   overlay.querySelector("#s-density").addEventListener("change", e => applyDensity(e.target.value));
-  overlay.querySelector("#s-focus-mode").addEventListener("change", e => setFocusModePreferred(e.target.checked));
   overlay.querySelector("#s-telemetry").addEventListener("change", async e => {
     try { await setTracking(e.target.checked); toast(e.target.checked ? "Статистика для карты работы включена." : "Статистика выключена — ничего не собирается.", "info"); }
     catch (err) { toast(`Не удалось сохранить выбор: ${err.message}`, "error"); }

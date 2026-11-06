@@ -578,7 +578,7 @@ button.kd-tile:hover { transform: translateY(-2px); }
    Карточка серии (report-detail.js)
    ================================================================ */
 .overlay.report-detail-overlay .sheet {
-  width: min(1080px, calc(100vw - 48px)); max-width: none; max-height: calc(100vh - var(--titlebar-h) - 32px);
+  width: min(1400px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - var(--titlebar-h) - 20px);
   border-radius: 26px; background: var(--surface);   /* сплошной цвет темы: полупрозрачный пропускал текст списка, а зашитый коричневый не совпадал с палитрой «Небо»/«Мята»… */
   backdrop-filter: blur(30px);
   animation: kadr-pop .5s var(--kadr-ease) both;
@@ -615,8 +615,6 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-step i { width: 7px; height: 7px; }
 /* будущие этапы — пустой кружок, но в цвет своего статуса: серый контур на тёмном не было видно */
 .rd-step:not(.cur):not(.done) i { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 65%, transparent); }
-/* «Фокус» — текстовая кнопка среди иконок: ширина по тексту, иначе слово вылезало на кнопку ссылки */
-#btn-focus-toggle { width: auto; padding: 0 12px; font-size: 12px; font-weight: 700; }
 .rd-step-side { height: 32px; border-radius: 10px; margin-left: 8px; }
 :root[data-theme="light"] .rd-step { background: rgba(80, 40, 20, .05); }
 
@@ -642,7 +640,7 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-nt-row.bad .m b { color: var(--s-stop); font-weight: 600; }
 .rd-nt-row .t { margin-top: 2px; font-size: 11px; color: var(--ink-dim); }
 
-.rd-body { grid-template-columns: minmax(0, 1fr) 300px; }
+.rd-body { grid-template-columns: minmax(0, 1fr) 340px; }
 .rd-main { padding: 22px 30px 30px; gap: 26px; }
 .rd-side { padding: 22px 24px 24px; background: rgba(255, 255, 255, .015); }
 .rd-sec h3 { font-size: 13.5px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--ink); margin-bottom: 12px; }

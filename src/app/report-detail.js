@@ -16,7 +16,6 @@ import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from
 import { setDropTarget } from "./file-drop.js";
 import { downloadWithCard } from "./download-card.js";
 import { recordRecentReport, forgetRecentReport } from "./recent-reports.js";
-import { toggleFocusMode, syncFocusButton } from "./focus-mode.js";
 import { loadAvatars } from "./profile.js";
 import { createPlayer, isAudioFile } from "./player.js";
 import { linkifyProject } from "./deeplink-core.js";
@@ -204,14 +203,9 @@ export async function openReportDetail(publicId) {
     ${dialogSkeletonHtml(5)}
   `, "wide");
   // Класс-маркер, а не просто ".sheet-wide" (её же используют admin.js,
-  // profile.js, titles-admin.js) — фокус-режим (focus-mode.js) должен
-  // отличать именно карточку отчёта от остальных широких модалок, чтобы
-  // не прятать шапку/сайдбар под какой-нибудь другой из них.
+  // profile.js, titles-admin.js): по нему стили и хоткеи отличают именно карточку отчёта
+  // от остальных широких модалок.
   overlay.classList.add("report-detail-overlay");
-  // Фокус-режим слушает эти два события, а не сам следит за DOM —
-  // открытие/закрытие карточки уже единственное место, где меняется
-  // presence ".report-detail-overlay".
-  document.dispatchEvent(new CustomEvent("report-detail-opened", { detail: { publicId } }));
 
   // Пока эта карточка открыта — сюда падает файл, перетащенный из
   // проводника (см. file-drop.js). Снимаем цель при закрытии ЛЮБЫМ
@@ -261,7 +255,6 @@ export async function openReportDetail(publicId) {
       document.removeEventListener("app:refresh", onAppRefresh);
       document.removeEventListener("report-notes-added", onFileUploaded);
       document.removeEventListener("keydown", onNavKey, true);
-      document.dispatchEvent(new CustomEvent("report-detail-closed", { detail: { publicId } }));
     }
   }).observe(document.body, { childList: true });
 
@@ -392,7 +385,6 @@ export async function openReportDetail(publicId) {
               <button class="icon-btn" data-nav="prev" title="Предыдущий в списке (Alt+←)" aria-label="Предыдущий отчёт" ${nav.prev ? "" : "disabled"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
               <button class="icon-btn" data-nav="next" title="Следующий в списке (Alt+→)" aria-label="Следующий отчёт" ${nav.next ? "" : "disabled"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>` : ""}
             <button class="icon-btn" data-copy-plink="${esc(detail.public_id)}" style="flex:none;" title="Копировать ссылку project://…" aria-label="Копировать ссылку на отчёт"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1"/></svg></button>
-            <button class="icon-btn" id="btn-focus-toggle" data-focus-toggle style="flex:none;"></button>
             <button class="icon-btn" data-close style="flex:none;" title="Закрыть" aria-label="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           </div>
         </div>
@@ -545,8 +537,6 @@ export async function openReportDetail(publicId) {
       const nb = listNeighbors(publicId);
       if (nb) goTo(b.dataset.nav === "prev" ? nb.prev : nb.next);
     }));
-    syncFocusButton(sheet.querySelector("#btn-focus-toggle"));
-    sheet.querySelector("#btn-focus-toggle").addEventListener("click", toggleFocusMode);
     sheet.querySelector("#btn-pin-window").addEventListener("click", async () => {
       try {
         await pinReportWindow(publicId);
