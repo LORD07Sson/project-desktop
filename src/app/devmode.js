@@ -5,7 +5,7 @@
 // (_require_owner) — фронту тут доверять нельзя.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, toast } from "./api.js";
+import { apiGet, apiPost, askConfirm, toast } from "./api.js";
 import { esc, relTime } from "./utils.js";
 import { actionLabel, forgetPeopleNames } from "./people-names.js";
 import { openExternal } from "./tauri.js";
@@ -191,4 +191,73 @@ export function wireDevPanel(root, telegramId, onSaved, d) {
     } catch (e) { toast(`Не удалось выдать награду: ${e.message}`, "error"); }
     finally { badgeBtn.disabled = false; }
   });
+}
+
+// Все поля записи из базы: значение копируется кликом, вся запись — кнопкой.
+function rawHtml(row) {
+  return `<dl class="dev-raw">${Object.entries(row).map(([k, v]) => `<dt>${esc(k)}</dt><dd><button type="button" class="dev-raw-v" data-copy="${esc(String(v ?? ""))}" title="Копировать">${v == null || v === "" ? "—" : esc(String(v))}</button></dd>`).join("")}</dl>`;
+}
+
+function wireCopy(box, row) {
+  const copy = async text => {
+    try { await navigator.clipboard.writeText(text); toast("Скопировано."); }
+    catch (_) { toast("Не удалось скопировать.", "error"); }
+  };
+  box.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => { if (b.dataset.copy) copy(b.dataset.copy); }));
+  box.querySelector("[data-dev-json]")?.addEventListener("click", () => copy(JSON.stringify(row, null, 2)));
+}
+
+// Вкладка «Служебное» в карточке отчёта.
+export async function fillReportDevPanel(box, publicId) {
+  box.innerHTML = `<div class="dev-hint">загружаю…</div>`;
+  let row;
+  try { row = await apiGet(`/dev/report/${encodeURIComponent(publicId)}/raw`); }
+  catch (e) { box.innerHTML = `<div class="dev-hint">Не удалось загрузить: ${esc(e.message)}</div>`; return; }
+  box.innerHTML = `
+    <div class="dev-actions dev-actions-top">
+      <button class="btn" data-dev-json>Скопировать запись</button>
+      <button class="btn" data-dev-reset title="Бот снова напомнит о сроке и просрочке">Сбросить напоминания</button>
+    </div>
+    ${rawHtml(row)}`;
+  wireCopy(box, row);
+  box.querySelector("[data-dev-reset]").addEventListener("click", async () => {
+    if (!await askConfirm(`Сбросить напоминания для ${publicId}? Бот сможет снова написать исполнителям о сроке и просрочке.`, { yes: "Сбросить", danger: true })) return;
+    try {
+      await apiPost(`/dev/report/${encodeURIComponent(publicId)}/reset-reminders`, {});
+      toast("Напоминания сброшены.");
+      fillReportDevPanel(box, publicId);
+    } catch (e) { toast(`Не удалось сбросить: ${e.message}`, "error"); }
+  });
+}
+
+// Блок внизу страницы тайтла.
+export async function appendTitleDevPanel(sheet, titleId) {
+  const box = document.createElement("section");
+  box.className = "tpg-dev";
+  sheet.querySelector(".tp")?.appendChild(box);
+  const fill = async () => {
+    let row;
+    try { row = await apiGet(`/dev/title/${titleId}/raw`); }
+    catch (e) { box.innerHTML = `<div class="dev-hint">Не удалось загрузить служебные данные: ${esc(e.message)}</div>`; return; }
+    box.innerHTML = `
+      <div class="dev-head"><span class="kd-label">Служебные данные</span><span class="dev-tag">режим разработчика</span></div>
+      <div class="dev-binding">
+        <label>Shikimori ID<input type="number" min="1" class="field-input" id="dev-shiki" value="${esc(String(row.shiki_id ?? ""))}"></label>
+        <label>AniList ID<input type="number" min="1" class="field-input" id="dev-anilist" value="${esc(String(row.anilist_id ?? ""))}"></label>
+        <button class="dev-save-btn" id="dev-binding-save">Сохранить привязку</button>
+        <button class="btn" data-dev-json>Скопировать запись</button>
+      </div>
+      ${rawHtml(row)}`;
+    wireCopy(box, row);
+    const save = box.querySelector("#dev-binding-save");
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      try {
+        await apiPost(`/dev/title/${titleId}/binding`, { shiki_id: box.querySelector("#dev-shiki").value, anilist_id: box.querySelector("#dev-anilist").value });
+        toast("Привязка сохранена.");
+        fill();
+      } catch (e) { toast(`Не удалось сохранить: ${e.message}`, "error"); save.disabled = false; }
+    });
+  };
+  await fill();
 }

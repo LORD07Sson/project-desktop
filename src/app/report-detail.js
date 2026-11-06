@@ -8,6 +8,7 @@ import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { can, state } from "./state.js";
 import { loadPeopleNames, nameByUsername } from "./people-names.js";
+import { devModeActive, fillReportDevPanel } from "./devmode.js";
 import { productionNow } from "./report-now-core.js";
 import { classifyFiles, overviewKpis, isFinalFile, isVideoFile } from "./report-overview-core.js";
 import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./tauri.js";
@@ -408,6 +409,7 @@ export async function openReportDetail(publicId) {
         <button class="rd-tab" data-rd-tab="history">История</button>
         <button class="rd-tab" data-rd-tab="activity">Активность</button>
         <button class="rd-tab" data-rd-tab="notifications">Уведомления<span class="rd-tab-bad" hidden></span></button>
+        ${devModeActive() ? `<button class="rd-tab" data-rd-tab="dev">Служебное</button>` : ""}
         ${canEdit ? `<button class="rd-tab" id="btn-qc-track" title="Проверить звук дорожки">QC дорожки</button>` : ""}
       </div>
 
@@ -464,6 +466,7 @@ export async function openReportDetail(publicId) {
           <div class="rd-panel" data-rd-panel="history" hidden></div>
           <div class="rd-panel" data-rd-panel="activity" hidden></div>
           <div class="rd-panel" data-rd-panel="notifications" hidden></div>
+          ${devModeActive() ? `<div class="rd-panel" data-rd-panel="dev" hidden></div>` : ""}
         </div>
 
         <aside class="rd-side">
@@ -512,7 +515,8 @@ export async function openReportDetail(publicId) {
       const tab = b.dataset.rdTab;
       sheet.querySelectorAll("[data-rd-tab]").forEach(x => x.classList.toggle("on", x === b));
       sheet.querySelectorAll("[data-rd-panel]").forEach(p => { p.hidden = p.dataset.rdPanel !== tab; });
-      if (tab !== "main") fillLogPanel(sheet.querySelector(`[data-rd-panel="${tab}"]`), publicId, tab);
+      if (tab === "dev") fillReportDevPanel(sheet.querySelector('[data-rd-panel="dev"]'), publicId);
+      else if (tab !== "main") fillLogPanel(sheet.querySelector(`[data-rd-panel="${tab}"]`), publicId, tab);
     }));
     // Сколько уведомлений не дошло — видно сразу на вкладке, не открывая её.
     apiGet(`/report/${publicId}/notifications`, { offset: 0, page_size: 1 }).then(r => {

@@ -5,6 +5,7 @@
 import { state, can } from "./state.js";
 import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, tabSkeleton } from "./api.js";
 import { $, esc } from "./utils.js";
+import { devModeActive, appendTitleDevPanel } from "./devmode.js";
 import { openSeasonsAdminSheet } from "./titles-admin.js";
 import { clearTitleHoverCache } from "./title-hover.js";
 import { imgProxy, hdPosterAttrs, titleArt, titlePageHtml, wireTitlePage } from "./title-page.js";
@@ -376,6 +377,7 @@ export async function openTitleDetail(titleId) {
   wireTitlePage(sheet, d, {
     openProfile: id => import("./profile.js").then(m => m.openUserProfile(id)),
   });
+  if (devModeActive()) appendTitleDevPanel(sheet, titleId);
 }
 
 export async function loadTitlesTab() {

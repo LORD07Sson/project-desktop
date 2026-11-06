@@ -4735,3 +4735,15 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .dev-act span { color: var(--ink-soft); }
 .dev-act small { display: block; margin-top: 2px; color: var(--ink-dim); font-size: 11.5px; }
 .dev-bcell input[type="range"] { display: block; width: 100%; margin-bottom: 12px; }
+
+/* Служебные данные отчёта и тайтла */
+.dev-actions-top { margin-bottom: 14px; }
+.dev-raw { display: grid; grid-template-columns: minmax(150px, max-content) minmax(0, 1fr); gap: 2px 14px; margin: 0; font-size: 12.5px; }
+.dev-raw dt { padding: 4px 0; color: var(--ink-dim); font-family: var(--mono, monospace); }
+.dev-raw dd { margin: 0; min-width: 0; }
+.dev-raw-v { display: block; max-width: 100%; padding: 4px 6px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.dev-raw-v:hover { background: var(--surface-3); }
+.tpg-dev { padding: 0 36px 28px; }
+.dev-binding { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 16px; }
+.dev-binding label { display: flex; flex-direction: column; gap: 5px; color: var(--ink-dim); font-size: 11px; font-weight: 700; }
+.dev-binding .field-input { width: 150px; }
