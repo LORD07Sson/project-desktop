@@ -216,6 +216,16 @@ assert.equal(parseSimilar(JSON.stringify({ data: { Media: null } })).found, fals
 assert.equal(parseSimilar("oops").found, false);
 assert.ok(SIMILAR_QUERY.includes("recommendations"));
 
+{
+  const { coverMatches, pickCoverCandidate, coverSearchTerms } = await import("../src/app/nyaa-core.js");
+  assert.ok(coverMatches("All Saints Street Special The Secret of the Old Castle", "All Saints Street"));
+  assert.ok(coverMatches("Baxian!", "Baxian"));
+  assert.ok(!coverMatches("Kaixin Chui Chui", "Xi Yang Yang Yu Hui Tai Lang: Zhi Kaixin Chuang Long Nian"), "похожее слово — не тот тайтл");
+  assert.ok(!coverMatches("Luo Xiaohei", "Luo"), "одно слово из названия не считается");
+  assert.equal(pickCoverCandidate(["baxian"], [{ url: "x", titles: ["Other"] }, { url: "y", titles: ["Baxian!"] }]), "y");
+  assert.equal(pickCoverCandidate(["baxian"], [{ url: "x", titles: ["Other"] }]), "");
+  assert.ok(coverSearchTerms("all wishes come true", "[ToonsHub] All Wishes Come True (2026) 2160p BSITE WEB-DL (Baxian!)").includes("baxian!"));
+}
 console.log("nyaa-test: ok");
 
 // ---------- Релизы 2.0 ----------

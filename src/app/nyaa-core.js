@@ -492,6 +492,33 @@ export function coverAltKeys(title) {
   return out;
 }
 
+/** Строки для поиска обложки в запасных каталогах: название, запасные, однословные из скобок («(Baxian!)»), начало длинного названия. */
+export function coverSearchTerms(key, title) {
+  const singles = [...String(title || "").replace(/^\s*\[[^\]]*\]/, " ").matchAll(/\(([^()\s]{4,})\)/g)].map(m => m[1])
+    .filter(w => /[A-Za-z]{3,}/.test(w) && !/^\d|^(hevc|bluray|batch|uncensored)$/i.test(w));
+  const head = String(key || "").split(/\s+/).slice(0, 3).join(" ");
+  return [...new Set([key, ...coverAltKeys(title), ...singles, head].filter(x => x && x.length > 1).map(x => x.toLowerCase()))];
+}
+
+const titleWords = t => String(t || "").toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").filter(Boolean);
+
+/** Каталоги отвечают и на похожие слова, поэтому берём кандидата, только если его название целиком есть в запросе или наоборот. */
+export function coverMatches(query, candidateTitle) {
+  const a = titleWords(query), b = titleWords(candidateTitle);
+  if (!a.length || !b.length) return false;
+  if (a.join(" ") === b.join(" ")) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return short.length >= 2 && short.every(w => long.includes(w));
+}
+
+export function pickCoverCandidate(terms, items) {
+  for (const term of terms) {
+    const hit = (items || []).find(it => (it.titles || []).some(t => coverMatches(term, t)));
+    if (hit) return hit.url;
+  }
+  return "";
+}
+
 export const SIMILAR_QUERY = `query($s:String){Media(search:$s,type:ANIME){id siteUrl format seasonYear averageScore genres title{romaji english native} coverImage{medium}
 relations{edges{relationType node{id siteUrl format averageScore title{romaji english} coverImage{medium}}}}
 recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id siteUrl format averageScore title{romaji english} coverImage{medium}}}}}}`;

@@ -30,7 +30,7 @@ import {
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
-  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey, coverAltKeys,
+  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey, coverAltKeys, coverSearchTerms, pickCoverCandidate,
   seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
   parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, libraryKeys,
 } from "./nyaa-core.js";
@@ -251,11 +251,25 @@ function paintCover(key) {
 // «Не нашлось» помним 3 дня, а не навсегда: новый тайтл появляется на AniList через день-другой после премьеры,
 // а раньше один промах оставлял строку без обложки насовсем. Старое «» (до этой правки) считаем просроченным.
 const MISS_TTL = 3 * 24 * 3600_000;
-// «miss2:» — промахи с тех пор, как запасные названия берутся и из [квадратных] скобок; старые «miss:» перепроверяем
-const missedRecently = v => typeof v === "string" && v.startsWith("miss2:") && Date.now() - Number(v.slice(6)) < MISS_TTL;
+// «miss3:» — промахи с тех пор, как есть запасные каталоги и картинка из описания раздачи; старые перепроверяем
+const missedRecently = v => typeof v === "string" && v.startsWith("miss3:") && Date.now() - Number(v.slice(6)) < MISS_TTL;
 const hasUrl = v => typeof v === "string" && v.startsWith("https://");
 
-async function fetchCover(key, alts = []) {
+// Если AniList не знает тайтл: Kitsu, MyAnimeList и Shikimori через сервер, а в конце — первая картинка из описания раздачи.
+async function coverFallback(key, sample) {
+  const terms = coverSearchTerms(key, sample && sample.title);
+  for (const q of terms) {
+    try {
+      const d = await apiGet("/nyaa/cover-search", { q });
+      const url = pickCoverCandidate(terms, d.items);
+      if (url) return url;
+    } catch (_) { break; }
+  }
+  if (!sample) return "";
+  return parseView(await nyaaView({ base: prefs.base, id: sample.id })).images[0] || "";
+}
+
+async function fetchCover(key, alts = [], sample = null) {
   if (coverBusy.has(key) || coverData.has(key)) return;
   coverBusy.add(key);
   try {
@@ -267,7 +281,8 @@ async function fetchCover(key, alts = []) {
         url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s } }));
         if (url) break;
       }
-      coverUrls[key] = url || `miss2:${Date.now()}`; saveCovers();
+      if (!url) url = await coverFallback(key, sample);
+      coverUrls[key] = url || `miss3:${Date.now()}`; saveCovers();
     }
     if (hasUrl(url)) { coverData.set(key, await fetchPic(url)); paintCover(key); }
   } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
@@ -283,10 +298,11 @@ async function loadListCovers() {
     const vis = view();
     const isAudio = i => categoryKind(i.categoryId) === "audio";
     const altsOf = new Map();
-    for (const i of vis) if (!isAudio(i)) { const k = coverKey(i.title); if (k && !altsOf.has(k)) altsOf.set(k, coverAltKeys(i.title)); }
+    const sampleOf = new Map();
+    for (const i of vis) if (!isAudio(i)) { const k = coverKey(i.title); if (k && !altsOf.has(k)) { altsOf.set(k, coverAltKeys(i.title)); sampleOf.set(k, i); } }
     const keys = [...altsOf.keys()].filter(k => !coverData.has(k) && !missedRecently(coverUrls[k])).slice(0, 80);
     const thumbs = vis.filter(i => isAudio(i) && !thumbData.has(i.id) && thumbUrls[i.id] !== "").slice(0, 30);
-    const jobs = [...keys.map(k => () => fetchCover(k, altsOf.get(k))), ...thumbs.map(i => () => fetchThumb(i))];
+    const jobs = [...keys.map(k => () => fetchCover(k, altsOf.get(k), sampleOf.get(k))), ...thumbs.map(i => () => fetchThumb(i))];
     let next = 0;
     const worker = async () => { while (next < jobs.length) await jobs[next++](); };
     await Promise.all([worker(), worker()]);
