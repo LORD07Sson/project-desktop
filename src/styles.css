@@ -2646,9 +2646,9 @@ kbd {
 .wm-tile:hover .wm-pic, .wm-tile:focus-visible .wm-pic, .wm-tile.sel .wm-pic { transform: translateY(-6px); box-shadow: 0 24px 44px -18px rgba(0, 0, 0, .95), 0 0 0 2px var(--tc, var(--gold)), 0 18px 50px -20px var(--tc, var(--gold)); }
 .wm-tile:hover .wm-pic img { transform: scale(1.07); }
 .wm-tile:focus-visible { outline: none; }
-.wm-badge { position: absolute; top: 9px; right: 9px; font-size: 10.5px; font-weight: 800; padding: 4px 9px; border-radius: 999px; background: rgba(10, 10, 12, .62); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, .14); }
+.wm-badge { position: absolute; top: 9px; right: 9px; font-size: 10.5px; font-weight: 800; padding: 4px 9px; border-radius: 999px; background: rgba(10, 10, 12, .82); border: 1px solid rgba(255, 255, 255, .14); }
 .wm-badge.hot { background: var(--accent-grad); color: var(--on-accent); border: none; }
-.wm-score { position: absolute; left: 9px; top: 9px; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 8px; background: rgba(10, 10, 12, .62); backdrop-filter: blur(8px); color: var(--gold); }
+.wm-score { position: absolute; left: 9px; top: 9px; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 8px; background: rgba(10, 10, 12, .82); color: var(--gold); }
 .wm-ring { position: absolute; right: 9px; bottom: 9px; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: conic-gradient(var(--gold) calc(var(--p) * 1%), rgba(255, 255, 255, .18) 0); }
 .wm-ring::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: rgba(10, 10, 12, .85); }
 .wm-ring span { position: relative; }
@@ -2765,17 +2765,17 @@ kbd {
 .wm-slot-title { margin-top: 26px; text-align: center; font-size: 22px; font-weight: 800; min-height: 30px; }
 
 /* подробнее */
-.wm-modal { position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 48; display: grid; place-items: center; background: rgba(0, 0, 0, .62); backdrop-filter: blur(8px); opacity: 0; transition: opacity .3s; color: #f5f2ec;
+.wm-modal { position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 48; display: grid; place-items: center; background: rgba(0, 0, 0, .82); opacity: 0; transition: opacity .3s; color: #f5f2ec;
   --wm-bg: #0b0b0e; --wm-bg2: #121217; --wm-card: #17171d; --wm-line: rgba(255, 255, 255, .08); --wm-soft: rgba(245, 242, 236, .72); --wm-dim: rgba(245, 242, 236, .45);
   --wm-ease: cubic-bezier(.22, .9, .3, 1); --wm-spring: cubic-bezier(.34, 1.56, .64, 1); }
 .wm-modal.on { opacity: 1; }
+.wm-modal .wm-chip, .wm-modal .wm-ghost { backdrop-filter: none; }
+body:has(.wm-modal) .wm-frame { animation-play-state: paused; }
 .wm-modal button { font: inherit; color: inherit; }
 .wm-sheet { width: min(920px, 94vw); max-height: 88vh; overflow: auto; border-radius: 22px; background: var(--wm-bg2); border: 1px solid var(--wm-line); transform: translateY(30px) scale(.96); transition: transform .45s var(--wm-spring); scrollbar-width: none; }
 .wm-modal.on .wm-sheet { transform: none; }
-.wm-sban { position: relative; height: 330px; overflow: hidden; }
-.wm-kb { position: absolute; inset: -4%; background: center / cover no-repeat; animation: wm-kb 18s ease-in-out infinite alternate; }
-@keyframes wm-kb { from { transform: scale(1.05); } to { transform: scale(1.18) translate(-3%, 2%); } }
-.wm-sban::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, var(--wm-bg2)); }
+.wm-sban { position: relative; height: 330px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 30%, transparent 97%); mask-image: linear-gradient(#000 30%, transparent 97%); }
+.wm-kb { position: absolute; inset: -4%; background: center / cover no-repeat; }
 .wm-x { position: absolute; z-index: 2; top: 14px; right: 14px; background: rgba(0, 0, 0, .45); }
 .wm-sin { position: relative; display: grid; grid-template-columns: 180px 1fr; gap: 26px; padding: 0 32px 26px; margin-top: -130px; }
 .wm-sin > img { width: 180px; border-radius: 16px; box-shadow: 0 24px 50px -16px #000; }
