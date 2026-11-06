@@ -10,7 +10,7 @@
 // не двигается. Запоминаются серия, озвучка, качество, громкость и место.
 
 import { state } from "./state.js";
-import { apiGet, toast } from "./api.js";
+import { apiGet, toast, API_BASE } from "./api.js";
 import { esc } from "./utils.js";
 import { appWindow } from "./tauri.js";
 import { pickSameVoice, preloadFresh, shouldPreload } from "./preload-core.js";
@@ -209,6 +209,7 @@ async function goEpisode(idx) {
   renderEpisodes();
   $r("[data-ap-ep]").textContent = ep.label;
   $r("[data-ap-next]").disabled = idx === eps.length - 1;
+  clearDirectWatch();
   P.video.pause();
   P.video.removeAttribute("src");
   P.video.load();
@@ -262,7 +263,32 @@ async function pickTranslation(trId, keepTime = false) {
   playSource(q, resumeAt);
 }
 
+// Два пути к видео: сначала напрямую с видеосервера, а если он молчит или обрывается — через наш сервер.
+// Раз прямой путь подвёл, до конца сеанса сразу идём через сервер, чтобы не ждать на каждой серии.
+const DIRECT_WAIT_MS = 12000;
+let relayPreferred = false;
+
+function relayUrl(src) { return src.relay ? `${API_BASE}${src.relay}` : ""; }
+
+function clearDirectWatch() { window.clearTimeout(P.directTimer); }
+
+function watchDirect(ms = DIRECT_WAIT_MS) {
+  clearDirectWatch();
+  P.directTimer = window.setTimeout(() => { if (P) switchToRelay(); }, ms);
+}
+
+function switchToRelay() {
+  if (!P || P.onRelay || !P.source || !relayUrl(P.source)) return false;
+  relayPreferred = true;
+  const at = P.video.currentTime > 0 ? P.video.currentTime : null;
+  playSource(P.source, at);
+  return true;
+}
+
 function playSource(src, resumeAt) {
+  P.source = src;
+  const relay = relayPreferred ? relayUrl(src) : "";
+  P.onRelay = !!relay;
   P.quality = src.height;
   $r("[data-ap-qlabel]").textContent = qLabel(src.height);
   const v = P.video;
@@ -271,7 +297,8 @@ function playSource(src, resumeAt) {
   const saved = resumeAt != null ? resumeAt : (mem.times || {})[ep.id];
   const speed = v.playbackRate || 1;
   setWait("Загружаю видео…");
-  v.addEventListener("loadedmetadata", () => {
+  if (P.onMeta) v.removeEventListener("loadedmetadata", P.onMeta);
+  P.onMeta = () => {
     v.playbackRate = speed;
     if (saved && saved > 5 && saved < v.duration - 20) {
       v.currentTime = saved;
@@ -280,8 +307,10 @@ function playSource(src, resumeAt) {
     const op = $r("[data-ap-op]");
     op.style.left = `${(OP_WINDOW[0] / v.duration) * 100}%`;
     op.style.width = `${(OP_SKIP / v.duration) * 100}%`;
-  }, { once: true });
-  v.src = src.url;
+  };
+  v.addEventListener("loadedmetadata", P.onMeta, { once: true });
+  v.src = relay || src.url;
+  if (relay) clearDirectWatch(); else watchDirect();
   v.play().catch(() => { /* автозапуск запрещён — ждём клика */ });
   window.clearInterval(P.saveTimer);
   P.saveTimer = window.setInterval(saveProgress, SAVE_EVERY_MS);
@@ -491,10 +520,10 @@ function wireControls() {
   v.addEventListener("pause", syncPlay);
   v.addEventListener("playing", () => { if (P && !P.watchSince) P.watchSince = Date.now(); });
   v.addEventListener("pause", flushWatch);
-  v.addEventListener("waiting", () => root.classList.add("buffering"));
-  v.addEventListener("playing", () => { root.classList.remove("buffering"); setWait(""); });
-  v.addEventListener("canplay", () => { root.classList.remove("buffering"); setWait(""); });
-  v.addEventListener("error", () => { if (v.getAttribute("src")) fail("Видео не загрузилось — попробуйте другое качество или озвучку."); });
+  v.addEventListener("waiting", () => { root.classList.add("buffering"); if (P && !P.onRelay && v.getAttribute("src")) watchDirect(); });
+  v.addEventListener("playing", () => { clearDirectWatch(); root.classList.remove("buffering"); setWait(""); });
+  v.addEventListener("canplay", () => { clearDirectWatch(); root.classList.remove("buffering"); setWait(""); });
+  v.addEventListener("error", () => { if (!v.getAttribute("src") || switchToRelay()) return; fail("Видео не загрузилось — попробуйте другое качество или озвучку."); });
   v.addEventListener("durationchange", () => { root.querySelector("[data-ap-dur]").textContent = fmtTime(v.duration); });
   v.addEventListener("progress", () => {
     if (!v.duration || !v.buffered.length) return;
@@ -534,6 +563,7 @@ function flushWatch() {
 
 export function closeAnimePlayer() {
   if (!P) return;
+  clearDirectWatch();
   flushWatch();
   if (P.watchMs > 5000) {
     const tr = (P.translations || []).find(t => t.id === P.trId);
