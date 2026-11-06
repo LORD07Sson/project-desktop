@@ -230,7 +230,7 @@ export function startPulse(DATA) {
     if (n.kind === "person") return FILTER.who === "mine" ? n.p.n === ME : links.some(l => l.a === n && vis(l.b) && epPass(l.b));
     return true;
   }
-  const personLoad = pn => { const eps = links.filter(l => l.a === pn && vis(l.b) && l.b.e.stage < 4).map(l => l.b); return { n: eps.length, late: eps.filter(late).length, titles: [...new Set(eps.map(e => e.tn.t.name))] }; };
+  const personLoad = pn => { const eps = epNodes.filter(en => en.e.who.includes(pn.p) && vis(en) && en.e.stage < 4); return { n: eps.length, late: eps.filter(late).length, titles: [...new Set(eps.map(e => e.tn.t.name))] }; };
 
   // ---------- окружение и живые события ----------
   let twinkles = [], pulses = [], inflow = [], waves = [], comets = [], toasts = [];

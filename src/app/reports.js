@@ -7,6 +7,7 @@
 // инициализации модуля (только позже, из обработчиков событий).
 
 import { state } from "./state.js";
+import { pipelinePct } from "./utils.js";
 import { pauseSuffix } from "./people.js";
 import { apiGet, apiPost, openSheet, toast, mediaUrl } from "./api.js";
 import { $, $all, esc, initials, isOverdue, STATUS_DOT_CLASS, STATUS_COLOR_VAR, PRIORITY_LABELS, showContextMenu } from "./utils.js";
@@ -332,8 +333,8 @@ function stageLabel(r) {
 function progressPct(r) {
   const roles = r.pipeline_roles || [];
   if (r.status === "completed") return 100;
-  if (roles.length && r.pipeline_stage != null) return Math.round((r.pipeline_stage / roles.length) * 100);
-  return STATUS_PCT[r.status] ?? 0;
+  const pct = roles.length ? pipelinePct(r) : null;
+  return pct ?? STATUS_PCT[r.status] ?? 0;
 }
 
 // Срок пилюлей с отсчётом («завтра», «просрочено 2 дн.») и цветом —
@@ -437,7 +438,9 @@ export async function loadMoreReports() {
 export function sortLocally() {
   const { field, dir } = state.sort;
   const mul = dir === "asc" ? 1 : -1;
+  const closed = r => r.status === "completed" || r.status === "cancelled";
   state.reports.sort((a, b) => {
+    if (field === "public_id" && dir === "asc" && closed(a) !== closed(b)) return closed(a) ? 1 : -1;
     let av = a[field], bv = b[field];
     if (av == null) av = "";
     if (bv == null) bv = "";

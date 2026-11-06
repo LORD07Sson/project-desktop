@@ -69,7 +69,7 @@ function detailHtml(it) {
   if (k === "elsewhere") return `<div class="a3-note">Наша озвучка этой серии уже есть на 365 — второй раз не зальётся.</div>${link(c.dup)}`;
   if (it.stage === "failed") return `<div class="a3-note bad">${esc(it.error || "")}</div>${it.hint ? `<div class="a3-note">${esc(it.hint)}</div>` : ""}`;
   if (!c) return `<div class="a3-note">${it.unbound ? "Привяжите тайтл к аниме на 365 — тогда можно проверить." : "Сезон и дубли ещё не проверялись."}</div>`;
-  if (!c.ok) return `<div class="a3-note bad">${esc(c.error)}</div><div class="a3-note">проверено ${esc(relTime(c.at))}</div>`;
+  if (!c.ok) return `<div class="a3-note bad">${esc(String(c.error || "").replace("выберите его в десктопе («Архив» → «Привязать»)", "нажмите «Привязать»"))}</div><div class="a3-note">проверено ${esc(relTime(c.at))}</div>`;
   const facts = checkFacts(c.lines).map(f => `<span class="a3-ck ${f.tone}">${esc(f.text)}</span>`).join("");
   return `<div class="a3-checks">${facts}</div>`;
 }
@@ -281,7 +281,7 @@ function toolsHtml(a, items, missing) {
 
 function emptyText(items) {
   return {
-    missing: items.length ? "Всё из архива уже на 365 (или ещё не проверено — «Проверить весь архив») 🎉" : "Индекс архива пуст — нажмите «Обновить архив»",
+    missing: items.length ? `Всё проверенное из архива уже на 365 🎉${items.some(it => kindOf(it) === "unbound") ? " Осталось привязать тайтлы — вкладка «Не привязано»." : ""}` : "Индекс архива пуст — нажмите «Обновить архив»",
     on: "Ничего из архива на 365 не найдено", queue: "Очередь пуста", unbound: "Все тайтлы архива привязаны", all: "Индекс архива пуст",
   }[archFilter];
 }

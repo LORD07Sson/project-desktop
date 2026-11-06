@@ -10,6 +10,8 @@
 // студии — три шага онбординга вместо нулей.
 
 import { render } from "solid-js/web";
+import { pipelinePct } from "./utils.js";
+import { loadPeopleNames, humanizeEvents, personName } from "./people-names.js";
 import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
 import { apiGet, openSheet, dialogSkeletonHtml, keepOnReload } from "./api.js";
 import { $, esc, initials, relTime, STATUS_COLOR_VAR } from "./utils.js";
@@ -33,7 +35,6 @@ const WEEKDAYS = ["воскресенье", "понедельник", "втор�
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 // Этапы конвейера слева направо — в том же порядке, что колонки «Доски».
 const FLOW = ["draft", "review", "revision", "working", "completed"];
-const ATTENTION_MAX = 5;
 
 function greeting() {
   const h = new Date().getHours();
@@ -96,7 +97,7 @@ function attentionItems(reports) {
     if (left === 0 || left === 1) push(r, 1 + left, left === 0 ? "сегодня" : "завтра", "yel", `${r.status_label} · дедлайн ${left === 0 ? "сегодня" : "завтра"}`);
   });
   open.filter(r => r.stuck).forEach(r => push(r, 3, "без движения", "blue", `${r.status_label} · статус не менялся 3+ дня`));
-  return items.sort((a, b) => a.rank - b.rank).slice(0, ATTENTION_MAX);
+  return items.sort((a, b) => a.rank - b.rank);
 }
 
 function Sparkline(props) {
@@ -152,9 +153,7 @@ const stageOf = r => (r.pipeline_roles && r.pipeline_roles.length && r.pipeline_
   ? r.pipeline_roles[Math.min(r.pipeline_stage, r.pipeline_roles.length - 1)]
   : cleanLabel(r.status_label));
 const STATUS_PCT = { draft: 6, working: 45, revision: 60, review: 75, completed: 100 };
-const progressOf = r => (r.pipeline_roles && r.pipeline_roles.length && r.pipeline_stage != null
-  ? Math.round((r.pipeline_stage / r.pipeline_roles.length) * 100)
-  : STATUS_PCT[r.status] ?? 0);
+const progressOf = r => pipelinePct(r) ?? STATUS_PCT[r.status] ?? 0;
 const statusColor = st => `var(${STATUS_COLOR_VAR[st] || "--s-draft"})`;
 const pad2 = n => String(n).padStart(2, "0");
 
@@ -397,7 +396,7 @@ function Overview(props) {
         </section>
 
         <section class="kd-gl">
-          <div class="kd-ch"><h3>Команда</h3><span class="kd-label">назначено серий</span><button type="button" class="kd-link" onClick={openMonthlyTopSheet}>Рейтинг месяца</button></div>
+          <div class="kd-ch"><h3>Команда</h3><span class="kd-label">назначено за всё время</span><button type="button" class="kd-link" onClick={openMonthlyTopSheet}>Рейтинг месяца</button></div>
           <Show when={d.performers.length} fallback={<div class="kd-quiet">Пока никому ничего не назначено.</div>}>
             <For each={d.performers.slice(0, 5)}>
               {p => (
@@ -529,7 +528,10 @@ export async function loadOverview() {
       // покажем «Требует внимания», а не завалим всю вкладку.
       apiGet("/dashboard/project").catch(() => null),
       apiGet("/feed", { offset: 0, page_size: 4 }).catch(() => null),
+      loadPeopleNames(),
     ]);
+    humanizeEvents(feed?.events);
+    for (const p of d.performers || []) p.name = personName(p.telegram_id, p.name);
   } catch (e) {
     if (disposePrev) { disposePrev(); disposePrev = null; }
     root.innerHTML = `<div class="bento-empty">Не удалось загрузить обзор: ${esc(e.message)}</div>`;

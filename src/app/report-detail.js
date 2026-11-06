@@ -287,7 +287,7 @@ export async function openReportDetail(publicId) {
     }
     if (!recentRecorded) {
       recentRecorded = true;
-      recordRecentReport(publicId, detail.title);
+      recordRecentReport(publicId, (() => { const p = seriesParts(detail); return [p.name, p.ep].filter(Boolean).join(" · "); })());
     }
 
     // Черновик цепочки пайплайна — правится локально до нажатия

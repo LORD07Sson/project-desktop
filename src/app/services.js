@@ -43,7 +43,7 @@ function serviceRowHtml(s) {
       <span class="svc-dot" style="background:var(${meta.colorVar}); box-shadow:0 0 0 3px color-mix(in srgb, var(${meta.colorVar}) 18%, transparent);"></span>
       <div class="svc-row-main">
         <div class="svc-row-name">${esc(s.name)}</div>
-        <div class="svc-row-desc">${esc(s.desc)}</div>
+        <div class="svc-row-desc">${esc(SERVICE_DESC[s.key] || s.desc)}</div>
       </div>
       <span class="svc-pill" style="background:color-mix(in srgb, var(${meta.colorVar}) 16%, var(--surface)); color:var(${meta.colorVar});">${meta.label}</span>
       <div class="svc-row-latency">${s.latency_ms != null ? `${s.latency_ms} мс` : "—"}</div>
@@ -208,3 +208,5 @@ async function fillBotStatus(root) {
       }).join("")}</div>` : `<div class="no-assignee">Чисто — ошибок в логе нет</div>`}
     </div>`;
 }
+
+const SERVICE_DESC = { telegram_bot: "Основной процесс бота", bot_api: "Локальный сервер Telegram Bot API", dashboard_api: "Мини-апп и REST API", edge: "Обратный прокси и TLS", disk: "Корневой раздел сервера", database: "База данных bot.db (SQLite)", db: "База данных bot.db (SQLite)" };

@@ -171,3 +171,10 @@ export function showContextMenu(x, y, items) {
     document.addEventListener("keydown", onMenuKeydown);
   }, 0);
 }
+
+// Готовность по пайплайну. При параллельной сдаче pipeline_stage стоит на месте, поэтому считаем и по числу сдавших.
+export function pipelinePct(r) {
+  const roles = r.pipeline_roles || [];
+  if (!roles.length || (r.pipeline_stage == null && r.pipeline_done == null)) return null;
+  return Math.round((Math.min(roles.length, Math.max(r.pipeline_stage ?? 0, r.pipeline_done ?? 0)) / roles.length) * 100);
+}

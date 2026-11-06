@@ -38,12 +38,13 @@ function deliver() {
 }
 
 async function collect() {
-  const [pulse, project, trend, workmap, errors] = await Promise.all([
+  const [pulse, project, trend, workmap, errors, team] = await Promise.all([
     apiGet("/pulse"),
     apiGet("/analytics/project").catch(() => null),
     apiGet("/trend").catch(() => null),
     state.isOwner ? apiGet("/analytics/work-map", { days: 30 }).catch(() => null) : Promise.resolve(null),
     state.isOwner ? apiGet("/analytics/errors", { days: 1 }).catch(() => null) : Promise.resolve(null),
+    apiGet("/team").catch(() => null),
   ]);
   // Фото участников для экрана «Команда»: страница в iframe сама токен для картинок не знает.
   for (const p of (pulse.team && pulse.team.people) || []) p.avatar = p.tg ? mediaUrl(`/avatar/${encodeURIComponent(p.tg)}`) : null;
@@ -54,7 +55,7 @@ async function collect() {
         completed_30d: project.completed_30d, completed_prior_30d: project.completed_prior_30d, avg_turnaround_days: project.avg_turnaround_days,
         overdue_now: project.overdue_now, on_time_rate: project.on_time_rate,
       },
-      workload: project.workload || [], performers: project.performers || [], trend,
+      workload: project.workload || [], performers: team ? (team.users || []).map(u => ({ name: u.name, completed: u.completed_month || 0 })) : project.performers || [], trend,
     } : null,
     workmap,
     errors,

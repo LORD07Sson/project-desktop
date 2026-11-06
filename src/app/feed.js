@@ -8,6 +8,7 @@
 // цепочку «Озвучка → Перезапись/дозапись → В работе».
 
 import { state } from "./state.js";
+import { loadPeopleNames, humanizeEvents } from "./people-names.js";
 import { apiGet, toast, dialogSkeletonHtml, mediaUrl, tabSkeleton } from "./api.js";
 import { $, esc, relTime, STATUS_COLOR_VAR } from "./utils.js";
 import { openReportDetail } from "./report-detail.js";
@@ -324,7 +325,8 @@ export async function loadFeed() {
   tabSkeleton(root, dialogSkeletonHtml(6));
   let d;
   try {
-    [d] = await Promise.all([apiGet("/feed", { offset: 0, page_size: FEED_PAGE_SIZE }), ensureUsers()]);
+    [d] = await Promise.all([apiGet("/feed", { offset: 0, page_size: FEED_PAGE_SIZE }), ensureUsers(), loadPeopleNames()]);
+    humanizeEvents(d?.events);
   } catch (e) {
     root.innerHTML = `<div class="bento-empty">Не удалось загрузить ленту: ${esc(e.message)}</div>`;
     return false;
@@ -386,6 +388,7 @@ export async function loadFeed() {
     more.textContent = "Загрузка…";
     try {
       const res = await apiGet("/feed", { offset, page_size: FEED_PAGE_SIZE });
+      humanizeEvents(res?.events);
       const fresh = res.events || [];
       all = all.concat(fresh);
       // Новая порция может продолжать последний день — тогда строки

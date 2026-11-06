@@ -4737,3 +4737,25 @@ td.row-actions { opacity: 1; transition: none; }
 body:has(.report-detail-overlay) .tab-panel *,
 body:has(.report-detail-overlay) .tab-panel *::before,
 body:has(.report-detail-overlay) .tab-panel *::after { animation: none !important; }
+
+/* ---- Правки по проверке всех панелей ---- */
+/* Сезонные листья: декор не должен спорить с текстом, который просвечивает над ними */
+.season-fx canvas { opacity: .45; }
+/* Меню не прыгает: «Ещё» заранее занимает ширину самого длинного раздела */
+@media (min-width: 1300px) { #more-lbl { display: inline-block; min-width: 92px; } }
+/* Заголовки страниц на одной высоте, фильтры очереди по левому краю заголовка */
+.tab-panel[data-panel="list"] .list-page-header { padding-top: 0; }
+.q-view-switch, .psb-toolbar, .my-status-toolbar { padding-left: 0; padding-right: 0; }
+.psb-board { padding-left: 0; padding-right: 0; }
+.q-empty-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+/* Просроченная карточка: срок читается, эффект остаётся на рамке и постере */
+.board-card.dead .kc-sg .hot, .board-card.is-overdue .kc-sg .hot { color: #ff9d94; text-shadow: 0 1px 2px rgba(0, 0, 0, .8); animation: none; }
+.board-col-head .cnt.over { background: none; }
+/* Трещины на кнопках героя не должны лежать на подписи */
+.kd-acts .btn .kd-btn-crack { opacity: .35; }
+/* Список: «+4» в одну строку с аватарами */
+td[data-list-col="team"] { white-space: nowrap; }
+td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: middle; }
+/* Чат: сообщения без горизонтальной прокрутки, панель сведений убирается раньше, чем сжимает переписку */
+.ms-msgs { overflow-x: hidden; }
+@media (max-width: 1280px) { .ms-layout.info-open { grid-template-columns: 280px minmax(0, 1fr); } .ms-layout.info-open .ms-info { display: none; } }

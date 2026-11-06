@@ -196,7 +196,8 @@ function ganttHtml(data) {
   const days = Array.from({ length: RANGE_DAYS }, (_, i) => addDays(weekStart, i));
   const f = getFilters();
   const rows = f.deadlines ? data.deadlines
-    .filter(r => r.status !== "cancelled" && r.deadline >= ymd(days[0]) && r.deadline <= ymd(days[RANGE_DAYS - 1]))
+    .filter(r => r.status !== "cancelled" && r.deadline <= ymd(days[RANGE_DAYS - 1])
+      && (r.deadline >= ymd(days[0]) || (r.status !== "completed" && dayDiff(today, days[0]) >= 0 && dayDiff(today, days[0]) < RANGE_DAYS)))
     .sort((a, b) => a.deadline.localeCompare(b.deadline)) : [];
   const shown = rows.slice(0, 12);
   // Серии в работе без срока — полоса от создания до сегодня, открытая справа: видно, что серия идёт, но срока нет.
@@ -208,7 +209,7 @@ function ganttHtml(data) {
   }).join("");
   const cols = days.map(d => `<span class="${d.getDay() % 6 === 0 ? "we" : ""}${sameDay(d, selected) ? " pick" : ""}" data-col="${ymd(d)}"></span>`).join("");
   const body = shown.map(r => {
-    const end = dayDiff(parseDay(r.deadline), days[0]);
+    const end = Math.max(0, dayDiff(parseDay(r.deadline), days[0]));   // срок раньше окна: просроченную серию всё равно показываем, у левого края
     const created = r.created_at ? dayDiff(parseDay(r.created_at), days[0]) : end - 2;
     const st = Math.max(0, Math.min(created, end));
     const cut = created < 0;
@@ -285,7 +286,7 @@ function monthHtml(data) {
   return `
     <div class="kcal-mmh"><b>${MONTHS_NOM[first.getMonth()]} ${first.getFullYear()}</b>
       <span><button type="button" data-mm-nav="-1" aria-label="Прошлый месяц"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><button type="button" data-mm-nav="1" aria-label="Следующий месяц"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></span></div>
-    <div class="kcal-mmg">${WEEKDAYS.map(w => `<small>${w}</small>`).join("")}${cells.map(d => `<button type="button" class="kcal-md${d.getMonth() !== first.getMonth() ? " out" : ""}${sameDay(d, today) ? " td" : ""}${sameDay(d, selected) ? " pick" : ""}${dayEvents(d, data).length ? " ev" : ""}" data-day="${ymd(d)}">${d.getDate()}</button>`).join("")}</div>`;
+    <div class="kcal-mmg">${WEEKDAYS.map(w => `<small>${w}</small>`).join("")}${cells.map(d => `<button type="button" class="kcal-md${d.getMonth() !== first.getMonth() ? " out" : ""}${sameDay(d, today) ? " td" : ""}${sameDay(d, selected) ? " pick" : ""}${dayEvents(d, data).some(e => e.kind === "deadline" || e.kind === "birthday" || e.kind === "reminder") ? " ev" : ""}" data-day="${ymd(d)}">${d.getDate()}</button>`).join("")}</div>`;
 }
 
 function bodyHtml(data) {
@@ -340,7 +341,9 @@ async function renderWeek() {
     cache = { airings, birthdays, reminders: rem ? rem.reminders : [], work, deadlines: [], undated: [], from: null, to: null };
   }
   if (cache.from !== from || cache.to !== to) {
-    Object.assign(cache, await fetchDeadlines(from, to));
+    const [cur, past] = await Promise.all([fetchDeadlines(from, to), fetchDeadlines(ymd(addDays(fromD, -60)), ymd(addDays(fromD, -1)))]);
+    const seen = new Set(cur.deadlines.map(r => r.public_id));
+    Object.assign(cache, cur, { deadlines: [...cur.deadlines, ...past.deadlines.filter(r => !seen.has(r.public_id))] });
     cache.from = from; cache.to = to;
   }
   if (seq !== requestSeq || !body.isConnected) return;

@@ -170,10 +170,11 @@ export async function loadQueue() {
         <div class="q-empty-ic">☕</div>
         <b>На руках пусто</b>
         <p>Когда вам назначат серию, она появится здесь с обратным отсчётом до срока.</p>
-        <button class="btn" data-q-titles>Проголосовать за тайтлы</button>
+        <div class="q-empty-acts"><button class="btn primary" data-q-free>Серии без исполнителя</button><button class="btn" data-q-titles>Проголосовать за тайтлы</button></div>
       </div>`;
     bindViewSwitch(root);
     root.querySelector("[data-q-titles]").addEventListener("click", () => switchTab("titles"));
+    root.querySelector("[data-q-free]").addEventListener("click", () => { switchTab("list"); document.querySelector("[data-qf=\"unassigned\"]")?.click(); });
     startTicker(root);
     return;
   }

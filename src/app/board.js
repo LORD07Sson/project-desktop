@@ -22,6 +22,7 @@
 // реализующий тот же «взял — перенёс — отпустил».
 
 import { apiGet, apiPost, toast, dialogSkeletonHtml, openSheet, tabSkeleton } from "./api.js";
+import { pipelinePct } from "./utils.js";
 import { invoke, pickInputFile } from "./tauri.js";
 import { $, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, PRIORITY_LABELS } from "./utils.js";
 import { timelineHtml, playTimelineIntro } from "./charts.js";
@@ -248,7 +249,7 @@ export function boardCardHtml(c, status) {
   const closed = status === "completed" || status === "cancelled";
   // Завершённая — всегда полная полоска: этап конвейера мог так и остаться на «Звукаре».
   const pct = status === "completed" ? 100
-    : roles.length && r.pipeline_stage != null ? Math.round((r.pipeline_stage / roles.length) * 100) : STATUS_PROGRESS[status] ?? 6;
+    : pipelinePct(r) ?? STATUS_PROGRESS[status] ?? 6;
   // Есть пайплайн — вместо полоски по звену на человека: сдавшие закрашены, и кого ждём.
   const pipeDone = status === "completed" ? roles.length : Math.min(r.pipeline_done ?? 0, roles.length);
   const waiting = (r.pipeline_waiting || []).join(", ");
@@ -655,7 +656,7 @@ function timelineSectionHtml(layout) {
       if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue;
       rows.push({
         label: c.publicId,
-        title: c.title,
+        title: (() => { const p = seriesParts({ ...(seriesById.get(c.publicId) || {}), title: c.title, public_id: c.publicId }); return [p.name, p.ep].filter(Boolean).join(" · "); })(),
         colorVar: STATUS_COLOR_VAR[col.status] || "--s-draft",
         startMs, endMs, heat: c.heat || 0,
       });

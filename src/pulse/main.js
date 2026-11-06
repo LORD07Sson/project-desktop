@@ -34,7 +34,7 @@ window.addEventListener("message", ev => {
   installColorMap(msg.theme);   // до startPulse: спрайты и туманность рисуются уже в цветах темы
   const month = new Date(`${data.today}T00:00:00`).toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
   const live = document.querySelector("#liveTxt");
-  if (live) live.textContent = `${month} · команда ${data.people.length}`;
+  if (live) live.textContent = `${month} · с сериями: ${data.people.length}`;
   const hasTeam = !!(data.team && data.team.people && data.team.people.length);
   if (!data.titles.length || (hasTeam && savedView() === "team")) {
     // Статистика команды: сама, когда серий нет, или по кнопке «Команда» на карте.
