@@ -37,6 +37,8 @@ const TARGET = [0, 4.2, -16];
 const FOV = Math.PI / 4;
 const TREE = [1.8, -16.5];
 const BLADES = 150000;
+const MIN_QUALITY = 0.4;
+const QUALITY_KEY = "project-idle-quality";
 const SEGMENTS = 7;   // звеньев в травинке — изгиб плавный, без изломов
 
 // Сезон — тот же, что в Настройках → Внешний вид (season.js, :root[data-season]); «Выкл.» — лето.
@@ -761,7 +763,9 @@ function buildScene(canvas) {
 
   // Качество: 1 — родное разрешение экрана; если видеокарта не успевает, плавно опускается (до 0.5)
   let quality = 1;
-  function setQuality(q) { quality = Math.max(0.5, Math.min(1, q)); resize(); }
+  function setQuality(q) { quality = Math.max(MIN_QUALITY, Math.min(1, q)); resize(); }
+  // На слабой видеокарте тормозит не столько разрешение, сколько число травинок. Они раскиданы случайно, поэтому часть из них — та же трава, только реже.
+  const bladeCount = () => Math.round(BLADES * (0.35 + 0.65 * (quality - MIN_QUALITY) / (1 - MIN_QUALITY)));
   let cam = camera(1), aspect = 1, horizon = 0.42;
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2) * quality;
@@ -861,7 +865,7 @@ function buildScene(canvas) {
     gl.bindTexture(gl.TEXTURE_2D, trTex);
     gl.uniform1i(grass.u.uTrample, 0);
     gl.bindVertexArray(grassVao);
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, SEGMENTS * 2 + 1, BLADES);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, SEGMENTS * 2 + 1, bladeCount());
 
     gl.enable(gl.BLEND);
     gl.depthMask(false);
@@ -935,16 +939,21 @@ export function showIdleScene() {
   tickText();
   const textTimer = setInterval(tickText, 15000);
 
-  let frameAvg = 1 / 60, qualityAt = window.performance.now();
+  // Качество помним: на слабом ноутбуке экран сразу открывается плавным, а не тормозит первые секунды.
+  try { const saved = Number(localStorage.getItem(QUALITY_KEY)); if (saved) scene.setQuality(saved); } catch (_) { /* начнём с полного */ }
+  const saveQuality = () => { try { localStorage.setItem(QUALITY_KEY, String(scene.quality())); } catch (_) { /* не запомнится */ } };
+  let frameAvg = 1 / 60, qualityAt = window.performance.now(), droppedAt = -Infinity;
   const frame = now => {
     const dt = Math.min(0.1, (now - prev) / 1000);
     prev = now;
     night += (nightGoal - night) * Math.min(1, dt * 1.6);
     // Автоподстройка: средний кадр дольше 25 мс — снижаем разрешение, быстрее 14 мс — поднимаем обратно
     frameAvg += (dt - frameAvg) * 0.05;
-    if (now - qualityAt > 2500) {
-      if (frameAvg > 0.025 && scene.quality() > 0.5) { scene.setQuality(scene.quality() - 0.15); qualityAt = now; }
-      else if (frameAvg < 0.014 && scene.quality() < 1) { scene.setQuality(scene.quality() + 0.1); qualityAt = now; }
+    // Вниз быстро; вверх редко и только если давно не тормозило, иначе качество качается туда-сюда и каждый раз даёт рывок.
+    if (now - qualityAt > 1200 && frameAvg > 0.022 && scene.quality() > MIN_QUALITY) {
+      scene.setQuality(scene.quality() - 0.15); qualityAt = droppedAt = now; frameAvg = 1 / 60; saveQuality();
+    } else if (now - qualityAt > 5000 && now - droppedAt > 60000 && frameAvg < 0.012 && scene.quality() < 1) {
+      scene.setQuality(scene.quality() + 0.1); qualityAt = now; saveQuality();
     }
     scene.draw((now - t0) / 1000, dt, night, cursor);
     raf = document.hidden || !document.hasFocus() ? 0 : requestAnimationFrame(frame);
