@@ -37,6 +37,14 @@ const TARGET = [0, 4.2, -16];
 const FOV = Math.PI / 4;
 const TREE = [1.8, -16.5];
 const BLADES = 150000;
+// Встроенная видеокарта или рисование на процессоре: начинаем с простой травы, не дожидаясь тормозов.
+function isWeakGpu(gl) {
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+  if (/nvidia|geforce|rtx|gtx|radeon (rx|pro)|arc/i.test(name)) return false;
+  return /intel|uhd|iris|radeon(tm) graphics|radeon graphics|vega|swiftshader|llvmpipe|basic render/i.test(name);
+}
+
 const MIN_QUALITY = 0.4;
 const QUALITY_KEY = "project-idle-quality";
 const SEGMENTS = 7;   // звеньев в травинке — изгиб плавный, без изломов
@@ -893,7 +901,7 @@ function buildScene(canvas) {
 
   function dispose() { gl.getExtension("WEBGL_lose_context")?.loseContext(); }
 
-  return { resize, pick, stamp, draw, dispose, setQuality, quality: () => quality };
+  return { resize, pick, stamp, draw, dispose, setQuality, quality: () => quality, weakGpu: () => isWeakGpu(gl) };
 }
 
 // ---------- экран ----------
@@ -940,7 +948,7 @@ export function showIdleScene() {
   const textTimer = setInterval(tickText, 15000);
 
   // Качество помним: на слабом ноутбуке экран сразу открывается плавным, а не тормозит первые секунды.
-  try { const saved = Number(localStorage.getItem(QUALITY_KEY)); if (saved) scene.setQuality(saved); } catch (_) { /* начнём с полного */ }
+  try { const saved = Number(localStorage.getItem(QUALITY_KEY)); if (saved) scene.setQuality(saved); else if (scene.weakGpu()) scene.setQuality(0.55); } catch (_) { /* начнём с полного */ }
   const saveQuality = () => { try { localStorage.setItem(QUALITY_KEY, String(scene.quality())); } catch (_) { /* не запомнится */ } };
   let frameAvg = 1 / 60, qualityAt = window.performance.now(), droppedAt = -Infinity;
   const frame = now => {

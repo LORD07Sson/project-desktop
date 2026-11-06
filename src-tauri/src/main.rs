@@ -1744,10 +1744,13 @@ fn main() {
 
     // Доступ для ИИ-агента (MCP): включается в Настройки → «Доступ для ИИ» и действует со следующего запуска.
     // Порт слушает только 127.0.0.1; без флага-файла переменная не выставляется и порт закрыт.
+    // На ноутбуках с двумя видеокартами просим дискретную: иначе Windows часто оставляет окно на встроенной.
+    let mut webview_args = String::from("--force_high_performance_gpu");
     if let Some(port) = debug_port_flag() {
-        // Единственный поток на этом этапе — других потоков, читающих окружение, ещё нет.
-        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", format!("--remote-debugging-port={port} --remote-allow-origins=*"));
+        webview_args.push_str(&format!(" --remote-debugging-port={port} --remote-allow-origins=*"));
     }
+    // Единственный поток на этом этапе — других потоков, читающих окружение, ещё нет.
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", webview_args);
 
     // Отдельный процесс антивируса с правами администратора: проверка закрытых папок без окна (см. antivirus::headless).
     let cli_args: Vec<String> = std::env::args().collect();
