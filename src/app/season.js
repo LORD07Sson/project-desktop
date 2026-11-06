@@ -191,9 +191,21 @@ function density(w, h) {
   return Math.round(area * ({ winter: 50, spring: 30, autumn: 16, summer: 26, halloween: 5 }[kind] || 0));
 }
 
-function frame(t) {
+// Частицы медленные, а на мониторе 240 Гц полноэкранный холст по кадру — лишняя работа движка:
+// держим не больше ~40 к/с (dt считается по времени, скорость не меняется)
+// и совсем не рисуем, пока окно скрыто или без фокуса — вернёмся по focus/visibilitychange.
+const FRAME_MS = 1000 / 40;
+
+function wake() {
+  if (raf || !canvas || !sprites || !kind || (layer && layer.hidden) || root.dataset.motion === "off") return;
+  last = 0;
   raf = window.requestAnimationFrame(frame);
-  if (document.hidden) { last = 0; return; }
+}
+
+function frame(t) {
+  if (document.hidden || !document.hasFocus()) { raf = 0; last = 0; return; }
+  raf = window.requestAnimationFrame(frame);
+  if (last && t - last < FRAME_MS - 2) return;
   const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
   last = t;
   const w = canvas.width / window.devicePixelRatio, h = canvas.height / window.devicePixelRatio;
@@ -407,6 +419,8 @@ function restart() {
     else document.body.prepend(layer);
     ctx = canvas.getContext("2d");
     window.addEventListener("resize", resize);
+    window.addEventListener("focus", wake);
+    document.addEventListener("visibilitychange", wake);
   }
   layer.hidden = false;
   putHat();

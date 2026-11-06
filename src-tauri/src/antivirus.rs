@@ -1349,7 +1349,8 @@ pub fn av_exclusion_remove(app: AppHandle, value: String) -> Result<(), String> 
     save_exclusions(&app, &ex)
 }
 
-#[tauri::command]
+// async: kill_pid ждёт taskkill/kill, а синхронная команда выполняется на главном потоке окна.
+#[tauri::command(async)]
 pub fn av_kill(pid: u64) {
     if pid != std::process::id() as u64 && pid > 4 {
         kill_pid(pid);

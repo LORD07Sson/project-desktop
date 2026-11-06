@@ -407,55 +407,53 @@ fn is_signed(path: &str) -> bool {
         .unwrap_or(true) // не смогли проверить — не обвиняем
 }
 
-/// pid → «ip:порт» для соединений на порты майнинг-пулов.
-fn pool_connections() -> HashMap<u64, String> {
-    let mut map = HashMap::new();
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let ports: [&str; 7] = [":3333", ":4444", ":5555", ":7777", ":14433", ":14444", ":45560"];
-        if let Ok(out) = Command::new("netstat").args(["-ano", "-p", "tcp"]).creation_flags(0x0800_0000).output() {
-            for line in String::from_utf8_lossy(&out.stdout).lines() {
-                let cols: Vec<&str> = line.split_whitespace().collect();
-                if cols.len() >= 5 && cols[3] == "ESTABLISHED" && !cols[2].starts_with("127.") && ports.iter().any(|p| cols[2].ends_with(p)) {
-                    if let Ok(pid) = cols[4].parse::<u64>() {
-                        map.insert(pid, cols[2].to_string());
-                    }
-                }
+/// Установленные TCP-соединения одним вызовом netstat: (pid, «ip:порт» удалённой стороны).
+/// Раньше pool_connections и c2_connections запускали netstat каждая сама — два процесса и
+/// два разбора одного и того же вывода за тик.
+#[cfg(windows)]
+fn established_tcp() -> Vec<(u64, String)> {
+    use std::os::windows::process::CommandExt;
+    let Ok(out) = Command::new("netstat").args(["-ano", "-p", "tcp"]).creation_flags(0x0800_0000).output() else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| {
+            let cols: Vec<&str> = line.split_whitespace().collect();
+            if cols.len() >= 5 && cols[3] == "ESTABLISHED" {
+                Some((cols[4].parse::<u64>().ok()?, cols[2].to_string()))
+            } else {
+                None
             }
-        }
-    }
-    map
+        })
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn established_tcp() -> Vec<(u64, String)> {
+    Vec::new()
+}
+
+/// pid → «ip:порт» для соединений на порты майнинг-пулов.
+fn pool_connections(conns: &[(u64, String)]) -> HashMap<u64, String> {
+    let ports: [&str; 7] = [":3333", ":4444", ":5555", ":7777", ":14433", ":14444", ":45560"];
+    conns
+        .iter()
+        .filter(|(_, addr)| !addr.starts_with("127.") && ports.iter().any(|p| addr.ends_with(p)))
+        .map(|(pid, addr)| (*pid, addr.clone()))
+        .collect()
 }
 
 /// pid → «ip:порт» для соединений с адресами из списка управляющих серверов.
-fn c2_connections(bad: &HashSet<String>) -> HashMap<u64, String> {
-    let mut map = HashMap::new();
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        if bad.is_empty() {
-            return map;
-        }
-        if let Ok(out) = Command::new("netstat").args(["-ano", "-p", "tcp"]).creation_flags(0x0800_0000).output() {
-            for line in String::from_utf8_lossy(&out.stdout).lines() {
-                let cols: Vec<&str> = line.split_whitespace().collect();
-                if cols.len() >= 5 && cols[3] == "ESTABLISHED" {
-                    let remote_ip = cols[2].rsplit_once(':').map(|(ip, _)| ip).unwrap_or("");
-                    if bad.contains(remote_ip) {
-                        if let Ok(pid) = cols[4].parse::<u64>() {
-                            map.insert(pid, cols[2].to_string());
-                        }
-                    }
-                }
-            }
-        }
+fn c2_connections(conns: &[(u64, String)], bad: &HashSet<String>) -> HashMap<u64, String> {
+    if bad.is_empty() {
+        return HashMap::new();
     }
-    #[cfg(not(windows))]
-    {
-        let _ = bad;
-    }
-    map
+    conns
+        .iter()
+        .filter(|(_, addr)| bad.contains(addr.rsplit_once(':').map(|(ip, _)| ip).unwrap_or("")))
+        .map(|(pid, addr)| (*pid, addr.clone()))
+        .collect()
 }
 
 fn autorun_snapshot() -> HashSet<String> {
@@ -545,8 +543,9 @@ fn monitor(app: AppHandle) {
         }
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
         if tick % NET_EVERY == 0 {
-            pools = pool_connections();
-            c2 = c2_connections(&bad_ips);
+            let conns = established_tcp();
+            pools = pool_connections(&conns);
+            c2 = c2_connections(&conns, &bad_ips);
         }
         if tick % 240 == 0 {
             bad_ips = crate::antivirus::bad_ip_set(&app); // базы могли обновиться
