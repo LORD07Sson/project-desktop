@@ -135,7 +135,7 @@ function tileHtml(t, opt = {}) {
 function studioTileHtml(s) {
   const pct = s.episodes_total ? Math.round((s.episodes_done / s.episodes_total) * 100) : 0;
   const meta = s.episodes_total
-    ? (s.current_label ? `${s.current_label} в работе · ${s.current_pct}%` : "все серии готовы")
+    ? (s.current_label ? `${s.current_label} в работе${s.current_pct ? ` · ${s.current_pct}%` : ""}` : "все серии готовы")
     : "серии ещё не заведены";
   return `
     <button type="button" class="wm-tile" data-wm-open="t:${s.title_id}">
