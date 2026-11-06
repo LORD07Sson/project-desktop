@@ -4761,3 +4761,5 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .tpg-actions button.tpg-watch { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #10141a; border-color: transparent; font-weight: 700; }
 .tpg-actions button.tpg-watch:hover { background: #e8edf2; border-color: transparent; }
 .tpg-watch svg { width: 15px; height: 15px; fill: currentColor; }
+
+.ap-op[hidden] { display: none; }
