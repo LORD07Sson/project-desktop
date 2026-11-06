@@ -4704,6 +4704,9 @@ td.row-actions { opacity: 1; transition: none; }
 .rd-details > h4, .rd-recent > h4 { margin: 10px 0 6px; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim); }
 .rd-details .rd-meta-row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 10px; min-height: 38px; margin: 0; padding: 8px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
 .rd-details .rd-meta-row > span:first-child { flex: none; font-size: 12.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink-soft); }
+.rd-details .rd-meta-btn, .rd-details .rd-meta-btn:hover { padding: 0; border: 0; border-radius: 999px; background: none; }
+.rd-details button.rd-meta-btn:hover > span { filter: brightness(1.25); }
+.rd-details button.rd-meta-btn:focus-visible { outline: 2px solid rgba(var(--fire-rgb), .6); outline-offset: 2px; }
 .rd-dl { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 38px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
 .rd-dl > span:first-child { flex: none; color: var(--ink-soft); }
 .rd-dl > span:last-child { min-width: 0; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
