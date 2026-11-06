@@ -55,6 +55,15 @@ export function devPanelHtml(d) {
         <input type="range" id="dev-banner-input" min="0" max="100" value="${Number(d.banner_pos_y ?? 50)}" aria-label="Положение баннера по вертикали">
         <button id="dev-banner-save" class="dev-save-btn">Сохранить</button>
       </div>
+      <div class="dev-bcell wide" id="dev-overdue" hidden>
+        <div class="h">Просроченные серии</div>
+        <div class="dev-hint" id="dev-overdue-list"></div>
+        <div class="dev-actions">
+          <input type="date" id="dev-overdue-date" class="field-input" aria-label="Новый срок">
+          <button class="dev-save-btn" id="dev-overdue-move">Перенести срок</button>
+          <button class="btn danger" id="dev-overdue-clear">Снять срок</button>
+        </div>
+      </div>
       <div class="dev-bcell wide">
         <div class="h">Последние действия</div>
         <div class="dev-acts" id="dev-acts"><div class="dev-hint">загружаю…</div></div>
@@ -83,6 +92,30 @@ export function devPanelHtml(d) {
   `;
 }
 
+// Срок общий для серии: перенос или снятие видно всей команде, поэтому сначала спрашиваем.
+function fillDevOverdue(root, telegramId, list) {
+  const card = root.querySelector("#dev-overdue");
+  if (!card || !list.length) return;
+  card.hidden = false;
+  card.querySelector("#dev-overdue-list").textContent = list.map(r => `${r.public_id} ${r.title} (${r.deadline})`).join(", ");
+  const date = card.querySelector("#dev-overdue-date");
+  date.min = new Date().toISOString().slice(0, 10);
+  const run = async deadline => {
+    const what = deadline ? `Перенести срок на ${deadline}` : "Снять срок";
+    if (!await askConfirm(`${what} у серий: ${list.length}? Срок общий, он изменится у всей команды этих серий. Статистика просрочек тоже пересчитается. Прежние даты останутся в журнале.`, { yes: "Применить", danger: true })) return;
+    try {
+      const r = await apiPost(`/dev/user/${telegramId}/clear-overdue`, { deadline });
+      toast(`Изменено серий: ${r.changed}.`);
+      card.dispatchEvent(new CustomEvent("dev-saved", { bubbles: true }));
+    } catch (e) { toast(`Не удалось изменить: ${e.message}`, "error"); }
+  };
+  card.querySelector("#dev-overdue-move").addEventListener("click", () => {
+    if (!date.value) { toast("Выберите новую дату.", "error"); return; }
+    run(date.value);
+  });
+  card.querySelector("#dev-overdue-clear").addEventListener("click", () => run(""));
+}
+
 async function fillDevExtra(root, telegramId) {
   const box = root.querySelector("#dev-acts");
   if (!box) return;
@@ -94,6 +127,7 @@ async function fillDevExtra(root, telegramId) {
   if (goal) goal.value = x.monthly_goal || 0;
   const name = root.querySelector("#dev-name-input");
   if (name) name.value = x.display_name || "";
+  fillDevOverdue(root, telegramId, x.overdue || []);
   const evs = x.events || [];
   box.innerHTML = evs.length ? evs.map(ev => `
     <button type="button" class="dev-act" data-dev-report="${esc(ev.public_id || "")}">
@@ -123,6 +157,7 @@ function wireSave(root, sel, send, done, onSaved) {
 
 export function wireDevPanel(root, telegramId, onSaved, d) {
   fillDevExtra(root, telegramId);
+  root.querySelector("#dev-overdue")?.addEventListener("dev-saved", () => { if (onSaved) onSaved(); });
   root.querySelector("[data-dev-dm]")?.addEventListener("click", async () => {
     const [{ openDmWith }, { switchTab }] = await Promise.all([import("./messages.js"), import("./tabs.js")]);
     openDmWith(telegramId);
