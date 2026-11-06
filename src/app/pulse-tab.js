@@ -6,6 +6,7 @@ import { apiGet, mediaUrl } from "./api.js";
 import { esc, isOverdue } from "./utils.js";
 import { state } from "./state.js";
 import { openReportDetail } from "./report-detail.js";
+import { seriesParts } from "./reports.js";
 
 let frame = null;
 let listening = false;
@@ -65,7 +66,7 @@ async function collect() {
 // Сводка — главный экран аналитики: простые ответы «что горит, кто перегружен, кто сдаёт». Граф открывается отдельно,
 // потому что он тяжёлый и на такие вопросы отвечает хуже.
 const VIEW_KEY = "analytics-view";
-const seriesName = r => [r.title_name || r.title || r.public_id, r.episode ? `серия ${r.episode}` : ""].filter(Boolean).join(" · ");
+const seriesName = r => { const p = seriesParts(r); return [p.name, p.ep].filter(Boolean).join(" · "); };
 const dayKey = d => d.toISOString().slice(0, 10);
 
 async function paintSummary(box) {
