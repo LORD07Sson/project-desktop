@@ -4687,18 +4687,30 @@ td.row-actions { opacity: 1; transition: none; }
 @media (max-width: 900px) { .rd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .rd-prod .rd-flow { display: flex; gap: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, .02); }
-.rd-prod .rd-fs { flex: 1 1 0; display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 2px 10px; padding: 12px 14px 18px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; }
-.rd-prod .rd-fs:first-child { border-left: 0; }
+.rd-prod .rd-fs { flex: 1 1 0; display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 2px 10px; padding: 12px 14px 18px; border: 0; box-shadow: inset 1px 0 0 var(--line); border-radius: 0; background: transparent; }
+.rd-prod .rd-fs:first-child { box-shadow: none; }
 .rd-prod .rd-fs::after { content: ""; position: absolute; top: auto; right: 0; bottom: 0; left: 0; width: auto; height: 3px; background: rgba(255, 255, 255, .08); }
 .rd-prod .rd-fs:last-child::after { display: block; }
 .rd-prod .rd-fs.done::after { background: linear-gradient(90deg, var(--fire), var(--gold)); }
 .rd-prod .rd-fs.todo::after { background: var(--gold); }
 .rd-prod .rd-fs.wait, .rd-prod .rd-fs.opt { opacity: .6; }
-.rd-prod .rd-fs small { order: 3; flex: 1 0 100%; min-height: 0; margin-left: 32px; }
-.rd-prod .rd-fs-act { order: 4; flex: 1 0 100%; display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; margin: 8px 0 0 32px; }
+.rd-prod .rd-fs small { order: 3; flex: 0 0 calc(100% - 32px); min-width: 0; min-height: 0; margin-left: 32px; }
+.rd-prod .rd-fs-act { order: 4; flex: 0 0 calc(100% - 32px); min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; margin: 8px 0 0 32px; }
 .rd-prod .rd-fs-act:empty { display: none; }
 .rd-prod .rd-fs-act .rd-add { width: auto; max-width: 100%; justify-content: flex-start; text-align: left; padding: 6px 12px; font-size: 11.5px; line-height: 1.25; white-space: normal; }
+.rd-prod .rd-fs-act .rd-add:not(.danger-zone):not(.primary) { border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .04); }
+.rd-prod .rd-fs-act .rd-add.danger-zone { align-items: flex-start; }
 @media (max-width: 860px) { .rd-prod .rd-flow { flex-wrap: wrap; } .rd-prod .rd-fs { flex-basis: 50%; } }
+
+/* Пайплайн: имя — колонка фиксированной ширины, роли и отметки о сдаче стоят ровно друг под другом во всех строках и шагах */
+.rd-tl-ent, .rd-tl-ents.many .rd-tl-ent { grid-template-columns: 30px minmax(0, 180px) max-content minmax(0, 1fr); }
+.rd-tl-t, .rd-tl-ents.many .rd-tl-t { justify-self: start; }
+.rd-tl-ok { justify-content: space-between; min-width: min(196px, 100%); }
+
+/* Низ боковой колонки: «Открепить в окне» и «Ещё» — одна высота, один отступ, один шрифт */
+.rd-side-foot .btn, .rd-more summary { min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.rd-more summary { display: flex; align-items: center; border: 1px solid transparent; }
+.rd-side-foot .rd-more .btn { display: flex; width: 100%; }
 
 .rd-details, .rd-recent { padding: 6px 16px 10px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); }
 .rd-details > h4, .rd-recent > h4 { margin: 10px 0 6px; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim); }
