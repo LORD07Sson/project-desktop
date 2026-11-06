@@ -1225,7 +1225,7 @@ function productionHtml(detail, fileList, pipeInner = "") {
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
   const nyaa = can("reports.files") ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l1">⚠ Опасная зона</span><span class="dz-l2">Видео с Nyaa</span></button>` : "";
   // Яркая — только когда собирать уже есть из чего; пока ждём видео, кнопка спокойная (окно сборки само скажет, чего не хватает).
-  const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal ? " primary" : ""}" id="report-assemble">🎬 Собрать финал</button>` : "";
+  const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal && !pipeLeft && (detail.pipeline_roles || []).length ? " primary" : ""}" id="report-assemble">🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
   // Что мешает сейчас — одной строкой и с кнопкой, а не угадыванием по четырём карточкам этапов.
   const now = productionNow({ hasVideo, hasFinal, pipeLeft, hasPipeline: !!(detail.pipeline_roles && detail.pipeline_roles.length), canAssemble: can("reports.assemble"), canPost: can("posts.manage") });

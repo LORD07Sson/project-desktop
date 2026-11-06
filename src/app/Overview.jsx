@@ -319,7 +319,7 @@ function Overview(props) {
   const activity = (props.feed?.events || []).slice(0, 4);
   const summary = [
     `${activeTotal} ${plural(activeTotal, "серия", "серии", "серий")} в работе`,
-    attention.length ? `${attention.length} ${plural(attention.length, "требует", "требуют", "требуют")} внимания` : "срочного нет",
+    (n => (n ? `${n} ${plural(n, "требует", "требуют", "требуют")} внимания` : "срочного нет"))(attention.filter(a => a.tone !== "blue").length),
   ].join(" · ");
   const flowTotal = Math.max(1, FLOW.reduce((s, st) => s + count(st), 0));
   // Фон окна ведёт герой (смена слайда — смена фона); без героя — первая

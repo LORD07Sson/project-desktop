@@ -11,6 +11,7 @@ export function productionNow({ hasVideo, hasFinal, pipeLeft = "", hasPipeline =
   if (pipeLeft) {
     return { tone: "wait", title: `Сейчас ждём озвучку: ${pipeLeft}`, sub: "Финал соберётся, когда пройдёт весь пайплайн.", label: "К пайплайну", act: { jump: ".rd-pipe" } };
   }
+  if (!hasPipeline && !hasFinal) return null;   // серия ещё не запущена в работу: сборка доступна на ленте, но не навязывается
   if (!hasFinal) {
     return canAssemble ? { tone: "go", title: "Можно собирать финал", sub: hasPipeline ? "Видео прикреплено, пайплайн пройден." : "Видео прикреплено, пайплайн не задан.", label: "Собрать финал", act: { click: "#report-assemble" } } : null;
   }
