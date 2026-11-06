@@ -525,6 +525,27 @@ recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id siteUrl
 
 export const COVER_QUERY = `query($s:String){Media(search:$s,type:ANIME){id coverImage{medium}}}`;
 
+// AniList пускает около 30 запросов в минуту, поэтому ищем пачками. Page, а не Media: ненайденный Media обнуляет весь ответ.
+export const COVER_BATCH = 20;
+
+export function coverBatchRequest(terms) {
+  const vars = terms.map((_, i) => `$s${i}:String`).join(",");
+  const body = terms.map((_, i) => `a${i}:Page(perPage:1){media(search:$s${i},type:ANIME){coverImage{medium}}}`).join(" ");
+  return { query: `query(${vars}){${body}}`, variables: Object.fromEntries(terms.map((t, i) => [`s${i}`, t])) };
+}
+
+/** Адреса обложек в порядке запроса; пустая строка — не нашлось. Сбой ответа — null, чтобы не запомнить промах. */
+export function parseCoverBatch(text, count) {
+  try {
+    const data = JSON.parse(text).data;
+    if (!data) return null;
+    return Array.from({ length: count }, (_, i) => {
+      const u = data[`a${i}`]?.media?.[0]?.coverImage?.medium;
+      return /^https:\/\//.test(u || "") ? u : "";
+    });
+  } catch (_) { return null; }
+}
+
 /** Обложка из ответа AniList: https-адрес или пустая строка, если тайтл не нашёлся. */
 export function parseCover(text) {
   try {

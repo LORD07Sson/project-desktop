@@ -30,7 +30,7 @@ import {
   makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
   isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
   cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
-  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey, coverAltKeys, coverSearchTerms, pickCoverCandidate,
+  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey, coverAltKeys, coverSearchTerms, pickCoverCandidate, COVER_BATCH, coverBatchRequest, parseCoverBatch,
   seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
   parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, libraryKeys,
 } from "./nyaa-core.js";
@@ -333,6 +333,30 @@ async function storeCover(key, src) {
   try { db.transaction("covers", "readwrite").objectStore("covers").put(src, key); } catch (_) { /* просто скачаем в следующий раз */ }
 }
 
+async function aniListBatch(terms) {
+  const { query, variables } = coverBatchRequest(terms);
+  const urls = parseCoverBatch(await invoke("anilist_query", { query, variables }), terms.length);
+  if (!urls) throw new Error("AniList не ответил");
+  return urls;
+}
+
+// Пачка: сначала по основным названиям, ненайденные — по запасным. Возвращает ненайденные ключи.
+async function resolveCoverChunk(chunk, altsOf) {
+  const urls = await aniListBatch(chunk);
+  chunk.forEach((k, i) => { if (urls[i]) coverUrls[k] = urls[i]; });
+  let misses = chunk.filter(k => !hasUrl(coverUrls[k]));
+  const altOwner = new Map();
+  for (const k of misses) for (const alt of (altsOf.get(k) || []).slice(0, 2)) if (!altOwner.has(alt) && altOwner.size < COVER_BATCH) altOwner.set(alt, k);
+  if (altOwner.size) {
+    const terms = [...altOwner.keys()];
+    const found = await aniListBatch(terms);
+    terms.forEach((t, i) => { const k = altOwner.get(t); if (found[i] && !hasUrl(coverUrls[k])) coverUrls[k] = found[i]; });
+    misses = misses.filter(k => !hasUrl(coverUrls[k]));
+  }
+  saveCovers();
+  return misses;
+}
+
 async function fetchCover(key, alts = [], sample = null) {
   if (coverBusy.has(key) || coverData.has(key)) return;
   coverBusy.add(key);
@@ -341,7 +365,7 @@ async function fetchCover(key, alts = [], sample = null) {
     if (!hasUrl(url) && !missedRecently(url)) {
       url = "";
       // по основному названию, потом по запасным из скобок («(Nezumi-kun no Chokki (TV))»)
-      for (const s of [key, ...alts]) {
+      for (const s of sample && sample.batched ? [] : [key, ...alts]) {
         url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s } }));
         if (url) break;
       }
@@ -371,18 +395,32 @@ async function loadListCovers() {
     const altsOf = new Map();
     const sampleOf = new Map();
     for (const i of vis) if (!isAudio(i)) { const k = coverKey(i.title); if (k && !altsOf.has(k)) { altsOf.set(k, coverAltKeys(i.title)); sampleOf.set(k, i); } }
-    const keys = [...altsOf.keys()].filter(k => !coverData.has(k) && !missedRecently(coverUrls[k])).slice(0, 80);
+    const keys = [...altsOf.keys()].filter(k => !coverData.has(k) && !missedRecently(coverUrls[k]));
     const thumbs = vis.filter(i => isAudio(i) && !thumbData.has(i.id) && thumbUrls[i.id] !== "").slice(0, 30);
-    // Адрес уже известен — это просто скачать картинку, потоков больше. Поиск упирается в лимиты каталогов, поэтому отдельно и бережнее.
-    const job = k => () => fetchCover(k, altsOf.get(k), sampleOf.get(k));
-    const known = keys.filter(k => hasUrl(coverUrls[k])).map(job);
-    const search = [...keys.filter(k => !hasUrl(coverUrls[k])).map(job), ...thumbs.map(i => () => fetchThumb(i))];
+    // Адрес уже известен — это просто скачать картинку, потоков больше. Поиск идёт пачками сверху списка, а по запасным каталогам — в конце и бережнее.
     const pool = (list, size) => {
       let next = 0;
       const worker = async () => { while (next < list.length) await list[next++](); };
       return Array.from({ length: size }, worker);
     };
-    await Promise.all([...pool(known, 8), ...pool(search, 3)]);
+    const download = k => () => fetchCover(k);
+    const lookups = async () => {
+      const unknown = keys.filter(k => !hasUrl(coverUrls[k]));
+      const misses = [];
+      try {
+        for (let i = 0; i < unknown.length; i += COVER_BATCH) {
+          const chunk = unknown.slice(i, i + COVER_BATCH);
+          misses.push(...await resolveCoverChunk(chunk, altsOf));
+          await Promise.all(pool(chunk.filter(k => hasUrl(coverUrls[k])).map(download), 8));
+        }
+      } catch (_) { /* лимит или нет связи: продолжим при следующей отрисовке */ }
+      const jobs = [
+        ...misses.map(k => () => fetchCover(k, [], { ...sampleOf.get(k), batched: true })),
+        ...thumbs.map(i => () => fetchThumb(i)),
+      ];
+      await Promise.all(pool(jobs, 3));
+    };
+    await Promise.all([...pool(keys.filter(k => hasUrl(coverUrls[k])).map(download), 8), lookups()]);
   } finally { coverQueueOn = false; }
 }
 

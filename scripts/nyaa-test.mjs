@@ -226,6 +226,16 @@ assert.ok(SIMILAR_QUERY.includes("recommendations"));
   assert.equal(pickCoverCandidate(["baxian"], [{ url: "x", titles: ["Other"] }]), "");
   assert.ok(coverSearchTerms("all wishes come true", "[ToonsHub] All Wishes Come True (2026) 2160p BSITE WEB-DL (Baxian!)").includes("baxian!"));
 }
+{
+  const { coverBatchRequest, parseCoverBatch } = await import("../src/app/nyaa-core.js");
+  const req = coverBatchRequest(["a", "b"]);
+  assert.deepEqual(req.variables, { s0: "a", s1: "b" });
+  assert.ok(req.query.includes("a1:Page"));
+  assert.ok(coverBatchRequest(Array(20).fill("x")).query.length < 4000, "предел длины запроса в Rust");
+  assert.deepEqual(parseCoverBatch(JSON.stringify({ data: { a0: { media: [{ coverImage: { medium: "https://x/1.jpg" } }] }, a1: { media: [] } } }), 2), ["https://x/1.jpg", ""]);
+  assert.equal(parseCoverBatch(JSON.stringify({ errors: [{}], data: null }), 2), null, "сбой не считается промахом");
+  assert.equal(parseCoverBatch("не json", 1), null);
+}
 console.log("nyaa-test: ok");
 
 // ---------- Релизы 2.0 ----------
