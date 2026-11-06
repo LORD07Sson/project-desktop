@@ -1117,6 +1117,8 @@ function pipelineTimelineHtml(pipeline, parallel = false, canManage = false, ass
     if (!name) return "не выбран";
     return name !== s.user_name && s.user_name ? `<span title="${esc(s.user_name)}">${esc(name)}</span>` : esc(name);
   };
+  const plain = s => (s.telegram_id && shown.get(String(s.telegram_id))) || s.user_name || "";
+  const avatar = s => `<span class="avatar-bubble"${s.telegram_id ? ` data-avatar-for="${esc(s.telegram_id)}"` : ""}>${esc(initials(plain(s) || "?"))}</span>`;
   const groups = pipelineGroups(pipeline, parallel);
   const curGroup = groups.findIndex(g => g.some(i => pipeline[i].current));
   const at = curGroup !== -1 ? curGroup : groups.filter(g => g.every(i => pipeline[i].done)).length;
@@ -1128,7 +1130,7 @@ function pipelineTimelineHtml(pipeline, parallel = false, canManage = false, ass
     return `
     <div class="rd-tl${done ? " done" : ""}${cur ? " cur" : ""}">
       <span class="rd-tl-dot">${done ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : gi + 1}</span>
-      <div class="rd-tl-ents${g.length > 1 ? " many" : ""}">${g.map(i => `<div class="rd-tl-ent${pipeline[i].submitted_at ? " sub" : ""}"><div class="rd-tl-t">${esc(pipeline[i].role)}</div><div class="rd-tl-p">${who(pipeline[i])}</div>${pipelineEntryActs(pipeline[i], i, canManage)}</div>`).join("")}</div>
+      <div class="rd-tl-ents${g.length > 1 ? " many" : ""}">${g.map(i => `<div class="rd-tl-ent${pipeline[i].submitted_at ? " sub" : ""}">${avatar(pipeline[i])}<div class="rd-tl-p">${who(pipeline[i])}</div><div class="rd-tl-t">${esc(pipeline[i].role)}</div>${pipelineEntryActs(pipeline[i], i, canManage)}</div>`).join("")}</div>
       ${g.length > 1 ? `<div class="rd-tl-par">одновременно${(cur || marked) && groups.length > 1 ? ` · сдали ${marked} из ${g.length}` : ""}</div>` : ""}
     </div>`;
   }).join("")}</div>`;
