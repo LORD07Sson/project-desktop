@@ -70,6 +70,8 @@ export function tabAllowed(name) {
 
 export function switchTab(name) {
   if (!tabAllowed(name)) name = "messages";
+  // Профиль коллеги лежит поверх вкладок: переход по меню должен его закрыть.
+  $all(".pf-page-overlay").forEach(o => o.remove());
   state.activeTab = name;
   try { localStorage.setItem(LAST_TAB_KEY, name); } catch (_) { /* не критично */ }
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
