@@ -4352,7 +4352,9 @@ td.row-actions { opacity: 1; transition: none; }
   animation: kd-explode 1.3s cubic-bezier(.12, .9, .25, 1) backwards;
   filter: drop-shadow(0 0 .7px rgba(255, 255, 255, .9)) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
 .kd-pieces.settled span { animation: none; }
-.kd-pieces em { position: absolute; inset: 0; animation: kd-float 6s ease-in-out infinite alternate; }
+/* Осколки парят только под мышью: у каждого осколка тройная тень, и 128 штук сразу опускали «Доску» до 25 кадров. */
+.kd-pieces em { position: absolute; inset: 0; animation: kd-float 6s ease-in-out infinite alternate; animation-play-state: paused; }
+.board-card:hover .kd-pieces em, .kd-slide:hover .kd-pieces em { animation-play-state: running; }
 .kd-pieces i { position: absolute; inset: 0; background: center / cover no-repeat; filter: saturate(.6) brightness(.85) contrast(1.1); }
 @keyframes kd-explode {
   0% { transform: none; filter: brightness(3) drop-shadow(0 0 8px #fff); }
