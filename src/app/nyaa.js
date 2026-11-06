@@ -269,6 +269,70 @@ async function coverFallback(key, sample) {
   return parseView(await nyaaView({ base: prefs.base, id: sample.id })).images[0] || "";
 }
 
+// Готовые обложки живут на диске уменьшенными: при запуске список сразу с картинками, без скачивания заново.
+const COVER_DB = "project-nyaa-cover-cache";
+const COVER_SIZE = 112;
+const COVER_DB_LIMIT = 1500;
+let coverDb = null;
+
+function openCoverDb() {
+  if (coverDb) return coverDb;
+  coverDb = new Promise(resolve => {
+    try {
+      const req = indexedDB.open(COVER_DB, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("covers");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch (_) { resolve(null); }
+  });
+  return coverDb;
+}
+
+let coverCacheLoaded = null;
+function loadCoverCache() {
+  if (coverCacheLoaded) return coverCacheLoaded;
+  coverCacheLoaded = openCoverDb().then(db => new Promise(resolve => {
+    if (!db) { resolve(); return; }
+    const store = db.transaction("covers").objectStore("covers");
+    const keys = store.getAllKeys();
+    const values = store.getAll();
+    values.onsuccess = () => {
+      keys.result.forEach((k, i) => { if (!coverData.has(k)) coverData.set(k, values.result[i]); });
+      if (keys.result.length > COVER_DB_LIMIT) {
+        const del = db.transaction("covers", "readwrite").objectStore("covers");
+        keys.result.slice(0, keys.result.length - COVER_DB_LIMIT).forEach(k => del.delete(k));
+      }
+      resolve();
+    };
+    values.onerror = () => resolve();
+  }));
+  return coverCacheLoaded;
+}
+
+function shrinkCover(src) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, COVER_SIZE / Math.min(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/webp", 0.8));
+      } catch (_) { resolve(src); }
+    };
+    img.onerror = () => resolve(src);
+    img.src = src;
+  });
+}
+
+async function storeCover(key, src) {
+  const db = await openCoverDb();
+  if (!db) return;
+  try { db.transaction("covers", "readwrite").objectStore("covers").put(src, key); } catch (_) { /* просто скачаем в следующий раз */ }
+}
+
 async function fetchCover(key, alts = [], sample = null) {
   if (coverBusy.has(key) || coverData.has(key)) return;
   coverBusy.add(key);
@@ -284,7 +348,12 @@ async function fetchCover(key, alts = [], sample = null) {
       if (!url) url = await coverFallback(key, sample);
       coverUrls[key] = url || `miss3:${Date.now()}`; saveCovers();
     }
-    if (hasUrl(url)) { coverData.set(key, await fetchPic(url)); paintCover(key); }
+    if (hasUrl(url)) {
+      const small = await shrinkCover(await fetchPic(url));
+      coverData.set(key, small);
+      paintCover(key);
+      storeCover(key, small);
+    }
   } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
   coverBusy.delete(key);
 }
@@ -294,6 +363,8 @@ async function loadListCovers() {
   if (coverQueueOn) return;
   coverQueueOn = true;
   try {
+    await loadCoverCache();
+    for (const el of document.querySelectorAll(".ny-kind[data-ck]")) if (el.dataset.ck) paintCover(el.dataset.ck);
     // Вся лента, а не первые 60 строк: раньше всё, что ниже, так и оставалось со значком.
     const vis = view();
     const isAudio = i => categoryKind(i.categoryId) === "audio";
@@ -302,10 +373,16 @@ async function loadListCovers() {
     for (const i of vis) if (!isAudio(i)) { const k = coverKey(i.title); if (k && !altsOf.has(k)) { altsOf.set(k, coverAltKeys(i.title)); sampleOf.set(k, i); } }
     const keys = [...altsOf.keys()].filter(k => !coverData.has(k) && !missedRecently(coverUrls[k])).slice(0, 80);
     const thumbs = vis.filter(i => isAudio(i) && !thumbData.has(i.id) && thumbUrls[i.id] !== "").slice(0, 30);
-    const jobs = [...keys.map(k => () => fetchCover(k, altsOf.get(k), sampleOf.get(k))), ...thumbs.map(i => () => fetchThumb(i))];
-    let next = 0;
-    const worker = async () => { while (next < jobs.length) await jobs[next++](); };
-    await Promise.all([worker(), worker()]);
+    // Адрес уже известен — это просто скачать картинку, потоков больше. Поиск упирается в лимиты каталогов, поэтому отдельно и бережнее.
+    const job = k => () => fetchCover(k, altsOf.get(k), sampleOf.get(k));
+    const known = keys.filter(k => hasUrl(coverUrls[k])).map(job);
+    const search = [...keys.filter(k => !hasUrl(coverUrls[k])).map(job), ...thumbs.map(i => () => fetchThumb(i))];
+    const pool = (list, size) => {
+      let next = 0;
+      const worker = async () => { while (next < list.length) await list[next++](); };
+      return Array.from({ length: size }, worker);
+    };
+    await Promise.all([...pool(known, 8), ...pool(search, 3)]);
   } finally { coverQueueOn = false; }
 }
 
