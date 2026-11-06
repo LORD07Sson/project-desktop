@@ -3386,7 +3386,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-summary b { font-size: 17px; } .rd-summary span { font-size: 10.5px; color: var(--ink-dim); line-height: 1.15; }
 .rd-side { position: sticky; top: 44px; align-self: start; max-height: calc(100vh - 76px); overflow-y: auto; }   /* 44px — высота залипающих вкладок, иначе колонка уходит под них */
 /* Что мешает сейчас: одна строка с кнопкой над этапами (productionHtml). */
-.rd-now { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(255, 176, 32, .5); background: rgba(255, 176, 32, .1); }
+.rd-now { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(255, 176, 32, .5); background: rgba(255, 176, 32, .1); }
 .rd-now b { display: block; font-size: 14px; color: #ffc457; }
 .rd-now small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-soft); }
 .rd-now.go { border-color: rgba(70, 200, 120, .5); background: rgba(70, 200, 120, .09); }
@@ -4671,11 +4671,11 @@ td.row-actions { opacity: 1; transition: none; }
 .up-src { max-width: 100%; max-height: calc(62vh - 20px); border-radius: 10px; object-fit: contain; }
 
 /* ---- Карточка отчёта: полоса показателей, лента этапов, «Детали» и «Последняя активность» (в конце файла: перебивает прежние .rd-fs) ---- */
-.rd-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.rd-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .rd-kpi { min-width: 0; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); }
 .rd-kpi h4 { margin: 0 0 8px; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim); }
 .rd-kpi b { display: block; font-size: 22px; line-height: 1.1; font-weight: 800; letter-spacing: -.02em; }
-.rd-kpi small { display: block; margin-top: 5px; overflow: hidden; font-size: 12px; color: var(--ink-soft); text-overflow: ellipsis; white-space: nowrap; }
+.rd-kpi small { display: -webkit-box; margin-top: 5px; overflow: hidden; font-size: 12px; line-height: 1.35; color: var(--ink-soft); -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .rd-kpi-bar { height: 6px; margin-top: 10px; overflow: hidden; border-radius: 3px; background: rgba(255, 255, 255, .08); }
 .rd-kpi-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--fire), var(--gold)); }
 .rd-kpi.bad { border-color: rgba(255, 90, 80, .5); background: rgba(255, 90, 80, .07); }
@@ -4713,3 +4713,9 @@ td.row-actions { opacity: 1; transition: none; }
 .rd-ev small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink-dim); }
 .rd-recent .pf-link { margin-top: 6px; }
 :root[data-theme="light"] .rd-details, :root[data-theme="light"] .rd-recent { background: rgba(255, 255, 255, .6); }
+
+/* Под открытой карточкой отчёта доски не видно, а её анимации (эффекты просроченных, осколки) держали прокрутку карточки на ~35 к/с.
+   Пока карточка открыта — выключаем их совсем: animation-play-state: paused не помогает, animation: none возвращает 230+ к/с. */
+body:has(.report-detail-overlay) .tab-panel *,
+body:has(.report-detail-overlay) .tab-panel *::before,
+body:has(.report-detail-overlay) .tab-panel *::after { animation: none !important; }
