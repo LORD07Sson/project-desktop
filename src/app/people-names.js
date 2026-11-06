@@ -33,11 +33,14 @@ export async function loadPeopleNames() {
   if (names && Date.now() - at < 600000) return names;
   try {
     const d = await apiGet("/team");
-    names = new Map((d.users || []).map(u => [String(u.telegram_id), u.name]));
+    names = new Map((d.users || []).flatMap(u => [[String(u.telegram_id), u.name], ...(u.username ? [[`@${u.username}`, u.name]] : [])]));
     at = Date.now();
   } catch (_) { names = names || new Map(); }
   return names;
 }
+
+// Журнал отчёта отдаёт только @username, без id.
+export const nameByUsername = username => (names && names.get(`@${username}`)) || username;
 
 export const personName = (telegramId, fallback) => (names && telegramId != null && names.get(String(telegramId))) || fallback;
 

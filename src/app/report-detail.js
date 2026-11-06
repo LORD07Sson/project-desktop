@@ -7,6 +7,7 @@ import { track } from "./telemetry.js";
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
 import { can, state } from "./state.js";
+import { loadPeopleNames, nameByUsername } from "./people-names.js";
 import { productionNow } from "./report-now-core.js";
 import { classifyFiles, overviewKpis, isFinalFile, isVideoFile } from "./report-overview-core.js";
 import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./tauri.js";
@@ -519,12 +520,12 @@ export async function openReportDetail(publicId) {
       if (badge && r && r.failed) { badge.textContent = r.failed; badge.hidden = false; badge.title = `Не доставлено: ${r.failed}`; }
     }).catch(() => { /* вкладка просто без значка */ });
     // Последние события отчёта — в боковой колонке; не загрузились — блок просто не показываем.
-    apiGet(`/report/${publicId}/activity`, { offset: 0, page_size: 4 }).then(r => {
+    Promise.all([apiGet(`/report/${publicId}/activity`, { offset: 0, page_size: 4 }), loadPeopleNames()]).then(([r]) => {
       const box = sheet.querySelector("#rd-recent .rd-recent-list");
       if (!box) return;
       const evs = (r && r.events) || [];
       if (!evs.length) { box.innerHTML = '<div class="pf-quiet">Пока пусто</div>'; return; }
-      box.innerHTML = evs.map(ev => `<div class="rd-ev"><i></i><span>${esc(actionLabel(ev.action))}${ev.detail ? ` · ${esc(ev.detail)}` : ""}<small>${[ev.actor || "бот", formatWhen(ev.created_at)].map(esc).join(" · ")}</small></span></div>`).join("")
+      box.innerHTML = evs.map(ev => `<div class="rd-ev"><i></i><span>${esc(actionLabel(ev.action))}${ev.detail ? ` · ${esc(ev.detail)}` : ""}<small>${[ev.actor ? nameByUsername(ev.actor) : "бот", formatWhen(ev.created_at)].map(esc).join(" · ")}</small></span></div>`).join("")
         + '<button type="button" class="pf-link" data-rd-all-activity>вся активность →</button>';
       box.querySelector("[data-rd-all-activity]")?.addEventListener("click", () => sheet.querySelector('[data-rd-tab="activity"]')?.click());
     }).catch(() => sheet.querySelector("#rd-recent")?.remove());
