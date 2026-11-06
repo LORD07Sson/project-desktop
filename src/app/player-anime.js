@@ -17,8 +17,6 @@ import { pickSameVoice, preloadFresh, shouldPreload, bufferedAhead, startBufferR
 
 const SAVE_EVERY_MS = 5000;
 const HIDE_AFTER_MS = 2600;
-const OP_SKIP = 85;            // длина типичного опенинга
-const OP_WINDOW = [5, 240];    // когда предлагать его пропустить
 const NEXT_CARD_SEC = 25;      // за сколько до конца показать «Следующая серия»
 const NEXT_COUNTDOWN = 10;
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -196,6 +194,33 @@ function renderEpisodes() {
   box.querySelectorAll("[data-ap-ep-i]").forEach(b => b.addEventListener("click", () => goEpisode(Number(b.dataset.apEpI))));
 }
 
+// Границы опенинга — настоящие, из AniSkip. Нет данных — нет ни кнопки, ни отметки на полосе.
+function paintOp() {
+  if (!P) return;
+  const op = $r("[data-ap-op]");
+  const dur = P.video.duration;
+  const known = P.op && dur > 0;
+  op.hidden = !known;
+  if (known) {
+    op.style.left = `${(P.op.start / dur) * 100}%`;
+    op.style.width = `${((P.op.end - P.op.start) / dur) * 100}%`;
+  }
+}
+
+async function loadOp(ep) {
+  P.op = null;
+  paintOp();
+  const number = Number(ep.number);
+  if (!Number.isInteger(number) || number < 1) return;
+  const root = P.root;
+  try {
+    const d = await apiGet("/player/skip", { shiki_id: P.shikiId, episode: number });
+    if (!P || P.root !== root || P.series.episodes[P.episodeIdx].id !== ep.id) return;
+    P.op = d.op;
+    paintOp();
+  } catch (_) { /* без кнопки пропуска */ }
+}
+
 async function goEpisode(idx) {
   if (!P || !P.series) return;
   const eps = P.series.episodes;
@@ -206,6 +231,7 @@ async function goEpisode(idx) {
   P.nextCancelled = false;
   const ep = eps[idx];
   writeMem(P.shikiId, { episodeId: ep.id });
+  loadOp(ep);
   renderEpisodes();
   $r("[data-ap-ep]").textContent = ep.label;
   $r("[data-ap-next]").disabled = idx === eps.length - 1;
@@ -334,9 +360,7 @@ function playSource(src, resumeAt) {
       v.currentTime = saved;
       if (resumeAt == null) toast(`Продолжаю с ${fmtTime(saved)}.`);
     }
-    const op = $r("[data-ap-op]");
-    op.style.left = `${(OP_WINDOW[0] / v.duration) * 100}%`;
-    op.style.width = `${(OP_SKIP / v.duration) * 100}%`;
+    paintOp();
   };
   v.addEventListener("loadedmetadata", P.onMeta, { once: true });
   v.src = relay || src.url;
@@ -475,7 +499,7 @@ function wireControls() {
   root.querySelector("[data-ap-fwd10]").addEventListener("click", () => seekBy(10));
   root.querySelector("[data-ap-next]").addEventListener("click", () => goEpisode(P.episodeIdx + 1));
   root.querySelector("[data-ap-full]").addEventListener("click", toggleFullscreen);
-  root.querySelector("[data-ap-skip]").addEventListener("click", () => { v.currentTime = Math.min(v.duration - 1, v.currentTime + OP_SKIP); flash(`<span class="ap-flash-txt">+${OP_SKIP} с</span>`); });
+  root.querySelector("[data-ap-skip]").addEventListener("click", () => { if (!P || !P.op) return; v.currentTime = Math.min(v.duration - 1, P.op.end); flash(`<span class="ap-flash-txt">Опенинг пропущен</span>`); });
   root.querySelector("[data-ap-nextgo]").addEventListener("click", () => { hideNextCard(); goEpisode(P.episodeIdx + 1); });
   root.querySelector("[data-ap-nextno]").addEventListener("click", () => { P.nextCancelled = true; hideNextCard(); });
   const settings = root.querySelector("[data-ap-settings]");
@@ -566,7 +590,7 @@ function wireControls() {
     const p = v.currentTime / v.duration;
     if (!seek.classList.contains("drag")) { fill.style.width = `${p * 100}%`; thumb.style.left = `${p * 100}%`; }
     root.querySelector("[data-ap-cur]").textContent = fmtTime(v.currentTime);
-    root.querySelector("[data-ap-skip]").hidden = !(v.currentTime > OP_WINDOW[0] && v.currentTime < Math.min(OP_WINDOW[1], v.duration * 0.3));
+    root.querySelector("[data-ap-skip]").hidden = !(P && P.op && v.currentTime >= P.op.start && v.currentTime < P.op.end - 1);
     const left = v.duration - v.currentTime;
     if (left < NEXT_CARD_SEC && !P.nextCancelled) showNextCard();
     preloadNext(left, v.duration);
