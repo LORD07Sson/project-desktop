@@ -150,15 +150,13 @@ export function restoreLastTab() {
 }
 
 // Редкие разделы (лента, аналитика, сервисы, команда, профиль) живут в
-// меню «Ещё» шапки. Когда открыт один из них, кнопка «Ещё» подсвечена
-// и подписана его именем — иначе в шапке не видно, где вы сейчас.
+// меню «Ещё» шапки. Когда открыт один из них, кнопка «Ещё» подсвечена, а подпись не меняется:
+// название раздела есть в заголовке страницы, а меню не сдвигается при переходах.
 function syncMoreButton(name) {
   const btn = $("#more-btn");
-  const lbl = $("#more-lbl");
-  if (!btn || !lbl) return;
+  if (!btn) return;
   const item = $(`#more-menu .tab-btn[data-tab="${name}"]`);
   btn.classList.toggle("active", !!item);
-  lbl.textContent = item ? item.querySelector(".tab-lbl").textContent : "Ещё";
 }
 
 export function clearTabDom() {
