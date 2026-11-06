@@ -194,8 +194,50 @@ export function wireDevPanel(root, telegramId, onSaved, d) {
 }
 
 // Все поля записи из базы: значение копируется кликом, вся запись — кнопкой.
-function rawHtml(row, editable = {}) {
-  return `<dl class="dev-raw">${Object.entries(row).map(([k, v]) => `<dt>${esc(k)}</dt><dd><button type="button" class="dev-raw-v" data-copy="${esc(String(v ?? ""))}" title="Копировать">${v == null || v === "" ? "—" : esc(String(v))}</button>${editable[k] ? `<button type="button" class="dev-raw-edit" data-dev-edit="${esc(k)}">изменить</button>` : ""}</dd>`).join("")}</dl>`;
+const REPORT_DOCS = {
+  id: "Внутренний номер записи в базе. На него ссылаются файлы, заметки и журнал, поэтому не меняется.",
+  public_id: "Номер отчёта, который видит команда, например R-000063.",
+  user_id: "Внутренний номер того, кто создал отчёт. Это не Telegram ID.",
+  title: "Короткое название отчёта: тайтл и номер серии.",
+  status: "Текущий статус. draft — черновик, review — озвучка, in_progress — в работе, completed — готово. Меняется кнопками вверху карточки.",
+  created_at: "Когда отчёт создан. От этой даты начинается полоса в календаре. Время в UTC.",
+  updated_at: "Когда запись менялась в последний раз. Время в UTC.",
+  priority: "Приоритет: например, normal — обычный, high — высокий. Меняется в блоке «Детали».",
+  deadline: "Срок сдачи. Меняется в блоке «Срок».",
+  deadline_reminder_sent: "Старая отметка: напоминал ли бот о сроке. 0 — нет.",
+  deadline_reminder_stage: "Сколько напоминаний о сроке бот уже отправил. Если уменьшить, он напомнит снова.",
+  overdue_notified: "Сообщал ли бот о просрочке: 1 — да, 0 — нет.",
+  overdue_notified_at: "День последнего сообщения о просрочке.",
+  pipeline_roles: "Цепочка работы в виде «роль:внутренний номер человека» через запятую. «~параллельно» в начале значит, что этап делают одновременно. Меняется через «изменить» в разделе «Пайплайн».",
+  pipeline_stage: "Номер текущего этапа цепочки, счёт с нуля. Отметки о сдаче от этого числа сами не меняются.",
+  title_id: "Номер тайтла, к которому относится отчёт. Пусто — отчёт без тайтла.",
+  work_role: "Роль, для которой заведена эта работа. Пусто — не указана.",
+  title_episode_id: "Номер серии тайтла, откуда берутся общие равки и исходники. Пусто — серия не привязана.",
+};
+
+const TITLE_DOCS = {
+  id: "Внутренний номер тайтла в базе.",
+  season_id: "Номер сезона, в котором находится тайтл.",
+  name: "Название тайтла в команде.",
+  created_by: "Внутренний номер того, кто добавил тайтл. Это не Telegram ID.",
+  created_at: "Когда тайтл добавлен. Время в UTC.",
+  poster_url: "Адрес постера.",
+  shiki_id: "Номер тайтла на Shikimori: оттуда берутся описание, жанры и серии, по нему же работает плеер.",
+  anilist_id: "Номер тайтла на AniList, второй источник данных.",
+  meta_synced_at: "Когда данные тайтла обновлялись с внешних сайтов. После смены привязки очищается.",
+  intro_file_id: "Файл заставки в хранилище.",
+  intro_file_name: "Имя файла заставки.",
+  watermark_file_id: "Файл логотипа в хранилище.",
+  watermark_file_name: "Имя файла логотипа.",
+  watermark_corner: "В каком углу видео стоит логотип.",
+  watermark_opacity: "Прозрачность логотипа.",
+  watermark_scale: "Размер логотипа.",
+  watermark_x: "Сдвиг логотипа по горизонтали.",
+  watermark_y: "Сдвиг логотипа по вертикали.",
+};
+
+function rawHtml(row, editable = {}, docs = {}) {
+  return `<dl class="dev-raw">${Object.entries(row).map(([k, v]) => `<dt>${docs[k] ? `<details class="dev-doc"><summary>${esc(k)}</summary><p>${esc(docs[k])}</p></details>` : esc(k)}</dt><dd><button type="button" class="dev-raw-v" data-copy="${esc(String(v ?? ""))}" title="Копировать">${v == null || v === "" ? "—" : esc(String(v))}</button>${editable[k] ? `<button type="button" class="dev-raw-edit" data-dev-edit="${esc(k)}">изменить</button>` : ""}</dd>`).join("")}</dl>`;
 }
 
 // Какие поля отчёта правятся напрямую и что подсказать. Статус, срок и исполнители — в самой карточке.
@@ -255,7 +297,7 @@ export async function fillReportDevPanel(box, publicId) {
       <button class="btn" data-dev-json>Скопировать запись</button>
       <button class="btn" data-dev-reset title="Бот снова напомнит о сроке и просрочке">Сбросить напоминания</button>
     </div>
-    ${rawHtml(row, REPORT_EDITABLE)}`;
+    ${rawHtml(row, REPORT_EDITABLE, REPORT_DOCS)}`;
   wireCopy(box, row);
   box.querySelectorAll("[data-dev-edit]").forEach(b => b.addEventListener("click", () => {
     editReportField(publicId, b.dataset.devEdit, row[b.dataset.devEdit], () => fillReportDevPanel(box, publicId));
@@ -287,7 +329,7 @@ export async function appendTitleDevPanel(sheet, titleId) {
         <button class="dev-save-btn" id="dev-binding-save">Сохранить привязку</button>
         <button class="btn" data-dev-json>Скопировать запись</button>
       </div>
-      ${rawHtml(row)}`;
+      ${rawHtml(row, {}, TITLE_DOCS)}`;
     wireCopy(box, row);
     const save = box.querySelector("#dev-binding-save");
     save.addEventListener("click", async () => {
