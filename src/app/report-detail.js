@@ -569,7 +569,7 @@ export async function openReportDetail(publicId) {
     });
     if (canEdit) {
       sheet.querySelector("#chip-status").addEventListener("click", () => changeStatusDialog([publicId], render, detail.status));
-      sheet.querySelector("#chip-assign").addEventListener("click", () => assignDialog([publicId], render));
+      sheet.querySelector("#chip-assign")?.addEventListener("click", () => assignDialog([publicId], render));
       sheet.querySelector("#chip-priority").addEventListener("click", () => priorityDialog(publicId, render, detail.priority));
       sheet.querySelector("#chip-deadline").addEventListener("click", () => deadlineDialog(publicId, detail.deadline, render));
     }
