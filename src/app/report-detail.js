@@ -406,8 +406,8 @@ export async function openReportDetail(publicId) {
 
       <div class="rd-tabs">
         <button class="rd-tab on" data-rd-tab="main">Обзор</button>
-        <button class="rd-tab" data-rd-tab="history">История</button>
-        <button class="rd-tab" data-rd-tab="activity">Активность</button>
+        ${detail.dub_only ? "" : `<button class="rd-tab" data-rd-tab="history">История</button>
+        <button class="rd-tab" data-rd-tab="activity">Активность</button>`}
         <button class="rd-tab" data-rd-tab="notifications">Уведомления<span class="rd-tab-bad" hidden></span></button>
         ${devModeActive() ? `<button class="rd-tab" data-rd-tab="dev">Служебное</button>` : ""}
         ${canEdit ? `<button class="rd-tab" id="btn-qc-track" title="Проверить звук дорожки">QC дорожки</button>` : ""}
@@ -489,7 +489,7 @@ export async function openReportDetail(publicId) {
               <div class="rd-dl"><span>Создан</span><span>${esc(authorName)} · ${esc(formatWhen(detail.created_at))}</span></div>
               <div class="rd-dl"><span>Команда</span><span>${(detail.assignees || []).length} чел.</span></div>
             </div>
-            <div class="rd-recent" id="rd-recent"><h4>Последняя активность</h4><div class="rd-recent-list"><div class="pf-quiet">Загружаем…</div></div></div>
+            <div class="rd-recent" id="rd-recent"${detail.dub_only ? " hidden" : ""}><h4>Последняя активность</h4><div class="rd-recent-list"><div class="pf-quiet">Загружаем…</div></div></div>
           </div>
           <div class="rd-side-foot">
             <button class="btn ghost" id="btn-pin-window">Открепить в окне</button>
@@ -524,7 +524,7 @@ export async function openReportDetail(publicId) {
       if (badge && r && r.failed) { badge.textContent = r.failed; badge.hidden = false; badge.title = `Не доставлено: ${r.failed}`; }
     }).catch(() => { /* вкладка просто без значка */ });
     // Последние события отчёта — в боковой колонке; не загрузились — блок просто не показываем.
-    Promise.all([apiGet(`/report/${publicId}/activity`, { offset: 0, page_size: 4 }), loadPeopleNames()]).then(([r]) => {
+    if (!detail.dub_only) Promise.all([apiGet(`/report/${publicId}/activity`, { offset: 0, page_size: 4 }), loadPeopleNames()]).then(([r]) => {
       const box = sheet.querySelector("#rd-recent .rd-recent-list");
       if (!box) return;
       const evs = (r && r.events) || [];
