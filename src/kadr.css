@@ -4759,3 +4759,6 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 /* Чат: сообщения без горизонтальной прокрутки, панель сведений убирается раньше, чем сжимает переписку */
 .ms-msgs { overflow-x: hidden; }
 @media (max-width: 1280px) { .ms-layout.info-open { grid-template-columns: 280px minmax(0, 1fr); } .ms-layout.info-open .ms-info { display: none; } }
+:root[data-theme="light"] .board-card.dead .kc-sg .hot, :root[data-theme="light"] .board-card.is-overdue .kc-sg .hot { color: #b3261e; text-shadow: none; }
+.board-card .kc-id { position: relative; z-index: 3; }
+:root[data-role="member"] .pf-card:has(> #idle-slot) { display: none; }

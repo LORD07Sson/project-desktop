@@ -3,7 +3,7 @@
 // только админам: «что мне записать и к какому сроку» нужно каждому.
 
 import { rollText } from "./roll-digits.js";
-import { state } from "./state.js";
+import { state, can } from "./state.js";
 import { apiGet, apiPost, tabSkeleton, toast, openSheet, dismissSheet } from "./api.js";
 import { $, esc } from "./utils.js";
 import { imgProxy, titleArt } from "./title-page.js";
@@ -170,11 +170,11 @@ export async function loadQueue() {
         <div class="q-empty-ic">☕</div>
         <b>На руках пусто</b>
         <p>Когда вам назначат серию, она появится здесь с обратным отсчётом до срока.</p>
-        <div class="q-empty-acts"><button class="btn primary" data-q-free>Серии без исполнителя</button><button class="btn" data-q-titles>Проголосовать за тайтлы</button></div>
+        <div class="q-empty-acts">${can("reports.list") ? `<button class="btn primary" data-q-free>Серии без исполнителя</button>` : ""}<button class="btn" data-q-titles>Проголосовать за тайтлы</button></div>
       </div>`;
     bindViewSwitch(root);
     root.querySelector("[data-q-titles]").addEventListener("click", () => switchTab("titles"));
-    root.querySelector("[data-q-free]").addEventListener("click", () => { switchTab("list"); document.querySelector("[data-qf=\"unassigned\"]")?.click(); });
+    root.querySelector("[data-q-free]")?.addEventListener("click", () => { switchTab("list"); document.querySelector("[data-qf=\"unassigned\"]")?.click(); });
     startTicker(root);
     return;
   }
