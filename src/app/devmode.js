@@ -5,7 +5,7 @@
 // (_require_owner) — фронту тут доверять нельзя.
 
 import { state } from "./state.js";
-import { apiGet, apiPost, askConfirm, toast } from "./api.js";
+import { apiGet, apiPost, askConfirm, openSheet, toast } from "./api.js";
 import { esc, relTime } from "./utils.js";
 import { actionLabel, forgetPeopleNames } from "./people-names.js";
 import { openExternal } from "./tauri.js";
@@ -194,8 +194,45 @@ export function wireDevPanel(root, telegramId, onSaved, d) {
 }
 
 // Все поля записи из базы: значение копируется кликом, вся запись — кнопкой.
-function rawHtml(row) {
-  return `<dl class="dev-raw">${Object.entries(row).map(([k, v]) => `<dt>${esc(k)}</dt><dd><button type="button" class="dev-raw-v" data-copy="${esc(String(v ?? ""))}" title="Копировать">${v == null || v === "" ? "—" : esc(String(v))}</button></dd>`).join("")}</dl>`;
+function rawHtml(row, editable = {}) {
+  return `<dl class="dev-raw">${Object.entries(row).map(([k, v]) => `<dt>${esc(k)}</dt><dd><button type="button" class="dev-raw-v" data-copy="${esc(String(v ?? ""))}" title="Копировать">${v == null || v === "" ? "—" : esc(String(v))}</button>${editable[k] ? `<button type="button" class="dev-raw-edit" data-dev-edit="${esc(k)}">изменить</button>` : ""}</dd>`).join("")}</dl>`;
+}
+
+// Какие поля отчёта правятся напрямую и что подсказать. Статус, срок и исполнители — в самой карточке.
+const REPORT_EDITABLE = {
+  title: "Короткое название, от 1 до 200 знаков",
+  created_at: "ГГГГ-ММ-ДД ЧЧ:ММ:СС",
+  user_id: "ID пользователя, создавшего отчёт (внутренний, не Telegram)",
+  title_id: "ID тайтла; пусто — без тайтла",
+  title_episode_id: "ID серии тайтла; пусто — без привязки",
+  work_role: "Роль; пусто — без роли",
+  pipeline_stage: "Номер этапа, целое число от нуля",
+  deadline_reminder_sent: "Целое число от нуля",
+  deadline_reminder_stage: "Целое число от нуля",
+  overdue_notified: "Целое число от нуля",
+  overdue_notified_at: "ГГГГ-ММ-ДД; пусто — не напоминали",
+};
+
+function editReportField(publicId, field, current, onSaved) {
+  const overlay = openSheet(`
+    <h2>${esc(field)}</h2>
+    <p class="tn-hint">${esc(publicId)}. ${esc(REPORT_EDITABLE[field])}. Правка идёт напрямую в базу, без уведомлений, и записывается в журнал.</p>
+    <div class="row"><input type="text" id="dev-field-value" value="${esc(String(current ?? ""))}" aria-label="Новое значение"></div>
+    <div class="sheet-actions">
+      <button class="btn ghost" data-close>Отмена</button>
+      <button class="btn primary" id="dev-field-save">Сохранить</button>
+    </div>`);
+  overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+  const save = overlay.querySelector("#dev-field-save");
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    try {
+      await apiPost(`/dev/report/${encodeURIComponent(publicId)}/field`, { field, value: overlay.querySelector("#dev-field-value").value });
+      overlay.remove();
+      toast("Поле сохранено.");
+      onSaved();
+    } catch (e) { toast(`Не удалось сохранить: ${e.message}`, "error"); save.disabled = false; }
+  });
 }
 
 function wireCopy(box, row) {
@@ -218,8 +255,11 @@ export async function fillReportDevPanel(box, publicId) {
       <button class="btn" data-dev-json>Скопировать запись</button>
       <button class="btn" data-dev-reset title="Бот снова напомнит о сроке и просрочке">Сбросить напоминания</button>
     </div>
-    ${rawHtml(row)}`;
+    ${rawHtml(row, REPORT_EDITABLE)}`;
   wireCopy(box, row);
+  box.querySelectorAll("[data-dev-edit]").forEach(b => b.addEventListener("click", () => {
+    editReportField(publicId, b.dataset.devEdit, row[b.dataset.devEdit], () => fillReportDevPanel(box, publicId));
+  }));
   box.querySelector("[data-dev-reset]").addEventListener("click", async () => {
     if (!await askConfirm(`Сбросить напоминания для ${publicId}? Бот сможет снова написать исполнителям о сроке и просрочке.`, { yes: "Сбросить", danger: true })) return;
     try {
