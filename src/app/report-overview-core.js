@@ -89,6 +89,6 @@ export function overviewKpis({ files, pipeline, status, deadline, overdue = fals
     { key: "progress", title: "Прогресс", value: `${prog.percent}%`, sub: `${prog.passed} из ${prog.total} этапов пройдено`, bar: prog.percent, tone: "" },
     { key: "deadline", title: "Срок", value: due.label, sub: due.date || "дата не указана", bar: null, tone: due.tone },
     { key: "voice", title: "Озвучка", value: total ? `${done} из ${total}` : "—", sub: voiceSub, bar: total ? Math.round(done / total * 100) : null, tone: "" },
-    { key: "files", title: "Материалы", value: `${c.total} ${pluralFiles(c.total)}`, sub: `${c.audio} аудио · ${c.subs} субтитры · ${c.video ? `${c.video} видео` : "видео нет"}`, bar: null, tone: "" },
+    { key: "files", title: "Материалы", value: `${c.total} ${pluralFiles(c.total)}`, sub: `${c.audio} аудио · ${c.subs} субтитры · ${c.video ? `${c.video} видео` : "видео нет"}${c.total - c.audio - c.subs - c.video > 0 ? ` · ${c.total - c.audio - c.subs - c.video} прочее` : ""}`, bar: null, tone: "" },
   ];
 }

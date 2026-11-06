@@ -3400,7 +3400,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-pipe { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .rd-pipe > h3 { margin-top: 0; font-size: 13px; }
 /* Колонка справа: срок сверху, исполнители аватарками (имя — в подсказке, снять — по наведению). */
-.rd-due { border-color: rgba(255, 90, 80, .35); }
+.rd-due.late { border-color: rgba(255, 90, 80, .35); }
 .rd-people { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 8px; }
 .rd-people > span:first-child { flex: 0 0 100%; margin-bottom: 8px; }
 .rd-people .rd-person { position: relative; flex: none; width: auto; padding: 0; margin: 0; background: none; border: 0; }

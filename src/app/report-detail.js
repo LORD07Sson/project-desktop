@@ -467,7 +467,7 @@ export async function openReportDetail(publicId) {
 
         <aside class="rd-side">
           <div class="rd-meta">
-            <div class="rd-meta-row rd-due"><span>Срок</span>
+            <div class="rd-meta-row rd-due${overdue ? " late" : ""}"><span>Срок</span>
               ${canEdit ? `<button class="rd-meta-btn" id="chip-deadline">${detail.deadline ? deadlineCellHtml(detail, overdue) : `<span class="ls-dl-none">без срока — поставить</span>`}</button>` : `<div class="rd-meta-btn" aria-disabled="true">${detail.deadline ? deadlineCellHtml(detail, overdue) : "без срока"}</div>`}</div>
             <div class="rd-meta-row rd-people"><span>Исполнители / кого уведомить</span>
               ${(detail.assignees || []).map(a => `<div class="rd-person" data-assignee="${a.telegram_id}" title="${esc(a.first_name || a.username || `ID ${a.telegram_id}`)}">
@@ -1228,7 +1228,7 @@ function productionHtml(detail, fileList, pipeInner = "") {
   const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal ? " primary" : ""}" id="report-assemble">🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
   // Что мешает сейчас — одной строкой и с кнопкой, а не угадыванием по четырём карточкам этапов.
-  const now = productionNow({ hasVideo, hasFinal, pipeLeft, canAssemble: can("reports.assemble"), canPost: can("posts.manage") });
+  const now = productionNow({ hasVideo, hasFinal, pipeLeft, hasPipeline: !!(detail.pipeline_roles && detail.pipeline_roles.length), canAssemble: can("reports.assemble"), canPost: can("posts.manage") });
   const nowAttr = now ? (now.act.jump ? `data-rd-jump="${now.act.jump}"` : `data-rd-click="${now.act.click}"`) : "";
   const nowHtml = now ? `
   <div class="rd-now ${now.tone}"><div><b>${now.title}</b>${now.sub ? `<small>${now.sub}</small>` : ""}</div><button type="button" class="rd-now-go" ${nowAttr}>${now.label}</button></div>` : "";
