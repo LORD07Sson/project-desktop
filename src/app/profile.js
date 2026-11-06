@@ -12,7 +12,7 @@ import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, media
 import { $, esc, isOverdue, relTime, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
 import { setQuickFilter, loadReports } from "./reports.js";
 import { switchTab } from "./tabs.js";
-import { donutHtml, donutLegendHtml, playDonutIntro } from "./charts.js";
+import { playDonutIntro } from "./charts.js";
 import { devModeActive, devPanelHtml, wireDevPanel } from "./devmode.js";
 import { openReportDetail } from "./report-detail.js";
 import { openRolesSheet } from "./roles.js";
