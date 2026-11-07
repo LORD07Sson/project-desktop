@@ -77,7 +77,7 @@ function syncAppAtmos() {
     de.style.setProperty("--fire-rgb", hexRgb(c.neon).join(", ")); de.style.setProperty("--gold-rgb", hexRgb(c.neon2).join(", ")); de.style.setProperty("--glow-rgb", hexRgb(c.neon).join(", "));
     de.style.setProperty("--ny-neon", c.neon); de.style.setProperty("--ny-neon2", c.neon2); de.style.setProperty("--ny-bg", c.bg);
     de.style.setProperty("--ny-panel", c.panel); de.style.setProperty("--ny-panel2", c.panel2);
-    de.style.setProperty("--ny-banner", `url("${srcOf(current)}")`);
+    de.style.setProperty("--ny-banner", `url("${current.k2}")`);   // размытый фон и шапка окна — 2K хватает, 4K только в большой шапке Nyaa
     const ny = rootEl();
     if (ny) setPalette(ny, c);
   } else if (de.dataset.nyAtmos) {
@@ -404,7 +404,7 @@ function wireRowTint(root) {
 function paintStrips() {
   const bar = document.getElementById("titlebar");
   if (!current || !bar) return;
-  const url = `url("${srcOf(current)}")`;
+  const url = `url("${current.k2}")`;
   let box = bar.querySelector(":scope > .tb-banner");
   if (!box) {
     bar.insertAdjacentHTML("afterbegin", `<div class="tb-banner" aria-hidden="true"><i></i></div>`);
@@ -422,7 +422,13 @@ function paintStrips() {
 
 /** При запуске приложения: выбрать баннер и раскрасить всё приложение его палитрой, не дожидаясь вкладки Nyaa. */
 export async function initAppAtmos() {
-  if (idx < 0) show(firstIndex(), true);
+  // Пока идёт заставка, ничего тяжёлого: декодировать баннер и перерисовывать фон окна — после неё.
+  for (let i = 0; i < 100 && document.getElementById("app-splash"); i++) await new Promise(r => setTimeout(r, 150));
+  if (idx < 0) {
+    const i = firstIndex();
+    try { const img = new Image(); img.src = banners[i].k2; await img.decode(); } catch (_) { /* покажем как есть */ }
+    if (idx < 0) show(i, true);
+  }
   if (!timer) restartTimer();
   await loadOwn();
 }

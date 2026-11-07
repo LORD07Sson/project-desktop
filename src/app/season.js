@@ -215,6 +215,7 @@ function wake() {
 function frame(t) {
   if (document.hidden || !document.hasFocus()) { raf = 0; last = 0; return; }
   raf = window.requestAnimationFrame(frame);
+  if (document.getElementById("app-splash")) { last = 0; return; }   // под заставкой частицы не рисуем — ей нужны все кадры
   if (last && t - last < FRAME_MS - 2) return;
   const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
   last = t;

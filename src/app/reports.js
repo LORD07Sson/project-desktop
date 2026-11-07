@@ -619,12 +619,9 @@ export function renderReports() {
     const left = state.total - state.reports.length;
     moreBtn.textContent = left > PAGE_SIZE ? `Показать ещё ${PAGE_SIZE} (осталось ${left})` : `Показать оставшиеся ${left}`;
   }
-  $("#statusbar").textContent =
-    (truncated
-      ? `Показаны ${state.reports.length} из ${state.total} · `
-      : `Отчётов: ${state.reports.length} · `) +
-    `клик по строке — открыть карточку, чекбоксы (Shift — диапазоном) — массовые операции · ` +
-    `Ctrl+Shift+P — показать/скрыть окно из любого места`;
+  $("#statusbar").textContent = truncated
+    ? `Показаны ${state.reports.length} из ${state.total}`
+    : `Отчётов: ${state.reports.length}`;
 
   $("#select-all").checked = state.reports.length > 0 && state.reports.every(r => state.selected.has(r.public_id));
   updateBulkBar();
