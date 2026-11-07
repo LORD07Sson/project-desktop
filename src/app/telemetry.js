@@ -189,7 +189,8 @@ export async function runNetCheck() {
   const timer = setTimeout(() => ctl.abort(), 8000);
   const t0 = window.performance.now();
   try {
-    await fetch(`${API_BASE}/whoami`, { headers: { "X-Init-Data": state.token || "" }, signal: ctl.signal, cache: "no-store" });
+    // Без cache: "no-store" — иначе каждый замер включал бы лишний предзапрос CORS (OPTIONS) и показывал двойную задержку.
+    await fetch(`${API_BASE}/whoami`, { headers: { "X-Init-Data": state.token || "" }, signal: ctl.signal });
     result.server_ok = true;                       // ответ получен (какой — неважно): сервер достижим
     result.server_ms = Math.round(window.performance.now() - t0);
   } catch (e) {

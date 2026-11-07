@@ -136,7 +136,9 @@ export async function api(method, path, body) {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    cache: (method === "GET" && path === "/me/permissions") || path.startsWith("/games/deals?") ? "no-store" : "default",
+    // Свежесть ответов обеспечивает сервер (Cache-Control: no-store). Режим "no-store" в самом запросе не ставим:
+    // с ним WebView2 не берёт разрешение CORS из кэша и шлёт OPTIONS на каждый запрос — лишний круг до сервера.
+    cache: "default",
     signal: controller.signal,
   };
   netStart();
