@@ -232,7 +232,7 @@ assert.ok(SIMILAR_QUERY.includes("recommendations"));
   assert.deepEqual(req.variables, { s0: "a", s1: "b" });
   assert.ok(req.query.includes("a1:Page"));
   assert.ok(coverBatchRequest(Array(20).fill("x")).query.length < 4000, "предел длины запроса в Rust");
-  assert.deepEqual(parseCoverBatch(JSON.stringify({ data: { a0: { media: [{ coverImage: { medium: "https://x/1.jpg" } }] }, a1: { media: [] } } }), 2), ["https://x/1.jpg", ""]);
+  assert.deepEqual(parseCoverBatch(JSON.stringify({ data: { a0: { media: [{ bannerImage: null, coverImage: { extraLarge: "https://x/1.jpg" } }] }, a1: { media: [] }, a2: { media: [{ bannerImage: "https://x/b.jpg", coverImage: { extraLarge: "https://x/2.jpg" } }] } } }), 3), ["https://x/1.jpg", "", "https://x/b.jpg"]);
   assert.equal(parseCoverBatch(JSON.stringify({ errors: [{}], data: null }), 2), null, "сбой не считается промахом");
   assert.equal(parseCoverBatch("не json", 1), null);
 }
@@ -270,7 +270,7 @@ console.log("nyaa-test: ok");
 
 {
   const { parseCover, coverKey } = await import("../src/app/nyaa-core.js");
-  assert.equal(parseCover('{"data":{"Media":{"id":1,"coverImage":{"medium":"https://s4.anilist.co/a.jpg"}}}}'), "https://s4.anilist.co/a.jpg");
+  assert.equal(parseCover('{"data":{"Media":{"id":1,"bannerImage":null,"coverImage":{"extraLarge":"https://s4.anilist.co/a.jpg"}}}}'), "https://s4.anilist.co/a.jpg");
   assert.equal(parseCover('{"data":{"Media":null}}'), "");
   assert.equal(parseCover("не json"), "");
   assert.equal(coverKey("[Sokudo] Re ZERO - S04E19 [1080p AV1]"), coverKey("[Breeze] Re ZERO - S04E19 [1080p AV1]"));

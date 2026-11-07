@@ -190,7 +190,8 @@ function statsHtml(list) {
 // ---------- обложки вместо значков ----------
 // Обложка берётся с AniList по названию тайтла (одна на аниме, не на каждую раздачу) и держится
 // в памяти; в localStorage лежит только адрес картинки. Не нашлась — остаётся значок.
-const COVERS_KEY = "project-nyaa-covers";
+const COVERS_KEY = "project-nyaa-covers-hd";   // адреса баннеров/больших постеров (прежние — 100×150)
+try { localStorage.removeItem("project-nyaa-covers"); } catch (_) { /* нет — и ладно */ }
 const coverUrls = (() => { try { return JSON.parse(localStorage.getItem(COVERS_KEY) || "{}"); } catch (_) { return {}; } })();
 const coverData = new Map();   // ключ → data-URL
 const coverBusy = new Set();
@@ -271,10 +272,10 @@ async function coverFallback(key, sample) {
 }
 
 // Готовые обложки живут на диске уменьшенными: при запуске список сразу с картинками, без скачивания заново.
-const COVER_DB = "project-nyaa-cover-cache-hd";   // обложки 360px (раньше 112px — на всю строку выходили мылом)
-try { indexedDB.deleteDatabase("project-nyaa-cover-cache"); } catch (_) { /* старого кэша может не быть */ }
-const COVER_SIZE = 360;
-const COVER_DB_LIMIT = 700;
+const COVER_DB = "project-nyaa-cover-cache-hd2";   // баннеры до 1280px и большие постеры (раньше 100×150 — на всю строку выходили мылом)
+try { ["project-nyaa-cover-cache", "project-nyaa-cover-cache-hd"].forEach(n => indexedDB.deleteDatabase(n)); } catch (_) { /* старого кэша может не быть */ }
+const COVER_SIZE = 420;
+const COVER_DB_LIMIT = 400;
 let coverDb = null;
 
 function openCoverDb() {
@@ -316,7 +317,7 @@ function shrinkCover(src) {
     const img = new Image();
     img.onload = () => {
       try {
-        const scale = Math.min(1, COVER_SIZE / Math.min(img.naturalWidth, img.naturalHeight));
+        const scale = Math.min(1, COVER_SIZE / Math.min(img.naturalWidth, img.naturalHeight), 1280 / img.naturalWidth);
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
         canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));

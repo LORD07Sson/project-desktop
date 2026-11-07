@@ -523,14 +523,17 @@ export const SIMILAR_QUERY = `query($s:String){Media(search:$s,type:ANIME){id si
 relations{edges{relationType node{id siteUrl format averageScore title{romaji english} coverImage{medium}}}}
 recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id siteUrl format averageScore title{romaji english} coverImage{medium}}}}}}`;
 
-export const COVER_QUERY = `query($s:String){Media(search:$s,type:ANIME){id coverImage{medium}}}`;
+export const COVER_QUERY = `query($s:String){Media(search:$s,type:ANIME){id bannerImage coverImage{extraLarge large}}}`;
 
 // AniList пускает около 30 запросов в минуту, поэтому ищем пачками. Page, а не Media: ненайденный Media обнуляет весь ответ.
 export const COVER_BATCH = 20;
 
+// Фон строки широкий — лучше всего баннер AniList (~1900×400), без него — постер в наибольшем размере.
+const bestPic = m => (m && (m.bannerImage || m.coverImage?.extraLarge || m.coverImage?.large)) || "";
+
 export function coverBatchRequest(terms) {
   const vars = terms.map((_, i) => `$s${i}:String`).join(",");
-  const body = terms.map((_, i) => `a${i}:Page(perPage:1){media(search:$s${i},type:ANIME){coverImage{medium}}}`).join(" ");
+  const body = terms.map((_, i) => `a${i}:Page(perPage:1){media(search:$s${i},type:ANIME){bannerImage coverImage{extraLarge large}}}`).join(" ");
   return { query: `query(${vars}){${body}}`, variables: Object.fromEntries(terms.map((t, i) => [`s${i}`, t])) };
 }
 
@@ -540,7 +543,7 @@ export function parseCoverBatch(text, count) {
     const data = JSON.parse(text).data;
     if (!data) return null;
     return Array.from({ length: count }, (_, i) => {
-      const u = data[`a${i}`]?.media?.[0]?.coverImage?.medium;
+      const u = bestPic(data[`a${i}`]?.media?.[0]);
       return /^https:\/\//.test(u || "") ? u : "";
     });
   } catch (_) { return null; }
@@ -549,7 +552,7 @@ export function parseCoverBatch(text, count) {
 /** Обложка из ответа AniList: https-адрес или пустая строка, если тайтл не нашёлся. */
 export function parseCover(text) {
   try {
-    const u = JSON.parse(text).data.Media.coverImage.medium;
+    const u = bestPic(JSON.parse(text).data.Media);
     return /^https:\/\//.test(u || "") ? u : "";
   } catch (_) { return ""; }
 }
