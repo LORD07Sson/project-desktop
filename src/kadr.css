@@ -4970,3 +4970,6 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .dl-x { flex: none; }
 .dl-note { overflow-wrap: anywhere; word-break: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .dl-card.ok .dl-bar { display: none; }
+.ny-dots button.pin { width: 20px; height: 20px; font-size: 11px; line-height: 20px; background: transparent; filter: grayscale(1); opacity: .55; transition: opacity .2s, filter .2s, transform .2s; }
+.ny-dots button.pin:hover { opacity: 1; background: transparent; }
+.ny-dots button.pin.on { width: 20px; filter: none; opacity: 1; background: transparent; box-shadow: none; transform: rotate(-20deg); text-shadow: 0 0 8px var(--ny-neon); }

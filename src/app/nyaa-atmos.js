@@ -28,6 +28,9 @@ const EVERY_MS = 5 * 60 * 1000;
 let idx = -1;
 let timer = null;
 let paused = false;
+// «Закрепить баннер»: слайд-шоу стоит на выбранном баннере, выбор запоминается на этом компьютере.
+let pinned = false;
+try { pinned = localStorage.getItem("project-nyaa-banner-pin") === "1"; } catch (_) { /* не критично */ }
 let current = null;
 let sparkColor = "#7cc7ff";
 const reduced = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -62,6 +65,7 @@ function syncAppAtmos() {
 function firstIndex() {
   let last = -1;
   try { last = Number(localStorage.getItem("project-nyaa-banner")); } catch (_) { /* не критично */ }
+  if (pinned && last >= 0 && last < banners.length) return last;
   let i = Math.floor(Math.random() * banners.length);
   if (banners.length > 1 && i === last) i = (i + 1) % banners.length;
   return i;
@@ -95,7 +99,7 @@ function restartTimer() {
   clearInterval(timer);
   timer = setInterval(() => {
     const r = rootEl();
-    if (!r || document.hidden || !r.offsetParent || paused) return;   // вкладка не на экране или курсор на баннере
+    if (!r || document.hidden || !r.offsetParent || paused || pinned) return;   // вкладка не на экране или курсор на баннере
     show(idx + 1, false);
   }, EVERY_MS);
 }
@@ -103,7 +107,8 @@ function paintDots(root) {
   const box = root.querySelector(".ny-dots");
   if (!box) return;
   box.innerHTML = banners.map((b, i) => `<button type="button" class="${i === idx ? "on" : ""}${b.own ? " own" : ""}" data-ny-dot="${i}" title="${b.own ? "Свой баннер — правый клик, чтобы убрать" : `Баннер ${i + 1}`}" aria-label="Баннер ${i + 1}"></button>`).join("")
-    + `<button type="button" class="add" data-ny-add title="Добавить свой баннер (увеличится нейросетью до 4K)" aria-label="Добавить свой баннер">+</button>`;
+    + `<button type="button" class="add" data-ny-add title="Добавить свой баннер (увеличится нейросетью до 4K)" aria-label="Добавить свой баннер">+</button>`
+    + `<button type="button" class="pin${pinned ? " on" : ""}" data-ny-pin title="${pinned ? "Баннер закреплён — нажми, чтобы снова менялись" : "Закрепить этот баннер"}" aria-label="Закрепить баннер" aria-pressed="${pinned}">📌</button>`;
 }
 
 // ---------- частицы в цвет баннера ----------
@@ -264,6 +269,11 @@ function wireHero(root) {
     const dot = e.target.closest("[data-ny-dot]");
     if (dot) { show(Number(dot.dataset.nyDot), false); restartTimer(); return; }
     if (e.target.closest("[data-ny-add]")) addOwn();
+    if (e.target.closest("[data-ny-pin]")) {
+      pinned = !pinned;
+      try { localStorage.setItem("project-nyaa-banner-pin", pinned ? "1" : "0"); } catch (_) { /* не критично */ }
+      paintDots(root);
+    }
   });
   hero.addEventListener("contextmenu", async e => {
     const dot = e.target.closest("[data-ny-dot]");
