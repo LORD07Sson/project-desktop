@@ -180,8 +180,18 @@ function savePendingNet(list) {
   try { localStorage.setItem(NET_PENDING_KEY, JSON.stringify(list.slice(-20))); } catch (_) { /* не критично */ }
 }
 
+let netBusy = false;
+let lastNetOk = true;
 export async function runNetCheck() {
   if (!trackingOn() || !state.token) return;
+  // При включении компьютера сетевые адаптеры поднимаются по очереди и «online» приходит пачкой — по проверке
+  // на каждое событие выходило ~10 провалов в одну секунду. Одна проверка за раз и не чаще раза в 30 секунд.
+  if (netBusy || Date.now() - lastNet < 30_000) return;
+  netBusy = true;
+  try { await netCheckOnce(); } finally { netBusy = false; }
+}
+
+async function netCheckOnce() {
   lastNet = Date.now();
   // at — когда проверка сделана: неудачные уходят на сервер позже, пачкой, и без него время сбоя терялось.
   const result = { at: Date.now(), server_ok: false, server_ms: null, server_error: "", dns_ok: null, dns_ms: null, dns_provider: "", dns_servers: [] };
@@ -196,14 +206,21 @@ export async function runNetCheck() {
   } catch (e) {
     result.server_error = e && e.name === "AbortError" ? "таймаут 8 с" : String((e && e.message) || e).slice(0, 100);
   } finally { clearTimeout(timer); }
+  lastNetOk = result.server_ok;
   try {
     const d = await invoke("net_diagnose");
     result.dns_ok = !!d.dns_ok; result.dns_ms = d.dns_ms; result.dns_provider = d.dns_provider; result.dns_servers = d.dns_servers;
   } catch (_) { /* не в приложении или команда недоступна */ }
   const queue = pendingNet();
-  if (!result.server_ok) { queue.push(result); savePendingNet(queue); return; }   // сервер недоступен — отправим позже
-  for (const item of queue.concat([result])) {
-    try { await apiPost("/telemetry/net", item); } catch (_) { savePendingNet([item]); return; }
+  if (!result.server_ok) {   // сервер недоступен — отправим позже; один провал в минуту, без дублей одного и того же сбоя
+    const last = queue[queue.length - 1];
+    if (!last || result.at - (last.at || 0) >= 60_000) { queue.push(result); savePendingNet(queue); }
+    return;
+  }
+  const all = queue.concat([result]);
+  for (let i = 0; i < all.length; i++) {
+    // не ушло — сохраняем это и все следующие (раньше оставалось только одно, остальные терялись)
+    try { await apiPost("/telemetry/net", all[i]); } catch (_) { savePendingNet(all.slice(i)); return; }
   }
   savePendingNet([]);
 }
@@ -213,7 +230,8 @@ function scheduleNetChecks() {
   if (netScheduled) return;
   netScheduled = true;
   runNetCheck();
-  setInterval(() => { if (Date.now() - lastNet >= NET_EVERY_MS) runNetCheck(); }, 60_000);
+  // после провала (например, программа запустилась раньше, чем появилась сеть) — повтор раз в минуту, а не через 20
+  setInterval(() => { if (Date.now() - lastNet >= (lastNetOk ? NET_EVERY_MS : 60_000)) runNetCheck(); }, 60_000);
   window.addEventListener("online", () => runNetCheck());
 }
 
