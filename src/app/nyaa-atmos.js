@@ -138,7 +138,7 @@ function restartTimer() {
 function paintDots(root) {
   const box = root.querySelector(".ny-dots");
   if (!box) return;
-  box.innerHTML = banners.map((b, i) => `<button type="button" class="${i === idx ? "on" : ""}${b.own ? " own" : ""}" data-ny-dot="${i}" title="${b.own ? "Свой баннер — правый клик, чтобы убрать" : `Баннер ${i + 1}`}" aria-label="Баннер ${i + 1}"></button>`).join("")
+  box.innerHTML = banners.map((b, i) => `<button type="button" class="${i === idx ? "on" : ""}${b.own ? " own" : ""}" data-ny-dot="${i}" title="${b.own ? "Свой баннер — правый клик: цвета или убрать" : `Баннер ${i + 1}`}" aria-label="Баннер ${i + 1}"></button>`).join("")
     + `<button type="button" class="add" data-ny-add title="Добавить свой баннер (увеличится нейросетью до 4K)" aria-label="Добавить свой баннер">+</button>`
     + `<button type="button" class="pin${pinned ? " on" : ""}" data-ny-pin title="${pinned ? "Баннер закреплён — нажми, чтобы снова менялись" : "Закрепить этот баннер"}" aria-label="Закрепить баннер" aria-pressed="${pinned}">📌</button>`;
 }
@@ -243,6 +243,62 @@ async function paletteOf(url) {
   const h1 = main.h, h2 = second.h;
   return { neon: hsl2hex(h1, 85, 64), neon2: hsl2hex(h2, 80, 70), bg: hsl2hex(h1, 40, 5), panel: hsl2hex(h1, 35, 8.5), panel2: hsl2hex(h1, 32, 12.5) };
 }
+function paletteFrom(neon, neon2) {
+  const [r, g, b] = hexRgb(neon);
+  const [h] = rgb2hsl(r, g, b);
+  return { neon, neon2, bg: hsl2hex(h, 40, 5), panel: hsl2hex(h, 35, 8.5), panel2: hsl2hex(h, 32, 12.5) };
+}
+async function savePal(id, pal) {
+  const rec = (await dbAll()).find(o => o.id === id);
+  if (!rec) return;
+  await dbPut({ ...rec, pal, auto: rec.auto || rec.pal });
+  await loadOwn();
+}
+
+// Цвета своего баннера: подобраны по картинке, но их можно поменять — главный и второй, остальное выводится из главного.
+function openPaletteEditor(b) {
+  const root = rootEl();
+  const hero = root && root.querySelector(".ny-hero");
+  if (!hero || !b || !b.own) return;
+  hero.querySelector(".ny-paled")?.remove();
+  hero.insertAdjacentHTML("beforeend", `<div class="ny-paled" role="dialog" aria-label="Цвета баннера">
+    <b>Цвета баннера</b>
+    <label><input type="color" data-pe="neon" value="${b.neon}"> Главный</label>
+    <label><input type="color" data-pe="neon2" value="${b.neon2}"> Второй</label>
+    <div class="ny-paled-acts">
+      <button type="button" class="btn ghost" data-pe-auto title="Снова подобрать по картинке">Авто</button>
+      <button type="button" class="btn ghost" data-pe-del>Убрать баннер</button>
+      <button type="button" class="btn primary" data-pe-ok>Готово</button>
+    </div></div>`);
+  const box = hero.querySelector(".ny-paled");
+  const id = b.id;
+  const preview = () => {
+    const pal = paletteFrom(box.querySelector('[data-pe="neon"]').value, box.querySelector('[data-pe="neon2"]').value);
+    Object.assign(b, pal); current = b;
+    setPalette(root, pal); syncAppAtmos();
+  };
+  box.querySelectorAll("input[type=color]").forEach(i => i.addEventListener("input", preview));
+  box.querySelector("[data-pe-auto]").addEventListener("click", async () => {
+    const rec = (await dbAll()).find(o => o.id === id);
+    const auto = (rec && (rec.auto || rec.pal)) || paletteFrom(b.neon, b.neon2);
+    box.querySelector('[data-pe="neon"]').value = auto.neon;
+    box.querySelector('[data-pe="neon2"]').value = auto.neon2;
+    preview();
+  });
+  box.querySelector("[data-pe-ok]").addEventListener("click", async () => {
+    await savePal(id, paletteFrom(box.querySelector('[data-pe="neon"]').value, box.querySelector('[data-pe="neon2"]').value));
+    box.remove();
+    show(banners.findIndex(x => x.id === id), true);
+  });
+  box.querySelector("[data-pe-del]").addEventListener("click", async () => {
+    if (!(await askConfirm("Убрать этот свой баннер?"))) return;
+    box.remove();
+    await dbDel(id);
+    await loadOwn();
+    show(Math.min(idx, banners.length - 1), false);
+  });
+}
+
 async function scaledBlob(blob, width) {
   const bmp = await window.createImageBitmap(blob);
   const h = Math.round(bmp.height * width / bmp.width);
@@ -283,7 +339,8 @@ export async function addOwnFromBytes(bytes) {
     await loadOwn();
     show(banners.findIndex(b => b.id === id), false);
     restartTimer();
-    toast("Баннер добавлен — палитра подобрана по картинке.", "success");
+    toast("Баннер добавлен — цвета подобраны по картинке, их можно поменять.", "success");
+    openPaletteEditor(banners.find(b => b.id === id));
     return id;
   } catch (e) {
     toast(`Баннер не добавился: ${e && e.message ? e.message : e}`, "error");
@@ -312,10 +369,8 @@ function wireHero(root) {
     const b = dot && banners[Number(dot.dataset.nyDot)];
     if (!b || !b.own) return;
     e.preventDefault();
-    if (!(await askConfirm("Убрать этот свой баннер?"))) return;
-    await dbDel(b.id);
-    await loadOwn();
-    show(Math.min(idx, banners.length - 1), false);
+    show(Number(dot.dataset.nyDot), true);
+    openPaletteEditor(banners[Number(dot.dataset.nyDot)]);
   });
 }
 

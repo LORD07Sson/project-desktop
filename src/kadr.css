@@ -5004,3 +5004,10 @@ body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 .tb-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--ny-bg, #000) 55%, transparent) 0%, color-mix(in srgb, var(--ny-bg, #000) 72%, transparent) 30%, color-mix(in srgb, var(--ny-bg, #000) 72%, transparent) 70%, color-mix(in srgb, var(--ny-bg, #000) 50%, transparent) 100%); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ny-neon, var(--fire)) 45%, transparent); }
 body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 :root[data-theme="light"] .tb-banner { display: none; }
+/* цвета своего баннера (nyaa-atmos.js openPaletteEditor) */
+.ny-paled { position: absolute !important; top: 52px; right: 16px; z-index: 3 !important; display: grid; gap: 8px; min-width: 230px; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ny-neon) 40%, transparent); background: color-mix(in srgb, var(--ny-bg) 82%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 14px 40px -16px var(--ny-neon); font-size: 12.5px; color: #fff; animation: kadr-pop .2s var(--kadr-ease); }
+.ny-paled > b { font-size: 13px; }
+.ny-paled label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.ny-paled input[type="color"] { width: 34px; height: 24px; padding: 0; border: 1px solid rgba(255, 255, 255, .25); border-radius: 6px; background: none; cursor: pointer; }
+.ny-paled-acts { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+.ny-paled-acts .btn { padding: 5px 10px; font-size: 12px; }
