@@ -635,6 +635,8 @@ function renderFaq(box) {
 
 // ---------- Заливка в Kodik (через Kodik Converter) ----------
 
+// Есть ли серия у DreamyVoice: в базе Kodik — уже в плеерах; в конвертере — залита, ждёт конвертации или модерации.
+const PRESENCE = { base: "✓ уже на Kodik", converter: "⏳ в конвертере", none: "нет на Kodik", unknown: "" };
 const UP_STAGE = { queued: "в очереди", file: "беру файл", pulling: "Kodik качает", done: "отправлено", failed: "ошибка" };
 let upTimer = 0;
 
@@ -649,15 +651,19 @@ async function renderUpload(box) {
   }
   box.innerHTML = `
     <p class="kk-dim">Те же финалы, что уходят на Anime 365. Kodik сам скачивает файл с нашего сервера по одноразовой ссылке — через твой компьютер видео не идёт. Перед отправкой карточку можно проверить и поправить; дальше конвертация и модерация у Kodik — статус во вкладке «Конвертер».</p>
+    <div class="kk-dim kk-count">Нет на Kodik: ${d.items.filter(i => i.presence === "none").length} из ${d.items.length}</div>
     <div class="kk-list">${d.items.map(it => {
       const st = it.kodik || {};
       const stage = it.running && !st.stage ? "queued" : st.stage;
+      const busy = ["queued", "file", "pulling"].includes(stage);
+      const has = it.presence === "base" || it.presence === "converter";
+      const badge = PRESENCE[it.presence] ? `<span class="kk-pres ${esc(it.presence)}">${esc(PRESENCE[it.presence])}${it.presence === "converter" && it.converter_status ? ` · ${esc(it.converter_status)}` : ""}</span>` : "";
       return `<div class="kk-dump kk-up" data-up-key="${esc(it.key)}">
-        <div><b>${esc(it.title || "?")} · ${esc(String(it.episode ?? "?"))} серия</b>
+        <div><b>${esc(it.title || "?")} · ${esc(String(it.episode ?? "?"))} серия</b> ${badge}
           <span class="kk-dim">${esc(it.file || "")}${it.size ? ` · ${fmtSize(it.size)}` : ""}</span>
           ${stage ? `<span class="kk-upst ${esc(stage)}">${esc(UP_STAGE[stage] || stage)}${st.text && stage !== "done" ? ` — ${esc(st.text)}` : ""}${st.error ? ` — ${esc(st.error)}` : ""}</span>` : ""}
         </div>
-        <div class="kk-dump-f">${["queued", "file", "pulling"].includes(stage) ? "" : `<button type="button" class="btn ${stage === "done" ? "ghost" : "primary"}" data-up-go>${stage === "done" ? "Залить ещё раз" : stage === "failed" ? "Повторить" : "Залить в Kodik"}</button>`}</div>
+        <div class="kk-dump-f">${busy ? "" : `<button type="button" class="btn ${stage === "done" || has ? "ghost" : "primary"}" data-up-go>${has ? "Заменить" : stage === "done" ? "Залить ещё раз" : stage === "failed" ? "Повторить" : "Залить в Kodik"}</button>`}</div>
       </div>`;
     }).join("") || `<div class="kk-dim">Готовых финалов нет.</div>`}</div>`;
   box.querySelectorAll("[data-up-go]").forEach(b => b.addEventListener("click", () => {
