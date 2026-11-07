@@ -107,6 +107,10 @@ const playerUrl = link => (link || "").startsWith("//") ? `https:${link}` : link
 
 // ---------- Каталог ----------
 
+// /list отдаёт по записи на пару «тайтл + озвучка», отсортировано по обновлению: на странице у тайтла оказывается
+// только озвучка, обновлённая последней. Полный набор озвучек догружаем поиском по Shikimori ID и держим здесь.
+const fullDubs = new Map(); // shikimori_id → все записи тайтла (по одной на озвучку) или null, пока грузится
+
 function groupResults(list) {
   const map = new Map();
   for (const r of list) {
@@ -114,7 +118,30 @@ function groupResults(list) {
     if (!map.has(key)) map.set(key, { key, main: r, dubs: [] });
     map.get(key).dubs.push(r);
   }
+  for (const g of map.values()) {
+    const full = g.main.shikimori_id ? fullDubs.get(String(g.main.shikimori_id)) : null;
+    if (!full) continue;
+    const seen = new Set(g.dubs.map(d => d.translation?.id ?? d.id));
+    for (const d of full) if (!seen.has(d.translation?.id ?? d.id)) { seen.add(d.translation?.id ?? d.id); g.dubs.push(d); }
+  }
   return [...map.values()];
+}
+
+// Догрузить озвучки тайтлов на экране (по 4 запроса за раз; сервер кэширует ответы Kodik на 5 минут).
+async function loadFullDubs(groups, onDone) {
+  const missing = [...new Set(groups.map(g => g.main.shikimori_id).filter(Boolean).map(String))].filter(sid => !fullDubs.has(sid));
+  if (!missing.length) return;
+  missing.forEach(sid => fullDubs.set(sid, null));
+  let next = 0;
+  const worker = async () => {
+    while (next < missing.length) {
+      const sid = missing[next++];
+      try { fullDubs.set(sid, (await apiGet("/kodik/api/search", { shikimori_id: sid, limit: 100 })).results || []); }
+      catch (_) { fullDubs.set(sid, []); }
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  onDone();
 }
 
 function posterOf(r) {
@@ -143,7 +170,7 @@ function cardHtml(g) {
       <span class="kk-dim kk-clamp1">${esc([r.title_orig, r.year, eps].filter(Boolean).join(" · "))}</span>
       <div class="kk-tags">${status ? `<span class="kk-tag ${esc(m.anime_status)}">${status}</span>` : ""}${genres.map(x => `<span class="kk-tag">${esc(x)}</span>`).join("")}</div>
       ${about ? `<p class="kk-about kk-clamp3">${esc(about)}</p>` : ""}
-      <div class="kk-dubs">${dubs.slice(0, 8).map(d => `<button type="button" class="kk-dub${/dreamy/i.test(d.translation?.title || "") ? " ours" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${progressOf(playerUrl(d.link)) ? "Продолжить просмотр" : "Открыть плеер"}">${progressOf(playerUrl(d.link)) ? "▶ " : ""}${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 8 ? `<span class="kk-dim">+${dubs.length - 8}</span>` : ""}</div>
+      <div class="kk-dubs">${dubs.map((d, di) => `<button type="button" class="kk-dub${/dreamy/i.test(d.translation?.title || "") ? " ours" : ""}${di >= 8 ? " kk-dub-more" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${progressOf(playerUrl(d.link)) ? "Продолжить просмотр" : "Открыть плеер"}">${progressOf(playerUrl(d.link)) ? "▶ " : ""}${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 8 ? `<button type="button" class="kk-dub kk-dub-toggle" data-more="+${dubs.length - 8}">+${dubs.length - 8}</button>` : ""}</div>
       <div class="kk-ids">${r.shikimori_id ? `<span>shikimori ${esc(r.shikimori_id)}</span>` : ""}${r.kinopoisk_id ? `<span>КП ${esc(r.kinopoisk_id)}</span>` : ""}<span>${esc(r.id)}</span></div>
     </div>
   </article>`;
@@ -212,6 +239,8 @@ async function renderCatalog(box) {
       const ph = document.createElement("div"); ph.className = "kk-noposter"; img.replaceWith(ph);
     }));
     list.querySelector("[data-kk-more]")?.addEventListener("click", async e => { e.target.disabled = true; await fetchCatalog(true).catch(err => toast(err.message, "error")); paint(); });
+    // Полный список озвучек — после того как карточки уже на экране; перерисуем, когда догрузится.
+    if (!cat.q) loadFullDubs(groups, () => { if (list.isConnected && !cat.q) paint(); });
   };
   const reload = async () => {
     list.innerHTML = `<div class="kk-dim">Загружаю…</div>`;
@@ -231,6 +260,8 @@ async function renderCatalog(box) {
   box.querySelector("[data-kk-reset]").addEventListener("click", () => { Object.assign(cat, { genre: "", year: "", country: "", quality: "", status: "", items: [] }); renderCatalog(box); });
   box.querySelector("[data-kk-status]").addEventListener("change", e => { cat.status = e.target.value; reload(); });
   list.addEventListener("click", e => {
+    const more = e.target.closest(".kk-dub-toggle");
+    if (more) { const card = more.closest(".kk-card"); const open = card.classList.toggle("kk-dubs-open"); more.textContent = open ? "свернуть" : more.dataset.more; return; }
     const p = e.target.closest("[data-kk-play]");
     if (p) openKodikPlayer(p.dataset.kkPlay, p.dataset.kkTitle);
   });
