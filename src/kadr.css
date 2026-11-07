@@ -4780,3 +4780,10 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .vault-log { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow: auto; }
 .vault-log-row { display: grid; grid-template-columns: 1fr 2fr auto; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .vault-log-row.bad { color: var(--danger, #e5484d); }
+.vault-tools { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.vault-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.vault-chip { border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 999px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.vault-chip span { opacity: .6; margin-left: 4px; }
+.vault-chip.on { background: var(--surface-2); border-color: var(--accent, currentColor); }
+.vault-kind { font-weight: 400; font-size: 12px; opacity: .6; margin-left: 6px; }
+.vault-item[hidden] { display: none; }

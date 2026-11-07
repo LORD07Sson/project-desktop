@@ -7,12 +7,16 @@ import { esc, relTime } from "./utils.js";
 import { personName, loadPeopleNames } from "./people-names.js";
 
 let session = "";
+let filterKind = "all";
+let query = "";
+const KINDS = { account: "Аккаунт", api: "API", token: "Токен", other: "Другое" };
+const KIND_ICON = { account: "👤", api: "🔌", token: "🔑", other: "📄" };
 let sessionUntil = 0;
 const CLIPBOARD_CLEAR_MS = 30_000;
 
 const ACTIONS = {
   phrase_set: "задал кодовую фразу", phrase_changed: "сменил кодовую фразу", unlocked: "открыл хранилище",
-  unlock_failed: "неверная фраза", revealed: "посмотрел", copied: "скопировал", saved: "сохранил", deleted: "удалил",
+  unlock_failed: "неверная фраза", renamed: "переименовал", revealed: "посмотрел", copied: "скопировал", saved: "сохранил", deleted: "удалил",
 };
 
 function isOpen() { return session && sessionUntil > Date.now(); }
@@ -104,7 +108,12 @@ async function renderList(box) {
       <button class="btn ghost" data-vault-phrase>Сменить фразу</button>
       <button class="btn ghost" data-vault-lock>Закрыть</button>
     </div>
+    <div class="vault-tools">
+      <input class="input" data-vault-q placeholder="Поиск по названию, прежнему названию, логину" value="${esc(query)}">
+      <div class="vault-chips">${["all", ...Object.keys(KINDS)].map(k => `<button class="vault-chip${filterKind === k ? " on" : ""}" data-kind="${k}">${k === "all" ? "Все" : KIND_ICON[k] + " " + KINDS[k]} <span>${k === "all" ? items.length : items.filter(i => i.kind === k).length}</span></button>`).join("")}</div>
+    </div>
     <div class="vault-list">${items.length ? items.map(itemHtml).join("") : `<div class="pf-quiet">Пока пусто.</div>`}</div>
+    <div class="pf-quiet" data-vault-none hidden>Ничего не нашлось.</div>
     <div class="sheet-actions"><button class="btn primary" data-vault-add>Добавить</button></div>`;
   tickTimer(box);
   box.querySelector("[data-vault-lock]").addEventListener("click", async () => {
@@ -112,6 +121,24 @@ async function renderList(box) {
     lockLocal();
     box.closest(".overlay")?.remove();
   });
+  const applyFilter = () => {
+    const q = query.trim().toLowerCase();
+    let shown = 0;
+    for (const row of box.querySelectorAll("[data-vault-id]")) {
+      const it = items.find(i => i.id === Number(row.dataset.vaultId));
+      const hay = [it.name, it.login, ...it.aliases].join(" ").toLowerCase();
+      const ok = (filterKind === "all" || it.kind === filterKind) && (!q || hay.includes(q));
+      row.hidden = !ok; if (ok) shown++;
+    }
+    box.querySelector("[data-vault-none]").hidden = !items.length || shown > 0;
+  };
+  box.querySelector("[data-vault-q]").addEventListener("input", e => { query = e.target.value; applyFilter(); });
+  for (const chip of box.querySelectorAll("[data-kind]")) chip.addEventListener("click", () => {
+    filterKind = chip.dataset.kind;
+    box.querySelectorAll("[data-kind]").forEach(c => c.classList.toggle("on", c === chip));
+    applyFilter();
+  });
+  applyFilter();
   box.querySelector("[data-vault-add]").addEventListener("click", () => renderEdit(box, null));
   box.querySelector("[data-vault-log]").addEventListener("click", () => renderLog(box));
   box.querySelector("[data-vault-phrase]").addEventListener("click", () => renderPhrase(box));
@@ -139,6 +166,7 @@ async function renderList(box) {
     });
     row.querySelector("[data-copy-login]")?.addEventListener("click", () => navigator.clipboard.writeText(item.login).then(() => toast("Логин скопирован", "success")));
     row.querySelector("[data-edit]").addEventListener("click", () => renderEdit(box, item));
+    row.querySelector("[data-rename]").addEventListener("click", () => renderRename(box, item));
     row.querySelector("[data-del]").addEventListener("click", async () => {
       if (!await askConfirm(`Удалить «${item.name}» навсегда?`)) return;
       try { await call("delete", { id }); renderList(box); } catch (err) { toast(err.message, "error"); }
@@ -149,7 +177,8 @@ async function renderList(box) {
 function itemHtml(i) {
   return `<div class="vault-item" data-vault-id="${i.id}">
     <div class="vault-main">
-      <b>${esc(i.name)}</b>
+      <b>${KIND_ICON[i.kind] || "📄"} ${esc(i.name)} <span class="vault-kind">${KINDS[i.kind] || KINDS.other}</span></b>
+      ${i.aliases.length ? `<span class="pf-quiet">раньше: ${i.aliases.map(esc).join(", ")}</span>` : ""}
       ${i.login ? `<button class="vault-login" data-copy-login title="Копировать логин">${esc(i.login)}</button>` : ""}
       <code class="vault-val">••••••••</code>
       ${i.note ? `<details class="dev-doc"><summary>заметка</summary><div>${esc(i.note)}</div></details>` : ""}
@@ -158,6 +187,7 @@ function itemHtml(i) {
     <div class="vault-actions">
       <button class="btn ghost" data-show>Показать</button>
       <button class="btn ghost" data-copy-secret>Копировать</button>
+      <button class="btn ghost" data-rename>Переименовать</button>
       <button class="btn ghost" data-edit>Изменить</button>
       <button class="btn ghost danger" data-del>✕</button>
     </div>
@@ -181,6 +211,8 @@ function renderEdit(box, item) {
     <h3>${item ? "Изменить запись" : "Новая запись"}</h3>
     <form class="vault-form">
       <input class="input" name="name" placeholder="Название (например, Kitsu API)" maxlength="80" required value="${esc(item?.name || "")}">
+      <select class="input" name="kind">${Object.entries(KINDS).map(([k, t]) => `<option value="${k}"${(item?.kind || (filterKind !== "all" ? filterKind : "account")) === k ? " selected" : ""}>${KIND_ICON[k]} ${t}</option>`).join("")}</select>
+      ${item?.aliases?.length ? `<div class="pf-quiet">Прежние названия: ${item.aliases.map(esc).join(", ")}</div>` : ""}
       <input class="input" name="login" placeholder="Логин или почта (необязательно)" maxlength="200" autocomplete="off" value="${esc(item?.login || "")}">
       <textarea class="input" name="value" rows="3" autocomplete="off" placeholder="${item ? "Новое значение — оставь пустым, чтобы не менять" : "Пароль, токен или ключ"}" ${item ? "" : "required"}></textarea>
       <textarea class="input" name="note" rows="2" maxlength="1000" placeholder="Заметка: где используется, когда менять">${esc(item?.note || "")}</textarea>
@@ -194,8 +226,31 @@ function renderEdit(box, item) {
   form.addEventListener("submit", async e => {
     e.preventDefault();
     try {
-      await call("save", { id: item?.id || 0, name: form.name.value, login: form.login.value, note: form.note.value, value: form.value.value });
+      await call("save", { id: item?.id || 0, kind: form.kind.value, name: form.name.value, login: form.login.value, note: form.note.value, value: form.value.value });
       toast("Сохранено", "success");
+      renderList(box);
+    } catch (err) { toast(err.message, "error"); }
+  });
+}
+
+// Сервис переехал или сменил имя: меняем только название, старое остаётся в «раньше» и ищется поиском.
+function renderRename(box, item) {
+  box.innerHTML = `
+    <h3>Переименовать «${esc(item.name)}»</h3>
+    <form class="vault-form">
+      <input class="input" name="name" maxlength="80" required value="${esc(item.name)}">
+      <p class="pf-quiet">Старое название сохранится в записи как прежнее — по нему тоже можно будет найти.</p>
+      <div class="sheet-actions"><button type="button" class="btn ghost" data-back>Назад</button><button type="submit" class="btn primary">Переименовать</button></div>
+    </form>`;
+  const form = box.querySelector("form");
+  form.name.select();
+  box.querySelector("[data-back]").addEventListener("click", () => renderList(box));
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    if (form.name.value.trim() === item.name) { renderList(box); return; }
+    try {
+      await call("save", { id: item.id, kind: item.kind, name: form.name.value, login: item.login, note: item.note, value: "" });
+      toast("Переименовано", "success");
       renderList(box);
     } catch (err) { toast(err.message, "error"); }
   });
