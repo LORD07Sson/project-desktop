@@ -22,6 +22,7 @@ import {
   levelOf, serialize, deserialize, SLOW_MS, ageText, durText, pushActivity, filterActivity, nextCheckIn,
 } from "./mirror-health.js";
 import { $, esc } from "./utils.js";
+import { applyBanner, cascadeRows, countUp } from "./nyaa-atmos.js";
 import {
   CATEGORIES, FILTERS, parseNyaaRss, magnetLink, sortItems, relTime, fmtDate,
   splitTitle, categoryKind, summarize, fmtBytes, torrentFileName,
@@ -839,7 +840,9 @@ function paintList() {
   paintStatus();
   const list = view();
   $("#ny-list").innerHTML = listHtml();
+  cascadeRows($("#ny-list"));
   $("#ny-stats").innerHTML = statsHtml(list);
+  countUp($("#ny-stats"));
   const bar = $("#ny-bar");
   bar.innerHTML = barHtml();
   bar.hidden = !selected.size;
@@ -2498,6 +2501,7 @@ export async function loadNyaa() {
   maybeWarnBeta();
   if (!body.querySelector(".ny")) {
     body.innerHTML = shellHtml();
+    applyBanner(body.querySelector(".ny"));
     paintStatic();
     wire(body.querySelector(".ny"));
     paintMonitorBadge();

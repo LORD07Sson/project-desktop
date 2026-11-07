@@ -4787,3 +4787,93 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .vault-chip.on { background: var(--surface-2); border-color: var(--accent, currentColor); }
 .vault-kind { font-weight: 400; font-size: 12px; opacity: .6; margin-left: 6px; }
 .vault-item[hidden] { display: none; }
+
+/* ---------- Nyaa: «баннеры» — обложка размытым фоном всей строки, слева затемнение, название поверх ---------- */
+.ny-list { gap: 10px; }
+.ny-list .ny-row { position: relative; overflow: hidden; isolation: isolate; min-height: 92px; padding: 14px 18px; border-radius: 14px !important; border: 0 !important; background: var(--ny-panel, #0e1016) !important; }
+.ny-list .ny-row > .ny-main { grid-column: 3; }
+.ny-list .ny-kind.has-cover { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; z-index: -1; opacity: .28; filter: blur(1px); transition: opacity .2s; }
+.ny-list .ny-kind.has-cover img { object-position: center 25%; }
+.ny-list .ny-row::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--ny-panel, #0e1016) 25%, color-mix(in srgb, var(--ny-panel, #0e1016) 35%, transparent) 55%, color-mix(in srgb, var(--ny-panel, #0e1016) 82%, transparent) 100%); pointer-events: none; }
+.ny-list .ny-row:hover .ny-kind.has-cover { opacity: .42; }
+.ny-list .ny-row.sel { box-shadow: inset 0 0 0 2px rgba(58, 166, 255, .6) !important; }
+.ny-list .ny-kind:not(.has-cover) { opacity: .5; }
+.ny-list .ny-row.sk::after { display: none; }
+.ny-list .ny-title { font-size: 15px; font-weight: 800; -webkit-line-clamp: 1; }
+.ny-list .ny-title em { background: rgba(255, 255, 255, .12); color: #fff; }
+
+/* ---------- Nyaa: баннер-слайд-шоу в шапке и палитра баннера на всю страницу (applyBanner/setPalette в nyaa.js) ---------- */
+@property --ny-neon { syntax: "<color>"; inherits: true; initial-value: #7cc7ff; }
+@property --ny-neon2 { syntax: "<color>"; inherits: true; initial-value: #f2c46d; }
+@property --ny-bg { syntax: "<color>"; inherits: true; initial-value: #08101a; }
+@property --ny-panel { syntax: "<color>"; inherits: true; initial-value: #0e1724; }
+@property --ny-panel2 { syntax: "<color>"; inherits: true; initial-value: #142135; }
+.ny {
+  transition: --ny-neon 1.4s ease, --ny-neon2 1.4s ease, --ny-bg 1.4s ease, --ny-panel 1.4s ease, --ny-panel2 1.4s ease;
+  /* общие переменные страницы — из палитры баннера: панели, линии, выделение, акцент, текст */
+  --fire: var(--ny-neon); --ember: var(--ny-neon); --gold: var(--ny-neon2);
+  --surface-2: var(--ny-panel); --glass-bg: color-mix(in srgb, var(--ny-panel) 80%, transparent); --glass-border: color-mix(in srgb, var(--ny-neon) 18%, transparent);
+  --line: color-mix(in srgb, var(--ny-neon) 14%, transparent);
+  --n-hover: color-mix(in srgb, var(--ny-neon) 7%, transparent); --n-press: color-mix(in srgb, var(--ny-neon) 12%, transparent); --n-sel: color-mix(in srgb, var(--ny-neon) 15%, transparent);
+  --n-line: color-mix(in srgb, var(--ny-neon) 11%, transparent); --n-line-i: color-mix(in srgb, var(--ny-neon) 22%, transparent); --n-line-f: color-mix(in srgb, var(--ny-neon) 65%, transparent);
+  --n-t2: color-mix(in srgb, #fff 74%, var(--ny-neon)); --n-t3: color-mix(in srgb, #8a8f9c 75%, var(--ny-neon));
+  --ink: #f2f4f8; --ink-soft: color-mix(in srgb, #fff 74%, var(--ny-neon)); --ink-dim: color-mix(in srgb, #8a8f9c 75%, var(--ny-neon)); --n-t1: var(--ink); color: var(--ink);
+  position: relative; padding: 0 18px 28px; border-radius: 24px;
+  background: radial-gradient(1100px 420px at 72% 0%, color-mix(in srgb, var(--ny-neon) 13%, transparent), transparent 62%), radial-gradient(800px 500px at 0% 100%, color-mix(in srgb, var(--ny-neon2) 7%, transparent), transparent 60%), var(--ny-bg);
+}
+/* шапка с баннером */
+.ny-hero { position: relative; isolation: isolate; overflow: hidden; min-height: 230px; align-items: flex-end; padding: 26px 28px 22px; border-radius: 20px; border: 1px solid color-mix(in srgb, var(--ny-neon) 45%, transparent); background: var(--ny-bg); box-shadow: 0 18px 60px -28px var(--ny-neon), 0 0 40px -18px var(--ny-neon2); }
+.ny-hero-bg { position: absolute; inset: 0; z-index: -2; background: center / cover no-repeat; opacity: 0; transform: scale(1.06); transition: opacity 1.4s ease, transform 8s ease-out; }
+.ny-hero-bg.on { opacity: 1; transform: scale(1.02); }
+.ny-hero-bg { top: -60px; translate: 0 var(--ny-par, 0px); }
+.ny-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, color-mix(in srgb, var(--ny-bg) 94%, transparent) 0%, color-mix(in srgb, var(--ny-bg) 55%, transparent) 38%, transparent 65%), linear-gradient(0deg, color-mix(in srgb, var(--ny-bg) 88%, transparent) 0%, transparent 55%); }
+.ny-hero h2 { color: #fff; font-size: 34px; text-shadow: 0 0 18px color-mix(in srgb, var(--ny-neon) 70%, transparent), 0 2px 8px rgba(0, 0, 0, .6); }
+.ny-hero .ny-beta { color: var(--ny-neon); border-color: color-mix(in srgb, var(--ny-neon) 60%, transparent); background: color-mix(in srgb, var(--ny-neon) 14%, transparent); animation: ny-glow 3.2s ease-in-out infinite; }
+.ny-hero p { color: rgba(255, 255, 255, .8); text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
+.ny-hero .ny-stat { background: color-mix(in srgb, var(--ny-bg) 60%, transparent); border: 1px solid color-mix(in srgb, var(--ny-neon) 35%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.ny-hero .ny-stat b { color: #fff; text-shadow: 0 0 12px color-mix(in srgb, var(--ny-neon) 55%, transparent); }
+.ny-hero .ny-stat span { color: rgba(255, 255, 255, .72); }
+/* панели под баннером: поиск, переключатели, статус, заголовок таблицы, дни, меню слева */
+.ny .ny-search { background: var(--ny-panel); border-color: color-mix(in srgb, var(--ny-neon) 20%, transparent); }
+.ny .ny-search:focus-within { border-color: color-mix(in srgb, var(--ny-neon) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ny-neon) 18%, transparent); }
+.ny #ny-go { background: var(--ny-neon); color: #08090d; box-shadow: 0 0 18px -4px var(--ny-neon); animation: ny-glow 3.2s ease-in-out infinite; }
+.ny .ny-flt-btn, .ny .ny-ib.wide { background: var(--ny-panel); border-color: color-mix(in srgb, var(--ny-neon) 18%, transparent); }
+.ny #ny-view button.on { color: var(--ny-neon); background: color-mix(in srgb, var(--ny-neon) 14%, transparent); text-shadow: 0 0 10px color-mix(in srgb, var(--ny-neon) 60%, transparent); }
+.ny .ny-status { background: var(--ny-panel); border-color: color-mix(in srgb, var(--ny-neon) 16%, transparent); }
+.ny .ny-head { background: var(--ny-panel2); border-color: color-mix(in srgb, var(--ny-neon) 18%, transparent); }
+.ny .ny-head .ny-sorth.on { color: var(--ny-neon); }
+.ny .ny-list > .ny-day { background: var(--ny-panel2); color: var(--ny-neon2); border-color: color-mix(in srgb, var(--ny-neon) 18%, transparent); }
+.ny .ny-side .ny-seg button.on, .ny .ny-cats button.on { background: color-mix(in srgb, var(--ny-neon) 14%, transparent); box-shadow: inset 3px 0 0 var(--ny-neon); color: #fff; }
+.ny .ny-side-h { color: color-mix(in srgb, var(--ny-neon) 55%, #8a8f9c); }
+.ny input[type="checkbox"] { accent-color: var(--ny-neon); }
+/* строки */
+.ny-list .ny-row:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--row-neon, var(--ny-neon)) 50%, transparent), 0 8px 30px -12px var(--row-neon, var(--ny-neon)) !important; }
+.ny-list .ny-row.sel { box-shadow: inset 0 0 0 2px var(--ny-neon), 0 0 24px -10px var(--ny-neon) !important; }
+.ny-list .ny-title em { background: color-mix(in srgb, var(--ny-neon) 22%, transparent); color: #fff; }
+.ny-list .ny-nums .se { color: var(--ny-neon); }
+.ny-list .ny-tags i { background: color-mix(in srgb, var(--ny-neon) 10%, transparent); color: color-mix(in srgb, #fff 70%, var(--ny-neon)); }
+@keyframes ny-glow { 0%, 100% { box-shadow: 0 0 12px -6px var(--ny-neon); } 50% { box-shadow: 0 0 22px -2px var(--ny-neon); } }
+@media (prefers-reduced-motion: reduce) { .ny-hero .ny-beta, .ny #ny-go { animation: none; } .ny-hero-bg { transition: opacity .3s; transform: none; } }
+
+/* ---------- Nyaa: атмосфера (nyaa-atmos.js) — точки слайд-шоу, полоска при прокрутке, частицы, каскад, атмосфера на всё приложение ---------- */
+.ny-hero > :not(.ny-hero-bg):not(.ny-sparks) { position: relative; z-index: 1; }
+.ny-sparks { position: absolute; inset: 0; z-index: 0; pointer-events: none; mix-blend-mode: screen; }
+.ny-dots { position: absolute !important; top: 14px; right: 16px; z-index: 2 !important; display: flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 99px; background: color-mix(in srgb, var(--ny-bg) 55%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.ny-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 99px; background: rgba(255, 255, 255, .35); cursor: pointer; transition: width .35s, background-color .35s, box-shadow .35s; }
+.ny-dots button:hover { background: rgba(255, 255, 255, .7); }
+.ny-dots button.on { width: 22px; background: var(--ny-neon); box-shadow: 0 0 10px var(--ny-neon); }
+.ny-dots button.own { outline: 1px dashed rgba(255, 255, 255, .5); outline-offset: 2px; }
+.ny-dots button.add { width: 18px; height: 18px; line-height: 16px; font-size: 14px; font-weight: 800; color: #fff; background: rgba(255, 255, 255, .14); }
+.ny-dots button.add:hover { background: var(--ny-neon); color: #08090d; }
+.ny-mini { position: sticky; top: 0; height: 0; z-index: 6; }
+.ny-mini > div { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 18px; margin: 0 -18px; border-bottom: 1px solid color-mix(in srgb, var(--ny-neon) 35%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--ny-panel) 92%, transparent), color-mix(in srgb, var(--ny-panel2) 85%, transparent)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 10px 30px -18px var(--ny-neon); transform: translateY(-110%); opacity: 0; transition: transform .35s ease, opacity .35s ease; pointer-events: none; }
+.ny-mini b { font-size: 17px; color: #fff; text-shadow: 0 0 12px color-mix(in srgb, var(--ny-neon) 70%, transparent); }
+.ny-mini span { font-size: 10.5px; font-weight: 700; color: var(--ny-neon); }
+.ny.ny-compact .ny-mini > div { transform: none; opacity: 1; }
+.ny-in { animation: ny-rise .5s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--ny-i, 0) * 26ms); }
+@keyframes ny-rise { from { opacity: 0; transform: translateY(12px); } }
+/* пока открыта Nyaa — атмосфера баннера на всём приложении */
+:root[data-ny-atmos]:not([data-theme="light"]) body { background-color: var(--ny-bg) !important; background-image: radial-gradient(1400px 700px at 75% -10%, color-mix(in srgb, var(--ny-neon) 12%, transparent), transparent 60%), radial-gradient(900px 600px at 0% 110%, color-mix(in srgb, var(--ny-neon2) 8%, transparent), transparent 60%) !important; transition: background-color 1.4s ease; }
+:root[data-ny-atmos] .tab-btn.active { color: var(--ny-neon); text-shadow: 0 0 12px color-mix(in srgb, var(--ny-neon) 60%, transparent); }
+.ny.ny-compact .ny-day { top: 52px; transition: top .35s ease; }
+.ny.ny-compact .ny-head { top: 46px; }
