@@ -3,7 +3,7 @@
 // Каталог и озвучки — живые данные API; остальное — справочник по кабинету для разработчиков
 // с генераторами ссылок и кодом, который можно сразу скопировать.
 import { $, esc } from "./utils.js";
-import { apiGet, apiPost, openSheet, toast } from "./api.js";
+import { apiGet, apiPost, openSheet, toast, mediaUrl } from "./api.js";
 import { openExternal, pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
 import { loadA365 } from "./a365.js";
@@ -127,12 +127,17 @@ function cardHtml(g) {
   const poster = posterOf(r);
   const eps = r.episodes_count ? `${r.last_episode || "?"} из ${m.episodes_total || r.episodes_count} эп.` : (r.type || "").includes("serial") ? "" : "фильм";
   const dubs = [...g.dubs].sort((a, b) => (b.last_episode || 0) - (a.last_episode || 0));
+  const genres = (m.anime_genres || m.genres || []).slice(0, 4);
+  const about = m.anime_description || m.description || "";
+  const status = ({ ongoing: "онгоинг", released: "вышло", anons: "анонс" })[m.anime_status] || "";
   return `<article class="kk-card">
-    ${poster ? `<img src="${esc(poster)}" alt="" loading="lazy">` : `<div class="kk-noposter"></div>`}
+    <div class="kk-cover">${poster ? `<img src="${esc(poster)}" alt="" loading="lazy">` : `<div class="kk-noposter"></div>`}${m.shikimori_rating ? `<span class="kk-rate">★ ${esc(String(m.shikimori_rating))}</span>` : ""}</div>
     <div class="kk-card-main">
-      <b>${esc(r.title)}</b>
-      <span class="kk-dim">${esc([r.title_orig, r.year, eps, m.anime_status && ({ ongoing: "онгоинг", released: "вышло", anons: "анонс" })[m.anime_status], m.shikimori_rating && `★ ${m.shikimori_rating}`].filter(Boolean).join(" · "))}</span>
-      <div class="kk-dubs">${dubs.slice(0, 12).map(d => `<button type="button" class="kk-dub${/dreamy/i.test(d.translation?.title || "") ? " ours" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${progressOf(playerUrl(d.link)) ? "Продолжить просмотр" : "Открыть плеер"}">${progressOf(playerUrl(d.link)) ? "▶ " : ""}${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 12 ? `<span class="kk-dim">+${dubs.length - 12}</span>` : ""}</div>
+      <b class="kk-clamp2">${esc(r.title)}</b>
+      <span class="kk-dim kk-clamp1">${esc([r.title_orig, r.year, eps].filter(Boolean).join(" · "))}</span>
+      <div class="kk-tags">${status ? `<span class="kk-tag ${esc(m.anime_status)}">${status}</span>` : ""}${genres.map(x => `<span class="kk-tag">${esc(x)}</span>`).join("")}</div>
+      ${about ? `<p class="kk-about kk-clamp3">${esc(about)}</p>` : ""}
+      <div class="kk-dubs">${dubs.slice(0, 8).map(d => `<button type="button" class="kk-dub${/dreamy/i.test(d.translation?.title || "") ? " ours" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${progressOf(playerUrl(d.link)) ? "Продолжить просмотр" : "Открыть плеер"}">${progressOf(playerUrl(d.link)) ? "▶ " : ""}${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 8 ? `<span class="kk-dim">+${dubs.length - 8}</span>` : ""}</div>
       <div class="kk-ids">${r.shikimori_id ? `<span>shikimori ${esc(r.shikimori_id)}</span>` : ""}${r.kinopoisk_id ? `<span>КП ${esc(r.kinopoisk_id)}</span>` : ""}<span>${esc(r.id)}</span></div>
     </div>
   </article>`;
@@ -192,8 +197,10 @@ async function renderCatalog(box) {
     // Фильтра по качеству в API нет — отбираем по полю quality в ответе.
     const groups = groupResults(cat.quality ? cat.items.filter(r => r.quality === cat.quality) : cat.items);
     list.innerHTML = groups.length
-      ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${Number.isFinite(Number(cat.total)) ? Number(cat.total) : "?"} материалов`}</div>${groups.map(cardHtml).join("")}${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
+      ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${Number.isFinite(Number(cat.total)) ? Number(cat.total) : "?"} материалов`}</div><div class="kk-grid kk-grid-wide">${groups.map(cardHtml).join("")}</div>${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
       : `<div class="kk-dim">Ничего не нашлось.</div>`;
+    // Битый адрес постера у Kodik — показываем заглушку, а не значок сломанной картинки.
+    list.querySelectorAll(".kk-cover img").forEach(img => img.addEventListener("error", () => { const ph = document.createElement("div"); ph.className = "kk-noposter"; img.replaceWith(ph); }, { once: true }));
     list.querySelector("[data-kk-more]")?.addEventListener("click", async e => { e.target.disabled = true; await fetchCatalog(true).catch(err => toast(err.message, "error")); paint(); });
   };
   const reload = async () => {
@@ -329,9 +336,9 @@ async function renderDumps(box) {
       groups.get(base).push(f);
     }
     const order = Object.keys(DUMP_LABEL);
-    out.className = "kk-dumps";
+    out.className = "kk-dumps kk-grid";
     out.innerHTML = [...groups.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).map(([base, list]) => `
-      <div class="kk-dump"><div><b>${esc(DUMP_LABEL[base] || base)}</b><span class="kk-dim">${esc(list[0].modified ? new Date(list[0].modified).toLocaleString("ru-RU") : "")}</span></div>
+      <div class="kk-dump kk-dcard"><div><span class="kk-dicon">${base.startsWith("films") ? "🎬" : base.startsWith("serials") ? "📺" : "📅"}</span><b>${esc(DUMP_LABEL[base] || base)}</b><span class="kk-dim">${esc(list[0].modified ? new Date(list[0].modified).toLocaleString("ru-RU") : "")}</span></div>
       <div class="kk-dump-f">${list.map(f => `<button type="button" class="btn ghost" data-kk-dump="${esc(f.key)}" data-kk-name="${esc(`kodik-${f.name.replace("/", "-")}`)}">${esc(f.name.split(".").pop().toUpperCase())} · ${fmtSize(f.size)}</button>`).join("")}</div></div>`).join("");
     out.addEventListener("click", async e => {
       const b = e.target.closest("[data-kk-dump]");
@@ -556,62 +563,151 @@ const DLE = [
 
 function renderDle(box) {
   box.innerHTML = `<p class="kk-dim">Модули для движка DataLife Engine — если сайт на DLE. Установка, обновление и удаление каждого расписаны в кабинете.</p>
-    ${DLE.map(([n, k, d]) => `<div class="kk-dump"><div><b>${esc(n)}</b><span class="kk-dim">${esc(k)}</span></div><div class="kk-dim">${esc(d)}</div></div>`).join("")}
+    <div class="kk-grid">${DLE.map(([n, k, d]) => `<div class="kk-dump kk-dcard"><div><b>${esc(n)}</b><span class="kk-dim">${esc(k)}</span></div><div class="kk-dim">${esc(d)}</div></div>`).join("")}</div>
     <div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/modules/dle">Инструкции по модулям ↗</button></div>`;
 }
 
 // ---------- Статистика ----------
 
+// Статистика показов: одна величина (показы) — одна ось. Прошлый период пунктиром на той же оси, чтобы было с чем сравнить.
+const statsState = { src: "all-sites", days: 30, table: false };
+const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const fmtN = n => Math.round(n).toLocaleString("ru-RU");
+const parseDay = s => { const [d, m, y] = String(s).split("."); return new Date(2000 + Number(y), Number(m) - 1, Number(d)); };
+const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+function niceMax(v) {
+  if (v <= 0) return 10;
+  const p = 10 ** Math.floor(Math.log10(v));
+  return [1, 2, 2.5, 5, 10].map(k => k * p).find(x => x >= v);
+}
+
+function lineChartSvg(cur, prev, W = 1000) {
+  const H = 260, L = 48, R = 12, T = 14, B = 28;
+  const n = cur.length;
+  const max = niceMax(Math.max(1, ...cur.map(r => r.count), ...prev.map(r => r.count)));
+  const x = i => L + (n <= 1 ? 0 : i * (W - L - R) / (n - 1));
+  const y = v => T + (H - T - B) * (1 - v / max);
+  const path = rows => rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(r.count).toFixed(1)}`).join("");
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(k => k * max);
+  const step = Math.max(1, Math.ceil(n / 8));
+  return `<svg class="kk-line" viewBox="0 0 ${W} ${H}" data-w="${W}" role="img" aria-label="Показы по дням">
+    ${ticks.map(t => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${L - 8}" y="${y(t) + 4}" text-anchor="end">${fmtN(t)}</text>`).join("")}
+    ${cur.map((r, i) => (i % step === 0 && n - 1 - i >= step / 2) || i === n - 1 ? `<text class="ax" x="${x(i)}" y="${H - 8}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}">${esc(r.date.slice(0, 5))}</text>` : "").join("")}
+    ${prev.length ? `<path class="prev" d="${path(prev.slice(-n))}"/>` : ""}
+    <path class="area" d="${path(cur)}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z"/>
+    <path class="cur" d="${path(cur)}"/>
+    <line class="cross" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/>
+    <circle class="dot" r="5" visibility="hidden"/>
+    <rect class="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/>
+  </svg>`;
+}
+
+function wireLineHover(wrap, cur, prev) {
+  const svg = wrap.querySelector("svg");
+  const tip = wrap.querySelector(".kk-tip");
+  const cross = svg.querySelector(".cross"), dot = svg.querySelector(".dot");
+  const W = Number(svg.dataset.w) || 1000, H = 260, L = 48, R = 12, T = 14, B = 28, n = cur.length;
+  const max = niceMax(Math.max(1, ...cur.map(r => r.count), ...prev.map(r => r.count)));
+  const prevAligned = prev.slice(-n);
+  svg.querySelector(".hit").addEventListener("mousemove", e => {
+    const box = svg.getBoundingClientRect();
+    const vx = (e.clientX - box.left) / box.width * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round((vx - L) / ((W - L - R) / Math.max(1, n - 1)))));
+    const px = L + i * (W - L - R) / Math.max(1, n - 1);
+    const py = T + (H - T - B) * (1 - cur[i].count / max);
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", px); dot.setAttribute("cy", py); dot.setAttribute("visibility", "visible");
+    const d = parseDay(cur[i].date);
+    tip.innerHTML = `<b>${esc(cur[i].date)} · ${WEEKDAYS[(d.getDay() + 6) % 7]}</b><span>${fmtN(cur[i].count)} показов</span>${prevAligned[i] ? `<span class="kk-dim">прошлый период: ${fmtN(prevAligned[i].count)}</span>` : ""}`;
+    tip.hidden = false;
+    const left = px / W * box.width;
+    tip.style.left = `${Math.min(box.width - 170, Math.max(0, left + 12))}px`;
+    tip.style.top = `${py / H * box.height - 10}px`;
+  });
+  svg.querySelector(".hit").addEventListener("mouseleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+}
+
 async function renderStats(box) {
   box.innerHTML = `
-    <div class="kk-tools">
-      <select class="field-input" data-st-src><option value="all-sites">Все сайты</option></select>
-      <select class="field-input" data-st-range>
-        <option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">90 дней</option><option value="365">Год</option>
-      </select>
+    <div class="kk-stat-bar">
+      <div class="a3-seg" data-st-src><button type="button" class="on" data-v="all-sites">Все сайты</button></div>
+      <div class="a3-seg" data-st-range>${[[7, "7 дней"], [30, "30 дней"], [90, "90 дней"], [365, "Год"]].map(([v, t]) => `<button type="button" class="${statsState.days === v ? "on" : ""}" data-v="${v}">${t}</button>`).join("")}</div>
+      <button type="button" class="btn ghost" data-st-table>${statsState.table ? "График" : "Таблица"}</button>
       <button type="button" class="btn ghost" data-kk-open="/users/stats">Кабинет ↗</button>
     </div>
-    <div class="kk-stats kk-dim">Загружаю…</div>
-    <p class="kk-dim">Показы рекламы в плеерах — то, что кабинет называет статистикой. Данные берутся из кабинета через наш сервер и обновляются раз в 10 минут.</p>
-    <h4>Найденные плееры</h4>
-    <p class="kk-dim">Результаты скрипта автодобавления по страницам сайта. Сейчас в профиле кабинета нет ни одного сайта, поэтому список пуст — для страниц с плеером он не нужен. Добавишь сайт — плееры появятся в кабинете.</p>
-    <div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/api-links">Найденные плееры ↗</button><button type="button" class="btn ghost" data-kk-open="/users/profile">Настройки кабинета ↗</button></div>`;
+    <div class="kk-stats"><div class="kk-skel"></div></div>
+    <details class="kk-faq kk-found"><summary>Найденные плееры</summary><p>Результаты скрипта автодобавления по страницам сайта. В профиле кабинета пока нет ни одного сайта, поэтому список пуст — для страниц с плеером он не нужен.</p>
+      <div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/api-links">Найденные плееры ↗</button><button type="button" class="btn ghost" data-kk-open="/users/profile">Настройки кабинета ↗</button></div></details>`;
   const out = box.querySelector(".kk-stats");
-  const src = box.querySelector("[data-st-src]");
-  const range = box.querySelector("[data-st-range]");
-  apiGet("/kodik/stats/sources").then(d => {
-    src.innerHTML = d.sources.map(o => `<option value="${esc(o.value)}">${esc(o.title)}</option>`).join("");
-  }).catch(() => {});
+  const srcBar = box.querySelector("[data-st-src]");
+  let sources = [{ value: "all-sites", title: "Все сайты" }];
+  const paintSources = () => {
+    srcBar.innerHTML = sources.map(o => `<button type="button" class="${statsState.src === o.value ? "on" : ""}" data-v="${esc(o.value)}">${esc(o.title)}</button>`).join("");
+  };
+  const sourcesReady = apiGet("/kodik/stats/sources").then(d => { sources = d.sources; paintSources(); }).catch(() => {});
+  srcBar.addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; statsState.src = b.dataset.v; paintSources(); load(); });
+  box.querySelector("[data-st-range]").addEventListener("click", e => {
+    const b = e.target.closest("[data-v]"); if (!b) return;
+    statsState.days = Number(b.dataset.v);
+    box.querySelectorAll("[data-st-range] button").forEach(x => x.classList.toggle("on", x === b));
+    load();
+  });
+  box.querySelector("[data-st-table]").addEventListener("click", e => { statsState.table = !statsState.table; e.target.textContent = statsState.table ? "График" : "Таблица"; load(); });
+
   const load = async () => {
-    out.className = "kk-stats kk-dim";
-    out.textContent = "Загружаю…";
-    const days = Number(range.value);
-    const iso = d => d.toISOString().slice(0, 10);
+    out.innerHTML = `<div class="kk-skel"></div>`;
+    const days = statsState.days;
+    const end = new Date();
+    const start = new Date(end.getTime() - (2 * days - 1) * 86400000); // два периода сразу: текущий и прошлый для сравнения
     try {
-      const d = await apiGet("/kodik/stats", { domain: src.value, start: iso(new Date(Date.now() - days * 86400000)), end: iso(new Date()) });
-      const rows = d.rows.filter(r => !r.event || r.event === "impression");
-      const total = rows.reduce((a, r) => a + (r.count || 0), 0);
-      const max = Math.max(1, ...rows.map(r => r.count || 0));
-      const last = rows.length ? rows[rows.length - 1].count || 0 : 0;
-      const best = rows.reduce((a, r) => (r.count || 0) > (a?.count || 0) ? r : a, null);
-      out.className = "kk-stats";
+      const d = await apiGet("/kodik/stats", { domain: statsState.src, start: isoDay(start), end: isoDay(end) });
+      const all = d.rows.filter(r => !r.event || r.event === "impression").map(r => ({ date: r.date, count: Number(r.count) || 0 }));
+      const cur = all.slice(-days), prev = all.slice(0, Math.max(0, all.length - days));
+      if (!cur.length) { out.innerHTML = `<div class="kk-empty">За этот период показов нет.</div>`; return; }
+      const total = cur.reduce((a, r) => a + r.count, 0);
+      const prevTotal = prev.reduce((a, r) => a + r.count, 0);
+      const delta = prevTotal ? (total - prevTotal) / prevTotal * 100 : null;
+      const best = cur.reduce((a, r) => r.count > a.count ? r : a, cur[0]);
+      const last = cur[cur.length - 1];
+      const last7 = cur.slice(-7).reduce((a, r) => a + r.count, 0) / Math.min(7, cur.length);
+      const byWd = Array.from({ length: 7 }, () => ({ sum: 0, n: 0 }));
+      cur.forEach(r => { const w = (parseDay(r.date).getDay() + 6) % 7; byWd[w].sum += r.count; byWd[w].n++; });
+      const wdAvg = byWd.map(w => w.n ? w.sum / w.n : 0);
+      const wdMax = Math.max(1, ...wdAvg);
+      const bestWd = wdAvg.indexOf(Math.max(...wdAvg));
+      const srcTitle = (sources.find(s => s.value === statsState.src) || {}).title || "";
       out.innerHTML = `
-        <div class="kk-stat-tiles">
-          <div><b>${total.toLocaleString("ru-RU")}</b><span>показов за период</span></div>
-          <div><b>${last.toLocaleString("ru-RU")}</b><span>за последний день</span></div>
-          <div><b>${Math.round(total / Math.max(1, rows.length)).toLocaleString("ru-RU")}</b><span>в среднем за день</span></div>
-          <div><b>${best ? best.count.toLocaleString("ru-RU") : "—"}</b><span>${best ? `лучший день · ${esc(best.date)}` : "лучший день"}</span></div>
+        <div class="kk-tiles">
+          <div class="kk-tile"><b>${fmtN(total)}</b><span>показов за ${days} дн. · ${esc(srcTitle)}</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(0)}% к прошлым ${days} дн.</em>`}</div>
+          <div class="kk-tile"><b>${fmtN(total / cur.length)}</b><span>в среднем за день</span><em class="kk-dim">за последние 7 дн.: ${fmtN(last7)}</em></div>
+          <div class="kk-tile"><b>${fmtN(best.count)}</b><span>лучший день · ${esc(best.date)}</span><em class="kk-dim">${WEEKDAYS[(parseDay(best.date).getDay() + 6) % 7]}</em></div>
+          <div class="kk-tile"><b>${fmtN(last.count)}</b><span>${esc(last.date)} · сегодня (день ещё идёт)</span></div>
         </div>
-        <div class="kk-bars" role="img" aria-label="Показы по дням">${rows.map(r => `<i style="height:${Math.max(2, (r.count || 0) / max * 100)}%" title="${esc(r.date)}: ${r.count}"></i>`).join("")}</div>
-        <div class="kk-bars-axis"><span>${esc(rows[0]?.date || "")}</span><span>${esc(rows[rows.length - 1]?.date || "")}</span></div>`;
+        ${statsState.table ? `<div class="kk-table"><table><thead><tr><th>Дата</th><th>День</th><th>Показы</th><th>Прошлый период</th></tr></thead><tbody>${cur.map((r, i) => `<tr><td>${esc(r.date)}</td><td>${WEEKDAYS[(parseDay(r.date).getDay() + 6) % 7]}</td><td>${fmtN(r.count)}</td><td>${prev.slice(-cur.length)[i] ? fmtN(prev.slice(-cur.length)[i].count) : "—"}</td></tr>`).join("")}</tbody></table></div>`
+        : `<section class="kk-chart"><div class="kk-chart-h"><b>Показы по дням</b><span class="kk-key"><i class="cur"></i>этот период<i class="prev"></i>прошлый</span></div>
+            <div class="kk-linewrap">${lineChartSvg(cur, prev, Math.max(480, Math.round(out.clientWidth - 32)))}<div class="kk-tip" hidden></div></div></section>`}
+        <div class="kk-two">
+          <section class="kk-chart"><div class="kk-chart-h"><b>По дням недели</b><span class="kk-dim">в среднем за день · больше всего — ${WEEKDAYS[bestWd]}</span></div>
+            <div class="kk-wd">${wdAvg.map((v, i) => `<div title="${WEEKDAYS[i]}: в среднем ${fmtN(v)}"><span>${fmtN(v)}</span><i style="height:${Math.max(3, v / wdMax * 100)}%" class="${i === bestWd ? "top" : ""}"></i><b>${WEEKDAYS[i]}</b></div>`).join("")}</div></section>
+          <section class="kk-chart kk-srcs"><div class="kk-chart-h"><b>По источникам</b><span class="kk-dim">за ${days} дн.</span></div><div class="kk-srclist kk-dim">Считаю…</div></section>
+        </div>`;
+      if (!statsState.table) wireLineHover(out.querySelector(".kk-linewrap"), cur, prev);
+      // Сравнение источников: тот же период по каждому (запросы кэшируются на сервере).
+      const list = out.querySelector(".kk-srclist");
+      await sourcesReady;
+      const totals = await Promise.all(sources.map(s => apiGet("/kodik/stats", { domain: s.value, start: isoDay(new Date(end.getTime() - (days - 1) * 86400000)), end: isoDay(end) })
+        .then(r => r.rows.filter(x => !x.event || x.event === "impression").reduce((a, x) => a + (Number(x.count) || 0), 0)).catch(() => null)));
+      const smax = Math.max(1, ...totals.filter(v => v != null));
+      if (!list.isConnected) return;
+      list.className = "kk-srclist";
+      list.innerHTML = sources.map((s, i) => `<div class="kk-src${s.value === statsState.src ? " on" : ""}"><span>${esc(s.title)}</span><i><u style="width:${totals[i] == null ? 0 : totals[i] / smax * 100}%"></u></i><b>${totals[i] == null ? "—" : fmtN(totals[i])}</b></div>`).join("");
     } catch (err) {
       out.innerHTML = /KODIK_LOGIN/.test(err.message)
-        ? `Чтобы статистика шла прямо сюда, серверу нужен вход в кабинет. Добавь в <code>/etc/telegram-bot.env</code> две строки и перезапусти сервис:${codeBlock("KODIK_LOGIN=логин_кабинета\nKODIK_PASSWORD=пароль_кабинета")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}Пароль увидят только владельцы — в хранилище, раздел «Сервер».`
-        : esc(err.message);
+        ? `<div class="kk-empty"><b>Нужен вход в кабинет</b><p>Добавь в <code>/etc/telegram-bot.env</code> две строки и перезапусти сервис:</p>${codeBlock("KODIK_LOGIN=логин_кабинета\nKODIK_PASSWORD=пароль_кабинета")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}</div>`
+        : `<div class="kk-empty">${esc(err.message)}</div>`;
     }
   };
-  src.addEventListener("change", load);
-  range.addEventListener("change", load);
   load();
 }
 
@@ -629,50 +725,68 @@ const FAQ = [
 ];
 
 function renderFaq(box) {
-  box.innerHTML = FAQ.map(([q, a]) => `<details class="kk-faq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("") +
+  box.innerHTML = `<div class="kk-grid kk-faqgrid">${FAQ.map(([q, a]) => `<details class="kk-faq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}</div>` +
     `<div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/faq">Полный FAQ ↗</button></div>`;
 }
 
 // ---------- Заливка в Kodik (через Kodik Converter) ----------
 
-// Есть ли серия у DreamyVoice: в базе Kodik — уже в плеерах; в конвертере — залита, ждёт конвертации или модерации.
-const PRESENCE = { base: "✓ уже на Kodik", converter: "⏳ в конвертере", none: "нет на Kodik", unknown: "" };
-const UP_STAGE = { queued: "в очереди", file: "беру файл", pulling: "Kodik качает", done: "отправлено", failed: "ошибка" };
 let upTimer = 0;
 
 async function renderUpload(box) {
   clearTimeout(upTimer);
   let d;
-  try { d = await apiGet("/kodik/uploads"); } catch (err) { box.innerHTML = `<div class="kk-dim">${esc(err.message)}</div>`; return; }
+  try { d = await apiGet("/kodik/uploads"); } catch (err) { box.innerHTML = `<div class="kk-empty">${esc(err.message)}</div>`; return; }
   if (!d.configured) {
-    box.innerHTML = `<p class="kk-dim">Заливка идёт через Kodik Converter — у него свой вход. Добавь на сервере в <code>/etc/telegram-bot.env</code>:</p>
-      ${codeBlock("KODIK_CONVERTER_LOGIN=логин_конвертера\nKODIK_CONVERTER_PASSWORD=пароль_конвертера")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}`;
+    box.innerHTML = `<div class="kk-empty"><b>Нужен вход в Kodik Converter</b><p>Добавь на сервере в <code>/etc/telegram-bot.env</code>:</p>
+      ${codeBlock("KODIK_CONVERTER_LOGIN=логин_конвертера\nKODIK_CONVERTER_PASSWORD=пароль_конвертера")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}</div>`;
     return;
   }
+  const items = d.items;
+  const stageOf = it => it.running && !it.kodik?.stage ? "queued" : it.kodik?.stage;
+  const count = p => items.filter(i => i.presence === p).length;
+  const busyN = items.filter(i => ["queued", "file", "pulling"].includes(stageOf(i))).length;
+  // Серии одного тайтла — в одну карточку: постер, название и серии плашками.
+  const groups = new Map();
+  for (const it of items) {
+    const k = it.title_id || it.title;
+    if (!groups.has(k)) groups.set(k, { title: it.title, title_id: it.title_id, shiki: it.shiki_id, eps: [] });
+    groups.get(k).eps.push(it);
+  }
+  const tile = (n, label, cls = "") => `<div class="kk-tile ${cls}"><b>${n}</b><span>${label}</span></div>`;
   box.innerHTML = `
-    <p class="kk-dim">Те же финалы, что уходят на Anime 365. Kodik сам скачивает файл с нашего сервера по одноразовой ссылке — через твой компьютер видео не идёт. Перед отправкой карточку можно проверить и поправить; дальше конвертация и модерация у Kodik — статус во вкладке «Конвертер».</p>
-    <div class="kk-dim kk-count">Нет на Kodik: ${d.items.filter(i => i.presence === "none").length} из ${d.items.length}</div>
-    <div class="kk-list">${d.items.map(it => {
-      const st = it.kodik || {};
-      const stage = it.running && !st.stage ? "queued" : st.stage;
-      const busy = ["queued", "file", "pulling"].includes(stage);
-      const has = it.presence === "base" || it.presence === "converter";
-      const badge = PRESENCE[it.presence] ? `<span class="kk-pres ${esc(it.presence)}">${esc(PRESENCE[it.presence])}${it.presence === "converter" && it.converter_status ? ` · ${esc(it.converter_status)}` : ""}</span>` : "";
-      return `<div class="kk-dump kk-up" data-up-key="${esc(it.key)}">
-        <div><b>${esc(it.title || "?")} · ${esc(String(it.episode ?? "?"))} серия</b> ${badge}
-          <span class="kk-dim">${esc(it.file || "")}${it.size ? ` · ${fmtSize(it.size)}` : ""}</span>
-          ${stage ? `<span class="kk-upst ${esc(stage)}">${esc(UP_STAGE[stage] || stage)}${st.text && stage !== "done" ? ` — ${esc(st.text)}` : ""}${st.error ? ` — ${esc(st.error)}` : ""}</span>` : ""}
+    <div class="kk-tiles">
+      ${tile(items.length, "готовых финалов")}
+      ${tile(count("base"), "уже на Kodik", "ok")}
+      ${tile(count("converter") + busyN, "в пути: конвертер и отправка", "run")}
+      ${tile(count("none"), "нет на Kodik — можно залить", count("none") ? "warn" : "")}
+    </div>
+    <p class="kk-dim kk-lead">Те же финалы, что уходят на Anime 365. Kodik сам скачивает файл с нашего сервера по одноразовой ссылке — через твой компьютер видео не идёт. Нажми на серию: откроется карточка, её можно проверить перед отправкой.</p>
+    <div class="kk-grid">${[...groups.values()].map(g => `
+      <article class="kk-tcard">
+        ${g.title_id ? `<img src="${esc(mediaUrl(`/titles/${g.title_id}/art/poster`, { w: 320 }))}" alt="" loading="lazy">` : `<div class="kk-noposter"></div>`}
+        <div class="kk-tcard-main">
+          <b class="kk-clamp2">${esc(g.title || "?")}</b>
+          <div class="kk-eps">${g.eps.sort((a, b) => (Number(a.episode) || 0) - (Number(b.episode) || 0)).map(it => {
+            const stage = stageOf(it);
+            const busy = ["queued", "file", "pulling"].includes(stage);
+            const cls = busy ? "run" : stage === "failed" ? "bad" : it.presence === "base" ? "ok" : it.presence === "converter" ? "run" : it.presence === "none" ? "warn" : "";
+            const tip = busy ? (it.kodik?.text || "отправляю") : stage === "failed" ? `ошибка: ${it.kodik?.error || ""}` : it.presence === "base" ? "уже на Kodik — нажми, чтобы заменить" : it.presence === "converter" ? `в конвертере: ${it.converter_status}` : "нет на Kodik — нажми, чтобы залить";
+            return `<button type="button" class="kk-ep ${cls}" data-up-key="${esc(it.key)}" title="${esc(tip)}"${busy ? " disabled" : ""}>
+              <b>${esc(String(it.episode ?? "?"))}</b><span>${busy ? `${it.kodik?.pct ?? 0}%` : cls === "ok" ? "✓" : cls === "warn" ? "↑" : cls === "bad" ? "!" : "⏳"}</span></button>`;
+          }).join("")}</div>
+          ${g.eps.filter(it => stageOf(it) === "failed").map(it => `<div class="kk-uperr">${esc(String(it.episode))} серия: ${esc(it.kodik?.error || "не отправилось")}</div>`).join("")}
+          ${g.eps.filter(it => ["queued", "file", "pulling"].includes(stageOf(it))).map(it => `<div class="kk-uprun">${esc(String(it.episode))} серия: ${esc(it.kodik?.text || "отправляю…")}</div>`).join("")}
         </div>
-        <div class="kk-dump-f">${busy ? "" : `<button type="button" class="btn ${stage === "done" || has ? "ghost" : "primary"}" data-up-go>${has ? "Заменить" : stage === "done" ? "Залить ещё раз" : stage === "failed" ? "Повторить" : "Залить в Kodik"}</button>`}</div>
-      </div>`;
-    }).join("") || `<div class="kk-dim">Готовых финалов нет.</div>`}</div>`;
-  box.querySelectorAll("[data-up-go]").forEach(b => b.addEventListener("click", () => {
-    const key = b.closest("[data-up-key]").dataset.upKey;
-    const it = d.items.find(x => x.key === key);
-    openUploadForm(it, () => renderUpload(box));
+      </article>`).join("") || `<div class="kk-empty">Готовых финалов нет.</div>`}
+    </div>
+    <div class="kk-legend"><span class="ok">✓ на Kodik</span><span class="run">⏳ в конвертере / отправляется</span><span class="warn">↑ нет на Kodik</span><span class="bad">! ошибка</span></div>`;
+  box.querySelectorAll(".kk-tcard img").forEach(img => img.addEventListener("error", () => { const ph = document.createElement("div"); ph.className = "kk-noposter"; img.replaceWith(ph); }));
+  box.querySelectorAll("[data-up-key]").forEach(b => b.addEventListener("click", () => {
+    const it = items.find(x => x.key === b.dataset.upKey);
+    if (it) openUploadForm(it, () => renderUpload(box));
   }));
-  // Пока что-то отправляется — обновляем раз в 4 секунды, пока вкладка открыта.
-  if (d.items.some(it => it.running || ["queued", "file", "pulling"].includes(it.kodik?.stage))) {
+  if (items.some(it => it.running || ["queued", "file", "pulling"].includes(it.kodik?.stage))) {
     upTimer = setTimeout(() => { if (box.isConnected && view === "upload") renderUpload(box); }, 4000);
   }
 }
