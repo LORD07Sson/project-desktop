@@ -1044,6 +1044,16 @@ function checklistItemHtml(item, editable = true) {
   </div>`;
 }
 
+// Таймкоды (19:18, 1:02:03) и упоминания (@ник) в любом месте заметки — плашками, а не обычным текстом.
+// Работает по уже экранированному тексту; ссылки (<a …>) не трогаем.
+const NOTE_INLINE_TC = /(^|[^\w:/.])(\d{1,2}:[0-5]\d(?::[0-5]\d)?)(?![\w:])/g;
+const NOTE_INLINE_AT = /(^|[^\w@])@([A-Za-z][A-Za-z0-9_]{3,31})\b/g;
+function decorateNote(escapedHtml) {
+  return String(escapedHtml).split(/(<a [^>]*>.*?<\/a>)/).map(part => part.startsWith("<a ") ? part : part
+    .replace(NOTE_INLINE_TC, (_, pre, tc) => `${pre}<span class="note-time inline" title="время на дорожке">${tc}</span>`)
+    .replace(NOTE_INLINE_AT, (_, pre, nick) => `${pre}<span class="note-mention" title="упоминание — человеку придёт уведомление">@${nick}</span>`)).join("");
+}
+
 function noteHtml(n) {
   const t = parseNoteTime(n.text);
   // Подпись «📎 имя» сервер ставит сам, когда заметка — только файл
@@ -1054,7 +1064,7 @@ function noteHtml(n) {
     <div class="meta">${esc(n.author)} · ${esc(formatWhen(n.created_at))}</div>
     <div class="note-body">
       ${t ? `<span class="note-time" title="время на дорожке">${esc(t.label)}</span>` : ""}
-      ${body ? `<span>${linkifyProject(esc(body))}</span>` : ""}
+      ${body ? `<span class="note-text">${decorateNote(linkifyProject(esc(body)))}</span>` : ""}
     </div>
     ${n.attach ? `<div class="note-att">${attachHtml(n.attach)}</div>` : ""}
   </div>`;
