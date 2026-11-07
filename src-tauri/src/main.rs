@@ -1944,6 +1944,8 @@ fn main() {
 
             // Пакет уже установленной версии в packages/ больше не нужен.
             std::thread::spawn(drop_installed_package);
+            // Ярлыки, оставшиеся от удалённой копии, — на текущий exe (иначе на панели задач пустой лист).
+            std::thread::spawn(installs::repair_dead_shortcuts);
 
             // Тосты от имени «Project Desktop», а не «Windows PowerShell».
             #[cfg(windows)]

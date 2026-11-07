@@ -317,3 +317,98 @@ async fn fetch(client: &reqwest::Client, url: &str, target: &Path, app: &tauri::
     }
     Ok(())
 }
+
+/// Ярлыки «Project Desktop», которые ведут в уже несуществующий exe (старая копия удалена или переехала), Windows
+/// показывает пустым листом — особенно закреплённые на панели задач. При запуске из установленной копии
+/// перенаправляем такие ярлыки на текущий exe: закрепление остаётся, иконка возвращается. Чужие ярлыки и рабочие не
+/// трогаем — только с нашим именем или нашим exe в цели, и только если цели больше нет.
+#[cfg(windows)]
+pub fn repair_dead_shortcuts() {
+    let Ok(exe) = std::env::current_exe() else { return };
+    let installed = exe.file_name().map(|n| n.eq_ignore_ascii_case(MAIN_EXE)).unwrap_or(false)
+        && exe.parent().and_then(|p| p.file_name()).map(|n| n.eq_ignore_ascii_case("current")).unwrap_or(false);
+    if !installed {
+        return;
+    }
+    let mut dirs = shortcut_dirs();
+    if let Some(appdata) = std::env::var_os("APPDATA").map(PathBuf::from) {
+        dirs.push(appdata.join(r"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"));
+        dirs.push(appdata.join(r"Microsoft\Internet Explorer\Quick Launch\User Pinned\StartMenu"));
+        dirs.push(appdata.join(r"Microsoft\Internet Explorer\Quick Launch"));
+    }
+    let mut fixed = 0;
+    for folder in dirs {
+        let Ok(entries) = std::fs::read_dir(&folder) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.extension().map(|e| e.eq_ignore_ascii_case("lnk")).unwrap_or(false) {
+                continue;
+            }
+            let Some(target) = lnk_target(&path).map(|t| expand_env(&t)) else { continue };
+            // Цель с %ПЕРЕМЕННЫМИ%, которые не раскрылись, — не уверены, что она мёртвая: не трогаем.
+            if target.to_string_lossy().contains('%') || target.exists() || same_path(&target, &exe) {
+                continue;
+            }
+            let ours_by_name = path.file_stem().map(|s| s.to_string_lossy().to_lowercase().contains("project desktop")).unwrap_or(false);
+            let ours_by_exe = target.file_name().map(|n| n.eq_ignore_ascii_case(MAIN_EXE)).unwrap_or(false);
+            if !(ours_by_name || ours_by_exe) {
+                continue;
+            }
+            match retarget_shortcut(&path, &exe) {
+                Ok(()) => fixed += 1,
+                Err(e) => log::warn!("Не удалось починить ярлык {}: {e}", path.display()),
+            }
+        }
+    }
+    if fixed > 0 {
+        log::info!("Починено ярлыков, ведущих в удалённую копию: {fixed}");
+        // Explorer кэширует иконки — просим перерисовать, иначе пустой лист висит до перезахода.
+        unsafe {
+            use windows::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
+            SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn repair_dead_shortcuts() {}
+
+#[cfg(windows)]
+fn retarget_shortcut(lnk: &Path, exe: &Path) -> windows::core::Result<()> {
+    use windows::core::{Interface, HSTRING};
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, STGM_READWRITE};
+    use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+        let file: IPersistFile = link.cast()?;
+        file.Load(&HSTRING::from(lnk.as_os_str()), STGM_READWRITE)?;
+        link.SetPath(&HSTRING::from(exe.as_os_str()))?;
+        if let Some(dir) = exe.parent() {
+            link.SetWorkingDirectory(&HSTRING::from(dir.as_os_str()))?;
+        }
+        link.SetIconLocation(&HSTRING::from(exe.as_os_str()), 0)?;
+        file.Save(windows::core::PCWSTR::null(), true)?;
+    }
+    Ok(())
+}
+
+/// Цель ярлыка «как записана» (SLGP_RAWPATH) может содержать %LOCALAPPDATA% и т.п. — раскрываем.
+fn expand_env(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    let mut out = String::new();
+    let mut rest = text.as_ref();
+    while let Some(start) = rest.find('%') {
+        let Some(len) = rest[start + 1..].find('%') else { break };
+        let name = &rest[start + 1..start + 1 + len];
+        out.push_str(&rest[..start]);
+        match std::env::var(name) {
+            Ok(value) if !name.is_empty() => out.push_str(&value),
+            _ => out.push_str(&rest[start..start + len + 2]),
+        }
+        rest = &rest[start + len + 2..];
+    }
+    out.push_str(rest);
+    PathBuf::from(out)
+}
