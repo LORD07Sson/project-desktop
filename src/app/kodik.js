@@ -118,9 +118,15 @@ function groupResults(list) {
 }
 
 function posterOf(r) {
-  const m = r.material_data || {};
-  return m.poster_url || m.anime_poster_url || (r.screenshots || [])[0] || "";
+  return postersOf(r)[0] || "";
 }
+
+function postersOf(r) {
+  const m = r.material_data || {};
+  return [...new Set([m.anime_poster_url, ...(r.screenshots || []).slice(0, 1), m.poster_url].filter(u => /^https:\/\//.test(u || "")))];
+}
+
+const fmtNum = n => Math.round(Number(n) || 0).toLocaleString("ru-RU");
 
 function cardHtml(g) {
   const r = g.main, m = r.material_data || {};
@@ -131,7 +137,7 @@ function cardHtml(g) {
   const about = m.anime_description || m.description || "";
   const status = ({ ongoing: "онгоинг", released: "вышло", anons: "анонс" })[m.anime_status] || "";
   return `<article class="kk-card">
-    <div class="kk-cover">${poster ? `<img src="${esc(poster)}" alt="" loading="lazy">` : `<div class="kk-noposter"></div>`}${m.shikimori_rating ? `<span class="kk-rate">★ ${esc(String(m.shikimori_rating))}</span>` : ""}</div>
+    <div class="kk-cover">${poster ? `<img src="${esc(poster)}" data-fb="${esc(postersOf(r).slice(1).join(" "))}" alt="" loading="lazy">` : `<div class="kk-noposter"></div>`}${m.shikimori_rating ? `<span class="kk-rate">★ ${esc(String(m.shikimori_rating))}</span>` : ""}</div>
     <div class="kk-card-main">
       <b class="kk-clamp2">${esc(r.title)}</b>
       <span class="kk-dim kk-clamp1">${esc([r.title_orig, r.year, eps].filter(Boolean).join(" · "))}</span>
@@ -200,7 +206,11 @@ async function renderCatalog(box) {
       ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${Number.isFinite(Number(cat.total)) ? Number(cat.total) : "?"} материалов`}</div><div class="kk-grid kk-grid-wide">${groups.map(cardHtml).join("")}</div>${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
       : `<div class="kk-dim">Ничего не нашлось.</div>`;
     // Битый адрес постера у Kodik — показываем заглушку, а не значок сломанной картинки.
-    list.querySelectorAll(".kk-cover img").forEach(img => img.addEventListener("error", () => { const ph = document.createElement("div"); ph.className = "kk-noposter"; img.replaceWith(ph); }, { once: true }));
+    list.querySelectorAll(".kk-cover img").forEach(img => img.addEventListener("error", () => {
+      const rest = (img.dataset.fb || "").split(" ").filter(Boolean);
+      if (rest.length) { img.dataset.fb = rest.slice(1).join(" "); img.src = rest[0]; return; }
+      const ph = document.createElement("div"); ph.className = "kk-noposter"; img.replaceWith(ph);
+    }));
     list.querySelector("[data-kk-more]")?.addEventListener("click", async e => { e.target.disabled = true; await fetchCatalog(true).catch(err => toast(err.message, "error")); paint(); });
   };
   const reload = async () => {
@@ -292,26 +302,50 @@ export function openKodikPlayer(link, title) {
 // ---------- Озвучки ----------
 
 async function renderTranslations(box) {
-  box.innerHTML = `<div class="kk-tools"><input class="field-input" data-kk-tq placeholder="Найти озвучку"><select class="field-input" data-kk-tt><option value="anime-serial,anime">Аниме</option><option value="">Всё</option></select></div><div class="kk-tlist kk-dim">Загружаю…</div>`;
+  box.innerHTML = `<div class="kk-stat-bar">
+      <input class="field-input kk-search" data-kk-tq placeholder="Найти озвучку или ID">
+      <div class="a3-seg" data-kk-tt><button type="button" class="on" data-v="anime-serial,anime">Аниме</button><button type="button" data-v="">Вся база</button></div>
+    </div><div class="kk-tlist"><div class="kk-skel"></div></div>`;
   const out = box.querySelector(".kk-tlist");
-  let rows = [];
+  let rows = [], types = "anime-serial,anime";
   const paint = () => {
     const q = box.querySelector("[data-kk-tq]").value.trim().toLowerCase();
-    const list = rows.filter(r => !q || r.title.toLowerCase().includes(q) || String(r.id) === q);
-    out.className = "kk-tlist";
-    out.innerHTML = `<div class="kk-dim kk-count">Озвучек: ${list.length}${q ? ` из ${rows.length}` : ""}. ID нужен для параметров translation_id, only_translations, hide_translations.</div>` +
-      table(["ID", "Озвучка", "Тайтлов"], list.map(r => [String(r.id), r.title, String(r.count)]));
-    out.querySelectorAll("tbody tr").forEach((tr, i) => { if (/dreamy/i.test(list[i].title)) tr.classList.add("ours"); });
+    const ranked = rows.map((r, i) => ({ ...r, rank: i + 1 }));
+    const list = ranked.filter(r => !q || r.title.toLowerCase().includes(q) || String(r.id) === q);
+    const max = Math.max(1, ...rows.map(r => r.count));
+    const ours = ranked.find(r => /dreamy/i.test(r.title));
+    const totalTitles = rows.reduce((a, r) => a + r.count, 0);
+    const rowHtml = r => `<button type="button" class="kk-trow${/dreamy/i.test(r.title) ? " ours" : ""}" data-kk-copy="${esc(String(r.id))}" title="Нажми — скопировать ID ${esc(String(r.id))}">
+        <span class="kk-rank">${r.rank}</span>
+        <span class="kk-tname"><b>${esc(r.title)}</b><i>ID ${esc(String(r.id))}</i></span>
+        <span class="kk-tbar"><u style="width:${Math.max(1.5, r.count / max * 100)}%"></u></span>
+        <span class="kk-tcount">${fmtNum(r.count)}</span>
+      </button>`;
+    out.innerHTML = `
+      <div class="kk-tiles">
+        <div class="kk-tile"><b>${fmtNum(rows.length)}</b><span>озвучек и субтитров</span></div>
+        <div class="kk-tile"><b>${fmtNum(totalTitles)}</b><span>материалов с переводом</span></div>
+        ${ours ? `<div class="kk-tile ok"><b>#${ours.rank}</b><span>место DreamyVoice · ${fmtNum(ours.count)} тайтлов</span></div>` : ""}
+        <div class="kk-tile"><b>${esc(rows[0]?.title || "—")}</b><span>больше всех · ${fmtNum(rows[0]?.count || 0)} тайтлов</span></div>
+      </div>
+      <p class="kk-dim kk-lead">ID озвучки нужен для параметров translation_id, only_translations и hide_translations — нажми на строку, чтобы скопировать.</p>
+      ${list.length ? `<div class="kk-tgrid">${list.slice(0, 300).map(rowHtml).join("")}</div>${list.length > 300 ? `<div class="kk-dim kk-count">Показаны первые 300 из ${list.length} — уточни поиск.</div>` : ""}` : `<div class="kk-empty">Ничего не нашлось.</div>`}`;
   };
   const load = async () => {
+    out.innerHTML = `<div class="kk-skel"></div>`;
     try {
-      const types = box.querySelector("[data-kk-tt]").value;
-      rows = (await apiGet("/kodik/api/translations/v2", { ...(types ? { types } : {}), sort: "count" })).results || [];
+      rows = ((await apiGet("/kodik/api/translations/v2", { ...(types ? { types } : {}), sort: "count" })).results || [])
+        .map(r => ({ id: r.id, title: String(r.title || ""), count: Number(r.count) || 0 })).sort((a, b) => b.count - a.count);
       paint();
-    } catch (err) { out.textContent = err.message; }
+    } catch (err) { out.innerHTML = `<div class="kk-empty">${esc(err.message)}</div>`; }
   };
-  box.querySelector("[data-kk-tq]").addEventListener("input", paint);
-  box.querySelector("[data-kk-tt]").addEventListener("change", load);
+  box.querySelector("[data-kk-tq]").addEventListener("input", () => rows.length && paint());
+  box.querySelector("[data-kk-tt]").addEventListener("click", e => {
+    const b = e.target.closest("[data-v]"); if (!b) return;
+    types = b.dataset.v;
+    box.querySelectorAll("[data-kk-tt] button").forEach(x => x.classList.toggle("on", x === b));
+    load();
+  });
   load();
 }
 
@@ -577,7 +611,8 @@ const parseDay = s => { const [d, m, y] = String(s).split("."); return new Date(
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 function niceMax(v) {
-  if (v <= 0) return 10;
+  // Не меньше 4: деления по четвертям остаются целыми (иначе на оси «1, 1, 1, 0»).
+  if (v <= 4) return 4;
   const p = 10 ** Math.floor(Math.log10(v));
   return [1, 2, 2.5, 5, 10].map(k => k * p).find(x => x >= v);
 }
@@ -664,8 +699,12 @@ async function renderStats(box) {
       const d = await apiGet("/kodik/stats", { domain: statsState.src, start: isoDay(start), end: isoDay(end) });
       const all = d.rows.filter(r => !r.event || r.event === "impression").map(r => ({ date: r.date, count: Number(r.count) || 0 }));
       const cur = all.slice(-days), prev = all.slice(0, Math.max(0, all.length - days));
-      if (!cur.length) { out.innerHTML = `<div class="kk-empty">За этот период показов нет.</div>`; return; }
       const total = cur.reduce((a, r) => a + r.count, 0);
+      if (!cur.length || !total) {
+        const name = (sources.find(x => x.value === statsState.src) || {}).title || "этого источника";
+        out.innerHTML = `<div class="kk-empty"><b>Показов нет</b><p>У «${esc(name)}» за ${days} дн. ни одного показа. Выбери другой источник или период.</p></div>`;
+        return;
+      }
       const prevTotal = prev.reduce((a, r) => a + r.count, 0);
       const delta = prevTotal ? (total - prevTotal) / prevTotal * 100 : null;
       const best = cur.reduce((a, r) => r.count > a.count ? r : a, cur[0]);
@@ -837,33 +876,63 @@ const CONV_FILTERS = [["", "Все"], ["hidden", "Скрытые"], ["to-be-dele
 const conv = { filter: "", page: 1, query: "" };
 
 async function renderConverter(box) {
-  box.innerHTML = `<div class="kk-tools">
+  box.innerHTML = `<div class="kk-stat-bar">
       <div class="a3-seg">${CONV_FILTERS.map(([k, t]) => `<button type="button" class="${conv.filter === k ? "on" : ""}" data-cf="${k}">${t}<i data-cfc="${k}"></i></button>`).join("")}</div>
-      <input class="field-input" data-cq placeholder="Поиск по названию" value="${esc(conv.query)}">
-      <button type="button" class="btn ghost" data-conv-open>Конвертер ↗</button>
-    </div><div class="kk-conv kk-dim">Загружаю…</div>`;
+      <input class="field-input kk-search" data-cq placeholder="Поиск по названию" value="${esc(conv.query)}">
+      <button type="button" class="btn ghost" data-conv-open>Открыть конвертер ↗</button>
+    </div><div class="kk-conv"><div class="kk-skel"></div></div>`;
   const out = box.querySelector(".kk-conv");
   box.querySelector("[data-conv-open]").addEventListener("click", () => openExternal("https://converter.kodikres.com/media-files"));
   box.querySelectorAll("[data-cf]").forEach(b => b.addEventListener("click", () => { conv.filter = b.dataset.cf; conv.page = 1; renderConverter(box); }));
   let t = 0;
   box.querySelector("[data-cq]").addEventListener("input", e => { conv.query = e.target.value; clearTimeout(t); t = setTimeout(() => { conv.page = 1; load(); }, 450); });
+  const rel = iso => { const d = new Date(iso); if (isNaN(d)) return ""; const h = Math.round((Date.now() - d) / 3600000); return h < 1 ? "только что" : h < 24 ? `${h} ч назад` : `${Math.round(h / 24)} дн. назад`; };
   const load = async () => {
-    out.className = "kk-conv kk-dim"; out.textContent = "Загружаю…";
+    out.innerHTML = `<div class="kk-skel"></div>`;
     try {
       const d = await apiGet("/kodik/converter/files", { filter: conv.filter, page: conv.page, query: conv.query });
-      for (const [k, n] of Object.entries(d.counts || {})) { const el = box.querySelector(`[data-cfc="${k}"]`); if (el) el.textContent = ` ${n}`; }
-      out.className = "kk-conv";
-      out.innerHTML = d.files.length ? `<div class="kk-table"><table><thead><tr><th>Файл</th><th>Статус</th><th></th></tr></thead><tbody>${d.files.map(f => `<tr>
-          <td>${esc(f.cells.filter(c => c && c !== "Копировать").slice(0, 8).join(" · "))}</td>
-          <td><span class="kk-upst ${esc(f.status_class)}">${esc(f.status || "—")}</span></td>
-          <td>${f.player ? `<button type="button" class="btn ghost" data-kk-copy="${esc(playerUrl(f.player))}">Ссылка</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
-        <div class="kk-row">${conv.page > 1 ? `<button type="button" class="btn ghost" data-cp="-1">← Назад</button>` : ""}<span class="kk-dim">страница ${d.page}</span>${d.files.length ? `<button type="button" class="btn ghost" data-cp="1">Дальше →</button>` : ""}</div>`
-        : `<div class="kk-dim">Пусто.</div>`;
+      for (const [k, n] of Object.entries(d.counts || {})) { const el = box.querySelector(`[data-cfc="${k}"]`); if (el) el.textContent = ` ${Number(n) || 0}`; }
+      if (!d.files.length) { out.innerHTML = `<div class="kk-empty">${conv.query ? "Ничего не нашлось." : "Здесь пусто."}</div>`; return; }
+      const inBase = d.files.filter(f => f.info?.in_base).length;
+      out.innerHTML = `
+        <div class="kk-dim kk-count">Страница ${Number(d.page) || 1} · файлов: ${d.files.length} · в базе Kodik: ${inBase}</div>
+        <div class="kk-grid kk-grid-wide">${d.files.map(f => {
+          const i = f.info || {};
+          const [ru, orig] = String(i.title || "").split(" / ");
+          const poster = (d.posters || {})[i.shikimori_id] || "";
+          const busy = !["finished", "error", ""].includes(f.status_class);
+          return `<article class="kk-card kk-ccard">
+            <div class="kk-cover">${poster ? `<img src="${esc(poster)}" alt="" loading="lazy">` : `<div class="kk-noposter"></div>`}
+              <span class="kk-epbadge">${i.season ? `S${esc(String(Number(i.season)))} · ` : ""}${esc(String(Number(i.episode) || i.episode || "?"))} серия</span></div>
+            <div class="kk-card-main">
+              <b class="kk-clamp2">${esc(ru || "?")}</b>
+              ${orig ? `<span class="kk-dim kk-clamp1">${esc(orig)}</span>` : ""}
+              <div class="kk-tags">
+                <span class="kk-tag kk-st ${esc(f.status_class)}">${esc(f.status || "—")}</span>
+                ${i.in_base ? `<span class="kk-tag ongoing" title="${esc(i.in_base_text)}">✓ в базе Kodik</span>` : `<span class="kk-tag anons" title="${esc(i.in_base_text || "Модератор ещё не добавил файл в базу")}">ждёт модерации</span>`}
+                ${i.quality ? `<span class="kk-tag">${esc(i.quality)}</span>` : ""}${i.size ? `<span class="kk-tag">${esc(i.size)}</span>` : ""}
+                ${i.priority ? `<span class="kk-tag">приоритет: ${esc(i.priority.toLowerCase())}</span>` : ""}
+              </div>
+              ${busy ? `<div class="kk-prog"><u style="width:${Math.max(3, Number(i.progress) || 0)}%"></u></div>` : ""}
+              <div class="kk-card-foot">
+                <span class="kk-dim">${esc([i.translation, i.year, rel(i.date)].filter(Boolean).join(" · "))}</span>
+                <span class="kk-acts">
+                  ${f.player ? `<button type="button" class="btn ghost" data-cv-play="${esc(f.player)}" data-cv-title="${esc(`${ru} · ${Number(i.episode) || i.episode} серия`)}">▶ Плеер</button><button type="button" class="btn ghost" data-kk-copy="${esc(playerUrl(f.player))}">Ссылка</button>` : ""}
+                  ${i.shikimori_id ? `<button type="button" class="btn ghost" data-cv-shiki="${esc(i.shikimori_id)}">Shikimori ↗</button>` : ""}
+                </span>
+              </div>
+            </div>
+          </article>`;
+        }).join("")}</div>
+        <div class="kk-row kk-pager">${conv.page > 1 ? `<button type="button" class="btn ghost" data-cp="-1">← Назад</button>` : ""}<span class="kk-dim">страница ${Number(d.page) || 1}</span>${d.files.length >= 20 ? `<button type="button" class="btn ghost" data-cp="1">Дальше →</button>` : ""}</div>`;
+      out.querySelectorAll(".kk-cover img").forEach(img => img.addEventListener("error", () => { const ph = document.createElement("div"); ph.className = "kk-noposter"; img.replaceWith(ph); }, { once: true }));
+      out.querySelectorAll("[data-cv-play]").forEach(b => b.addEventListener("click", () => openKodikPlayer(b.dataset.cvPlay, b.dataset.cvTitle)));
+      out.querySelectorAll("[data-cv-shiki]").forEach(b => b.addEventListener("click", () => openExternal(`https://shikimori.one/animes/${encodeURIComponent(b.dataset.cvShiki)}`)));
       out.querySelectorAll("[data-cp]").forEach(b => b.addEventListener("click", () => { conv.page += Number(b.dataset.cp); load(); }));
     } catch (err) {
       out.innerHTML = /KODIK_CONVERTER/.test(err.message)
-        ? `Нужен вход в конвертер: ${codeBlock("KODIK_CONVERTER_LOGIN=логин_конвертера\nKODIK_CONVERTER_PASSWORD=пароль_конвертера")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}`
-        : esc(err.message);
+        ? `<div class="kk-empty"><b>Нужен вход в конвертер</b>${codeBlock("KODIK_CONVERTER_LOGIN=логин_конвертера\nKODIK_CONVERTER_PASSWORD=пароль_конвертера")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}</div>`
+        : `<div class="kk-empty">${esc(err.message)}</div>`;
     }
   };
   load();

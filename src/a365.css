@@ -381,3 +381,32 @@
 .kk-found { margin-top: 14px; }
 .kk-dcard > div:first-child .kk-dim { flex-basis: 100%; }
 .kk-dcard .kk-dump-f .btn { padding: 4px 10px; }
+
+/* ===== Kodik: конвертер карточками, озвучки рейтингом ===== */
+.kk-search { flex: 1 1 260px; min-width: 200px; width: auto; }
+.kk-ccard .kk-cover img, .kk-ccard .kk-cover .kk-noposter { width: 96px; height: 138px; }
+.kk-epbadge { position: absolute; left: 6px; right: 6px; bottom: 6px; text-align: center; font-size: 11px; font-weight: 600; padding: 3px 4px; border-radius: 6px; background: rgba(0, 0, 0, .72); color: #fff; }
+.kk-st.finished { color: #7ee2a0; }
+.kk-st.error { color: #ff8f88; }
+.kk-st.converting, .kk-st.downloading, .kk-st.uploading, .kk-st.waiting { color: var(--fire); }
+.kk-prog { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--line) 60%, transparent); overflow: hidden; }
+.kk-prog u { display: block; height: 100%; background: var(--fire); }
+.kk-card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.kk-acts { display: flex; gap: 4px; flex-wrap: wrap; }
+.kk-acts .btn { padding: 3px 9px; font-size: 12px; }
+.kk-pager { justify-content: center; align-items: center; }
+
+.kk-tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 6px 14px; }
+.kk-trow { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 38px minmax(120px, 1.2fr) 1fr 64px; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); cursor: pointer; border: 1px solid transparent; transition: border-color .15s; }
+.kk-trow:hover { border-color: var(--line); }
+.kk-trow.ours { border-color: var(--fire); background: color-mix(in srgb, var(--fire) 10%, var(--surface-2)); }
+.kk-rank { font-size: 12px; font-weight: 600; color: var(--ink-dim); text-align: center; font-variant-numeric: tabular-nums; }
+.kk-trow:nth-child(-n+3) .kk-rank { color: #ffd36a; }
+.kk-tname { display: flex; flex-direction: column; min-width: 0; }
+.kk-tname b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kk-tname i { font-style: normal; font-size: 11px; color: var(--ink-dim); }
+.kk-tbar { height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--line) 55%, transparent); overflow: hidden; }
+.kk-tbar u { display: block; height: 100%; border-radius: 4px; background: color-mix(in srgb, var(--fire) 60%, transparent); }
+.kk-trow.ours .kk-tbar u { background: var(--fire); }
+.kk-tcount { text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kk-cover { align-self: flex-start; }
