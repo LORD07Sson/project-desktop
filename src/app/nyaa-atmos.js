@@ -41,7 +41,7 @@ function setPalette(el, b) {
   for (const [k, v] of [["--ny-neon", b.neon], ["--ny-neon2", b.neon2], ["--ny-bg", b.bg], ["--ny-panel", b.panel], ["--ny-panel2", b.panel2], ["--fire-rgb", hexRgb(b.neon).join(", ")]]) el.style.setProperty(k, v);
 }
 // Пока открыта Nyaa — акцент баннера на всём приложении (верхнее меню, общий фон, кнопки); ушли со вкладки — как было.
-const APP_VARS = ["--fire", "--ember", "--gold", "--fire-rgb", "--ny-neon", "--ny-neon2", "--ny-bg"];
+const APP_VARS = ["--fire", "--ember", "--gold", "--fire-rgb", "--ny-neon", "--ny-neon2", "--ny-bg", "--ny-panel", "--ny-panel2", "--ny-banner"];
 function syncAppAtmos() {
   const de = document.documentElement;
   const on = !!current && document.querySelector('.tab-panel[data-panel="nyaa"]')?.classList.contains("active");
@@ -50,6 +50,8 @@ function syncAppAtmos() {
     de.style.setProperty("--fire", current.neon); de.style.setProperty("--ember", current.neon); de.style.setProperty("--gold", current.neon2);
     de.style.setProperty("--fire-rgb", hexRgb(current.neon).join(", "));
     de.style.setProperty("--ny-neon", current.neon); de.style.setProperty("--ny-neon2", current.neon2); de.style.setProperty("--ny-bg", current.bg);
+    de.style.setProperty("--ny-panel", current.panel); de.style.setProperty("--ny-panel2", current.panel2);
+    de.style.setProperty("--ny-banner", `url("${srcOf(current)}")`);
   } else if (de.dataset.nyAtmos) {
     delete de.dataset.nyAtmos;
     APP_VARS.forEach(v => de.style.removeProperty(v));

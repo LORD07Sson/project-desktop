@@ -4877,3 +4877,54 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 :root[data-ny-atmos] .tab-btn.active { color: var(--ny-neon); text-shadow: 0 0 12px color-mix(in srgb, var(--ny-neon) 60%, transparent); }
 .ny.ny-compact .ny-day { top: 52px; transition: top .35s ease; }
 .ny.ny-compact .ny-head { top: 46px; }
+
+/* ---------- Nyaa: правки — без сезонных частиц, на всю ширину, баннер без приближения, кнопки и страница раздачи в палитре баннера ---------- */
+:root[data-ny-atmos] .season-fx { display: none; }
+.tab-panel[data-panel="nyaa"] .ny { max-width: none; margin: -10px -32px -40px; padding: 14px 32px 80px; min-height: calc(100% + 50px); border-radius: 0; }
+.tab-panel[data-panel="nyaa"] .ny-mini > div { margin: 0 -32px; padding: 0 32px; }
+.ny-hero-bg, .ny-hero-bg.on { transform: none; transition: opacity 1.4s ease; }
+/* кнопки */
+.ny .btn { border-radius: 10px; border: 1px solid color-mix(in srgb, var(--ny-neon) 22%, transparent); background: color-mix(in srgb, var(--ny-panel) 85%, transparent); color: var(--ink); transition: background-color .2s, border-color .2s, box-shadow .2s, color .2s; }
+.ny .btn:hover { border-color: color-mix(in srgb, var(--ny-neon) 60%, transparent); background: color-mix(in srgb, var(--ny-neon) 14%, var(--ny-panel)); box-shadow: 0 0 16px -6px var(--ny-neon); }
+.ny .btn.ghost { background: transparent; border-color: transparent; }
+.ny .btn.ghost:hover { background: color-mix(in srgb, var(--ny-neon) 12%, transparent); color: #fff; }
+.ny .btn svg { stroke: var(--ny-neon); }
+.ny .btn.primary, .ny-drawer .btn.primary { background: linear-gradient(135deg, var(--ny-neon), color-mix(in srgb, var(--ny-neon) 60%, var(--ny-neon2))); color: #08090d; border-color: transparent; font-weight: 700; }
+.ny .btn.primary svg, .ny-drawer .btn.primary svg { stroke: #08090d; }
+.ny #ny-view { gap: 6px; background: none; border: 0; padding: 0; }
+.ny #ny-view button { padding: 6px 12px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--ny-neon) 18%, transparent); background: color-mix(in srgb, var(--ny-panel) 70%, transparent); transition: all .2s; }
+.ny #ny-view button:hover { border-color: color-mix(in srgb, var(--ny-neon) 50%, transparent); color: #fff; }
+.ny #ny-view button.on { border-color: var(--ny-neon); box-shadow: 0 0 12px -4px var(--ny-neon); }
+.ny .ny-ib { border-radius: 10px; transition: all .2s; }
+.ny .ny-ib:hover { color: var(--ny-neon); background: color-mix(in srgb, var(--ny-neon) 14%, transparent); box-shadow: 0 0 12px -5px var(--ny-neon); }
+/* страница раздачи */
+:root[data-ny-atmos] .ny-drawer { --ink: #f2f4f8; --ink-soft: color-mix(in srgb, #fff 74%, var(--ny-neon)); --n-t1: #f2f4f8; --n-t2: color-mix(in srgb, #fff 74%, var(--ny-neon)); --n-t3: color-mix(in srgb, #8a8f9c 75%, var(--ny-neon)); --n-line: color-mix(in srgb, var(--ny-neon) 14%, transparent); --line: color-mix(in srgb, var(--ny-neon) 14%, transparent);
+  color: var(--ink); padding-top: 0; border-left: 1px solid color-mix(in srgb, var(--ny-neon) 45%, transparent); border-radius: 22px 0 0 0;
+  background: radial-gradient(700px 400px at 100% 0%, color-mix(in srgb, var(--ny-neon) 12%, transparent), transparent 60%), var(--ny-bg); box-shadow: -30px 0 80px -30px var(--ny-neon); }
+:root[data-ny-atmos] .ny-d-head { position: relative; isolation: isolate; margin: 0 -20px; padding: 70px 20px 16px; overflow: hidden; border-bottom: 1px solid color-mix(in srgb, var(--ny-neon) 30%, transparent); }
+:root[data-ny-atmos] .ny-d-head::before { content: ""; position: absolute; inset: 0; z-index: -2; background: var(--ny-banner) center 30% / cover no-repeat; opacity: .55; }
+:root[data-ny-atmos] .ny-d-head::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, var(--ny-bg) 8%, color-mix(in srgb, var(--ny-bg) 40%, transparent) 70%, transparent); }
+:root[data-ny-atmos] .ny-d-head h3 { font-size: 19px; color: #fff; text-shadow: 0 0 16px color-mix(in srgb, var(--ny-neon) 60%, transparent), 0 2px 6px rgba(0, 0, 0, .7); }
+:root[data-ny-atmos] .ny-d-head .kd-label { color: var(--ny-neon); }
+:root[data-ny-atmos] .ny-d-head .ny-ib { position: absolute; top: 14px; right: 16px; background: color-mix(in srgb, var(--ny-bg) 60%, transparent); backdrop-filter: blur(8px); }
+:root[data-ny-atmos] .ny-drawer .btn { border-radius: 10px; border: 1px solid color-mix(in srgb, var(--ny-neon) 22%, transparent); background: var(--ny-panel); color: var(--ink); transition: all .2s; }
+:root[data-ny-atmos] .ny-drawer .btn:hover { border-color: color-mix(in srgb, var(--ny-neon) 60%, transparent); box-shadow: 0 0 16px -6px var(--ny-neon); }
+:root[data-ny-atmos] .ny-drawer .btn.primary { border-color: transparent; background: linear-gradient(135deg, var(--ny-neon), color-mix(in srgb, var(--ny-neon) 60%, var(--ny-neon2))); color: #08090d; font-weight: 700; }
+:root[data-ny-atmos] .ny-d-grid > div { background: var(--ny-panel); border: 1px solid color-mix(in srgb, var(--ny-neon) 14%, transparent); border-radius: 10px; }
+:root[data-ny-atmos] .ny-d-grid span { color: color-mix(in srgb, var(--ny-neon) 55%, #8a8f9c); }
+:root[data-ny-atmos] .ny-d-links .ny-link { padding: 4px 10px; border-radius: 99px; color: var(--ny-neon2); background: color-mix(in srgb, var(--ny-neon2) 10%, transparent); text-decoration: none; }
+:root[data-ny-atmos] .ny-d-links .ny-link:hover { background: color-mix(in srgb, var(--ny-neon2) 20%, transparent); }
+:root[data-ny-atmos] .ny-d-sub .ny-link:hover { color: var(--ny-neon); text-decoration: none; }
+:root[data-ny-atmos] .ny-d-tabs button.on { color: #fff; border-bottom-color: var(--ny-neon); text-shadow: 0 0 10px color-mix(in srgb, var(--ny-neon) 60%, transparent); }
+:root[data-ny-atmos] .ny-scrim { background: color-mix(in srgb, var(--ny-bg) 60%, rgba(0, 0, 0, .4)); backdrop-filter: blur(3px); }
+/* строки: обложка чётче, текст с мягкой обводкой для читаемости поверх картинки */
+.ny-list .ny-kind.has-cover { filter: none; opacity: .38; }
+.ny-list .ny-kind.has-cover img { filter: none; image-rendering: auto; }
+.ny-list .ny-row:hover .ny-kind.has-cover { opacity: .5; }
+.ny-list .ny-row::after { background: linear-gradient(90deg, var(--ny-panel, #0e1016) 18%, color-mix(in srgb, var(--ny-panel, #0e1016) 25%, transparent) 55%, color-mix(in srgb, var(--ny-panel, #0e1016) 75%, transparent) 100%); }
+.ny-list .ny-title, .ny-list .ny-nums, .ny-list .ny-size, .ny-list .ny-age { text-shadow: 0 0 1px rgba(0, 0, 0, .9), 0 1px 3px rgba(0, 0, 0, .85), 0 0 10px rgba(0, 0, 0, .5); }
+.ny-list .ny-title em { padding: 1px 6px; margin-right: 4px; border-radius: 6px; font-style: normal; font-weight: 700; color: #fff; text-shadow: none; background: color-mix(in srgb, var(--ny-neon) 26%, rgba(0, 0, 0, .35)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ny-neon) 55%, transparent); }
+.ny-list .ny-tags i { padding: 1px 6px; border-radius: 5px; font-style: normal; text-shadow: none; background: color-mix(in srgb, var(--ny-neon) 14%, rgba(0, 0, 0, .4)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ny-neon) 30%, transparent); }
+.ny-list .ny-kind.has-cover { left: 30%; -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%); mask-image: linear-gradient(90deg, transparent, #000 25%); }
+.ny-list .ny-tags i + i::before { content: none; }
+.ny-list .ny-tags { gap: 5px; }

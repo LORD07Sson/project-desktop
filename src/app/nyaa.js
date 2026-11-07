@@ -271,9 +271,10 @@ async function coverFallback(key, sample) {
 }
 
 // Готовые обложки живут на диске уменьшенными: при запуске список сразу с картинками, без скачивания заново.
-const COVER_DB = "project-nyaa-cover-cache";
-const COVER_SIZE = 112;
-const COVER_DB_LIMIT = 1500;
+const COVER_DB = "project-nyaa-cover-cache-hd";   // обложки 360px (раньше 112px — на всю строку выходили мылом)
+try { indexedDB.deleteDatabase("project-nyaa-cover-cache"); } catch (_) { /* старого кэша может не быть */ }
+const COVER_SIZE = 360;
+const COVER_DB_LIMIT = 700;
 let coverDb = null;
 
 function openCoverDb() {
