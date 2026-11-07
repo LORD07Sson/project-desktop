@@ -11,7 +11,8 @@ const RULES = [
   ['.tab-btn[data-tab="list"]', "reports.list"],
   ['.tab-btn[data-tab="calendar"]', "reports.calendar"],
   ['.tab-btn[data-tab="analytics"]', "reports.analytics"],
-  ['.tab-btn[data-tab="a365"]', ["a365.view", "a365.upload"]],
+  // «Заливка аниме и другие» — только разработчику и не в «Смотреть как…» (сервер режет так же).
+  ['.tab-btn[data-tab="a365"]', () => !!state.isDeveloper && !state.previewRole],
   ["#titles-admin-btn", "titles.create"],
   ["#team-roles-btn", "roles.manage"],
   ["#tn-edit", "notice.manage"],
@@ -20,7 +21,7 @@ const RULES = [
 export function applyPermVisibility() {
   if (!state.perms) return;
   for (const [selector, perm] of RULES) {
-    const allowed = [].concat(perm).some(can); // несколько прав — хватит любого
+    const allowed = typeof perm === "function" ? perm() : [].concat(perm).some(can); // несколько прав — хватит любого
     document.querySelectorAll(selector).forEach(el => {
       if (allowed) el.removeAttribute("data-perm-hidden"); else el.setAttribute("data-perm-hidden", "1");
       // Роль без звания админа: CSS прячет админские кнопки у «участника» — для выданного права снимаем это.
