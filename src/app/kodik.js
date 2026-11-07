@@ -388,9 +388,9 @@ limit=5</textarea>
     }
     out.innerHTML = `<div class="kk-dim">Выполняю…</div>`;
     try {
-      const started = performance.now();
+      const started = Date.now();
       const d = await apiGet(`/kodik/api/${box.querySelector("[data-kk-res]").value}`, params);
-      out.innerHTML = `<div class="kk-dim">${Math.round(performance.now() - started)} мс · ${d.total ?? (d.results || []).length} в ответе</div>` + codeBlock(JSON.stringify(d, null, 2).slice(0, 60000));
+      out.innerHTML = `<div class="kk-dim">${Date.now() - started} мс · ${d.total ?? (d.results || []).length} в ответе</div>` + codeBlock(JSON.stringify(d, null, 2).slice(0, 60000));
     } catch (err) { out.innerHTML = `<div class="kk-dim">${esc(err.message)}</div>`; }
   });
 }

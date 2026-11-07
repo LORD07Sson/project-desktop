@@ -103,7 +103,7 @@ async function renderList(box) {
   let files = [];
   try {
     [{ items }, { files }] = await Promise.all([call("items"), call("env").catch(() => ({ files: [] }))]);
-  } catch (e) { return renderGate(box, { has_phrase: true }); }
+  } catch (_) { return renderGate(box, { has_phrase: true }); }
   items.forEach(i => { i.id = String(i.id); });
   const envItems = files.flatMap(f => f.keys.map(key => ({ id: `env:${f.id}:${key}`, file: f.id, path: f.path, kind: "server", name: key, login: "", aliases: [f.path] })));
   const all = [...items, ...envItems];
