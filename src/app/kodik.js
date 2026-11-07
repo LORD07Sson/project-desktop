@@ -729,7 +729,7 @@ async function renderStats(box) {
         <div class="kk-two">
           <section class="kk-chart"><div class="kk-chart-h"><b>По дням недели</b><span class="kk-dim">в среднем за день · больше всего — ${WEEKDAYS[bestWd]}</span></div>
             <div class="kk-wd">${wdAvg.map((v, i) => `<div title="${WEEKDAYS[i]}: в среднем ${fmtN(v)}"><span>${fmtN(v)}</span><i style="height:${Math.max(3, v / wdMax * 100)}%" class="${i === bestWd ? "top" : ""}"></i><b>${WEEKDAYS[i]}</b></div>`).join("")}</div></section>
-          <section class="kk-chart kk-srcs"><div class="kk-chart-h"><b>По источникам</b><span class="kk-dim">за ${days} дн.</span></div><div class="kk-srclist kk-dim">Считаю…</div></section>
+          <section class="kk-chart kk-srcs"><div class="kk-chart-h"><b>Откуда показы</b><span class="kk-dim">доля от всех показов · ${days} дн.</span></div><div class="kk-srclist kk-dim">Считаю…</div></section>
         </div>`;
       if (!statsState.table) wireLineHover(out.querySelector(".kk-linewrap"), cur, prev);
       // Сравнение источников: тот же период по каждому (запросы кэшируются на сервере).
@@ -737,10 +737,25 @@ async function renderStats(box) {
       await sourcesReady;
       const totals = await Promise.all(sources.map(s => apiGet("/kodik/stats", { domain: s.value, start: isoDay(new Date(end.getTime() - (days - 1) * 86400000)), end: isoDay(end) })
         .then(r => r.rows.filter(x => !x.event || x.event === "impression").reduce((a, x) => a + (Number(x.count) || 0), 0)).catch(() => null)));
-      const smax = Math.max(1, ...totals.filter(v => v != null));
       if (!list.isConnected) return;
+      // Источники кабинета не складываются: «Все сайты» — все показы аккаунта, остальные — их части
+      // (озвучка — плееры с переводом DreamyVoice на любых сайтах; страница с плеером — ссылки w.kdkonl.com).
+      const allIdx = sources.findIndex(x => x.value === "all-sites");
+      const base = allIdx >= 0 && totals[allIdx] ? totals[allIdx] : Math.max(1, ...totals.filter(v => v != null));
+      const NOTE = { translation: "плееры с вашей озвучкой на любых сайтах", uid: "ваша страница с плеером — ссылки для соцсетей" };
+      const parts = sources.map((s, i) => ({ s, v: totals[i] })).filter(x => x.s.value !== "all-sites");
       list.className = "kk-srclist";
-      list.innerHTML = sources.map((s, i) => `<div class="kk-src${s.value === statsState.src ? " on" : ""}"><span>${esc(s.title)}</span><i><u style="width:${totals[i] == null ? 0 : totals[i] / smax * 100}%"></u></i><b>${totals[i] == null ? "—" : fmtN(totals[i])}</b></div>`).join("");
+      list.innerHTML = `<div class="kk-src-total"><b>${allIdx >= 0 && totals[allIdx] != null ? fmtN(totals[allIdx]) : "—"}</b><span>всего показов на всех сайтах</span></div>` +
+        parts.map(({ s, v }) => {
+          const pct = v == null ? null : v / base * 100;
+          const note = NOTE[s.value.split(":")[0]] || "";
+          const zero = v === 0 && s.value.startsWith("uid:") ? " Ноль — такими ссылками сейчас никто не пользуется." : "";
+          return `<div class="kk-src${s.value === statsState.src ? " on" : ""}">
+            <span>${esc(s.title)}<small class="kk-src-note">${esc(note + (note && zero ? "." : "") + zero)}</small></span>
+            <i><u style="width:${pct == null ? 0 : Math.min(100, pct)}%"></u></i>
+            <b>${v == null ? "—" : `${pct.toFixed(pct > 0 && pct < 1 ? 1 : 0)}%`}<em>${v == null ? "" : fmtN(v)}</em></b></div>`;
+        }).join("") +
+        `<p class="kk-dim kk-src-hint">Это не отдельные источники, а части «Всех сайтов»: их не складывают. Если доля озвучки — 100%, значит все показы аккаунта идут через плееры с DreamyVoice.</p>`;
     } catch (err) {
       out.innerHTML = /KODIK_LOGIN/.test(err.message)
         ? `<div class="kk-empty"><b>Нужен вход в кабинет</b><p>Добавь в <code>/etc/telegram-bot.env</code> две строки и перезапусти сервис:</p>${codeBlock("KODIK_LOGIN=логин_кабинета\nKODIK_PASSWORD=пароль_кабинета")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}</div>`
