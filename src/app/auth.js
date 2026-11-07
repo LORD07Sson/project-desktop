@@ -19,6 +19,7 @@ import { loadTitlebarTeam } from "./profile.js";
 import { refreshInbox, resetInbox } from "./inbox.js";
 import { maybeWelcome, resetTourUi } from "./tour.js";
 import { refreshPermissions, startPermissionsPolling } from "./permissions-refresh.js";
+import { initAppAtmos } from "./nyaa-atmos.js";
 
 // Экран загрузки при старте — тот же маскот/прогресс-бар, что и в
 // мини-аппе (см. #splash в miniapp/static/index.html). Держим минимум
@@ -195,6 +196,7 @@ export function showAuth(err) {
 export function showApp() {
   $("#auth-screen").hidden = true;
   $("#app-screen").hidden = false;
+  initAppAtmos().catch(() => { /* без атмосферы баннера — обычные цвета */ });
   $("#titlebar-apps").hidden = false;
   setDisplayName(state.name);
   // Первый пинг присутствия — сразу, а не через минуту: модуль

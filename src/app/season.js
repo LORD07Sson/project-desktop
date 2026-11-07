@@ -16,6 +16,16 @@ export function seasonPref() {
   return SEASONS[v] ? v : "auto";
 }
 
+// Эффекты сезона (частицы, свечение, гирлянда) можно выключить отдельно — значок на логотипе и цвета сезона остаются.
+const FX_KEY = "project-season-fx";
+export function seasonFxOn() {
+  try { return localStorage.getItem(FX_KEY) !== "0"; } catch (_) { return true; }
+}
+export function applySeasonFx(on) {
+  try { localStorage.setItem(FX_KEY, on ? "1" : "0"); } catch (_) { /* не запомним */ }
+  restart();
+}
+
 function byDate(d = new Date()) {
   const m = d.getMonth(), day = d.getDate();
   if ((m === 9 && day >= 24) || (m === 10 && day <= 2)) return "halloween";
@@ -422,8 +432,9 @@ function restart() {
     window.addEventListener("focus", wake);
     document.addEventListener("visibilitychange", wake);
   }
-  layer.hidden = false;
   putHat();
+  if (!seasonFxOn()) { layer.hidden = true; kind = ""; drawGarland(); return; }
+  layer.hidden = false;
   watchHangers();
   drawGarland();
   setTimeout(drawGarland, 1500);   // вкладки и аватарки команды дорисовываются после входа

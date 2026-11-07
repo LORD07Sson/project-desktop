@@ -11,7 +11,8 @@ import { isDevModeOn, setDevModeOn } from "./devmode.js";
 import { desktopNotifyEnabled, setDesktopNotifyEnabled, NOTIFY_KINDS, notifyKinds, setNotifyKind, quietHours, setQuietHours } from "./desktop-notify.js";
 import { ACCENTS, SCALES, START_TABS, currentAccent, applyAccent, currentScale, applyScale, currentMotion, applyMotion, backdropOn, applyBackdrop, startTab, setStartTab } from "./ui-prefs.js";
 import { GROUPS as SHORTCUT_GROUPS } from "./shortcuts-help.js";
-import { SEASONS, seasonPref, applySeason } from "./season.js";
+import { SEASONS, seasonPref, applySeason, seasonFxOn, applySeasonFx } from "./season.js";
+import { ATMOS_MIX, atmosMix, setAtmosMix, refreshAppAtmos } from "./nyaa-atmos.js";
 import { avatarHtml, loadAvatars } from "./profile.js";
 import { previewOptionsHtml, setPreviewRole } from "./role-preview.js";
 import { fetchPerson, openPauseDialog } from "./people.js";
@@ -182,6 +183,7 @@ async function openSettings() {
                 <span class="st-pal-prev" style="--p0:${a.sw[0]};--p1:${a.sw[1]};--p2:${a.sw[2]};--p3:${a.sw[3]}"><i></i><i></i><i></i><i></i></span>
                 <b>${a.label}</b></button>`).join("")}
             </div>
+            ${row(ICONS.look, "Цвета баннера", "Баннер сверху красит приложение своими цветами — полностью, пополам с цветовой темой или не красит", seg("data-st-mix", Object.entries(ATMOS_MIX), atmosMix()), "баннер атмосфера цвет смешать 50")}
           </div>
           <div class="st-group" data-st-find="тема тёмная светлая огонь золото свечение фон">
             <div class="st-group-h">Фон</div>
@@ -197,6 +199,7 @@ async function openSettings() {
             ${row(ICONS.density, "Плотность таблиц", "Сколько строк влезает в «Список»", seg("data-st-density", [["comfortable", "Обычная"], ["compact", "Компактная"]], density))}
             ${row(ICONS.motion, "Анимации", "Выключите на слабом компьютере", seg("data-st-motion", [["on", "Включены"], ["off", "Выключены"]], motion), "движение плавность")}
             ${row(ICONS.look, "Сезонное оформление", "Снег зимой, сакура весной, светлячки летом, листопад осенью", seg("data-st-season", Object.entries(SEASONS), seasonPref()), "сезон зима весна лето осень снег листья сакура светлячки")}
+            ${row(ICONS.motion, "Эффекты сезона", "Листья, снег, свечение и гирлянда за окном. Значок на логотипе и цвета остаются", sw("s-season-fx", seasonFxOn()), "сезон эффекты частицы листья снег гирлянда")}
             ${row(ICONS.backdrop, "Фон из кадра тайтла", "Размытая обложка серии за интерфейсом", sw("s-backdrop", backdropOn()), "фон обложка размытие")}
           </div>
           <div class="st-group" data-st-find="своя тема размытие стекла скругления углы блюр">
@@ -644,6 +647,11 @@ async function openSettings() {
   overlay.querySelectorAll("[data-st-accent]").forEach(b => b.addEventListener("click", () => {
     overlay.querySelectorAll("[data-st-accent]").forEach(x => x.classList.toggle("on", x === b));
     applyAccent(b.dataset.stAccent);
+    refreshAppAtmos();
+  }));
+  overlay.querySelectorAll("[data-st-mix]").forEach(b => b.addEventListener("click", () => {
+    pick("data-st-mix", null, b.dataset.stMix);
+    setAtmosMix(b.dataset.stMix);
   }));
   overlay.querySelectorAll("[data-st-scale]").forEach(b => b.addEventListener("click", () => {
     pick("data-st-scale", null, b.dataset.stScale);
@@ -663,6 +671,7 @@ async function openSettings() {
     applySeason(b.dataset.stSeason);
   }));
   overlay.querySelector("#s-backdrop").addEventListener("change", e => applyBackdrop(e.target.checked));
+  overlay.querySelector("#s-season-fx").addEventListener("change", e => applySeasonFx(e.target.checked));
 
   // Уведомления
   overlay.querySelectorAll("[data-st-kind]").forEach(inp => inp.addEventListener("change", () => setNotifyKind(inp.dataset.stKind, inp.checked)));

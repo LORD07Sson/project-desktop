@@ -4879,7 +4879,7 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .ny.ny-compact .ny-head { top: 46px; }
 
 /* ---------- Nyaa: правки — без сезонных частиц, на всю ширину, баннер без приближения, кнопки и страница раздачи в палитре баннера ---------- */
-:root[data-ny-atmos] .season-fx { display: none; }
+body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 .tab-panel[data-panel="nyaa"] .ny { max-width: none; margin: -10px -32px -40px; padding: 14px 32px 80px; min-height: calc(100% + 50px); border-radius: 0; }
 .tab-panel[data-panel="nyaa"] .ny-mini > div { margin: 0 -32px; padding: 0 32px; }
 .ny-hero-bg, .ny-hero-bg.on { transform: none; transition: opacity 1.4s ease; }
@@ -4973,3 +4973,34 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .ny-dots button.pin { width: 20px; height: 20px; font-size: 11px; line-height: 20px; background: transparent; filter: grayscale(1); opacity: .55; transition: opacity .2s, filter .2s, transform .2s; }
 .ny-dots button.pin:hover { opacity: 1; background: transparent; }
 .ny-dots button.pin.on { width: 20px; filter: none; opacity: 1; background: transparent; box-shadow: none; transform: rotate(-20deg); text-shadow: 0 0 8px var(--ny-neon); }
+.ny-drawer > * { flex-shrink: 0; }
+
+
+/* ---------- атмосфера баннера на всём приложении (тёмные темы): фон, стекло, линии, отсвет картинки за окном ---------- */
+:root[data-ny-atmos]:not([data-theme="light"]) {
+  --bg: var(--ny-bg); --bg-2: var(--ny-panel);
+  --surface: color-mix(in srgb, var(--ny-panel) 92%, #000); --surface-2: var(--ny-panel); --surface-3: var(--ny-panel2); --surface-4: color-mix(in srgb, var(--ny-panel2) 80%, #fff 6%);
+  --glass-bg: color-mix(in srgb, var(--ny-panel) 62%, transparent); --glass-bg-strong: color-mix(in srgb, var(--ny-panel) 92%, transparent);
+  --glass-border: color-mix(in srgb, var(--ny-neon) 16%, transparent);
+  --line: color-mix(in srgb, var(--ny-neon) 12%, transparent); --line-soft: color-mix(in srgb, var(--ny-neon) 7%, transparent);
+  --ink-soft: color-mix(in srgb, #fff 72%, var(--ny-neon)); --ink-dim: color-mix(in srgb, #8a8f9c 78%, var(--ny-neon));
+}
+/* размытый баннер за всем окном — поверх кадра тайтла, мягко */
+:root[data-ny-atmos]:not([data-theme="light"]) .app-backdrop::before { content: ""; position: absolute; inset: -120px; background: var(--ny-banner) center 30% / cover no-repeat; filter: blur(90px) saturate(1.5) brightness(.55); opacity: .55; transition: background-image 1.4s; }
+:root[data-ny-atmos]:not([data-theme="light"]) .app-backdrop { background: radial-gradient(70% 55% at 75% 0%, rgba(var(--fire-rgb), .2), transparent 70%), radial-gradient(60% 60% at 0% 100%, rgba(var(--gold-rgb), .12), transparent 70%), var(--ny-bg); }
+/* шапка окна и вкладки — в тон баннера */
+:root[data-ny-atmos]:not([data-theme="light"]) .titlebar { background: color-mix(in srgb, var(--ny-bg) 80%, transparent); border-bottom-color: color-mix(in srgb, var(--ny-neon) 18%, transparent); }
+:root[data-ny-atmos] .tab-btn.active::after { background: var(--ny-neon); box-shadow: 0 0 10px var(--ny-neon); }
+/* полоса-баннер: неоновая кромка снизу, медленный блик, мягкое свечение */
+/* карточки и панели на вкладках — тонкая неоновая кромка сверху */
+:root[data-ny-atmos]:not([data-theme="light"]) .tab-panel:not([data-panel="nyaa"]) :is(.kd-card, .card, .panel, .glass) { border-color: color-mix(in srgb, var(--ny-neon) 16%, transparent); }
+
+
+/* ---------- баннер в шапке окна (nyaa-atmos.js paintStrips): на всех вкладках, кроме Nyaa ---------- */
+.titlebar { position: relative; isolation: isolate; }
+.tb-banner { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; transition: opacity .4s; }
+.tb-banner i { position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0; transition: opacity 1.4s ease; }
+.tb-banner i.on { opacity: 1; }
+.tb-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--ny-bg, #000) 55%, transparent) 0%, color-mix(in srgb, var(--ny-bg, #000) 72%, transparent) 30%, color-mix(in srgb, var(--ny-bg, #000) 72%, transparent) 70%, color-mix(in srgb, var(--ny-bg, #000) 50%, transparent) 100%); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ny-neon, var(--fire)) 45%, transparent); }
+body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
+:root[data-theme="light"] .tb-banner { display: none; }

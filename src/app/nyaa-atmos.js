@@ -15,6 +15,7 @@ import banner4k2 from "../assets/nyaa/banner4-2k.webp";
 import banner4k4 from "../assets/nyaa/banner4-4k.webp";
 import { invoke, pickInputFile } from "./tauri.js";
 import { toast, askConfirm } from "./api.js";
+import { ACCENTS, currentAccent } from "./ui-prefs.js";
 
 // neon — главный акцент, neon2 — второй, bg — фон страницы, panel/panel2 — панели
 const BUILTIN = [
@@ -44,17 +45,41 @@ function setPalette(el, b) {
   for (const [k, v] of [["--ny-neon", b.neon], ["--ny-neon2", b.neon2], ["--ny-bg", b.bg], ["--ny-panel", b.panel], ["--ny-panel2", b.panel2], ["--fire-rgb", hexRgb(b.neon).join(", ")]]) el.style.setProperty(k, v);
 }
 // Пока открыта Nyaa — акцент баннера на всём приложении (верхнее меню, общий фон, кнопки); ушли со вкладки — как было.
-const APP_VARS = ["--fire", "--ember", "--gold", "--fire-rgb", "--ny-neon", "--ny-neon2", "--ny-bg", "--ny-panel", "--ny-panel2", "--ny-banner"];
+const APP_VARS = ["--gold-rgb", "--glow-rgb", "--fire", "--ember", "--gold", "--fire-rgb", "--ny-neon", "--ny-neon2", "--ny-bg", "--ny-panel", "--ny-panel2", "--ny-banner"];
+// Насколько цвета баннера красят приложение (Настройки → Внешний вид → «Цвета баннера»):
+// full — полностью баннер, half — пополам с выбранной цветовой темой, own — только своя тема.
+export const ATMOS_MIX = { full: "Баннер", half: "50 / 50", own: "Своя тема" };
+const MIX_KEY = "project-atmos-mix";
+export function atmosMix() {
+  let v = "full";
+  try { v = localStorage.getItem(MIX_KEY) || "full"; } catch (_) { /* не критично */ }
+  return ATMOS_MIX[v] ? v : "full";
+}
+export function setAtmosMix(v) {
+  try { localStorage.setItem(MIX_KEY, ATMOS_MIX[v] ? v : "full"); } catch (_) { /* не запомним */ }
+  syncAppAtmos();
+}
+/** Цветовую тему сменили в настройках — заново смешать с баннером. */
+export function refreshAppAtmos() { syncAppAtmos(); }
+const mixHex = (a, b, k) => "#" + hexRgb(a).map((v, i) => Math.round(v * (1 - k) + hexRgb(b)[i] * k).toString(16).padStart(2, "0")).join("");
+
 function syncAppAtmos() {
   const de = document.documentElement;
-  const on = !!current && document.querySelector('.tab-panel[data-panel="nyaa"]')?.classList.contains("active");
+  const mode = atmosMix();
+  const on = !!current && mode !== "own";
   if (on) {
+    // своя тема: акцент, второй цвет, фон, карточка — из образца выбранной палитры
+    const sw = (ACCENTS[currentAccent()] || ACCENTS.original).sw;
+    const k = mode === "half" ? 0.5 : 0;
+    const c = { neon: mixHex(current.neon, sw[2], k), neon2: mixHex(current.neon2, sw[3], k), bg: mixHex(current.bg, sw[0], k), panel: mixHex(current.panel, sw[1], k), panel2: mixHex(current.panel2, sw[1], k) };
     de.dataset.nyAtmos = "1";
-    de.style.setProperty("--fire", current.neon); de.style.setProperty("--ember", current.neon); de.style.setProperty("--gold", current.neon2);
-    de.style.setProperty("--fire-rgb", hexRgb(current.neon).join(", "));
-    de.style.setProperty("--ny-neon", current.neon); de.style.setProperty("--ny-neon2", current.neon2); de.style.setProperty("--ny-bg", current.bg);
-    de.style.setProperty("--ny-panel", current.panel); de.style.setProperty("--ny-panel2", current.panel2);
+    de.style.setProperty("--fire", c.neon); de.style.setProperty("--ember", c.neon); de.style.setProperty("--gold", c.neon2);
+    de.style.setProperty("--fire-rgb", hexRgb(c.neon).join(", ")); de.style.setProperty("--gold-rgb", hexRgb(c.neon2).join(", ")); de.style.setProperty("--glow-rgb", hexRgb(c.neon).join(", "));
+    de.style.setProperty("--ny-neon", c.neon); de.style.setProperty("--ny-neon2", c.neon2); de.style.setProperty("--ny-bg", c.bg);
+    de.style.setProperty("--ny-panel", c.panel); de.style.setProperty("--ny-panel2", c.panel2);
     de.style.setProperty("--ny-banner", `url("${srcOf(current)}")`);
+    const ny = rootEl();
+    if (ny) setPalette(ny, c);
   } else if (de.dataset.nyAtmos) {
     delete de.dataset.nyAtmos;
     APP_VARS.forEach(v => de.style.removeProperty(v));
@@ -73,11 +98,18 @@ function firstIndex() {
 function show(i, instant) {
   const root = rootEl();
   const hero = root && root.querySelector(".ny-hero");
-  if (!hero || !banners.length) return;
+  if (!banners.length) return;
   i = ((i % banners.length) + banners.length) % banners.length;
   const b = banners[i];
   idx = i; current = b;
   try { localStorage.setItem("project-nyaa-banner", String(i)); } catch (_) { /* не критично */ }
+  if (!hero) {
+    const img = new Image();
+    img.onload = img.onerror = () => { syncAppAtmos(); paintStrips(); };
+    img.src = srcOf(b);
+    if (instant) { syncAppAtmos(); paintStrips(); }
+    return;
+  }
   const put = () => {
     const layer = document.createElement("div");
     layer.className = "ny-hero-bg";
@@ -86,6 +118,7 @@ function show(i, instant) {
     hero.prepend(layer);
     setPalette(root, b);
     syncAppAtmos();
+    paintStrips();
     paintDots(root);
     const on = () => { layer.classList.add("on"); hero.querySelectorAll(".ny-hero-bg:not(:first-child)").forEach(old => setTimeout(() => old.remove(), 1600)); };
     if (instant) on(); else requestAnimationFrame(() => requestAnimationFrame(on));
@@ -98,8 +131,7 @@ function show(i, instant) {
 function restartTimer() {
   clearInterval(timer);
   timer = setInterval(() => {
-    const r = rootEl();
-    if (!r || document.hidden || !r.offsetParent || paused || pinned) return;   // вкладка не на экране или курсор на баннере
+    if (document.hidden || paused || pinned) return;   // окно свёрнуто, курсор на баннере или баннер закреплён
     show(idx + 1, false);
   }, EVERY_MS);
 }
@@ -311,6 +343,33 @@ function wireRowTint(root) {
     const col = coverTint.get(key);
     if (col) row.style.setProperty("--row-neon", col);
   });
+}
+
+// ---------- баннер в шапке окна (за вкладками и кнопками) — на всех вкладках, кроме Nyaa со своей большой шапкой ----------
+function paintStrips() {
+  const bar = document.getElementById("titlebar");
+  if (!current || !bar) return;
+  const url = `url("${srcOf(current)}")`;
+  let box = bar.querySelector(":scope > .tb-banner");
+  if (!box) {
+    bar.insertAdjacentHTML("afterbegin", `<div class="tb-banner" aria-hidden="true"><i></i></div>`);
+    box = bar.firstElementChild;
+  }
+  const old = box.querySelector("i:last-child");
+  if (old.dataset.src === url) return;
+  const next = document.createElement("i");
+  next.dataset.src = url;
+  next.style.backgroundImage = url;
+  next.style.backgroundPosition = current.pos || "center";
+  box.appendChild(next);
+  requestAnimationFrame(() => requestAnimationFrame(() => { next.classList.add("on"); setTimeout(() => box.querySelectorAll("i:not(:last-child)").forEach(x => x.remove()), 1500); }));
+}
+
+/** При запуске приложения: выбрать баннер и раскрасить всё приложение его палитрой, не дожидаясь вкладки Nyaa. */
+export async function initAppAtmos() {
+  if (idx < 0) show(firstIndex(), true);
+  if (!timer) restartTimer();
+  await loadOwn();
 }
 
 // ---------- для nyaa.js ----------
