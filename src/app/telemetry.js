@@ -183,7 +183,8 @@ function savePendingNet(list) {
 export async function runNetCheck() {
   if (!trackingOn() || !state.token) return;
   lastNet = Date.now();
-  const result = { server_ok: false, server_ms: null, server_error: "", dns_ok: null, dns_ms: null, dns_provider: "", dns_servers: [] };
+  // at — когда проверка сделана: неудачные уходят на сервер позже, пачкой, и без него время сбоя терялось.
+  const result = { at: Date.now(), server_ok: false, server_ms: null, server_error: "", dns_ok: null, dns_ms: null, dns_provider: "", dns_servers: [] };
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
   const t0 = window.performance.now();
