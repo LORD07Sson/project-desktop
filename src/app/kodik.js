@@ -24,7 +24,32 @@ const store = {
 };
 
 let view = store.get(VIEW_KEY, "catalog");
-const cat = { q: "", types: "anime-serial,anime", status: "", items: [], next: "", loading: false };
+const cat = { q: "", types: "anime-serial,anime", status: "", genre: "", year: "", country: "", quality: "", items: [], next: "", loading: false };
+const facets = {};
+const PROGRESS_KEY = "project-kodik-progress";
+
+// Где остановился в плеере Kodik: ключ — ссылка плеера без параметров. Приходит из postMessage плеера.
+function progressAll() { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || "{}"); } catch (_) { return {}; } }
+function progressOf(link) { return progressAll()[(link || "").split("?")[0]] || null; }
+function saveProgress(link, patch) {
+  const all = progressAll();
+  const key = (link || "").split("?")[0];
+  all[key] = { ...(all[key] || {}), ...patch, at: Date.now() };
+  const keys = Object.keys(all);
+  if (keys.length > 300) keys.sort((a, b) => all[a].at - all[b].at).slice(0, keys.length - 300).forEach(k => delete all[k]);
+  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(all)); } catch (_) { /* без памяти — просто не продолжим */ }
+}
+const clock = sec => { sec = Math.max(0, Math.round(sec || 0)); const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, x = String(sec % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
+
+async function loadFacets(types) {
+  const key = types || "all";
+  if (facets[key]) return facets[key];
+  const q = types ? { types } : {};
+  const [g, y, c, ql] = await Promise.all(["genres", "years", "countries", "qualities/v2"].map(r =>
+    apiGet(`/kodik/api/${r}`, r === "years" ? q : { ...q, sort: "count" }).then(d => d.results || []).catch(() => [])));
+  facets[key] = { genres: g, years: y, countries: c, qualities: ql };
+  return facets[key];
+}
 
 // ---------- переключатель Anime 365 / Kodik ----------
 
@@ -107,7 +132,7 @@ function cardHtml(g) {
     <div class="kk-card-main">
       <b>${esc(r.title)}</b>
       <span class="kk-dim">${esc([r.title_orig, r.year, eps, m.anime_status && ({ ongoing: "онгоинг", released: "вышло", anons: "анонс" })[m.anime_status], m.shikimori_rating && `★ ${m.shikimori_rating}`].filter(Boolean).join(" · "))}</span>
-      <div class="kk-dubs">${dubs.slice(0, 12).map(d => `<button type="button" class="kk-dub${/dreamy/i.test(d.translation?.title || "") ? " ours" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="Открыть плеер">${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 12 ? `<span class="kk-dim">+${dubs.length - 12}</span>` : ""}</div>
+      <div class="kk-dubs">${dubs.slice(0, 12).map(d => `<button type="button" class="kk-dub${/dreamy/i.test(d.translation?.title || "") ? " ours" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${progressOf(playerUrl(d.link)) ? "Продолжить просмотр" : "Открыть плеер"}">${progressOf(playerUrl(d.link)) ? "▶ " : ""}${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 12 ? `<span class="kk-dim">+${dubs.length - 12}</span>` : ""}</div>
       <div class="kk-ids">${r.shikimori_id ? `<span>shikimori ${esc(r.shikimori_id)}</span>` : ""}${r.kinopoisk_id ? `<span>КП ${esc(r.kinopoisk_id)}</span>` : ""}<span>${esc(r.id)}</span></div>
     </div>
   </article>`;
@@ -120,6 +145,9 @@ async function fetchCatalog(more) {
     const q = cat.q.trim();
     const common = { types: cat.types, with_material_data: "true", limit: 100 };
     if (cat.status) common.anime_status = cat.status;
+    if (cat.genre) common.all_genres = cat.genre;
+    if (cat.year) common.year = cat.year;
+    if (cat.country) common.countries = cat.country;
     let d;
     if (q) d = await apiGet("/kodik/api/search", { ...common, ...(/^\d+$/.test(q) ? { shikimori_id: q } : { title: q }) });
     else d = await apiGet("/kodik/api/list", { ...common, sort: "updated_at", ...(more && cat.next ? { next: cat.next } : {}) });
@@ -140,10 +168,29 @@ async function renderCatalog(box) {
         ${[["", "Любой статус"], ["ongoing", "Онгоинги"], ["released", "Вышедшие"], ["anons", "Анонсы"]].map(([v, t]) => `<option value="${v}"${cat.status === v ? " selected" : ""}>${t}</option>`).join("")}
       </select>
     </div>
+    <div class="kk-tools kk-facets">
+      <select class="field-input" data-kk-f="genre"><option value="">Жанр</option></select>
+      <select class="field-input" data-kk-f="year"><option value="">Год</option></select>
+      <select class="field-input" data-kk-f="country"><option value="">Страна</option></select>
+      <select class="field-input" data-kk-f="quality"><option value="">Качество</option></select>
+      <button type="button" class="btn ghost" data-kk-reset>Сбросить</button>
+    </div>
     <div class="kk-list"><div class="kk-dim">Загружаю…</div></div>`;
   const list = box.querySelector(".kk-list");
+  const fillFacets = async () => {
+    const f = await loadFacets(cat.types);
+    const opts = (sel, rows, label, val) => {
+      const el = box.querySelector(`[data-kk-f="${sel}"]`);
+      if (!el) return;
+      el.innerHTML = `<option value="">${label}</option>` + rows.map(r => { const v = String(r.title ?? r.year); return `<option value="${esc(v)}"${val === v ? " selected" : ""}>${esc(v)} · ${r.count}</option>`; }).join("");
+    };
+    opts("genre", f.genres, "Жанр", cat.genre); opts("year", f.years, "Год", cat.year);
+    opts("country", f.countries, "Страна", cat.country); opts("quality", f.qualities, "Качество", cat.quality);
+  };
+  fillFacets();
   const paint = () => {
-    const groups = groupResults(cat.items);
+    // Фильтра по качеству в API нет — отбираем по полю quality в ответе.
+    const groups = groupResults(cat.quality ? cat.items.filter(r => r.quality === cat.quality) : cat.items);
     list.innerHTML = groups.length
       ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${cat.total ?? "?"} материалов`}</div>${groups.map(cardHtml).join("")}${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
       : `<div class="kk-dim">Ничего не нашлось.</div>`;
@@ -155,7 +202,9 @@ async function renderCatalog(box) {
   };
   let t = 0;
   box.querySelector("[data-kk-q]").addEventListener("input", e => { cat.q = e.target.value; clearTimeout(t); t = setTimeout(reload, 450); });
-  box.querySelector("[data-kk-types]").addEventListener("change", e => { cat.types = e.target.value; reload(); });
+  box.querySelector("[data-kk-types]").addEventListener("change", e => { cat.types = e.target.value; fillFacets(); reload(); });
+  box.querySelectorAll("[data-kk-f]").forEach(el => el.addEventListener("change", () => { cat[el.dataset.kkF] = el.value; if (el.dataset.kkF === "quality") paint(); else reload(); }));
+  box.querySelector("[data-kk-reset]").addEventListener("click", () => { Object.assign(cat, { genre: "", year: "", country: "", quality: "", status: "", items: [] }); renderCatalog(box); });
   box.querySelector("[data-kk-status]").addEventListener("change", e => { cat.status = e.target.value; reload(); });
   list.addEventListener("click", e => {
     const p = e.target.closest("[data-kk-play]");
@@ -165,10 +214,23 @@ async function renderCatalog(box) {
 }
 
 export function openKodikPlayer(link, title) {
-  const src = playerUrl(link);
+  const base = playerUrl(link);
+  // Продолжить с того же места: серия, сезон и секунда из прошлого просмотра (API плеера).
+  const prog = progressOf(base);
+  let src = base;
+  if (prog && !/[?&](season|episode|start_from)=/.test(base)) {
+    const u = new URL(base);
+    if (prog.season != null) u.searchParams.set("season", prog.season);
+    if (prog.episode != null) u.searchParams.set("episode", prog.episode);
+    if (prog.time > 15 && !prog.ended) u.searchParams.set("start_from", Math.floor(prog.time - 5));
+    src = u.toString();
+  }
   const overlay = openSheet(`
     <div class="kk-player-head"><b>${esc(title || "Kodik")}</b>
-      <button type="button" class="btn ghost" data-kk-copy="${esc(src)}">Ссылка</button>
+      <span class="kk-dim" data-kk-now>${prog ? esc(`продолжаю: ${prog.episode ? `${prog.season ?? 1} сезон, ${prog.episode} серия, ` : ""}${clock(prog.time)}`) : ""}</span>
+      <button type="button" class="btn ghost" data-kk-cmd="prev" title="Предыдущая серия">‹</button>
+      <button type="button" class="btn ghost" data-kk-cmd="next" title="Следующая серия">›</button>
+      <button type="button" class="btn ghost" data-kk-copy="${esc(base)}">Ссылка</button>
       <button type="button" class="btn ghost" data-kk-page title="Если плеер здесь пишет «страницы не существует»">Открыть в браузере ↗</button>
       <button type="button" class="btn ghost" data-close>Закрыть</button></div>
     <div class="kk-player"><iframe src="${esc(src)}" allow="autoplay *; fullscreen *; picture-in-picture *" allowfullscreen referrerpolicy="origin"></iframe></div>`, "wide");
@@ -176,12 +238,40 @@ export function openKodikPlayer(link, title) {
   // Голая ссылка плеера вне сайта у Kodik не открывается — в браузер отдаём их «страницу с плеером».
   overlay.querySelector("[data-kk-page]").addEventListener("click", async () => {
     try {
-      const d = await apiGet("/kodik/api/search", { player_link: src, with_page_links: "true", limit: 1 });
+      const d = await apiGet("/kodik/api/search", { player_link: base, with_page_links: "true", limit: 1 });
       const page = d.results?.[0]?.link;
-      openExternal(page ? playerUrl(page) : src);
+      openExternal(page ? playerUrl(page) : base);
     } catch (err) { toast(err.message, "error"); }
   });
-  overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+  const frame = overlay.querySelector("iframe");
+  const now = overlay.querySelector("[data-kk-now]");
+  const cur = { season: prog?.season ?? null, episode: prog?.episode ?? null, time: 0 };
+  const send = value => frame.contentWindow?.postMessage({ key: "kodik_player_api", value }, "*");
+  let lastSave = 0;
+  const onMessage = e => {
+    if (e.source !== frame.contentWindow || !e.data || typeof e.data.key !== "string") return;
+    const { key, value } = e.data;
+    if (key === "kodik_player_current_episode" && value) {
+      cur.season = value.season; cur.episode = value.episode;
+      saveProgress(base, { season: value.season, episode: value.episode, translation: value.translation?.title || "", time: 0, ended: false });
+    } else if (key === "kodik_player_time_update" || key === "kodik_player_time") {
+      cur.time = Number(value) || 0;
+      if (Date.now() - lastSave > 5000) { lastSave = Date.now(); saveProgress(base, { season: cur.season, episode: cur.episode, time: cur.time, ended: false }); }
+    } else if (key === "kodik_player_video_ended") {
+      saveProgress(base, { ended: true });
+    } else return;
+    now.textContent = `${cur.episode ? `${cur.season ?? 1} сезон, ${cur.episode} серия · ` : ""}${clock(cur.time)}`;
+  };
+  window.addEventListener("message", onMessage);
+  const close = () => { if (cur.time) saveProgress(base, { season: cur.season, episode: cur.episode, time: cur.time }); window.removeEventListener("message", onMessage); };
+  overlay.addEventListener("sheet-dismissed", close);
+  overlay.querySelectorAll("[data-kk-cmd]").forEach(b => b.addEventListener("click", () => {
+    if (!cur.episode) { toast("Номер серии плеер ещё не прислал — запусти видео", "info"); return; }
+    const episode = cur.episode + (b.dataset.kkCmd === "next" ? 1 : -1);
+    if (episode < 1) return;
+    send({ method: "change_episode", ...(cur.season != null ? { season: cur.season } : {}), episode, without_reload: true });
+  }));
+  overlay.querySelector("[data-close]").addEventListener("click", () => { close(); overlay.remove(); });
   overlay.querySelector("[data-kk-copy]").addEventListener("click", e => navigator.clipboard.writeText(e.target.dataset.kkCopy).then(() => toast("Ссылка на плеер скопирована", "success")));
 }
 
@@ -251,7 +341,8 @@ const RESOURCES = {
   search: "Поиск тайтла: по названию (нечётко) или по ID — shikimori_id, kinopoisk_id, imdb_id, mdl_id, worldart_*.",
   list: "Весь каталог страницами (limit до 100, переход по next). Фильтры почти по любому полю.",
   "translations/v2": "Все озвучки (ID, название, число тайтлов) — для всей базы или по фильтрам.",
-  genres: "Жанры", years: "Годы", countries: "Страны", "qualities/v2": "Качества видео",
+  genres: "Жанры (genres_type: kinopoisk, shikimori, mydramalist, all)", years: "Годы", countries: "Страны", "qualities/v2": "Качества видео с числом материалов",
+  translations: "Озвучки, старая версия (без числа тайтлов, с типом voice/subtitles)", qualities: "Качества видео, старая версия (только названия)",
 };
 
 const API_PARAMS = [
@@ -464,9 +555,57 @@ function renderDle(box) {
 
 // ---------- Статистика ----------
 
-function renderStats(box) {
-  box.innerHTML = `<p class="kk-dim">Статистика просмотров (по сайтам и странице с плеером, за период и за сегодня) у Kodik есть только в кабинете — через API её не отдают. Откроется в браузере — там нужен вход в кабинет.</p>
-    <div class="kk-row"><button type="button" class="btn primary" data-kk-open="/users/stats">Статистика ↗</button><button type="button" class="btn ghost" data-kk-open="/users/profile">Настройки кабинета ↗</button><button type="button" class="btn ghost" data-kk-open="/api-links">Найденные плееры ↗</button></div>`;
+async function renderStats(box) {
+  box.innerHTML = `
+    <div class="kk-tools">
+      <select class="field-input" data-st-src><option value="all-sites">Все сайты</option></select>
+      <select class="field-input" data-st-range>
+        <option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">90 дней</option><option value="365">Год</option>
+      </select>
+      <button type="button" class="btn ghost" data-kk-open="/users/stats">Кабинет ↗</button>
+    </div>
+    <div class="kk-stats kk-dim">Загружаю…</div>
+    <p class="kk-dim">Показы рекламы в плеерах — то, что кабинет называет статистикой. Данные берутся из кабинета через наш сервер и обновляются раз в 10 минут.</p>
+    <h4>Найденные плееры</h4>
+    <p class="kk-dim">Результаты скрипта автодобавления по страницам сайта. Сейчас в профиле кабинета нет ни одного сайта, поэтому список пуст — для страниц с плеером он не нужен. Добавишь сайт — плееры появятся в кабинете.</p>
+    <div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/api-links">Найденные плееры ↗</button><button type="button" class="btn ghost" data-kk-open="/users/profile">Настройки кабинета ↗</button></div>`;
+  const out = box.querySelector(".kk-stats");
+  const src = box.querySelector("[data-st-src]");
+  const range = box.querySelector("[data-st-range]");
+  apiGet("/kodik/stats/sources").then(d => {
+    src.innerHTML = d.sources.map(o => `<option value="${esc(o.value)}">${esc(o.title)}</option>`).join("");
+  }).catch(() => {});
+  const load = async () => {
+    out.className = "kk-stats kk-dim";
+    out.textContent = "Загружаю…";
+    const days = Number(range.value);
+    const iso = d => d.toISOString().slice(0, 10);
+    try {
+      const d = await apiGet("/kodik/stats", { domain: src.value, start: iso(new Date(Date.now() - days * 86400000)), end: iso(new Date()) });
+      const rows = d.rows.filter(r => !r.event || r.event === "impression");
+      const total = rows.reduce((a, r) => a + (r.count || 0), 0);
+      const max = Math.max(1, ...rows.map(r => r.count || 0));
+      const last = rows.length ? rows[rows.length - 1].count || 0 : 0;
+      const best = rows.reduce((a, r) => (r.count || 0) > (a?.count || 0) ? r : a, null);
+      out.className = "kk-stats";
+      out.innerHTML = `
+        <div class="kk-stat-tiles">
+          <div><b>${total.toLocaleString("ru-RU")}</b><span>показов за период</span></div>
+          <div><b>${last.toLocaleString("ru-RU")}</b><span>за последний день</span></div>
+          <div><b>${Math.round(total / Math.max(1, rows.length)).toLocaleString("ru-RU")}</b><span>в среднем за день</span></div>
+          <div><b>${best ? best.count.toLocaleString("ru-RU") : "—"}</b><span>${best ? `лучший день · ${esc(best.date)}` : "лучший день"}</span></div>
+        </div>
+        <div class="kk-bars" role="img" aria-label="Показы по дням">${rows.map(r => `<i style="height:${Math.max(2, (r.count || 0) / max * 100)}%" title="${esc(r.date)}: ${r.count}"></i>`).join("")}</div>
+        <div class="kk-bars-axis"><span>${esc(rows[0]?.date || "")}</span><span>${esc(rows[rows.length - 1]?.date || "")}</span></div>`;
+    } catch (err) {
+      out.innerHTML = /KODIK_LOGIN/.test(err.message)
+        ? `Чтобы статистика шла прямо сюда, серверу нужен вход в кабинет. Добавь в <code>/etc/telegram-bot.env</code> две строки и перезапусти сервис:${codeBlock("KODIK_LOGIN=логин_кабинета\nKODIK_PASSWORD=пароль_кабинета")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}Пароль увидят только владельцы — в хранилище, раздел «Сервер».`
+        : esc(err.message);
+    }
+  };
+  src.addEventListener("change", load);
+  range.addEventListener("change", load);
+  load();
 }
 
 // ---------- FAQ ----------

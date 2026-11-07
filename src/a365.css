@@ -248,3 +248,12 @@
 .kk-faq summary { cursor: pointer; font-weight: 600; }
 .kk-faq p { margin: 8px 0 2px; color: var(--ink-dim); }
 #kodik-body h4 { margin: 16px 0 6px; }
+.kk-facets select.field-input { flex: 1 1 140px; width: auto; }
+.kk-stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.kk-stat-tiles div { padding: 12px; border-radius: 10px; background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; }
+.kk-stat-tiles b { font-size: 22px; }
+.kk-stat-tiles span { font-size: 12px; color: var(--ink-dim); }
+.kk-bars { display: flex; align-items: flex-end; gap: 2px; height: 140px; padding: 8px; border-radius: 10px; background: var(--surface-2); }
+.kk-bars i { flex: 1; min-width: 2px; background: var(--fire); border-radius: 4px 4px 0 0; opacity: .85; }
+.kk-bars i:hover { opacity: 1; }
+.kk-bars-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-dim); margin-top: 4px; }
