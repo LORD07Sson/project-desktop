@@ -433,3 +433,4 @@
 .kk-dub-more { display: none; }
 .kk-dubs-open .kk-dub-more { display: inline-block; }
 .kk-dub-toggle { color: var(--ink-dim); border-style: dashed; }
+.kk-adult { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); cursor: pointer; padding: 0 6px; white-space: nowrap; }

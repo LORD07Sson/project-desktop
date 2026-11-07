@@ -24,7 +24,13 @@ const store = {
 };
 
 let view = store.get(VIEW_KEY, "catalog");
-const cat = { q: "", types: "anime-serial,anime", status: "", genre: "", year: "", country: "", quality: "", items: [], next: "", loading: false };
+const cat = { q: "", types: "anime-serial,anime", status: "", genre: "", year: "", country: "", quality: "", adult: false, items: [], next: "", loading: false };
+// Тайтлы 18+ (эротика, хентай) по умолчанию не показываем — только по галочке «18+».
+const ADULT_GENRES = /^(эротика|хентай|erotica|hentai)$/i;
+const isAdult = r => {
+  const m = r.material_data || {};
+  return [...(m.anime_genres || []), ...(m.genres || []), ...(m.all_genres || [])].some(g => ADULT_GENRES.test(String(g).trim()));
+};
 const facets = {};
 const PROGRESS_KEY = "project-kodik-progress";
 
@@ -211,6 +217,7 @@ async function renderCatalog(box) {
       <select class="field-input" data-kk-f="year"><option value="">Год</option></select>
       <select class="field-input" data-kk-f="country"><option value="">Страна</option></select>
       <select class="field-input" data-kk-f="quality"><option value="">Качество</option></select>
+      <label class="kk-adult" title="Показывать тайтлы с жанрами «Эротика» и «Хентай»"><input type="checkbox" data-kk-adult${cat.adult ? " checked" : ""}> 18+</label>
       <button type="button" class="btn ghost" data-kk-reset>Сбросить</button>
     </div>
     <div class="kk-list"><div class="kk-dim">Загружаю…</div></div>`;
@@ -222,15 +229,17 @@ async function renderCatalog(box) {
       if (!el) return;
       el.innerHTML = `<option value="">${label}</option>` + rows.map(r => { const v = String(r.title ?? r.year); return `<option value="${esc(v)}"${val === v ? " selected" : ""}>${esc(v)} · ${r.count}</option>`; }).join("");
     };
-    opts("genre", f.genres, "Жанр", cat.genre); opts("year", f.years, "Год", cat.year);
+    opts("genre", cat.adult ? f.genres : f.genres.filter(g => !ADULT_GENRES.test(String(g.title).trim())), "Жанр", cat.genre); opts("year", f.years, "Год", cat.year);
     opts("country", f.countries, "Страна", cat.country); opts("quality", f.qualities, "Качество", cat.quality);
   };
   fillFacets();
   const paint = () => {
     // Фильтра по качеству в API нет — отбираем по полю quality в ответе.
-    const groups = groupResults(cat.quality ? cat.items.filter(r => r.quality === cat.quality) : cat.items);
+    const shown = cat.items.filter(r => (!cat.quality || r.quality === cat.quality) && (cat.adult || !isAdult(r)));
+    const groups = groupResults(shown);
+    const hiddenAdult = cat.adult ? 0 : groupResults(cat.items.filter(isAdult)).length;
     list.innerHTML = groups.length
-      ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${Number.isFinite(Number(cat.total)) ? Number(cat.total) : "?"} материалов`}</div><div class="kk-grid kk-grid-wide">${groups.map(cardHtml).join("")}</div>${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
+      ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${Number.isFinite(Number(cat.total)) ? Number(cat.total) : "?"} материалов`}${hiddenAdult ? ` · скрыто 18+: ${hiddenAdult}` : ""}</div><div class="kk-grid kk-grid-wide">${groups.map(cardHtml).join("")}</div>${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
       : `<div class="kk-dim">Ничего не нашлось.</div>`;
     // Битый адрес постера у Kodik — показываем заглушку, а не значок сломанной картинки.
     list.querySelectorAll(".kk-cover img").forEach(img => img.addEventListener("error", () => {
@@ -257,7 +266,8 @@ async function renderCatalog(box) {
     cat[field] = String(el.value);
     if (field === "quality") paint(); else reload();
   }));
-  box.querySelector("[data-kk-reset]").addEventListener("click", () => { Object.assign(cat, { genre: "", year: "", country: "", quality: "", status: "", items: [] }); renderCatalog(box); });
+  box.querySelector("[data-kk-adult]").addEventListener("change", e => { cat.adult = e.target.checked; fillFacets(); paint(); });
+  box.querySelector("[data-kk-reset]").addEventListener("click", () => { Object.assign(cat, { genre: "", year: "", country: "", quality: "", status: "", adult: false, items: [] }); renderCatalog(box); });
   box.querySelector("[data-kk-status]").addEventListener("change", e => { cat.status = e.target.value; reload(); });
   list.addEventListener("click", e => {
     const more = e.target.closest(".kk-dub-toggle");
