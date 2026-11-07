@@ -10,7 +10,9 @@ let session = "";
 let filterKind = "all";
 let query = "";
 const KINDS = { account: "Аккаунт", api: "API", token: "Токен", other: "Другое" };
-const KIND_ICON = { account: "👤", api: "🔌", token: "🔑", other: "📄" };
+const KIND_ICON = { account: "👤", api: "🔌", token: "🔑", other: "📄", server: "⚙️" };
+// Фильтры: свои типы записей плюс «Сервер» — переменные из серверных .env (только чтение, правятся на сервере).
+const CHIPS = { ...KINDS, server: "Сервер" };
 let sessionUntil = 0;
 const CLIPBOARD_CLEAR_MS = 30_000;
 
@@ -66,8 +68,8 @@ function renderGate(box, st) {
       ? "Задай личную кодовую фразу — минимум 12 символов. Её не хранит ни приложение, ни сервер: только хэш. Забудешь — сменить можно, только зная старую."
       : "Введи кодовую фразу. После 5 ошибок вход закроется на 15 минут, а тебе в Telegram придёт предупреждение."}</p>
     <form class="vault-gate">
-      <input type="password" class="input" name="phrase" autocomplete="off" placeholder="Кодовая фраза" required minlength="${setup ? 12 : 1}">
-      ${setup ? `<input type="password" class="input" name="again" autocomplete="off" placeholder="Ещё раз" required>` : ""}
+      <input type="password" class="field-input" name="phrase" autocomplete="off" placeholder="Кодовая фраза" required minlength="${setup ? 12 : 1}">
+      ${setup ? `<input type="password" class="field-input" name="again" autocomplete="off" placeholder="Ещё раз" required>` : ""}
       <div class="sheet-actions"><button class="btn primary" type="submit">${setup ? "Задать фразу" : "Открыть"}</button></div>
     </form>`;
   const form = box.querySelector("form");
@@ -98,7 +100,13 @@ function renderGate(box, st) {
 async function renderList(box) {
   box.innerHTML = `<div class="pf-quiet">Загружаю…</div>`;
   let items;
-  try { ({ items } = await call("items")); } catch (e) { return renderGate(box, { has_phrase: true }); }
+  let files = [];
+  try {
+    [{ items }, { files }] = await Promise.all([call("items"), call("env").catch(() => ({ files: [] }))]);
+  } catch (e) { return renderGate(box, { has_phrase: true }); }
+  items.forEach(i => { i.id = String(i.id); });
+  const envItems = files.flatMap(f => f.keys.map(key => ({ id: `env:${f.id}:${key}`, file: f.id, path: f.path, kind: "server", name: key, login: "", aliases: [f.path] })));
+  const all = [...items, ...envItems];
   await loadPeopleNames().catch(() => {});
   box.innerHTML = `
     <div class="vault-head">
@@ -109,10 +117,10 @@ async function renderList(box) {
       <button class="btn ghost" data-vault-lock>Закрыть</button>
     </div>
     <div class="vault-tools">
-      <input class="input" data-vault-q placeholder="Поиск по названию, прежнему названию, логину" value="${esc(query)}">
-      <div class="vault-chips">${["all", ...Object.keys(KINDS)].map(k => `<button class="vault-chip${filterKind === k ? " on" : ""}" data-kind="${k}">${k === "all" ? "Все" : KIND_ICON[k] + " " + KINDS[k]} <span>${k === "all" ? items.length : items.filter(i => i.kind === k).length}</span></button>`).join("")}</div>
+      <input class="field-input" data-vault-q placeholder="Поиск по названию, прежнему названию, логину, переменной" value="${esc(query)}">
+      <div class="vault-chips">${["all", ...Object.keys(CHIPS)].map(k => `<button class="vault-chip${filterKind === k ? " on" : ""}" data-kind="${k}">${k === "all" ? "Все" : KIND_ICON[k] + " " + CHIPS[k]} <span>${k === "all" ? all.length : all.filter(i => i.kind === k).length}</span></button>`).join("")}</div>
     </div>
-    <div class="vault-list">${items.length ? items.map(itemHtml).join("") : `<div class="pf-quiet">Пока пусто.</div>`}</div>
+    <div class="vault-list">${all.length ? all.map(i => i.kind === "server" ? envHtml(i) : itemHtml(i)).join("") : `<div class="pf-quiet">Пока пусто.</div>`}</div>
     <div class="pf-quiet" data-vault-none hidden>Ничего не нашлось.</div>
     <div class="sheet-actions"><button class="btn primary" data-vault-add>Добавить</button></div>`;
   tickTimer(box);
@@ -125,12 +133,12 @@ async function renderList(box) {
     const q = query.trim().toLowerCase();
     let shown = 0;
     for (const row of box.querySelectorAll("[data-vault-id]")) {
-      const it = items.find(i => i.id === Number(row.dataset.vaultId));
+      const it = all.find(i => i.id === row.dataset.vaultId);
       const hay = [it.name, it.login, ...it.aliases].join(" ").toLowerCase();
       const ok = (filterKind === "all" || it.kind === filterKind) && (!q || hay.includes(q));
       row.hidden = !ok; if (ok) shown++;
     }
-    box.querySelector("[data-vault-none]").hidden = !items.length || shown > 0;
+    box.querySelector("[data-vault-none]").hidden = !all.length || shown > 0;
   };
   box.querySelector("[data-vault-q]").addEventListener("input", e => { query = e.target.value; applyFilter(); });
   for (const chip of box.querySelectorAll("[data-kind]")) chip.addEventListener("click", () => {
@@ -143,20 +151,21 @@ async function renderList(box) {
   box.querySelector("[data-vault-log]").addEventListener("click", () => renderLog(box));
   box.querySelector("[data-vault-phrase]").addEventListener("click", () => renderPhrase(box));
   for (const row of box.querySelectorAll("[data-vault-id]")) {
-    const id = Number(row.dataset.vaultId);
-    const item = items.find(i => i.id === id);
+    const item = all.find(i => i.id === row.dataset.vaultId);
+    const id = Number(item.id);
+    const reveal = copy => item.kind === "server" ? call("env/reveal", { file: item.file, key: item.name, copy }) : call("reveal", { id, copy });
     const val = row.querySelector(".vault-val");
     row.querySelector("[data-show]").addEventListener("click", async e => {
       if (val.dataset.shown) { val.textContent = "••••••••"; delete val.dataset.shown; e.target.textContent = "Показать"; return; }
       try {
-        const { value } = await call("reveal", { id });
+        const { value } = await reveal(false);
         val.textContent = value; val.dataset.shown = "1"; e.target.textContent = "Скрыть";
         setTimeout(() => { if (val.isConnected && val.dataset.shown) { val.textContent = "••••••••"; delete val.dataset.shown; e.target.textContent = "Показать"; } }, CLIPBOARD_CLEAR_MS);
       } catch (err) { toast(err.message, "error"); }
     });
     row.querySelector("[data-copy-secret]").addEventListener("click", async () => {
       try {
-        const { value } = await call("reveal", { id, copy: true });
+        const { value } = await reveal(true);
         await navigator.clipboard.writeText(value);
         toast("Скопировано, буфер очистится через 30 с", "success");
         setTimeout(async () => {
@@ -165,6 +174,7 @@ async function renderList(box) {
       } catch (err) { toast(err.message, "error"); }
     });
     row.querySelector("[data-copy-login]")?.addEventListener("click", () => navigator.clipboard.writeText(item.login).then(() => toast("Логин скопирован", "success")));
+    if (item.kind === "server") continue;
     row.querySelector("[data-edit]").addEventListener("click", () => renderEdit(box, item));
     row.querySelector("[data-rename]").addEventListener("click", () => renderRename(box, item));
     row.querySelector("[data-del]").addEventListener("click", async () => {
@@ -194,6 +204,19 @@ function itemHtml(i) {
   </div>`;
 }
 
+function envHtml(i) {
+  return `<div class="vault-item" data-vault-id="${esc(i.id)}">
+    <div class="vault-main">
+      <b>⚙️ ${esc(i.name)} <span class="vault-kind">${esc(i.path)} · только чтение</span></b>
+      <code class="vault-val">••••••••</code>
+    </div>
+    <div class="vault-actions">
+      <button class="btn ghost" data-show>Показать</button>
+      <button class="btn ghost" data-copy-secret>Копировать</button>
+    </div>
+  </div>`;
+}
+
 function tickTimer(box) {
   const el = box.querySelector("[data-vault-timer]");
   const step = () => {
@@ -210,12 +233,12 @@ function renderEdit(box, item) {
   box.innerHTML = `
     <h3>${item ? "Изменить запись" : "Новая запись"}</h3>
     <form class="vault-form">
-      <input class="input" name="name" placeholder="Название (например, Kitsu API)" maxlength="80" required value="${esc(item?.name || "")}">
-      <select class="input" name="kind">${Object.entries(KINDS).map(([k, t]) => `<option value="${k}"${(item?.kind || (filterKind !== "all" ? filterKind : "account")) === k ? " selected" : ""}>${KIND_ICON[k]} ${t}</option>`).join("")}</select>
+      <input class="field-input" name="name" placeholder="Название (например, Kitsu API)" maxlength="80" required value="${esc(item?.name || "")}">
+      <select class="field-input" name="kind">${Object.entries(KINDS).map(([k, t]) => `<option value="${k}"${(item?.kind || (filterKind !== "all" ? filterKind : "account")) === k ? " selected" : ""}>${KIND_ICON[k]} ${t}</option>`).join("")}</select>
       ${item?.aliases?.length ? `<div class="pf-quiet">Прежние названия: ${item.aliases.map(esc).join(", ")}</div>` : ""}
-      <input class="input" name="login" placeholder="Логин или почта (необязательно)" maxlength="200" autocomplete="off" value="${esc(item?.login || "")}">
-      <textarea class="input" name="value" rows="3" autocomplete="off" placeholder="${item ? "Новое значение — оставь пустым, чтобы не менять" : "Пароль, токен или ключ"}" ${item ? "" : "required"}></textarea>
-      <textarea class="input" name="note" rows="2" maxlength="1000" placeholder="Заметка: где используется, когда менять">${esc(item?.note || "")}</textarea>
+      <input class="field-input" name="login" placeholder="Логин или почта (необязательно)" maxlength="200" autocomplete="off" value="${esc(item?.login || "")}">
+      <textarea class="field-input" name="value" rows="3" autocomplete="off" placeholder="${item ? "Новое значение — оставь пустым, чтобы не менять" : "Пароль, токен или ключ"}" ${item ? "" : "required"}></textarea>
+      <textarea class="field-input" name="note" rows="2" maxlength="1000" placeholder="Заметка: где используется, когда менять">${esc(item?.note || "")}</textarea>
       <div class="sheet-actions">
         <button type="button" class="btn ghost" data-back>Назад</button>
         <button type="submit" class="btn primary">Сохранить</button>
@@ -238,7 +261,7 @@ function renderRename(box, item) {
   box.innerHTML = `
     <h3>Переименовать «${esc(item.name)}»</h3>
     <form class="vault-form">
-      <input class="input" name="name" maxlength="80" required value="${esc(item.name)}">
+      <input class="field-input" name="name" maxlength="80" required value="${esc(item.name)}">
       <p class="pf-quiet">Старое название сохранится в записи как прежнее — по нему тоже можно будет найти.</p>
       <div class="sheet-actions"><button type="button" class="btn ghost" data-back>Назад</button><button type="submit" class="btn primary">Переименовать</button></div>
     </form>`;
@@ -260,9 +283,9 @@ function renderPhrase(box) {
   box.innerHTML = `
     <h3>Сменить кодовую фразу</h3>
     <form class="vault-form">
-      <input type="password" class="input" name="current" placeholder="Текущая фраза" autocomplete="off" required>
-      <input type="password" class="input" name="phrase" placeholder="Новая фраза, от 12 символов" autocomplete="off" minlength="12" required>
-      <input type="password" class="input" name="again" placeholder="Новая ещё раз" autocomplete="off" required>
+      <input type="password" class="field-input" name="current" placeholder="Текущая фраза" autocomplete="off" required>
+      <input type="password" class="field-input" name="phrase" placeholder="Новая фраза, от 12 символов" autocomplete="off" minlength="12" required>
+      <input type="password" class="field-input" name="again" placeholder="Новая ещё раз" autocomplete="off" required>
       <div class="sheet-actions"><button type="button" class="btn ghost" data-back>Назад</button><button type="submit" class="btn primary">Сменить</button></div>
     </form>`;
   const form = box.querySelector("form");
