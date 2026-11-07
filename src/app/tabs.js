@@ -14,7 +14,7 @@ import { loadNyaa } from "./nyaa.js";
 import { loadProfile } from "./profile.js";
 import { loadAnalytics } from "./analytics.js";
 import { loadServices } from "./services.js";
-import { loadA365 } from "./a365.js";
+import { loadUploads } from "./kodik.js";
 import { loadTeam } from "./team.js";
 import { loadQueue } from "./queue.js";
 import { startTab } from "./ui-prefs.js";
@@ -38,7 +38,7 @@ const LOADERS = {
   nyaa: loadNyaa,
   analytics: loadAnalytics,
   services: loadServices,
-  a365: loadA365,
+  a365: loadUploads,
   team: loadTeam,
   profile: loadProfile,
 };

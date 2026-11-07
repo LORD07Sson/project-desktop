@@ -1512,6 +1512,7 @@ fn allowed_attachment_path(api_path: &str) -> bool {
     let numeric = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
     let shape = match parts.as_slice() {
         ["chats", _key, "messages", id, "file"] => numeric(id),
+        ["kodik", "dump", key] => !key.is_empty() && key.len() <= 60,
         ["report", _pid, "notes", id, "file"] => numeric(id),
         ["tickets", t, "posts", id, "file"] => numeric(t) && numeric(id),
         ["report", _pid, "raws", kind, "file"] => matches!(*kind, "voice" | "mix" | "subs"),
