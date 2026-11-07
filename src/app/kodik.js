@@ -85,8 +85,12 @@ export async function loadUploads() {
   return part === "kodik" ? loadKodik() : loadA365();
 }
 
-let cabinetLogin = null;
+// Кабинет и наша озвучка — из настроек сервера (KODIK_LOGIN, KODIK_TRANSLATION_ID): сменятся там — сменится и тут.
+let account = null;
+const isOurs = t => !!account && (Number(t?.id) === account.translation_id || (!!account.translation_title && t?.title === account.translation_title));
+const oursName = () => account?.translation_title || "нашей озвучки";
 export async function loadKodik() {
+  if (!account) account = await apiGet("/kodik/account").catch(() => null);
   const root = $("#kodik-body");
   if (!root) return false;
   if (!root.dataset.wired) {
@@ -95,19 +99,11 @@ export async function loadKodik() {
   }
   root.innerHTML = `
     <div class="kk-head">
-      <div><b>Kodik</b> <span class="kk-dim"><span data-kk-login>${cabinetLogin ? `кабинет ${esc(cabinetLogin)}` : "кабинет"}</span> · база, API, плееры</span></div>
+      <div><b>Kodik</b> <span class="kk-dim"><span data-kk-login>${account?.login ? `кабинет ${esc(account.login)}` : "кабинет"}</span> · база, API, плееры</span></div>
       <button type="button" class="btn ghost" data-kk-open="/">Открыть кабинет ↗</button>
     </div>
     <div class="a3-seg kk-views" role="tablist">${VIEWS.map(([k, t]) => `<button type="button" role="tab" class="${view === k ? "on" : ""}" aria-selected="${view === k}" data-kk-view="${k}">${t}</button>`).join("")}</div>
     <div class="kk-body"></div>`;
-  // Имя кабинета — из KODIK_LOGIN на сервере: сменится логин — сменится подпись.
-  if (cabinetLogin == null) {
-    apiGet("/kodik/account").then(d => {
-      cabinetLogin = String(d.login || "");
-      const el = root.querySelector("[data-kk-login]");
-      if (el && cabinetLogin) el.textContent = `кабинет ${cabinetLogin}`;
-    }).catch(() => {});
-  }
   await RENDER[view](root.querySelector(".kk-body"));
   return true;
 }
@@ -193,7 +189,7 @@ function cardHtml(g) {
       <span class="kk-dim kk-clamp1">${esc([r.title_orig, r.year, eps].filter(Boolean).join(" · "))}</span>
       <div class="kk-tags">${status ? `<span class="kk-tag ${esc(m.anime_status)}">${status}</span>` : ""}${genres.map(x => `<span class="kk-tag">${esc(x)}</span>`).join("")}</div>
       ${about ? `<p class="kk-about kk-clamp3">${esc(about)}</p>` : ""}
-      <div class="kk-dubs">${dubs.map((d, di) => `<button type="button" class="kk-dub${/dreamy/i.test(d.translation?.title || "") ? " ours" : ""}${di >= 8 ? " kk-dub-more" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${progressOf(playerUrl(d.link)) ? "Продолжить просмотр" : "Открыть плеер"}">${progressOf(playerUrl(d.link)) ? "▶ " : ""}${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 8 ? `<button type="button" class="kk-dub kk-dub-toggle" data-more="+${dubs.length - 8}">+${dubs.length - 8}</button>` : ""}</div>
+      <div class="kk-dubs">${dubs.map((d, di) => `<button type="button" class="kk-dub${isOurs(d.translation) ? " ours" : ""}${di >= 8 ? " kk-dub-more" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${progressOf(playerUrl(d.link)) ? "Продолжить просмотр" : "Открыть плеер"}">${progressOf(playerUrl(d.link)) ? "▶ " : ""}${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 8 ? `<button type="button" class="kk-dub kk-dub-toggle" data-more="+${dubs.length - 8}">+${dubs.length - 8}</button>` : ""}</div>
       <div class="kk-ids">${r.shikimori_id ? `<span>shikimori ${esc(r.shikimori_id)}</span>` : ""}${r.kinopoisk_id ? `<span>КП ${esc(r.kinopoisk_id)}</span>` : ""}<span>${esc(r.id)}</span></div>
     </div>
   </article>`;
@@ -376,9 +372,9 @@ async function renderTranslations(box) {
     const ranked = teams.map((r, i) => ({ ...r, rank: i + 1 }));
     const list = ranked.filter(r => !q || r.title.toLowerCase().includes(q) || String(r.id) === q);
     const max = Math.max(1, ...teams.map(r => r.count));
-    const ours = ranked.find(r => /dreamy/i.test(r.title));
+    const ours = ranked.find(r => isOurs(r));
     const totalTitles = teams.reduce((a, r) => a + r.count, 0);
-    const rowHtml = r => `<button type="button" class="kk-trow${/dreamy/i.test(r.title) ? " ours" : ""}" data-kk-copy="${esc(String(r.id))}" title="Нажми — скопировать ID ${esc(String(r.id))}">
+    const rowHtml = r => `<button type="button" class="kk-trow${isOurs(r) ? " ours" : ""}" data-kk-copy="${esc(String(r.id))}" title="Нажми — скопировать ID ${esc(String(r.id))}">
         <span class="kk-rank">${r.rank}</span>
         <span class="kk-tname"><b>${esc(r.title)}</b><i>ID ${esc(String(r.id))}</i></span>
         <span class="kk-tbar"><u style="width:${Math.max(1.5, r.count / max * 100)}%"></u></span>
@@ -388,7 +384,7 @@ async function renderTranslations(box) {
       <div class="kk-tiles">
         <div class="kk-tile"><b>${fmtNum(teams.length)}</b><span>озвучек и субтитров</span></div>
         <div class="kk-tile"><b>${fmtNum(totalTitles)}</b><span>материалов с переводом</span></div>
-        ${ours ? `<div class="kk-tile ok"><b>#${ours.rank}</b><span>место DreamyVoice · ${fmtNum(ours.count)} тайтлов</span></div>` : ""}
+        ${ours ? `<div class="kk-tile ok"><b>#${ours.rank}</b><span>место ${esc(oursName())} · ${fmtNum(ours.count)} тайтлов</span></div>` : ""}
         <div class="kk-tile"><b>${esc(teams[0]?.title || "—")}</b><span>больше всех · ${fmtNum(teams[0]?.count || 0)} тайтлов</span></div>
       </div>
       <p class="kk-dim kk-lead">ID озвучки нужен для параметров translation_id, only_translations и hide_translations — нажми на строку, чтобы скопировать.</p>
@@ -803,7 +799,7 @@ async function renderStats(box) {
         .then(r => r.rows.filter(x => !x.event || x.event === "impression").reduce((a, x) => a + (Number(x.count) || 0), 0)).catch(() => null)));
       if (!list.isConnected) return;
       // Источники кабинета не складываются: «Все сайты» — все показы аккаунта, остальные — их части
-      // (озвучка — плееры с переводом DreamyVoice на любых сайтах; страница с плеером — ссылки w.kdkonl.com).
+      // (озвучка — плееры с нашим переводом на любых сайтах; страница с плеером — ссылки w.kdkonl.com).
       const allIdx = sources.findIndex(x => x.value === "all-sites");
       const base = allIdx >= 0 && totals[allIdx] ? totals[allIdx] : Math.max(1, ...totals.filter(v => v != null));
       const NOTE = { translation: "плееры с вашей озвучкой на любых сайтах", uid: "ваша страница с плеером — ссылки для соцсетей" };
@@ -819,7 +815,7 @@ async function renderStats(box) {
             <i><u style="width:${pct == null ? 0 : Math.min(100, pct)}%"></u></i>
             <b>${v == null ? "—" : `${pct.toFixed(pct > 0 && pct < 1 ? 1 : 0)}%`}<em>${v == null ? "" : fmtN(v)}</em></b></div>`;
         }).join("") +
-        `<p class="kk-dim kk-src-hint">Это не отдельные источники, а части «Всех сайтов»: их не складывают. Если доля озвучки — 100%, значит все показы аккаунта идут через плееры с DreamyVoice.</p>`;
+        `<p class="kk-dim kk-src-hint">Это не отдельные источники, а части «Всех сайтов»: их не складывают. Если доля озвучки — 100%, значит все показы аккаунта идут через плееры с ${esc(oursName())}.</p>`;
     } catch (err) {
       out.innerHTML = /KODIK_LOGIN/.test(err.message)
         ? `<div class="kk-empty"><b>Нужен вход в кабинет</b><p>Добавь в <code>/etc/telegram-bot.env</code> две строки и перезапусти сервис:</p>${codeBlock("KODIK_LOGIN=логин_кабинета\nKODIK_PASSWORD=пароль_кабинета")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}</div>`
@@ -928,7 +924,7 @@ async function openUploadForm(it, onDone) {
   const f = pre.fields;
   box.innerHTML = `
     <h3>Залить в Kodik: ${esc(it.title || "")} · ${esc(String(it.episode ?? ""))} серия</h3>
-    ${pre.already ? `<div class="kk-warn">На Kodik у DreamyVoice эта серия уже есть (серии: ${esc(pre.ours_episodes.join(", "))}). Отправлять повторно стоит, только если это замена.</div>` : ""}
+    ${pre.already ? `<div class="kk-warn">На Kodik у ${esc(oursName())} эта серия уже есть (серии: ${esc(pre.ours_episodes.join(", "))}). Отправлять повторно стоит, только если это замена.</div>` : ""}
     ${!pre.found ? `<div class="kk-warn">Тайтла пока нет в базе Kodik — поля заполнены из нашего тайтла, проверь название и год.</div>` : ""}
     <form class="kk-bgrid kk-upgrid">
       ${UP_FIELDS.map(([k, label]) => `<label><span>${esc(label)}</span><input class="field-input" name="${k}" value="${esc(String(f[k] ?? ""))}"></label>`).join("")}

@@ -314,7 +314,7 @@ function manualHtml() {
         <div><label class="field-label">Номер серии</label><input class="field-input" id="a3-mnum" type="number" min="0" step="0.5" placeholder="Если это фильм — 1"></div>
         <div><label class="field-label">Тип серии</label><select class="field-input" id="a3-meptype">${["tv", "ova", "ona", "movie", "special"].map(t => `<option value="${t}">${{ tv: "TV", ova: "OVA", ona: "ONA", movie: "Фильм", special: "Спешл" }[t]}</option>`).join("")}</select></div>
         <div><label class="field-label">Тип перевода</label><select class="field-input" id="a3-mtype"><option value="voiceRu">Озвучка</option><option value="subRu">Русские субтитры</option></select></div>
-        <div><label class="field-label">Авторы</label><input class="field-input" id="a3-mauthors" value="${esc((last && last.account && last.account.authors) || "DreamyVoice")}"></div>
+        <div><label class="field-label">Авторы</label><input class="field-input" id="a3-mauthors" value="${esc((last && last.account && last.account.authors) || "")}"></div>
       </div>
       <div class="a3-note">Формат «Авторы», как на сайте: Команда (Участник &amp; Участник), например AniPlus (GreenWay &amp; YellowCup). Без команды: Участник &amp; Участник.</div>
       <label class="a3-check"><input type="checkbox" id="a3-mauthor" checked> Я участник команды авторов этого перевода</label>
@@ -557,7 +557,7 @@ function paint(root) {
         <div class="a3-status">
           <div class="a3-acc ${acc.ok ? "ok" : "bad"}"><i></i><div>
             <b>${acc.ok ? esc(acc.name || "") : "Нет входа на 365"}</b>
-            <span>${acc.ok ? `подпись «${esc(acc.authors || "")}» · заливает бот` : `<span class="a3-bad">${esc(acc.error || "аккаунт не принят")}</span>`}</span>
+            <span>${acc.ok ? `подпись «${esc(acc.authors || "")}» <button type="button" class="link-btn" data-a3-authors="${esc(acc.authors || "")}" title="Сменить подпись озвучки на 365">изменить</button> · заливает бот` : `<span class="a3-bad">${esc(acc.error || "аккаунт не принят")}</span>`}</span>
           </div></div>
           <div class="a3-fact" title="Самый быстрый адрес загрузки 365 по последнему замеру"><b>${esc(speed)}</b><span>скорость</span></div>
           <div class="a3-fact" title="После «Залить» серия ждёт — можно передумать"><b>${d.grace ? `${d.grace} с` : "сразу"}</b><span>${d.grace ? "на отмену" : "старт заливки"}</span></div>
@@ -620,6 +620,23 @@ async function refresh(root) {
   return true;
 }
 
+// Подпись озвучки на 365 (настройка сервера a365_authors): переименовалась студия — меняем тут, код не трогаем.
+function editAuthors(root, current) {
+  const sheet = openSheet(`<h3>Подпись на Anime 365</h3>
+    <p class="kk-dim">Так бот подписывает новые серии и по ней ищет дубли нашей озвучки.</p>
+    <input class="field-input" id="a3-authors-in" maxlength="120" value="${esc(current || "")}">
+    <div class="sheet-actions"><button type="button" class="btn" data-a3-authors-save>Сохранить</button></div>`);
+  const box = sheet;
+  const input = box.querySelector("#a3-authors-in");
+  input?.focus();
+  box.querySelector("[data-a3-authors-save]")?.addEventListener("click", async () => {
+    try {
+      await apiPost("/a365/authors", { authors: input.value });
+      dismissSheet(sheet); toast("Подпись сохранена."); refresh(root);
+    } catch (err) { toast(err.message, "error"); }
+  });
+}
+
 let bound = false;
 
 function bind(root) {
@@ -632,6 +649,7 @@ function bind(root) {
     if (b.dataset.a3Ff) { finalsFilter = b.dataset.a3Ff; paint(root); return; }
     if (b.dataset.a3Af) { archFilter = b.dataset.a3Af; paint(root); return; }
     if (b.dataset.a3Open) { openExternal(b.dataset.a3Open); return; }
+    if (b.hasAttribute("data-a3-authors")) { editAuthors(root, b.dataset.a3Authors); return; }
     if (b.dataset.a3Chip) { openEp = openEp === b.dataset.a3Chip ? null : b.dataset.a3Chip; paint(root); return; }
     if (b.dataset.a3Bind != null && b.dataset.a3Season) { openBind(root, b.dataset.a3Bind, b.dataset.a3Season, b.dataset.a3Name); return; }
     if (b.hasAttribute("data-a3-mclear")) { manual.series = null; manual.episodes = null; manual.check = null; keepForm(root, () => paint(root)); return; }
