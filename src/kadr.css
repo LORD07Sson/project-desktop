@@ -4962,3 +4962,11 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 :root[data-ny-atmos] .ny-d-grid b.mono { font-size: 12px; color: var(--n-t2); }
 .ny-desc-h { display: block; margin: 6px 0 2px; font-size: 14px; color: var(--ink); }
 .ny-desc a { color: var(--ny-neon, var(--gold)); cursor: pointer; }
+/* карточка скачивания: длинные имена и пути не вылезают за край */
+#dl-root { width: 360px; max-width: calc(100vw - 32px); }
+.dl-card { min-width: 0; overflow: hidden; }
+.dl-head { min-width: 0; }
+.dl-head b { min-width: 0; flex: 1; }
+.dl-x { flex: none; }
+.dl-note { overflow-wrap: anywhere; word-break: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.dl-card.ok .dl-bar { display: none; }

@@ -59,7 +59,8 @@ export async function downloadWithCard({ command, args, savePath, name }) {
     bar.style.width = "100%";
     card.classList.remove("busy");
     card.classList.add("ok");
-    note.textContent = `Сохранено: ${savePath}`;
+    note.textContent = `Сохранено в ${savePath.replace(/[\\/][^\\/]*$/, "") || savePath}`;
+    note.title = savePath;
     act.innerHTML = `<button type="button" class="btn dl-reveal">📂 Показать в папке</button>`;
     act.querySelector(".dl-reveal").addEventListener("click", () => revealInFolder(savePath));
     revealInFolder(savePath).catch(() => { /* кнопка остаётся */ });
