@@ -257,3 +257,10 @@
 .kk-bars i { flex: 1; min-width: 2px; background: var(--fire); border-radius: 4px 4px 0 0; opacity: .85; }
 .kk-bars i:hover { opacity: 1; }
 .kk-bars-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-dim); margin-top: 4px; }
+.kk-upst { display: inline-block; font-size: 12px; margin-top: 3px; color: var(--ink-dim); }
+.kk-upst.done, .kk-upst.finished { color: #3fb950; }
+.kk-upst.failed, .kk-upst.error { color: #f85149; }
+.kk-upst.pulling, .kk-upst.file, .kk-upst.queued, .kk-upst.converting, .kk-upst.downloading, .kk-upst.uploading { color: var(--fire); }
+.kk-upgrid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-dim); }
+.kk-warn { padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--fire) 14%, transparent); margin-bottom: 10px; font-size: 13px; }
+.kk-upform { width: min(760px, 92vw); }

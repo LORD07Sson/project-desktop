@@ -3,7 +3,7 @@
 // Каталог и озвучки — живые данные API; остальное — справочник по кабинету для разработчиков
 // с генераторами ссылок и кодом, который можно сразу скопировать.
 import { $, esc } from "./utils.js";
-import { apiGet, openSheet, toast } from "./api.js";
+import { apiGet, apiPost, openSheet, toast } from "./api.js";
 import { openExternal, pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
 import { loadA365 } from "./a365.js";
@@ -13,7 +13,7 @@ const PART_KEY = "project-uploads-part";
 const VIEW_KEY = "project-kodik-view";
 
 const VIEWS = [
-  ["catalog", "Каталог"], ["translations", "Озвучки"], ["dumps", "Файлы базы"], ["api", "API"],
+  ["upload", "Заливка"], ["converter", "Конвертер"], ["catalog", "Каталог"], ["translations", "Озвучки"], ["dumps", "Файлы базы"], ["api", "API"],
   ["player", "API плеера"], ["iframe", "Параметры iframe"], ["scripts", "Скрипты"], ["dle", "Модули DLE"],
   ["stats", "Статистика"], ["faq", "FAQ"],
 ];
@@ -626,7 +626,123 @@ function renderFaq(box) {
     `<div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/faq">Полный FAQ ↗</button></div>`;
 }
 
+// ---------- Заливка в Kodik (через Kodik Converter) ----------
+
+const UP_STAGE = { queued: "в очереди", file: "беру файл", pulling: "Kodik качает", done: "отправлено", failed: "ошибка" };
+let upTimer = 0;
+
+async function renderUpload(box) {
+  clearTimeout(upTimer);
+  let d;
+  try { d = await apiGet("/kodik/uploads"); } catch (err) { box.innerHTML = `<div class="kk-dim">${esc(err.message)}</div>`; return; }
+  if (!d.configured) {
+    box.innerHTML = `<p class="kk-dim">Заливка идёт через Kodik Converter — у него свой вход. Добавь на сервере в <code>/etc/telegram-bot.env</code>:</p>
+      ${codeBlock("KODIK_CONVERTER_LOGIN=логин_конвертера\nKODIK_CONVERTER_PASSWORD=пароль_конвертера")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}`;
+    return;
+  }
+  box.innerHTML = `
+    <p class="kk-dim">Те же финалы, что уходят на Anime 365. Kodik сам скачивает файл с нашего сервера по одноразовой ссылке — через твой компьютер видео не идёт. Перед отправкой карточку можно проверить и поправить; дальше конвертация и модерация у Kodik — статус во вкладке «Конвертер».</p>
+    <div class="kk-list">${d.items.map(it => {
+      const st = it.kodik || {};
+      const stage = it.running && !st.stage ? "queued" : st.stage;
+      return `<div class="kk-dump kk-up" data-up-key="${esc(it.key)}">
+        <div><b>${esc(it.title || "?")} · ${esc(String(it.episode ?? "?"))} серия</b>
+          <span class="kk-dim">${esc(it.file || "")}${it.size ? ` · ${fmtSize(it.size)}` : ""}</span>
+          ${stage ? `<span class="kk-upst ${esc(stage)}">${esc(UP_STAGE[stage] || stage)}${st.text && stage !== "done" ? ` — ${esc(st.text)}` : ""}${st.error ? ` — ${esc(st.error)}` : ""}</span>` : ""}
+        </div>
+        <div class="kk-dump-f">${["queued", "file", "pulling"].includes(stage) ? "" : `<button type="button" class="btn ${stage === "done" ? "ghost" : "primary"}" data-up-go>${stage === "done" ? "Залить ещё раз" : stage === "failed" ? "Повторить" : "Залить в Kodik"}</button>`}</div>
+      </div>`;
+    }).join("") || `<div class="kk-dim">Готовых финалов нет.</div>`}</div>`;
+  box.querySelectorAll("[data-up-go]").forEach(b => b.addEventListener("click", () => {
+    const key = b.closest("[data-up-key]").dataset.upKey;
+    const it = d.items.find(x => x.key === key);
+    openUploadForm(it, () => renderUpload(box));
+  }));
+  // Пока что-то отправляется — обновляем раз в 4 секунды, пока вкладка открыта.
+  if (d.items.some(it => it.running || ["queued", "file", "pulling"].includes(it.kodik?.stage))) {
+    upTimer = setTimeout(() => { if (box.isConnected && view === "upload") renderUpload(box); }, 4000);
+  }
+}
+
+const UP_FIELDS = [
+  ["title", "Название (по-русски) *"], ["year", "Год *"], ["season", "Сезон"], ["episode", "Серия *"],
+  ["translation", "Озвучка *"], ["quality", "Качество (пусто — определю по файлу)"], ["shikimori_id", "Shikimori ID"],
+  ["worldart_link", "Ссылка на World Art"], ["kinopoisk_id", "КиноПоиск ID"], ["imdb_id", "IMDb ID"],
+  ["torrent_link", "Ссылка на страницу торрента"], ["note", "Комментарий"],
+];
+
+async function openUploadForm(it, onDone) {
+  const overlay = openSheet(`<div class="kk-upform"><div class="kk-dim">Собираю карточку…</div></div>`);
+  const box = overlay.querySelector(".kk-upform");
+  let pre;
+  try { pre = await apiGet("/kodik/upload/prefill", { key: it.key }); } catch (err) { box.innerHTML = `<div class="kk-dim">${esc(err.message)}</div>`; return; }
+  const f = pre.fields;
+  box.innerHTML = `
+    <h3>Залить в Kodik: ${esc(it.title || "")} · ${esc(String(it.episode ?? ""))} серия</h3>
+    ${pre.already ? `<div class="kk-warn">На Kodik у DreamyVoice эта серия уже есть (серии: ${esc(pre.ours_episodes.join(", "))}). Отправлять повторно стоит, только если это замена.</div>` : ""}
+    ${!pre.found ? `<div class="kk-warn">Тайтла пока нет в базе Kodik — поля заполнены из нашего тайтла, проверь название и год.</div>` : ""}
+    <form class="kk-bgrid kk-upgrid">
+      ${UP_FIELDS.map(([k, label]) => `<label><span>${esc(label)}</span><input class="field-input" name="${k}" value="${esc(String(f[k] ?? ""))}"></label>`).join("")}
+      <label><span>Приоритет</span><select class="field-input" name="priority">
+        <option value="1"${String(f.priority) === "1" ? " selected" : ""}>Высокий — новинка</option><option value="0"${String(f.priority) === "0" ? " selected" : ""}>Обычный</option><option value="-1">Низкий</option>
+      </select></label>
+    </form>
+    <p class="kk-dim">Правила конвертера: название только по-русски, озвучка как в базе, без вшитой рекламы. Ошибка в полях — файл удалят.</p>
+    <div class="sheet-actions"><button type="button" class="btn ghost" data-x>Отмена</button><button type="button" class="btn primary" data-send>Отправить в Kodik</button></div>`;
+  box.querySelector("[data-x]").addEventListener("click", () => overlay.remove());
+  box.querySelector("[data-send]").addEventListener("click", async e => {
+    const form = box.querySelector("form");
+    const fields = Object.fromEntries([...form.elements].filter(x => x.name).map(x => [x.name, x.value.trim()]));
+    e.target.disabled = true;
+    try {
+      await apiPost("/kodik/upload", { key: it.key, fields, again: (it.kodik || {}).stage === "done" });
+      toast("Отправляю в Kodik — статус в списке", "success");
+      overlay.remove();
+      onDone();
+    } catch (err) { toast(err.message, "error"); e.target.disabled = false; }
+  });
+}
+
+// ---------- Конвертер: файлы студии на converter.kodikres.com ----------
+
+const CONV_FILTERS = [["", "Все"], ["hidden", "Скрытые"], ["to-be-deleted", "На удалении"], ["error", "Ошибки"]];
+const conv = { filter: "", page: 1, query: "" };
+
+async function renderConverter(box) {
+  box.innerHTML = `<div class="kk-tools">
+      <div class="a3-seg">${CONV_FILTERS.map(([k, t]) => `<button type="button" class="${conv.filter === k ? "on" : ""}" data-cf="${k}">${t}<i data-cfc="${k}"></i></button>`).join("")}</div>
+      <input class="field-input" data-cq placeholder="Поиск по названию" value="${esc(conv.query)}">
+      <button type="button" class="btn ghost" data-conv-open>Конвертер ↗</button>
+    </div><div class="kk-conv kk-dim">Загружаю…</div>`;
+  const out = box.querySelector(".kk-conv");
+  box.querySelector("[data-conv-open]").addEventListener("click", () => openExternal("https://converter.kodikres.com/media-files"));
+  box.querySelectorAll("[data-cf]").forEach(b => b.addEventListener("click", () => { conv.filter = b.dataset.cf; conv.page = 1; renderConverter(box); }));
+  let t = 0;
+  box.querySelector("[data-cq]").addEventListener("input", e => { conv.query = e.target.value; clearTimeout(t); t = setTimeout(() => { conv.page = 1; load(); }, 450); });
+  const load = async () => {
+    out.className = "kk-conv kk-dim"; out.textContent = "Загружаю…";
+    try {
+      const d = await apiGet("/kodik/converter/files", { filter: conv.filter, page: conv.page, query: conv.query });
+      for (const [k, n] of Object.entries(d.counts || {})) { const el = box.querySelector(`[data-cfc="${k}"]`); if (el) el.textContent = ` ${n}`; }
+      out.className = "kk-conv";
+      out.innerHTML = d.files.length ? `<div class="kk-table"><table><thead><tr><th>Файл</th><th>Статус</th><th></th></tr></thead><tbody>${d.files.map(f => `<tr>
+          <td>${esc(f.cells.filter(c => c && c !== "Копировать").slice(0, 8).join(" · "))}</td>
+          <td><span class="kk-upst ${esc(f.status_class)}">${esc(f.status || "—")}</span></td>
+          <td>${f.player ? `<button type="button" class="btn ghost" data-kk-copy="${esc(playerUrl(f.player))}">Ссылка</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
+        <div class="kk-row">${conv.page > 1 ? `<button type="button" class="btn ghost" data-cp="-1">← Назад</button>` : ""}<span class="kk-dim">страница ${d.page}</span>${d.files.length ? `<button type="button" class="btn ghost" data-cp="1">Дальше →</button>` : ""}</div>`
+        : `<div class="kk-dim">Пусто.</div>`;
+      out.querySelectorAll("[data-cp]").forEach(b => b.addEventListener("click", () => { conv.page += Number(b.dataset.cp); load(); }));
+    } catch (err) {
+      out.innerHTML = /KODIK_CONVERTER/.test(err.message)
+        ? `Нужен вход в конвертер: ${codeBlock("KODIK_CONVERTER_LOGIN=логин_конвертера\nKODIK_CONVERTER_PASSWORD=пароль_конвертера")}${codeBlock("systemctl restart telegram-miniapp", "Перезапуск")}`
+        : esc(err.message);
+    }
+  };
+  load();
+}
+
 const RENDER = {
+  upload: renderUpload, converter: renderConverter,
   catalog: renderCatalog, translations: renderTranslations, dumps: renderDumps, api: renderApi, player: renderPlayer,
   iframe: renderIframe, scripts: renderScripts, dle: renderDle, stats: renderStats, faq: renderFaq,
 };
