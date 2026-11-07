@@ -52,8 +52,16 @@ async function loadFacets(types) {
   if (facets[key]) return facets[key];
   const q = types ? { types } : {};
   const [g, y, c, ql] = await Promise.all(["genres", "years", "countries", "qualities/v2"].map(r =>
-    apiGet(`/kodik/api/${r}`, r === "years" ? q : { ...q, sort: "count" }).then(d => d.results || []).catch(() => [])));
-  facets[key] = { genres: g, years: y, countries: c, qualities: ql };
+    apiGet(`/kodik/api/${r}`, r === "years" ? q : r === "genres" ? { ...q, sort: "count", genres_type: "all" } : { ...q, sort: "count" }).then(d => d.results || []).catch(() => [])));
+  // genres_type=all: жанры КиноПоиска + Shikimori (эротика/хентай есть только у Shikimori); склеиваем дубли по названию.
+  const byTitle = new Map();
+  for (const x of g) {
+    const k = String(x.title || "").trim().toLowerCase();
+    const prev = byTitle.get(k);
+    if (!prev || (x.count || 0) > (prev.count || 0)) byTitle.set(k, x);
+  }
+  const genres = [...byTitle.values()].sort((a, b) => (b.count || 0) - (a.count || 0));
+  facets[key] = { genres, years: y, countries: c, qualities: ql };
   return facets[key];
 }
 
