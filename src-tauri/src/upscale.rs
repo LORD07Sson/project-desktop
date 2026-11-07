@@ -244,6 +244,8 @@ pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Ve
             .arg("-o").arg(&output2)
             .args(["-n", name.as_str(), "-z", &model_scale.to_string()])
             .args(&size_args)
+            // плитки поменьше: видеокарта отпускает кадр чаще, и окно (и вся система) не подвисает, пока идёт апскейл
+            .args(["-t", "128"])
             .args(["-f", "png", "-m"])
             .arg(&models_dir)
             .stdout(Stdio::null())
