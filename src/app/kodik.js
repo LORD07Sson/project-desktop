@@ -310,11 +310,16 @@ async function renderTranslations(box) {
   let rows = [], types = "anime-serial,anime";
   const paint = () => {
     const q = box.querySelector("[data-kk-tq]").value.trim().toLowerCase();
-    const ranked = rows.map((r, i) => ({ ...r, rank: i + 1 }));
+    // «Не требуется» (ID 703) — не озвучка, а отметка Kodik: материалу перевод не нужен (русская оригинальная дорожка).
+    // В рейтинг команд её не ставим, показываем отдельно.
+    const isService = r => r.id === 703 || /^не требуется$/i.test(r.title.trim());
+    const service = rows.filter(isService);
+    const teams = rows.filter(r => !isService(r));
+    const ranked = teams.map((r, i) => ({ ...r, rank: i + 1 }));
     const list = ranked.filter(r => !q || r.title.toLowerCase().includes(q) || String(r.id) === q);
-    const max = Math.max(1, ...rows.map(r => r.count));
+    const max = Math.max(1, ...teams.map(r => r.count));
     const ours = ranked.find(r => /dreamy/i.test(r.title));
-    const totalTitles = rows.reduce((a, r) => a + r.count, 0);
+    const totalTitles = teams.reduce((a, r) => a + r.count, 0);
     const rowHtml = r => `<button type="button" class="kk-trow${/dreamy/i.test(r.title) ? " ours" : ""}" data-kk-copy="${esc(String(r.id))}" title="Нажми — скопировать ID ${esc(String(r.id))}">
         <span class="kk-rank">${r.rank}</span>
         <span class="kk-tname"><b>${esc(r.title)}</b><i>ID ${esc(String(r.id))}</i></span>
@@ -323,12 +328,13 @@ async function renderTranslations(box) {
       </button>`;
     out.innerHTML = `
       <div class="kk-tiles">
-        <div class="kk-tile"><b>${fmtNum(rows.length)}</b><span>озвучек и субтитров</span></div>
+        <div class="kk-tile"><b>${fmtNum(teams.length)}</b><span>озвучек и субтитров</span></div>
         <div class="kk-tile"><b>${fmtNum(totalTitles)}</b><span>материалов с переводом</span></div>
         ${ours ? `<div class="kk-tile ok"><b>#${ours.rank}</b><span>место DreamyVoice · ${fmtNum(ours.count)} тайтлов</span></div>` : ""}
-        <div class="kk-tile"><b>${esc(rows[0]?.title || "—")}</b><span>больше всех · ${fmtNum(rows[0]?.count || 0)} тайтлов</span></div>
+        <div class="kk-tile"><b>${esc(teams[0]?.title || "—")}</b><span>больше всех · ${fmtNum(teams[0]?.count || 0)} тайтлов</span></div>
       </div>
       <p class="kk-dim kk-lead">ID озвучки нужен для параметров translation_id, only_translations и hide_translations — нажми на строку, чтобы скопировать.</p>
+      ${service.length ? `<p class="kk-dim kk-lead">Не в рейтинге: ${service.map(s => `«${esc(s.title)}» (ID ${esc(String(s.id))}, ${fmtNum(s.count)} материалов)`).join(", ")} — служебная отметка Kodik для материалов, которым перевод не нужен: в основном русские фильмы и сериалы с оригинальной дорожкой.</p>` : ""}
       ${list.length ? `<div class="kk-tgrid">${list.slice(0, 300).map(rowHtml).join("")}</div>${list.length > 300 ? `<div class="kk-dim kk-count">Показаны первые 300 из ${list.length} — уточни поиск.</div>` : ""}` : `<div class="kk-empty">Ничего не нашлось.</div>`}`;
   };
   const load = async () => {
