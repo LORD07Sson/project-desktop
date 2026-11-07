@@ -419,3 +419,14 @@
 .kk-src > b em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--ink-dim); }
 .kk-src-hint { margin: 4px 0 0; font-size: 11.5px; }
 .kk-src { grid-template-columns: minmax(150px, 220px) 1fr auto; }
+
+/* FAQ: колонки как в журнале — раскрытый вопрос не растягивает соседей и не оставляет дыр */
+.kk-faqgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 0 12px; align-items: start; }
+.kk-faqcol { display: flex; flex-direction: column; min-width: 0; }
+.kk-faqgrid .kk-faq { margin: 0 0 10px; padding: 0; border: 1px solid transparent; transition: border-color .15s; }
+.kk-faqgrid .kk-faq:hover, .kk-faqgrid .kk-faq[open] { border-color: var(--line); }
+.kk-faqgrid .kk-faq summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+.kk-faqgrid .kk-faq summary::-webkit-details-marker { display: none; }
+.kk-faqgrid .kk-faq summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--ink-dim); border-bottom: 2px solid var(--ink-dim); transform: rotate(45deg); transition: transform .15s; flex: none; }
+.kk-faqgrid .kk-faq[open] summary::after { transform: rotate(-135deg); }
+.kk-faqgrid .kk-faq p { margin: 0; padding: 0 14px 14px; line-height: 1.5; }

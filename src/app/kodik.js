@@ -779,7 +779,10 @@ const FAQ = [
 ];
 
 function renderFaq(box) {
-  box.innerHTML = `<div class="kk-grid kk-faqgrid">${FAQ.map(([q, a]) => `<details class="kk-faq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}</div>` +
+  // Две постоянные колонки: раскрытый вопрос сдвигает вниз только свою колонку и ничего не перескакивает.
+  const item = ([q, a]) => `<details class="kk-faq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`;
+  const half = Math.ceil(FAQ.length / 2);
+  box.innerHTML = `<div class="kk-faqgrid"><div class="kk-faqcol">${FAQ.slice(0, half).map(item).join("")}</div><div class="kk-faqcol">${FAQ.slice(half).map(item).join("")}</div></div>` +
     `<div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/faq">Полный FAQ ↗</button></div>`;
 }
 
