@@ -192,7 +192,7 @@ async function renderCatalog(box) {
     // Фильтра по качеству в API нет — отбираем по полю quality в ответе.
     const groups = groupResults(cat.quality ? cat.items.filter(r => r.quality === cat.quality) : cat.items);
     list.innerHTML = groups.length
-      ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${cat.total ?? "?"} материалов`}</div>${groups.map(cardHtml).join("")}${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
+      ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${Number.isFinite(Number(cat.total)) ? Number(cat.total) : "?"} материалов`}</div>${groups.map(cardHtml).join("")}${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
       : `<div class="kk-dim">Ничего не нашлось.</div>`;
     list.querySelector("[data-kk-more]")?.addEventListener("click", async e => { e.target.disabled = true; await fetchCatalog(true).catch(err => toast(err.message, "error")); paint(); });
   };
@@ -203,7 +203,14 @@ async function renderCatalog(box) {
   let t = 0;
   box.querySelector("[data-kk-q]").addEventListener("input", e => { cat.q = e.target.value; clearTimeout(t); t = setTimeout(reload, 450); });
   box.querySelector("[data-kk-types]").addEventListener("change", e => { cat.types = e.target.value; fillFacets(); reload(); });
-  box.querySelectorAll("[data-kk-f]").forEach(el => el.addEventListener("change", () => { cat[el.dataset.kkF] = el.value; if (el.dataset.kkF === "quality") paint(); else reload(); }));
+  // Только эти четыре поля: запись в cat[любое имя из DOM] позволила бы странице подменить, например, cat.total.
+  const FACET_FIELDS = { genre: "genre", year: "year", country: "country", quality: "quality" };
+  box.querySelectorAll("[data-kk-f]").forEach(el => el.addEventListener("change", () => {
+    const field = FACET_FIELDS[el.dataset.kkF];
+    if (!field) return;
+    cat[field] = String(el.value);
+    if (field === "quality") paint(); else reload();
+  }));
   box.querySelector("[data-kk-reset]").addEventListener("click", () => { Object.assign(cat, { genre: "", year: "", country: "", quality: "", status: "", items: [] }); renderCatalog(box); });
   box.querySelector("[data-kk-status]").addEventListener("change", e => { cat.status = e.target.value; reload(); });
   list.addEventListener("click", e => {
