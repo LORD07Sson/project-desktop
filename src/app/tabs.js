@@ -70,8 +70,10 @@ export function tabAllowed(name) {
 
 export function switchTab(name) {
   if (!tabAllowed(name)) name = "messages";
-  // Профиль коллеги лежит поверх вкладок: переход по меню должен его закрыть.
-  $all(".pf-page-overlay").forEach(o => o.remove());
+  // Профиль коллеги и карточка серии лежат поверх вкладок: переход по меню должен их закрыть, иначе вкладку не видно.
+  // Карточка серии сама снимает подписки при удалении из DOM (MutationObserver в report-detail.js).
+  // Окно, открепленное в отдельное окно программы, — не оверлей, его это не касается.
+  $all(".pf-page-overlay, .overlay.report-detail-overlay").forEach(o => o.remove());
   state.activeTab = name;
   try { localStorage.setItem(LAST_TAB_KEY, name); } catch (_) { /* не критично */ }
   $all(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
