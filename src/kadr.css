@@ -5011,3 +5011,10 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .ny-paled input[type="color"] { width: 34px; height: 24px; padding: 0; border: 1px solid rgba(255, 255, 255, .25); border-radius: 6px; background: none; cursor: pointer; }
 .ny-paled-acts { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
 .ny-paled-acts .btn { padding: 5px 10px; font-size: 12px; }
+/* полоска Nyaa при прокрутке: вплотную к верху (без щели в отступ панели), заголовок таблицы под ней, день — под заголовком */
+.tab-panel[data-panel="nyaa"] .ny-mini { top: -10px; }
+.tab-panel[data-panel="nyaa"] .ny-mini > div { background: linear-gradient(90deg, color-mix(in srgb, var(--ny-panel) 97%, transparent), color-mix(in srgb, var(--ny-panel2) 95%, transparent)); }
+.tab-panel[data-panel="nyaa"] .ny.ny-compact .ny-head { top: 36px; }
+.tab-panel[data-panel="nyaa"] .ny.ny-compact .ny-list > .ny-day { top: 68px; }
+.tab-panel[data-panel="nyaa"] .ny .ny-list > .ny-day { background: linear-gradient(90deg, color-mix(in srgb, var(--ny-neon2) 10%, var(--ny-bg)), var(--ny-bg) 60%); }
+.tab-panel[data-panel="nyaa"] .ny .ny-head { background: var(--ny-bg); }
