@@ -367,9 +367,21 @@ export async function apiUpload(path, file, fields) {
   }
 }
 
+// Одинаковые GET, пока первый ещё в пути, склеиваются в один запрос (при старте разные модули
+// одновременно просят /team, /me/permissions и т.п.). Каждый вызывающий получает свою копию ответа.
+const inflightGets = new Map();
 export function apiGet(path, params) {
   const qs = params ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)) : "";
-  return api("GET", path + qs);
+  const key = path + qs;
+  let p = inflightGets.get(key);
+  if (!p) {
+    p = api("GET", key);
+    inflightGets.set(key, p);
+    const drop = () => { if (inflightGets.get(key) === p) inflightGets.delete(key); };
+    p.then(drop, drop);
+    return p;
+  }
+  return p.then(d => (d && typeof d === "object" ? globalThis.structuredClone(d) : d));
 }
 export function apiPost(path, body) { return api("POST", path, body || {}); }
 export function apiDelete(path) { return api("DELETE", path); }

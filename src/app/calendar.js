@@ -11,6 +11,7 @@
 import { state, can } from "./state.js";
 import { fetchReminders, openRemindersSheet } from "./reminders.js";
 import { apiGet, dialogSkeletonHtml, mediaUrl } from "./api.js";
+import { fetchTitleDetails } from "./titles.js";
 import { $, esc, STATUS_COLOR_VAR } from "./utils.js";
 import { openReportDetail } from "./report-detail.js";
 import { seriesParts } from "./reports.js";
@@ -64,20 +65,9 @@ async function fetchAirings() {
   for (const s of seasons.slice(0, 2)) {
     try { titles.push(...((await apiGet(`/public/seasons/${s.id}/titles`)).titles || [])); } catch (_) { /* пропускаем сезон */ }
   }
-  const out = [];
-  const queue = titles.slice();
-  const worker = async () => {
-    while (queue.length) {
-      const t = queue.shift();
-      try {
-        const d = await apiGet(`/public/titles/${t.id}`);
-        const det = d.details && !Array.isArray(d.details) ? d.details : null;
-        if (det && det.next_episode_at) out.push({ title: t, det });
-      } catch (_) { /* без расписания */ }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
-  return out;
+  // Расписание серий — одним пакетным запросом вместо запроса на каждый тайтл.
+  const dets = await fetchTitleDetails(titles.map(t => t.id));
+  return titles.filter(t => dets.get(t.id)?.next_episode_at).map(t => ({ title: t, det: dets.get(t.id) }));
 }
 
 // Ход нашей работы по сериям взятых тайтлов (/work/episodes, только

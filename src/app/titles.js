@@ -26,24 +26,20 @@ function setView(v) {
 
 // Подробности Shikimori/AniList (формат, эпизоды, студия, жанры) есть
 // только в /public/titles/{id} — в списке сезона их нет. Догружаются
-// после отрисовки, не больше 4 запросов разом, и кэшируются на сессию.
+// после отрисовки одним пакетным запросом (/public/title-details) и кэшируются на сессию.
 const detailsCache = new Map();
+export async function fetchTitleDetails(ids) {
+  const queue = [...new Set(ids)].filter(id => !detailsCache.has(id));
+  for (let i = 0; i < queue.length; i += 60) {
+    const part = queue.slice(i, i + 60);
+    let got = {};
+    try { got = (await apiGet("/public/title-details", { ids: part.join(",") })).details || {}; } catch (_) { /* строки останутся с прочерками */ }
+    part.forEach(id => detailsCache.set(id, got[String(id)] || null));
+  }
+  return new Map(ids.map(id => [id, detailsCache.get(id) ?? null]));
+}
 async function loadDetails(ids, onEach) {
-  const queue = ids.filter(id => !detailsCache.has(id));
-  ids.filter(id => detailsCache.has(id)).forEach(id => onEach(id, detailsCache.get(id)));
-  const worker = async () => {
-    while (queue.length) {
-      const id = queue.shift();
-      let det = null;
-      try {
-        const d = await apiGet(`/public/titles/${id}`);
-        det = d.details && !Array.isArray(d.details) ? d.details : null;
-      } catch (_) { /* без подробностей строка просто останется с прочерками */ }
-      detailsCache.set(id, det);
-      onEach(id, det);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+  (await fetchTitleDetails(ids)).forEach((det, id) => onEach(id, det));
 }
 
 function approvalPct(t) {
