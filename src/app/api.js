@@ -101,6 +101,23 @@ function reportApiFail(method, path, status, message) {
   document.dispatchEvent(new CustomEvent("project:api-fail", { detail: { method, path: String(path).split("?")[0], status, message } }));
 }
 
+// ---- Запасной путь, когда не работает системный DNS (net_fallback.rs) ----
+// fetch из WebView ходит через DNS Windows; если он сломан, Rust узнаёт адрес сервера через DNS-over-HTTPS и делает
+// запрос сам. Сработал — следующие 5 минут идём сразу им, не тратя ~10 с на повторы обычного пути.
+let fallbackUntil = 0;
+async function viaFallback(method, path, init, write) {
+  const tauri = window.__TAURI_INTERNALS__;
+  if (!tauri) return null;
+  try {
+    const r = await tauri.invoke("api_fallback", { method, path, headers: init.headers, body: init.body ?? null, write });
+    fallbackUntil = Date.now() + 5 * 60_000;
+    return new window.Response(r.body, { status: r.status, headers: { "Content-Type": "application/json" } });
+  } catch (_) {
+    fallbackUntil = 0;
+    return null;
+  }
+}
+
 export async function api(method, path, body) {
   const headers = { "Content-Type": "application/json" };
   if (state.token) headers["X-Init-Data"] = state.token;
@@ -128,11 +145,18 @@ export async function api(method, path, body) {
   // сервер мог её уже выполнить. 502 от nginx приходит без CORS-заголовков и в браузере выглядит как «Failed to fetch».
   const retryable = method === "GET" || path === "/presence/ping";
   try {
-    for (let attempt = 0; ; attempt++) {
+    if (Date.now() < fallbackUntil) resp = await viaFallback(method, path, init, !retryable);
+    if (!resp) for (let attempt = 0; ; attempt++) {
       try {
         resp = await fetch(url, init);
         if (!(retryable && resp.status >= 502 && resp.status <= 504 && attempt < NET_RETRY_MS.length)) break;
       } catch (e) {
+        // Не соединились (не таймаут): сразу пробуем запасной путь. Запись Rust отправит, только если сломан
+        // именно DNS — тогда до сервера она точно не дошла.
+        if (e.name !== "AbortError" && attempt === 0) {
+          resp = await viaFallback(method, path, init, !retryable);
+          if (resp) break;
+        }
         if (!retryable || e.name === "AbortError" || attempt >= NET_RETRY_MS.length) throw e;
       }
       await new Promise(r => setTimeout(r, NET_RETRY_MS[attempt])); // DevSkim: ignore DS172411 — функция, не строка

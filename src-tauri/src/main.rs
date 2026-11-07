@@ -20,6 +20,7 @@ mod local_render;
 mod nyaa;
 mod steam_session;
 mod net_diag;
+mod net_fallback;
 mod torrent_clients;
 mod media_tools;
 mod token_store;
@@ -1099,6 +1100,25 @@ fn net_diagnose() -> net_diag::NetDiag {
     net_diag::diagnose(host)
 }
 
+/// Запрос к нашему API в обход системного DNS (см. net_fallback.rs) — интерфейс зовёт его, когда fetch не смог
+/// соединиться. Только наш сервер: адрес берётся из API_BASE, из интерфейса приходит лишь путь.
+#[tauri::command]
+async fn api_fallback(
+    method: String,
+    path: String,
+    headers: std::collections::HashMap<String, String>,
+    body: Option<String>,
+    write: bool,
+) -> Result<net_fallback::FallbackResponse, String> {
+    let result = net_fallback::request(API_BASE, &method, &path, headers, body, write).await;
+    if let Err(e) = &result {
+        log::info!("api_fallback {method} {path}: {e}");
+    } else {
+        log::info!("api_fallback {method} {path}: ok via doh {:?}", net_fallback::cached_ip());
+    }
+    result
+}
+
 /// Параметры видео, лежащего на этом компьютере, для плана сборки (читается только выбранный пользователем файл).
 #[tauri::command(async)]
 fn local_render_probe(app: tauri::AppHandle, path: String) -> Result<local_render::LocalVideoInfo, String> {
@@ -1823,6 +1843,7 @@ fn main() {
         .manage(file_scope::FileScope::default())
         .invoke_handler(tauri::generate_handler![
             desktop_notify::notify_desktop,
+            api_fallback,
             local_render_prepare,
             upscale_image,
             upscale_read,
