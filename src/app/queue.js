@@ -34,11 +34,12 @@ function dueText(left) {
   return `через ${left} ${plural(left, "день", "дня", "дней")}`;
 }
 
+// Порядок групп — порядок на экране: сначала то, что ещё не сдано (по срочности), сданное — в самом низу.
 const COLUMNS = [
-  { key: "submitted", label: "Сдано вовремя", hint: "личная сдача до срока", test: it => it.personal_submitted_by_deadline },
   { key: "hot", label: "Горит", hint: "просрочено, сегодня и завтра", test: (it, l) => !it.personal_submitted_by_deadline && l !== null && l <= 1 },
   { key: "week", label: "На неделе", hint: "2–7 дней", test: (it, l) => !it.personal_submitted_by_deadline && l !== null && l > 1 && l <= 7 },
   { key: "later", label: "Позже", hint: "дальше недели и без срока", test: (it, l) => !it.personal_submitted_by_deadline && (l === null || l > 7) },
+  { key: "submitted", label: "Сдано вовремя", hint: "личная сдача до срока", test: it => it.personal_submitted_by_deadline },
 ];
 
 // Готовность по статусу: у серии в очереди нет цепочки этапов, только
