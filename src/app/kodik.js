@@ -800,6 +800,7 @@ const UP_FIELDS = [
 
 async function openUploadForm(it, onDone) {
   const overlay = openSheet(`<div class="kk-upform"><div class="kk-dim">Собираю карточку…</div></div>`);
+  overlay.querySelector(".sheet").classList.add("kk-upsheet");
   const box = overlay.querySelector(".kk-upform");
   let pre;
   try { pre = await apiGet("/kodik/upload/prefill", { key: it.key }); } catch (err) { box.innerHTML = `<div class="kk-dim">${esc(err.message)}</div>`; return; }
