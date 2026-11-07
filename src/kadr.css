@@ -4763,3 +4763,20 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .tpg-watch svg { width: 15px; height: 15px; fill: currentColor; }
 
 .ap-op[hidden] { display: none; }
+
+/* Хранилище разработчика */
+.vault-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.vault-sheet { width: min(720px, 94vw); }
+.vault-gate, .vault-form { display: flex; flex-direction: column; gap: 10px; }
+.vault-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.vault-head h3 { margin: 0 auto 0 0; }
+.vault-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow: auto; }
+.vault-item { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.vault-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.vault-login { all: unset; cursor: pointer; color: var(--text-2, inherit); font-size: 13px; }
+.vault-val { font-family: ui-monospace, monospace; word-break: break-all; user-select: text; }
+.vault-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.vault-actions .btn { padding: 4px 10px; }
+.vault-log { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow: auto; }
+.vault-log-row { display: grid; grid-template-columns: 1fr 2fr auto; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.vault-log-row.bad { color: var(--danger, #e5484d); }

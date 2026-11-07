@@ -14,6 +14,7 @@ import { setQuickFilter, loadReports } from "./reports.js";
 import { switchTab } from "./tabs.js";
 import { playDonutIntro } from "./charts.js";
 import { devModeActive, devPanelHtml, wireDevPanel } from "./devmode.js";
+import { vaultEntryHtml, wireVaultEntry } from "./vault.js";
 import { openReportDetail } from "./report-detail.js";
 import { openRolesSheet } from "./roles.js";
 import { openExternal, sendNotification } from "./tauri.js";
@@ -393,7 +394,7 @@ export async function loadProfile() {
           ${teamTeaserHtml(me)}
         </aside>
       </div>
-      ${devModeActive() ? devPanelHtml(me) : ""}
+      ${devModeActive() ? devPanelHtml(me) + vaultEntryHtml() : ""}
     </div>
   `;
   wireProfileCommon(root, me.telegram_id, () => loadProfile());
@@ -413,7 +414,7 @@ export async function loadProfile() {
   root.querySelectorAll("[data-open-report]").forEach(row => {
     row.addEventListener("click", () => openReportDetail(row.dataset.openReport));
   });
-  if (devModeActive()) wireDevPanel(root, me.telegram_id, () => loadProfile(), me);
+  if (devModeActive()) { wireDevPanel(root, me.telegram_id, () => loadProfile(), me); wireVaultEntry(root); }
   notifyGoalReachedIfNeeded(me, goalSet, goalOver, goalDone);
 }
 
