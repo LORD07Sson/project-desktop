@@ -235,6 +235,19 @@ async function fetchThumb(it) {
   coverBusy.delete(`t${id}`);
 }
 
+// Фон шапки страницы раздачи — обложка/баннер самого тайтла, если уже загружена.
+function headCover(it) { const key = coverKey(it.title); return (key && coverData.get(key)) || thumbData.get(it.id) || ""; }
+// Описание с nyaa — markdown: заголовки, жирный, курсив, ссылки, списки — в простую разметку (после esc).
+function descHtml(md) {
+  return esc(md).split(/\n/).map(l => {
+    const h = l.match(/^\s*#{1,6}\s*(.*)$/);
+    let t = (h ? h[1] : l).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|\s)\*(\S.*?)\*/g, "$1<i>$2</i>")
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, a, u) => `<a data-ext="${u}">${a}</a>`);
+    if (!h && /^\s*[-*]\s+/.test(l)) t = "• " + t.replace(/^\s*[-*]\s+/, "");
+    return h ? `<b class="ny-desc-h">${t}</b>` : t;
+  }).join("<br>");
+}
+
 function kindHtml(it, kind) {
   const key = coverKey(it.title);
   const src = thumbData.get(it.id) || (key && kind === "anime" && coverData.get(key)) || (kind !== "audio" && key && coverData.get(key));
@@ -2105,7 +2118,7 @@ function drawerBodyHtml(d) {
     return tabs + (v.files.length ? `<ul class="ny-files">${v.files.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : `<div class="ny-empty"><p>Список файлов не указан.</p></div>`);
   }
   return tabs + galleryHtml(d)
-    + (v.description ? `<div class="ny-desc">${esc(v.description).replace(/\n/g, "<br>")}</div>` : (v.images.length ? "" : `<div class="ny-empty"><p>У раздачи нет описания и картинок.</p></div>`));
+    + (v.description && !/^[#\s]*no description\.?\s*$/i.test(v.description) ? `<div class="ny-desc">${descHtml(v.description)}</div>` : (v.images.length ? "" : `<div class="ny-empty"><p>У раздачи нет описания и картинок.</p></div>`));
 }
 
 function drawerHtml() {
@@ -2116,7 +2129,7 @@ function drawerHtml() {
   return `
     <div class="ny-scrim" data-d-close></div>
     <aside class="ny-drawer" role="dialog" aria-label="Страница раздачи">
-      <header class="ny-d-head">
+      <header class="ny-d-head"${headCover(it) ? ` style="--d-cover:url(&quot;${esc(headCover(it))}&quot;)"` : ""}>
         <div><span class="kd-label">Раздача №${it.id}</span><h3>${esc((v && v.title) || it.title)}</h3></div>
         <button type="button" class="ny-ib wide" data-d-close title="Закрыть (Esc)" aria-label="Закрыть">${ICONS.close}</button>
       </header>

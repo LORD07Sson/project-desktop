@@ -4944,3 +4944,21 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .ny .ny-status { border-radius: 10px; background: color-mix(in srgb, var(--ny-bg) 45%, transparent); border-color: color-mix(in srgb, var(--ny-neon) 10%, transparent); }
 .ny .ny-head { border-radius: 10px; background: color-mix(in srgb, var(--ny-bg) 80%, transparent); border-color: color-mix(in srgb, var(--ny-neon) 14%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .ny .ny-list > .ny-day { border-radius: 10px; background: linear-gradient(90deg, color-mix(in srgb, var(--ny-neon2) 10%, var(--ny-bg)), color-mix(in srgb, var(--ny-bg) 70%, transparent) 60%); border-color: color-mix(in srgb, var(--ny-neon2) 14%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+
+/* ---------- Nyaa: страница раздачи — шапка с обложкой тайтла, компактные кнопки, сведения одной панелью ---------- */
+:root[data-ny-atmos] .ny-d-head::before { background: var(--d-cover, var(--ny-banner)) center 25% / cover no-repeat; opacity: .5; filter: saturate(1.15); }
+:root[data-ny-atmos] .ny-d-head { padding-top: 84px; }
+:root[data-ny-atmos] .ny-d-head h3 { font-size: 18px; font-weight: 800; line-height: 1.3; }
+:root[data-ny-atmos] .ny-d-acts { gap: 6px; }
+:root[data-ny-atmos] .ny-d-acts .btn { padding: 7px 12px; font-size: 12.5px; }
+:root[data-ny-atmos] .ny-d-acts .btn.primary { padding: 7px 18px; }
+:root[data-ny-atmos] .ny-d-sub { font-size: 12px; color: var(--n-t3); }
+:root[data-ny-atmos] .ny-d-links .ny-link { color: var(--ny-neon); background: color-mix(in srgb, var(--ny-neon) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ny-neon) 25%, transparent); }
+:root[data-ny-atmos] .ny-d-links .ny-link:hover { background: color-mix(in srgb, var(--ny-neon) 20%, transparent); }
+:root[data-ny-atmos] .ny-d-grid { gap: 1px; padding: 0; border-radius: 14px; overflow: hidden; background: color-mix(in srgb, var(--ny-neon) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ny-neon) 16%, transparent); }
+:root[data-ny-atmos] .ny-d-grid > div { border: 0; border-radius: 0; padding: 10px 14px; background: color-mix(in srgb, var(--ny-bg) 92%, var(--ny-neon)); }
+:root[data-ny-atmos] .ny-d-grid span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
+:root[data-ny-atmos] .ny-d-grid b { font-size: 14px; color: #fff; }
+:root[data-ny-atmos] .ny-d-grid b.mono { font-size: 12px; color: var(--n-t2); }
+.ny-desc-h { display: block; margin: 6px 0 2px; font-size: 14px; color: var(--ink); }
+.ny-desc a { color: var(--ny-neon, var(--gold)); cursor: pointer; }
