@@ -1,4 +1,4 @@
-// Раздел «Заливка аниме и другие» → Kodik (кабинет dreamyvoice).
+// Раздел «Заливка аниме и другие» → Kodik (кабинет из KODIK_LOGIN).
 // Все запросы идут через наш сервер (/api/kodik/*): токен Kodik хранится только там.
 // Каталог и озвучки — живые данные API; остальное — справочник по кабинету для разработчиков
 // с генераторами ссылок и кодом, который можно сразу скопировать.
@@ -85,6 +85,7 @@ export async function loadUploads() {
   return part === "kodik" ? loadKodik() : loadA365();
 }
 
+let cabinetLogin = null;
 export async function loadKodik() {
   const root = $("#kodik-body");
   if (!root) return false;
@@ -94,11 +95,19 @@ export async function loadKodik() {
   }
   root.innerHTML = `
     <div class="kk-head">
-      <div><b>Kodik</b> <span class="kk-dim">кабинет dreamyvoice · база, API, плееры</span></div>
+      <div><b>Kodik</b> <span class="kk-dim"><span data-kk-login>${cabinetLogin ? `кабинет ${esc(cabinetLogin)}` : "кабинет"}</span> · база, API, плееры</span></div>
       <button type="button" class="btn ghost" data-kk-open="/">Открыть кабинет ↗</button>
     </div>
     <div class="a3-seg kk-views" role="tablist">${VIEWS.map(([k, t]) => `<button type="button" role="tab" class="${view === k ? "on" : ""}" aria-selected="${view === k}" data-kk-view="${k}">${t}</button>`).join("")}</div>
     <div class="kk-body"></div>`;
+  // Имя кабинета — из KODIK_LOGIN на сервере: сменится логин — сменится подпись.
+  if (cabinetLogin == null) {
+    apiGet("/kodik/account").then(d => {
+      cabinetLogin = String(d.login || "");
+      const el = root.querySelector("[data-kk-login]");
+      if (el && cabinetLogin) el.textContent = `кабинет ${cabinetLogin}`;
+    }).catch(() => {});
+  }
   await RENDER[view](root.querySelector(".kk-body"));
   return true;
 }
