@@ -4928,3 +4928,19 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .ny-list .ny-kind.has-cover { left: 30%; -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%); mask-image: linear-gradient(90deg, transparent, #000 25%); }
 .ny-list .ny-tags i + i::before { content: none; }
 .ny-list .ny-tags { gap: 5px; }
+
+/* ---------- Nyaa: меню слева и панели над лентой — один общий мягкий отсвет баннера за всей страницей, панели тёмное стекло ---------- */
+.ny { isolation: isolate; }
+.ny::before { content: ""; position: absolute; left: 0; right: 0; top: 200px; height: 900px; z-index: -1; pointer-events: none;
+  background: var(--ny-banner) center 40% / cover no-repeat; filter: blur(70px) saturate(1.4); opacity: .16;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 100%); mask-image: linear-gradient(180deg, #000 0%, transparent 100%); }
+.ny-side-g { position: relative; margin-bottom: 10px; padding: 10px 8px 8px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ny-neon) 12%, transparent); background: color-mix(in srgb, var(--ny-bg) 55%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.ny .ny-side-h { color: color-mix(in srgb, var(--ny-neon) 70%, #9aa0ad); letter-spacing: .04em; }
+.ny .ny-cats button, .ny .ny-side .ny-seg button, .ny .ny-side-btn { border-radius: 9px; transition: background-color .2s, color .2s; }
+.ny .ny-cats button:hover, .ny .ny-side .ny-seg button:hover, .ny .ny-side-btn:hover { background: color-mix(in srgb, var(--ny-neon) 8%, transparent); }
+.ny .ny-side .ny-seg button.on, .ny .ny-cats button.on { background: linear-gradient(90deg, color-mix(in srgb, var(--ny-neon) 16%, transparent), transparent 85%); box-shadow: inset 2px 0 0 var(--ny-neon); }
+.ny .ny-side-btn svg { stroke: color-mix(in srgb, var(--ny-neon) 70%, #9aa0ad); }
+.ny .ny-search { border-radius: 12px; border-color: color-mix(in srgb, var(--ny-neon) 18%, transparent); background: color-mix(in srgb, var(--ny-bg) 60%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.ny .ny-status { border-radius: 10px; background: color-mix(in srgb, var(--ny-bg) 45%, transparent); border-color: color-mix(in srgb, var(--ny-neon) 10%, transparent); }
+.ny .ny-head { border-radius: 10px; background: color-mix(in srgb, var(--ny-bg) 80%, transparent); border-color: color-mix(in srgb, var(--ny-neon) 14%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.ny .ny-list > .ny-day { border-radius: 10px; background: linear-gradient(90deg, color-mix(in srgb, var(--ny-neon2) 10%, var(--ny-bg)), color-mix(in srgb, var(--ny-bg) 70%, transparent) 60%); border-color: color-mix(in srgb, var(--ny-neon2) 14%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
