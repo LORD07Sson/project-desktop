@@ -16,29 +16,23 @@ import { pickFiles } from "./attachments.js";
 import { imgProxy } from "./title-page.js";
 import { state } from "./state.js";
 import { liveButton, openShare } from "./nyaa-fx.js";
-import { notifyDesktop } from "./desktop-notify.js";
 import {
   newHealth, record as hRecord, statsOf, cooling as hCooling, bestPath, pickMirror, shouldSwitch,
   levelOf, serialize, deserialize, SLOW_MS, ageText, durText, pushActivity, filterActivity, nextCheckIn,
 } from "./mirror-health.js";
 import { $, esc } from "./utils.js";
 import { applyBanner, cascadeRows, countUp } from "./nyaa-atmos.js";
-import {
-  CATEGORIES, FILTERS, parseNyaaRss, magnetLink, sortItems, relTime, fmtDate,
-  splitTitle, categoryKind, summarize, fmtBytes, torrentFileName,
-  parseView, buildServices, classifyCheck, normalizeMirror, hostOf, NYAA_MIRRORS,
-  applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds,
-  makeMonitor, monitorTitle, diffMonitor, CLIENT_NAMES, CLIENT_PORTS,
-  isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime,
-  cleanTitleForSearch, parseSimilar, SIMILAR_QUERY,
-  dayLabel, groupReleases, episodeKey, makeRule, ruleText, freshForRule, COVER_QUERY, parseCover, coverKey, coverAltKeys, coverSearchTerms, pickCoverCandidate, COVER_BATCH, coverBatchRequest, parseCoverBatch,
-  seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, DETAIL_TABS, normalizeTabs,
-  parseTsukiFull, exactLinks, parseMediainfo, highlightSubtitle, defaultShotTrack, libraryKeys,
-} from "./nyaa-core.js";
+import { CATEGORIES, FILTERS, parseNyaaRss, magnetLink, sortItems, fmtDate, categoryKind, summarize, fmtBytes, torrentFileName, parseView, classifyCheck, normalizeMirror, hostOf, NYAA_MIRRORS, applyFilters, activeFilterCount, normalizeFilters, DEFAULT_FILTERS, splitWords, mergePages, rangeIds, CLIENT_NAMES, isHash40, sourceUrls, parseSeadex, parseAnimetosho, parseNekoSearch, parseNekoTorrent, parseTsukihime, cleanTitleForSearch, parseSimilar, SIMILAR_QUERY, groupReleases, episodeKey, makeRule, coverKey, seadexListUrl, parseSeadexList, titleLinks, DETAIL_TABS, normalizeTabs, libraryKeys } from "./nyaa-core.js";
+import { barHtml, coverData, coverUrls, descHtml, headCover, listHtml, loadListCovers, seg, shellHtml, thumbData, thumbUrls } from "./nyaa-covers.js";
+import { openInSystemClient, openPanel, paintClient, paintClientLabel, readClientForm, sendToClient } from "./nyaa-torrent.js";
+import { MON_CHOICES, addMonitor, checkMonitors, paintMonitorBadge, paintMonitors } from "./nyaa-monitors.js";
+import { ROUTES, allServices, applyChecks, exitList, exitName, exitOf, loadExits, loadRemoteMirrors, remoteMirrors, routeOf, serviceOfUrl, viaQuery } from "./nyaa-routes.js";
+import { isNoConnection, isNotFound, loadMediainfo, loadShots, metaGet, openSubtitle, saveSubtitle, sourcesTabHtml, toshoTabHtml } from "./nyaa-external.js";
+
 
 const KEY = "project-nyaa";
 const QUICK_CATS = [["2_1", "Аудио без потерь"], ["1_2", "Аниме · англ. субтитры"], ["1_4", "Аниме · raw"], ["1_3", "Аниме · другие языки"], ["0_0", "Всё"]];
-const KIND_ICON = {
+export const KIND_ICON = {
   anime: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10.5 9.5v5l4-2.5z"/></svg>',
   video: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10.5 9.5v5l4-2.5z"/></svg>',
   audio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/></svg>',
@@ -49,12 +43,12 @@ function loadPrefs() {
   const d = { cat: "2_1", filter: "0", q: "", sort: "date", saved: [], base: NYAA_MIRRORS[0], custom: [], filters: { ...DEFAULT_FILTERS }, presets: [], monitors: [], route: {}, exit: {}, group: false, hideDone: false, onlySeadex: false, tabs: {}, hideHave: false, monEvery: 30 };
   try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { return d; }
 }
-const prefs = loadPrefs();
+export const prefs = loadPrefs();
 prefs.filters = normalizeFilters(prefs.filters);
 
 // «Уже смотрел»: раздачи, которые открывали, копировали или сохраняли.
 const SEEN_KEY = "project-nyaa-seen";
-const seen = (() => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || "[]")); } catch (_) { return new Set(); } })();
+export const seen = (() => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || "[]")); } catch (_) { return new Set(); } })();
 const markSeen = id => {
   if (seen.has(id)) return;
   seen.add(id);
@@ -62,17 +56,17 @@ const markSeen = id => {
 };
 // Серии, которые уже отправлены в клиент: по ним ставится пометка и работает «скрыть скачанное».
 const EPS_KEY = "project-nyaa-eps";
-const sentEps = (() => { try { return new Set(JSON.parse(localStorage.getItem(EPS_KEY) || "[]")); } catch (_) { return new Set(); } })();
-const markSent = list => {
+export const sentEps = (() => { try { return new Set(JSON.parse(localStorage.getItem(EPS_KEY) || "[]")); } catch (_) { return new Set(); } })();
+export const markSent = list => {
   list.forEach(i => { const k = episodeKey(i); if (k) sentEps.add(k); });
   try { localStorage.setItem(EPS_KEY, JSON.stringify([...sentEps].slice(-2000))); } catch (_) { /* не запомнится */ }
 };
-const openGroups = new Set();
+export const openGroups = new Set();
 
 // Медиатека: папка с аниме на этом компьютере. Rust сканирует имена файлов, здесь они превращаются в ключи серий.
 let lib = null;              // { dir, count, truncated, keys:Set } или null
 let libBusy = false;
-const haveIt = it => { if (!lib) return false; const k = episodeKey(it); return !!k && lib.keys.has(k); };
+export const haveIt = it => { if (!lib) return false; const k = episodeKey(it); return !!k && lib.keys.has(k); };
 function setLib(scan) {
   lib = scan ? { dir: scan.dir, count: scan.files.length, truncated: !!scan.truncated, keys: libraryKeys(scan.files) } : null;
 }
@@ -110,29 +104,29 @@ const cacheSave = xml => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(
 const cacheLoad = () => {
   try { const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); return c && c.id === cacheId() && Date.now() - c.at < 24 * 3600e3 ? c : null; } catch (_) { return null; }
 };
-let stale = 0;               // метка времени кэша, если показываем старые данные
+export let stale = 0;               // метка времени кэша, если показываем старые данные
 
-const savePrefs = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) { /* не запомнится */ } };
+export const savePrefs = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) { /* не запомнится */ } };
 
-let items = [];
-let loading = false;
-let error = "";
+export let items = [];
+export let loading = false;
+export let error = "";
 let fetchedAt = 0;
 let page = 1;
-let hasMore = false;
-let moreBusy = false;
+export let hasMore = false;
+export let moreBusy = false;
 let filtersOpen = false;
 let anchorId = null;
-let client = null;          // настройки торрент-клиента (без пароля)
-let clientDraft = null;
-const selected = new Set();
-let checks = {};           // url → результат проверки по выбранному для сервиса соединению
-let localChecks = {};      // url → проверка с этого компьютера
-let serverChecks = {};     // url → проверка с сервера студии (через его туннель WireGuard)
+export let client = null;          // настройки торрент-клиента (без пароля)
+export let clientDraft = null;
+export const selected = new Set();
+export let checks = {};           // url → результат проверки по выбранному для сервиса соединению
+export let localChecks = {};      // url → проверка с этого компьютера
+export let serverChecks = {};     // url → проверка с сервера студии (через его туннель WireGuard)
 let checking = false;
-let detail = null;         // { item, state, view, err, tab, imgs, lightbox }
+export let detail = null;         // { item, state, view, err, tab, imgs, lightbox }
 
-const ICONS = {
+export const ICONS = {
   search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>',
   torrent: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   magnet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v7a7 7 0 0 0 14 0V4h-4v7a3 3 0 0 1-6 0V4zM5 7h4M15 7h4"/></svg>',
@@ -153,8 +147,8 @@ const ICONS = {
 
 // SeaDex: «лучший» (синий) и «запасной» (оранжевый) релизы по info hash, одним запросом на список.
 const sdMap = new Map();
-const sdOf = it => sdMap.get(String(it.hash || "").toLowerCase()) || "";
-const view = () => {
+export const sdOf = it => sdMap.get(String(it.hash || "").toLowerCase()) || "";
+export const view = () => {
   items.forEach(i => { i._sd = sdOf(i); });
   let l = sortItems(applyFilters(items, prefs.filters, { seen }), prefs.sort, "desc");
   if (prefs.hideDone) l = l.filter(i => { const k = episodeKey(i); return !k || !sentEps.has(k); });
@@ -175,7 +169,7 @@ async function loadSeadexList() {
     paintList();
   } catch (_) { /* SeaDex недоступен — метки просто не показываются */ }
 }
-const serverOrigin = () => { try { return new URL(API_BASE).origin; } catch (_) { return ""; } };
+export const serverOrigin = () => { try { return new URL(API_BASE).origin; } catch (_) { return ""; } };
 
 function statsHtml(list) {
   if (!list.length) return "";
@@ -187,405 +181,10 @@ function statsHtml(list) {
     <div class="ny-stat"><b>${s.trusted}</b><span>доверенных</span></div>`;
 }
 
-// ---------- обложки вместо значков ----------
-// Обложка берётся с AniList по названию тайтла (одна на аниме, не на каждую раздачу) и держится
-// в памяти; в localStorage лежит только адрес картинки. Не нашлась — остаётся значок.
-const COVERS_KEY = "project-nyaa-covers-hd";   // адреса баннеров/больших постеров (прежние — 100×150)
-try { localStorage.removeItem("project-nyaa-covers"); } catch (_) { /* нет — и ладно */ }
-const coverUrls = (() => { try { return JSON.parse(localStorage.getItem(COVERS_KEY) || "{}"); } catch (_) { return {}; } })();
-const coverData = new Map();   // ключ → data-URL
-const coverBusy = new Set();
-const saveCovers = () => {
-  const keys = Object.keys(coverUrls);
-  if (keys.length > 500) keys.slice(0, keys.length - 500).forEach(k => delete coverUrls[k]);
-  try { localStorage.setItem(COVERS_KEY, JSON.stringify(coverUrls)); } catch (_) { /* не запомнится */ }
-};
-
-// У раздач без аниме-обложки (музыка, OST) аватар — первая картинка из описания раздачи.
-const THUMBS_KEY = "project-nyaa-thumbs";
-const thumbUrls = (() => { try { return JSON.parse(localStorage.getItem(THUMBS_KEY) || "{}"); } catch (_) { return {}; } })();
-const thumbData = new Map();   // id → data-URL
-const saveThumbs = () => {
-  const keys = Object.keys(thumbUrls);
-  if (keys.length > 800) keys.slice(0, keys.length - 800).forEach(k => delete thumbUrls[k]);
-  try { localStorage.setItem(THUMBS_KEY, JSON.stringify(thumbUrls)); } catch (_) { /* не запомнится */ }
-};
-
-const thumbFailAt = new Map();   // id → когда последний раз не получилось (повтор не чаще раза в минуту)
-
-async function fetchThumb(it) {
-  const id = it.id;
-  if (coverBusy.has(`t${id}`) || thumbData.has(id)) return;
-  if (Date.now() - (thumbFailAt.get(id) || 0) < 60_000) return;
-  coverBusy.add(`t${id}`);
-  try {
-    let url = thumbUrls[id];
-    if (url === undefined) {
-      url = parseView(await nyaaView({ base: prefs.base, id })).images[0] || "";
-      thumbUrls[id] = url; saveThumbs();
-    }
-    if (url) {
-      thumbData.set(id, await fetchPic(url));
-      document.querySelectorAll(".ny-kind[data-tid]").forEach(el => {
-        if (el.dataset.tid !== String(id) || el.querySelector("img")) return;
-        el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(thumbData.get(id))}" alt="">`;
-      });
-    }
-  } catch (_) { thumbFailAt.set(id, Date.now()); }
-  coverBusy.delete(`t${id}`);
-}
-
-// Фон шапки страницы раздачи — обложка/баннер самого тайтла, если уже загружена.
-function headCover(it) { const key = coverKey(it.title); return (key && coverData.get(key)) || thumbData.get(it.id) || ""; }
-// Описание с nyaa — markdown: заголовки, жирный, курсив, ссылки, списки — в простую разметку (после esc).
-function descHtml(md) {
-  return esc(md).split(/\n/).map(l => {
-    const h = l.match(/^\s*#{1,6}\s*(.*)$/);
-    let t = (h ? h[1] : l).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|\s)\*(\S.*?)\*/g, "$1<i>$2</i>")
-      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, a, u) => `<a data-ext="${u}">${a}</a>`);
-    if (!h && /^\s*[-*]\s+/.test(l)) t = "• " + t.replace(/^\s*[-*]\s+/, "");
-    return h ? `<b class="ny-desc-h">${t}</b>` : t;
-  }).join("<br>");
-}
-
-function kindHtml(it, kind) {
-  const key = coverKey(it.title);
-  const src = thumbData.get(it.id) || (key && kind === "anime" && coverData.get(key)) || (kind !== "audio" && key && coverData.get(key));
-  return `<span class="ny-kind k-${kind}${src ? " has-cover" : ""}" data-ck="${esc(key)}" data-tid="${esc(it.id)}" title="${esc(it.category)}">${src ? `<img src="${esc(src)}" alt="">` : KIND_ICON[kind]}</span>`;
-}
-
-function paintCover(key) {
-  const src = coverData.get(key);
-  if (!src) return;
-  document.querySelectorAll(".ny-kind[data-ck]").forEach(el => {
-    if (el.dataset.ck !== key || el.querySelector("img") || el.classList.contains("k-audio")) return;
-    el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(src)}" alt="">`;
-  });
-}
-
-// «Не нашлось» помним 3 дня, а не навсегда: новый тайтл появляется на AniList через день-другой после премьеры,
-// а раньше один промах оставлял строку без обложки насовсем. Старое «» (до этой правки) считаем просроченным.
-const MISS_TTL = 3 * 24 * 3600_000;
-// «miss3:» — промахи с тех пор, как есть запасные каталоги и картинка из описания раздачи; старые перепроверяем
-const missedRecently = v => typeof v === "string" && v.startsWith("miss3:") && Date.now() - Number(v.slice(6)) < MISS_TTL;
-const hasUrl = v => typeof v === "string" && v.startsWith("https://");
-
-// Если AniList не знает тайтл: Kitsu, MyAnimeList и Shikimori через сервер, а в конце — первая картинка из описания раздачи.
-async function coverFallback(key, sample) {
-  const terms = coverSearchTerms(key, sample && sample.title);
-  for (const q of terms) {
-    try {
-      const d = await apiGet("/nyaa/cover-search", { q });
-      const url = pickCoverCandidate(terms, d.items);
-      if (url) return url;
-    } catch (_) { break; }
-  }
-  if (!sample) return "";
-  return parseView(await nyaaView({ base: prefs.base, id: sample.id })).images[0] || "";
-}
-
-// Готовые обложки живут на диске уменьшенными: при запуске список сразу с картинками, без скачивания заново.
-const COVER_DB = "project-nyaa-cover-cache-hd2";   // баннеры до 1280px и большие постеры (раньше 100×150 — на всю строку выходили мылом)
-try { ["project-nyaa-cover-cache", "project-nyaa-cover-cache-hd"].forEach(n => indexedDB.deleteDatabase(n)); } catch (_) { /* старого кэша может не быть */ }
-const COVER_SIZE = 420;
-const COVER_DB_LIMIT = 400;
-let coverDb = null;
-
-function openCoverDb() {
-  if (coverDb) return coverDb;
-  coverDb = new Promise(resolve => {
-    try {
-      const req = indexedDB.open(COVER_DB, 1);
-      req.onupgradeneeded = () => req.result.createObjectStore("covers");
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    } catch (_) { resolve(null); }
-  });
-  return coverDb;
-}
-
-let coverCacheLoaded = null;
-function loadCoverCache() {
-  if (coverCacheLoaded) return coverCacheLoaded;
-  coverCacheLoaded = openCoverDb().then(db => new Promise(resolve => {
-    if (!db) { resolve(); return; }
-    const store = db.transaction("covers").objectStore("covers");
-    const keys = store.getAllKeys();
-    const values = store.getAll();
-    values.onsuccess = () => {
-      keys.result.forEach((k, i) => { if (!coverData.has(k)) coverData.set(k, values.result[i]); });
-      if (keys.result.length > COVER_DB_LIMIT) {
-        const del = db.transaction("covers", "readwrite").objectStore("covers");
-        keys.result.slice(0, keys.result.length - COVER_DB_LIMIT).forEach(k => del.delete(k));
-      }
-      resolve();
-    };
-    values.onerror = () => resolve();
-  }));
-  return coverCacheLoaded;
-}
-
-function shrinkCover(src) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const scale = Math.min(1, COVER_SIZE / Math.min(img.naturalWidth, img.naturalHeight), 1280 / img.naturalWidth);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/webp", 0.8));
-      } catch (_) { resolve(src); }
-    };
-    img.onerror = () => resolve(src);
-    img.src = src;
-  });
-}
-
-async function storeCover(key, src) {
-  const db = await openCoverDb();
-  if (!db) return;
-  try { db.transaction("covers", "readwrite").objectStore("covers").put(src, key); } catch (_) { /* просто скачаем в следующий раз */ }
-}
-
-async function aniListBatch(terms) {
-  const { query, variables } = coverBatchRequest(terms);
-  const urls = parseCoverBatch(await invoke("anilist_query", { query, variables }), terms.length);
-  if (!urls) throw new Error("AniList не ответил");
-  return urls;
-}
-
-// Пачка: сначала по основным названиям, ненайденные — по запасным. Возвращает ненайденные ключи.
-async function resolveCoverChunk(chunk, altsOf) {
-  const urls = await aniListBatch(chunk);
-  chunk.forEach((k, i) => { if (urls[i]) coverUrls[k] = urls[i]; });
-  let misses = chunk.filter(k => !hasUrl(coverUrls[k]));
-  const altOwner = new Map();
-  for (const k of misses) for (const alt of (altsOf.get(k) || []).slice(0, 2)) if (!altOwner.has(alt) && altOwner.size < COVER_BATCH) altOwner.set(alt, k);
-  if (altOwner.size) {
-    const terms = [...altOwner.keys()];
-    const found = await aniListBatch(terms);
-    terms.forEach((t, i) => { const k = altOwner.get(t); if (found[i] && !hasUrl(coverUrls[k])) coverUrls[k] = found[i]; });
-    misses = misses.filter(k => !hasUrl(coverUrls[k]));
-  }
-  saveCovers();
-  return misses;
-}
-
-async function fetchCover(key, alts = [], sample = null) {
-  if (coverBusy.has(key) || coverData.has(key)) return;
-  coverBusy.add(key);
-  try {
-    let url = coverUrls[key];
-    if (!hasUrl(url) && !missedRecently(url)) {
-      url = "";
-      // по основному названию, потом по запасным из скобок («(Nezumi-kun no Chokki (TV))»)
-      for (const s of sample && sample.batched ? [] : [key, ...alts]) {
-        url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s } }));
-        if (url) break;
-      }
-      if (!url) url = await coverFallback(key, sample);
-      coverUrls[key] = url || `miss3:${Date.now()}`; saveCovers();
-    }
-    if (hasUrl(url)) {
-      const small = await shrinkCover(await fetchPic(url));
-      coverData.set(key, small);
-      paintCover(key);
-      storeCover(key, small);
-    }
-  } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
-  coverBusy.delete(key);
-}
-
-let coverQueueOn = false;
-async function loadListCovers() {
-  if (coverQueueOn) return;
-  coverQueueOn = true;
-  try {
-    await loadCoverCache();
-    for (const el of document.querySelectorAll(".ny-kind[data-ck]")) if (el.dataset.ck) paintCover(el.dataset.ck);
-    // Вся лента, а не первые 60 строк: раньше всё, что ниже, так и оставалось со значком.
-    const vis = view();
-    const isAudio = i => categoryKind(i.categoryId) === "audio";
-    const altsOf = new Map();
-    const sampleOf = new Map();
-    for (const i of vis) if (!isAudio(i)) { const k = coverKey(i.title); if (k && !altsOf.has(k)) { altsOf.set(k, coverAltKeys(i.title)); sampleOf.set(k, i); } }
-    const keys = [...altsOf.keys()].filter(k => !coverData.has(k) && !missedRecently(coverUrls[k]));
-    const thumbs = vis.filter(i => isAudio(i) && !thumbData.has(i.id) && thumbUrls[i.id] !== "").slice(0, 30);
-    // Адрес уже известен — это просто скачать картинку, потоков больше. Поиск идёт пачками сверху списка, а по запасным каталогам — в конце и бережнее.
-    const pool = (list, size) => {
-      let next = 0;
-      const worker = async () => { while (next < list.length) await list[next++](); };
-      return Array.from({ length: size }, worker);
-    };
-    const download = k => () => fetchCover(k);
-    const lookups = async () => {
-      const unknown = keys.filter(k => !hasUrl(coverUrls[k]));
-      const misses = [];
-      try {
-        for (let i = 0; i < unknown.length; i += COVER_BATCH) {
-          const chunk = unknown.slice(i, i + COVER_BATCH);
-          misses.push(...await resolveCoverChunk(chunk, altsOf));
-          await Promise.all(pool(chunk.filter(k => hasUrl(coverUrls[k])).map(download), 8));
-        }
-      } catch (_) { /* лимит или нет связи: продолжим при следующей отрисовке */ }
-      const jobs = [
-        ...misses.map(k => () => fetchCover(k, [], { ...sampleOf.get(k), batched: true })),
-        ...thumbs.map(i => () => fetchThumb(i)),
-      ];
-      await Promise.all(pool(jobs, 3));
-    };
-    await Promise.all([...pool(keys.filter(k => hasUrl(coverUrls[k])).map(download), 8), lookups()]);
-  } finally { coverQueueOn = false; }
-}
-
-function rowHtml(it, maxSeed, now) {
-  const { group, tags } = splitTitle(it.title);
-  const kind = categoryKind(it.categoryId);
-  const health = maxSeed ? Math.max(4, Math.round(it.seeders / maxSeed * 100)) : 0;
-  return `
-    <div class="ny-row${it.trusted ? " tr" : ""}${it.remake ? " rm" : ""}${selected.has(it.id) ? " sel" : ""}${seen.has(it.id) ? " seen" : ""}${haveIt(it) ? " have" : ""}${sdOf(it) ? ` sd-${sdOf(it)}` : ""}" data-id="${it.id}">
-      <label class="ny-ck"><input type="checkbox" ${selected.has(it.id) ? "checked" : ""} aria-label="Выбрать"></label>
-      ${kindHtml(it, kind)}
-      <div class="ny-main">
-        <div class="ny-title">${group ? `<em>${esc(group)}</em>` : ""}${esc(group ? it.title.replace(/^\s*\[[^\]]*\]\s*/, "") : it.title)}</div>
-        <div class="ny-tags">${tags.map(t => `<i>${esc(t)}</i>`).join("")}${it.remake ? `<i class="warn">ремейк</i>` : ""}${haveIt(it) ? `<i class="have-i" title="Эта серия уже есть в вашей медиатеке">уже есть</i>` : ""}${sdOf(it) === "best" ? `<i class="sd-b" title="Лучший релиз по SeaDex">SeaDex ★</i>` : sdOf(it) === "alt" ? `<i class="sd-a" title="Хорошая альтернатива по SeaDex">SeaDex</i>` : ""}${it.trusted ? `<i class="ok" title="Доверенный загрузчик">${ICONS.check}</i>` : ""}${it.comments ? `<span class="ny-cm">${ICONS.comment}${it.comments}</span>` : ""}</div>
-      </div>
-      <div class="ny-meta"><b>${esc(it.size)}</b><span title="${esc(fmtDate(it.date))}">${esc(relTime(it.date, now))}</span></div>
-      <div class="ny-health" title="раздают · качают · скачали">
-        <div class="ny-bar-bg"><u style="width:${health}%"></u></div>
-        <div class="ny-nums"><span class="se">↑ ${it.seeders}</span><span class="le">↓ ${it.leechers}</span><span class="dl">✓ ${it.downloads}</span></div>
-      </div>
-      <div class="ny-act">
-        <button type="button" class="ny-ib" data-a="send" title="Отправить в торрент-клиент" aria-label="Отправить в торрент-клиент">${ICONS.send}</button>
-        ${reportTarget ? `<button type="button" class="ny-ib ny-srv" data-a="srv" title="Скачать на сервер и прикрепить к отчёту ${esc(reportTarget.publicId)}" aria-label="Скачать на сервер">☁</button><button type="button" class="ny-ib ny-srv" data-a="mine" title="Скачать на этот компьютер (торрент-клиент): видео останется у вас, на сервере будут только субтитры и звук" aria-label="Скачать у себя">💻</button>` : ""}
-        <button type="button" class="ny-ib" data-a="menu" title="Ещё действия" aria-label="Ещё действия" aria-haspopup="menu">${ICONS.more}</button>
-      </div>
-    </div>`;
-}
-
-// Карточка аниме: серии одного сезона вместе, внутри — лучшая раздача на каждую серию.
-function groupHtml(g, maxSeed, now) {
-  const open = openGroups.has(g.key);
-  const fresh = g.episodes.filter(e => !sentEps.has(episodeKey(e.item))).length;
-  return `<div class="ny-grp${open ? " open" : ""}" data-gkey="${esc(g.key)}">
-    <div class="ny-grp-h" data-grp-toggle="${esc(g.key)}"><span class="ny-grp-ar">${open ? "▾" : "▸"}</span>
-      <div class="ny-grp-t"><b>${esc(g.title)}${g.season > 1 ? ` · сезон ${g.season}` : ""}</b><span>${g.items.length} раздач · ${g.groups || 1} групп · серий: ${g.episodes.length}</span></div>
-      ${fresh ? `<i class="ny-grp-new">${fresh} ${fresh === 1 ? "новая" : "новых"}</i>` : `<i class="ny-grp-done">всё отправлено</i>`}
-      <button type="button" class="btn ghost" data-grp-send="${esc(g.key)}" title="Отправить в торрент-клиент лучшие раздачи неотправленных серий">${ICONS.send} Все новые</button></div>
-    ${open ? `<div class="ny-grp-b">${g.episodes.map(e => `<div class="ny-ep${sentEps.has(episodeKey(e.item)) ? " done" : ""}"><span class="ny-ep-n">E${String(e.episode).padStart(2, "0")}</span>${rowHtml(e.item, maxSeed, now)}</div>`).join("")}</div>` : ""}
-  </div>`;
-}
-
-// Заголовки дней между строками: «Сегодня», «Вчера», «8 октября» — только при сортировке по дате.
-function rowsByDay(list, maxSeed, now) {
-  if (prefs.sort !== "date") return list.map(i => rowHtml(i, maxSeed, now)).join("");
-  let last = "";
-  return list.map(i => {
-    const lbl = dayLabel(i.date, now);
-    const head = lbl !== last ? `<div class="ny-day">${esc(lbl)}</div>` : "";
-    last = lbl;
-    return head + rowHtml(i, maxSeed, now);
-  }).join("");
-}
-
-function skeleton() {
-  return Array.from({ length: 8 }, () => `<div class="ny-row sk"><span class="ny-kind"></span><div class="ny-main"><div class="ny-sk w80"></div><div class="ny-sk w40"></div></div></div>`).join("");
-}
-
-function listHtml() {
-  if (loading && !items.length) return skeleton();
-  if (error && !items.length) {
-    return `<div class="ny-empty"><b>Не получилось загрузить с ${esc(hostOf(prefs.base))}</b><p>${esc(error)}</p>
-      <div class="ny-empty-act"><button type="button" class="btn primary" id="ny-retry">Повторить</button><button type="button" class="btn" data-open-sources>Проверить зеркала</button></div>
-      <p class="ny-hint">Если сайт переехал или заблокирован — выберите другое зеркало в «Источниках». Если открывается только через VPN, включите его.</p></div>`;
-  }
-  const list = view();
-  const hidden = items.length - list.length;
-  if (!list.length) {
-    return `<div class="ny-empty"><b>${items.length ? "Всё скрыто фильтрами" : "Ничего не найдено"}</b><p>${items.length ? `Фильтры прячут ${hidden} из ${items.length}.${prefs.onlySeadex ? " Включён «SeaDex»: в этом списке нет раздач из базы SeaDex." : ""}${prefs.hideDone ? " Включено «Скрыть отправленное»." : ""}` : "Попробуйте другое слово или категорию."}</p>${prefs.onlySeadex ? `<button type="button" class="btn" data-toggle="onlySeadex">Выключить «SeaDex»</button>` : ""}${items.length ? `<button type="button" class="btn" data-flt-reset>Сбросить фильтры</button>` : ""}${hasMore ? `<div class="ny-more-wrap"><button type="button" class="btn primary" data-more>Показать ещё</button></div>` : ""}</div>`;
-  }
-  const maxSeed = Math.max(...list.map(i => i.seeders), 1);
-  const now = Date.now();
-  const body = prefs.group ? groupReleases(list).map(g => g.kind === "item" ? rowHtml(g.item, maxSeed, now) : groupHtml(g, maxSeed, now)).join("") : rowsByDay(list, maxSeed, now);
-  const sortBtn = (k, label, cls = "") => `<button type="button" class="ny-sorth${prefs.sort === k ? " on" : ""} ${cls}" data-sort="${k}" aria-label="Сортировать: ${label}">${label}${prefs.sort === k ? " ↓" : ""}</button>`;
-  // Каждая колонка — своя ячейка сетки, той же, что у .ny-row (размер, дата, ↑, ↓, ✓ — по отдельности),
-  // чтобы подпись стояла ровно над своими цифрами.
-  return `<div class="ny-head"><span></span><span></span><span>Название</span>${sortBtn("size", "Размер", "r")}${sortBtn("date", "Дата", "r")}${sortBtn("seeders", "Раздают", "r")}<span class="ny-h2 r">Качают</span>${sortBtn("downloads", "Скачали", "r")}<span></span></div>`
-    + (stale ? `<div class="ny-stale">Сайт не отвечает — показаны сохранённые данные (${esc(relTime(stale))}). <button type="button" class="ny-link" id="ny-retry">Обновить</button></div>` : "")
-    + body
-    + `<div class="ny-more-wrap">${hidden ? `<span class="ny-hint">фильтры скрывают ${hidden}</span>` : ""}${hasMore ? `<button type="button" class="btn" data-more>${moreBusy ? "Загружаю…" : "Показать ещё"}</button>` : `<span class="ny-hint">это всё, что отдал сайт</span>`}</div>`;
-}
-
-function barHtml() {
-  if (!selected.size) return "";
-  return `
-    <span class="ny-bar-count"><b>${selected.size}</b> выбрано</span>
-    <button type="button" class="btn primary" data-bulk="mag">${ICONS.magnet} Копировать magnet</button>
-    <button type="button" class="btn" data-bulk="send">${ICONS.send} В торрент-клиент</button>
-    <button type="button" class="btn" data-bulk="sys" title="Открыть magnet в системном торрент-клиенте">${ICONS.magnet} В системный клиент</button>
-    <button type="button" class="btn" data-bulk="titles">${ICONS.copy} Названия</button>
-    <button type="button" class="btn" data-bulk="links">${ICONS.open} Ссылки на страницы</button>
-    <button type="button" class="btn ghost" data-bulk="clear">Сбросить</button>`;
-}
-
-function shellHtml() {
-  return `
-  <div class="ny">
-    <header class="ny-hero">
-      <div class="ny-hero-t"><h2>Nyaa <span class="ny-beta">Beta</span></h2>
-        <p>Свежие раздачи из публичной ленты. Щелчок по строке открывает страницу раздачи: описание, картинки, файлы.</p></div>
-      <div class="ny-stats" id="ny-stats"></div>
-    </header>
-    <section class="ny-sources" id="ny-sources" hidden></section>
-    <section class="ny-sources" id="ny-client" hidden></section>
-    <section class="ny-sources" id="ny-monitors" hidden></section>
-    <section class="ny-sources" id="ny-library" hidden></section>
-    <div class="ny-layout">
-      <aside class="ny-side" aria-label="Категории и инструменты">
-        <div class="ny-side-g"><div class="ny-side-h">Категории</div><div class="ny-cats" id="ny-cats"></div></div>
-        <div class="ny-side-g"><div class="ny-side-h">Показывать</div><div class="ny-seg" id="ny-filter"></div></div>
-        <div class="ny-side-g ny-saved-g"><div class="ny-side-h">Мои запросы</div><div class="ny-saved" id="ny-saved"></div></div>
-        <div class="ny-side-g"><div class="ny-side-h">Инструменты</div>
-          <button type="button" class="ny-side-btn" data-open-sources>${ICONS.plug}<span id="ny-src-host"></span><i id="ny-src-dot"></i></button>
-          <button type="button" class="ny-side-btn" data-open-client>${ICONS.send}<span id="ny-client-lbl">Торрент-клиент</span></button>
-          <button type="button" class="ny-side-btn" data-open-library>${ICONS.folder || ICONS.open}<span id="ny-lib-lbl">Медиатека</span></button>
-          <button type="button" class="ny-side-btn" data-open-monitors>${ICONS.bell}<span>Слежение</span><b id="ny-mon-n" class="ny-badge"></b></button>
-        </div>
-      </aside>
-      <main class="ny-main-col">
-        <div class="ny-search">
-          <span class="ny-search-ic">${ICONS.search}</span>
-          <input id="ny-q" type="text" placeholder="Название, группа, 1080p…" value="${esc(prefs.q)}" spellcheck="false" autocomplete="off">
-          <button type="button" class="btn ghost" id="ny-save" title="Запомнить запрос и категорию">${ICONS.star} Запомнить</button>
-          <button type="button" class="btn ghost" data-watch-query title="Следить за этим запросом и сообщать о новых раздачах">${ICONS.bell} Следить</button>
-          <button type="button" class="btn primary" id="ny-go">Найти</button>
-        </div>
-        <div class="ny-ctl">
-          <div class="ny-seg" id="ny-view"></div>
-          <span class="ny-sp"></span>
-          <button type="button" class="ny-flt-btn" id="ny-flt-btn" aria-expanded="false">${ICONS.filter}<span>Фильтры</span><b id="ny-flt-n"></b></button>
-          <button type="button" class="ny-ib wide" id="ny-refresh" title="Обновить список" aria-label="Обновить список">${ICONS.refresh}</button>
-        </div>
-        <section class="ny-filters" id="ny-filters" hidden></section>
-        <div class="ny-status" id="ny-status" data-open-sources title="Нажмите, чтобы открыть «Источники и зеркала»"></div>
-        <div class="ny-sel-all"><label><input type="checkbox" id="ny-all"> выбрать всё</label><button type="button" class="ny-link" id="ny-invert">инвертировать</button></div>
-        <div class="ny-list" id="ny-list"></div>
-        <div class="ny-bar" id="ny-bar" hidden></div>
-      </main>
-    </div>
-  </div>`;
-}
-
-function seg(items2, current, attr) {
-  return items2.map(([k, l]) => `<button type="button" class="${k === current ? "on" : ""}" ${attr}="${esc(k)}">${esc(l)}</button>`).join("");
-}
-
 // ---------- «Видео с Nyaa» из карточки отчёта ----------
 // Из отчёта сюда приходят с готовым запросом: находим раздачу, отправляем в торрент-клиент (скачивание идёт на этом
 // компьютере), а когда видео скачалось — «Прикрепить видео» кладёт файл в отчёт. Дальше «Собрать финал» там же.
-let reportTarget = null; // { publicId, query }
+export let reportTarget = null; // { publicId, query }
 
 function paintReportBar() {
   const body = $("#nyaa-body");
@@ -748,7 +347,7 @@ async function localDownload(it) {
   }
 }
 
-async function attachVideoToReport() {
+export async function attachVideoToReport() {
   if (!reportTarget) return;
   const files = await pickFiles("video/*,.mkv,.mp4,.avi,.mov,.webm,.m4v");
   if (!files.length) return;
@@ -850,7 +449,7 @@ function paintFilterBadge() {
   $("#ny-flt-btn")?.classList.toggle("on", n > 0 || filtersOpen);
 }
 
-function paintList() {
+export function paintList() {
   paintFilterBadge();
   paintStatus();
   const list = view();
@@ -868,7 +467,7 @@ function paintList() {
   if (sb) { sb.textContent = sdLabel(); sb.classList.toggle("dim", !sdCount()); }
 }
 
-async function load() {
+export async function load() {
   loading = true; error = "";
   $("#ny-refresh")?.classList.add("spin");
   paintList();
@@ -928,7 +527,7 @@ async function loadMore() {
 }
 
 // Отметить раздачу «просмотренной» (открывали, копировали magnet, сохраняли .torrent).
-function touch(id) {
+export function touch(id) {
   markSeen(id);
   document.querySelector(`.ny-row[data-id="${id}"]`)?.classList.add("seen");
 }
@@ -1055,277 +654,6 @@ function resetFilters() {
   prefs.filters = { ...DEFAULT_FILTERS };
   prefs.onlySeadex = false; prefs.hideDone = false;
   savePrefs(); paintStatic(); paintFilters(); paintList();
-}
-
-// ---------- торрент-клиент ----------
-function paintClientLabel() {
-  const l = $("#ny-client-lbl");
-  if (l) l.textContent = client ? CLIENT_NAMES[client.kind] || "Торрент-клиент" : "Торрент-клиент";
-}
-
-function clientHtml(msg = "") {
-  const c = clientDraft || client || { kind: "qbittorrent", url: "", user: "", category: "", tags: "", paused: false, has_pass: false };
-  const hasPass = client && client.kind === c.kind && client.user === c.user && client.has_pass;
-  return `
-    <div class="ny-src-head"><div><b>Торрент-клиент</b><span>Отправка magnet в ваш клиент через его веб-интерфейс. Пароль хранится в защищённом хранилище Windows.</span></div>
-      <div><button type="button" class="ny-ib wide" data-close-panel title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
-    <div class="ny-f-grid">
-      <label class="ny-fld"><span>Клиент</span><select data-c="kind">${Object.entries(CLIENT_NAMES).map(([k, n]) => `<option value="${k}" ${c.kind === k ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-      <label class="ny-fld"><span>Адрес веб-интерфейса</span><input type="text" data-c="url" value="${esc(c.url)}" placeholder="http://127.0.0.1:${CLIENT_PORTS[c.kind]}" spellcheck="false"></label>
-      <label class="ny-fld"><span>Логин</span><input type="text" data-c="user" value="${esc(c.user)}" spellcheck="false" autocomplete="off"></label>
-      <label class="ny-fld"><span>Пароль</span><input type="password" data-c="pass" value="" placeholder="${hasPass ? "сохранён — оставьте пустым" : "пароль"}" autocomplete="new-password"></label>
-      ${c.kind === "qbittorrent" ? `<label class="ny-fld"><span>Категория (необязательно)</span><input type="text" data-c="category" value="${esc(c.category)}"></label><label class="ny-fld"><span>Теги (через запятую)</span><input type="text" data-c="tags" value="${esc(c.tags)}"></label>` : ""}
-      <label class="ny-chk wide-row"><input type="checkbox" data-c="paused" ${c.paused ? "checked" : ""}> Добавлять на паузе</label>
-    </div>
-    <div class="ny-f-presets"><button type="button" class="btn" data-client-test>Проверить</button><button type="button" class="btn primary" data-client-save>Сохранить</button>${client ? `<button type="button" class="btn ghost" data-client-clear>Забыть клиент</button>` : ""}<span class="ny-client-msg" id="ny-client-msg">${esc(msg)}</span></div>`;
-}
-
-function readClientForm() {
-  const g = k => document.querySelector(`#ny-client [data-c="${k}"]`);
-  return {
-    kind: g("kind").value, url: g("url").value.trim(), user: g("user").value.trim(), pass: g("pass").value,
-    category: g("category") ? g("category").value.trim() : "", tags: g("tags") ? g("tags").value.trim() : "",
-    paused: g("paused").checked,
-  };
-}
-
-function paintClient(msg = "") {
-  const box = $("#ny-client");
-  if (!box || box.hidden) return;
-  box.innerHTML = clientHtml(msg);
-}
-
-function openPanel(id) {
-  ["ny-sources", "ny-client", "ny-monitors", "ny-library"].forEach(x => { const el = $(`#${x}`); if (el) el.hidden = x !== id; });
-  const box = $(`#${id}`);
-  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
-// Magnet в торрент-клиенте, назначенном в системе по умолчанию: настраивать Web UI не нужно.
-async function openInSystemClient(list) {
-  const magnets = list.map(magnetLink).filter(Boolean).slice(0, 10);
-  if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
-  let ok = 0;
-  for (const m of magnets) {
-    try { await invoke("open_magnet", { magnet: m }); ok++; }
-    catch (e) { toast(String(e && e.message ? e.message : e), "error"); break; }
-  }
-  if (ok) { list.forEach(i => touch(i.id)); markSent(list.slice(0, ok)); paintList(); toast(`Открыто в системном клиенте: ${ok}.`, "success"); }
-  if (list.length > magnets.length) toast("За один раз открывается не больше 10 раздач.");
-}
-
-async function sendToClient(list) {
-  if (!client) {
-    toast("Свой клиент не настроен — открываю в системном торрент-клиенте.");
-    openInSystemClient(list); return;
-  }
-  const magnets = list.map(magnetLink).filter(Boolean);
-  if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }
-  track("action", "nyaa.send_client", reportTarget ? reportTarget.publicId : "");
-  try {
-    const n = await invoke("tc_add", { magnets });
-    list.forEach(i => touch(i.id));
-    markSent(list); paintList();
-    toast(`Отправлено в ${CLIENT_NAMES[client.kind]}: ${n}.`, "success",
-      reportTarget ? { label: "Прикрепить видео к отчёту", onClick: attachVideoToReport } : null);
-  } catch (e) { toast(`Не удалось отправить: ${e}`, "error"); }
-}
-
-// ---------- слежение ----------
-const MON_CHOICES = [[10, "10 минут"], [30, "30 минут"], [60, "час"], [180, "3 часа"]];
-const monEveryMs = () => (MON_CHOICES.some(c => c[0] === prefs.monEvery) ? prefs.monEvery : 30) * 60 * 1000;
-let lastMonCheck = 0;
-let monitorsBusy = false;
-
-function newTotal() { return prefs.monitors.reduce((s, m) => s + (m.new || 0), 0); }
-
-function paintMonitorBadge() {
-  const b = $("#ny-mon-n");
-  if (!b) return;
-  const n = newTotal();
-  b.textContent = n ? String(n) : "";
-}
-
-function monitorsHtml() {
-  const cats = CATEGORIES.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
-  return `
-    <div class="ny-src-head"><div><b>Слежение</b><span>Программа сама проверяет запросы и загрузчиков и сообщает о новых раздачах — и в фоне, если окно закрыто в трей (но не завершена).</span></div>
-      <div><button type="button" class="btn" data-mon-check>${monitorsBusy ? "Проверяю…" : "Проверить сейчас"}</button><button type="button" class="ny-ib wide" data-close-panel title="Закрыть" aria-label="Закрыть">${ICONS.close}</button></div></div>
-    <div class="ny-mon-every"><label>Проверять раз в <select id="ny-mon-every">${MON_CHOICES.map(([v, l]) => `<option value="${v}"${v === prefs.monEvery ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>
-    <div class="ny-mons">${prefs.monitors.length ? prefs.monitors.map(m => `
-      <div class="ny-mon${m.new ? " has-new" : ""}">
-        <label class="ny-chk"><input type="checkbox" data-mon-toggle="${esc(m.id)}" ${m.on ? "checked" : ""}></label>
-        <div class="ny-mon-t"><b>${esc(monitorTitle(m))}</b><span>${m.type === "user" ? "загрузчик" : esc((CATEGORIES.find(c => c[0] === m.cat) || [0, m.cat])[1])}${m.rule ? ` · ${esc(ruleText(m.rule))}` : ""}${m.new ? ` · новых: ${m.new}` : ""}</span></div>
-        <button type="button" class="btn ghost" data-mon-open="${esc(m.id)}">Открыть</button>
-        <button type="button" class="ny-ib" data-mon-del="${esc(m.id)}" title="Убрать" aria-label="Убрать">${ICONS.close}</button>
-      </div>`).join("") : `<div class="wt-empty">Пока ничего не отслеживается.</div>`}</div>
-    <div class="ny-mon-add">
-      <select id="ny-mon-type"><option value="query">Запрос</option><option value="user">Загрузчик</option></select>
-      <input type="text" id="ny-mon-q" placeholder="слова запроса или имя загрузчика" spellcheck="false">
-      <select id="ny-mon-cat">${cats}</select>
-      <button type="button" class="btn primary" data-mon-add>Добавить</button>
-    </div>
-    <div class="ny-mon-rule"><b>Правило (по желанию)</b>
-      <input type="text" id="ny-mon-groups" placeholder="группы по приоритету: Erai-raws, VARYG" spellcheck="false">
-      <select id="ny-mon-res"><option value="">любое качество</option><option value="1080p">1080p</option><option value="720p">720p</option><option value="2160p">2160p</option></select>
-      <label><input type="checkbox" id="ny-mon-nohevc"> не HEVC</label>
-      <label><input type="checkbox" id="ny-mon-auto"> сразу в торрент-клиент</label>
-      <span class="ny-hint">С правилом уведомление приходит только о подходящих раздачах, по одной лучшей на серию — без дублей разных кодеков.</span></div>`;
-}
-
-function paintMonitors() {
-  const box = $("#ny-monitors");
-  paintMonitorBadge();
-  if (!box || box.hidden) return;
-  box.innerHTML = monitorsHtml();
-}
-
-async function checkMonitor(m, quiet) {
-  const xml = await nyaaRss({
-    base: prefs.base, query: m.type === "query" ? m.q : "", category: m.cat, filter: "0", page: 1, user: m.type === "user" ? m.q : null,
-  });
-  const { fresh: raw, seen: nextSeen } = diffMonitor(parseNyaaRss(xml), m);
-  m.seen = nextSeen;
-  const fresh = freshForRule(raw, m);
-  if (fresh.length) {
-    m.new = (m.new || 0) + fresh.length;
-    if (m.rule) m.got = [...new Set([...(m.got || []), ...fresh.map(episodeKey).filter(Boolean)])].slice(-300);
-    if (m.rule && m.rule.auto && client && !quiet) {
-      try { await invoke("tc_add", { magnets: fresh.map(magnetLink).filter(Boolean) }); markSent(fresh); fresh.forEach(i => touch(i.id)); } catch (_) { /* уведомление ниже скажет о новом */ }
-    }
-    if (!quiet) {
-      const text = `${monitorTitle(m)}: ${fresh[0].title}${fresh.length > 1 ? ` и ещё ${fresh.length - 1}` : ""}`;
-      toast(`Новое на Nyaa — ${text}`, "success");
-      notifyDesktop("Новое на Nyaa", text);
-    }
-  }
-}
-
-async function checkMonitors(manual = false) {
-  if (monitorsBusy || !prefs.monitors.some(m => m.on)) { if (manual) toast("Нечего проверять."); return; }
-  monitorsBusy = true; paintMonitors();
-  let failed = 0;
-  for (const m of prefs.monitors.filter(x => x.on)) {
-    try { await checkMonitor(m, false); } catch (_) { failed++; }
-  }
-  savePrefs();
-  monitorsBusy = false; paintMonitors();
-  if (manual) toast(failed ? `Не удалось проверить: ${failed}` : "Проверка завершена.", failed ? "error" : "success");
-}
-
-async function addMonitor({ type, q, cat, rule = null }) {
-  const m = makeMonitor({ type, q, cat: cat || prefs.cat, rule });
-  if (!m) { toast(type === "user" ? "Имя загрузчика: латинские буквы, цифры, _ - ." : "Введите слова для слежения.", "error"); return; }
-  if (prefs.monitors.some(x => x.type === m.type && x.q.toLowerCase() === m.q.toLowerCase() && x.cat === m.cat)) { toast("Такое слежение уже есть."); return; }
-  prefs.monitors = [...prefs.monitors, m].slice(-12);
-  savePrefs(); paintMonitors();
-  try { await checkMonitor(m, true); savePrefs(); toast(`Слежу: ${monitorTitle(m)}.`, "success"); }
-  catch (e) { toast(`Добавлено, но проверить не удалось: ${e}`, "error"); }
-  paintMonitors();
-}
-
-// Окно можно закрыть: программа остаётся в трее, страница продолжает работать, и слежение идёт в фоне.
-// Раз в минуту смотрим, не прошёл ли выбранный интервал, — так смена интервала действует сразу.
-function startMonitoring() {
-  const tick = () => {
-    if (!state.token || !state.isAdmin) return;
-    if (lastMonCheck && Date.now() - lastMonCheck < monEveryMs()) return;
-    lastMonCheck = Date.now();
-    checkMonitors(false);
-  };
-  setTimeout(tick, 25_000);
-  setInterval(tick, 60_000);
-}
-startMonitoring();
-
-// Фоновое обновление ленты: раз в 5 минут, если страница открыта, ничего не грузится и поиск не набирается.
-setInterval(() => {
-  if (!$("#ny-list") || loading || moreBusy || document.hidden || detail) return;
-  const q = $("#ny-q");
-  if (q && document.activeElement === q) return;
-  load();
-}, 5 * 60 * 1000);
-
-// ---------- страна выхода сервера ----------
-// Когда запросы идут через сервер студии, у него несколько выходов (WireGuard по странам). Для каждого
-// сервиса можно выбрать свой: пусто — по умолчанию (то, что задано на сервере), «direct» — без VPN.
-const EXIT_KEY = "project-nyaa-exits";
-let exitList = (() => { try { const c = JSON.parse(localStorage.getItem(EXIT_KEY) || "null"); return c && Date.now() - c.at < 5 * 60e3 ? c.data : null; } catch (_) { return null; } })()
-  || { default: "direct", exits: [{ code: "direct", name: "Напрямую, без VPN" }] };
-let exitRefresh = null;
-const exitOf = id => { const v = prefs.exit && prefs.exit[id]; return exitList.exits.some(e => e.code === v) ? v : ""; };
-const exitName = id => {
-  const code = exitOf(id) || exitList.default;
-  const e = exitList.exits.find(x => x.code === code);
-  return e ? e.name : code;
-};
-async function loadExits() {
-  if (exitRefresh) return exitRefresh;
-  exitRefresh = (async () => {
-    try {
-      const data = JSON.parse(await (await apiBlob("/exits")).text());
-      if (data && Array.isArray(data.exits)) {
-        exitList = data;
-        const valid = new Set(data.exits.map(e => e.code));
-        let changed = false;
-        for (const [id, code] of Object.entries(prefs.exit || {})) {
-          if (code && !valid.has(code)) { delete prefs.exit[id]; changed = true; }
-        }
-        if (changed) savePrefs();
-        try { localStorage.setItem(EXIT_KEY, JSON.stringify({ at: Date.now(), data })); } catch (_) { /* не запомнится */ }
-        paintSources();
-      }
-    } catch (_) { /* временная ошибка не затирает последний рабочий список */ }
-  })();
-  try {
-    await exitRefresh;
-  } finally {
-    exitRefresh = null;
-  }
-}
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && state.isAdmin) loadExits();
-});
-setInterval(() => {
-  if (state.isAdmin && !document.hidden) loadExits();
-}, 60 * 1000);
-const viaQuery = id => { const v = exitOf(id); return v ? `&via=${encodeURIComponent(v)}` : ""; };
-
-// ---------- выбор соединения для каждого сервиса ----------
-// auto — программа сама берёт лучший путь по замерам (напрямую или через сервер); pc — только этот
-// компьютер; server — всегда через сервер студии (его WireGuard).
-// Зеркала, которые сервер подсказал без релиза программы (файл mirrors.json на сервере); кэш на сутки.
-const MIRRORS_KEY = "project-nyaa-mirrors";
-let remoteMirrors = (() => { try { const c = JSON.parse(localStorage.getItem(MIRRORS_KEY) || "null"); return c && Date.now() - c.at < 24 * 3600e3 ? c.data : {}; } catch (_) { return {}; } })();
-const allServices = () => buildServices(prefs.custom, serverOrigin(), remoteMirrors);
-async function loadRemoteMirrors() {
-  try {
-    const data = JSON.parse(await (await apiBlob("/mirrors")).text());
-    if (data && typeof data === "object") {
-      remoteMirrors = data;
-      try { localStorage.setItem(MIRRORS_KEY, JSON.stringify({ at: Date.now(), data })); } catch (_) { /* не запомнится */ }
-      paintSources();
-    }
-  } catch (_) { /* старый сервер без ручки — остаются встроенные зеркала */ }
-}
-
-const ROUTES = [["auto", "Авто"], ["pc", "Мой компьютер"], ["server", "Сервер"]];
-const routeOf = id => (prefs.route && ["pc", "server"].includes(prefs.route[id])) ? prefs.route[id] : "auto";
-const serviceOfUrl = url => {
-  const h = hostOf(url);
-  const sv = allServices().find(s => s.mirrors.some(m => hostOf(m) === h));
-  return sv ? sv.id : "";
-};
-// сам сервер студии проверяется только отсюда: его адрес для проверки «с сервера» недопустим (свой порт)
-const routeOfUrl = url => { const id = serviceOfUrl(url); return id === "server" ? "pc" : routeOf(id); };
-
-// Результат последней проверки по выбранному соединению сервиса (для кнопки «Источник» и подсказок).
-function applyChecks() {
-  new Set([...Object.keys(serverChecks), ...Object.keys(localChecks)]).forEach(u => {
-    const mode = routeOfUrl(u);
-    const r = mode === "pc" ? localChecks[u] : mode === "server" ? serverChecks[u] : (serverChecks[u] || localChecks[u]);
-    if (r) checks[u] = r;
-  });
 }
 
 // ---------- здоровье зеркал: замеры, выбор пути, пауза ----------
@@ -1527,7 +855,7 @@ function sourcesHtml() {
       <div class="ny-log-body">${filterActivity(activity, logFilter).length ? filterActivity(activity, logFilter).map(evHtml).join("") : `<span class="ny-hint">Пока пусто: сюда пишутся проверки связи, загрузки и переключения.</span>`}</div></details>`;
 }
 
-function paintSources() {
+export function paintSources() {
   const box = $("#ny-sources");
   if (!box || box.hidden) return;
   box.innerHTML = sourcesHtml();
@@ -1717,34 +1045,6 @@ function galleryHtml(d) {
   }).join("")}</div>`;
 }
 
-// ---------- внешние источники (SeaDex, AnimeTosho, nekoBT, Tsukihime) ----------
-// Сначала напрямую с этого компьютера; если сайт не отвечает (закрыт у провайдера) —
-// через сервер студии (/api/meta/relay), у которого другая сеть. Ответ «404» от сайта —
-// это «в базе нет», а не поломка, поэтому дальше он не пробуется.
-const isNotFound = e => /ответил 404/.test(String(e && e.message ? e.message : e));
-const isNoConnection = e => /Не удалось загрузить|error sending request|timed out|connect/i.test(String(e && e.message ? e.message : e));
-
-async function metaGet(url) {
-  const mode = routeOf("sources");
-  const viaRelay = async () => {
-    const wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}${viaQuery("sources")}`)).text());
-    if (wrapped.status === 404) throw new Error("Сайт ответил 404");
-    if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
-    return String(wrapped.body || "");
-  };
-  if (mode === "server") return viaRelay();
-  try { return await invoke("meta_get", { url }); }
-  catch (e) {
-    if (mode === "pc" || isNotFound(e) || !isNoConnection(e)) throw e;
-    let wrapped;
-    try { wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}${viaQuery("sources")}`)).text()); }
-    catch (_) { throw e; }                      // на сервере ручки нет или он недоступен — показываем исходную ошибку
-    if (wrapped.status === 404) throw new Error("Сайт ответил 404");
-    if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
-    return String(wrapped.body || "");
-  }
-}
-
 // ---------- Nyaa напрямую или через сервер студии ----------
 // Nyaa закрыт у части провайдеров и стран. У сервера есть туннель WireGuard, через который
 // он Nyaa видит, поэтому при отсутствии связи с компьютера запрос уходит на сервер
@@ -1812,9 +1112,9 @@ async function nyaaDirectOrRelay(direct, relayParams, pick) {
   }
 }
 
-const nyaaRss = a => nyaaDirectOrRelay(() => invoke("nyaa_rss", a),
+export const nyaaRss = a => nyaaDirectOrRelay(() => invoke("nyaa_rss", a),
   { kind: "rss", base: a.base, q: a.query, c: a.category, f: a.filter, p: a.page || 1, u: a.user || "" }, w => String(w.body || ""));
-const nyaaView = a => nyaaDirectOrRelay(() => invoke("nyaa_view", a),
+export const nyaaView = a => nyaaDirectOrRelay(() => invoke("nyaa_view", a),
   { kind: "view", base: a.base, id: a.id }, w => String(w.body || ""));
 
 async function nyaaSaveTorrent(base, id, path) {
@@ -1851,7 +1151,7 @@ function friendlyError(e) {
 
 // Картинка → data-URL: напрямую с этого компьютера, а если хост закрыт (i.ibb.co и т.п.) — через сервер студии.
 // Соединение выбирается так же, как для Nyaa: «Авто» / «Мой компьютер» / «Сервер (WireGuard)».
-async function fetchPic(url) {
+export async function fetchPic(url) {
   const mode = routeOf("nyaa");
   const viaRelay = async () => {
     const w = JSON.parse(await (await apiBlob(`/nyaa/image?url=${encodeURIComponent(url)}${viaQuery("nyaa")}`)).text());
@@ -1870,15 +1170,15 @@ async function fetchPic(url) {
   }
 }
 
-const shortErr = e => {
+export const shortErr = e => {
   const m = String(e && e.message ? e.message : e);
   return isNoConnection({ message: m }) ? "нет связи с сайтом" : m.slice(0, 120);
 };
-const SRC_NAMES = { seadex: "SeaDex", at: "AnimeTosho", neko: "nekoBT", tsuki: "Tsukihime" };
+export const SRC_NAMES = { seadex: "SeaDex", at: "AnimeTosho", neko: "nekoBT", tsuki: "Tsukihime" };
 
-function hashOf(d) { return ((d.view && d.view.fields["info hash"]) || d.item.hash || "").toLowerCase(); }
+export function hashOf(d) { return ((d.view && d.view.fields["info hash"]) || d.item.hash || "").toLowerCase(); }
 
-async function loadSources(d) {
+export async function loadSources(d) {
   if (d.src) return;
   const hash = hashOf(d);
   d.src = { seadex: { s: "loading" }, at: { s: "loading" }, neko: { s: "loading" }, tsuki: { s: "loading" } };
@@ -1901,147 +1201,6 @@ async function loadSources(d) {
     return r.found ? { s: "ok", ...r } : { s: "none" };
   });
   task("tsuki", async () => { const r = parseTsukihime(await metaGet(u.tsukihime)); return r.found ? { s: "ok", ...r } : { s: "none" }; });
-}
-
-// ---------- AnimeTosho: субтитры и кадры ----------
-const DATA_SHOT = b64 => `data:image/jpeg;base64,${b64}`;
-async function toshoRelay(params) {
-  const q = new URLSearchParams({ ...params, ...(exitOf("sources") ? { via: exitOf("sources") } : {}) });
-  try { return JSON.parse(await (await apiBlob(`/tosho/relay?${q}`)).text()); }
-  catch (e) { throw new Error(/404|Not Found/i.test(String(e && e.message ? e.message : e)) ? "Нужно обновить сервер студии (нет ручки AnimeTosho)." : shortErr(e)); }
-}
-
-async function loadTosho(d) {
-  if (d.tosho) return;
-  d.tosho = { state: "loading", files: [], shots: {}, sub: null };
-  const paint = () => { if (detail === d && d.tab === "tosho") $("#ny-d-body").innerHTML = drawerBodyHtml(d); };
-  const hash = hashOf(d);
-  if (!isHash40(hash)) { d.tosho.state = "none"; paint(); return; }
-  // Tsukihime даёт точные номера тайтла (ссылки) и MediaInfo файла; не мешает AnimeTosho, если недоступен.
-  metaGet(sourceUrls(hash).tsukihime).then(txt => {
-    const r = parseTsukiFull(txt);
-    if (!r.found) return;
-    d.tosho.tsuki = r; d.exact = exactLinks(r.ids);
-    if (detail === d) paintDrawer();
-  }).catch(() => {});
-  try {
-    const r = parseToshoTorrent(await metaGet(sourceUrls(hash).animetosho));
-    d.tosho.files = r.files; d.tosho.state = r.found ? "ok" : "none";
-    if (r.found) d.tosho.track = defaultShotTrack(r.files[0].subs);
-  } catch (e) { d.tosho.state = isNotFound(e) ? "none" : "err"; d.tosho.err = shortErr(e); }
-  paint();
-  if (d.tosho.state === "ok") loadShots(d, paint);
-}
-
-async function loadMediainfo(d) {
-  const t = d.tosho;
-  if (!t || !t.tsuki || !t.tsuki.files.length || t.info) return;
-  const f = t.tsuki.files[0];
-  t.info = { state: "loading", text: "" };
-  $("#ny-d-body").innerHTML = drawerBodyHtml(d);
-  try {
-    t.info.text = parseMediainfo(await metaGet(`https://api.tsukihime.org/v1/torrents/${t.tsuki.tid}/file/${f.id}`));
-    t.info.state = t.info.text ? "ok" : "none";
-  } catch (e) { t.info.state = "err"; t.info.err = shortErr(e); }
-  if (detail === d && d.tab === "tosho") $("#ny-d-body").innerHTML = drawerBodyHtml(d);
-}
-
-async function loadShots(d, paint) {
-  const f = d.tosho.files[0];
-  if (!f || !f.id) return;
-  const stamps = f.shots.slice(0, 6);
-  const track = d.tosho.track || 0;
-  d.tosho.shots = {}; d.tosho.shotErr = "";
-  let next = 0;
-  const worker = async () => {
-    while (next < stamps.length) {
-      const ts = stamps[next++];
-      try {
-        const w = await toshoRelay({ kind: "shot", fid: f.id, ts, s: track });
-        if (d.tosho.track !== track) return;
-        if (w.status === 200 && w.b64) d.tosho.shots[ts] = DATA_SHOT(w.b64);
-      } catch (e) { d.tosho.shotErr = String(e.message || e); }
-      paint();
-    }
-  };
-  await Promise.all([worker(), worker()]);
-}
-
-async function openSubtitle(d, subId) {
-  const file = d.tosho.files.find(f => f.subs.some(s => s.id === subId));
-  const sub = file && file.subs.find(s => s.id === subId);
-  if (!sub) return;
-  d.tosho.sub = { id: subId, sub, state: "loading", lines: [], raw: "", q: "" };
-  $("#ny-d-body").innerHTML = drawerBodyHtml(d);
-  try {
-    const w = await toshoRelay({ kind: "sub", aid: subId });
-    if (w.status !== 200) throw new Error(`Сайт ответил ${w.status}`);
-    d.tosho.sub.raw = String(w.body || "");
-    d.tosho.sub.lines = parseSubtitle(d.tosho.sub.raw, sub.codec);
-    d.tosho.sub.state = "ok";
-  } catch (e) { d.tosho.sub.state = "err"; d.tosho.sub.err = String(e.message || e); }
-  if (detail === d && d.tab === "tosho") $("#ny-d-body").innerHTML = drawerBodyHtml(d);
-}
-
-async function saveSubtitle(d) {
-  const s = d.tosho && d.tosho.sub;
-  if (!s || s.state !== "ok") return;
-  const ext = (s.sub.codec || "srt").toLowerCase();
-  const out = await pickOutputFile(`${(d.item.title || "subtitle").replace(/[\\/:*?"<>|]/g, "_").slice(0, 80)}.${s.sub.lang}.${ext}`, [{ name: "Субтитры", extensions: [ext] }]);
-  if (!out) return;
-  try { await invoke("write_text_file", { path: out, content: s.raw }); toast("Субтитры сохранены.", "success"); }
-  catch (e) { toast(`Не удалось сохранить: ${e}`, "error"); }
-}
-
-function toshoTabHtml(d) {
-  if (!d.tosho) setTimeout(() => loadTosho(d), 0);
-  const t = d.tosho || { state: "loading" };
-  if (t.state === "loading") return `<div class="ny-d-load"><div class="ny-sk w80"></div><div class="ny-sk w40"></div></div>`;
-  if (t.state === "err") return `<div class="ny-empty"><b>AnimeTosho не отвечает</b><p>${esc(t.err || "")}</p></div>`;
-  if (t.state === "none") return `<div class="ny-empty"><b>Этой раздачи нет на AnimeTosho</b><p>Субтитры и кадры берутся оттуда, если сайт успел разобрать файл.</p></div>`;
-  const f0 = t.files[0];
-  const burn = f0.subs.filter(s => s.num);
-  const trackSel = burn.length ? `<div class="ny-shot-track"><span>Субтитры на кадрах:</span><select id="ny-shot-track"><option value="0">без субтитров</option>${burn.map(s => `<option value="${s.num}"${t.track === s.num ? " selected" : ""}>Дорожка ${s.num} · ${esc(s.lang)} · ${esc(s.codec || "—")}${s.forced ? " · форсированные" : ""}</option>`).join("")}</select></div>` : "";
-  const shots = trackSel + (Object.keys(t.shots).length || f0.shots.length
-    ? `<div class="ny-shots">${f0.shots.slice(0, 6).map(ts => t.shots[ts] ? `<button type="button" class="ny-shot" data-shot="${ts}"><img src="${esc(t.shots[ts])}" alt="Кадр"></button>` : `<div class="ny-shot sk"></div>`).join("")}</div>${t.shotErr ? `<p class="ny-hint">${esc(t.shotErr)}</p>` : ""}`
-    : `<p class="ny-hint">Кадров у файла нет.</p>`);
-  const LANG_OK = ["en", "eng", "enm", "und"];
-  const only = prefs.subLangs !== false;
-  const subs = `<label class="ny-sub-filter"><input type="checkbox" data-sub-langs ${only ? "checked" : ""}> только английские и без языка</label>` + t.files.slice(0, 6).map(f => `<div class="ny-tosho-file"><b>${esc(f.name)}</b><span>${esc(fmtBytes(f.size))}${f.fonts ? ` · шрифтов: ${f.fonts}` : ""}</span>
-    ${f.subs.length ? f.subs.filter(s => !only || LANG_OK.includes(s.lang.toLowerCase())).map(s => `<div class="ny-sub-row"><span class="ny-sub-lang">${esc(s.lang)}</span><span>${esc(s.codec || "—")}${s.def ? " · по умолчанию" : ""}${s.forced ? " · форсированные" : ""} · ${esc(fmtBytes(s.size))}</span><button type="button" class="btn ghost" data-sub-open="${s.id}">Смотреть</button></div>`).join("") || `<span class="ny-hint">Нет дорожек под фильтр языка.</span>` : `<span class="ny-hint">Дорожек субтитров нет.</span>`}</div>`).join("");
-  const sv = t.sub;
-  const viewer = !sv ? "" : sv.state === "loading" ? `<div class="ny-d-load"><div class="ny-sk w80"></div></div>`
-    : sv.state === "err" ? `<p class="ny-hint">${esc(sv.err)}</p>`
-    : `<div class="ny-sub-view"><div class="ny-sub-bar"><input type="text" id="ny-sub-q" placeholder="Найти в субтитрах" value="${esc(sv.q)}" spellcheck="false"><button type="button" class="btn" data-sub-find>Найти</button><button type="button" class="btn ghost" data-sub-raw>${sv.raw_on ? "Реплики" : "Исходный текст"}</button><button type="button" class="btn ghost" data-sub-save>Сохранить файл</button><button type="button" class="ny-ib" data-sub-close aria-label="Закрыть">${ICONS.close}</button></div>
-      ${sv.raw_on ? `<pre class="ny-sub-raw">${highlightSubtitle(sv.raw)}</pre>` : `<div class="ny-sub-lines">${(sv.q ? sv.lines.filter(l => l.text.toLowerCase().includes(sv.q.toLowerCase())) : sv.lines).slice(0, 600).map(l => `<div><time>${esc(l.clock)}</time><span>${esc(l.text)}</span></div>`).join("") || `<p class="ny-hint">Ничего не найдено.</p>`}</div>`}
-      <p class="ny-hint">Реплик: ${sv.lines.length}${sv.lines.length > 600 && !sv.q ? " (показаны первые 600)" : ""}</p></div>`;
-  const info = !t.tsuki || !t.tsuki.files.length ? "" : !t.info ? `<button type="button" class="btn ghost" data-fileinfo>Показать FileInfo (MediaInfo)</button>`
-    : t.info.state === "loading" ? `<div class="ny-d-load"><div class="ny-sk w80"></div></div>`
-    : t.info.state === "ok" ? `<pre class="ny-fileinfo">${esc(t.info.text)}</pre>` : `<p class="ny-hint">${esc(t.info.err || "MediaInfo недоступен.")}</p>`;
-  return `<h4 class="ny-sec">Кадры</h4>${shots}<h4 class="ny-sec">Субтитры и вложения</h4>${subs}${viewer}${info ? `<h4 class="ny-sec">FileInfo</h4>${info}` : ""}`;
-}
-
-function srcLines(k, r) {
-  const L = [];
-  const add = (label, v) => { if (v) L.push(`<div><span>${esc(label)}</span><b>${esc(String(v))}</b></div>`); };
-  if (k === "seadex") add("Оценка", r.best === true ? "лучший релиз" : r.best === false ? "запасной вариант" : "есть в базе");
-  if (k === "at") { add("Название", r.title); add("Файлов", r.files || ""); }
-  if (k === "neko") { add("Название", r.title); add("Загрузил", r.uploader); add("Группа", r.group); add("Раздача", r.swarm); add("Размер", r.size); add("Звук", r.audio); add("Субтитры", r.subs); add("Метки", (r.flags || []).join(", ")); }
-  if (k === "tsuki") { add("Название", r.title); add("Тайтл", r.anime); add("Группа", r.group); add("Серия", r.episode); add("Размер", r.size); add("Файлов", r.files); add("Звук", r.audio); add("Субтитры", r.subs); }
-  return L.join("");
-}
-
-function sourcesTabHtml(d) {
-  loadSources(d);
-  const src = d.src || {};
-  return `<div class="ny-srcs">${Object.keys(SRC_NAMES).map(k => {
-    const r = src[k] || { s: "loading" };
-    const badge = r.s === "loading" ? `<em class="load">проверяю…</em>` : r.s === "ok" ? `<em class="ok">${k === "seadex" ? (r.best === true ? "лучший" : r.best === false ? "запасной" : "найдено") : "найдено"}</em>` : r.s === "none" ? `<em>нет в базе</em>` : `<em class="bad" title="${esc(r.full || r.err || "")}">недоступен</em>`;
-    return `<div class="ny-src-card"><div class="ny-src-top"><b>${SRC_NAMES[k]}</b>${badge}</div>
-      ${r.s === "ok" ? `<div class="ny-src-lines">${srcLines(k, r)}</div>${r.link ? `<button type="button" class="btn ghost" data-ext="${esc(r.link)}">${ICONS.open} Открыть</button>` : ""}` : r.s === "err" ? `<p class="ny-hint">${esc(r.err)}. Возможно, сайт закрыт у вашего провайдера: включите VPN (WireGuard) и откройте вкладку заново.</p>` : ""}
-    </div>`;
-  }).join("")}</div>
-  <p class="ny-hint">Данные запрашиваются по info hash раздачи и только когда вы открыли эту вкладку.</p>`;
 }
 
 // ---------- «Похожее» (AniList) ----------
@@ -2102,7 +1261,7 @@ function uploaderOf(d) {
   return name && !/^anonymous$/i.test(name) && /^[A-Za-z0-9_.-]{1,40}$/.test(name) ? name : "";
 }
 
-function drawerBodyHtml(d) {
+export function drawerBodyHtml(d) {
   const v = d.view;
   if (d.state === "loading") return `<div class="ny-d-load"><div class="ny-sk w80"></div><div class="ny-sk w40"></div><div class="ny-sk w80"></div></div>`;
   if (d.state === "error") return `<div class="ny-empty"><b>Страница не открылась</b><p>${esc(d.err)}</p><button type="button" class="btn primary" data-d-retry>Повторить</button></div>`;
@@ -2182,7 +1341,7 @@ function drawerEl() {
   return host;
 }
 
-function paintDrawer() {
+export function paintDrawer() {
   const host = drawerEl();
   host.hidden = !detail;
   host.innerHTML = detail ? drawerHtml() : "";
