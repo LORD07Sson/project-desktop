@@ -61,8 +61,8 @@ import { startAntivirusAuto } from "./antivirus-ui.js";
 import { startSplash } from "./splash.js";
 installLiquidNav();
 // Системное меню браузера (Back / Refresh / Save as / Print) по правому клику программе ни к чему: убираем его.
-// Своё меню (чаты, отчёты, профиль) отменяет событие раньше и работает как было. Браузерное меню остаётся только
-// в полях ввода и на выделенном тексте — там оно полезно: копировать, вставить, проверка орфографии.
+// Браузерное меню остаётся только в полях ввода и на выделенном тексте — там оно полезно: копировать, вставить,
+// проверка орфографии.
 document.addEventListener("contextmenu", e => {
   if (e.defaultPrevented) return;
   const t = e.target instanceof window.Element ? e.target : null;

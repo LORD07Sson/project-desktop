@@ -37,12 +37,7 @@ export function hideSplash() {
   setTimeout(() => import("./splash.js").then(m => m.finishSplash()), wait);
 }
 
-// Имя в шапке. Отдельной функцией, потому что при восстановлении сессии
-// оно приходит не сразу: /whoami отдаёт только {telegram_id, is_admin}
-// (см. docs/API.md), имя есть лишь в ответе на вход по коду и в /me —
-// раньше showApp() читал state.name, который после перезапуска всегда
-// был null, и шапка молча оставалась пустой у всех, кроме только что
-// вошедших.
+// Имя в шапке.
 export function setDisplayName(name) {
   state.name = name || null;
   const el = $("#whoami");
@@ -322,9 +317,6 @@ async function loadCodeLength() {
 
 function renderCodeCells() {
   const input = $("#code-input");
-  // Только цифры и не больше шести: раньше поле брало до 8 символов, и
-  // лишние цифры сидели невидимо за последней ячейкой — Backspace стирал
-  // сначала их, а на экране ничего не менялось.
   const digits = input.value.replace(/\D/g, "").slice(0, CODE_LEN);
   if (digits !== input.value) input.value = digits;
   const cells = document.querySelectorAll(".code-cell");

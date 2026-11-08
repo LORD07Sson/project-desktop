@@ -1,9 +1,7 @@
 // «Чаты бота» — где состоит бот и что в каждом делает (только владелец).
 // Сервер: /api/bot-chats (список; заодно уточняет названия у Telegram),
 // POST /api/bot-chats/{id} {features?, mention?, mention_thread_id?},
-// POST /api/bot-chats/{id}/forget. Бот сам заносит группы в список —
-// здесь только включаем/выключаем функции и выбираем рабочий чат для
-// упоминаний (раньше — число в config.py на сервере).
+// POST /api/bot-chats/{id}/forget.
 
 import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";

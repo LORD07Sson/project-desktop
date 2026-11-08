@@ -81,8 +81,7 @@ function paintCover(key) {
   });
 }
 
-// «Не нашлось» помним 3 дня, а не навсегда: новый тайтл появляется на AniList через день-другой после премьеры,
-// а раньше один промах оставлял строку без обложки насовсем. Старое «» (до этой правки) считаем просроченным.
+// Старое «» (до этой правки) считаем просроченным.
 const MISS_TTL = 3 * 24 * 3600_000;
 // «miss3:» — промахи с тех пор, как есть запасные каталоги и картинка из описания раздачи; старые перепроверяем
 const missedRecently = v => typeof v === "string" && v.startsWith("miss3:") && Date.now() - Number(v.slice(6)) < MISS_TTL;
@@ -223,7 +222,6 @@ export async function loadListCovers() {
   try {
     await loadCoverCache();
     for (const el of document.querySelectorAll(".ny-kind[data-ck]")) if (el.dataset.ck) paintCover(el.dataset.ck);
-    // Вся лента, а не первые 60 строк: раньше всё, что ниже, так и оставалось со значком.
     const vis = view();
     const isAudio = i => categoryKind(i.categoryId) === "audio";
     const altsOf = new Map();

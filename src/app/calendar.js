@@ -1,12 +1,6 @@
 // Вкладка «Календарь» в духе «Кадра»: слева расписание на две недели —
 // сроки серий полосами от начала работы до сдачи (ромб — срок), справа
-// повестка выбранного дня и месяц. Что в ней:
-//  • выход серий онгоингов текущего сезона — по next_episode_at из
-//    /public/titles/{id}: дальше и раньше серия повторяется раз в неделю
-//    в то же время, номер серии считаем от episodes_aired;
-//  • дедлайны отчётов (/calendar/deadlines) — дата без времени, строка
-//    «Весь день» сверху;
-//  • дни рождения из /overview — тоже «Весь день».
+// повестка выбранного дня и месяц.
 
 import { state, can } from "./state.js";
 import { fetchReminders, openRemindersSheet } from "./reminders.js";
@@ -204,7 +198,6 @@ function ganttHtml(data) {
     const st = Math.max(0, Math.min(created, end));
     const cut = created < 0;
     const left = dayDiff(parseDay(r.deadline), today);
-    // Срок прошёл, а серия не сдана — полоса красная и говорит, на сколько опаздываем (раньше была как все).
     const late = left < 0 && r.status !== "completed";
     const ep = epOf(r);
     const poster = r.poster_url ? mediaUrl("/img_proxy", { url: r.poster_url }) : "";

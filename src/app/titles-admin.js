@@ -245,8 +245,7 @@ async function openSeasonDetailAdmin(seasonId) {
 // Номер тайтла из того, что вставили: голый id («59193»), кусок адреса
 // («59193-mushoku-tensei…»), или ссылка на любом зеркале Shikimori —
 // shikimori.one/.me/.io/.org, с www и без, с префиксом архивных тайтлов
-// «z» (…/animes/z5114-…). Раньше сервер узнавал только .one и .me, и
-// ссылка с shikimori.io молча не распознавалась.
+// «z» (…/animes/z5114-…).
 export function parseShikimoriId(input) {
   const raw = String(input || "").trim();
   if (!raw) return null;
@@ -398,11 +397,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
         `).join("") : `<div class="no-assignee">Ничего не найдено</div>`;
         box.querySelectorAll("[data-confirm-candidate]").forEach(btn => {
           btn.addEventListener("click", async () => {
-            // Раньше source и source_id склеивались через ":" в один
-            // атрибут БЕЗ экранирования (единственное место в проекте,
-            // где чужие данные шли в HTML-атрибут напрямую) и потом
-            // разбирались split(":") — ломалось на любом id с
-            // двоеточием. Теперь два отдельных экранированных атрибута.
+            // Два отдельных экранированных атрибута.
             const { source, sourceId } = btn.dataset;
             btn.disabled = true;
             try {

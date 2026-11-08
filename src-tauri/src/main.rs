@@ -36,12 +36,9 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-// Обновления — по прямым ссылкам на файлы релизов GitHub, а не через
-// GitHub API: у ссылок вида /releases/latest/download/<файл> нет лимита
-// 60 запросов в час, ради которого раньше в бинарник вшивался токен
-// (его было видно любому, кто скачал exe). Velopack HttpSource читает
-// <база>/releases.<канал>.json и качает пакет из той же папки — в каждом
-// релизе лежат и фид, и полный пакет этой версии.
+// Velopack HttpSource читает <база>/releases.<канал>.json и качает пакет
+// из той же папки — в каждом релизе лежат и фид, и полный пакет этой
+// версии.
 const UPDATE_STABLE_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/latest/download";
 const UPDATE_ALPHA_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/alpha-latest";
 // Зеркало тех же файлов на нашем сервере (voice_report_bot/desktop_updates.py): у части людей GitHub не открывается.
@@ -282,10 +279,8 @@ fn update_check_cache() -> &'static Mutex<Option<CachedUpdateCheck>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
-// Канал входит в ключ кэша, чтобы результаты разных типов сборки
-// не смешивались при локальном тестировании.
-// force — ручная кнопка «Проверить обновления»: всегда свежий запрос к GitHub. Раньше и она брала ответ из кэша, и
-// если за пять минут до этого автопроверка видела «нового нет», только что вышедшая альфа не находилась.
+// Канал входит в ключ кэша, чтобы результаты разных типов сборки не смешивались при локальном тестировании. force
+// — ручная кнопка «Проверить обновления»: всегда свежий запрос к GitHub.
 fn check_for_update_cached(app: &tauri::AppHandle, force: bool) -> Result<Option<UpdateInfoOut>, String> {
     let channel = build_update_channel().to_string();
     let cache = update_check_cache();
@@ -555,16 +550,14 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
         let Some((um, info)) = picked else {
             return Err(errors.join("\n"));
         };
-        // apply_updates_and_restart сама завершает процесс — строка ниже
-        // в норме никогда не выполняется до конца, но если она вообще
-        // вернула управление, это уже само по себе ошибка на стороне ОС.
-        // Раньше тут был apply_updates_and_restart — он завершает процесс жёстким exit(0), без штатного
-        // закрытия окна. Дочерние процессы WebView2 после этого висели ещё секунды и держали папку
-        // `current`, а Update.exe не мог её переименовать («файл занят», 10 повторов и отказ): версия
-        // оставалась старой. Теперь Update.exe запускается и ждёт, а мы выходим штатно, закрывая webview.
-        // Сначала закрываем окна и ждём, пока завершатся процессы WebView2 программы: их рабочая папка — `current`,
-        // и пока они живы, Windows не даёт Update.exe её переименовать («Access is denied», 10 повторов и отказ —
-        // версия остаётся старой). Update.exe к тому же не всегда может дождаться нашего процесса сам.
+        // apply_updates_and_restart сама завершает процесс — строка ниже в норме никогда не выполняется до конца,
+        // но если она вообще вернула управление, это уже само по себе ошибка на стороне ОС. Дочерние процессы
+        // WebView2 после этого висели ещё секунды и держали папку `current`, а Update.exe не мог её переименовать
+        // («файл занят», 10 повторов и отказ): версия оставалась старой. Update.exe запускается и ждёт, а мы
+        // выходим штатно, закрывая webview. Сначала закрываем окна и ждём, пока завершатся процессы WebView2
+        // программы: их рабочая папка — `current`, и пока они живы, Windows не даёт Update.exe её переименовать
+        // («Access is denied», 10 повторов и отказ — версия остаётся старой). Update.exe к тому же не всегда может
+        // дождаться нашего процесса сам.
         release_program_files(&app);
         um.wait_exit_then_apply_updates(&info.TargetFullRelease, false, true, Vec::<String>::new())
             .map_err(|e| e.to_string())?;
@@ -727,10 +720,8 @@ fn board_layout(
 }
 
 // ---------- нативные диалоги выбора файлов (file_scope.rs) ----------
-// Раньше диалоги открывал JS (@tauri-apps/plugin-dialog) и присылал
-// бэкенду готовый путь — то есть путь приходил из вебвью и ничем не
-// отличался от произвольной строки. Теперь диалог открывает Rust: путь
-// становится известен ему раньше, чем JS, и сразу попадает в скоуп.
+// Диалог открывает Rust: путь становится известен ему раньше, чем JS,
+// и сразу попадает в скоуп.
 
 #[tauri::command(async)]
 fn pick_input_files(
@@ -1384,14 +1375,10 @@ const ALLOWED_UPLOAD_EXT: &[&str] = &[
 // файл потоком, см. _spooled в miniapp/server.py).
 const MAX_UPLOAD_BYTES: u64 = 2000 * 1024 * 1024;
 
-// Файл разрешён к загрузке, если пользователь сам его указал ЛЮБЫМ
-// из двух способов — перетащил в окно (DroppedFiles) или выбрал в
+// Файл разрешён к загрузке, если пользователь сам его указал ЛЮБЫМ из
+// двух способов — перетащил в окно (DroppedFiles) или выбрал в
 // нативном диалоге (FileScope.readable, тот же скоуп, что уже даёт
-// mt_register_media_file и остальным ffmpeg-командам). Раньше
-// upload_report_file понимал только drag-drop — кнопка «Выбрать файл»
-// (если такая появится в интерфейсе) молча отклонялась бы с той же
-// ошибкой, хотя источник доверия ровно тот же: явный выбор
-// пользователя, а не путь, подставленный из вебвью.
+// mt_register_media_file и остальным ffmpeg-командам).
 fn checked_upload_path(
     dropped: &DroppedFiles,
     scope: &file_scope::FileScope,
@@ -1819,10 +1806,6 @@ fn main() {
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
-        // reveal_item_in_dir для open_log_folder (кнопка «Открыть логи»
-        // в настройках) — не тот же плагин, что shell:allow-open,
-        // который open_log_folder раньше использовал через deprecated
-        // Shell::open.
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())

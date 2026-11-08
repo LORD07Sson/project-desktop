@@ -51,7 +51,6 @@
   --gold-rgb: 255, 179, 92;
   --glow-rgb: 255, 196, 140;
 }
-/* «Янтарь» — палитра до 2.0 (раньше была темой по умолчанию). */
 :root[data-accent="amber"]:not([data-theme="light"]) {
   --bg: #070403; --bg-2: #0d0806; --bg-glow-1: #a8330d; --bg-glow-2: #2a0c05;
   --surface: #150e0b; --surface-2: #1c1310; --surface-3: #261a15; --surface-4: #33231c;
@@ -260,10 +259,6 @@ body {
   #more-menu .tb-mi { width: 100%; height: auto; padding: 9px 10px; justify-content: flex-start; }
   #more-menu .tab-lbl { display: inline; }
 }
-
-/* Участнику — только его разделы (как и раньше скрывалось в боковом
-   меню, см. styles.css :root[data-role="member"]); «Ещё» у него —
-   команда и профиль. */
 :root[data-role="member"] #more-menu .tb-sep:first-of-type { display: none; }
 
 /* ---------- Экран приложения без бокового меню ---------- */
@@ -923,8 +918,7 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .statusbar { border-top: 0; background: transparent; color: var(--ink-dim); padding: 10px 4px 14px; }
 .tab-panel[data-panel="list"] .statusbar { color: var(--ink-soft); }
 @media (max-width: 1100px) { .tab-panel[data-panel="list"] .col-prog, .tab-panel[data-panel="list"] .ls-prog { display: none; } }
-/* Узкое окно (от 760 px): «Срок» и кнопки не сжимаются и раньше съедали всю ширину — у «Серии» оставался один постер,
- * а названий не было видно вовсе. Даём названию минимум и убираем «Этап» и быстрые кнопки (всё это есть в карточке серии). */
+/* Даём названию минимум и убираем «Этап» и быстрые кнопки (всё это есть в карточке серии). */
 @media (max-width: 900px) {
   .tab-panel[data-panel="list"] .content td.ls-series, .content td.ls-series { min-width: 200px; }
   .tab-panel[data-panel="list"] [data-list-col="stage"], .tab-panel[data-panel="list"] [data-list-col="actions"] { display: none; }
@@ -1944,8 +1938,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
    иначе под короткими карточками оставались дыры в пол-экрана. */
 .ny-src-grid { display: block; columns: 3 340px; column-gap: 12px; }
 .ny-src-grid > .ny-svc { break-inside: avoid; margin: 0 0 12px; width: 100%; }
-/* Колонки зеркал фиксированной ширины во всех карточках: раньше последняя была auto, и цифры у строк с разным
-   числом кнопок (активное зеркало — одна, остальные — две, свои — три) съезжали. */
 .ny-mir2, .ny-cols { grid-template-columns: 10px minmax(0, 1fr) 64px 64px 60px; }
 .ny-svc.wide-act .ny-mir2, .ny-svc.wide-act .ny-cols { grid-template-columns: 10px minmax(0, 1fr) 64px 64px 88px; }
 .ny-cols span:nth-child(3), .ny-cols span:nth-child(4) { text-align: right; }
@@ -2940,10 +2932,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-tl-undo { margin: 0 0 0 6px; color: var(--ink-dim); }
 .rd-tl-ok { margin-top: 6px; font-weight: 700; color: var(--s-done); }
 
-/* Тайтлы: карточка не «дрожит» под курсором.
-   1) Кнопка «Взять в работу» раньше появлялась через display:none → flex и растягивала карточку, сетка перестраивалась
-      и курсор попадал то на карточку, то мимо. Теперь она лежит поверх постера и только проявляется.
-   2) Подъём на 5px сдвигал нижнюю кромку выше курсора — край карточки мигал. Запас снизу не даёт курсору «выпасть». */
+/* Она лежит поверх постера и только проявляется. 2) Подъём на 5px сдвигал нижнюю кромку выше курсора — край карточки мигал. Запас снизу не даёт курсору «выпасть». */
 .af-card { container-type: inline-size; padding-bottom: 8px; margin-bottom: -8px; }
 .af-card .tl-take:not(.on) {
   display: flex; position: absolute; left: 10px; right: 10px; width: auto; z-index: 3;
@@ -3319,7 +3308,6 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .rd-people .rd-person:hover .icon-btn, .rd-people .rd-person .icon-btn:focus-visible { opacity: 1; }
 .rd-people .rd-add { flex: none; width: auto; margin-left: 2px; padding: 6px 10px; }
 :root[data-motion="off"] .rd-people .rd-person .icon-btn { transition: none; }
-/* Пайплайн списком (раньше — горизонтальная шкала с карточками): этап — точка слева, участники — строки «аватар · имя · роль · действие». */
 .rd-timeline { display: flex; flex-direction: column; gap: 14px; padding: 14px; }
 .rd-timeline::before, .rd-timeline::after { display: none; }
 .rd-tl { flex-direction: row; flex-wrap: wrap; align-items: flex-start; text-align: left; gap: 0 14px; padding: 0; }
@@ -3437,8 +3425,6 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .wm-stage[data-bg="light"] { background: linear-gradient(135deg, #e8ecf2, #cfd6e2); }
 .wm-stage[data-bg="check"] { background: repeating-conic-gradient(#8a93a3 0 25%, #c9cfda 0 50%) 0 0 / 24px 24px; }
 .wm-stage[data-bg="green"] { background: linear-gradient(135deg, #1f4d33, #2a6b46); }
-
-/* Дни рождения: имя на всю ширину, ниже дата, «без года» и кнопка — раньше имя сжималось до обрезанной подсказки. */
 .bd-form { grid-template-columns: minmax(0, 1fr) auto; }
 .bd-form #bd-name { grid-column: 1 / -1; }
 .bd-form button[type="submit"] { grid-column: 1 / -1; justify-self: end; }
@@ -3490,10 +3476,7 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 .sheet.tk-sheet.tk-none { height: auto; width: min(520px, calc(100vw - 48px)); }
 .tk-sheet.tk-none .tk-layout { grid-template-columns: 1fr; min-height: 150px; }
 .tk-sheet.tk-none .tk-list { display: none; }
-
-/* Доска: пустые колонки уже (но принимают карточки как и раньше) — вся доска помещается без прокрутки. */
 .board-col { transition: width .28s ease; }
-/* На широком экране колонки тянутся до края (раньше справа оставалась треть пустоты, а названия переносились), пустые — вполовину */
 .board-col:not(.collapsed) { flex: 1 0 268px; max-width: 440px; }
 /* Колонка, где идёт работа, забирает освободившееся место и раскладывает карточки в два ряда. */
 .board-col.wide:not(.collapsed) { flex: 2.4 0 560px; max-width: none; }
@@ -3523,9 +3506,6 @@ button.gm-rc-wk { border: 0; background: none; cursor: pointer; font: inherit; f
 /* Сервисы: подпись цветов полоски аптайма. */
 .svc-history-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11px; color: var(--ink-dim); }
 .svc-history-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
-
-/* Чат: панель действий над сообщением не занимает место в строке (раньше невидимые 126 px сжимали пузырь до ~170 px
-   и короткие фразы переносились на 2–3 строки) — теперь всплывает над углом пузыря при наведении. */
 .ms-bubble-row { position: relative; }
 /* Сбоку от пузыря по центру, а не над ним: сверху панель закрывала имя автора и время. */
 .ms-bubble-row > .ms-acts { position: absolute; top: 50%; left: calc(100% + 6px); z-index: 3; pointer-events: none; transform: translate(-4px, -50%); }
@@ -3971,9 +3951,6 @@ td.row-actions { opacity: 1; transition: none; }
 .g-drop::before { content: ""; position: absolute; inset: 9% 7% 5% 11%; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
 .g-drop::after { content: ""; position: absolute; right: 12%; bottom: 13%; width: 20%; height: 12%; border-radius: 50%; transform: rotate(-38deg);
   background: radial-gradient(ellipse, #fff 0 35%, rgba(255, 255, 255, .4) 60%, transparent 75%); }
-
-/* доводка: плиты вращаются вокруг своего центра (раньше — вокруг левого края, раскладка съезжала на ~30°);
-   у кубика тёмная толстая кромка по периметру, прозрачна только середина; капля темнее */
 .app-splash .sp-glow i { transform-origin: 50% 50%; }
 .g-left { width: 11%; background: linear-gradient(90deg, rgba(78, 80, 84, .95), rgba(30, 31, 33, .65) 50%, transparent); }
 .g-drop { background: radial-gradient(circle at 44% 64%, #4a4c50 0%, #1e1f21 25%, #050506 55%, #000 72%); }
@@ -4051,9 +4028,7 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-dcore { position: absolute; transform-style: preserve-3d; pointer-events: none; }
 .sp-dcore i { position: absolute; inset: 0; }
 
-/* ---- Аватар в карточке команды и в шапке профиля: ровное тёмное кольцо ----
-   Раньше кольцо рисовала тень аватара поверх градиента той же толщины — по краю градиент проступал
-   рваной цветной каймой. Теперь кольцо — сплошная подложка, тень у аватара убрана. */
+/* Кольцо — сплошная подложка, тень у аватара убрана. */
 .tm-av, .pf-hero .avatar-ring { padding: 3px; background: var(--bg); box-shadow: 0 0 0 1px rgba(255, 255, 255, .07); }
 .tm-av .avatar.xl, .pf-hero .avatar-ring .avatar.xl { box-shadow: none; }
 .pf-hero .avatar-ring.tier-bronze { box-shadow: 0 0 0 2px #b0774a; }

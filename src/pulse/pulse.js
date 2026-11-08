@@ -312,7 +312,6 @@ export function startPulse(DATA) {
       if (R() > .35 && n) twinkles.push({ x: n.px + (R() - .5) * 10, y: n.py + (R() - .5) * 10, born: t, life: 700 + R() * 700, s: (16 + R() * 26) * n.pd, cyan: R() > .82 });
       else { const tn = titleNodes[Math.floor(R() * titleNodes.length)], k = R(); twinkles.push({ x: lerp(CX, tn.px, k), y: lerp(CY, tn.py, k), born: t, life: 600 + R() * 600, s: 12 + R() * 18 }); }
     }
-    // (раньше здесь кольца вспыхивали на случайных узлах — со стороны это выглядело как настоящая активность; убрано)
     twinkles = twinkles.filter(w => t - w.born < w.life);
     toasts = toasts.filter(w => t - w.born < 2600);
     if (!inflow.length) inflow = Array.from({ length: 36 }, () => ({ a: R() * 7, r: 60 + R() * 110, v: .03 + R() * .05 }));
@@ -441,7 +440,7 @@ export function startPulse(DATA) {
     const hits = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
     const placed = [];
     // Подписи раскладываются по очереди: сначала горящие и самые готовые. Наехала на уже стоящую — пробуем другую сторону,
-    // не вышло — прячем подпись (узел остаётся; при наведении подпись видна всегда). Раньше они ложились друг на друга.
+    // не вышло — прячем подпись (узел остаётся; при наведении подпись видна всегда).
     const burning = n => n.eps.some(e => late(epNodes.find(x => x.tn === n && x.e === e)));
     const labelOrder = titleNodes.filter(n => bornK(n) > 0).sort((a, b) => (burning(b) ? 1 : 0) - (burning(a) ? 1 : 0) || b.pct - a.pct);
     for (const n of labelOrder) {

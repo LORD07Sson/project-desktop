@@ -25,9 +25,7 @@ import { linkifyProject } from "./deeplink-core.js";
 import { titleArt } from "./title-page.js";
 
 // Ключи "kind" — ровно те, что отдаёт серверный audio_qc.py (miniapp/audio_qc.py):
-// "clip"/"noise"/"silence"/"silence_long"/"no_speech". Раньше здесь жил набор
-// clipping/silence/noise/loud/quiet — ни один ключ не совпадал с реальным
-// ответом сервера, находки просто не подписывались.
+// "clip"/"noise"/"silence"/"silence_long"/"no_speech".
 const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silence_long: "Долгая тишина", no_speech: "Речь не найдена" };
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
 
@@ -263,8 +261,6 @@ export async function openReportDetail(publicId) {
 
   // Вложение к следующей заметке — переживает перерисовку карточки.
   let pendingNoteFile = null;
-  // Открытый редактор пайплайна и его черновик тоже переживают перерисовку: карточка рисуется заново, когда догрузился
-  // файл или пришла заметка, и раньше недособранная цепочка пропадала. null — редактор закрыт.
   let pipeEdit = null;   // { draft: [{role, telegram_id, name}], parallel }
 
   async function render() {
@@ -338,9 +334,7 @@ export async function openReportDetail(publicId) {
     }).join("");
     const side = detail.status === "revision" || detail.status === "cancelled" ? detail.status : "";
 
-    // Черновик заметки (текст, время, курсор) переживает перерисовку. Карточка рисуется заново по F5 / «Обновить», когда
-    // догрузился файл или пришли заметки из QC — раньше недописанная заметка пропадала, и «Добавить» с пустым полем
-    // молча ничего не отправлял («заметка не отправляется»).
+    // Черновик заметки (текст, время, курсор) переживает перерисовку.
     const oldNote = overlay.querySelector("#note-new");
     const noteDraft = oldNote ? {
       text: oldNote.value,
@@ -536,7 +530,6 @@ export async function openReportDetail(publicId) {
     const pipeEditor = sheet.querySelector("#pipe-editor");
     const pipeView = sheet.querySelector("#pipe-view");
     const pipeToggle = sheet.querySelector("#pipe-edit-toggle");
-    // Редактор открывается на месте шкалы этапов (раньше — под ней, вне экрана, и казалось, что «изменить» не работает).
     const setPipeEditing = on => {
       pipeEdit = on ? { draft: pipelineDraft, parallel: pipelineParallel } : null;
       if (pipeEditor) pipeEditor.hidden = !on;
@@ -789,7 +782,6 @@ export async function openReportDetail(publicId) {
     sheet.querySelector("#report-watermark")?.addEventListener("click", () => (detail.title_id
       ? openTitleAdminDetail(detail.title_id, undefined, "watermark")
       : import("./watermark-editor.js").then(m => m.openStudioWatermark())));
-    // Сборка уже идёт (запущена раньше или с другого устройства) — карточка хода появится сама.
     if (sheet.querySelector("#report-assemble")) startAssemblyWatch(publicId, overlay, false);
     const startNyaa = async () => {
       // Запрос для Nyaa: латинское название тайтла (как у релизеров) и номер серии; не вышло — просто название отчёта.
@@ -1212,13 +1204,9 @@ function renderNotifications(panel, publicId, res) {
 
 // Скачивание — кнопка, а не <a href>. Ссылка с target="_blank" внутри
 // webview вообще ничего не открывает (окно создавать некому), а токен
-// в ней уезжал в query-строку — то есть в логи сервера. Теперь файл
-// тянет Rust-команда download_report_file (токен заголовком), путь
-// выбирает нативный диалог сохранения.
-// Тип проверяем и по file_type, и по имени: file_type у файла,
-// присланного документом, приходит "document" — и mp3 внутри него
-// раньше оставался без кнопки AI-проверки, потому что || до имени
-// просто не доходил.
+// в ней уезжал в query-строку — то есть в логи сервера. Файл тянет
+// Rust-команда download_report_file (токен заголовком), путь выбирает
+// нативный диалог сохранения.
 
 // «Производство финала»: четыре шага со статусом и одной кнопкой на шаг. Кнопки сохраняют прежние id —
 // их обработчики (Nyaa, сборка, добавление файла) остались как были.
@@ -1348,9 +1336,6 @@ async function openReportLogSheet(publicId, kind) {
     `;
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
     const moreBtn = sheet.querySelector("#log-more");
-    // try/catch прямо тут: раньше ошибка второй и следующих страниц
-    // никем не ловилась (try ниже охватывает только первый вызов) —
-    // кнопка навсегда оставалась disabled, а reject уходил в консоль.
     if (moreBtn) moreBtn.addEventListener("click", async () => {
       moreBtn.disabled = true;
       moreBtn.textContent = "Загрузка…";

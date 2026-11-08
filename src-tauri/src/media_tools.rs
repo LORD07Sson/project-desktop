@@ -602,9 +602,6 @@ pub fn concat_media(progress: &Progress, paths: &[String], out_path: &str) -> Re
         // filter_complex concat — универсальный путь для разнородных
         // входов, но требует перекодирования: у каждого входа по одному
         // видео- и аудио-потоку ([i:v:0][i:a:0]...concat=n=N:v=1:a=1).
-        // Он же требует, чтобы видео/аудио были у КАЖДОГО входа —
-        // иначе ffmpeg падает с невнятным "Stream specifier ... matches
-        // no streams", и раньше это доезжало до пользователя как есть.
         if infos.iter().any(|i| i.video.is_none()) || infos.iter().any(|i| i.audio.is_none()) {
             return Err(
                 "Склейка с перекодированием требует, чтобы у всех файлов были и видео-, и аудио-дорожка. \
@@ -1065,8 +1062,7 @@ pub fn mux_media(tracks: &[MuxTrack], out_path: &str) -> Result<(), String> {
     cmd.args(["-c", "copy"]);
     // SRT/ASS в MP4 скопировать нельзя — контейнер их не держит, и
     // ffmpeg падает с "Subtitle codec 94213 not supported"; в MP4 нужен
-    // свой формат субтитров (mov_text). Раньше пользователь получал эту
-    // строку как есть и не понимал, что делать.
+    // свой формат субтитров (mov_text).
     let out_ext = ext_of(out_path);
     let has_subtitles = tracks.iter().any(|t| t.kind == "subtitle");
     if has_subtitles && matches!(out_ext.as_str(), "mp4" | "m4v" | "mov") {

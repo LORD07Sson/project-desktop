@@ -8,9 +8,8 @@ import { can } from "./state.js";
 import { getLocalVideo } from "./local-video.js";
 import { localRenderSupport, prepareLocalRender, describeTools } from "./local-render.js";
 
-// Профиль качества по умолчанию. Раньше всегда стоял первый («Стандарт»), а «Свой профиль» — последним в списке:
-// не переключил руками — и ffmpeg кодировал не своим профилем. Теперь: тот, что выбирали в прошлый раз
-// (если он ещё есть), иначе «Свой профиль», иначе первый.
+// Профиль качества по умолчанию. Теперь: тот, что выбирали в прошлый раз (если он ещё есть), иначе «Свой
+// профиль», иначе первый.
 const LAST_PROFILE_KEY = "project-assemble-profile";
 const LAST_WHERE_KEY = "project-assemble-where";   // «server» / «local» — где собирали в прошлый раз
 function defaultProfile(profiles) {

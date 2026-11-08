@@ -68,9 +68,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   --radius-xl: 22px;
   --radius: var(--radius-md);
 
-  /* Шкала теней — от едва заметной (кнопки/чипы) до плавающей
-     (модалки/поповеры). Раньше была одна --shadow на всё, поэтому
-     карточки и модалки визуально «плавали» на одной высоте. */
+  /* Шкала теней — от едва заметной (кнопки/чипы) до плавающей (модалки/поповеры). */
   --shadow-xs: 0 1px 2px rgba(0,0,0,.22);
   --shadow-sm: 0 3px 10px -4px rgba(0,0,0,.35);
   --shadow: 0 4px 16px -4px rgba(0,0,0,.4);
@@ -159,12 +157,7 @@ body {
   color: var(--ink);
   font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
-  /* Интерфейсный хром (кнопки, вкладки, заголовки колонок) выделять
-     мышью незачем — иначе драг карточки на доске начинает таскать
-     выделение текста. Но сами данные выделять надо: номер отчёта,
-     текст заметки, сообщение об ошибке — их переносят в переписку
-     руками. Раньше user-select: none стоял на body без единого
-     исключения, и скопировать нельзя было вообще ничего. */
+  /* Интерфейсный хром (кнопки, вкладки, заголовки колонок) выделять мышью незачем — иначе драг карточки на доске начинает таскать выделение текста. Но сами данные выделять надо: номер отчёта, текст заметки, сообщение об ошибке — их переносят в переписку руками. */
   user-select: none;
 }
 
@@ -401,22 +394,11 @@ body.window-maximized .titlebar { border-radius: 0; }
 body.window-maximized .win-btn .ic-max { display: none; }
 body.window-maximized .win-btn .ic-restore { display: block; }
 
-/* ---------- Навигация (Обзор / Список / Я) ----------
-   Раньше — горизонтальная полоска вкладок сверху, как в мини-аппе.
-   На широком окне ПК это оставляло пустые поля по бокам у самого
-   контента; вертикальный sidebar с иконками (тот же приём, что у
-   VS Code/Slack/Linear) использует эту ширину и явно читается как
-   desktop-приложение, а не перенесённая веб-страница. */
+/* На широком окне ПК это оставляло пустые поля по бокам у самого контента; вертикальный sidebar с иконками (тот же приём, что у VS Code/Slack/Linear) использует эту ширину и явно читается как desktop-приложение, а не перенесённая веб-страница. */
 
 .app-body { flex: 1; display: flex; min-height: 0; }
 
-/* Подписанный сайдбар (логотип + сгруппированные пункты с текстом) —
-   перенесено вживую с референса пользователя (Dribbble: Xentra Digital
-   Marketing Dashboard, dribbble.com/shots/27265906): там боковая панель
-   не узкая иконка-полоска, а широкая, с секциями "MAIN MENU"/
-   "MANAGEMENT" и подписью у каждого пункта. Раньше здесь была голая
-   64px-полоска с одними иконками (см. историю) — узнаваема только по
-   title-тултипу на долгой наводке, не с одного взгляда. */
+/* Подписанный сайдбар (логотип + сгруппированные пункты с текстом) — перенесено вживую с референса пользователя (Dribbble: Xentra Digital Marketing Dashboard, dribbble.com/shots/27265906): там боковая панель не узкая иконка-полоска, а широкая, с секциями "MAIN MENU"/ "MANAGEMENT" и подписью у каждого пункта. */
 
 .sidebar {
   flex: none;
@@ -501,10 +483,7 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   background: var(--surface-3); border-radius: 999px; padding: 1px 8px;
 }
 
-/* Узкое окно (минимум по tauri.conf.json — 760px) — подписи сжирают
-   слишком много ширины у контента, возвращаемся к иконкам-квадратам,
-   тому же поведению, что было раньше у всего сайдбара. Раскрытый
-   список статусов на такой ширине тем более не поместится читаемо. */
+/* Раскрытый список статусов на такой ширине тем более не поместится читаемо. */
 @media (max-width: 860px) {
   .sidebar { width: 60px; align-items: center; padding: 12px 8px; }
   .sidebar-brand-txt, .sidebar-group-label, .tab-btn .tab-lbl, .sidebar-sub { display: none; }
@@ -538,14 +517,7 @@ body.window-maximized .win-btn .ic-restore { display: block; }
    вложенный, независимый скролл-контейнер. */
 .scroll-panel { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 24px; }
 
-/* Крупный заголовок страницы + подпись — у референса каждая вкладка
-   открывается так ("Projects" + пояснение), у нас панели раньше
-   начинались прямо с сетки/тулбара без него. На «Доске» справа —
-   реальные действия (месяц/Импорт/Добавить проект, см. board.js:
-   POST /api/reports через create_report, тот же, что у голосового
-   пайплайна бота, plus upload_report_file для «Импорт» — не
-   кнопки-пустышки). На «Обзоре» действий нет — там нечего создавать
-   напрямую, только заголовок+подпись. */
+/* На «Доске» справа — реальные действия (месяц/Импорт/Добавить проект, см. board.js: POST /api/reports через create_report, тот же, что у голосового пайплайна бота, plus upload_report_file для «Импорт» — не кнопки-пустышки). На «Обзоре» действий нет — там нечего создавать напрямую, только заголовок+подпись. */
 /* min-width:0 на обоих флекс-элементах — без него заголовок (первый
    элемент) отказывается сжиматься ниже своей "естественной" ширины
    (умолчание flex-элемента — min-width:auto, а не 0), и на узких/
@@ -881,10 +853,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
   padding: 0; font-size: 10px; border-radius: 50%; line-height: 1;
 }
-
-/* «Структура загрузки» — отдельная озаглавленная карточка (как в
-   мини-аппе), не bento-плитка: сюда идёт тот же донат + легенда/роли,
-   что и раньше был внутри сетки. */
 .sec-title, .profile-subtitle {
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
   color: var(--ink-dim); margin: 4px 0 10px;
@@ -921,12 +889,7 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   background: var(--accent-grad); color: var(--on-accent); border: none; border-radius: 10px; padding: 0 14px; font-weight: 700; font-size: 12.5px; cursor: pointer;
 }
 
-/* Широкая раскладка своей вкладки «Я» — карточка человека прилипает
-   слева, справа (во всю оставшуюся ширину окна) — статус/структура
-   загрузки/плитка статистики. Раньше вся эта разметка была одной узкой
-   колонкой, портированной из мобильного мини-аппа — на широком окне ПК
-   половина ширины просто пустовала. У карточки коллеги (sheet, тесная)
-   своя, прежняя плоская разметка — profileHeaderHtml(d) без asParts. */
+/* Широкая раскладка своей вкладки «Я» — карточка человека прилипает слева, справа (во всю оставшуюся ширину окна) — статус/структура загрузки/плитка статистики. У карточки коллеги (sheet, тесная) своя, прежняя плоская разметка — profileHeaderHtml(d) без asParts. */
 .profile-head-grid { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
 .profile-head-left {
   position: sticky; top: 0;
@@ -1182,10 +1145,7 @@ tbody td.deadline.overdue { color: var(--s-stop); font-weight: 600; }
 .priority-chip.normal .dot { background: var(--s-review); }
 .priority-chip.high .dot { background: var(--s-work); }
 .priority-chip.urgent .dot { background: var(--s-stop); }
-/* Раньше только urgent был тонирован фоном, low/normal/high — голая
-   точка на нейтрально-сером. Тот же самый пробел, что закрыт у
-   .status-chip чуть выше — тонируем все четыре уровня одинаково,
-   теми же цветами, что уже красят точку. */
+/* Тот же самый пробел, что закрыт у .status-chip чуть выше — тонируем все четыре уровня одинаково, теми же цветами, что уже красят точку. */
 .priority-chip.low { color: var(--s-done); background: color-mix(in srgb, var(--s-done) 14%, var(--surface-2)); }
 .priority-chip.normal { color: var(--s-review); background: color-mix(in srgb, var(--s-review) 14%, var(--surface-2)); }
 .priority-chip.high { color: var(--s-work); background: color-mix(in srgb, var(--s-work) 14%, var(--surface-2)); }
@@ -1414,9 +1374,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
 .sheet select:focus, .sheet input:focus, .sheet textarea:focus {
   outline: none; border-color: color-mix(in srgb, var(--fire) 60%, var(--line));
 }
-/* Подпись поля в форме создания проекта (board.js) — раньше формы в
-   .sheet обходились без отдельных подписей (row из select'ов и так
-   понятен по placeholder'ам), здесь полей больше и они вертикальные. */
 .field-label { display: block; font-size: 11.5px; font-weight: 700; color: var(--ink-dim); margin: 12px 0 4px; }
 .field-label:first-of-type { margin-top: 0; }
 #rc-title, #rc-season, #rc-title-id, #rc-priority, #rc-deadline { width: 100%; }
@@ -1530,11 +1487,6 @@ kbd {
 .detail-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .detail-chips .chip { cursor: pointer; }
 .detail-chips .chip:hover { border-color: var(--surface-4); }
-
-/* Секции карточки отчёта отделены не только отступом: тонкая линия
-   сверху даёт структуру, которой раньше не было — «Заметки», «Файлы» и
-   «Чек-лист» сливались в одну ленту, и глазом граница между ними
-   находилась только по заголовку. */
 .detail-section { margin-bottom: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .detail-section:first-of-type { padding-top: 0; border-top: none; }
 .detail-section h3 {
@@ -1680,8 +1632,7 @@ kbd {
 .toast[data-kind="error"] { border-left-color: var(--s-stop); }
 .toast[data-kind="success"] { border-left-color: var(--s-done); }
 
-/* Полоска автозакрытия — визуально показывает, сколько времени
-   осталось до того, как тост исчезнет сам. Клик по тосту закрывает раньше. */
+/* Полоска автозакрытия — визуально показывает, сколько времени осталось до того, как тост исчезнет сам. */
 .toast-progress {
   position: absolute;
   left: 0; bottom: 0;
@@ -1883,19 +1834,8 @@ kbd {
    drag'а (board.js: wireBoardScroll) переключается на auto — иначе
    доска отставала бы от курсора, плавность там не нужна, нужна
    мгновенная 1:1 привязка к пальцу/курсору. */
-/* touch-action: pan-y — горизонталь забираем себе (её тянет наш
-   самодельный drag в board.js), вертикаль отдаём браузеру. Раньше тут
-   стояло none: без него браузер перехватывал жест панорамирования ДО
-   нашего pointerdown/pointermove, и самодельный drag не запускался.
-   Но none отнимает и вертикаль — пальцем нельзя было прокрутить
-   страницу, стоя на доске. pan-y решает обе задачи сразу: горизонталь
-   браузер не трогает (pointermove доходят до нас), вертикаль
-   прокручивает сам, как на любой обычной странице.
-   Карточкам нужно то же самое — см. .board-card ниже. */
-/* ---------- Панель управления доской ----------
-   Поиск и порядок карточек. Раньше доска показывала ровно то, что
-   прислал сервер, в его же порядке: понять «что горит» можно было
-   только прочитав её целиком. */
+/* touch-action: pan-y — горизонталь забираем себе (её тянет наш самодельный drag в board.js), вертикаль отдаём браузеру. Но none отнимает и вертикаль — пальцем нельзя было прокрутить страницу, стоя на доске. pan-y решает обе задачи сразу: горизонталь браузер не трогает (pointermove доходят до нас), вертикаль прокручивает сам, как на любой обычной странице. Карточкам нужно то же самое — см. .board-card ниже. */
+/* ---------- Панель управления доской ---------- Поиск и порядок карточек. */
 .board-toolbar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-bottom: 12px;
@@ -2077,8 +2017,7 @@ kbd {
 .board-col.folded .board-col-fold { transform: rotate(-90deg); }
 .board-col.folded .board-cards, .board-col.folded .board-col-more, .board-col.folded .board-col-progress, .board-col.folded .board-col-badges { display: none; }
 
-/* Значки состояния колонки: просрочено / залежалось / без исполнителя.
-   Раньше эти три вопроса читались только пролистыванием всех карточек. */
+/* Значки состояния колонки: просрочено / залежалось / без исполнителя. */
 .board-col-badges { display: flex; gap: 5px; flex-wrap: wrap; padding: 0 4px 2px; }
 .board-col-badge {
   font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 99px;
@@ -2142,11 +2081,7 @@ kbd {
   to   { opacity: 1; transform: none; }
 }
 
-/* Левая полоска — не просто цвет статуса: её ширина и яркость показывают
-   срочность (--heat считает board.rs, 0..1). Раньше все карточки колонки
-   выглядели одинаково, и «что горит» искалось глазами по датам. Полоска
-   отдельным элементом, а не border-left: только так её можно сделать
-   переменной ширины, не сдвигая текст. */
+/* Левая полоска — не просто цвет статуса: её ширина и яркость показывают срочность (--heat считает board.rs, 0..1). Полоска отдельным элементом, а не border-left: только так её можно сделать переменной ширины, не сдвигая текст. */
 .board-card-heat {
   position: absolute; left: 0; top: 0; bottom: 0;
   width: calc(3px + var(--heat, 0) * 3px);

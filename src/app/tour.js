@@ -495,8 +495,6 @@ function endTour(completed) {
   if (completed && tour.id === "intro") showDoneToast();
 }
 
-// Клавиши урока — раньше всех остальных (захват на window): Esc не
-// должен закрывать заодно открытую под уроком модалку или «Смотреть».
 window.addEventListener("keydown", e => {
   if (!T) return;
   const k = e.key;

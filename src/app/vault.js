@@ -256,7 +256,6 @@ function renderEdit(box, item) {
   });
 }
 
-// Сервис переехал или сменил имя: меняем только название, старое остаётся в «раньше» и ищется поиском.
 function renderRename(box, item) {
   box.innerHTML = `
     <h3>Переименовать «${esc(item.name)}»</h3>

@@ -136,13 +136,6 @@ export function timelineHtml(rows, rangeStart, rangeEnd, todayMs) {
   // тот же приём, что у playSegBarIntro/playDonutIntro выше: полоса
   // должна вырасти из точки, а не появиться сразу в целевом размере.
   //
-  // Подпись — ОТДЕЛЬНАЯ плавающая плашка над тонкой цветной полосой
-  // (не текст внутри самой полосы, как было раньше): так у референса —
-  // обычно тёмная и приглушённая, но белая и жирная, если задача
-  // пересекает «сегодня» (тот же смысл, что подсветка today-строки на
-  // Гант-чарте референса).
-  // Серия, начавшаяся у правого края, раньше вылезала плашкой за
-  // карточку и обрезалась — там плашка заканчивается у начала полосы.
   const tagHtml = (left, current, text) => left > 65
     ? `<div class="gantt-tag end${current ? " current" : ""}" style="right:${(100 - left).toFixed(2)}%;">${esc(text)}</div>`
     : `<div class="gantt-tag${current ? " current" : ""}" style="left:${left.toFixed(2)}%;">${esc(text)}</div>`;

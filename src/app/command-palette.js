@@ -58,10 +58,6 @@ export function openPalette() {
       </div>
     `).join("") || `<div class="cmdk-empty">Ничего не найдено</div>`;
     list.querySelectorAll(".cmdk-item").forEach(el => {
-      // Подсветка — переключением класса, а не renderList(): раньше
-      // каждый проезд мышью по пункту пересобирал весь список через
-      // innerHTML (вместе с перевешиванием обработчиков) — на каждый
-      // mouseenter, включая те, что порождал сам же пересбор.
       el.addEventListener("mouseenter", () => highlight(parseInt(el.dataset.i, 10)));
       el.addEventListener("click", () => activate(parseInt(el.dataset.i, 10)));
     });

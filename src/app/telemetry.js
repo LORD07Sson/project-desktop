@@ -219,7 +219,6 @@ async function netCheckOnce() {
   }
   const all = queue.concat([result]);
   for (let i = 0; i < all.length; i++) {
-    // не ушло — сохраняем это и все следующие (раньше оставалось только одно, остальные терялись)
     try { await apiPost("/telemetry/net", all[i]); } catch (_) { savePendingNet(all.slice(i)); return; }
   }
   savePendingNet([]);

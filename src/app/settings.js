@@ -32,10 +32,6 @@ const updateLog = tagLogger("updates");
 // Версию подставляет Vite на этапе сборки (define: __APP_VERSION__ в
 // vite.config.js — читает файл VERSION, а в CI ещё и переменную
 // PKG_VERSION, куда альфа-сборка кладёт "0.6.0-alpha.N+sha").
-// Раньше здесь лежал литерал, который CI правил себе sed'ом по
-// исходнику, — и в git он годами расходился и с VERSION, и с
-// Cargo.toml: у собранного локально клиента в Настройках показывалась
-// версия, которой нигде больше нет.
 const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 
 // Альфа-сборки несут короткий коммит как SemVer build-metadata —
@@ -507,8 +503,6 @@ async function openSettings() {
     }
   });
 
-  // Плитки и сегменты — поверх тех же скрытых <select>, что и раньше:
-  // обработчики выше не поменялись.
   const pick = (attr, sel, value) => {
     overlay.querySelectorAll(`[${attr}]`).forEach(b => b.classList.toggle(b.classList.contains("seg-btn") ? "active" : "on", b.getAttribute(attr) === value));
     if (sel) { const el = overlay.querySelector(sel); el.value = value; el.dispatchEvent(new window.Event("change")); }
@@ -881,9 +875,7 @@ function autoCheckIfDue() {
     // проверять можно, лучше лишний запрос, чем никогда не проверять.
   }
   if (Date.now() - last < AUTO_CHECK_THROTTLE_MS) return;
-  // Паузу в 4 часа запоминаем, только если обновления нет или человек сам нажал «Позже». Раньше время писалось ДО
-  // проверки: оборвался интернет посреди закачки — и окно «Доступно обновление» не появлялось 4 часа, сколько ни
-  // перезапускай программу.
+  // Паузу в 4 часа запоминаем, только если обновления нет или человек сам нажал «Позже».
   checkForUpdates(true).then(result => {
     if (result !== "none" && result !== "declined") return;
     try {
@@ -894,8 +886,7 @@ function autoCheckIfDue() {
   });
 }
 
-// Программу часто не закрывают сутками — раньше она проверяла обновления только при запуске и новую версию так и
-// не замечала. Раз в полчаса смотрим, не прошли ли те же 4 часа с последней проверки.
+// Раз в полчаса смотрим, не прошли ли те же 4 часа с последней проверки.
 setInterval(() => { if (document.visibilityState === "visible") autoCheckIfDue(); }, 30 * 60 * 1000);
 
 export async function checkForUpdates(silent) {
@@ -910,11 +901,6 @@ export async function checkForUpdates(silent) {
     await installUpdate();
     return "installing";
   } catch (e) {
-    // Тихую автопроверку при старте (silent=true) пользователь никогда
-    // не видит тостом — раньше падение здесь (тот самый 403 на общем IP
-    // студии) не оставляло вообще никакого следа. error-тост ниже уже
-    // сам логируется через toast() (см. api.js), поэтому явный вызов
-    // нужен именно на silent-ветке.
     if (!silent) toast(`Не удалось проверить обновления: ${e}`, "error");
     else updateLog.error(`тихая автопроверка при старте не удалась: ${e}`);
   }
@@ -934,9 +920,6 @@ function confirmUpdateSheet(update) {
     overlay.querySelector("[data-no]").addEventListener("click", () => { overlay.remove(); resolve(false); });
     overlay.querySelector("[data-yes]").addEventListener("click", () => { overlay.remove(); resolve(true); });
     // Закрытие клавишей Escape или кликом по фону — тоже ответ «позже».
-    // Раньше Escape просто удалял оверлей из DOM, промис не резолвился
-    // никогда, и checkForUpdates() оставался висеть на await до конца
-    // жизни процесса.
     overlay.addEventListener("sheet-dismissed", () => resolve(false));
   });
 }
