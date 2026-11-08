@@ -2,8 +2,8 @@
 // Чистая разметка без сети. Данные слайдов приходят с /games/store/home (hero), друзья — с /games/store/hero-friends.
 
 import { priceView, ruPlural, heroPalette, huePalette, logoHasTransparentEdge } from "./games-core.js";
+import { esc } from "./utils.js";
 
-const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export const heroLogoUrl = id => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${Number(id)}/logo.png`;
 

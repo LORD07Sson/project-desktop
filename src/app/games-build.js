@@ -2,8 +2,8 @@
 // Чистые функции без DOM и сети: проверяются в scripts/games-test.mjs.
 
 import { shortDate, fmtNum } from "./games-core.js";
+import { esc } from "./utils.js";
 
-const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 /** Размер: 72684619429 → «67,7 ГиБ»; нет данных — «—». */
 export function fmtBytes(n) {

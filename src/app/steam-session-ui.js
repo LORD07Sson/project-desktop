@@ -2,8 +2,8 @@
 // Чистые функции без обращения к Tauri — чтобы их можно было проверять тестами (сами вызовы Rust — в steam-session.js).
 
 import qrcode from "qrcode-generator";
+import { esc } from "./utils.js";
 
-const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 /** QR-код ссылки входа в виде масштабируемого SVG (чёрное на белом: так его читает камера телефона). */
 export function qrSvg(text) {

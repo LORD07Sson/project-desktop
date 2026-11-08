@@ -1,3 +1,4 @@
+import { esc } from "./utils.js";
 // Личные подборки Steam (по токену входа): очередь открытий и желаемое со скидкой.
 // Чистый разбор ответов Steam в карточки витрины { appid, name, image, price } — проверяется в scripts/games-test.mjs.
 
@@ -36,7 +37,6 @@ export function cardsFrom(body, key, currency) {
   return list.map(x => storeItemToCard(x, currency)).filter(c => c && !seen.has(c.appid) && seen.add(c.appid));
 }
 
-const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cnt = v => (Array.isArray(v) ? v.length : 0);
 const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
 

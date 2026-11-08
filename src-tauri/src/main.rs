@@ -1768,7 +1768,7 @@ fn main() {
     // На ноутбуках с двумя видеокартами просим дискретную: иначе Windows часто оставляет окно на встроенной.
     let mut webview_args = String::from("--force_high_performance_gpu");
     if let Some(port) = debug_port_flag() {
-        webview_args.push_str(&format!(" --remote-debugging-port={port} --remote-allow-origins=*"));
+        webview_args.push_str(&format!(" --remote-debugging-port={port} --remote-allow-origins=http://127.0.0.1:{port}"));
     }
     // Единственный поток на этом этапе — других потоков, читающих окружение, ещё нет.
     std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", webview_args);

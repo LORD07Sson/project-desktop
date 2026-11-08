@@ -2,11 +2,11 @@
 // Чистая разметка без сети: данные приходят с /games/store/tabs.
 
 import { priceView, fmtNum } from "./games-core.js";
+import { esc } from "./utils.js";
 
 export const STABS = [["new", "Популярные новинки"], ["top", "Лидеры продаж"], ["soon", "Популярные будущие новинки"], ["spec", "Скидки"], ["free", "Популярные бесплатные игры"]];
 export const STAB_SHOWN = 10;
 
-const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 /** Цветовой класс итога отзывов: положительные синие, смешанные жёлтые, отрицательные красные. */
 export function reviewTone(pct, count) {

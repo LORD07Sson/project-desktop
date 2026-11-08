@@ -2,8 +2,8 @@
 // Чистые функции без DOM и сети — проверяются в scripts/games-test.mjs.
 
 import { alertText, shortDate } from "./games-core.js";
+import { esc } from "./utils.js";
 
-const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export const ALERT_ICON = { target: "🎯", sale: "🔥", low: "📉", update: "🛠", release: "🚀" };
 
