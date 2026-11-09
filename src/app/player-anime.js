@@ -14,7 +14,7 @@ import { apiGet, toast, API_BASE } from "./api.js";
 import { esc } from "./utils.js";
 import { appWindow } from "./tauri.js";
 import { pickSameVoice, preloadFresh, shouldPreload, bufferedAhead, startBufferReady, START_BUFFER_SEC } from "./preload-core.js";
-import { parseVtt } from "./subs-core.js";
+import { parseVtt, parseSubsFile, decodeSubs } from "./subs-core.js";
 
 const SAVE_EVERY_MS = 5000;
 const HIDE_AFTER_MS = 2600;
@@ -139,7 +139,7 @@ export async function openAnimePlayer({ shikiId, name }) {
   const vol = readVolume();
   video.volume = vol.v;
   video.muted = vol.muted;
-  P = { root, video, shikiId, name, series: null, episodeIdx: 0, translations: [], trId: null, sources: [], quality: null, saveTimer: null, hideTimer: null, nextCancelled: false, nextTimer: null, fs: false, pre: null, preBusy: null, subTrack: video.addTextTrack("subtitles"), subsPrefs: readSubsPrefs(), hasSubs: false };
+  P = { root, video, shikiId, name, series: null, episodeIdx: 0, translations: [], trId: null, sources: [], quality: null, saveTimer: null, hideTimer: null, nextCancelled: false, nextTimer: null, fs: false, pre: null, preBusy: null, subTrack: video.addTextTrack("subtitles"), subsPrefs: readSubsPrefs(), hasSubs: false, subsLoad: 0 };
   P.subTrack.mode = "hidden";
   wireControls();
   setWait("Ищу серии…");
@@ -286,6 +286,7 @@ function renderSubs() {
   box.dataset.size = P.subsPrefs.size;
 }
 function clearSubs() {
+  P.subsLoad += 1;
   P.hasSubs = false;
   [...(P.subTrack.cues || [])].forEach(c => P.subTrack.removeCue(c));
   renderSubs();
@@ -293,16 +294,41 @@ function clearSubs() {
 async function loadSubs(tr) {
   clearSubs();
   if (!tr || tr.kind !== "sub") return;
+  const load = P.subsLoad;
   try {
     const { vtt } = await apiGet(`/player/subs/${tr.id}`);
-    if (!P || P.trId !== tr.id) return;
-    const cues = parseVtt(vtt);
-    cues.forEach(c => P.subTrack.addCue(new window.VTTCue(c.start, c.end, c.text)));
-    P.hasSubs = cues.length > 0;
-    renderSubs();
+    if (!P || P.subsLoad !== load) return;
+    showCues(parseVtt(vtt));
   } catch (_) {
-    if (P && P.trId === tr.id) toast("Субтитры этого перевода не загрузились.", "error");
+    if (P && P.subsLoad === load) toast("Субтитры этого перевода не загрузились.", "error");
   }
+}
+function showCues(cues) {
+  cues.forEach(c => P.subTrack.addCue(new window.VTTCue(c.start, c.end, c.text)));
+  P.hasSubs = cues.length > 0;
+  renderSubs();
+}
+// Свой файл живёт только в этом окне и только для текущей серии: на сервер не уходит.
+function pickLocalSubs() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".srt,.vtt,.ass,.ssa";
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    if (!file || !P) return;
+    try {
+      const cues = parseSubsFile(file.name, decodeSubs(await file.arrayBuffer()));
+      if (!P) return;
+      if (!cues.length) { toast("В этом файле не нашлось реплик.", "error"); return; }
+      clearSubs();
+      showCues(cues);
+      setSubsPrefs({ on: true });
+      toast(`Субтитры загружены: ${file.name}`);
+    } catch (_) {
+      toast("Не удалось прочитать файл субтитров.", "error");
+    }
+  });
+  input.click();
 }
 function setSubsPrefs(patch) {
   P.subsPrefs = { ...P.subsPrefs, ...patch };
@@ -530,12 +556,14 @@ function renderMenu() {
   const v = P.video;
   const subs = P.subsPrefs;
   menu.innerHTML = `
-    ${P.hasSubs ? `<div class="ap-menu-h">Субтитры</div>
-    <div class="ap-speeds"><button type="button" class="${subs.on ? "" : "on"}" data-ap-sub-off>Выкл</button>${SUB_SIZES.map(([id, label]) => `<button type="button" class="${subs.on && subs.size === id ? "on" : ""}" data-ap-sub-size="${id}">${label}</button>`).join("")}</div>` : ""}
+    <div class="ap-menu-h">Субтитры</div>
+    ${P.hasSubs ? `<div class="ap-speeds"><button type="button" class="${subs.on ? "" : "on"}" data-ap-sub-off>Выкл</button>${SUB_SIZES.map(([id, label]) => `<button type="button" class="${subs.on && subs.size === id ? "on" : ""}" data-ap-sub-size="${id}">${label}</button>`).join("")}</div>` : ""}
+    <button type="button" data-ap-sub-file>Загрузить свой файл…</button>
     <div class="ap-menu-h">Качество</div>
     ${P.sources.map(s => `<button type="button" class="${s.height === P.quality ? "on" : ""}" data-ap-q="${s.height}">${qLabel(s.height)}${s.height >= 1080 ? " <i>HD</i>" : ""}</button>`).join("")}
     <div class="ap-menu-h">Скорость</div>
     <div class="ap-speeds">${SPEEDS.map(s => `<button type="button" class="${Math.abs(v.playbackRate - s) < 0.01 ? "on" : ""}" data-ap-speed="${s}">${s}×</button>`).join("")}</div>`;
+  menu.querySelector("[data-ap-sub-file]").addEventListener("click", () => { menu.hidden = true; pickLocalSubs(); });
   menu.querySelector("[data-ap-sub-off]")?.addEventListener("click", () => { setSubsPrefs({ on: false }); renderMenu(); });
   menu.querySelectorAll("[data-ap-sub-size]").forEach(b => b.addEventListener("click", () => { setSubsPrefs({ on: true, size: b.dataset.apSubSize }); renderMenu(); }));
   menu.querySelectorAll("[data-ap-q]").forEach(b => b.addEventListener("click", () => {
