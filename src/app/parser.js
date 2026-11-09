@@ -123,6 +123,7 @@ export async function loadParser() {
         c.mirrors?.length ? `+${c.mirrors.length} зеркал${c.mirrors.length === 1 ? "о" : "а"}` : "",
         c.audio_only ? "только звук" : "",
         c.alive === false ? "не отвечает" : "",
+        c.drm ? "защищено DRM" : "",
       ].filter(Boolean).map(x => ` · ${esc(x)}`).join("");
       return `
         <div class="pr-row">
@@ -133,14 +134,14 @@ export async function loadParser() {
           </div>
           <div class="pr-col pr-actions">
             <button type="button" class="btn sm" data-copy="${i}">Копировать</button>
-            <button type="button" class="btn sm primary" data-dl="${i}">Скачать</button>
+            <button type="button" class="btn sm primary" data-dl="${i}"${c.drm ? " disabled" : ""}>Скачать</button>
           </div>
         </div>`;
     }).join("");
 
     const candidatesBlock = (r.candidates && r.candidates.length)
       ? `<div class="pr-list">${rowsHtml}</div>`
-      : `<div class="empty">Автоматически видео не найдено.${r.deep ? "" : " Попробуйте «Глубокий анализ»."}</div>`;
+      : `<div class="empty">${esc(r.reason?.message || "Автоматически видео не найдено.")}${r.deep ? "" : " Попробуйте «Глубокий анализ»."}</div>`;
 
     const allReqs = (r.requests || []).filter(x => x.status && x.status < 400);
     const reqs = [
@@ -164,7 +165,8 @@ export async function loadParser() {
       ? `<details class="pr-reqs"><summary>Сетевые запросы страницы (${reqs.length}) — выбрать вручную</summary><div class="pr-req-list">${reqRows}</div></details>`
       : "";
 
-    results.innerHTML = head + profileHtml(r.profile) + candidatesBlock + requestsBlock;
+    const notice = r.reason && r.candidates?.length ? `<div class="pr-status">${esc(r.reason.message)}</div>` : "";
+    results.innerHTML = head + notice + profileHtml(r.profile) + candidatesBlock + requestsBlock;
     status.hidden = true;
     bindProfile(r);
 
