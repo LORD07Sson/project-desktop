@@ -159,34 +159,55 @@ export async function loadParser() {
           headers: { "Referer": input.value.trim(), "Origin": new URL(input.value.trim()).origin },
         };
         btn.disabled = true;
-        btn.textContent = "Качаю…";
+        btn.textContent = "0%";
         try {
-          await downloadCandidate(item, r.title);
+          await downloadCandidate(item, r.title, btn);
         } catch (err) {
           toast(`Загрузка: ${err.message || err}`, "error");
         } finally {
           btn.disabled = false;
           btn.textContent = "Скачать";
+          btn.classList.remove("pr-dl-progress");
+          btn.style.removeProperty("--pr-progress");
         }
       }
     };
   }
 
-  async function downloadCandidate(c, title) {
-    const res = await fetch(`${API_BASE}/parser/download`, {
+  async function downloadCandidate(c, title, btn) {
+    const start = await fetch(`${API_BASE}/parser/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...clientHeaders() },
       body: JSON.stringify({ url: c.url, headers: c.headers || {}, name: title || "video" }),
     });
-    if (!res.ok) {
-      let msg = `HTTP ${res.status}`;
-      try { const j = await res.json(); if (j.detail) msg = j.detail; } catch (_) { /* не json */ }
+    if (!start.ok) {
+      let msg = `HTTP ${start.status}`;
+      try { const j = await start.json(); if (j.detail) msg = j.detail; } catch (_) { /* не json */ }
       throw new Error(msg);
     }
-    const blob = await res.blob();
-    const cd = res.headers.get("Content-Disposition") || "";
+    const { job_id } = await start.json();
+
+    let job = null;
+    while (true) {
+      await new Promise(r => setTimeout(r, 700));
+      const r = await fetch(`${API_BASE}/parser/download/${job_id}/status`, {
+        headers: clientHeaders(),
+      });
+      if (!r.ok) throw new Error(`статус HTTP ${r.status}`);
+      job = await r.json();
+      if (btn) renderBtnProgress(btn, job);
+      if (job.status === "done") break;
+      if (job.status === "error") throw new Error(job.error || "Ошибка загрузки");
+    }
+
+    const fileRes = await fetch(`${API_BASE}/parser/download/${job_id}/file`, {
+      headers: clientHeaders(),
+    });
+    if (!fileRes.ok) throw new Error(`файл HTTP ${fileRes.status}`);
+    const blob = await fileRes.blob();
+    const cd = fileRes.headers.get("Content-Disposition") || "";
     const fn = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
-    const name = fn ? decodeURIComponent(fn[1]) : `${(title || "video").replace(/[^\w\-. ]+/g, "_").slice(0, 100)}.mp4`;
+    const name = fn ? decodeURIComponent(fn[1]) : job.filename || `${(title || "video").replace(/[^\w\-. ]+/g, "_").slice(0, 100)}.mp4`;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = name;
@@ -194,6 +215,18 @@ export async function loadParser() {
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
     toast(`Скачано: ${name}`, "ok");
+  }
+
+  function renderBtnProgress(btn, job) {
+    const pct = typeof job.percent === "number" ? job.percent : 0;
+    const spd = job.speed ? `${(job.speed / 1024 / 1024).toFixed(1)} МБ/с` : "";
+    const got = job.downloaded ? `${(job.downloaded / 1024 / 1024).toFixed(0)}` : "0";
+    const total = job.total ? `/${(job.total / 1024 / 1024).toFixed(0)}` : "";
+    btn.textContent = job.phase === "merging"
+      ? "Склеиваю…"
+      : `${pct}% · ${got}${total} МБ${spd ? " · " + spd : ""}`;
+    btn.style.setProperty("--pr-progress", pct + "%");
+    btn.classList.add("pr-dl-progress");
   }
 
   return true;

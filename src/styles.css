@@ -6140,3 +6140,5 @@ html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), 
 .pr-req-url { font-size: 11.5px; color: var(--ink-soft); font-family: var(--mono, ui-monospace, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .pr-req-actions { display: flex; gap: 4px; }
 .pr-req.on { background: rgba(80, 200, 120, .08); border-color: rgba(80, 200, 120, .35); }
+.pr-dl-progress { position: relative; min-width: 160px; overflow: hidden; z-index: 0; font-variant-numeric: tabular-nums; }
+.pr-dl-progress::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--pr-progress, 0%); background: linear-gradient(90deg, rgba(120,174,252,.4), rgba(120,174,252,.25)); z-index: -1; transition: width .2s ease; }
