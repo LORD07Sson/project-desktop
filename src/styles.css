@@ -6165,6 +6165,9 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pr-src { font-size: 12px; color: var(--ink-dim); margin-bottom: 2px; }
 .pr-url { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono, ui-monospace, monospace); }
 .pr-actions { display: flex; gap: 6px; }
+.pr-key-row { display: flex; gap: 6px; margin-top: 4px; align-items: center; }
+.pr-key-input { flex: 1; font-size: 12px; font-family: var(--mono, ui-monospace, monospace); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-width: 0; }
+.pr-key-input::placeholder { color: var(--ink-soft); opacity: .6; }
 
 .pr-reqs { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 12px; }
 .pr-reqs summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); padding: 4px 0; user-select: none; }

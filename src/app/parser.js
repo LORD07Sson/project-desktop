@@ -189,7 +189,7 @@ export async function loadParser() {
         c.mirrors?.length ? `+${c.mirrors.length} зеркал${c.mirrors.length === 1 ? "о" : "а"}` : "",
         c.audio_only ? "только звук" : "",
         c.alive === false ? "не отвечает" : "",
-        c.drm ? "защищено DRM" : "",
+        c.drm ? "DRM" : "",
       ].filter(Boolean).map(x => ` · ${esc(x)}`).join("");
       return `
         <div class="pr-row">
@@ -197,10 +197,11 @@ export async function loadParser() {
           <div class="pr-col pr-info">
             <div class="pr-src"><span class="pr-engine sm" data-auto-engine="${engineOf(c)}">${engineOf(c)}</span> ${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}${extras}</div>
             <div class="pr-url" title="${esc(c.url)}">${esc(c.url)}</div>
+            ${c.drm ? `<div class="pr-key-row"><input type="text" class="pr-key-input" data-key="${i}" placeholder="KID:KEY (hex32:hex32)" spellcheck="false" autocomplete="off"><button type="button" class="btn sm" data-auto-key="${i}" title="Получить ключ автоматически через Widevine CDM">Авто</button></div>` : ""}
           </div>
           <div class="pr-col pr-actions">
             <button type="button" class="btn sm" data-copy="${i}">Копировать</button>
-            <button type="button" class="btn sm primary" data-dl="${i}"${c.drm ? " disabled" : ""}>Скачать</button>
+            <button type="button" class="btn sm primary" data-dl="${i}">Скачать</button>
           </div>
         </div>`;
     }).join("");
@@ -256,12 +257,35 @@ export async function loadParser() {
       } else if (rc) {
         const q = reqs[+rc.dataset.reqCopy];
         try { await navigator.clipboard.writeText(q.url); toast("Ссылка в буфере", "info"); } catch { toast("Не вышло скопировать", "error"); }
+      } else if (ev.target.closest("[data-auto-key]")) {
+        const ab = ev.target.closest("[data-auto-key]");
+        const idx = +ab.dataset.autoKey;
+        const c = r.candidates[idx];
+        const ki = results.querySelector(`[data-key="${idx}"]`);
+        ab.disabled = true; ab.textContent = "Получаю…";
+        try {
+          const res = await fetch(`${API_BASE}/parser/drm/keys`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...clientHeaders() },
+            body: JSON.stringify({ mpd_url: c.url, page_url: input.value.trim() }),
+          });
+          if (!res.ok) throw new Error(await errorText(res));
+          const { keys } = await res.json();
+          if (keys?.length && ki) ki.value = keys.join(", ");
+          else toast("Ключи не найдены", "error");
+        } catch (err) {
+          toast(`DRM: ${err.message || err}`, "error");
+        } finally { ab.disabled = false; ab.textContent = "Авто"; }
       } else if (dl || rd) {
         const btn = dl || rd;
-        const item = dl ? r.candidates[+dl.dataset.dl] : {
+        const idx = dl ? +dl.dataset.dl : null;
+        const item = dl ? r.candidates[idx] : {
           url: reqs[+rd.dataset.reqDl].url,
           headers: { "Referer": input.value.trim(), "Origin": new URL(input.value.trim()).origin },
         };
+        const keyInput = idx !== null ? results.querySelector(`[data-key="${idx}"]`) : null;
+        const keys = keyInput?.value.split(/[,\s]+/).map(s => s.trim()).filter(Boolean) || [];
+        if (keys.length) item.keys = keys;
         btn.disabled = true;
         btn.textContent = "Куда сохранить…";
         try {
@@ -289,7 +313,7 @@ export async function loadParser() {
     const start = await fetch(`${API_BASE}/parser/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...clientHeaders() },
-      body: JSON.stringify({ url: c.url, headers: c.headers || {}, name: title || "video", engine }),
+      body: JSON.stringify({ url: c.url, headers: c.headers || {}, name: title || "video", engine, ...(c.keys?.length ? { keys: c.keys } : {}) }),
     });
     if (!start.ok) throw new Error(await errorText(start));
     const { job_id } = await start.json();
