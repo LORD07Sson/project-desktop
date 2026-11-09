@@ -22,7 +22,7 @@ function layout() {
   return `
     <div class="pr-wrap">
       <div class="pr-head">
-        <h2>Парсер видео</h2>
+        <h2>Парсер видео <span class="pr-beta">Beta</span></h2>
         <small>Любая ссылка: yt-dlp + разбор HTML ищут потоки. Глубокий анализ — запустить headless-браузер и перехватить сеть (медленнее, но берёт сайты с JS-плеерами).</small>
       </div>
       <form class="pr-form" id="pr-form">
