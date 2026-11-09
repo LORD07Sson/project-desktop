@@ -9,7 +9,10 @@ function seconds(stamp) {
 }
 
 function plain(line) {
-  return line.replace(/<[^>]*>/g, "").replace(/&(?:amp|lt|gt|nbsp|quot|#39);/g, m => ENTITIES[m]).trim();
+  let s = line;
+  let prev;
+  do { prev = s; s = s.replace(/<[^>]*>/g, ""); } while (s !== prev);
+  return s.replace(/&(?:amp|lt|gt|nbsp|quot|#39);/g, m => ENTITIES[m]).trim();
 }
 
 /** Реплики из .ass/.ssa: теги оформления убираем, векторные рисунки и повторы слоёв пропускаем. */
