@@ -54,13 +54,14 @@ function layout() {
             <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
           </form>
           <details class="pr-cookies-wrap">
-            <summary class="pr-cookies-toggle">Cookies <small>(для авторизованных сайтов)</small></summary>
-            <input id="pr-cookies" type="text" class="pr-cookies-input" placeholder="name=value; name2=value2" autocomplete="off" spellcheck="false">
+            <summary class="pr-cookies-toggle">Cookies <small>· только для глубокого анализа</small></summary>
+            <input id="pr-cookies" type="password" class="pr-cookies-input" placeholder="name=value; name2=value2" aria-label="Cookies для глубокого анализа" autocomplete="off" spellcheck="false">
+            <small>Chromium использует cookies для исходного сайта. Они не передаются загрузчику.</small>
           </details>
           <div class="pr-engines" id="pr-engines" role="group" aria-label="Загрузчик">
             <button type="button" class="pr-engine" data-engine="auto" title="Сначала N_m3u8DL-RE, если не вышло — yt-dlp">Авто <small>по очереди</small></button>
             <button type="button" class="pr-engine" data-engine="nm3u8" title="Только N_m3u8DL-RE: HLS и DASH">N_m3u8DL-RE <small>HLS и DASH</small></button>
-            <button type="button" class="pr-engine" data-engine="ytdlp" title="Только yt-dlp">yt-dlp <small>любые ссылки</small></button>
+            <button type="button" class="pr-engine" data-engine="ytdlp" title="Только yt-dlp">yt-dlp <small>поддерживаемые сайты</small></button>
           </div>
         </div>
       </section>
@@ -81,6 +82,7 @@ export async function loadParser() {
   body.innerHTML = layout();
   const form = $("#pr-form");
   const input = $("#pr-url");
+  const cookieInput = $("#pr-cookies");
   const submit = $("#pr-submit");
   const deepBtn = $("#pr-deep");
   const status = $("#pr-status");
@@ -92,6 +94,13 @@ export async function loadParser() {
 
   let analyzeReferer = null;
   let engine = readEngine();
+  let cookieOrigin = "";
+
+  function pageOrigin(url) {
+    try { return new URL(url).origin; } catch { return ""; }
+  }
+
+  cookieInput.addEventListener("input", () => { cookieOrigin = pageOrigin(input.value); });
 
   function syncEngine() {
     body.querySelectorAll("[data-engine]").forEach(b => {
@@ -113,9 +122,23 @@ export async function loadParser() {
 
   async function analyze(deep) {
     const url = input.value.trim();
+    if (!url) return;
+    const cookies = cookieInput.value.trim();
+    if (cookies && cookieOrigin && cookieOrigin !== pageOrigin(url)) {
+      cookieInput.value = "";
+      cookieOrigin = "";
+      status.hidden = false;
+      status.textContent = "Адрес сайта изменился. Введите cookies для нового сайта или запустите поиск без них.";
+      return;
+    }
+    if (!deep && cookies) {
+      status.hidden = false;
+      status.textContent = "С cookies нажмите «Глубокий анализ» или очистите поле для обычного поиска.";
+      return;
+    }
     const referer = analyzeReferer;
     analyzeReferer = null;
-    if (!url) return;
+    if (cookies) cookieOrigin = pageOrigin(url);
     submit.disabled = deepBtn.disabled = true;
     (deep ? deepBtn : submit).textContent = deep ? "Браузер…" : "Ищу…";
     status.hidden = false;
@@ -128,7 +151,7 @@ export async function loadParser() {
       const res = await fetch(`${API_BASE}/parser/analyze/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...clientHeaders() },
-        body: JSON.stringify({ url, deep, referer, cookies: ($("#pr-cookies")?.value || "").trim() || undefined }),
+        body: JSON.stringify({ url, deep, referer, ...(deep && cookies ? { cookies } : {}) }),
       });
       if (!res.ok) throw new Error(await errorText(res));
       const { analysis_id } = await res.json();
@@ -381,6 +404,10 @@ export async function loadParser() {
     $("#pr-voice-open")?.addEventListener("click", () => {
       const v = voice();
       if (!v) return;
+      if (cookieOrigin && cookieOrigin !== pageOrigin(v.url)) {
+        cookieInput.value = "";
+        cookieOrigin = "";
+      }
       input.value = v.url;
       analyzeReferer = p.referer || null;
       analyze(true);
@@ -456,7 +483,7 @@ export async function loadParser() {
       ${done.length > 1 ? `<button type="button" class="btn sm" id="pr-save-all">Сохранить все готовые (${done.length}) в папку</button>` : ""}
       <div class="pr-req-list">${jobs.map(j => `
       <div class="pr-req">
-        <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${j.engine ? `${esc(j.engine)} · ` : ""}${j.percent || 0}%` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
+        <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${ENGINE_NAMES[j.active_engine] ? `${esc(ENGINE_NAMES[j.active_engine])} · ` : ""}${j.percent || 0}%` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
         <div class="pr-req-url" title="${esc(j.filename || j.name)}">${esc(j.filename || j.name)}</div>
         <div class="pr-req-actions">
           ${j.status === "done" ? `<button type="button" class="btn sm primary" data-job-save="${esc(j.id)}">Сохранить</button>` : ""}
@@ -493,7 +520,7 @@ export async function loadParser() {
     const total = job.total ? `/${(job.total / 1024 / 1024).toFixed(0)}` : "";
     btn.textContent = job.phase === "merging"
       ? "Склеиваю…"
-      : `${job.engine ? `${job.engine} · ` : ""}${pct}% · ${got}${total} МБ${spd ? " · " + spd : ""}`;
+      : `${ENGINE_NAMES[job.active_engine] ? `${ENGINE_NAMES[job.active_engine]} · ` : ""}${pct}% · ${got}${total} МБ${spd ? " · " + spd : ""}`;
     btn.style.setProperty("--pr-progress", pct + "%");
     btn.classList.add("pr-dl-progress");
   }
