@@ -2,7 +2,7 @@
 // список найденных потоков с качеством, прямая загрузка mp4 через сервер.
 // Доступно только владельцу — бэкенд (miniapp/parser_api.py) режет 403, здесь только косметика.
 
-import { state } from "./state.js";
+import { can } from "./state.js";
 import { clientHeaders, API_BASE, toast } from "./api.js";
 import { $ } from "./utils.js";
 
@@ -40,8 +40,8 @@ function layout() {
 export async function loadParser() {
   const body = $("#parser-body");
   if (!body) return;
-  if (!state.isOwner) {
-    body.innerHTML = `<div class="pr-wrap"><div class="empty">Раздел доступен только владельцу.</div></div>`;
+  if (!can("parser.use")) {
+    body.innerHTML = `<div class="pr-wrap"><div class="empty">Нет права «Парсер видео». Его выдаёт владелец в настройках ролей.</div></div>`;
     return true;
   }
   body.innerHTML = layout();
