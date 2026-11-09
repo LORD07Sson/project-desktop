@@ -6169,6 +6169,12 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pr-key-input { flex: 1; font-size: 12px; font-family: var(--mono, ui-monospace, monospace); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-width: 0; }
 .pr-key-input::placeholder { color: var(--ink-soft); opacity: .6; }
 
+.pr-cookies-wrap { margin-top: 6px; }
+.pr-cookies-toggle { font-size: 12px; color: var(--ink-soft); cursor: pointer; user-select: none; }
+.pr-cookies-toggle small { opacity: .7; }
+.pr-cookies-input { width: 100%; font-size: 12px; font-family: var(--mono, ui-monospace, monospace); padding: 4px 8px; margin-top: 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); box-sizing: border-box; }
+.pr-cookies-input::placeholder { color: var(--ink-soft); opacity: .6; }
+
 .pr-reqs { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 12px; }
 .pr-reqs summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); padding: 4px 0; user-select: none; }
 .pr-reqs[open] summary { color: var(--ink); margin-bottom: 6px; }

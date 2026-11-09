@@ -53,6 +53,10 @@ function layout() {
             <button class="btn primary" type="submit" id="pr-submit">Найти</button>
             <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
           </form>
+          <details class="pr-cookies-wrap">
+            <summary class="pr-cookies-toggle">Cookies <small>(для авторизованных сайтов)</small></summary>
+            <input id="pr-cookies" type="text" class="pr-cookies-input" placeholder="name=value; name2=value2" autocomplete="off" spellcheck="false">
+          </details>
           <div class="pr-engines" id="pr-engines" role="group" aria-label="Загрузчик">
             <button type="button" class="pr-engine" data-engine="auto" title="Сначала N_m3u8DL-RE, если не вышло — yt-dlp">Авто <small>по очереди</small></button>
             <button type="button" class="pr-engine" data-engine="nm3u8" title="Только N_m3u8DL-RE: HLS и DASH">N_m3u8DL-RE <small>HLS и DASH</small></button>
@@ -124,7 +128,7 @@ export async function loadParser() {
       const res = await fetch(`${API_BASE}/parser/analyze/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...clientHeaders() },
-        body: JSON.stringify({ url, deep, referer }),
+        body: JSON.stringify({ url, deep, referer, cookies: ($("#pr-cookies")?.value || "").trim() || undefined }),
       });
       if (!res.ok) throw new Error(await errorText(res));
       const { analysis_id } = await res.json();
