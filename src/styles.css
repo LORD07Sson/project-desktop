@@ -6128,7 +6128,10 @@ html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), 
 .pr-engines { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pr-engine { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: rgba(255, 255, 255, .86); background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .12); }
 .pr-engine small { font-size: 11px; font-weight: 400; color: rgba(255, 255, 255, .58); }
-.pr-engine.auto { color: #1a0f2e; background: #c4a1ff; border-color: transparent; }
+button.pr-engine { font-family: inherit; cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+button.pr-engine:hover { background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .28); }
+button.pr-engine.on, button.pr-engine.on:hover { color: #1a0f2e; background: #c4a1ff; border-color: transparent; }
+button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pr-engine.sm { padding: 1px 7px; font-size: 10.5px; color: #d6bcff; background: rgba(183, 148, 246, .14); border-color: rgba(183, 148, 246, .28); }
 .pr-profile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; margin: 8px 0; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
 .pr-field { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); }

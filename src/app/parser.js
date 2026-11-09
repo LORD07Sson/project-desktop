@@ -27,6 +27,13 @@ function engineOf(c) {
   return /m3u8|dash|mpd|ism|mss/i.test(`${c.protocol || ""} ${c.ext || ""}`) ? "N_m3u8DL-RE" : "yt-dlp";
 }
 
+const ENGINE_KEY = "project_parser_engine";
+const ENGINE_NAMES = { nm3u8: "N_m3u8DL-RE", ytdlp: "yt-dlp" };
+
+function readEngine() {
+  try { const v = localStorage.getItem(ENGINE_KEY); return v === "nm3u8" || v === "ytdlp" ? v : "auto"; } catch (_) { return "auto"; }
+}
+
 function hostOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
@@ -46,10 +53,10 @@ function layout() {
             <button class="btn primary" type="submit" id="pr-submit">Найти</button>
             <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
           </form>
-          <div class="pr-engines">
-            <span class="pr-engine auto">Авто</span>
-            <span class="pr-engine">N_m3u8DL-RE <small>HLS и DASH</small></span>
-            <span class="pr-engine">yt-dlp <small>остальное</small></span>
+          <div class="pr-engines" id="pr-engines" role="group" aria-label="Загрузчик">
+            <button type="button" class="pr-engine" data-engine="auto" title="Сначала N_m3u8DL-RE, если не вышло — yt-dlp">Авто <small>по очереди</small></button>
+            <button type="button" class="pr-engine" data-engine="nm3u8" title="Только N_m3u8DL-RE: HLS и DASH">N_m3u8DL-RE <small>HLS и DASH</small></button>
+            <button type="button" class="pr-engine" data-engine="ytdlp" title="Только yt-dlp">yt-dlp <small>любые ссылки</small></button>
           </div>
         </div>
       </section>
@@ -80,6 +87,25 @@ export async function loadParser() {
   loadHistory();
 
   let analyzeReferer = null;
+  let engine = readEngine();
+
+  function syncEngine() {
+    body.querySelectorAll("[data-engine]").forEach(b => {
+      const on = b.dataset.engine === engine;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    results.querySelectorAll("[data-auto-engine]").forEach(el => { el.textContent = ENGINE_NAMES[engine] || el.dataset.autoEngine; });
+  }
+
+  $("#pr-engines").addEventListener("click", ev => {
+    const btn = ev.target.closest("[data-engine]");
+    if (!btn) return;
+    engine = btn.dataset.engine;
+    try { localStorage.setItem(ENGINE_KEY, engine); } catch (_) { /* не критично */ }
+    syncEngine();
+  });
+  syncEngine();
 
   async function analyze(deep) {
     const url = input.value.trim();
@@ -169,7 +195,7 @@ export async function loadParser() {
         <div class="pr-row">
           <div class="pr-col pr-q">${q}</div>
           <div class="pr-col pr-info">
-            <div class="pr-src"><span class="pr-engine sm">${engineOf(c)}</span> ${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}${extras}</div>
+            <div class="pr-src"><span class="pr-engine sm" data-auto-engine="${engineOf(c)}">${engineOf(c)}</span> ${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}${extras}</div>
             <div class="pr-url" title="${esc(c.url)}">${esc(c.url)}</div>
           </div>
           <div class="pr-col pr-actions">
@@ -209,6 +235,7 @@ export async function loadParser() {
     results.innerHTML = head + notice + profileHtml(r.profile) + candidatesBlock + requestsBlock;
     status.hidden = true;
     bindProfile(r);
+    syncEngine();
     const posterImg = $("#pr-poster-img");
     if (posterImg) {
       posterImg.addEventListener("load", () => setBackdrop(poster), { once: true });
@@ -262,7 +289,7 @@ export async function loadParser() {
     const start = await fetch(`${API_BASE}/parser/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...clientHeaders() },
-      body: JSON.stringify({ url: c.url, headers: c.headers || {}, name: title || "video" }),
+      body: JSON.stringify({ url: c.url, headers: c.headers || {}, name: title || "video", engine }),
     });
     if (!start.ok) throw new Error(await errorText(start));
     const { job_id } = await start.json();
@@ -356,7 +383,7 @@ export async function loadParser() {
         const res = await fetch(`${API_BASE}/parser/queue`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...clientHeaders() },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, engine }),
         });
         if (!res.ok) throw new Error(await errorText(res));
         const { job_ids } = await res.json();
@@ -401,7 +428,7 @@ export async function loadParser() {
       ${done.length > 1 ? `<button type="button" class="btn sm" id="pr-save-all">Сохранить все готовые (${done.length}) в папку</button>` : ""}
       <div class="pr-req-list">${jobs.map(j => `
       <div class="pr-req">
-        <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${j.percent || 0}%` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
+        <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${j.engine ? `${esc(j.engine)} · ` : ""}${j.percent || 0}%` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
         <div class="pr-req-url" title="${esc(j.filename || j.name)}">${esc(j.filename || j.name)}</div>
         <div class="pr-req-actions">
           ${j.status === "done" ? `<button type="button" class="btn sm primary" data-job-save="${esc(j.id)}">Сохранить</button>` : ""}
@@ -438,7 +465,7 @@ export async function loadParser() {
     const total = job.total ? `/${(job.total / 1024 / 1024).toFixed(0)}` : "";
     btn.textContent = job.phase === "merging"
       ? "Склеиваю…"
-      : `${pct}% · ${got}${total} МБ${spd ? " · " + spd : ""}`;
+      : `${job.engine ? `${job.engine} · ` : ""}${pct}% · ${got}${total} МБ${spd ? " · " + spd : ""}`;
     btn.style.setProperty("--pr-progress", pct + "%");
     btn.classList.add("pr-dl-progress");
   }
