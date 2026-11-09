@@ -1,7 +1,7 @@
 import { can } from "./state.js";
 import { clientHeaders, API_BASE, toast } from "./api.js";
 import { $ } from "./utils.js";
-import { pickOutputFile } from "./tauri.js";
+import { pickOutputDir, pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -18,6 +18,11 @@ function fmtDur(s) {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+async function errorText(res) {
+  try { const j = await res.json(); if (j.detail) return j.detail; } catch (_) { /* не json */ }
+  return `HTTP ${res.status}`;
+}
+
 function layout() {
   return `
     <div class="pr-wrap">
@@ -32,6 +37,7 @@ function layout() {
       </form>
       <div class="pr-status" id="pr-status" hidden></div>
       <div class="pr-results" id="pr-results"></div>
+      <div class="pr-history" id="pr-history"></div>
     </div>
   `;
 }
@@ -53,9 +59,14 @@ export async function loadParser() {
 
   form.addEventListener("submit", e => { e.preventDefault(); analyze(false); });
   deepBtn.addEventListener("click", () => analyze(true));
+  loadHistory();
+
+  let analyzeReferer = null;
 
   async function analyze(deep) {
     const url = input.value.trim();
+    const referer = analyzeReferer;
+    analyzeReferer = null;
     if (!url) return;
     submit.disabled = deepBtn.disabled = true;
     (deep ? deepBtn : submit).textContent = deep ? "Браузер…" : "Ищу…";
@@ -65,17 +76,23 @@ export async function loadParser() {
       : "Анализ: yt-dlp + разбор HTML…";
     results.innerHTML = "";
     try {
-      const res = await fetch(`${API_BASE}/parser/analyze`, {
+      const res = await fetch(`${API_BASE}/parser/analyze/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...clientHeaders() },
-        body: JSON.stringify({ url, deep }),
+        body: JSON.stringify({ url, deep, referer }),
       });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try { const j = await res.json(); if (j.detail) msg = j.detail; } catch (_) { /* не json */ }
-        throw new Error(msg);
-      }
-      renderResults(await res.json());
+      if (!res.ok) throw new Error(await errorText(res));
+      const { analysis_id } = await res.json();
+      let state;
+      do {
+        await new Promise(r => setTimeout(r, 600));
+        const r = await fetch(`${API_BASE}/parser/analyze/${analysis_id}/status`, { headers: clientHeaders() });
+        if (!r.ok) throw new Error(await errorText(r));
+        state = await r.json();
+        status.textContent = `${state.stage || "Анализ"}…`;
+      } while (state.status === "running");
+      if (state.status === "error") throw new Error(state.error || "Анализ не удался");
+      renderResults(state.result);
     } catch (err) {
       status.textContent = `Ошибка: ${err.message || err}`;
       toast(`Парсер: ${err.message || err}`, "error");
@@ -99,12 +116,19 @@ export async function loadParser() {
     const rowsHtml = (r.candidates || []).map((c, i) => {
       const q = typeof c.quality === "number" ? `${c.quality}p` : esc(c.quality || "?");
       const protoExt = [c.protocol, c.ext].filter(Boolean).join(" · ");
-      const size = fmtSize(c.filesize);
+      const size = c.filesize ? `${c.filesize_estimated ? "≈ " : ""}${fmtSize(c.filesize)}` : "";
+      const extras = [
+        c.bitrate ? `${(c.bitrate / 1e6).toFixed(1)} Мбит/с` : "",
+        c.codecs ? c.codecs.split(",")[0].split(".")[0] : "",
+        c.mirrors?.length ? `+${c.mirrors.length} зеркал${c.mirrors.length === 1 ? "о" : "а"}` : "",
+        c.audio_only ? "только звук" : "",
+        c.alive === false ? "не отвечает" : "",
+      ].filter(Boolean).map(x => ` · ${esc(x)}`).join("");
       return `
         <div class="pr-row">
           <div class="pr-col pr-q">${q}</div>
           <div class="pr-col pr-info">
-            <div class="pr-src">${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}</div>
+            <div class="pr-src">${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}${extras}</div>
             <div class="pr-url" title="${esc(c.url)}">${esc(c.url)}</div>
           </div>
           <div class="pr-col pr-actions">
@@ -140,8 +164,9 @@ export async function loadParser() {
       ? `<details class="pr-reqs"><summary>Сетевые запросы страницы (${reqs.length}) — выбрать вручную</summary><div class="pr-req-list">${reqRows}</div></details>`
       : "";
 
-    results.innerHTML = head + candidatesBlock + requestsBlock;
+    results.innerHTML = head + profileHtml(r.profile) + candidatesBlock + requestsBlock;
     status.hidden = true;
+    bindProfile(r);
 
     results.onclick = async ev => {
       const cp = ev.target.closest("[data-copy]");
@@ -171,6 +196,7 @@ export async function loadParser() {
           btn.textContent = "Скачать";
           btn.classList.remove("pr-dl-progress");
           btn.style.removeProperty("--pr-progress");
+          loadHistory();
         }
       }
     };
@@ -188,33 +214,171 @@ export async function loadParser() {
       headers: { "Content-Type": "application/json", ...clientHeaders() },
       body: JSON.stringify({ url: c.url, headers: c.headers || {}, name: title || "video" }),
     });
-    if (!start.ok) {
-      let msg = `HTTP ${start.status}`;
-      try { const j = await start.json(); if (j.detail) msg = j.detail; } catch (_) { /* не json */ }
-      throw new Error(msg);
-    }
+    if (!start.ok) throw new Error(await errorText(start));
     const { job_id } = await start.json();
+    loadHistory();
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "btn sm";
+    cancelBtn.textContent = "Отмена";
+    cancelBtn.onclick = () => {
+      cancelBtn.disabled = true;
+      fetch(`${API_BASE}/parser/download/${job_id}/cancel`, { method: "POST", headers: clientHeaders() })
+        .catch(() => { cancelBtn.disabled = false; });
+    };
+    btn.after(cancelBtn);
 
     let job = null;
-    while (true) {
-      await new Promise(r => setTimeout(r, 700));
-      const r = await fetch(`${API_BASE}/parser/download/${job_id}/status`, {
-        headers: clientHeaders(),
-      });
-      if (!r.ok) throw new Error(`статус HTTP ${r.status}`);
-      job = await r.json();
-      if (btn) renderBtnProgress(btn, job);
-      if (job.status === "done") break;
-      if (job.status === "error") throw new Error(job.error || "Ошибка загрузки");
+    try {
+      while (true) {
+        await new Promise(r => setTimeout(r, 700));
+        const r = await fetch(`${API_BASE}/parser/download/${job_id}/status`, {
+          headers: clientHeaders(),
+        });
+        if (!r.ok) throw new Error(`статус HTTP ${r.status}`);
+        job = await r.json();
+        if (btn) renderBtnProgress(btn, job);
+        if (job.status === "done") break;
+        if (job.status === "cancelled") { toast("Загрузка отменена", "info"); return; }
+        if (job.status === "error") throw new Error(job.error || "Ошибка загрузки");
+      }
+    } finally {
+      cancelBtn.remove();
     }
 
     btn.textContent = "Сохраняю…";
-    await downloadWithCard({
+    await saveJob(job_id, savePath);
+  }
+
+  function profileHtml(p) {
+    if (!p || (!p.translations?.length && !p.episodes?.length)) return "";
+    const voices = (p.translations || []).map((t, i) =>
+      `<option value="${i}"${t.selected ? " selected" : ""}>${esc(t.title)}${t.type === "subtitles" ? " (субтитры)" : ""}</option>`).join("");
+    const episodes = (p.episodes || []).map((e, i) =>
+      `<label class="pr-ep"><input type="checkbox" data-ep="${i}"${String(e.id) === String(p.current_episode) ? " checked" : ""}> ${esc(e.number ?? "")}<small>${esc(e.label || "")}</small></label>`).join("");
+    return `
+      <div class="pr-profile">
+        ${voices ? `<label class="pr-field">Озвучка <select id="pr-voice">${voices}</select></label>` : ""}
+        <label class="pr-field">Качество <select id="pr-quality">
+          <option value="1080">до 1080p</option><option value="720" selected>до 720p</option><option value="480">до 480p</option><option value="360">до 360p</option>
+        </select></label>
+        ${voices ? `<button type="button" class="btn sm" id="pr-voice-open">Найти потоки этой озвучки</button>` : ""}
+        <button type="button" class="btn sm primary" id="pr-enqueue">${episodes ? "Выбранные серии в очередь" : "В очередь"}</button>
+        ${episodes ? `<button type="button" class="btn sm" id="pr-ep-all">Выбрать все</button><div class="pr-eps">${episodes}</div>` : ""}
+      </div>`;
+  }
+
+  function bindProfile(r) {
+    const p = r.profile;
+    if (!p) return;
+    const voice = () => p.translations?.[+($("#pr-voice")?.value ?? -1)];
+    $("#pr-voice-open")?.addEventListener("click", () => {
+      const v = voice();
+      if (!v) return;
+      input.value = v.url;
+      analyzeReferer = p.referer || null;
+      analyze(true);
+    });
+    $("#pr-ep-all")?.addEventListener("click", () => {
+      const boxes = [...results.querySelectorAll("[data-ep]")];
+      const on = !boxes.every(b => b.checked);
+      boxes.forEach(b => { b.checked = on; });
+    });
+    $("#pr-enqueue")?.addEventListener("click", async ev => {
+      const btn = ev.currentTarget;
+      const picked = [...results.querySelectorAll("[data-ep]:checked")].map(b => p.episodes[+b.dataset.ep]);
+      const quality = +$("#pr-quality").value;
+      const title = r.title || "video";
+      const v = voice();
+      let payload;
+      if (p.site === "animelib") {
+        if (!picked.length || !v) { toast("Выберите серии и озвучку", "error"); return; }
+        payload = { site: "animelib", episode_ids: picked.map(e => e.id), team: v.title, title, referer: p.referer, quality };
+      } else if (p.episodes?.length) {
+        if (!picked.length) { toast("Выберите серии", "error"); return; }
+        payload = { items: picked.map(e => ({ url: e.url, referer: p.referer, name: `${title} - ${e.number}` })), quality };
+      } else {
+        payload = { items: [{ url: v.url, referer: p.referer, name: `${title} [${v.title}]` }], quality };
+      }
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/parser/queue`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...clientHeaders() },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await errorText(res));
+        const { job_ids } = await res.json();
+        toast(`В очереди: ${job_ids.length}`, "info");
+        const details = $("#pr-history details");
+        if (details) details.open = true;
+        loadHistory(true);
+      } catch (err) {
+        toast(`Очередь: ${err.message || err}`, "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function saveJob(jobId, savePath) {
+    return downloadWithCard({
       command: "download_api_file",
-      args: { apiPath: `parser/download/${job_id}/file` },
+      args: { apiPath: `parser/download/${jobId}/file` },
       savePath,
       name: savePath.split(/[\\/]/).pop(),
     });
+  }
+
+  const JOB_STATUS = { queued: "в очереди", analyzing: "ищу поток", running: "загружается", done: "готово", error: "ошибка", cancelled: "отменено" };
+  const JOB_OPEN = new Set(["queued", "analyzing", "running"]);
+  let historyTimer = null;
+
+  async function loadHistory(open = false) {
+    const box = $("#pr-history");
+    if (!box) return;
+    clearTimeout(historyTimer);
+    let jobs = [];
+    try {
+      const r = await fetch(`${API_BASE}/parser/jobs`, { headers: clientHeaders() });
+      if (r.ok) ({ jobs } = await r.json());
+    } catch (_) { return; }
+    if (!jobs.length) { box.innerHTML = ""; return; }
+    const wasOpen = open || box.querySelector("details")?.open;
+    const done = jobs.filter(j => j.status === "done");
+    box.innerHTML = `<details class="pr-reqs"${wasOpen ? " open" : ""}><summary>Очередь и загрузки (${jobs.length}) — файлы хранятся 6 часов</summary>
+      ${done.length > 1 ? `<button type="button" class="btn sm" id="pr-save-all">Сохранить все готовые (${done.length}) в папку</button>` : ""}
+      <div class="pr-req-list">${jobs.map(j => `
+      <div class="pr-req">
+        <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${j.percent || 0}%` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
+        <div class="pr-req-url" title="${esc(j.filename || j.name)}">${esc(j.filename || j.name)}</div>
+        <div class="pr-req-actions">
+          ${j.status === "done" ? `<button type="button" class="btn sm primary" data-job-save="${esc(j.id)}">Сохранить</button>` : ""}
+          ${JOB_OPEN.has(j.status) ? `<button type="button" class="btn sm" data-job-cancel="${esc(j.id)}">Отмена</button>` : ""}
+        </div>
+      </div>`).join("")}</div></details>`;
+    box.onclick = async ev => {
+      const cancel = ev.target.closest("[data-job-cancel]");
+      if (cancel) {
+        cancel.disabled = true;
+        await fetch(`${API_BASE}/parser/download/${cancel.dataset.jobCancel}/cancel`, { method: "POST", headers: clientHeaders() }).catch(() => {});
+        loadHistory();
+        return;
+      }
+      if (ev.target.closest("#pr-save-all")) {
+        const dir = await pickOutputDir();
+        if (!dir) return;
+        for (const j of done) await saveJob(j.id, `${dir}\\${j.filename || `${j.name}.mp4`}`);
+        return;
+      }
+      const b = ev.target.closest("[data-job-save]");
+      if (!b) return;
+      const job = jobs.find(j => j.id === b.dataset.jobSave);
+      const savePath = await pickOutputFile(job.filename || `${job.name}.mp4`, [{ name: "Видео MP4", extensions: ["mp4"] }]);
+      if (savePath) await saveJob(job.id, savePath);
+    };
+    if (jobs.some(j => JOB_OPEN.has(j.status)) && box.isConnected) historyTimer = setTimeout(loadHistory, 2500);
   }
 
   function renderBtnProgress(btn, job) {
