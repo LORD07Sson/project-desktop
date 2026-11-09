@@ -1,6 +1,6 @@
-// Вкладка «Ещё → Парсер»: ввод URL, поиск видео на любой странице (yt-dlp + HTML-скрапинг),
-// список найденных потоков с качеством, прямая загрузка mp4 через сервер.
-// Доступно только владельцу — бэкенд (miniapp/parser_api.py) режет 403, здесь только косметика.
+// Вкладка «Ещё → Парсер»: ввод URL, поиск видео на любой странице.
+// L1 yt-dlp + L2 HTML всегда; L3 headless Chromium — по кнопке «Глубокий анализ»
+// (secunды + ресурсы сервера). Загрузка mp4 — через сервер, файл падает в браузер.
 
 import { can } from "./state.js";
 import { clientHeaders, API_BASE, toast } from "./api.js";
@@ -25,11 +25,12 @@ function layout() {
     <div class="pr-wrap">
       <div class="pr-head">
         <h2>Парсер видео</h2>
-        <small>Любая ссылка: yt-dlp + разбор HTML ищут потоки, кнопка «Скачать» тянет mp4 через сервер.</small>
+        <small>Любая ссылка: yt-dlp + разбор HTML ищут потоки. Глубокий анализ — запустить headless-браузер и перехватить сеть (медленнее, но берёт сайты с JS-плеерами).</small>
       </div>
       <form class="pr-form" id="pr-form">
         <input id="pr-url" type="url" placeholder="https://… ссылка на страницу с видео" autocomplete="off" required>
         <button class="btn primary" type="submit" id="pr-submit">Найти</button>
+        <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
       </form>
       <div class="pr-status" id="pr-status" hidden></div>
       <div class="pr-results" id="pr-results"></div>
@@ -48,25 +49,28 @@ export async function loadParser() {
   const form = $("#pr-form");
   const input = $("#pr-url");
   const submit = $("#pr-submit");
+  const deepBtn = $("#pr-deep");
   const status = $("#pr-status");
   const results = $("#pr-results");
 
-  form.addEventListener("submit", async e => {
-    e.preventDefault();
+  form.addEventListener("submit", e => { e.preventDefault(); analyze(false); });
+  deepBtn.addEventListener("click", () => analyze(true));
+
+  async function analyze(deep) {
     const url = input.value.trim();
     if (!url) return;
-    submit.disabled = true;
-    submit.textContent = "Ищу…";
+    submit.disabled = deepBtn.disabled = true;
+    (deep ? deepBtn : submit).textContent = deep ? "Браузер…" : "Ищу…";
     status.hidden = false;
-    status.textContent = "Анализ: yt-dlp + разбор HTML…";
+    status.textContent = deep
+      ? "Глубокий анализ: запускаю headless-Chromium, 10–15 секунд…"
+      : "Анализ: yt-dlp + разбор HTML…";
     results.innerHTML = "";
     try {
-      // Анализ может длиться дольше обычного 20-секундного таймаута apiPost
-      // (yt-dlp + скрапинг нескольких iframes), поэтому fetch напрямую, без таймаута.
       const res = await fetch(`${API_BASE}/parser/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...clientHeaders() },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, deep }),
       });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
@@ -78,10 +82,11 @@ export async function loadParser() {
       status.textContent = `Ошибка: ${err.message || err}`;
       toast(`Парсер: ${err.message || err}`, "error");
     } finally {
-      submit.disabled = false;
+      submit.disabled = deepBtn.disabled = false;
       submit.textContent = "Найти";
+      deepBtn.textContent = "Глубокий анализ";
     }
-  });
+  }
 
   function renderResults(r) {
     const diag = (r.diagnostics || []).map(d =>
@@ -92,17 +97,13 @@ export async function loadParser() {
         ${r.duration ? `<div class="pr-dur">${fmtDur(r.duration)}</div>` : ""}
         <div class="pr-diag">${diag}</div>
       </div>`;
-    if (!r.candidates || !r.candidates.length) {
-      results.innerHTML = head + `<div class="empty">Видео на странице не найдено.</div>`;
-      status.hidden = true;
-      return;
-    }
-    const rows = r.candidates.map((c, i) => {
+
+    const rowsHtml = (r.candidates || []).map((c, i) => {
       const q = typeof c.quality === "number" ? `${c.quality}p` : esc(c.quality || "?");
       const protoExt = [c.protocol, c.ext].filter(Boolean).join(" · ");
       const size = fmtSize(c.filesize);
       return `
-        <div class="pr-row" data-idx="${i}">
+        <div class="pr-row">
           <div class="pr-col pr-q">${q}</div>
           <div class="pr-col pr-info">
             <div class="pr-src">${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}</div>
@@ -114,29 +115,60 @@ export async function loadParser() {
           </div>
         </div>`;
     }).join("");
-    results.innerHTML = head + `<div class="pr-list">${rows}</div>`;
+
+    const candidatesBlock = (r.candidates && r.candidates.length)
+      ? `<div class="pr-list">${rowsHtml}</div>`
+      : `<div class="empty">Автоматически видео не найдено.${r.deep ? "" : " Попробуйте «Глубокий анализ»."}</div>`;
+
+    // L4: список всех сетевых запросов (только из L3). Свернут по умолчанию.
+    const reqs = (r.requests || []).filter(x => x.status && x.status < 400);
+    const reqRows = reqs.map((x, i) => {
+      const ct = (x.content_type || "").split(";")[0];
+      const size = fmtSize(x.size);
+      return `
+        <div class="pr-req">
+          <div class="pr-req-ct">${esc(ct)}${size ? ` · ${size}` : ""}</div>
+          <div class="pr-req-url" title="${esc(x.url)}">${esc(x.url)}</div>
+          <div class="pr-req-actions">
+            <button type="button" class="btn sm" data-req-copy="${i}">Копировать</button>
+            <button type="button" class="btn sm primary" data-req-dl="${i}">Скачать</button>
+          </div>
+        </div>`;
+    }).join("");
+    const requestsBlock = reqs.length
+      ? `<details class="pr-reqs"><summary>Сетевые запросы страницы (${reqs.length}) — выбрать вручную</summary><div class="pr-req-list">${reqRows}</div></details>`
+      : "";
+
+    results.innerHTML = head + candidatesBlock + requestsBlock;
     status.hidden = true;
 
-    // Один живой обработчик на блок: innerHTML пересоздаёт разметку, а .onclick
-    // перезаписывается без накопления старых закрытий со stale r.candidates.
+    // Один живой обработчик на блок: innerHTML пересоздаётся, а .onclick перезаписывается.
     results.onclick = async ev => {
       const cp = ev.target.closest("[data-copy]");
       const dl = ev.target.closest("[data-dl]");
+      const rc = ev.target.closest("[data-req-copy]");
+      const rd = ev.target.closest("[data-req-dl]");
       if (cp) {
         const c = r.candidates[+cp.dataset.copy];
         try { await navigator.clipboard.writeText(c.url); toast("Ссылка в буфере", "info"); } catch { toast("Не вышло скопировать", "error"); }
-      } else if (dl) {
-        const i = +dl.dataset.dl;
-        const c = r.candidates[i];
-        dl.disabled = true;
-        dl.textContent = "Качаю…";
+      } else if (rc) {
+        const q = reqs[+rc.dataset.reqCopy];
+        try { await navigator.clipboard.writeText(q.url); toast("Ссылка в буфере", "info"); } catch { toast("Не вышло скопировать", "error"); }
+      } else if (dl || rd) {
+        const btn = dl || rd;
+        const item = dl ? r.candidates[+dl.dataset.dl] : {
+          url: reqs[+rd.dataset.reqDl].url,
+          headers: { "Referer": input.value.trim(), "Origin": new URL(input.value.trim()).origin },
+        };
+        btn.disabled = true;
+        btn.textContent = "Качаю…";
         try {
-          await downloadCandidate(c, r.title);
+          await downloadCandidate(item, r.title);
         } catch (err) {
           toast(`Загрузка: ${err.message || err}`, "error");
         } finally {
-          dl.disabled = false;
-          dl.textContent = "Скачать";
+          btn.disabled = false;
+          btn.textContent = "Скачать";
         }
       }
     };
