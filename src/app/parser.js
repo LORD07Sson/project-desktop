@@ -1,7 +1,3 @@
-// Вкладка «Ещё → Парсер»: ввод URL, поиск видео на любой странице.
-// L1 yt-dlp + L2 HTML всегда; L3 headless Chromium — по кнопке «Глубокий анализ»
-// (secunды + ресурсы сервера). Загрузка mp4 — через сервер, файл падает в браузер.
-
 import { can } from "./state.js";
 import { clientHeaders, API_BASE, toast } from "./api.js";
 import { $ } from "./utils.js";
@@ -120,7 +116,6 @@ export async function loadParser() {
       ? `<div class="pr-list">${rowsHtml}</div>`
       : `<div class="empty">Автоматически видео не найдено.${r.deep ? "" : " Попробуйте «Глубокий анализ»."}</div>`;
 
-    // L4: список всех сетевых запросов (только из L3). Свернут по умолчанию.
     const reqs = (r.requests || []).filter(x => x.status && x.status < 400);
     const reqRows = reqs.map((x, i) => {
       const ct = (x.content_type || "").split(";")[0];
@@ -142,7 +137,6 @@ export async function loadParser() {
     results.innerHTML = head + candidatesBlock + requestsBlock;
     status.hidden = true;
 
-    // Один живой обработчик на блок: innerHTML пересоздаётся, а .onclick перезаписывается.
     results.onclick = async ev => {
       const cp = ev.target.closest("[data-copy]");
       const dl = ev.target.closest("[data-dl]");
