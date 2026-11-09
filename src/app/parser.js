@@ -23,18 +23,36 @@ async function errorText(res) {
   return `HTTP ${res.status}`;
 }
 
+function engineOf(c) {
+  return /m3u8|dash|mpd|ism|mss/i.test(`${c.protocol || ""} ${c.ext || ""}`) ? "N_m3u8DL-RE" : "yt-dlp";
+}
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+
 function layout() {
   return `
     <div class="pr-wrap">
-      <div class="pr-head">
-        <h2>Парсер видео <span class="pr-beta">Beta</span></h2>
-        <small>Любая ссылка: yt-dlp + разбор HTML ищут потоки. Глубокий анализ — запустить headless-браузер и перехватить сеть (медленнее, но берёт сайты с JS-плеерами).</small>
-      </div>
-      <form class="pr-form" id="pr-form">
-        <input id="pr-url" type="url" placeholder="https://… ссылка на страницу с видео" autocomplete="off" required>
-        <button class="btn primary" type="submit" id="pr-submit">Найти</button>
-        <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
-      </form>
+      <section class="pr-hero" id="pr-hero">
+        <div class="pr-hero-bg" id="pr-hero-bg" aria-hidden="true"></div>
+        <div class="pr-hero-body">
+          <div class="pr-head">
+            <h2>Парсер видео <span class="pr-beta">Beta</span></h2>
+            <small>Вставьте ссылку: найдём постер, потоки и качества. Если сайт прячет плеер в JS, поможет глубокий анализ.</small>
+          </div>
+          <form class="pr-form" id="pr-form">
+            <input id="pr-url" type="url" placeholder="https://… ссылка на страницу с видео" autocomplete="off" required>
+            <button class="btn primary" type="submit" id="pr-submit">Найти</button>
+            <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
+          </form>
+          <div class="pr-engines">
+            <span class="pr-engine auto">Авто</span>
+            <span class="pr-engine">N_m3u8DL-RE <small>HLS и DASH</small></span>
+            <span class="pr-engine">yt-dlp <small>остальное</small></span>
+          </div>
+        </div>
+      </section>
       <div class="pr-status" id="pr-status" hidden></div>
       <div class="pr-results" id="pr-results"></div>
       <div class="pr-history" id="pr-history"></div>
@@ -75,6 +93,7 @@ export async function loadParser() {
       ? "Глубокий анализ: запускаю headless-Chromium, 10–15 секунд…"
       : "Анализ: yt-dlp + разбор HTML…";
     results.innerHTML = "";
+    setBackdrop(null);
     try {
       const res = await fetch(`${API_BASE}/parser/analyze/start`, {
         method: "POST",
@@ -103,14 +122,35 @@ export async function loadParser() {
     }
   }
 
+  function setBackdrop(url) {
+    const bg = $("#pr-hero-bg");
+    const hero = $("#pr-hero");
+    if (!bg || !hero) return;
+    bg.style.backgroundImage = url ? `url("${url.replace(/["\\\n\r]/g, encodeURIComponent)}")` : "";
+    hero.classList.toggle("has-poster", !!url);
+  }
+
   function renderResults(r) {
     const diag = (r.diagnostics || []).map(d =>
       `<span class="pr-chip ${d.ok ? "ok" : "no"}">L${d.level} ${esc(d.name)}: ${d.ok ? (d.count ?? 0) + " найдено" : "—"}</span>`).join("");
+    const poster = /^https:\/\//i.test(r.poster || "") ? r.poster : "";
+    const host = hostOf(input.value.trim());
+    const count = (r.candidates || []).length;
     const head = `
-      <div class="pr-meta">
-        ${r.title ? `<div class="pr-title">${esc(r.title)}</div>` : ""}
-        ${r.duration ? `<div class="pr-dur">${fmtDur(r.duration)}</div>` : ""}
-        <div class="pr-diag">${diag}</div>
+      <div class="pr-meta${poster ? "" : " no-poster"}">
+        <div class="pr-poster">
+          ${poster ? `<img id="pr-poster-img" src="${esc(poster)}" alt="" referrerpolicy="no-referrer">` : ""}
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 5h18v14H3z"/><path d="M10 9l5 3-5 3z" fill="currentColor" stroke="none"/></svg>
+        </div>
+        <div class="pr-meta-body">
+          ${host ? `<div class="pr-host">${esc(host)}</div>` : ""}
+          <div class="pr-title">${esc(r.title || "Без названия")}</div>
+          <div class="pr-facts">
+            ${r.duration ? `<span class="pr-dur">${fmtDur(r.duration)}</span>` : ""}
+            <span class="pr-dur">${count ? `Потоков: ${count}` : "Потоки не найдены"}</span>
+          </div>
+          <div class="pr-diag">${diag}</div>
+        </div>
       </div>`;
 
     const rowsHtml = (r.candidates || []).map((c, i) => {
@@ -129,7 +169,7 @@ export async function loadParser() {
         <div class="pr-row">
           <div class="pr-col pr-q">${q}</div>
           <div class="pr-col pr-info">
-            <div class="pr-src">${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}${extras}</div>
+            <div class="pr-src"><span class="pr-engine sm">${engineOf(c)}</span> ${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}${extras}</div>
             <div class="pr-url" title="${esc(c.url)}">${esc(c.url)}</div>
           </div>
           <div class="pr-col pr-actions">
@@ -169,6 +209,14 @@ export async function loadParser() {
     results.innerHTML = head + notice + profileHtml(r.profile) + candidatesBlock + requestsBlock;
     status.hidden = true;
     bindProfile(r);
+    const posterImg = $("#pr-poster-img");
+    if (posterImg) {
+      posterImg.addEventListener("load", () => setBackdrop(poster), { once: true });
+      posterImg.addEventListener("error", () => {
+        posterImg.remove();
+        results.querySelector(".pr-meta")?.classList.add("no-poster");
+      }, { once: true });
+    }
 
     results.onclick = async ev => {
       const cp = ev.target.closest("[data-copy]");

@@ -14,6 +14,7 @@ import { apiGet, toast, API_BASE } from "./api.js";
 import { esc } from "./utils.js";
 import { appWindow } from "./tauri.js";
 import { pickSameVoice, preloadFresh, shouldPreload, bufferedAhead, startBufferReady, START_BUFFER_SEC } from "./preload-core.js";
+import { parseVtt } from "./subs-core.js";
 
 const SAVE_EVERY_MS = 5000;
 const HIDE_AFTER_MS = 2600;
@@ -56,6 +57,12 @@ function fmtTime(sec) {
   return `${h ? `${h}:` : ""}${h ? String(m).padStart(2, "0") : m}:${String(s).padStart(2, "0")}`;
 }
 const qLabel = h => (h >= 2160 ? "4K" : `${h}p`);
+const PLAYABLE_KINDS = new Set(["voice", "sub", "raw"]);
+const SUBS_KEY = "project_player_subs";
+const SUB_SIZES = [["s", "S"], ["m", "M"], ["l", "L"]];
+function readSubsPrefs() {
+  try { const p = JSON.parse(localStorage.getItem(SUBS_KEY) || "null"); return { on: p?.on !== false, size: SUB_SIZES.some(([id]) => id === p?.size) ? p.size : "m" }; } catch (_) { return { on: true, size: "m" }; }
+}
 
 let P = null; // состояние открытого плеера
 
@@ -76,6 +83,7 @@ export async function openAnimePlayer({ shikiId, name }) {
       <video class="ap-video" playsinline preload="auto"></video>
       <div class="ap-wait" data-ap-wait><span></span><b data-ap-wait-text>Загружаю…</b></div>
       <div class="ap-buffer"><span></span></div>
+      <div class="ap-subs" data-ap-subs hidden></div>
       <div class="ap-flash" data-ap-flash></div>
       <div class="ap-shade top"></div><div class="ap-shade bottom"></div>
       <header class="ap-top">
@@ -120,7 +128,7 @@ export async function openAnimePlayer({ shikiId, name }) {
       <div class="ap-panel-in">
         <div class="ap-panel-head"><b>Серии</b><span data-ap-count></span></div>
         <div class="ap-eps" data-ap-eps></div>
-        <div class="ap-panel-head"><b>Озвучка</b></div>
+        <div class="ap-panel-head"><b>Озвучка и субтитры</b></div>
         <div class="ap-trs" data-ap-trs><div class="ap-muted">—</div></div>
       </div>
     </aside>`;
@@ -131,7 +139,8 @@ export async function openAnimePlayer({ shikiId, name }) {
   const vol = readVolume();
   video.volume = vol.v;
   video.muted = vol.muted;
-  P = { root, video, shikiId, name, series: null, episodeIdx: 0, translations: [], trId: null, sources: [], quality: null, saveTimer: null, hideTimer: null, nextCancelled: false, nextTimer: null, fs: false, pre: null, preBusy: null };
+  P = { root, video, shikiId, name, series: null, episodeIdx: 0, translations: [], trId: null, sources: [], quality: null, saveTimer: null, hideTimer: null, nextCancelled: false, nextTimer: null, fs: false, pre: null, preBusy: null, subTrack: video.addTextTrack("subtitles"), subsPrefs: readSubsPrefs(), hasSubs: false };
+  P.subTrack.mode = "hidden";
   wireControls();
   setWait("Ищу серии…");
 
@@ -248,6 +257,7 @@ async function goEpisode(idx) {
   $r("[data-ap-next]").disabled = idx === eps.length - 1;
   clearDirectWatch();
   stopBufferGate();
+  clearSubs();
   P.video.pause();
   P.video.removeAttribute("src");
   P.video.load();
@@ -259,12 +269,45 @@ async function goEpisode(idx) {
     return fail(`Не удалось получить озвучки: ${e.message}`);
   }
   if (!P || P.series.episodes[P.episodeIdx].id !== ep.id) return;
-  P.translations = d.translations.filter(t => t.kind === "voice" || t.kind === "raw");
+  P.translations = d.translations.filter(t => PLAYABLE_KINDS.has(t.kind));
   renderTranslations();
-  if (!P.translations.length) return fail("У этой серии пока нет озвучки.");
+  if (!P.translations.length) return fail("У этой серии пока нет озвучки и субтитров.");
   const mem = readMem(P.shikiId);
-  const same = mem.authors && P.translations.find(t => t.authors === mem.authors);
-  pickTranslation((same || P.translations[0]).id);
+  pickTranslation((pickSameVoice(P.translations, mem.authors, mem.kind) || P.translations[0]).id);
+}
+
+// ---------- субтитры ----------
+function renderSubs() {
+  if (!P) return;
+  const box = $r("[data-ap-subs]");
+  const text = P.subsPrefs.on ? [...(P.subTrack.activeCues || [])].map(c => c.text).join("\n") : "";
+  box.hidden = !text;
+  box.textContent = text;
+  box.dataset.size = P.subsPrefs.size;
+}
+function clearSubs() {
+  P.hasSubs = false;
+  [...(P.subTrack.cues || [])].forEach(c => P.subTrack.removeCue(c));
+  renderSubs();
+}
+async function loadSubs(tr) {
+  clearSubs();
+  if (!tr || tr.kind !== "sub") return;
+  try {
+    const { vtt } = await apiGet(`/player/subs/${tr.id}`);
+    if (!P || P.trId !== tr.id) return;
+    const cues = parseVtt(vtt);
+    cues.forEach(c => P.subTrack.addCue(new window.VTTCue(c.start, c.end, c.text)));
+    P.hasSubs = cues.length > 0;
+    renderSubs();
+  } catch (_) {
+    if (P && P.trId === tr.id) toast("Субтитры этого перевода не загрузились.", "error");
+  }
+}
+function setSubsPrefs(patch) {
+  P.subsPrefs = { ...P.subsPrefs, ...patch };
+  try { localStorage.setItem(SUBS_KEY, JSON.stringify(P.subsPrefs)); } catch (_) { /* не критично */ }
+  renderSubs();
 }
 
 function renderTranslations() {
@@ -285,7 +328,8 @@ async function pickTranslation(trId, keepTime = false) {
   P.trId = trId;
   renderTranslations();
   const tr = P.translations.find(t => t.id === trId);
-  if (tr) writeMem(P.shikiId, { authors: tr.authors });
+  if (tr) writeMem(P.shikiId, { authors: tr.authors, kind: tr.kind });
+  loadSubs(tr);
   setWait("Загружаю видео…");
   let d;
   try {
@@ -391,11 +435,12 @@ async function preloadNext(left, duration) {
   const root = P.root;
   try {
     const d = await apiGet(`/player/episode/${next.id}`);
-    const tr = pickSameVoice(d.translations, readMem(P.shikiId).authors);
+    const mem = readMem(P.shikiId);
+    const tr = pickSameVoice(d.translations, mem.authors, mem.kind);
     if (!tr) return;
     const s = await apiGet(`/player/stream/${tr.id}`);
     if (!P || P.root !== root) return;
-    P.pre = { episodeId: next.id, trId: tr.id, translations: d.translations.filter(t => t.kind === "voice" || t.kind === "raw"), sources: s.sources, at: Date.now() };
+    P.pre = { episodeId: next.id, trId: tr.id, translations: d.translations.filter(t => PLAYABLE_KINDS.has(t.kind)), sources: s.sources, at: Date.now() };
   } catch (_) { /* не вышло — обычная загрузка при переходе */ }
 }
 
@@ -483,11 +528,16 @@ function toggleFullscreen() { setFullscreen(!P.fs); }
 function renderMenu() {
   const menu = $r("[data-ap-menu]");
   const v = P.video;
+  const subs = P.subsPrefs;
   menu.innerHTML = `
+    ${P.hasSubs ? `<div class="ap-menu-h">Субтитры</div>
+    <div class="ap-speeds"><button type="button" class="${subs.on ? "" : "on"}" data-ap-sub-off>Выкл</button>${SUB_SIZES.map(([id, label]) => `<button type="button" class="${subs.on && subs.size === id ? "on" : ""}" data-ap-sub-size="${id}">${label}</button>`).join("")}</div>` : ""}
     <div class="ap-menu-h">Качество</div>
     ${P.sources.map(s => `<button type="button" class="${s.height === P.quality ? "on" : ""}" data-ap-q="${s.height}">${qLabel(s.height)}${s.height >= 1080 ? " <i>HD</i>" : ""}</button>`).join("")}
     <div class="ap-menu-h">Скорость</div>
     <div class="ap-speeds">${SPEEDS.map(s => `<button type="button" class="${Math.abs(v.playbackRate - s) < 0.01 ? "on" : ""}" data-ap-speed="${s}">${s}×</button>`).join("")}</div>`;
+  menu.querySelector("[data-ap-sub-off]")?.addEventListener("click", () => { setSubsPrefs({ on: false }); renderMenu(); });
+  menu.querySelectorAll("[data-ap-sub-size]").forEach(b => b.addEventListener("click", () => { setSubsPrefs({ on: true, size: b.dataset.apSubSize }); renderMenu(); }));
   menu.querySelectorAll("[data-ap-q]").forEach(b => b.addEventListener("click", () => {
     const s = P.sources.find(x => x.height === Number(b.dataset.apQ));
     menu.hidden = true;
@@ -502,6 +552,7 @@ function renderMenu() {
 
 function wireControls() {
   const { root, video: v } = P;
+  P.subTrack.addEventListener("cuechange", renderSubs);
   root.querySelector("[data-ap-close]").addEventListener("click", closeAnimePlayer);
   root.querySelector("[data-ap-panel]").addEventListener("click", () => root.classList.toggle("panel-open"));
   root.querySelector("[data-ap-center]").addEventListener("click", togglePlay);
@@ -675,5 +726,6 @@ document.addEventListener("keydown", e => {
   else if (k === "m" || k === "ь") { handled(); setVolume(v.volume || 1, !v.muted); }
   else if (k === "f" || k === "а") { handled(); toggleFullscreen(); }
   else if (k === "n" || k === "т") { handled(); goEpisode(P.episodeIdx + 1); }
+  else if ((k === "c" || k === "с") && P.hasSubs) { handled(); setSubsPrefs({ on: !P.subsPrefs.on }); flash(`<span class="ap-flash-txt">Субтитры ${P.subsPrefs.on ? "вкл" : "выкл"}</span>`); }
   else if (k === "s" || k === "ы") { handled(); if (!$r("[data-ap-skip]").hidden) $r("[data-ap-skip]").click(); }
 }, true);

@@ -7,6 +7,9 @@ assert.equal(pickSameVoice(tr, "нет такой").id, 2, "нет совпад�
 assert.equal(pickSameVoice(tr, null).id, 2);
 assert.equal(pickSameVoice([{ kind: "sub" }], "x"), null);
 assert.equal(pickSameVoice(null, "x"), null);
+assert.equal(pickSameVoice(tr, "A", "sub").id, 1, "смотрел с субтитрами — те же субтитры");
+assert.equal(pickSameVoice(tr, "нет такой", "sub").id, 1, "нет той команды — первые субтитры");
+assert.equal(pickSameVoice(tr.slice(1), "Другие", "sub").id, 3, "субтитров нет — озвучка");
 
 const pre = { episodeId: 7, at: 1000, sources: [{ height: 1080 }] };
 assert.ok(preloadFresh(pre, 7, 1000 + PRELOAD_TTL_MS - 1));

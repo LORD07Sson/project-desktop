@@ -6,8 +6,10 @@
 export const PRELOAD_LEFT_SEC = 150;      // за сколько до конца начинать
 export const PRELOAD_TTL_MS = 6 * 60_000; // ссылки на видео живут недолго
 
-/** Озвучка для следующей серии: та же команда (authors), иначе первая. */
-export function pickSameVoice(translations, authors) {
+/** Перевод для следующей серии: та же команда (authors), иначе первый. Смотрел с субтитрами — ищем сначала среди них. */
+export function pickSameVoice(translations, authors, kind) {
+  const subs = kind === "sub" ? (translations || []).filter(t => t.kind === "sub") : [];
+  if (subs.length) return (authors && subs.find(t => t.authors === authors)) || subs[0];
   const voices = (translations || []).filter(t => t.kind === "voice" || t.kind === "raw");
   if (!voices.length) return null;
   return (authors && voices.find(t => t.authors === authors)) || voices[0];
