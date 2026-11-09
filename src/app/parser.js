@@ -1,6 +1,8 @@
 import { can } from "./state.js";
 import { clientHeaders, API_BASE, toast } from "./api.js";
 import { $ } from "./utils.js";
+import { pickOutputFile } from "./tauri.js";
+import { downloadWithCard } from "./download-card.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -159,7 +161,7 @@ export async function loadParser() {
           headers: { "Referer": input.value.trim(), "Origin": new URL(input.value.trim()).origin },
         };
         btn.disabled = true;
-        btn.textContent = "0%";
+        btn.textContent = "Куда сохранить…";
         try {
           await downloadCandidate(item, r.title, btn);
         } catch (err) {
@@ -175,6 +177,12 @@ export async function loadParser() {
   }
 
   async function downloadCandidate(c, title, btn) {
+    const defaultName = (title || "video").replace(/[\\/:*?"<>|]+/g, "_").trim().slice(0, 100) || "video";
+    const savePath = await pickOutputFile(`${defaultName}.mp4`, [{ name: "Видео MP4", extensions: ["mp4"] }]);
+    if (!savePath) return;
+    toast(`Сохраню в ${savePath}`, "info");
+    btn.textContent = "0%";
+
     const start = await fetch(`${API_BASE}/parser/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...clientHeaders() },
@@ -200,21 +208,13 @@ export async function loadParser() {
       if (job.status === "error") throw new Error(job.error || "Ошибка загрузки");
     }
 
-    const fileRes = await fetch(`${API_BASE}/parser/download/${job_id}/file`, {
-      headers: clientHeaders(),
+    btn.textContent = "Сохраняю…";
+    await downloadWithCard({
+      command: "download_api_file",
+      args: { apiPath: `parser/download/${job_id}/file` },
+      savePath,
+      name: savePath.split(/[\\/]/).pop(),
     });
-    if (!fileRes.ok) throw new Error(`файл HTTP ${fileRes.status}`);
-    const blob = await fileRes.blob();
-    const cd = fileRes.headers.get("Content-Disposition") || "";
-    const fn = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
-    const name = fn ? decodeURIComponent(fn[1]) : job.filename || `${(title || "video").replace(/[^\w\-. ]+/g, "_").slice(0, 100)}.mp4`;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-    toast(`Скачано: ${name}`, "ok");
   }
 
   function renderBtnProgress(btn, job) {

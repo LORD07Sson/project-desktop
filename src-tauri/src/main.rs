@@ -1520,6 +1520,7 @@ fn allowed_attachment_path(api_path: &str) -> bool {
     let shape = match parts.as_slice() {
         ["chats", _key, "messages", id, "file"] => numeric(id),
         ["kodik", "dump", key] => !key.is_empty() && key.len() <= 60,
+        ["parser", "download", id, "file"] => id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit()),
         ["report", _pid, "notes", id, "file"] => numeric(id),
         ["tickets", t, "posts", id, "file"] => numeric(t) && numeric(id),
         ["report", _pid, "raws", kind, "file"] => matches!(*kind, "voice" | "mix" | "subs"),
@@ -2079,6 +2080,9 @@ mod tests {
         assert!(!allowed_attachment_path("admin/access"));
         assert!(!allowed_attachment_path("report/R-1/raws/other/file"));
         assert!(!allowed_attachment_path("chats/general/messages/x/file"));
+        assert!(allowed_attachment_path("parser/download/0123456789abcdef0123456789abcdef/file"));
+        assert!(!allowed_attachment_path("parser/download/not-a-job/file"));
+        assert!(!allowed_attachment_path("parser/download/0123456789abcdef0123456789abcdef/status"));
         assert!(!allowed_attachment_path("chats/../admin/messages/1/file"));
         assert!(!allowed_attachment_path("chats/general/messages/1/file?x=1"));
         assert!(!allowed_attachment_path("/chats/general/messages/1/file"));
