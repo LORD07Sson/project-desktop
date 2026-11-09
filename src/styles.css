@@ -6139,3 +6139,4 @@ html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), 
 .pr-req-ct { font-size: 11.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pr-req-url { font-size: 11.5px; color: var(--ink-soft); font-family: var(--mono, ui-monospace, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .pr-req-actions { display: flex; gap: 4px; }
+.pr-req.on { background: rgba(80, 200, 120, .08); border-color: rgba(80, 200, 120, .35); }

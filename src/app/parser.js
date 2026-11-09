@@ -116,13 +116,17 @@ export async function loadParser() {
       ? `<div class="pr-list">${rowsHtml}</div>`
       : `<div class="empty">Автоматически видео не найдено.${r.deep ? "" : " Попробуйте «Глубокий анализ»."}</div>`;
 
-    const reqs = (r.requests || []).filter(x => x.status && x.status < 400);
+    const allReqs = (r.requests || []).filter(x => x.status && x.status < 400);
+    const reqs = [
+      ...allReqs.filter(x => x.media),
+      ...allReqs.filter(x => !x.media),
+    ];
     const reqRows = reqs.map((x, i) => {
       const ct = (x.content_type || "").split(";")[0];
       const size = fmtSize(x.size);
       return `
-        <div class="pr-req">
-          <div class="pr-req-ct">${esc(ct)}${size ? ` · ${size}` : ""}</div>
+        <div class="pr-req${x.media ? " on" : ""}">
+          <div class="pr-req-ct">${x.media ? "🎬 " : ""}${esc(ct)}${size ? ` · ${size}` : ""}</div>
           <div class="pr-req-url" title="${esc(x.url)}">${esc(x.url)}</div>
           <div class="pr-req-actions">
             <button type="button" class="btn sm" data-req-copy="${i}">Копировать</button>
