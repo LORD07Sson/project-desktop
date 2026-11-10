@@ -1,0 +1,184 @@
+/* Веер разделов (#tabstrip.fan) — круглая кнопка в правом нижнем углу,
+   пункты разлетаются вверх по дуге. Логика и раскладка (--x, --y, --r на
+   каждом пункте) — src/app/titlebar-menus.js. Все правила — внутри #tabstrip,
+   общих правил не трогаем.
+
+   Тайминги сняты покадрово с референса (729 кадров, 60 к/с, шаг 16,7 мс):
+   - открытие, текущий раздел: из кнопки в кадре клика, на месте к 150 мс,
+     пик перелёта (~8%) к 200 мс, покой к 370 мс;
+   - открытие, остальные: стартуют с 30% пути (в первом кадре ~40%), на месте
+     к ~130 мс, перелёт ~6% к ~180 мс; задержки между пунктами нет; прозрачность 0→1 за ~90 мс;
+   - наведение: весь фон перетекает в цвет пункта за ~175 мс;
+   - выбор, остальные: +17 мс, ускоряются к кнопке и гаснут к ~90 мс;
+   - выбор, выбранный: +17 мс, та же пружина до кнопки, подпись схлопывается
+     за ~80 мс, пункт становится кнопкой.
+   Пружина: затухание 0,62, ω 19,5 рад/с — 1,0 на 147 мс, пик 1,084 на 204 мс. */
+
+@property --fan-c { syntax: "<color>"; inherits: true; initial-value: #ffd23f; }
+
+#tabstrip.fan {
+  --fan-spring: linear(0, 0.0248, 0.0895, 0.181, 0.2882, 0.402, 0.5155, 0.6233, 0.7218, 0.8087, 0.8827, 0.9436, 0.9919, 1.0284, 1.0543, 1.0712, 1.0804, 1.0835, 1.0819, 1.0768, 1.0693, 1.0605, 1.051, 1.0415, 1.0324, 1.0241, 1.0167, 1.0104, 1.0052, 1.0011, 0.9979, 0.9957, 0.9942, 0.9933, 0.993, 0.9931, 0.9935, 0.9941, 0.9949, 0.9956, 1);
+  --fan-in: cubic-bezier(.35, 0, .75, .7); /* уход к кнопке: 1%, 8%, 19%, 34%, 49% пути по кадрам */
+  position: fixed; right: 24px; bottom: 24px; z-index: 230;
+  width: 48px; height: 48px; margin: 0; padding: 0; border: 0; background: none; box-shadow: none;
+  transition: --fan-c .175s ease-in-out; /* фон перетекает в цвет пункта под курсором */
+}
+body:has(#titlebar-apps[hidden]) #tabstrip.fan { display: none; } /* до входа разделов нет */
+#tabstrip.fan > .sg-in { display: none; } /* сезонная гирлянда вешается на #tabstrip — у кнопки ей не место */
+/* Подкраска окна цветом текущего раздела: мягкое свечение из угла, кликам не мешает. */
+#tabstrip.fan::before {
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background: radial-gradient(120% 90% at 100% 100%, color-mix(in srgb, var(--fan-c) 22%, transparent), transparent 55%);
+  mix-blend-mode: screen; opacity: .55;
+}
+:root[data-theme="light"] #tabstrip.fan::before { mix-blend-mode: multiply; opacity: .25; }
+
+/* Фон под открытым веером — тёмный, тонированный цветом пункта под курсором (в референсе
+   перекрашивается весь экран); клик по нему закрывает веер. */
+#tabstrip .fan-scrim {
+  position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(80% 110% at 100% 100%, color-mix(in srgb, var(--fan-c) 16%, transparent), transparent 70%),
+    radial-gradient(70% 110% at 100% 100%, rgba(4, 4, 8, .94), rgba(4, 4, 8, .8) 50%, rgba(4, 4, 8, .5));
+  opacity: 0; transition: opacity .15s ease;
+}
+#tabstrip.fan-open .fan-scrim { opacity: 1; }
+:root[data-theme="light"] #tabstrip .fan-scrim {
+  background:
+    radial-gradient(80% 110% at 100% 100%, color-mix(in srgb, var(--fan-c) 14%, transparent), transparent 70%),
+    radial-gradient(90% 100% at 100% 100%, rgba(255, 250, 245, .92), rgba(255, 250, 245, .5) 60%, rgba(255, 250, 245, .2));
+}
+
+/* ---------- кнопка ---------- */
+#tabstrip .fan-btn {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--fan-c) 38%, transparent);
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--fan-c) 22%, #15151b), color-mix(in srgb, var(--fan-c) 8%, #0c0c10));
+  color: var(--fan-c);
+  box-shadow: 0 10px 28px -8px rgba(0, 0, 0, .8), 0 0 22px -6px var(--fan-c), inset 0 1px 0 rgba(255, 255, 255, .08);
+  transition: transform .2s cubic-bezier(.2, .9, .3, 1), opacity .1s ease;
+}
+#tabstrip .fan-btn:hover { transform: scale(1.06); }
+#tabstrip .fan-btn:focus-visible { outline: 2px solid var(--fan-c); outline-offset: 3px; }
+#tabstrip .fan-btn-ic { display: grid; place-items: center; width: 22px; height: 22px; }
+#tabstrip .fan-btn-ic svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--fan-c) 70%, transparent));
+}
+#tabstrip .fan-btn.has-badge::after {
+  content: ""; position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--fire, #ff5c3a); box-shadow: 0 0 0 2px #0c0c10, 0 0 8px var(--fire, #ff5c3a);
+}
+/* Открыт веер — кнопки нет в тот же кадр: из неё вылетает текущий раздел. */
+#tabstrip:is(.fan-open, .fan-closing) .fan-btn { opacity: 0; pointer-events: none; transition: none; }
+/* Выбор: выбранный пункт пружиной падает в кнопку; к ~300 мс под ним проявляется
+   диск кнопки — пункт и кнопка совпадают, подмена незаметна. */
+#tabstrip.fan-picking .fan-btn { opacity: 1; transition: opacity .1s ease .3s; }
+
+/* ---------- пункты ---------- */
+#tabstrip .fan-menu { position: absolute; right: 0; bottom: 0; width: 0; height: 0; z-index: 1; }
+#tabstrip .fan-menu[hidden] { display: none; }
+#tabstrip .fan-it {
+  position: absolute; right: 0; bottom: 6px; display: flex; align-items: center; gap: 10px;
+  height: 36px; width: auto; padding: 0 8px 0 14px; margin: 0; border: 0; border-radius: 18px;
+  background: rgba(12, 12, 16, .55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  color: var(--c); font: inherit; font-size: 14px; font-weight: 650; letter-spacing: .005em; white-space: nowrap; cursor: pointer;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+  transform-origin: calc(100% - 24px) 50%; /* поворот — вокруг значка */
+  /* стартовое состояние: уже на 30% пути, невидимы (в первом видимом кадре — ~40%) */
+  transform: translate(calc(var(--x) * .3), calc(var(--y) * .3)) rotate(calc(var(--r) * .3));
+  opacity: 0;
+  transition: transform .42s var(--fan-spring), opacity .09s ease-out .017s, background .12s, box-shadow .12s;
+}
+/* Текущий раздел летит на всю длину — пружина в полном темпе (на месте к 150 мс). */
+#tabstrip .fan-it.active { transition-duration: .48s, .09s, .12s, .12s; }
+/* Текущий раздел стартует из самой кнопки и виден сразу. */
+#tabstrip .fan-it.active { transform: none; opacity: 1; }
+#tabstrip .fan-it::before { content: none; }
+#tabstrip.fan-open .fan-it { transform: translate(var(--x), var(--y)) rotate(var(--r)); opacity: 1; }
+/* Закрытие (без выбора — все; при выборе — остальные): ускоряются к кнопке и гаснут. */
+#tabstrip.fan-closing .fan-it {
+  transform: translate(0, 0) scale(.6); opacity: 0;
+  transition: transform .12s var(--fan-in), opacity .07s ease-in .013s;
+}
+/* Выбранный — та же пружина до кнопки, подпись и плашка схлопываются. */
+#tabstrip.fan-picking .fan-it.fan-chosen {
+  transform: none; opacity: 1; background: transparent; box-shadow: none; backdrop-filter: none;
+  transition: transform .48s var(--fan-spring) .017s, background .08s, box-shadow .08s;
+}
+
+#tabstrip .fan-it .tab-lbl {
+  order: 1; font-size: inherit; font-weight: inherit; color: inherit; overflow: visible;
+  opacity: 0; transform: translateX(8px);
+  transition: opacity .1s ease-out .03s, transform .48s var(--fan-spring);
+}
+#tabstrip.fan-open .fan-it .tab-lbl { opacity: 1; transform: none; }
+#tabstrip.fan-picking .fan-chosen :is(.tab-lbl, .tab-badge, .fan-kbd) { opacity: 0; transform: translateX(8px); transition: opacity .08s, transform .08s; }
+#tabstrip .fan-it .tm-txt { order: 1; display: flex; }
+#tabstrip .fan-it .tm-txt small { display: none; }
+#tabstrip .fan-it .tab-badge { order: 2; position: static; margin: 0; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 9px; font-size: 10px; box-shadow: none; text-shadow: none; }
+#tabstrip .fan-it .tab-ic {
+  order: 3; display: grid; place-items: center; width: 32px; height: 32px; flex: none; margin: 0;
+  background: none; box-shadow: none; color: var(--c);
+}
+#tabstrip .fan-it .tab-ic svg {
+  width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--c) 70%, transparent));
+}
+/* Подсказка Ctrl+N — слева, видна у пункта под курсором/фокусом. */
+#tabstrip .fan-kbd {
+  order: 0; font: 600 10.5px/1 var(--font, inherit); color: rgba(255, 255, 255, .5); text-shadow: none;
+  padding: 0; background: none; border: 0; opacity: 0; transition: opacity .12s;
+}
+#tabstrip .fan-it:is(:hover, :focus) .fan-kbd { opacity: 1; }
+
+#tabstrip .fan-it:is(:hover, :focus) {
+  outline: none; background: color-mix(in srgb, var(--c) 18%, rgba(12, 12, 16, .8));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent), 0 0 20px -6px var(--c);
+}
+/* Текущий раздел — светящаяся точка справа от значка (в референсе — шеврон). */
+#tabstrip .fan-it.active::after {
+  content: ""; position: absolute; right: -9px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%;
+  background: var(--c); box-shadow: 0 0 8px var(--c);
+}
+#tabstrip .fan-it.active .tab-lbl { font-weight: 750; }
+
+:root[data-theme="light"] #tabstrip .fan-it {
+  background: rgba(255, 255, 255, .8); color: color-mix(in srgb, var(--c) 62%, #1a1020); text-shadow: none;
+}
+:root[data-theme="light"] #tabstrip .fan-it .tab-ic { color: color-mix(in srgb, var(--c) 70%, #1a1020); }
+:root[data-theme="light"] #tabstrip .fan-kbd { color: rgba(0, 0, 0, .45); }
+
+/* ---------- без анимаций: всё мгновенно, без перелётов и размытия ---------- */
+:root[data-motion="off"] #tabstrip.fan { transition: none; }
+:root[data-motion="off"] #tabstrip :is(.fan-it, .fan-it .tab-lbl, .fan-btn, .fan-scrim) { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  #tabstrip.fan { transition: none; }
+  #tabstrip :is(.fan-it, .fan-it .tab-lbl, .fan-btn, .fan-scrim) { transition: none !important; }
+}
+
+/* ---------- шапка без строки разделов ----------
+   Разделы ушли в веер, и без них всё в шапке сбилось влево. Раскладка как у
+   окна настольной программы: слева логотип и «кто в сети», по центру — поиск,
+   справа — кнопки, «Смотреть» и профиль. Только при веере на странице. */
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions { flex: 1; min-width: 0; gap: 4px; }
+body:has(#tabstrip.fan) #titlebar-team { margin-left: 4px; margin-right: auto; }
+body:has(#tabstrip.fan) #titlebar-team[hidden] + #open-cmdk { margin-left: 0; }
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-cmdk {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: clamp(260px, 30vw, 520px); height: 36px; border-radius: 12px; padding: 0 8px 0 14px; gap: 10px;
+}
+body:has(#tabstrip.fan) #open-cmdk .tb-search-lbl { flex: 1; text-align: left; }
+/* Если «кто в сети» скрыт, кнопки всё равно прижаты вправо. */
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > .lr-wrap { margin-left: auto; }
+body:has(#tabstrip.fan) #titlebar-team:not([hidden]) ~ .lr-wrap { margin-left: 0; }
+/* «Смотреть» и профиль отделены от значков тонкой чертой. */
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-watch { margin-left: 10px; position: relative; }
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-watch::before {
+  content: ""; position: absolute; left: -9px; top: 8px; bottom: 8px; width: 1px; background: rgba(255, 255, 255, .1); pointer-events: none;
+}
+:root[data-theme="light"] body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-watch::before { background: rgba(0, 0, 0, .1); }
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #me-wrap { margin: 0 10px 0 2px; }
+@media (max-width: 1100px) {
+  body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-cmdk { position: relative; left: auto; top: auto; transform: none; width: 220px; }
+}
