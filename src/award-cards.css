@@ -218,5 +218,15 @@
 @media (prefers-reduced-motion: reduce) { .ac-char { transform: translateX(-50%); } }
 
 /* Те же марки, встроенные в раздел «Награды» профиля. */
-.ac-grid.ac-inline { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 30px 20px; padding: 28px 6px 6px; overflow: visible; }
-.ac-inline .ac-lb { font-size: 13px; }
+.ac-grid.ac-inline { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 30px 20px; padding: 28px 6px 6px; overflow: visible; }
+@media (max-width: 760px) { .ac-grid.ac-inline { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* В профиле марки крупнее и стоят ровно. Повёрнутая марка рисуется через промежуточную текстуру (тень, маска
+   перфорации) и при повороте замыливается вместе с артом и подписью; наклон остаётся только под курсором. */
+.ac-inline .ac-card:not(.hot) { transform: none; }
+/* Блёстки и перелив «живут» только на марке под курсором: бесконечные анимации с наложением на каждой марке
+   заставляли перерисовывать весь раздел каждый кадр, и прокрутка профиля теряла кадры. В покое блёстки
+   неподвижны и приглушены, чтобы не шумели поверх арта. */
+.ac-inline .ac-card:not(.hot) .ac-glit::before, .ac-inline .ac-card:not(.hot) .ac-glit::after,
+.ac-inline .ac-card:not(.hot) .ac-sheen { animation: none; }
+.ac-inline .ac-card.won:not(.hot) .ac-glit { opacity: .28; }
+.ac-inline .ac-card.won.r-legendary:not(.hot) .ac-glit, .ac-inline .ac-card.won.r-custom:not(.hot) .ac-glit { opacity: .4; }

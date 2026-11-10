@@ -4407,7 +4407,9 @@ td.row-actions { opacity: 1; transition: none; }
 /* У кнопок свои правила для svg-иконок (размер 14px, обводка currentColor) — гирлянде они не нужны. */
 .btn svg.sg-in, .tb-search svg.sg-in { height: 18px; stroke: none; fill: none; flex: none; }
 .sg-wire { fill: none; stroke: rgba(20, 30, 40, .9); stroke-width: .8; }
-.sg-led { animation: sg-twinkle 4s ease-in-out infinite; }
+/* Мерцание ступенями: плавная анимация прозрачности внутри SVG не уходит на видеокарту и перерисовывала шапку
+   каждый кадр (на 240 Гц — заметная доля времени кадра на любой вкладке). Шесть ступеней за цикл глазу не видны. */
+.sg-led { animation: sg-twinkle 4s steps(3) infinite; }
 @keyframes sg-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .75; } }
 :root[data-motion="off"] .sg-led, :root[data-motion="off"] .sg-pumpkin { animation: none; }
 .sg-pumpkin { animation: sg-glow 4s ease-in-out infinite; }
@@ -5046,6 +5048,11 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-tl-b { flex: 1; min-width: 0; }
 .pff-tl .m:empty { display: none; }
 .pff-tl time { flex: none; padding-top: 3px; font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
+
+/* Декоративные бесконечные анимации стоят, пока страница прокручивается и пока их не видно. */
+.pf-folio.pff-scrolling .pff-av::before, .pf-folio.pff-scrolling .pff-glow::before, .pf-folio.pff-scrolling .pff-heat-skel,
+.pf-folio.pff-scrolling .ac-glit::before, .pf-folio.pff-scrolling .ac-glit::after, .pf-folio.pff-scrolling .ac-sheen,
+.pf-folio .pff-away .pff-av::before, .pf-folio .pff-away .pff-glow::before { animation-play-state: paused; }
 
 @keyframes pff-cell { from { opacity: 0; transform: scale(.3); } }
 @keyframes pff-bar { from { opacity: 0; transform: scaleY(0); } }

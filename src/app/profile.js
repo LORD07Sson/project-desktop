@@ -531,25 +531,36 @@ function wireFolio(root) {
     if (b) folio.querySelector(`#${b.dataset.pffGo}`)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   });
   const banner = folio.querySelector(".pff-banner");
-  const onScroll = () => {
+  const secs = btns.map(b => [b, folio.querySelector(`#${b.dataset.pffGo}`)]).filter(x => x[1]);
+  // Прокрутка: одно обновление на кадр, сначала все чтения, потом записи (иначе каждая запись заставляла браузер
+  // заново считать раскладку), и запись только когда значение изменилось. Пока страница едет, декоративные
+  // анимации профиля стоят на паузе (класс pff-scrolling) — кадры уходят на саму прокрутку.
+  let raf = 0, idle = 0, lastP = -1, lastY = -1, lastCur = null, lastLift = null;
+  const update = () => {
+    raf = 0;
     if (!folio.isConnected) { scroller.removeEventListener("scroll", onScroll); return; }
+    const st = scroller.scrollTop;
     const max = scroller.scrollHeight - scroller.clientHeight;
-    const p = max > 0 ? Math.round(Math.min(1, scroller.scrollTop / max) * 100) : 100;
-    pct.textContent = `${p}%`;
-    pill.style.setProperty("--p", String(p));
-    // лёгкий параллакс баннера, пока шапка на экране
-    if (banner && !reduce && scroller.scrollTop < 700) banner.style.setProperty("--pff-y", String(Math.round(scroller.scrollTop * 0.18)));
     const top = isDoc ? 0 : scroller.getBoundingClientRect().top;
     let cur = btns[0];
-    for (const b of btns) {
-      const sec = folio.querySelector(`#${b.dataset.pffGo}`);
-      if (sec && sec.getBoundingClientRect().top - top < 160) cur = b;
-    }
-    btns.forEach(b => b.classList.toggle("on", b === cur));
-    pill.classList.toggle("lifted", scroller.scrollTop > 12);
+    for (const [b, sec] of secs) if (sec.getBoundingClientRect().top - top < 160) cur = b;
+    const p = max > 0 ? Math.round(Math.min(1, st / max) * 100) : 100;
+    if (p !== lastP) { lastP = p; pct.textContent = `${p}%`; pill.style.setProperty("--p", String(p)); }
+    // баннер медленно приближается, пока шапка на экране
+    const y = reduce ? 0 : Math.round(Math.min(700, st) * 0.18);
+    if (banner && y !== lastY) { lastY = y; banner.style.setProperty("--pff-y", String(y)); }
+    if (cur !== lastCur) { lastCur = cur; btns.forEach(b => b.classList.toggle("on", b === cur)); }
+    const lift = st > 12;
+    if (lift !== lastLift) { lastLift = lift; pill.classList.toggle("lifted", lift); }
+  };
+  const onScroll = () => {
+    if (!raf) raf = requestAnimationFrame(update);
+    if (!idle) folio.classList.add("pff-scrolling");
+    clearTimeout(idle);
+    idle = setTimeout(() => { idle = 0; folio.classList.remove("pff-scrolling"); }, 160);
   };
   scroller.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
+  update();
 
   // Проявление секций. Без IntersectionObserver (или при выключенных анимациях) — всё видно сразу.
   const rv = [...folio.querySelectorAll(".pff-rv")];
@@ -566,6 +577,11 @@ function wireFolio(root) {
       }
     }, { root: isDoc ? null : scroller, rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
     rv.forEach(el => io.observe(el));
+    // вращающиеся свечения (аватар, плашка в подвале) крутятся, только пока их видно
+    const away = new window.IntersectionObserver(entries => {
+      for (const en of entries) en.target.classList.toggle("pff-away", !en.isIntersecting);
+    }, { root: isDoc ? null : scroller });
+    folio.querySelectorAll(".pff-hero, .pff-foot").forEach(el => away.observe(el));
   }
 
   const clock = folio.querySelector("[data-pff-clock]");
