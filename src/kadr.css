@@ -5115,3 +5115,10 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   .pf-folio > .pff-duo .pf-acts > .pf-act:nth-child(n+5) { display: none; }
   .pf-folio > .pff-duo .ac-inline .ac-no { display: none; }
 }
+/* Боковые колонки: без заголовка «Пульс», марки — только арт (подписи видны в коллекции по клику). */
+@media (min-width: 1720px) {
+  .pf-folio > .pff-duo .pff-pulse .pf-card-head h3 { display: none; }
+  .pf-folio > .pff-duo .pff-pulse .pf-card-head { justify-content: flex-end; }
+  .pf-folio > .pff-duo .ac-inline .ac-top, .pf-folio > .pff-duo .ac-inline .ac-art,
+  .pf-folio > .pff-duo .ac-inline .ac-lb, .pf-folio > .pff-duo .ac-inline .ac-foot { display: none; }
+}
