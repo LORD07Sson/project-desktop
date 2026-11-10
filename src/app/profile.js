@@ -20,6 +20,7 @@ import { openReportDetail } from "./report-detail.js";
 import { openRolesSheet } from "./roles.js";
 import { openExternal, sendNotification } from "./tauri.js";
 import { markMyReportsSeen } from "./notifications.js";
+import { wireGraffiti } from "./graffiti.js";
 // Тот же маскот, что на экране загрузки (index.html) — Vite отдаёт
 // готовый URL собранного ассета. Больше ему показаться негде, хотя он
 // уже лежит в каждой сборке.
@@ -422,6 +423,7 @@ export async function loadProfile() {
     </div>
   `;
   wireFolio(root);
+  wireGraffiti(root, me.telegram_id);
   wireProfileCommon(root, me.telegram_id, () => loadProfile());
   // Обе догрузки — без await: профиль уже отрисован, и ждать ради
   // подсказки в одном блоке незачем (иначе на них ждала бы и кнопка
@@ -463,7 +465,7 @@ function greeting(h) {
   return "Добрый вечер";
 }
 
-function folioHeroHtml(d) {
+function folioHeroHtml(d, isSelf = true) {
   const tier = tenureTier(d.member_since_days);
   const name = d.display_name || d.name || "";
   const first = name.split(/\s+/)[0] || name;
@@ -480,15 +482,15 @@ function folioHeroHtml(d) {
   ].filter(Boolean).join(`<i class="dot"></i>`);
   const bio = d.status_text || d.bio
     ? `${d.status_text ? `<p class="pff-status">${esc(d.status_text)}</p>` : ""}${d.bio ? `<p class="pff-bio">${esc(d.bio)}</p>` : ""}`
-    : `<button type="button" class="pff-bio-add" data-edit-profile><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Добавить статус и пару слов о себе — их видят коллеги</button>`;
+    : !isSelf ? "" : `<button type="button" class="pff-bio-add" data-edit-profile><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Добавить статус и пару слов о себе — их видят коллеги</button>`;
   const now = new Date();
   return `
     <div class="pf-hero pff-hero">
-      <div class="pf-banner pff-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}" data-editable="1"></div>
+      <div class="pf-banner pff-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}"${isSelf ? ' data-editable="1"' : ""}></div>
       <div class="pff-hero-row">
         <div class="pff-intro">
-          <div class="pff-eyebrow"><span>${WEEKDAYS_RU[now.getDay()]}, ${now.getDate()} ${MONTHS_RU[now.getMonth() + 1]}</span><i class="dot"></i><span class="pff-clock" data-pff-clock></span></div>
-          <h1 class="pff-hi"><span data-pff-greet>${greeting(now.getHours())}</span>, <b>${esc(first)}</b>${d.is_developer || d.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</h1>
+          ${isSelf ? `<div class="pff-eyebrow"><span>${WEEKDAYS_RU[now.getDay()]}, ${now.getDate()} ${MONTHS_RU[now.getMonth() + 1]}</span><i class="dot"></i><span class="pff-clock" data-pff-clock></span></div>` : `<div class="pff-eyebrow"><span>${d.is_online ? "в сети" : "профиль коллеги"}</span></div>`}
+          <h1 class="pff-hi">${isSelf ? `<span data-pff-greet>${greeting(now.getHours())}</span>, <b>${esc(first)}</b>` : `<b>${esc(name)}</b>`}${d.is_developer || d.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</h1>
           <div class="pff-role" aria-live="polite"><span class="pff-role-t" data-pff-roles="${esc(JSON.stringify(roles))}">${esc(roles[0])}</span>${rankTagHtml(d.studio_rank)}</div>
           ${bio}
           <div class="pf-meta">${meta}</div>
@@ -497,19 +499,20 @@ function folioHeroHtml(d) {
       </div>
       <div class="pff-actions">
         ${profileRolesHtml(d, true)}
-        <button class="btn pf-edit" id="btn-edit-profile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/></svg>Изменить</button>
+        ${isSelf ? `<button class="btn pf-edit" id="btn-edit-profile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/></svg>Изменить</button>` : ""}
+        ${state.isDeveloper ? `<button class="btn" data-graffiti-edit><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21c3 0 4-2 4-4a3 3 0 1 1 3 3"/><path d="M10 14 20 4"/></svg>Граффити</button>` : ""}
       </div>
     </div>`;
 }
 
-function folioFooterHtml(d) {
+function folioFooterHtml(d, isSelf = true) {
   const days = d.member_since_days;
   const won = (d.badges || []).filter(b => b.unlocked).length;
   return `
     <footer class="pff-foot">
       <blockquote>«Хороший дубляж не слышно — слышно историю.»<cite>девиз студии</cite></blockquote>
-      ${days != null ? `<div class="pff-glow"><span>Вы в команде <b>${days}</b> ${pluralDays(days)}${won ? ` · наград: <b>${won}</b>` : ""}</span></div>` : ""}
-      <p class="pff-cta">Возьмём следующую серию?</p>
+      ${days != null ? `<div class="pff-glow"><span>${isSelf ? "Вы" : esc((d.display_name || d.name || "").split(/\s+/)[0])} в команде <b>${days}</b> ${pluralDays(days)}${won ? ` · наград: <b>${won}</b>` : ""}</span></div>` : ""}
+      ${isSelf ? `<p class="pff-cta">Возьмём следующую серию?</p>` : ""}
     </footer>`;
 }
 
@@ -758,44 +761,6 @@ async function fillPulse(root) {
     spark.title = "Закрытые серии по неделям, последние 12 недель";
     spark.hidden = false;
   }
-}
-
-function myHeroHtml(d, isSelf = true) {
-  const tier = tenureTier(d.member_since_days);
-  let joined = "";
-  if (d.created_at) {
-    const jd = new Date(d.created_at.replace(" ", "T") + "Z");
-    if (!isNaN(jd.getTime())) joined = `в команде с ${jd.getUTCDate()} ${MONTHS_RU[jd.getUTCMonth() + 1]}. ${jd.getUTCFullYear()}`;
-  }
-  const meta = [
-    d.username ? `@${esc(d.username)}` : "",
-    d.internal_id != null ? `<span class="id-chip">#${d.internal_id}</span>` : "",
-    joined,
-    d.is_online ? `<span class="on">в сети</span>` : "",
-  ].filter(Boolean).join(`<i class="dot"></i>`);
-  const about = d.status_text || d.bio ? `
-    <div class="pf-about">
-      ${d.status_text ? `<div class="st">${esc(d.status_text)}</div>` : ""}
-      ${d.bio ? `<div class="bio">${esc(d.bio)}</div>` : ""}
-    </div>` : isSelf ? `<div class="pf-about empty">Статус и пара слов о себе — их видят коллеги в карточке профиля.</div>` : "";
-  return `
-    <section class="pf-hero">
-      <div class="pf-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}"${isSelf ? ' data-editable="1"' : ""}></div>
-      <div class="pf-hero-body">
-        <span class="avatar-ring${tier ? " tier-" + tier : ""}">${avatarHtml(d.telegram_id, d.display_name || d.name, "xl")}</span>
-        <div class="pf-who">
-          <div class="nm-row">
-            <span class="nm">${esc(d.display_name || d.name)}</span>
-            ${d.is_developer || d.is_owner ? `<span class="dev-pill">DEV</span>` : ""}
-            ${rankTagHtml(d.studio_rank)}
-          </div>
-          ${profileRolesHtml(d, true)}
-          <div class="pf-meta">${meta}</div>
-          ${about}
-        </div>
-        ${isSelf ? `<button class="btn pf-edit" id="btn-edit-profile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/></svg>Изменить</button>` : ""}
-      </div>
-    </section>`;
 }
 
 // «Моя работа» — вместо огромного доната на одно значение: тонкая
@@ -1189,37 +1154,48 @@ export async function openUserProfile(telegramId) {
   const manage = person && (person.can_pause || (person.can_transfer && person.load.length));
 
   const sheet = overlay.querySelector(".sheet");
+  // Коллега — в той же «портфолио»-разметке, что и свой профиль (без приветствия, часов и кнопок своих настроек).
   sheet.innerHTML = `
-    <div class="pf">
-      <button class="btn ghost pf-back" data-close><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H6M11 6l-6 6 6 6"/></svg>Назад</button>
-      ${myHeroHtml(d, false)}
-      <div class="pf-kpis">
+    <div class="pf pf-folio pf-folio-other">
+      <nav class="pff-pill" aria-label="Разделы профиля">
+        <button class="pff-back" type="button" data-close title="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H6M11 6l-6 6 6 6"/></svg></button>
+        <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(telegramId, d.display_name || d.name, "sm")}</span>
+        ${[["pff-about", "О человеке"], ["pff-work", "Работа"], ["pff-awards", "Награды"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
+        <span class="pff-pct" aria-hidden="true">0%</span>
+      </nav>
+      <section class="pff-sec" id="pff-about">${folioHeroHtml(d, false)}</section>
+      <div class="pf-kpis pff-stats pff-rv">
         ${kpi("Сейчас в работе", (d.reports || []).length, late ? `<span class="warn">${late} просрочено</span>` : "всё в сроках")}
         ${kpi("Закрыто", st.completed_count ?? d.completed_total ?? 0, st.assigned_total != null ? `из ${st.assigned_total} назначенных` : "за всё время")}
         ${kpi("Просрочено", late, "за всё время")}
         ${kpi("Средний срок", avg != null ? `${avg.toFixed ? avg.toFixed(1) : avg} дн.` : "пока нет", "на один отчёт")}
       </div>
-      <div class="pf-grid">
-        <div class="pf-main">
-          ${prepHtml(d)}
-          ${myWorkHtml(d, true)}
-          ${myBadgesHtml(d)}
-        </div>
-        <aside class="pf-side">
-          <section class="pf-card pf-tenure">${tenureProgressHtml(d.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
+      <section class="pff-sec pff-rv" id="pff-work">
+        <h2 class="pff-h">Работа</h2>
+        ${prepHtml(d)}
+        ${myWorkHtml(d, true)}
+        <div class="pff-two">
+          <section class="pf-card pf-tenure"><h3>Стаж в команде</h3>${tenureProgressHtml(d.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
           ${manage ? `<section class="pf-card pf-manage">
             <h3>Управление</h3>
             <div class="pf-quiet">${person.paused_until ? `На паузе до ${esc(fmtDay(person.paused_until))}` : "Напоминания приходят"}</div>
             ${person.can_pause ? `<button type="button" class="btn" data-pp-pause>${person.paused_until ? "Изменить паузу" : "Поставить паузу"}</button>` : ""}
             ${person.can_transfer && person.load.length ? `<button type="button" class="btn" data-pp-transfer>Передать дела · ${person.load.length}</button>` : ""}
-          </section>` : ""}
-          ${teamTeaserHtml(d)}
-        </aside>
-      </div>
+          </section>` : teamTeaserHtml(d)}
+        </div>
+        ${manage ? teamTeaserHtml(d) : ""}
+      </section>
+      <section class="pff-sec pff-rv" id="pff-awards">
+        <h2 class="pff-h">Награды</h2>
+        ${myBadgesHtml(d) || `<div class="pf-quiet">Наград пока нет.</div>`}
+      </section>
+      ${folioFooterHtml(d, false)}
       ${devModeActive() ? devPanelHtml(d) : ""}
       ${state.isDeveloper && String(telegramId) !== String(state.telegramId) ? `<div class="sheet-actions"><button class="btn danger" data-purge-chats title="Только владелец команды">Удалить личные переписки</button></div>` : ""}
     </div>
   `;
+  wireFolio(sheet);
+  wireGraffiti(sheet, telegramId);
   wireProfileCommon(sheet, telegramId, async () => { await openUserProfile(telegramId); overlay.remove(); });
   sheet.querySelectorAll("[data-manage-roles]").forEach(button => button.addEventListener("click", () => openProfileRoles(Number(button.dataset.manageRoles))));
   sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
