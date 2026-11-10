@@ -3,7 +3,7 @@
 // Каталог и озвучки — живые данные API; остальное — справочник по кабинету для разработчиков
 // с генераторами ссылок и кодом, который можно сразу скопировать.
 import { $, esc } from "./utils.js";
-import { apiGet, apiPost, openSheet, toast, mediaUrl } from "./api.js";
+import { apiGet, apiPost, openSheet, dismissSheet, toast, mediaUrl } from "./api.js";
 import { openExternal, pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
 import { loadA365 } from "./a365.js";
@@ -174,25 +174,98 @@ function postersOf(r) {
 
 const fmtNum = n => Math.round(Number(n) || 0).toLocaleString("ru-RU");
 
-function cardHtml(g) {
-  const r = g.main, m = r.material_data || {};
+const STATUS_TEXT = { ongoing: "онгоинг", released: "вышло", anons: "анонс" };
+const PLAY_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>`;
+
+// Озвучки тайтла: сначала наша, дальше — у кого больше вышедших серий.
+const sortedDubs = g => [...g.dubs].sort((a, b) => (isOurs(b.translation) - isOurs(a.translation)) || ((b.last_episode || 0) - (a.last_episode || 0)));
+const epsText = (r, m) => r.episodes_count ? `${r.last_episode || "?"} / ${m.episodes_total || r.episodes_count}` : (r.type || "").includes("serial") ? "" : "фильм";
+const posterImg = (r, cls = "") => {
   const poster = posterOf(r);
-  const eps = r.episodes_count ? `${r.last_episode || "?"} из ${m.episodes_total || r.episodes_count} эп.` : (r.type || "").includes("serial") ? "" : "фильм";
-  const dubs = [...g.dubs].sort((a, b) => (b.last_episode || 0) - (a.last_episode || 0));
-  const genres = (m.anime_genres || m.genres || []).slice(0, 4);
+  return poster ? `<img class="${cls}" src="${esc(poster)}" data-fb="${esc(postersOf(r).slice(1).join(" "))}" alt="" loading="lazy" decoding="async">` : `<div class="kk-noposter ${cls}"></div>`;
+};
+
+function dubButton(r, d) {
+  const resume = progressOf(playerUrl(d.link));
+  return `<button type="button" class="kc-dub${isOurs(d.translation) ? " ours" : ""}${resume ? " resume" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${resume ? "Продолжить просмотр" : "Открыть плеер"}">
+    <span>${esc(d.translation?.title || "?")}</span>${d.last_episode ? `<i>${d.last_episode} эп.</i>` : ""}</button>`;
+}
+
+function cardHtml(g, index) {
+  const r = g.main, m = r.material_data || {};
+  const dubs = sortedDubs(g);
+  const top = dubs[0];
   const about = m.anime_description || m.description || "";
-  const status = ({ ongoing: "онгоинг", released: "вышло", anons: "анонс" })[m.anime_status] || "";
-  return `<article class="kk-card">
-    <div class="kk-cover">${poster ? `<img src="${esc(poster)}" data-fb="${esc(postersOf(r).slice(1).join(" "))}" alt="" loading="lazy">` : `<div class="kk-noposter"></div>`}${m.shikimori_rating ? `<span class="kk-rate">★ ${esc(String(m.shikimori_rating))}</span>` : ""}</div>
-    <div class="kk-card-main">
+  const eps = epsText(r, m);
+  const ours = dubs.some(d => isOurs(d.translation));
+  return `<article class="kc-card" tabindex="0" data-kc-key="${esc(String(g.key))}" style="--i:${Math.min(index, 24)}" aria-label="${esc(r.title)}">
+    <div class="kc-poster">
+      ${posterImg(r)}
+      <div class="kc-shade"></div>
+      <div class="kc-badges">${m.anime_status ? `<span class="kc-status ${esc(m.anime_status)}">${STATUS_TEXT[m.anime_status] || ""}</span>` : "<span></span>"}${m.shikimori_rating ? `<span class="kc-rate">★ ${esc(String(m.shikimori_rating))}</span>` : ""}</div>
+      ${eps ? `<span class="kc-eps">${esc(eps)}</span>` : ""}
+      <div class="kc-hover">
+        ${about ? `<p class="kc-about">${esc(about)}</p>` : ""}
+        ${top ? `<button type="button" class="kc-play" data-kk-play="${esc(top.link)}" data-kk-title="${esc(`${r.title} — ${top.translation?.title || ""}`)}">${PLAY_ICON}<span>${progressOf(playerUrl(top.link)) ? "Продолжить" : "Смотреть"}</span><i>${esc(top.translation?.title || "")}</i></button>` : ""}
+      </div>
+    </div>
+    <div class="kc-info">
       <b class="kk-clamp2">${esc(r.title)}</b>
-      <span class="kk-dim kk-clamp1">${esc([r.title_orig, r.year, eps].filter(Boolean).join(" · "))}</span>
-      <div class="kk-tags">${status ? `<span class="kk-tag ${esc(m.anime_status)}">${status}</span>` : ""}${genres.map(x => `<span class="kk-tag">${esc(x)}</span>`).join("")}</div>
-      ${about ? `<p class="kk-about kk-clamp3">${esc(about)}</p>` : ""}
-      <div class="kk-dubs">${dubs.map((d, di) => `<button type="button" class="kk-dub${isOurs(d.translation) ? " ours" : ""}${di >= 8 ? " kk-dub-more" : ""}" data-kk-play="${esc(d.link)}" data-kk-title="${esc(`${r.title} — ${d.translation?.title || ""}`)}" title="${progressOf(playerUrl(d.link)) ? "Продолжить просмотр" : "Открыть плеер"}">${progressOf(playerUrl(d.link)) ? "▶ " : ""}${esc(d.translation?.title || "?")}${d.last_episode ? ` <i>${d.last_episode}</i>` : ""}</button>`).join("")}${dubs.length > 8 ? `<button type="button" class="kk-dub kk-dub-toggle" data-more="+${dubs.length - 8}">+${dubs.length - 8}</button>` : ""}</div>
-      <div class="kk-ids">${r.shikimori_id ? `<span>shikimori ${esc(r.shikimori_id)}</span>` : ""}${r.kinopoisk_id ? `<span>КП ${esc(r.kinopoisk_id)}</span>` : ""}<span>${esc(r.id)}</span></div>
+      <span class="kc-meta kk-clamp1">${esc([r.year, r.title_orig].filter(Boolean).join(" · "))}</span>
+      <span class="kc-dubn">${dubs.length} ${dubs.length % 10 === 1 && dubs.length % 100 !== 11 ? "озвучка" : [2, 3, 4].includes(dubs.length % 10) && ![12, 13, 14].includes(dubs.length % 100) ? "озвучки" : "озвучек"}${ours ? `<em>наша</em>` : ""}</span>
     </div>
   </article>`;
+}
+
+function detailHtml(g) {
+  const r = g.main, m = r.material_data || {};
+  const dubs = sortedDubs(g);
+  const genres = (m.anime_genres || m.genres || []).slice(0, 8);
+  const about = m.anime_description || m.description || "";
+  const eps = epsText(r, m);
+  const facts = [
+    m.anime_status ? ["Статус", STATUS_TEXT[m.anime_status] || m.anime_status] : null,
+    r.year ? ["Год", r.year] : null,
+    eps ? ["Серии", eps] : null,
+    m.shikimori_rating ? ["Shikimori", `★ ${m.shikimori_rating}`] : null,
+    r.quality ? ["Качество", r.quality] : null,
+  ].filter(Boolean);
+  return `<div class="kc-detail">
+    <div class="kc-detail-poster">${posterImg(r)}</div>
+    <div class="kc-detail-main">
+      <div class="kc-detail-head">
+        <h3>${esc(r.title)}</h3>
+        <button type="button" class="kc-x" data-kc-close aria-label="Закрыть">×</button>
+      </div>
+      ${r.title_orig ? `<div class="kc-meta">${esc(r.title_orig)}</div>` : ""}
+      <dl class="kc-facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(String(v))}</dd></div>`).join("")}</dl>
+      ${genres.length ? `<div class="kc-genres">${genres.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
+      ${about ? `<p class="kc-detail-about">${esc(about)}</p>` : ""}
+      <div class="kc-detail-h"><b>Озвучки</b><span class="kk-dim">${dubs.length} · нажмите, чтобы открыть плеер</span></div>
+      <div class="kc-dubs">${dubs.map(d => dubButton(r, d)).join("")}</div>
+      <div class="kk-ids">${r.shikimori_id ? `<span>shikimori ${esc(r.shikimori_id)}</span>` : ""}${r.kinopoisk_id ? `<span>КП ${esc(r.kinopoisk_id)}</span>` : ""}<span>${esc(r.id)}</span></div>
+    </div>
+  </div>`;
+}
+
+// Битый адрес постера у Kodik — пробуем запасные, потом заглушка, а не значок сломанной картинки.
+function wirePosterFallback(root) {
+  root.querySelectorAll(".kc-poster img, .kc-detail-poster img").forEach(img => img.addEventListener("error", () => {
+    const rest = (img.dataset.fb || "").split(" ").filter(Boolean);
+    if (rest.length) { img.dataset.fb = rest.slice(1).join(" "); img.src = rest[0]; return; }
+    const ph = document.createElement("div"); ph.className = "kk-noposter"; img.replaceWith(ph);
+  }));
+}
+
+function openDetail(g) {
+  const overlay = openSheet(detailHtml(g), "wide");
+  overlay.querySelector(".sheet").classList.add("kc-sheet");
+  wirePosterFallback(overlay);
+  overlay.addEventListener("click", e => {
+    if (e.target.closest("[data-kc-close]")) { dismissSheet(overlay); return; }
+    const p = e.target.closest("[data-kk-play]");
+    if (p) { dismissSheet(overlay); openKodikPlayer(p.dataset.kkPlay, p.dataset.kkTitle); }
+  });
 }
 
 async function fetchCatalog(more) {
@@ -215,78 +288,98 @@ async function fetchCatalog(more) {
 }
 
 async function renderCatalog(box) {
+  const seg = (attr, rows, current) => `<div class="kc-seg" role="group" ${attr}>${rows.map(([v, t]) => `<button type="button" data-v="${v}" class="${current === v ? "on" : ""}" aria-pressed="${current === v}">${t}</button>`).join("")}</div>`;
+  const pick = (field, label) => `<label class="kc-pick"><select data-kk-f="${field}" aria-label="${label}"><option value="">${label}</option></select></label>`;
   box.innerHTML = `
-    <div class="kk-tools">
-      <input class="field-input" data-kk-q placeholder="Название или Shikimori ID — пусто: последние обновления" value="${esc(cat.q)}">
-      <select class="field-input" data-kk-types>
-        ${[["anime-serial,anime", "Аниме"], ["anime-serial", "Аниме-сериалы"], ["anime", "Аниме-фильмы"], ["", "Всё"]].map(([v, t]) => `<option value="${v}"${cat.types === v ? " selected" : ""}>${t}</option>`).join("")}
-      </select>
-      <select class="field-input" data-kk-status>
-        ${[["", "Любой статус"], ["ongoing", "Онгоинги"], ["released", "Вышедшие"], ["anons", "Анонсы"]].map(([v, t]) => `<option value="${v}"${cat.status === v ? " selected" : ""}>${t}</option>`).join("")}
-      </select>
-    </div>
-    <div class="kk-tools kk-facets">
-      <select class="field-input" data-kk-f="genre"><option value="">Жанр</option></select>
-      <select class="field-input" data-kk-f="year"><option value="">Год</option></select>
-      <select class="field-input" data-kk-f="country"><option value="">Страна</option></select>
-      <select class="field-input" data-kk-f="quality"><option value="">Качество</option></select>
-      <label class="kk-adult" title="Показывать тайтлы с жанрами «Эротика» и «Хентай»"><input type="checkbox" data-kk-adult${cat.adult ? " checked" : ""}> 18+</label>
-      <button type="button" class="btn ghost" data-kk-reset>Сбросить</button>
-    </div>
-    <div class="kk-list"><div class="kk-dim">Загружаю…</div></div>`;
-  const list = box.querySelector(".kk-list");
+    <section class="kc">
+      <header class="kc-hero">
+        <div class="kc-title"><h2>Каталог</h2><span class="kc-sub" data-kc-sub>Kodik · аниме, озвучки, плееры</span></div>
+        <label class="kc-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+          <input data-kk-q placeholder="Название или Shikimori ID" value="${esc(cat.q)}" aria-label="Поиск по каталогу">
+          <kbd>пусто — последние обновления</kbd>
+        </label>
+      </header>
+      <div class="kc-bar">
+        ${seg("data-kk-types", [["anime-serial,anime", "Аниме"], ["anime-serial", "Сериалы"], ["anime", "Фильмы"], ["", "Всё"]], cat.types)}
+        ${seg("data-kk-status", [["", "Любой статус"], ["ongoing", "Онгоинги"], ["released", "Вышедшие"], ["anons", "Анонсы"]], cat.status)}
+        <div class="kc-picks">
+          ${pick("genre", "Жанр")}${pick("year", "Год")}${pick("country", "Страна")}${pick("quality", "Качество")}
+          <label class="kc-adult" title="Показывать тайтлы с жанрами «Эротика» и «Хентай»"><input type="checkbox" data-kk-adult${cat.adult ? " checked" : ""}><span>18+</span></label>
+          <button type="button" class="kc-reset" data-kk-reset>Сбросить</button>
+        </div>
+      </div>
+      <div class="kc-list" aria-live="polite"></div>
+    </section>`;
+  const list = box.querySelector(".kc-list");
+  const sub = box.querySelector("[data-kc-sub]");
+  const skeleton = () => { list.innerHTML = `<div class="kc-grid">${Array.from({ length: 14 }, (_, i) => `<div class="kc-skel" style="--i:${i}"><i></i><b></b><span></span></div>`).join("")}</div>`; };
   const fillFacets = async () => {
     const f = await loadFacets(cat.types);
     const opts = (sel, rows, label, val) => {
       const el = box.querySelector(`[data-kk-f="${sel}"]`);
       if (!el) return;
       el.innerHTML = `<option value="">${label}</option>` + rows.map(r => { const v = String(r.title ?? r.year); return `<option value="${esc(v)}"${val === v ? " selected" : ""}>${esc(v)} · ${r.count}</option>`; }).join("");
+      el.closest(".kc-pick").classList.toggle("on", !!val);
     };
     opts("genre", cat.adult ? f.genres : f.genres.filter(g => !ADULT_GENRES.test(String(g.title).trim())), "Жанр", cat.genre); opts("year", f.years, "Год", cat.year);
     opts("country", f.countries, "Страна", cat.country); opts("quality", f.qualities, "Качество", cat.quality);
   };
   fillFacets();
+  let groupsByKey = new Map();
   const paint = () => {
     // Фильтра по качеству в API нет — отбираем по полю quality в ответе.
     const shown = cat.items.filter(r => (!cat.quality || r.quality === cat.quality) && (cat.adult || !isAdult(r)));
     const groups = groupResults(shown);
+    groupsByKey = new Map(groups.map(g => [String(g.key), g]));
     const hiddenAdult = cat.adult ? 0 : groupResults(cat.items.filter(isAdult)).length;
+    sub.textContent = cat.q
+      ? `Найдено тайтлов: ${groups.length}${hiddenAdult ? ` · скрыто 18+: ${hiddenAdult}` : ""}`
+      : `Последние обновления · в базе ${Number.isFinite(Number(cat.total)) ? fmtNum(cat.total) : "?"} материалов${hiddenAdult ? ` · скрыто 18+: ${hiddenAdult}` : ""}`;
     list.innerHTML = groups.length
-      ? `<div class="kk-dim kk-count">${cat.q ? `Найдено тайтлов: ${groups.length}` : `Последние обновления · в базе ${Number.isFinite(Number(cat.total)) ? Number(cat.total) : "?"} материалов`}${hiddenAdult ? ` · скрыто 18+: ${hiddenAdult}` : ""}</div><div class="kk-grid kk-grid-wide">${groups.map(cardHtml).join("")}</div>${!cat.q && cat.next ? `<button type="button" class="btn ghost kk-more" data-kk-more>Показать ещё</button>` : ""}`
-      : `<div class="kk-dim">Ничего не нашлось.</div>`;
-    // Битый адрес постера у Kodik — показываем заглушку, а не значок сломанной картинки.
-    list.querySelectorAll(".kk-cover img").forEach(img => img.addEventListener("error", () => {
-      const rest = (img.dataset.fb || "").split(" ").filter(Boolean);
-      if (rest.length) { img.dataset.fb = rest.slice(1).join(" "); img.src = rest[0]; return; }
-      const ph = document.createElement("div"); ph.className = "kk-noposter"; img.replaceWith(ph);
-    }));
-    list.querySelector("[data-kk-more]")?.addEventListener("click", async e => { e.target.disabled = true; await fetchCatalog(true).catch(err => toast(err.message, "error")); paint(); });
+      ? `<div class="kc-grid">${groups.map(cardHtml).join("")}</div>${!cat.q && cat.next ? `<button type="button" class="kc-more" data-kk-more>Показать ещё</button>` : ""}`
+      : `<div class="kc-empty"><b>Ничего не нашлось</b><span>Попробуйте другое название или сбросьте фильтры.</span></div>`;
+    wirePosterFallback(list);
+    list.querySelector("[data-kk-more]")?.addEventListener("click", async e => { e.target.disabled = true; e.target.textContent = "Загружаю…"; await fetchCatalog(true).catch(err => toast(err.message, "error")); paint(); });
     // Полный список озвучек — после того как карточки уже на экране; перерисуем, когда догрузится.
-    if (!cat.q) loadFullDubs(groups, () => { if (list.isConnected && !cat.q) paint(); });
+    if (!cat.q) loadFullDubs(groups, () => { if (list.isConnected && !cat.q) { list.classList.add("kc-quiet"); paint(); } });
   };
   const reload = async () => {
-    list.innerHTML = `<div class="kk-dim">Загружаю…</div>`;
-    try { await fetchCatalog(false); paint(); } catch (err) { list.innerHTML = `<div class="kk-dim">${esc(err.message || "Kodik не ответил")}</div>`; }
+    list.classList.remove("kc-quiet");
+    skeleton();
+    try { await fetchCatalog(false); paint(); } catch (err) { list.innerHTML = `<div class="kc-empty"><b>Kodik не ответил</b><span>${esc(err.message || "")}</span></div>`; }
   };
+  const setSeg = (el, value) => el.querySelectorAll("button").forEach(b => { const on = b.dataset.v === value; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
   let t = 0;
   box.querySelector("[data-kk-q]").addEventListener("input", e => { cat.q = e.target.value; clearTimeout(t); t = setTimeout(reload, 450); });
-  box.querySelector("[data-kk-types]").addEventListener("change", e => { cat.types = e.target.value; fillFacets(); reload(); });
+  box.querySelector("[data-kk-types]").addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]"); if (!b || b.dataset.v === cat.types) return;
+    cat.types = b.dataset.v; setSeg(e.currentTarget, cat.types); fillFacets(); reload();
+  });
+  box.querySelector("[data-kk-status]").addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]"); if (!b || b.dataset.v === cat.status) return;
+    cat.status = b.dataset.v; setSeg(e.currentTarget, cat.status); reload();
+  });
   // Только эти четыре поля: запись в cat[любое имя из DOM] позволила бы странице подменить, например, cat.total.
   const FACET_FIELDS = { genre: "genre", year: "year", country: "country", quality: "quality" };
   box.querySelectorAll("[data-kk-f]").forEach(el => el.addEventListener("change", () => {
     const field = FACET_FIELDS[el.dataset.kkF];
     if (!field) return;
     cat[field] = String(el.value);
+    el.closest(".kc-pick").classList.toggle("on", !!el.value);
     if (field === "quality") paint(); else reload();
   }));
   box.querySelector("[data-kk-adult]").addEventListener("change", e => { cat.adult = e.target.checked; fillFacets(); paint(); });
   box.querySelector("[data-kk-reset]").addEventListener("click", () => { Object.assign(cat, { genre: "", year: "", country: "", quality: "", status: "", adult: false, items: [] }); renderCatalog(box); });
-  box.querySelector("[data-kk-status]").addEventListener("change", e => { cat.status = e.target.value; reload(); });
+  const openCard = card => { const g = groupsByKey.get(card.dataset.kcKey); if (g) openDetail(g); };
   list.addEventListener("click", e => {
-    const more = e.target.closest(".kk-dub-toggle");
-    if (more) { const card = more.closest(".kk-card"); const open = card.classList.toggle("kk-dubs-open"); more.textContent = open ? "свернуть" : more.dataset.more; return; }
     const p = e.target.closest("[data-kk-play]");
-    if (p) openKodikPlayer(p.dataset.kkPlay, p.dataset.kkTitle);
+    if (p) { openKodikPlayer(p.dataset.kkPlay, p.dataset.kkTitle); return; }
+    const card = e.target.closest(".kc-card");
+    if (card) openCard(card);
+  });
+  list.addEventListener("keydown", e => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("kc-card")) { e.preventDefault(); openCard(e.target); }
   });
   if (cat.items.length) paint(); else reload();
 }
@@ -677,50 +770,102 @@ function niceMax(v) {
   return [1, 2, 2.5, 5, 10].map(k => k * p).find(x => x >= v);
 }
 
-function lineChartSvg(cur, prev, W = 1000) {
-  const H = 260, L = 48, R = 12, T = 14, B = 28;
-  const n = cur.length;
+// Монотонная кубическая кривая (Fritsch–Carlson): плавная, но не уходит ниже нуля и не рисует пиков, которых нет в данных.
+function smoothPath(pts) {
+  const n = pts.length;
+  if (!n) return "";
+  if (n === 1) return `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  const dx = [], m = [];
+  for (let i = 0; i < n - 1; i++) { dx[i] = pts[i + 1][0] - pts[i][0]; m[i] = dx[i] ? (pts[i + 1][1] - pts[i][1]) / dx[i] : 0; }
+  const t = [m[0]];
+  for (let i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
+  t[n - 1] = m[n - 2];
+  for (let i = 0; i < n - 1; i++) {
+    if (!m[i]) { t[i] = 0; t[i + 1] = 0; continue; }
+    const a = t[i] / m[i], b = t[i + 1] / m[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+  }
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3;
+    d += `C${(pts[i][0] + h).toFixed(1)},${(pts[i][1] + t[i] * h).toFixed(1)} ${(pts[i + 1][0] - h).toFixed(1)},${(pts[i + 1][1] - t[i + 1] * h).toFixed(1)} ${pts[i + 1][0].toFixed(1)},${pts[i + 1][1].toFixed(1)}`;
+  }
+  return d;
+}
+
+// Геометрия графика «Показы по дням» — одна на отрисовку и наведение.
+const LINE = { H: 280, L: 52, R: 16, T: 18, B: 30 };
+function lineGeom(cur, prev, W) {
+  const { H, L, R, T, B } = LINE, n = cur.length;
   const max = niceMax(Math.max(1, ...cur.map(r => r.count), ...prev.map(r => r.count)));
-  const x = i => L + (n <= 1 ? 0 : i * (W - L - R) / (n - 1));
-  const y = v => T + (H - T - B) * (1 - v / max);
-  const path = rows => rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(r.count).toFixed(1)}`).join("");
+  return { W, n, max, x: i => L + (n <= 1 ? 0 : i * (W - L - R) / (n - 1)), y: v => T + (H - T - B) * (1 - v / max) };
+}
+const fmtAxis = v => v >= 10000 ? `${+(v / 1000).toFixed(1)}k` : fmtN(v);
+let chartSeq = 0;
+
+function lineChartSvg(cur, prev, W = 1000) {
+  const { H, L, R, T, B } = LINE;
+  const { n, max, x, y } = lineGeom(cur, prev, W);
+  const pts = rows => rows.map((r, i) => [x(i), y(r.count)]);
+  const curPath = smoothPath(pts(cur));
+  const avg = cur.reduce((a, r) => a + r.count, 0) / Math.max(1, n);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(k => k * max);
-  const step = Math.max(1, Math.ceil(n / 8));
+  const step = Math.max(1, Math.ceil(n / 9));
+  const id = `kkg${++chartSeq}`;
   return `<svg class="kk-line" viewBox="0 0 ${W} ${H}" data-w="${W}" role="img" aria-label="Показы по дням">
-    ${ticks.map(t => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${L - 8}" y="${y(t) + 4}" text-anchor="end">${fmtN(t)}</text>`).join("")}
+    <defs>
+      <linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="g0"/><stop offset="1" class="g1"/></linearGradient>
+    </defs>
+    ${ticks.map((t, k) => `<line class="grid${k ? "" : " base"}" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${L - 10}" y="${y(t) + 4}" text-anchor="end">${fmtAxis(t)}</text>`).join("")}
     ${cur.map((r, i) => (i % step === 0 && n - 1 - i >= step / 2) || i === n - 1 ? `<text class="ax" x="${x(i)}" y="${H - 8}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}">${esc(r.date.slice(0, 5))}</text>` : "").join("")}
-    ${prev.length ? `<path class="prev" d="${path(prev.slice(-n))}"/>` : ""}
-    <path class="area" d="${path(cur)}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z"/>
-    <path class="cur" d="${path(cur)}"/>
+    <path class="area" fill="url(#${id})" d="${curPath}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z"/>
+    ${prev.length ? `<path class="prev" d="${smoothPath(pts(prev.slice(-n)))}"/>` : ""}
+    <line class="avg" x1="${L}" x2="${W - R}" y1="${y(avg)}" y2="${y(avg)}"/>
+    <text class="avg-l" x="${W - R}" y="${y(avg) - 6}" text-anchor="end">среднее ${fmtN(avg)}</text>
+    <path class="cur" pathLength="1" d="${curPath}"/>
     <line class="cross" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/>
-    <circle class="dot" r="5" visibility="hidden"/>
+    <circle class="dot prev-dot" r="4" visibility="hidden"/>
+    <circle class="dot" r="6" visibility="hidden"/>
     <rect class="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/>
   </svg>`;
+}
+
+function sparkSvg(values, W = 160, H = 44) {
+  const max = Math.max(1, ...values), n = values.length;
+  const pts = values.map((v, i) => [n <= 1 ? 0 : i * W / (n - 1), 3 + (H - 6) * (1 - v / max)]);
+  const d = smoothPath(pts), id = `kks${++chartSeq}`;
+  return `<svg class="kk-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="g0"/><stop offset="1" class="g1"/></linearGradient></defs>
+    <path class="area" fill="url(#${id})" d="${d}L${W},${H}L0,${H}Z"/><path class="cur" pathLength="1" d="${d}"/></svg>`;
 }
 
 function wireLineHover(wrap, cur, prev) {
   const svg = wrap.querySelector("svg");
   const tip = wrap.querySelector(".kk-tip");
-  const cross = svg.querySelector(".cross"), dot = svg.querySelector(".dot");
-  const W = Number(svg.dataset.w) || 1000, H = 260, L = 48, R = 12, T = 14, B = 28, n = cur.length;
-  const max = niceMax(Math.max(1, ...cur.map(r => r.count), ...prev.map(r => r.count)));
+  const cross = svg.querySelector(".cross"), dot = svg.querySelector(".dot:not(.prev-dot)"), pdot = svg.querySelector(".prev-dot");
+  const { L, R } = LINE;
+  const { W, n, x, y } = lineGeom(cur, prev, Number(svg.dataset.w) || 1000);
   const prevAligned = prev.slice(-n);
+  const hide = () => { tip.hidden = true; [cross, dot, pdot].forEach(el => el.setAttribute("visibility", "hidden")); };
   svg.querySelector(".hit").addEventListener("mousemove", e => {
     const box = svg.getBoundingClientRect();
     const vx = (e.clientX - box.left) / box.width * W;
     const i = Math.max(0, Math.min(n - 1, Math.round((vx - L) / ((W - L - R) / Math.max(1, n - 1)))));
-    const px = L + i * (W - L - R) / Math.max(1, n - 1);
-    const py = T + (H - T - B) * (1 - cur[i].count / max);
+    const px = x(i), py = y(cur[i].count);
     cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
     dot.setAttribute("cx", px); dot.setAttribute("cy", py); dot.setAttribute("visibility", "visible");
+    if (prevAligned[i]) { pdot.setAttribute("cx", px); pdot.setAttribute("cy", y(prevAligned[i].count)); pdot.setAttribute("visibility", "visible"); }
     const d = parseDay(cur[i].date);
-    tip.innerHTML = `<b>${esc(cur[i].date)} · ${WEEKDAYS[(d.getDay() + 6) % 7]}</b><span>${fmtN(cur[i].count)} показов</span>${prevAligned[i] ? `<span class="kk-dim">прошлый период: ${fmtN(prevAligned[i].count)}</span>` : ""}`;
+    const diff = prevAligned[i]?.count ? (cur[i].count - prevAligned[i].count) / prevAligned[i].count * 100 : null;
+    tip.innerHTML = `<span class="kk-tip-d">${WEEKDAYS[(d.getDay() + 6) % 7]}, ${esc(cur[i].date)}</span><b>${fmtN(cur[i].count)}<small> показов</small></b>${prevAligned[i] ? `<span class="kk-tip-p">прошлый период ${fmtN(prevAligned[i].count)}${diff == null ? "" : ` <em class="${diff >= 0 ? "kk-up" : "kk-down"}">${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(0)}%</em>`}</span>` : ""}`;
     tip.hidden = false;
-    const left = px / W * box.width;
-    tip.style.left = `${Math.min(box.width - 170, Math.max(0, left + 12))}px`;
-    tip.style.top = `${py / H * box.height - 10}px`;
+    const left = px / W * box.width, top = py / LINE.H * box.height;
+    const flip = left > box.width - 200;
+    tip.style.left = `${flip ? left - 14 : left + 14}px`;
+    tip.style.top = `${Math.max(46, top)}px`;
+    tip.classList.toggle("flip", flip);
   });
-  svg.querySelector(".hit").addEventListener("mouseleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+  svg.querySelector(".hit").addEventListener("mouseleave", hide);
 }
 
 async function renderStats(box) {
@@ -777,19 +922,19 @@ async function renderStats(box) {
       const bestWd = wdAvg.indexOf(Math.max(...wdAvg));
       const srcTitle = (sources.find(s => s.value === statsState.src) || {}).title || "";
       out.innerHTML = `
-        <div class="kk-tiles">
-          <div class="kk-tile"><b>${fmtN(total)}</b><span>показов за ${days} дн. · ${esc(srcTitle)}</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(0)}% к прошлым ${days} дн.</em>`}</div>
-          <div class="kk-tile"><b>${fmtN(total / cur.length)}</b><span>в среднем за день</span><em class="kk-dim">за последние 7 дн.: ${fmtN(last7)}</em></div>
-          <div class="kk-tile"><b>${fmtN(best.count)}</b><span>лучший день · ${esc(best.date)}</span><em class="kk-dim">${WEEKDAYS[(parseDay(best.date).getDay() + 6) % 7]}</em></div>
-          <div class="kk-tile"><b>${fmtN(last.count)}</b><span>${esc(last.date)} · сегодня (день ещё идёт)</span></div>
+        <div class="kk-tiles kk-tiles-v2">
+          <div class="kk-tile hero"><span class="kk-tile-k">Показы · ${days} дн.</span><b>${fmtN(total)}</b>${delta == null ? `<span>${esc(srcTitle)}</span>` : `<em class="kk-delta ${delta >= 0 ? "kk-up" : "kk-down"}">${delta >= 0 ? "↑" : "↓"} ${Math.abs(delta).toFixed(0)}%<small>к прошлым ${days} дн.</small></em>`}${sparkSvg(cur.map(r => r.count))}</div>
+          <div class="kk-tile"><span class="kk-tile-k">В среднем за день</span><b>${fmtN(total / cur.length)}</b><span>за последние 7 дн. — ${fmtN(last7)}</span></div>
+          <div class="kk-tile"><span class="kk-tile-k">Лучший день</span><b>${fmtN(best.count)}</b><span>${esc(best.date)} · ${WEEKDAYS[(parseDay(best.date).getDay() + 6) % 7]}</span></div>
+          <div class="kk-tile live"><span class="kk-tile-k"><i class="kk-pulse"></i>Сегодня</span><b>${fmtN(last.count)}</b><span>${esc(last.date)} · день ещё идёт</span></div>
         </div>
         ${statsState.table ? `<div class="kk-table"><table><thead><tr><th>Дата</th><th>День</th><th>Показы</th><th>Прошлый период</th></tr></thead><tbody>${cur.map((r, i) => `<tr><td>${esc(r.date)}</td><td>${WEEKDAYS[(parseDay(r.date).getDay() + 6) % 7]}</td><td>${fmtN(r.count)}</td><td>${prev.slice(-cur.length)[i] ? fmtN(prev.slice(-cur.length)[i].count) : "—"}</td></tr>`).join("")}</tbody></table></div>`
-        : `<section class="kk-chart"><div class="kk-chart-h"><b>Показы по дням</b><span class="kk-key"><i class="cur"></i>этот период<i class="prev"></i>прошлый</span></div>
-            <div class="kk-linewrap">${lineChartSvg(cur, prev, Math.max(480, Math.round(out.clientWidth - 32)))}<div class="kk-tip" hidden></div></div></section>`}
+        : `<section class="kk-chart kk-chart-main"><div class="kk-chart-h"><div><b>Показы по дням</b><span class="kk-dim">${esc(srcTitle)} · ${esc(cur[0].date)} — ${esc(last.date)}</span></div><span class="kk-key"><i class="cur"></i>этот период<i class="prev"></i>прошлый<i class="avg"></i>среднее</span></div>
+            <div class="kk-linewrap">${lineChartSvg(cur, prev, Math.max(480, Math.round(out.clientWidth - 40)))}<div class="kk-tip" hidden></div></div></section>`}
         <div class="kk-two">
-          <section class="kk-chart"><div class="kk-chart-h"><b>По дням недели</b><span class="kk-dim">в среднем за день · больше всего — ${WEEKDAYS[bestWd]}</span></div>
-            <div class="kk-wd">${wdAvg.map((v, i) => `<div title="${WEEKDAYS[i]}: в среднем ${fmtN(v)}"><span>${fmtN(v)}</span><i style="height:${Math.max(3, v / wdMax * 100)}%" class="${i === bestWd ? "top" : ""}"></i><b>${WEEKDAYS[i]}</b></div>`).join("")}</div></section>
-          <section class="kk-chart kk-srcs"><div class="kk-chart-h"><b>Откуда показы</b><span class="kk-dim">доля от всех показов · ${days} дн.</span></div><div class="kk-srclist kk-dim">Считаю…</div></section>
+          <section class="kk-chart"><div class="kk-chart-h"><div><b>По дням недели</b><span class="kk-dim">в среднем за день</span></div><span class="kk-best">пик — ${WEEKDAYS[bestWd]}</span></div>
+            <div class="kk-wd">${wdAvg.map((v, i) => `<div title="${WEEKDAYS[i]}: в среднем ${fmtN(v)}" style="--i:${i}"><span>${fmtN(v)}</span><i style="--h:${Math.max(3, v / wdMax * 100).toFixed(1)}%" class="${i === bestWd ? "top" : ""}"></i><b>${WEEKDAYS[i]}</b></div>`).join("")}</div></section>
+          <section class="kk-chart kk-srcs"><div class="kk-chart-h"><div><b>Откуда показы</b><span class="kk-dim">доля от всех показов · ${days} дн.</span></div></div><div class="kk-srclist kk-dim">Считаю…</div></section>
         </div>`;
       if (!statsState.table) wireLineHover(out.querySelector(".kk-linewrap"), cur, prev);
       // Сравнение источников: тот же период по каждому (запросы кэшируются на сервере).
