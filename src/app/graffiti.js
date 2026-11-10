@@ -2,7 +2,7 @@
 // Видят все, рисуют только разработчики — прямо по странице, инструменты: карандаш, фломастер, маркер, баллончик, ластик.
 
 import { state } from "./state.js";
-import { api, mediaUrl, toast, askConfirm } from "./api.js";
+import { apiPost, mediaUrl, toast, askConfirm } from "./api.js";
 
 const COLORS = ["#ffffff", "#111111", "#ff3b6b", "#ff9f1c", "#ffe14d", "#3ddc84", "#2ec5ff", "#7a5cff", "#ff5cf0"];
 const TOOLS = [
@@ -183,7 +183,7 @@ function openEditor(hero, telegramId) {
     let empty = true;
     for (let i = 3; i < px.length; i += 4) if (px[i]) { empty = false; break; }
     try {
-      await api("PUT", `/graffiti/${encodeURIComponent(telegramId)}`, { png: empty ? "" : canvas.toDataURL("image/png") });
+      await apiPost(`/graffiti/${encodeURIComponent(telegramId)}`, { png: empty ? "" : canvas.toDataURL("image/png") });
       toast(empty ? "Граффити стёрто." : "Граффити сохранено — его видят все.");
       close(true);
     } catch (e) { toast(`Не удалось сохранить: ${e.message}`, "error"); }
