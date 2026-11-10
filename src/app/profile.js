@@ -9,10 +9,11 @@ import { fillRemindersCard } from "./reminders.js";
 import { fetchPerson, fmtDay, wireWorkSection, fillPauseCard } from "./people.js";
 import { loadPeopleNames, personName } from "./people-names.js";
 import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken, tabSkeleton, askConfirm } from "./api.js";
-import { $, esc, isOverdue, relTime, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
+import { $, esc, isOverdue, relTime, formatWhen, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
 import { setQuickFilter, loadReports } from "./reports.js";
 import { switchTab } from "./tabs.js";
-import { playDonutIntro } from "./charts.js";
+import { playDonutIntro, deltaPillHtml } from "./charts.js";
+import { rollText } from "./roll-digits.js";
 import { devModeActive, devPanelHtml, wireDevPanel } from "./devmode.js";
 import { vaultEntryHtml, wireVaultEntry } from "./vault.js";
 import { openReportDetail } from "./report-detail.js";
@@ -347,17 +348,25 @@ export async function loadProfile() {
   ` : `
     <div class="bcell wide goal-card" id="goal-card">
       <h3>Цель месяца</h3>
-      <div class="goal-hint" style="margin-top:4px;">Цель на месяц не задана — нажмите, чтобы поставить себе план.</div>
+      <div class="goal-hint">Цель на месяц не задана — поставьте себе план, и здесь появится кольцо прогресса.</div>
       <div class="goal-hint" id="goal-pace" hidden></div>
+      <span class="pff-goal-set"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Поставить цель</span>
     </div>
   `;
 
-  const kpi = (label, val, sub, empty) => `
-    <div class="pf-kpi${empty ? " empty" : ""}">
+  // Число в плитке «докручивается» от нуля, когда плитка появляется на экране (data-count), а справа от него —
+  // небольшое дополнение: сравнение с прошлым месяцем, столбики по неделям, кольцо доли.
+  const kpi = (label, val, sub, o = {}) => `
+    <div class="pf-kpi${o.empty ? " empty" : ""}">
       <span class="l">${label}</span>
-      <b>${empty ? "пока нет" : val}</b>
+      <span class="pff-kv"><b${o.empty || o.count == null ? "" : ` data-count="${o.count}" data-dec="${o.dec || 0}" data-suffix="${esc(o.suffix || "")}"`}>${o.empty ? "пока нет" : val}</b>${o.extra || ""}</span>
       <span class="s">${sub}</span>
     </div>`;
+  const prevMonth = me.completed_prev_month || 0;
+  const monthDelta = prevMonth > 0 ? deltaPillHtml(Math.round((((me.completed_month || 0) - prevMonth) / prevMonth) * 100)) : "";
+  const onTimeRing = me.on_time_pct != null
+    ? `<svg class="pff-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15"></circle><circle class="f" cx="18" cy="18" r="15" pathLength="100" style="--v:${Math.max(0, Math.min(100, me.on_time_pct))};"></circle></svg>`
+    : "";
 
   // Свой профиль — как портфолио (эталон: одноколоночный сайт-визитка): приветствие с меняющейся
   // подписью, ниже секции одна под другой, сверху плавающая «таблетка» с переходом по секциям и
@@ -365,32 +374,36 @@ export async function loadProfile() {
   root.innerHTML = `
     <div class="pf pf-folio">
       <nav class="pff-pill" aria-label="Разделы профиля">
-        <span class="pff-pill-ic" aria-hidden="true"><i></i><i></i></span>
+        <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(me.telegram_id, me.display_name || me.name, "sm")}</span>
         ${[["pff-about", "Обо мне"], ["pff-work", "Работа"], ["pff-awards", "Награды"], ["pff-activity", "Активность"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
         <span class="pff-pct" aria-hidden="true">0%</span>
       </nav>
       <section class="pff-sec" id="pff-about">${folioHeroHtml(me)}</section>
-      <div class="pf-kpis pff-stats">
-        ${kpi("Сейчас на мне", me.assigned ?? 0, me.overdue ? `<span class="warn">${me.overdue} просрочено</span>` : "всё в сроках")}
-        ${kpi("Закрыто", me.completed_total ?? 0, `${me.completed_week ?? 0} за неделю · ${me.completed_month ?? 0} за месяц`)}
-        ${kpi("Вовремя", `${me.on_time_pct}%`, me.on_time_pct != null ? "закрыто не позже срока" : "появится после первого отчёта со сроком", me.on_time_pct == null)}
-        ${kpi("Средний срок", `${me.avg_days != null ? me.avg_days.toFixed(1) : ""} дн.`, me.avg_days != null ? "на один отчёт" : "появится после первой закрытой серии", me.avg_days == null)}
+      <div class="pf-kpis pff-stats pff-rv">
+        ${kpi("Сейчас на мне", me.assigned ?? 0, me.overdue ? `<span class="warn">${me.overdue} просрочено</span>` : "всё в сроках", { count: me.assigned ?? 0 })}
+        ${kpi("Закрыто", me.completed_total ?? 0, `${me.completed_week ?? 0} за неделю · ${me.completed_month ?? 0} за месяц`, { count: me.completed_total ?? 0, extra: `${monthDelta}<span class="pff-spark" data-pff-spark hidden></span>` })}
+        ${kpi("Вовремя", `${me.on_time_pct}%`, me.on_time_pct != null ? "закрыто не позже срока" : "появится после первого отчёта со сроком", { empty: me.on_time_pct == null, count: me.on_time_pct, suffix: "%", extra: onTimeRing })}
+        ${kpi("Средний срок", `${me.avg_days != null ? me.avg_days.toFixed(1) : ""} дн.`, me.avg_days != null ? "на один отчёт" : "появится после первой закрытой серии", { empty: me.avg_days == null, count: me.avg_days, dec: 1, suffix: " дн." })}
       </div>
-      <section class="pff-sec" id="pff-work">
+      <section class="pff-sec pff-rv" id="pff-work">
         <h2 class="pff-h">Работа</h2>
         ${prepHtml(me)}
         ${myWorkHtml(me)}
         <div class="pff-two">
           ${goalCardHtml}
-          <section class="pf-card pf-tenure">${tenureProgressHtml(me.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
+          <section class="pf-card pf-tenure"><h3>Стаж в команде</h3>${tenureProgressHtml(me.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
         </div>
       </section>
-      <section class="pff-sec" id="pff-awards">
+      <section class="pff-sec pff-rv" id="pff-awards">
         <h2 class="pff-h">Награды</h2>
         ${myBadgesHtml(me) || `<div class="pf-quiet">Наград пока нет — они появятся за закрытые серии и стаж.</div>`}
       </section>
-      <section class="pff-sec" id="pff-activity">
+      <section class="pff-sec pff-rv" id="pff-activity">
         <h2 class="pff-h">Активность</h2>
+        <section class="pf-card pff-pulse" id="pulse-card">
+          <div class="pf-card-head"><h3>Пульс <span class="n">полгода по дням</span></h3><span class="pff-pulse-sum" id="pulse-sum"></span></div>
+          <div id="pulse-body"><div class="pff-heat-skel"></div></div>
+        </section>
         <section class="pf-card" id="activity-card">
           <div class="pf-card-head"><h3>Последние действия</h3><button class="pf-link" id="activity-all">вся активность →</button></div>
           <div class="pf-acts" id="activity-list"><div class="pf-quiet">загружаю…</div></div>
@@ -417,10 +430,11 @@ export async function loadProfile() {
   fillPauseCard(root, me.telegram_id);
   fillRemindersCard(root);
   fillRecentActivity(root);
+  fillPulse(root);
   let suggested = null;
   if (!goalSet) suggestGoal(root).then(v => { suggested = v; });
   root.querySelector("#goal-card").addEventListener("click", () => monthlyGoalDialog(me.monthly_goal || suggested));
-  root.querySelector("#btn-edit-profile").addEventListener("click", () => editProfileDialog(me));
+  root.querySelectorAll("#btn-edit-profile, [data-edit-profile]").forEach(b => b.addEventListener("click", () => editProfileDialog(me)));
   root.querySelectorAll("[data-manage-roles]").forEach(button => button.addEventListener("click", () => openProfileRoles(Number(button.dataset.manageRoles))));
   root.querySelector("#activity-all").addEventListener("click", () => openMyActivitySheet());
   root.querySelectorAll("[data-open-report]").forEach(row => {
@@ -440,6 +454,15 @@ function folioRoles(d) {
   return list.length ? list : ["Участник Project"];
 }
 
+const WEEKDAYS_RU = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+function greeting(h) {
+  if (h < 5) return "Доброй ночи";
+  if (h < 12) return "Доброе утро";
+  if (h < 18) return "Добрый день";
+  return "Добрый вечер";
+}
+
 function folioHeroHtml(d) {
   const tier = tenureTier(d.member_since_days);
   const name = d.display_name || d.name || "";
@@ -457,19 +480,20 @@ function folioHeroHtml(d) {
   ].filter(Boolean).join(`<i class="dot"></i>`);
   const bio = d.status_text || d.bio
     ? `${d.status_text ? `<p class="pff-status">${esc(d.status_text)}</p>` : ""}${d.bio ? `<p class="pff-bio">${esc(d.bio)}</p>` : ""}`
-    : `<p class="pff-bio empty">Статус и пара слов о себе — их видят коллеги в карточке профиля. Нажмите «Изменить».</p>`;
+    : `<button type="button" class="pff-bio-add" data-edit-profile><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Добавить статус и пару слов о себе — их видят коллеги</button>`;
+  const now = new Date();
   return `
     <div class="pf-hero pff-hero">
       <div class="pf-banner pff-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}" data-editable="1"></div>
       <div class="pff-hero-row">
         <div class="pff-intro">
-          <h1 class="pff-hi">Привет, я <b>${esc(first)}</b>${d.is_developer || d.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</h1>
+          <div class="pff-eyebrow"><span>${WEEKDAYS_RU[now.getDay()]}, ${now.getDate()} ${MONTHS_RU[now.getMonth() + 1]}</span><i class="dot"></i><span class="pff-clock" data-pff-clock></span></div>
+          <h1 class="pff-hi"><span data-pff-greet>${greeting(now.getHours())}</span>, <b>${esc(first)}</b>${d.is_developer || d.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</h1>
           <div class="pff-role" aria-live="polite"><span class="pff-role-t" data-pff-roles="${esc(JSON.stringify(roles))}">${esc(roles[0])}</span>${rankTagHtml(d.studio_rank)}</div>
           ${bio}
           <div class="pf-meta">${meta}</div>
-          <div class="pff-clock"><span data-pff-clock></span>${d.is_online ? `<span class="on">· в сети</span>` : ""}</div>
         </div>
-        <span class="avatar-ring pff-av${tier ? " tier-" + tier : ""}">${avatarHtml(d.telegram_id, name, "xl")}</span>
+        <span class="avatar-ring pff-av${tier ? " tier-" + tier : ""}${d.is_online ? " online" : ""}">${avatarHtml(d.telegram_id, name, "xl")}</span>
       </div>
       <div class="pff-actions">
         ${profileRolesHtml(d, true)}
@@ -489,8 +513,8 @@ function folioFooterHtml(d) {
     </footer>`;
 }
 
-// Плавающая таблетка: переход по секциям, подсветка текущей и процент прокрутки; подпись роли
-// меняется по кругу (с размытием, как в эталоне); часы — локальное время.
+// Плавающая таблетка: переход по секциям, подсветка текущей и кольцо прокрутки вокруг аватара; подпись роли
+// меняется по кругу; часы — местное время с прокруткой цифр; секции проявляются, когда до них докрутили.
 function wireFolio(root) {
   const folio = root.querySelector(".pf-folio");
   if (!folio) return;
@@ -498,6 +522,7 @@ function wireFolio(root) {
   let scroller = folio.parentElement;
   while (scroller && scroller !== document.body && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
   if (!scroller || scroller === document.body) scroller = document.scrollingElement || document.documentElement;
+  const isDoc = scroller === document.documentElement || scroller === document.scrollingElement;
   const pill = folio.querySelector(".pff-pill");
   const pct = pill.querySelector(".pff-pct");
   const btns = [...pill.querySelectorAll("[data-pff-go]")];
@@ -505,11 +530,16 @@ function wireFolio(root) {
     const b = e.target.closest("[data-pff-go]");
     if (b) folio.querySelector(`#${b.dataset.pffGo}`)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   });
+  const banner = folio.querySelector(".pff-banner");
   const onScroll = () => {
     if (!folio.isConnected) { scroller.removeEventListener("scroll", onScroll); return; }
     const max = scroller.scrollHeight - scroller.clientHeight;
-    pct.textContent = `${max > 0 ? Math.round(Math.min(1, scroller.scrollTop / max) * 100) : 100}%`;
-    const top = scroller === document.documentElement || scroller === document.scrollingElement ? 0 : scroller.getBoundingClientRect().top;
+    const p = max > 0 ? Math.round(Math.min(1, scroller.scrollTop / max) * 100) : 100;
+    pct.textContent = `${p}%`;
+    pill.style.setProperty("--p", String(p));
+    // лёгкий параллакс баннера, пока шапка на экране
+    if (banner && !reduce && scroller.scrollTop < 700) banner.style.setProperty("--pff-y", String(Math.round(scroller.scrollTop * 0.18)));
+    const top = isDoc ? 0 : scroller.getBoundingClientRect().top;
     let cur = btns[0];
     for (const b of btns) {
       const sec = folio.querySelector(`#${b.dataset.pffGo}`);
@@ -521,14 +551,33 @@ function wireFolio(root) {
   scroller.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
+  // Проявление секций. Без IntersectionObserver (или при выключенных анимациях) — всё видно сразу.
+  const rv = [...folio.querySelectorAll(".pff-rv")];
+  if (reduce || typeof window.IntersectionObserver !== "function") {
+    rv.forEach(el => el.classList.add("in"));
+  } else {
+    folio.classList.add("pff-anim");
+    const io = new window.IntersectionObserver(entries => {
+      for (const en of entries) {
+        if (!en.isIntersecting) continue;
+        io.unobserve(en.target);
+        en.target.classList.add("in");
+        countUp(en.target);
+      }
+    }, { root: isDoc ? null : scroller, rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+    rv.forEach(el => io.observe(el));
+  }
+
   const clock = folio.querySelector("[data-pff-clock]");
+  const greet = folio.querySelector("[data-pff-greet]");
   const role = folio.querySelector("[data-pff-roles]");
   let roles = [];
   try { roles = JSON.parse(role?.dataset.pffRoles || "[]"); } catch (_) { /* подпись останется первой ролью */ }
   let i = 0, n = 0;
   const tick = () => {
     const now = new Date();
-    if (clock) clock.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} — у вас сейчас`;
+    rollText(clock, `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+    if (greet) greet.textContent = greeting(now.getHours());
   };
   const timer = setInterval(() => {
     if (!folio.isConnected) { clearInterval(timer); return; }
@@ -538,6 +587,161 @@ function wireFolio(root) {
     setTimeout(() => { i = (i + 1) % roles.length; role.textContent = roles[i]; role.classList.remove("out"); }, 260);
   }, 1000);
   tick();
+}
+
+// Числа в плитках «докручиваются» от нуля до значения (data-count), один раз.
+function countUp(root) {
+  root.querySelectorAll("[data-count]").forEach(el => {
+    const to = Number(el.dataset.count);
+    if (!Number.isFinite(to) || to <= 0 || el.dataset.counted) return;
+    el.dataset.counted = "1";
+    const dec = Number(el.dataset.dec || 0), suffix = el.dataset.suffix || "";
+    const dur = 900;
+    let t0 = null;
+    const step = t => {
+      if (t0 == null) t0 = t;
+      const k = Math.min(1, Math.max(0, (t - t0) / dur));
+      el.textContent = (to * (1 - Math.pow(1 - k, 3))).toFixed(dec) + suffix;
+      if (k < 1 && el.isConnected) requestAnimationFrame(step);
+    };
+    el.textContent = (0).toFixed(dec) + suffix;
+    requestAnimationFrame(step);
+  });
+}
+
+// ---------- «Пульс»: календарь активности за полгода ----------
+
+const MSK_MS = 3 * 3600e3, DAY_MS = 86400e3, PULSE_WEEKS = 26;
+
+function pluralRu(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+// Сервер отдаёт счётчики по московским датам; раскладываем их в 26 недель (пн–вс), последняя — текущая.
+// Даты считаем в UTC со сдвигом на Москву, чтобы сетка не зависела от пояса компьютера.
+export function pulseModel(d, nowMs = Date.now()) {
+  const actions = (d && d.actions) || {}, closed = (d && d.closed) || {};
+  const today = new Date(nowMs + MSK_MS);
+  const t0 = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const start = t0 - ((today.getUTCDay() + 6) % 7) * DAY_MS - (PULSE_WEEKS - 1) * 7 * DAY_MS;
+  const weeks = [], past = [];
+  let max = 0;
+  for (let w = 0; w < PULSE_WEEKS; w++) {
+    const days = [];
+    let closedSum = 0;
+    for (let k = 0; k < 7; k++) {
+      const ts = start + (w * 7 + k) * DAY_MS;
+      const key = new Date(ts).toISOString().slice(0, 10);
+      const future = ts > t0;
+      const day = { ts, n: future ? 0 : Number(actions[key]) || 0, c: future ? 0 : Number(closed[key]) || 0, future };
+      if (!future) { past.push(day); max = Math.max(max, day.n); closedSum += day.c; }
+      days.push(day);
+    }
+    weeks.push({ ts: start + w * 7 * DAY_MS, days, closed: closedSum });
+  }
+  // серия: дни подряд с действиями, считая от сегодня (или от вчера, если сегодня ещё пусто)
+  let streak = 0;
+  for (let k = past.length - 1; k >= 0; k--) {
+    if (past[k].n > 0) streak++;
+    else if (k !== past.length - 1) break;
+  }
+  const sum = list => list.reduce((a, x) => a + x.n, 0);
+  const best = past.reduce((a, x) => (x.n > (a ? a.n : 0) ? x : a), null);
+  return {
+    weeks, max, streak, best,
+    activeDays: past.filter(x => x.n > 0).length,
+    total: sum(past),
+    last30: sum(past.slice(-30)),
+    prev30: sum(past.slice(-60, -30)),
+    closedTotal: weeks.reduce((a, w) => a + w.closed, 0),
+    maxClosedWeek: weeks.reduce((a, w) => Math.max(a, w.closed), 0),
+  };
+}
+
+const dayLabel = ts => { const d = new Date(ts); return `${d.getUTCDate()} ${MONTHS_RU[d.getUTCMonth() + 1]}`; };
+
+function pulseHtml(m) {
+  const lvl = n => (n > 0 ? Math.min(4, Math.max(1, Math.ceil((n / m.max) * 4))) : 0);
+  let lastMonth = -1;
+  const months = m.weeks.map(w => {
+    const mo = new Date(w.ts).getUTCMonth();
+    const show = mo !== lastMonth;
+    lastMonth = mo;
+    return `<span>${show ? MONTHS_RU[mo + 1] : ""}</span>`;
+  }).join("");
+  const cells = m.weeks.map((w, wi) => w.days.map(day => day.future
+    ? `<i class="f"></i>`
+    : `<i class="l${lvl(day.n)}${day.c ? " c" : ""}" style="--i:${wi};" data-tip="${dayLabel(day.ts)} · ${day.n ? `${day.n} ${pluralRu(day.n, "действие", "действия", "действий")}` : "тихо"}${day.c ? ` · закрыто ${day.c}` : ""}"></i>`).join("")).join("");
+  const bars = m.closedTotal ? `
+    <div class="pff-heat-b">${m.weeks.map((w, wi) => `<i style="--i:${wi}; --h:${Math.round((w.closed / m.maxClosedWeek) * 100)}%;"${w.closed ? ` class="on"` : ""} data-tip="неделя с ${dayLabel(w.ts)} · закрыто ${w.closed}"></i>`).join("")}</div>
+    <div class="pff-heat-cap">закрытые серии по неделям</div>` : "";
+  const stat = (v, l) => `<div class="pff-ps"><b>${v}</b><span>${l}</span></div>`;
+  return `
+    <div class="pff-heat" style="--cols:${m.weeks.length};">
+      <div class="pff-heat-m">${months}</div>
+      <div class="pff-heat-w">
+        <div class="pff-heat-wd"><span>пн</span><span></span><span>ср</span><span></span><span>пт</span><span></span><span>вс</span></div>
+        <div class="pff-heat-g">${cells}</div>
+      </div>
+      ${bars}
+      <div class="pff-tip" hidden></div>
+    </div>
+    <div class="pff-pulse-foot">
+      <div class="pff-pss">
+        ${stat(m.activeDays, pluralRu(m.activeDays, "активный день", "активных дня", "активных дней"))}
+        ${stat(m.streak, `${pluralRu(m.streak, "день", "дня", "дней")} подряд`)}
+        ${stat(m.best ? m.best.n : 0, m.best ? `рекорд за день · ${dayLabel(m.best.ts)}` : "рекорд за день")}
+        ${stat(m.closedTotal, pluralRu(m.closedTotal, "серия закрыта", "серии закрыто", "серий закрыто"))}
+      </div>
+      <div class="pff-heat-leg">меньше<i class="l0"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i>больше</div>
+    </div>`;
+}
+
+async function fillPulse(root) {
+  const card = root.querySelector("#pulse-card");
+  if (!card) return;
+  let d;
+  try { d = await apiGet("/me/pulse"); } catch (_) { d = null; }
+  if (!card.isConnected) return;
+  // старый сервер без /me/pulse — просто без карточки
+  if (!d || typeof d.actions !== "object" || d.actions === null) { card.remove(); return; }
+  const m = pulseModel(d);
+  const body = card.querySelector("#pulse-body");
+  if (!m.total) {
+    body.innerHTML = `<div class="pf-quiet">За полгода действий по отчётам не было — календарь заполнится, как только появится работа.</div>`;
+    return;
+  }
+  body.innerHTML = pulseHtml(m);
+  const delta = m.prev30 > 0 ? deltaPillHtml(Math.round(((m.last30 - m.prev30) / m.prev30) * 100)) : "";
+  card.querySelector("#pulse-sum").innerHTML = `<b>${m.last30}</b> ${pluralRu(m.last30, "действие", "действия", "действий")} за 30 дней ${delta}`;
+  requestAnimationFrame(() => requestAnimationFrame(() => body.classList.add("in")));
+
+  // одна всплывающая подсказка на всю сетку
+  const heat = body.querySelector(".pff-heat"), tip = body.querySelector(".pff-tip");
+  heat.addEventListener("pointerover", e => {
+    const el = e.target.closest("[data-tip]");
+    if (!el) { tip.hidden = true; return; }
+    tip.textContent = el.dataset.tip;
+    tip.hidden = false;
+    const hr = heat.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const half = tip.offsetWidth / 2;
+    tip.style.left = `${Math.max(half, Math.min(hr.width - half, r.left - hr.left + r.width / 2))}px`;
+    tip.style.top = `${r.top - hr.top}px`;
+  });
+  heat.addEventListener("pointerleave", () => { tip.hidden = true; });
+
+  // те же недели — столбиками в плитке «Закрыто» (последние 12)
+  const spark = root.querySelector("[data-pff-spark]");
+  const last = m.weeks.slice(-12);
+  const top = last.reduce((a, w) => Math.max(a, w.closed), 0);
+  if (spark && top > 0) {
+    spark.innerHTML = last.map(w => `<i style="--h:${Math.max(8, Math.round((w.closed / top) * 100))}%;"${w.closed ? ` class="on"` : ""}></i>`).join("");
+    spark.title = "Закрытые серии по неделям, последние 12 недель";
+    spark.hidden = false;
+  }
 }
 
 function myHeroHtml(d, isSelf = true) {
@@ -679,20 +883,42 @@ function myBadgesHtml(d) {
     </section>`;
 }
 
+// Вид действия — для цвета и значка точки на таймлайне.
+function actKind(action) {
+  const a = String(action || "").toLowerCase();
+  if (/удал|снят|отмен|отозв/.test(a)) return "del";
+  if (/назнач|добав|созда/.test(a)) return "add";
+  if (/файл|загруж|залит|выложен/.test(a)) return "file";
+  if (/статус|закры|заверш|готов|принят/.test(a)) return "done";
+  return "etc";
+}
+const ACT_ICONS = {
+  add: `<path d="M12 5v14M5 12h14"/>`,
+  del: `<path d="M5 12h14"/>`,
+  file: `<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>`,
+  done: `<path d="M5 12.5l4.5 4.5L19 7.5"/>`,
+  etc: `<circle cx="12" cy="12" r="2.5"/>`,
+};
+
 async function fillRecentActivity(root) {
   const box = root.querySelector("#activity-list");
   if (!box) return;
   let d;
   try { d = await apiGet("/me/activity"); } catch (_) { d = null; }
   if (!box.isConnected) return;
-  const evs = ((d && d.events) || []).slice(0, 5);
+  const evs = ((d && d.events) || []).slice(0, 6);
   if (!evs.length) { box.innerHTML = `<div class="pf-quiet">пока тихо — действия по отчётам появятся здесь</div>`; return; }
-  box.innerHTML = evs.map(ev => `
-    <div class="pf-act"${ev.public_id ? ` data-open-report="${esc(ev.public_id)}"` : ""}>
-      <i></i>
-      <div><div class="a">${esc(ev.action || "")}${ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : ""}</div>
-      <div class="m">${ev.public_id ? `${esc(ev.public_id)} ${esc(ev.title || "")} · ` : ""}${esc(relTime(ev.created_at))}</div></div>
-    </div>`).join("");
+  box.classList.add("pff-tl");
+  box.innerHTML = evs.map((ev, i) => {
+    const kind = actKind(ev.action);
+    return `
+    <div class="pf-act k-${kind}" style="--i:${i};"${ev.public_id ? ` data-open-report="${esc(ev.public_id)}"` : ""}>
+      <i><svg viewBox="0 0 24 24" aria-hidden="true">${ACT_ICONS[kind]}</svg></i>
+      <div class="pff-tl-b"><div class="a">${esc(ev.action || "")}${ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : ""}</div>
+      <div class="m">${ev.public_id ? `${esc(ev.public_id)} ${esc(ev.title || "")}` : ""}</div></div>
+      <time title="${esc(formatWhen(ev.created_at))}">${esc(relTime(ev.created_at))}</time>
+    </div>`;
+  }).join("");
   box.querySelectorAll("[data-open-report]").forEach(row => {
     row.addEventListener("click", () => openReportDetail(row.dataset.openReport));
   });

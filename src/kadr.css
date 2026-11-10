@@ -4840,10 +4840,9 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
    сайт-визитка; секции с короткими заголовками, плавающая таблетка
    навигации с прогрессом прокрутки, светящаяся плашка в подвале.
    ================================================================ */
-.pf-folio { --pff-w: 820px; --pff-ease: cubic-bezier(.2, .9, .25, 1); max-width: var(--pff-w); margin: 0 auto; padding: 8px 4px 40px; display: flex; flex-direction: column; gap: 34px; }
-.pf-folio > * { animation: pff-in .6s var(--pff-ease) both; }
-.pf-folio > :nth-child(2) { animation-delay: 60ms; } .pf-folio > :nth-child(3) { animation-delay: 110ms; }
-.pf-folio > :nth-child(4) { animation-delay: 160ms; } .pf-folio > :nth-child(n+5) { animation-delay: 210ms; }
+.pf-folio { --pff-w: 900px; --pff-ease: cubic-bezier(.2, .9, .25, 1); max-width: var(--pff-w); margin: 0 auto; padding: 8px 4px 40px; display: flex; flex-direction: column; gap: 34px; }
+.pf-folio > .pff-pill, .pf-folio > #pff-about { animation: pff-in .6s var(--pff-ease) both; }
+.pf-folio > #pff-about { animation-delay: 60ms; }
 
 /* Таблетка навигации */
 .pff-pill { position: sticky; top: 8px; z-index: 5; align-self: center; display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 4px; border-radius: 99px;
@@ -4851,8 +4850,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .9);
   transition: box-shadow .3s, transform .3s var(--pff-ease); margin-bottom: -14px; }
 .pff-pill.lifted { box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .95), 0 0 0 1px rgba(var(--fire-rgb), .12); transform: translateY(2px); }
-.pff-pill-ic { display: inline-flex; gap: 3px; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); margin-right: 4px; }
-.pff-pill-ic i { width: 3px; height: 10px; border-radius: 2px; background: var(--bg); }
 .pff-pill button { border: 0; background: none; color: var(--ink-dim); font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 6px 12px; border-radius: 99px; cursor: pointer; transition: color .2s, background .25s var(--pff-ease); }
 .pff-pill button:hover { color: var(--ink); }
 .pff-pill button.on { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
@@ -4881,8 +4878,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-status { margin: 4px 0 0; font-size: 15px; font-weight: 600; color: var(--ink); }
 .pff-bio { margin: 0; max-width: 520px; font-size: 14px; line-height: 1.6; color: var(--ink-soft); }
 .pff-bio.empty { color: var(--ink-dim); font-style: italic; }
-.pff-clock { font-size: 13px; color: var(--ink-dim); font-style: italic; font-family: "Segoe Script", "Segoe Print", cursive; letter-spacing: .01em; }
-.pff-clock .on { color: #4ade80; font-family: inherit; font-style: normal; margin-left: 4px; }
 .pf-folio .pff-av { flex: none; padding: 0; border-radius: 22px; background: none; box-shadow: none; animation: pff-wipe .9s .15s var(--pff-ease) both; }
 .pf-folio .pff-av .avatar.xl { width: 132px; height: 132px; border-radius: 20px; font-size: 44px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent), 0 24px 50px -24px rgba(0, 0, 0, .9); }
 .pf-folio .pff-av .avatar.xl img { border-radius: 20px; }
@@ -4927,6 +4922,140 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   .pff-pill button { padding: 6px 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pf-folio > *, .pf-folio .pff-av, .pff-glow::before { animation: none; }
+  .pf-folio > .pff-pill, .pf-folio > #pff-about, .pf-folio .pff-av, .pff-glow::before { animation: none; }
   .pff-role-t, .pff-pill, .pf-folio .pf-rep, .pf-folio .pf-badge { transition: none; }
+}
+
+/* ================================================================
+   Профиль-портфолио: проявление секций, «Пульс» (календарь активности),
+   таймлайн действий, живые цифры. Дополняет блок .pf-folio выше.
+   ================================================================ */
+
+/* Секции проявляются, когда до них докрутили (класс .pff-anim ставит wireFolio, если есть IntersectionObserver). */
+.pf-folio.pff-anim .pff-rv { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--pff-ease), transform .7s var(--pff-ease); }
+.pf-folio.pff-anim .pff-rv.in { opacity: 1; transform: none; }
+
+/* Таблетка: аватар в кольце прокрутки */
+.pff-pill-ic { position: relative; display: grid; place-items: center; width: 30px; height: 30px; margin-right: 4px; border-radius: 50%;
+  background: conic-gradient(var(--fire) calc(var(--p, 0) * 1%), color-mix(in srgb, var(--ink) 14%, transparent) 0); }
+.pff-pill-ic .avatar.sm { width: 24px; height: 24px; margin: 0; font-size: 11px; box-shadow: 0 0 0 2px var(--surface); }
+
+/* Шапка: баннер виден справа, текст читается слева; при прокрутке баннер медленно приближается */
+.pf-folio .pff-hero { padding: 32px 32px 22px; }
+.pf-folio .pff-banner { transform: scale(calc(1.03 + var(--pff-y, 0) * .0007)); transform-origin: 70% 40%; will-change: transform; }
+.pf-folio .pff-banner.adjust { transform: none; }
+.pf-folio .pff-banner::after {
+  background:
+    linear-gradient(100deg, var(--surface-2) 0%, color-mix(in srgb, var(--surface-2) 95%, transparent) 42%, color-mix(in srgb, var(--surface-2) 62%, transparent) 64%, color-mix(in srgb, var(--surface-2) 20%, transparent) 100%),
+    linear-gradient(0deg, color-mix(in srgb, var(--surface-2) 88%, transparent) 0%, transparent 46%); }
+.pff-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
+.pff-eyebrow .dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .6; }
+.pff-eyebrow .pff-clock { color: var(--ink-soft); letter-spacing: .08em; }
+.pff-hi { font-size: 34px; }
+.pff-hi b { background: linear-gradient(95deg, var(--ink) 30%, color-mix(in srgb, var(--fire) 70%, var(--ink))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.pff-hi .dev-pill { vertical-align: middle; }
+.pff-bio-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; margin: 4px 0 2px; padding: 8px 14px 8px 10px; border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--ink) 22%, transparent); background: color-mix(in srgb, var(--ink) 4%, transparent);
+  color: var(--ink-soft); font: inherit; font-size: 13px; text-align: left; cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
+.pff-bio-add:hover { color: var(--ink); border-color: rgba(var(--fire-rgb), .6); background: rgba(var(--fire-rgb), .08); }
+.pff-bio-add svg { flex: none; width: 14px; height: 14px; fill: none; stroke: var(--fire); stroke-width: 2.4; stroke-linecap: round; }
+/* Аватар: мягкое вращающееся свечение цвета ранга и точка «в сети» */
+.pf-folio .pff-av { position: relative; inset: auto; z-index: 0; animation-fill-mode: backwards; }
+.pf-folio .pff-av::before { content: ""; position: absolute; inset: -12px; z-index: -1; border-radius: 30px; opacity: .6; filter: blur(16px);
+  background: conic-gradient(from 0deg, transparent 0 35%, var(--tier-c, var(--fire)) 55%, color-mix(in srgb, var(--fire) 80%, transparent) 70%, transparent 88%); animation: pff-spin 8s linear infinite; }
+.pf-folio .pff-av.online::after { content: ""; position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; border-radius: 50%;
+  background: #4ade80; border: 3px solid var(--surface-2); box-shadow: 0 0 10px rgba(74, 222, 128, .7); }
+
+/* Цифры: число и дополнение в одну строку */
+.pff-kv { display: flex; align-items: center; gap: 10px; min-height: 40px; margin: 4px 0 2px; }
+.pf-folio .pff-stats .pf-kpi { transition: background .25s; }
+.pf-folio .pff-stats .pf-kpi:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.pf-folio .pff-stats .pf-kpi b { margin: 0; font-variant-numeric: tabular-nums; }
+.pf-folio .pff-stats .pf-kpi.empty b { padding: 0; font-size: 17px; font-weight: 700; letter-spacing: 0; color: var(--ink-dim); }
+.pff-spark { display: flex; align-items: flex-end; gap: 2px; height: 28px; margin-left: auto; }
+.pff-spark[hidden] { display: none; }
+.pff-spark i { width: 4px; height: var(--h); border-radius: 2px; background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.pff-spark i.on { background: var(--fire); }
+.pff-ring { flex: none; width: 34px; height: 34px; margin-left: auto; transform: rotate(-90deg); }
+.pff-ring circle { fill: none; stroke: color-mix(in srgb, var(--ink) 10%, transparent); stroke-width: 4; }
+.pff-ring .f { stroke: var(--s-done); stroke-linecap: round; stroke-dasharray: 0 100; transition: stroke-dasharray 1.1s var(--pff-ease) .15s; }
+.pff-rv.in .pff-ring .f { stroke-dasharray: var(--v) 100; }
+
+/* Цель, стаж, команда — те же карточки, что и остальные */
+.pf-folio .goal-card, .pf-folio .team-teaser { padding: 20px 22px; border: 0; border-radius: 20px; background: var(--glass-bg); backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow: 0 26px 50px -32px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(255, 255, 255, .06); transition: box-shadow .25s, transform .3s var(--pff-ease); }
+.pf-folio .goal-card:hover, .pf-folio .team-teaser:hover { transform: translateY(-2px); box-shadow: 0 26px 50px -32px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(var(--fire-rgb), .4); }
+.pf-folio .goal-card h3 { margin: 0 0 6px; font-size: 14px; font-weight: 800; }
+.pf-folio .goal-card .goal-hint { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+.pff-goal-set { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 6px 12px 6px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; color: var(--fire); background: rgba(var(--fire-rgb), .12); }
+.pff-goal-set svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.pf-folio .pf-tenure h3 { margin-bottom: 12px; }
+.pf-folio .pf-tenure .tenure-lbl { font-size: 12.5px; }
+.pf-folio .pf-tenure .tenure-track { height: 6px; margin: 10px 0 7px; background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.pf-folio .pf-tenure .tenure-track i { transform-origin: 0 50%; transition: transform 1.1s var(--pff-ease) .2s; }
+.pf-folio.pff-anim .pff-rv:not(.in) .tenure-track i { transform: scaleX(0); }
+
+/* «Пульс»: сетка 26 недель × 7 дней, под ней — закрытые серии по неделям */
+.pff-pulse { --l1: rgba(var(--fire-rgb), .26); --l2: rgba(var(--fire-rgb), .48); --l3: rgba(var(--fire-rgb), .74); --l4: var(--fire); --l0: color-mix(in srgb, var(--ink) 6%, transparent); }
+.pff-pulse-sum { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim); }
+.pff-pulse-sum b { font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pff-heat { position: relative; --gut: 28px; --gap: 4px; }
+.pff-heat-m, .pff-heat-b { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--gap); margin-left: var(--gut); }
+.pff-heat-m { margin-bottom: 6px; font-size: 10.5px; color: var(--ink-dim); }
+.pff-heat-m span { white-space: nowrap; }
+.pff-heat-w { display: grid; grid-template-columns: var(--gut) minmax(0, 1fr); }
+.pff-heat-wd { display: grid; grid-template-rows: repeat(7, minmax(0, 1fr)); gap: var(--gap); font-size: 10px; color: var(--ink-dim); }
+.pff-heat-wd span { display: flex; align-items: center; }
+.pff-heat-g { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, auto); grid-auto-columns: minmax(0, 1fr); gap: var(--gap); }
+.pff-heat-g i { position: relative; aspect-ratio: 1; border-radius: 5px; background: var(--l0); transition: transform .15s, box-shadow .15s; }
+.pff-heat-g i.f { background: none; }
+.pff-pulse i.l1 { background: var(--l1); } .pff-pulse i.l2 { background: var(--l2); } .pff-pulse i.l3 { background: var(--l3); }
+.pff-pulse i.l4 { background: var(--l4); }
+.pff-heat-g i.l4 { box-shadow: 0 0 12px -2px rgba(var(--fire-rgb), .9); }
+.pff-heat-g i.c::after { content: ""; position: absolute; inset: 32%; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+.pff-heat-g i:not(.f):hover { z-index: 1; transform: scale(1.2); box-shadow: 0 0 0 1.5px var(--ink); }
+#pulse-body:not(.in) .pff-heat-g i, #pulse-body:not(.in) .pff-heat-b i { opacity: 0; }
+#pulse-body.in .pff-heat-g i { animation: pff-cell .5s var(--pff-ease) backwards; animation-delay: calc(var(--i) * 16ms); }
+.pff-heat-b { grid-template-rows: 34px; align-items: end; margin-top: 10px; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, var(--ink) 10%, transparent); }
+.pff-heat-b i { height: max(3px, var(--h)); border-radius: 4px 4px 2px 2px; background: var(--l0); transform-origin: 50% 100%; }
+.pff-heat-b i.on { background: linear-gradient(180deg, var(--gold), color-mix(in srgb, var(--gold) 40%, transparent)); }
+#pulse-body.in .pff-heat-b i { animation: pff-bar .7s var(--pff-ease) backwards; animation-delay: calc(var(--i) * 16ms + 200ms); }
+.pff-heat-cap { margin: 6px 0 0 var(--gut); font-size: 10.5px; color: var(--ink-dim); }
+.pff-tip { position: absolute; z-index: 3; transform: translate(-50%, calc(-100% - 8px)); padding: 5px 9px; border-radius: 8px; font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  color: var(--ink); background: var(--glass-bg-strong); box-shadow: 0 8px 20px -8px #000, inset 0 0 0 1px rgba(255, 255, 255, .1); pointer-events: none; }
+.pff-tip[hidden] { display: none; }
+.pff-pulse-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
+.pff-pss { display: flex; flex-wrap: wrap; gap: 14px 30px; }
+.pff-ps b { display: block; font-size: 22px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.pff-ps span { font-size: 11.5px; color: var(--ink-dim); }
+.pff-heat-leg { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--ink-dim); }
+.pff-heat-leg i { width: 11px; height: 11px; border-radius: 3px; background: var(--l0); }
+.pff-heat-leg i:first-of-type { margin-left: 4px; } .pff-heat-leg i:last-of-type { margin-right: 4px; }
+.pff-heat-skel { height: 190px; border-radius: 12px; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--ink) 5%, transparent) 50%, transparent 70%) 0 0 / 200% 100%, color-mix(in srgb, var(--ink) 3%, transparent); animation: pff-shim 1.4s linear infinite; }
+
+/* Последние действия — таймлайном: значок по виду действия, линия между событиями, время справа */
+.pf-folio .pff-tl .pf-act { position: relative; align-items: flex-start; gap: 14px; margin: 0 -8px; padding: 10px 8px; border: 0; border-radius: 12px; transition: background .2s;
+  animation: pff-in .5s var(--pff-ease) backwards; animation-delay: calc(var(--i) * 50ms); }
+.pf-folio .pff-tl .pf-act + .pf-act { border-top: 0; }
+.pf-folio .pff-tl .pf-act:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.pf-folio .pff-tl .pf-act > i { position: relative; z-index: 1; display: grid; place-items: center; width: 26px; height: 26px; margin: 0; border-radius: 9px; box-shadow: none;
+  color: var(--k, var(--fire)); background: color-mix(in srgb, var(--k, var(--fire)) 16%, var(--surface-2)); }
+.pf-folio .pff-tl .pf-act > i svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pf-folio .pff-tl .pf-act:not(:last-child)::before { content: ""; position: absolute; left: 20.5px; top: 40px; bottom: -6px; width: 1px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.pff-tl .k-add { --k: var(--s-done); } .pff-tl .k-del { --k: var(--s-stop); } .pff-tl .k-file { --k: var(--s-review); } .pff-tl .k-done { --k: var(--gold); }
+.pff-tl-b { flex: 1; min-width: 0; }
+.pff-tl .m:empty { display: none; }
+.pff-tl time { flex: none; padding-top: 3px; font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
+
+@keyframes pff-cell { from { opacity: 0; transform: scale(.3); } }
+@keyframes pff-bar { from { opacity: 0; transform: scaleY(0); } }
+@keyframes pff-shim { to { background-position: -200% 0, 0 0; } }
+@media (max-width: 760px) {
+  .pff-heat { --gap: 2px; --gut: 22px; }
+  .pff-heat-g i { border-radius: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-folio .pff-av::before, .pff-heat-skel, #pulse-body.in .pff-heat-g i, #pulse-body.in .pff-heat-b i, .pf-folio .pff-tl .pf-act { animation: none; }
+  .pf-folio .pff-banner { transform: none; }
+  .pff-ring .f, .pf-folio .pf-tenure .tenure-track i, .pf-folio .goal-card, .pf-folio .team-teaser { transition: none; }
 }
