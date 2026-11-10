@@ -204,7 +204,7 @@ function ganttHtml(data) {
     const poster = r.poster_url ? mediaUrl("/img_proxy", { url: r.poster_url }) : "";
     return `<div class="kcal-r">
       <div class="kcal-who">${poster ? `<img src="${poster}" alt="" loading="lazy">` : `<span class="kcal-ph"></span>`}<div><b>${esc(seriesName(r))}</b><span>${esc(r.public_id)}${ep != null ? ` · EP ${pad2(ep)}` : ""}</span></div></div>
-      <button type="button" class="kcal-bar${cut ? " cut" : ""}${late ? " late" : left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${late ? "--s-stop" : STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}${late ? ` · просрочено ${-left} дн.` : ""}"><span>${esc(stageOf(r))}</span><em></em>${late ? `<i class="kcal-late-lbl">просрочено на ${-left} ${daysWord(-left)}</i>` : ""}</button>
+      <button type="button" class="kcal-bar${cut ? " cut" : ""}${late ? " late" : left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${late ? "--s-stop" : STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}${late ? ` · просрочено ${-left} дн.` : ""}"><span>${esc(stageOf(r))}</span><em></em>${late ? `<i class="kcal-late-lbl${end >= days.length - 3 ? " in" : ""}">просрочено на ${-left} ${daysWord(-left)}</i>` : ""}</button>
     </div>`;
   }).join("");
   const undatedBody = undated.map(r => {

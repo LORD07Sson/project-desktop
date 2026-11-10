@@ -5184,3 +5184,7 @@ button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; o
 /* Календарь: «просрочено N дн.» — справа от ромбика срока, за полоской (в узкой полоске текст не помещался). */
 .kcal-bar .kcal-late-lbl { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); z-index: 2; white-space: nowrap; font-style: normal; font-size: 11.5px; font-weight: 650; line-height: 1; padding: 5px 9px; border-radius: 99px; color: #ffb3ba; background: #2a1520; border: 1px solid rgba(255, 92, 110, .35); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); pointer-events: none; }
 .kcal-late { display: inline-block; width: 14px; height: 8px; border-radius: 3px; background: color-mix(in srgb, var(--s-stop) 55%, transparent); border: 1px solid var(--s-stop); vertical-align: middle; margin-right: 6px; }
+:root[data-theme="light"] .kcal-bar .kcal-late-lbl { color: #b3263a; background: #fff1f3; border-color: rgba(214, 48, 72, .35); box-shadow: 0 2px 6px rgba(120, 20, 40, .12); }
+@media (max-width: 1000px) { .kcal-bar .kcal-late-lbl { left: calc(100% + 10px); padding: 4px 7px; font-size: 11px; } }
+/* У правого края окна плашке справа места нет — ставим её внутрь полоски, перед ромбиком. */
+.kcal-bar .kcal-late-lbl.in { left: auto; right: 16px; }
