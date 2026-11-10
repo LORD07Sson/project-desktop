@@ -5094,3 +5094,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-duo > .pff-sec { min-width: 0; }
 .pff-duo .pff-two { grid-template-columns: 1fr; }
 @media (max-width: 980px) { .pff-duo { grid-template-columns: 1fr; gap: 34px; } }
+.pf-folio .gf-place { position: absolute; z-index: 8; outline: 2px dashed rgba(var(--fire-rgb), .8); outline-offset: 2px; }
+.pf-folio .gf-place > img { display: block; width: 100%; height: 100%; cursor: move; user-select: none; touch-action: none; }
+.gf-place-acts { position: absolute; left: 0; top: calc(100% + 8px); display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12px; color: var(--ink-dim); }

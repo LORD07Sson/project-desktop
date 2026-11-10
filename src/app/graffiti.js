@@ -77,6 +77,8 @@ function openEditor(hero, telegramId) {
       <input type="color" class="gf-pick" value="${color}" title="Свой цвет"></div>
     <label class="gf-size">размер <input type="range" min="1" max="60" value="${size}"></label>
     <div class="gf-group">
+      <button type="button" class="btn sm" data-gf="image">Картинка</button>
+      <input type="file" accept="image/*" class="gf-file" hidden>
       <button type="button" class="btn sm" data-gf="undo">Отменить</button>
       <button type="button" class="btn sm" data-gf="clear">Очистить</button>
       <button type="button" class="btn sm" data-gf="cancel">Закрыть</button>
@@ -99,10 +101,50 @@ function openEditor(hero, telegramId) {
     const a = e.target.closest("[data-gf]")?.dataset.gf;
     if (a === "undo" && undo.length) ctx.putImageData(undo.pop(), 0, 0);
     else if (a === "clear") { pushUndo(); ctx.clearRect(0, 0, W, H); }
+    else if (a === "image") bar.querySelector(".gf-file").click();
     else if (a === "cancel") close(false);
     else if (a === "save") save();
   });
   bar.querySelector(".gf-pick").addEventListener("input", e => setColor(e.target.value));
+
+  // «Картинка»: свой файл кладём поверх профиля — двигаешь мышью, размер колесом, «Вставить» впечатывает её в рисунок.
+  let placing = null;
+  bar.querySelector(".gf-file").addEventListener("change", e => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => startPlace(img, url);
+    img.onerror = () => { URL.revokeObjectURL(url); toast("Не удалось открыть картинку.", "error"); };
+    img.src = url;
+  });
+  function startPlace(img, url) {
+    placing?.cancel();
+    const r = stroke.getBoundingClientRect();
+    let w = Math.min(520, img.naturalWidth), h = w * img.naturalHeight / img.naturalWidth;
+    let x = Math.max(0, window.innerWidth / 2 - r.left - w / 2), y = Math.max(0, window.innerHeight / 2 - r.top - h / 2);
+    const box = document.createElement("div");
+    box.className = "gf-place";
+    box.innerHTML = `<div class="gf-place-acts"><button type="button" class="btn sm primary" data-p="ok">Вставить</button><button type="button" class="btn sm" data-p="no">Отмена</button><span>тяни мышью · колесо — размер</span></div>`;
+    box.prepend(img);
+    hero.append(box);
+    const put = () => { box.style.left = `calc(50% - ${W / 2}px + ${x}px)`; box.style.top = `${y}px`; box.style.width = `${w}px`; box.style.height = `${h}px`; };
+    put();
+    let drag = null;
+    img.addEventListener("pointerdown", e => { e.preventDefault(); img.setPointerCapture(e.pointerId); drag = { sx: e.clientX, sy: e.clientY, x, y }; });
+    img.addEventListener("pointermove", e => { if (!drag) return; x = drag.x + e.clientX - drag.sx; y = drag.y + e.clientY - drag.sy; put(); });
+    img.addEventListener("pointerup", () => { drag = null; });
+    box.addEventListener("wheel", e => {
+      e.preventDefault();
+      const k = e.deltaY < 0 ? 1.08 : 1 / 1.08, nw = Math.max(40, Math.min(W, w * k));
+      x += (w - nw) / 2; y += (h - nw * h / w) / 2; h = nw * h / w; w = nw; put();
+    }, { passive: false });
+    const done = () => { box.remove(); URL.revokeObjectURL(url); placing = null; };
+    box.querySelector('[data-p="ok"]').addEventListener("click", () => { pushUndo(); ctx.drawImage(img, x, y, w, h); done(); });
+    box.querySelector('[data-p="no"]').addEventListener("click", done);
+    placing = { cancel: done };
+  }
   range.addEventListener("input", () => { size = Number(range.value); });
   function setColor(c) {
     color = c;
@@ -190,6 +232,7 @@ function openEditor(hero, telegramId) {
   }
   async function close(saved) {
     if (!saved && undo.length && !await askConfirm("Выйти без сохранения?")) return;
+    placing?.cancel();
     canvas.remove(); stroke.remove(); bar.remove();
     hero.classList.remove("gf-editing");
     if (saved) loadGraffiti(hero, telegramId);
