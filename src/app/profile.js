@@ -720,11 +720,11 @@ function pulseHtml(m) {
     </div>`;
 }
 
-async function fillPulse(root) {
+async function fillPulse(root, base = "/me") {
   const card = root.querySelector("#pulse-card");
   if (!card) return;
   let d;
-  try { d = await apiGet("/me/pulse"); } catch (_) { d = null; }
+  try { d = await apiGet(`${base}/pulse`); } catch (_) { d = null; }
   if (!card.isConnected) return;
   // старый сервер без /me/pulse — просто без карточки
   if (!d || typeof d.actions !== "object" || d.actions === null) { card.remove(); return; }
@@ -885,11 +885,11 @@ const ACT_ICONS = {
   etc: `<circle cx="12" cy="12" r="2.5"/>`,
 };
 
-async function fillRecentActivity(root) {
+async function fillRecentActivity(root, base = "/me") {
   const box = root.querySelector("#activity-list");
   if (!box) return;
   let d;
-  try { d = await apiGet("/me/activity"); } catch (_) { d = null; }
+  try { d = await apiGet(`${base}/activity`); } catch (_) { d = null; }
   if (!box.isConnected) return;
   const evs = ((d && d.events) || []).slice(0, 6);
   if (!evs.length) { box.innerHTML = `<div class="pf-quiet">пока тихо — действия по отчётам появятся здесь</div>`; return; }
@@ -1164,7 +1164,7 @@ export async function openUserProfile(telegramId) {
       <nav class="pff-pill" aria-label="Разделы профиля">
         <button class="pff-back" type="button" data-close title="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H6M11 6l-6 6 6 6"/></svg></button>
         <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(telegramId, d.display_name || d.name, "sm")}</span>
-        ${[["pff-about", "О человеке"], ["pff-work", "Работа"], ["pff-awards", "Награды"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
+        ${[["pff-about", "О человеке"], ["pff-work", "Работа"], ["pff-awards", "Награды"], ["pff-activity", "Активность"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
         <span class="pff-pct" aria-hidden="true">0%</span>
       </nav>
       <section class="pff-sec" id="pff-about">${folioHeroHtml(d, false)}</section>
@@ -1193,6 +1193,17 @@ export async function openUserProfile(telegramId) {
         <h2 class="pff-h">Награды</h2>
         ${myBadgesHtml(d) || `<div class="pf-quiet">Наград пока нет.</div>`}
       </section>
+      <section class="pff-sec pff-rv" id="pff-activity">
+        <h2 class="pff-h">Активность</h2>
+        <section class="pf-card pff-pulse" id="pulse-card">
+          <div class="pf-card-head"><h3>Пульс <span class="n">полгода по дням</span></h3><span class="pff-pulse-sum" id="pulse-sum"></span></div>
+          <div id="pulse-body"><div class="pff-heat-skel"></div></div>
+        </section>
+        <section class="pf-card" id="activity-card">
+          <div class="pf-card-head"><h3>Последние действия</h3></div>
+          <div class="pf-acts" id="activity-list"><div class="pf-quiet">загружаю…</div></div>
+        </section>
+      </section>
       ${folioFooterHtml(d, false)}
       ${devModeActive() ? devPanelHtml(d) : ""}
       ${state.isDeveloper && String(telegramId) !== String(state.telegramId) ? `<div class="sheet-actions"><button class="btn danger" data-purge-chats title="Только владелец команды">Удалить личные переписки</button></div>` : ""}
@@ -1200,6 +1211,8 @@ export async function openUserProfile(telegramId) {
   `;
   wireFolio(sheet);
   wireGraffiti(sheet, telegramId);
+  fillPulse(sheet, `/user/${encodeURIComponent(telegramId)}`);
+  fillRecentActivity(sheet, `/user/${encodeURIComponent(telegramId)}`);
   wireProfileCommon(sheet, telegramId, async () => { await openUserProfile(telegramId); overlay.remove(); });
   sheet.querySelectorAll("[data-manage-roles]").forEach(button => button.addEventListener("click", () => openProfileRoles(Number(button.dataset.manageRoles))));
   sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
