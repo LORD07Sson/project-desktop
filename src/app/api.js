@@ -467,20 +467,27 @@ export async function ensureMediaToken() {
 
 // Картинки с нашего сервера (постеры, баннеры, фото) <img src=".../img_proxy?...&mtok=…"> один раз перезапрашиваем, если загрузка
 // не удалась: сервер мог на секунду не ответить или перезапуститься (тогда прежний токен уже недействителен). Без этого
-// постер оставался пустым, пока экран не перерисуют. Повтор один на картинку — отсутствующие (404/204) не долбим.
+// постер оставался пустым, пока экран не перерисуют. Источник (anilist/shikimori) может лежать дольше секунды — сервер тогда
+// минуту отвечает 204 на весь хост, поэтому повторов несколько и с нарастающей паузой; для реально отсутствующей картинки
+// это три дешёвых ответа из серверного кэша промахов.
+const MEDIA_RETRY_DELAYS_MS = [2500, 20_000, 75_000];
 document.addEventListener("error", ev => {
   const img = ev.target;
-  if (!img || img.tagName !== "IMG" || img.dataset.mtokRetried) return;
+  if (!img || img.tagName !== "IMG") return;
+  const attempt = Number(img.dataset.mtokRetried || 0);
+  if (attempt >= MEDIA_RETRY_DELAYS_MS.length) return;
   const src = img.currentSrc || img.src || "";
   if (!src.startsWith(API_BASE) || !src.includes("mtok=")) return;
-  img.dataset.mtokRetried = "1";
+  img.dataset.mtokRetried = String(attempt + 1);
   setTimeout(async () => {
+    // Картинку за это время могли заменить на другую — чужой адрес не возвращаем.
+    if ((img.currentSrc || img.src) !== src) return;
     try { await forceMediaToken(); } catch (_) { /* не критично */ }
     if (!img.isConnected || !state.mediaToken) return;
     const url = new URL(src);
     url.searchParams.set("mtok", state.mediaToken);
     img.src = url.toString();
-  }, 2500);
+  }, MEDIA_RETRY_DELAYS_MS[attempt]);
 }, true);
 
 // Фоновое обновление — тот же приём, что presence.js (pingPresence):
