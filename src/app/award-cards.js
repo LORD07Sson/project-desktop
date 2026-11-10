@@ -151,7 +151,11 @@ function wire(host, list) {
   document.addEventListener("keydown", onKey, true);
   host.querySelector(".ac-close").addEventListener("click", closeCollection);
   host.addEventListener("mousedown", (e) => { if (e.target === host) closeCollection(); });
-  const grid = host.querySelector(".ac-grid");
+  wireGrid(host.querySelector(".ac-grid"), (c) => { if (list[c.dataset.i]) focusCard(c); });
+}
+
+// Наклон/подсветка/клик для любой сетки карточек — и в оверлее, и в профиле.
+function wireGrid(grid, onPick) {
   grid.addEventListener("pointermove", (e) => {
     const c = e.target.closest(".ac-card");
     if (!c || reduced()) return;
@@ -169,9 +173,32 @@ function wire(host, list) {
   });
   grid.addEventListener("click", (e) => {
     const c = e.target.closest(".ac-card");
-    if (c && list[c.dataset.i]) focusCard(c);
+    if (c) onPick(c);
   });
 }
+
+// Раздел «Награды» в профиле: плитки .pf-badges (их рисует profile.js)
+// заменяем этими же марками, не трогая разметку профиля. Режим
+// разработчика (кнопки отзыва ручных наград) оставляем на плитках.
+let inlineBusy = false;
+async function upgradeProfileBadges() {
+  const box = document.querySelector(".pf-badges:not([data-ac])");
+  if (!box || inlineBusy || box.querySelector("[data-revoke-badge]")) return;
+  inlineBusy = true;
+  box.dataset.ac = "1";
+  let me;
+  try { me = await apiGet("/me"); } catch (_) { me = null; }
+  inlineBusy = false;
+  const list = sortBadges((me && me.badges) || []);
+  if (!list.length || !box.isConnected) return;
+  const grid = document.createElement("div");
+  grid.className = "ac-grid ac-inline";
+  grid.innerHTML = list.map(cardHtml).join("");
+  box.replaceWith(grid);
+  wireGrid(grid, (c) => openAwardCollection(list[c.dataset.i]?.label));
+}
+new MutationObserver(() => { if (document.querySelector(".pf-badges:not([data-ac])")) upgradeProfileBadges(); })
+  .observe(document.body, { childList: true, subtree: true });
 
 function focusCard(card) {
   if (!card || focused || !root) return;

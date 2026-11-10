@@ -216,3 +216,7 @@
 .ac-lb, .ac-foot, .ac-top { z-index: 1; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
 .ac-card.locked .ac-char, .ac-big.locked .ac-char { filter: grayscale(1) brightness(.35) contrast(1.1); }
 @media (prefers-reduced-motion: reduce) { .ac-char { transform: translateX(-50%); } }
+
+/* Те же марки, встроенные в раздел «Награды» профиля. */
+.ac-grid.ac-inline { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 30px 20px; padding: 28px 6px 6px; overflow: visible; }
+.ac-inline .ac-lb { font-size: 13px; }
