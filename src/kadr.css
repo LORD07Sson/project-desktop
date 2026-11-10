@@ -5122,3 +5122,5 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   .pf-folio > .pff-duo .ac-inline .ac-top, .pf-folio > .pff-duo .ac-inline .ac-art,
   .pf-folio > .pff-duo .ac-inline .ac-lb, .pf-folio > .pff-duo .ac-inline .ac-foot { display: none; }
 }
+/* В плашке разделов оставлены только аватар, «Награды» и процент прокрутки. */
+.pff-pill [data-pff-go="pff-about"], .pff-pill [data-pff-go="pff-work"], .pff-pill [data-pff-go="pff-activity"] { display: none; }
