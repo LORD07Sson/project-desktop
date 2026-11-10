@@ -203,7 +203,7 @@ function ganttHtml(data) {
     const poster = r.poster_url ? mediaUrl("/img_proxy", { url: r.poster_url }) : "";
     return `<div class="kcal-r">
       <div class="kcal-who">${poster ? `<img src="${poster}" alt="" loading="lazy">` : `<span class="kcal-ph"></span>`}<div><b>${esc(seriesName(r))}</b><span>${esc(r.public_id)}${ep != null ? ` · EP ${pad2(ep)}` : ""}</span></div></div>
-      <button type="button" class="kcal-bar${cut ? " cut" : ""}${late ? " late" : left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${late ? "--s-stop" : STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}${late ? ` · просрочено ${-left} дн.` : ""}"><span>${end < 2 && late ? `−${-left} дн.` : `${esc(stageOf(r))}${late ? ` · −${-left} дн.` : ""}`}</span><em></em></button>
+      <button type="button" class="kcal-bar${cut ? " cut" : ""}${late ? " late" : left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${late ? "--s-stop" : STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}${late ? ` · просрочено ${-left} дн.` : ""}"><span>${esc(stageOf(r))}</span><em></em>${late ? `<i class="kcal-late-lbl">просрочено ${-left} дн.</i>` : ""}</button>
     </div>`;
   }).join("");
   const undatedBody = undated.map(r => {
@@ -230,7 +230,7 @@ function ganttHtml(data) {
         ${body + undatedBody || `<div class="kcal-quiet">${f.deadlines ? "В эти две недели сроков нет." : "Сроки скрыты фильтром."}</div>`}
         ${nowIdx >= 0 && nowIdx < RANGE_DAYS ? `<div class="kcal-now" id="cal-now" style="left:calc(210px + (100% - 210px) * ${((nowIdx + frac) / RANGE_DAYS).toFixed(4)})"></div>` : ""}
       </div>
-      <div class="kcal-lg">${rows.length > shown.length ? `<span>ещё ${rows.length - shown.length} в списке</span>` : ""}<span><i class="kcal-dia"></i>срок сдачи</span><span><i class="kcal-nowk"></i>сейчас</span><span><i class="kcal-dot" style="background:${BDAY_COLOR}"></i>день рождения</span><span><i class="kcal-dot" style="background:${REM_COLOR}"></i>напоминание</span></div>
+      <div class="kcal-lg">${rows.length > shown.length ? `<span>ещё ${rows.length - shown.length} в списке</span>` : ""}<span><i class="kcal-dia"></i>срок сдачи</span><span><i class="kcal-late"></i>просрочено</span><span><i class="kcal-nowk"></i>сейчас</span><span><i class="kcal-dot" style="background:${BDAY_COLOR}"></i>день рождения</span><span><i class="kcal-dot" style="background:${REM_COLOR}"></i>напоминание</span></div>
     </section>`;
 }
 

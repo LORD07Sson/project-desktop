@@ -5181,3 +5181,6 @@ button.note-time { border: 0; cursor: pointer; font-weight: 700; transition: fil
 button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; opacity: .8; }
 .pff-pill .pff-days { padding: 0 10px; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); white-space: nowrap; }
 .pff-pill .pff-days b { color: var(--ink); }
+/* Календарь: «просрочено N дн.» — справа от ромбика срока, за полоской (в узкой полоске текст не помещался). */
+.kcal-bar .kcal-late-lbl { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); white-space: nowrap; font-style: normal; font-size: 12px; font-weight: 700; color: #ff7a85; pointer-events: none; z-index: 2; padding: 1px 6px; border-radius: 6px; background: rgba(20, 12, 28, .85); }
+.kcal-late { display: inline-block; width: 14px; height: 8px; border-radius: 3px; background: color-mix(in srgb, var(--s-stop) 55%, transparent); border: 1px solid var(--s-stop); vertical-align: middle; margin-right: 6px; }
