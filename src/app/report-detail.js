@@ -12,7 +12,7 @@ import { devModeActive, fillReportDevPanel } from "./devmode.js";
 import { productionNow } from "./report-now-core.js";
 import { classifyFiles, overviewKpis, isFinalFile, isVideoFile } from "./report-overview-core.js";
 import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./tauri.js";
-import { esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange, formatWhen } from "./utils.js";
+import { relTime, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange, formatWhen } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, deadlineCellHtml, posterSrc } from "./reports.js";
 import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from "./titles-admin.js";
@@ -261,6 +261,8 @@ export async function openReportDetail(publicId) {
 
   // Вложение к следующей заметке — переживает перерисовку карточки.
   let pendingNoteFile = null;
+  let replyTo = null;      // {id, author} — заметка, на которую сейчас отвечают
+  let editingNote = null;  // id заметки в режиме правки
   let pipeEdit = null;   // { draft: [{role, telegram_id, name}], parallel }
 
   async function render() {
@@ -312,6 +314,17 @@ export async function openReportDetail(publicId) {
           return 0;
         })
       : notes.notes;
+    const noteIds = new Set(notes.notes.map(n => n.id));
+    const repliesOf = new Map();
+    for (const n of notes.notes) if (n.parent_id && noteIds.has(n.parent_id)) {
+      if (!repliesOf.has(n.parent_id)) repliesOf.set(n.parent_id, []);
+      repliesOf.get(n.parent_id).push(n);
+    }
+    const topNotes = orderedNotes.filter(n => !(n.parent_id && noteIds.has(n.parent_id)));
+    const openNotes = topNotes.filter(n => !n.resolved_at), doneNotes = topNotes.filter(n => n.resolved_at);
+    const noteCtx = { canEdit, me: state.telegramId, owner: !!state.isDeveloper, editing: editingNote };
+    const noteThread = n => noteHtml(n, noteCtx) + ((repliesOf.get(n.id) || []).length
+      ? `<div class="note-replies">${repliesOf.get(n.id).map(r => noteHtml(r, noteCtx)).join("")}</div>` : "");
 
     const t = seriesParts(detail);
     const poster = posterSrc(detail.poster_url);
@@ -426,13 +439,13 @@ export async function openReportDetail(publicId) {
               <h3>Заметки ${notes.notes.length ? `<span class="n">${notes.notes.length}</span>` : ""}
                 ${timedCount >= 2 ? `<button class="btn ghost notes-sort rd-h-act" id="notes-sort">${notesByTime ? "По времени добавления" : "По тайм-коду"}</button>` : ""}
               </h3>
-              <div id="notes-list">${orderedNotes.map(noteHtml).join("")}</div>
-              ${canEdit ? `<div class="add-row note-add-row">
-                <input id="note-time" class="note-time-input" placeholder="04:12" maxlength="8" inputmode="numeric" title="Время на дорожке — необязательно">
-                <textarea id="note-new" rows="2" placeholder="Правка или комментарий… (Ctrl+Enter — отправить, Ctrl+V — вставить скриншот)"></textarea>
+              <div id="notes-list">${openNotes.map(noteThread).join("")}${doneNotes.length ? `<details class="notes-done"><summary>Исправлено · ${doneNotes.length}</summary>${doneNotes.map(noteThread).join("")}</details>` : ""}</div>
+              ${canEdit ? `${replyTo ? `<div class="note-replying">Ответ для <b>${esc(replyTo.author)}</b><button type="button" class="icon-btn" id="note-reply-cancel" aria-label="Отменить ответ">✕</button></div>` : ""}<div class="add-row note-add-row">
+                <label class="note-tc" title="Привязать к моменту дорожки (необязательно): 04:12 или 1:02:03"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg><input id="note-time" class="note-time-input" placeholder="мм:сс" maxlength="8" inputmode="numeric" aria-label="Время на дорожке"></label>
+                <textarea id="note-new" rows="1" placeholder="${replyTo ? "Ответ…" : "Правка или комментарий…"}"></textarea>
                 <button class="icon-btn note-attach" id="note-attach" title="Приложить картинку к заметке (или Ctrl+V скриншота)" aria-label="Приложить картинку к заметке">${CLIP_ICON}</button>
                 <button class="btn" id="note-add">Добавить</button>
-              </div><div class="note-pending" id="note-pending"></div>` : ""}
+              </div><div class="note-hint">Ctrl+Enter — отправить · Ctrl+V — вставить скриншот · @ник — упомянуть</div><div class="note-pending" id="note-pending"></div>` : ""}
             </div>
 
             <div class="rd-sec rd-files">
@@ -898,8 +911,9 @@ export async function openReportDetail(publicId) {
       const payload = timeInput.value.trim() ? noteTimePrefix(seconds) + text : text;
       try {
         if (file) await apiUpload(`/report/${publicId}/notes/attach`, file, { text: payload });
-        else await apiPost(`/report/${publicId}/notes`, { text: payload });
+        else await apiPost(`/report/${publicId}/notes`, replyTo ? { text: payload, parent_id: replyTo.id } : { text: payload });
         pendingNoteFile = null;
+        replyTo = null;
         // Отправлено — черновик больше не нужен, иначе перерисовка вернула бы его в поле.
         ta.value = "";
         timeInput.value = "";
@@ -907,6 +921,63 @@ export async function openReportDetail(publicId) {
       } catch (e) { toast(`Не удалось добавить заметку: ${e.message}`, "error"); }
     }
     sheet.querySelector("#note-add")?.addEventListener("click", addNote);
+    const noteTa = sheet.querySelector("#note-new");
+    if (noteTa) {
+      const grow = () => { noteTa.style.height = "auto"; noteTa.style.height = `${Math.min(noteTa.scrollHeight, 220)}px`; };
+      noteTa.addEventListener("input", grow);
+      requestAnimationFrame(grow);
+    }
+    sheet.querySelector("#note-reply-cancel")?.addEventListener("click", () => { replyTo = null; render(); });
+    // Таймкод в заметке — перемотка плеера на этот момент (плеер открывается на первой дорожке, если ещё закрыт).
+    sheet.querySelector("#notes-list")?.addEventListener("click", async e => {
+      const tc = e.target.closest("[data-seek]");
+      if (tc) {
+        const sec = Number(tc.dataset.seek);
+        if (!player) sheet.querySelector("[data-play-file]")?.click();
+        if (player) { player.seekTo(Math.max(0, sec - 1)); player.el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+        else toast("К серии ещё не загружена дорожка — перематывать нечего.");
+        return;
+      }
+      const act = e.target.closest("[data-note-act]");
+      if (!act) return;
+      const item = act.closest(".note-item");
+      const id = Number(item.dataset.noteId);
+      const kind = act.dataset.noteAct;
+      const n = notes.notes.find(x => x.id === id);
+      if (!n) return;
+      try {
+        if (kind === "reply") {
+          replyTo = { id: n.parent_id && noteIds.has(n.parent_id) ? n.parent_id : n.id, author: n.author };
+          await render();
+          sheet.querySelector("#note-new")?.focus();
+        } else if (kind === "resolve") {
+          await apiPost(`/report/${publicId}/notes/${id}/resolve`, { resolved: !n.resolved_at });
+          await render();
+        } else if (kind === "edit") {
+          editingNote = id;
+          await render();
+          const ta = sheet.querySelector(`.note-item[data-note-id="${id}"] .note-edit textarea`);
+          if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+        } else if (kind === "cancel") {
+          editingNote = null;
+          await render();
+        } else if (kind === "save") {
+          const text = item.querySelector(".note-edit textarea").value.trim();
+          if (!text) { toast("Пустая заметка — лучше удалите её.", "error"); return; }
+          await apiPost(`/report/${publicId}/notes/${id}/edit`, { text });
+          editingNote = null;
+          await render();
+        } else if (kind === "delete") {
+          if (!window.confirm("Удалить заметку? Её не будет ни здесь, ни в боте. Ответы на неё останутся.")) return;
+          await apiPost(`/report/${publicId}/notes/${id}/delete`, {});
+          await render();
+        }
+      } catch (err) { toast(`Не получилось: ${err.message}`, "error"); }
+    });
+    sheet.querySelectorAll(".note-edit textarea").forEach(ta => ta.addEventListener("keydown", e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); ta.closest(".note-item").querySelector('[data-note-act="save"]').click(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); ta.closest(".note-item").querySelector('[data-note-act="cancel"]').click(); }
+    }));
     // Ctrl/Cmd+Enter из самого поля — привычка из Slack/GitHub/Linear:
     // руки уже на клавиатуре после текста заметки, тянуться к кнопке
     // мышью незачем. Обычный Enter не годится — заметки часто
@@ -1042,21 +1113,52 @@ const NOTE_INLINE_TC = /(^|[^\w:/.])(\d{1,2}:[0-5]\d(?::[0-5]\d)?)(?![\w:])/g;
 const NOTE_INLINE_AT = /(^|[^\w@])@([A-Za-z][A-Za-z0-9_]{3,31})\b/g;
 function decorateNote(escapedHtml) {
   return String(escapedHtml).split(/(<a [^>]*>.*?<\/a>)/).map(part => part.startsWith("<a ") ? part : part
-    .replace(NOTE_INLINE_TC, (_, pre, tc) => `${pre}<span class="note-time inline" title="время на дорожке">${tc}</span>`)
+    .replace(NOTE_INLINE_TC, (_, pre, tc) => `${pre}<span class="note-time inline" role="button" data-seek="${tc.split(":").reduce((acc, x) => acc * 60 + Number(x), 0)}" title="Перемотать дорожку на ${tc}">${tc}</span>`)
     .replace(NOTE_INLINE_AT, (_, pre, nick) => `${pre}<span class="note-mention" title="упоминание — человеку придёт уведомление">@${nick}</span>`)).join("");
 }
 
-function noteHtml(n) {
+// «LissaDor — 140 Oni — 93 …» — раскладка реплик по людям. Если вся заметка состоит из пар «имя — число»
+// (в строку или по строкам), рисуем её мини-таблицей с полосками долей, иначе null.
+const TALLY_RE = /([^\s—–\-:\d,;][^—–\n]*?)\s*[—–-]\s*(\d+)(?=[\s,;]|$)/g;
+function tallyHtml(text) {
+  const rows = [...String(text).matchAll(TALLY_RE)].map(m => ({ name: m[1].trim(), n: Number(m[2]) }));
+  if (rows.length < 2) return null;
+  if (String(text).replace(TALLY_RE, "").replace(/[\s,;]/g, "")) return null;
+  const max = Math.max(...rows.map(r => r.n)) || 1;
+  const sum = rows.reduce((acc, r) => acc + r.n, 0);
+  return `<div class="note-tally">${rows.map(r => `<div class="nt-row"><span class="nt-name">${esc(r.name)}</span><span class="nt-bar"><i style="width:${(r.n / max * 100).toFixed(1)}%"></i></span><b>${r.n}</b><small>${Math.round(r.n / sum * 100)}%</small></div>`).join("")}<div class="nt-sum">всего ${sum}</div></div>`;
+}
+
+function noteHtml(n, ctx = {}) {
   const t = parseNoteTime(n.text);
   // Подпись «📎 имя» сервер ставит сам, когда заметка — только файл
   // (её видно в боте); здесь вместо неё показывается само вложение.
   const autoCaption = n.attach && n.text === `📎 ${n.attach.name}`;
   const body = autoCaption ? "" : (t ? t.rest : n.text);
-  return `<div class="note-item${t ? " timed" : ""}">
-    <div class="meta">${esc(n.author)} · ${esc(formatWhen(n.created_at))}</div>
+  const who = (state.users || []).find(u => String(u.telegram_id) === String(n.author_telegram_id));
+  const role = who && who.roles && who.roles.length ? who.roles.join(", ") : "";
+  const mine = n.author_telegram_id && String(n.author_telegram_id) === String(ctx.me);
+  const editing = ctx.editing === n.id;
+  const tally = body && !editing ? tallyHtml(body) : null;
+  const text = editing
+    ? `<div class="note-edit"><textarea rows="2">${esc(n.text)}</textarea><div class="note-edit-act"><button type="button" class="btn ghost" data-note-act="cancel">Отмена</button><button type="button" class="btn" data-note-act="save">Сохранить</button></div></div>`
+    : tally || (body ? `<span class="note-text">${decorateNote(linkifyProject(esc(body)))}</span>` : "");
+  const acts = ctx.canEdit && !editing ? `<span class="note-acts">
+      <button type="button" data-note-act="reply">Ответить</button>
+      ${n.parent_id ? "" : `<button type="button" data-note-act="resolve" title="${n.resolved_at ? "Вернуть в открытые правки" : "Отметить правку исправленной"}">${n.resolved_at ? "Вернуть" : "✓ Исправлено"}</button>`}
+      ${mine || ctx.owner ? `<button type="button" data-note-act="edit">Изменить</button><button type="button" class="danger" data-note-act="delete">Удалить</button>` : ""}
+    </span>` : "";
+  return `<div class="note-item${t ? " timed" : ""}${n.resolved_at ? " resolved" : ""}${n.parent_id ? " reply" : ""}" data-note-id="${n.id}">
+    <div class="meta">
+      <span class="avatar-bubble note-av"${n.author_telegram_id ? ` data-avatar-for="${esc(n.author_telegram_id)}"` : ""}>${esc(initials(n.author || "?"))}</span>
+      <b class="note-author">${esc(n.author)}</b>${role ? `<span class="note-role">${esc(role)}</span>` : ""}
+      <time title="${esc(formatWhen(n.created_at))}">${esc(relTime(n.created_at))}</time>${n.edited_at ? `<span class="note-edited" title="${esc(formatWhen(n.edited_at))}">· изменено</span>` : ""}
+      ${n.resolved_at ? `<span class="note-res" title="${esc(formatWhen(n.resolved_at))}">✓ исправлено${n.resolved_by ? ` · ${esc(n.resolved_by)}` : ""}</span>` : ""}
+      ${acts}
+    </div>
     <div class="note-body">
-      ${t ? `<span class="note-time" title="время на дорожке">${esc(t.label)}</span>` : ""}
-      ${body ? `<span class="note-text">${decorateNote(linkifyProject(esc(body)))}</span>` : ""}
+      ${t ? `<button type="button" class="note-time" data-seek="${t.seconds}" title="Перемотать дорожку на ${esc(t.label)}">▶ ${esc(t.label)}</button>` : ""}
+      ${text}
     </div>
     ${n.attach ? `<div class="note-att">${attachHtml(n.attach)}</div>` : ""}
   </div>`;

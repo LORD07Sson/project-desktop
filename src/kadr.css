@@ -5124,3 +5124,55 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 }
 /* В плашке разделов оставлены только аватар и процент прокрутки. */
 .pff-pill [data-pff-go="pff-about"], .pff-pill [data-pff-go="pff-work"], .pff-pill [data-pff-go="pff-activity"], .pff-pill [data-pff-go="pff-awards"] { display: none; }
+
+/* ===== Заметки отчёта: автор с аватаром, таблица «имя — число», таймкоды-перемотка, действия, ответы ===== */
+.note-item .meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; font-size: 12px; }
+.note-av { width: 22px; height: 22px; font-size: 9.5px; flex: none; }
+.note-author { color: var(--ink); font-weight: 650; font-size: 12.5px; }
+.note-role { padding: 1px 7px; border-radius: 99px; background: rgba(var(--fire-rgb), .12); color: var(--fire); font-size: 10.5px; font-weight: 600; }
+.note-item .meta time, .note-edited { color: var(--ink-dim); }
+.note-res { color: #4fd18b; font-weight: 600; }
+.note-acts { display: inline-flex; gap: 2px; margin-left: auto; opacity: 0; transition: opacity .15s; }
+.note-item:hover .note-acts, .note-item:focus-within .note-acts { opacity: 1; }
+.note-acts button { padding: 3px 8px; border: 0; border-radius: 6px; background: none; color: var(--ink-dim); font-family: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.note-acts button:hover { background: rgba(255, 255, 255, .07); color: var(--ink); }
+.note-acts button.danger:hover { color: #ff6b7a; background: rgba(255, 107, 122, .1); }
+.note-body { padding-left: 29px; }
+.note-text { white-space: pre-line; }
+button.note-time { border: 0; cursor: pointer; font-weight: 700; transition: filter .15s; }
+.note-time[data-seek] { cursor: pointer; }
+.note-time[data-seek]:hover { filter: brightness(1.25); }
+.note-item.resolved { opacity: .55; }
+.note-item.resolved .note-text { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, .25); }
+.note-replies { margin: -2px 0 8px 29px; padding-left: 12px; border-left: 2px solid rgba(255, 255, 255, .07); }
+.note-replies .note-item { padding-top: 8px; padding-bottom: 8px; }
+.notes-done { margin-top: 8px; }
+.notes-done > summary { cursor: pointer; padding: 6px 0; font-size: 12px; font-weight: 600; color: var(--ink-dim); list-style: none; }
+.notes-done > summary::before { content: "▸ "; }
+.notes-done[open] > summary::before { content: "▾ "; }
+/* Таблица «имя — число» */
+.note-tally { flex: 1; display: grid; gap: 5px; max-width: 460px; }
+.nt-row { display: grid; grid-template-columns: minmax(70px, 120px) 1fr 38px 34px; align-items: center; gap: 10px; font-size: 12.5px; }
+.nt-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nt-bar { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.nt-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--fire), var(--gold)); }
+.nt-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.nt-row small { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.nt-sum { font-size: 11px; color: var(--ink-dim); padding-top: 2px; }
+/* Правка заметки */
+.note-edit { flex: 1; display: grid; gap: 6px; }
+.note-edit textarea { width: 100%; min-height: 54px; resize: vertical; }
+.note-edit-act { display: flex; justify-content: flex-end; gap: 6px; }
+/* Ввод */
+.note-replying { display: flex; align-items: center; gap: 6px; margin: 6px 0 -2px; font-size: 12px; color: var(--ink-dim); }
+.note-replying b { color: var(--ink); }
+.note-replying .icon-btn { width: 20px; height: 20px; font-size: 10px; }
+.note-add-row { align-items: flex-end; }
+.note-add-row textarea#note-new { min-height: 38px; resize: none; overflow-y: auto; line-height: 1.45; }
+.note-tc { display: inline-flex; align-items: center; gap: 5px; height: 38px; padding: 0 9px; border-radius: 10px; flex: none;
+  background: rgba(120, 174, 252, .08); border: 1px solid rgba(120, 174, 252, .18); color: #a9c9ff; cursor: text; }
+.note-tc svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.note-tc .note-time-input.note-time-input { width: 46px; padding: 0; border: 0; background: none; color: inherit; outline: none; box-shadow: none; }
+.note-hint { max-height: 0; overflow: hidden; margin-top: 0; font-size: 11px; color: var(--ink-dim); opacity: 0; transition: max-height .2s, opacity .2s, margin .2s; }
+.note-add-row:focus-within + .note-hint { max-height: 20px; opacity: 1; margin-top: 6px; }
+@media (prefers-reduced-motion: reduce) { .note-acts, .note-hint { transition: none; } }

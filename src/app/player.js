@@ -314,6 +314,8 @@ export function createPlayer({ publicId, onAddNote, onClose, readOnly = false })
     open,
     destroy,
     setFiles(list) { files = list.filter(isAudioFile); drawFiles(); },
+    // Перемотка по таймкоду из заметки: если дорожка ещё грузится — дождаться длительности.
+    seekTo(t) { if (dur()) seek(t); else audio.addEventListener("loadedmetadata", () => seek(t), { once: true }); },
     setNotes(list) {
       notes = list.map(n => { const t = parseNoteTime(n.text); return t ? { seconds: t.seconds, label: t.label, text: t.rest.trim() } : null; })
         .filter(Boolean).sort((a, b) => a.seconds - b.seconds);
