@@ -156,3 +156,29 @@ body:has(#titlebar-apps[hidden]) #tabstrip.fan { display: none; } /* до вхо
   #tabstrip.fan { transition: none; }
   #tabstrip :is(.fan-it, .fan-it .tab-lbl, .fan-btn, .fan-scrim) { transition: none !important; }
 }
+
+/* ---------- шапка без строки разделов ----------
+   Разделы ушли в веер, и без них всё в шапке сбилось влево. Раскладка как у
+   окна настольной программы: слева логотип и «кто в сети», по центру — поиск,
+   справа — кнопки, «Смотреть» и профиль. Только при веере на странице. */
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions { flex: 1; min-width: 0; gap: 4px; }
+body:has(#tabstrip.fan) #titlebar-team { margin-left: 4px; margin-right: auto; }
+body:has(#tabstrip.fan) #titlebar-team[hidden] + #open-cmdk { margin-left: 0; }
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-cmdk {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: clamp(260px, 30vw, 520px); height: 36px; border-radius: 12px; padding: 0 8px 0 14px; gap: 10px;
+}
+body:has(#tabstrip.fan) #open-cmdk .tb-search-lbl { flex: 1; text-align: left; }
+/* Если «кто в сети» скрыт, кнопки всё равно прижаты вправо. */
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > .lr-wrap { margin-left: auto; }
+body:has(#tabstrip.fan) #titlebar-team:not([hidden]) ~ .lr-wrap { margin-left: 0; }
+/* «Смотреть» и профиль отделены от значков тонкой чертой. */
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-watch { margin-left: 10px; position: relative; }
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-watch::before {
+  content: ""; position: absolute; left: -9px; top: 8px; bottom: 8px; width: 1px; background: rgba(255, 255, 255, .1); pointer-events: none;
+}
+:root[data-theme="light"] body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-watch::before { background: rgba(0, 0, 0, .1); }
+body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #me-wrap { margin: 0 10px 0 2px; }
+@media (max-width: 1100px) {
+  body:has(#tabstrip.fan) .titlebar-apps .tb-actions > #open-cmdk { position: relative; left: auto; top: auto; transform: none; width: 220px; }
+}
