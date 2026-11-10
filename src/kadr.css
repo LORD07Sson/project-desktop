@@ -5188,3 +5188,8 @@ button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; o
 @media (max-width: 1000px) { .kcal-bar .kcal-late-lbl { left: calc(100% + 10px); padding: 4px 7px; font-size: 11px; } }
 /* У правого края окна плашке справа места нет — ставим её внутрь полоски, перед ромбиком. */
 .kcal-bar .kcal-late-lbl.in { left: auto; right: 16px; }
+/* Ближайшие сроки — той же плашкой: «сдать сегодня» (жёлтая), «сдать завтра» (голубая). */
+.kcal-bar .kcal-late-lbl.today { color: #ffe08a; background: #2a2410; border-color: rgba(255, 200, 60, .45); }
+.kcal-bar .kcal-late-lbl.tmrw { color: #a9d4ff; background: #12202e; border-color: rgba(100, 170, 255, .4); }
+:root[data-theme="light"] .kcal-bar .kcal-late-lbl.today { color: #8a5a00; background: #fff6d6; border-color: rgba(200, 150, 0, .4); }
+:root[data-theme="light"] .kcal-bar .kcal-late-lbl.tmrw { color: #1d5fa8; background: #e9f3ff; border-color: rgba(40, 110, 220, .3); }
