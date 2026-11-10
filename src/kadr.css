@@ -4834,3 +4834,92 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .tab-panel[data-panel="nyaa"] .ny.ny-compact .ny-list > .ny-day { top: 68px; }
 .tab-panel[data-panel="nyaa"] .ny .ny-list > .ny-day { background: linear-gradient(90deg, color-mix(in srgb, var(--ny-neon2) 10%, var(--ny-bg)), var(--ny-bg) 60%); }
 .tab-panel[data-panel="nyaa"] .ny .ny-head { background: var(--ny-bg); }
+
+/* ================================================================
+   Профиль-портфолио (.pf-folio): одна узкая колонка по центру, как
+   сайт-визитка; секции с короткими заголовками, плавающая таблетка
+   навигации с прогрессом прокрутки, светящаяся плашка в подвале.
+   ================================================================ */
+.pf-folio { --pff-w: 820px; --pff-ease: cubic-bezier(.2, .9, .25, 1); max-width: var(--pff-w); margin: 0 auto; padding: 8px 4px 40px; display: flex; flex-direction: column; gap: 34px; }
+.pf-folio > * { animation: pff-in .6s var(--pff-ease) both; }
+.pf-folio > :nth-child(2) { animation-delay: 60ms; } .pf-folio > :nth-child(3) { animation-delay: 110ms; }
+.pf-folio > :nth-child(4) { animation-delay: 160ms; } .pf-folio > :nth-child(n+5) { animation-delay: 210ms; }
+
+/* Таблетка навигации */
+.pff-pill { position: sticky; top: 8px; z-index: 5; align-self: center; display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 4px; border-radius: 99px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent); backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .9);
+  transition: box-shadow .3s, transform .3s var(--pff-ease); margin-bottom: -14px; }
+.pff-pill.lifted { box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .95), 0 0 0 1px rgba(var(--fire-rgb), .12); transform: translateY(2px); }
+.pff-pill-ic { display: inline-flex; gap: 3px; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); margin-right: 4px; }
+.pff-pill-ic i { width: 3px; height: 10px; border-radius: 2px; background: var(--bg); }
+.pff-pill button { border: 0; background: none; color: var(--ink-dim); font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 6px 12px; border-radius: 99px; cursor: pointer; transition: color .2s, background .25s var(--pff-ease); }
+.pff-pill button:hover { color: var(--ink); }
+.pff-pill button.on { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.pff-pct { min-width: 38px; text-align: right; font-size: 11px; font-weight: 700; color: var(--ink-dim); font-variant-numeric: tabular-nums; padding-left: 6px; border-left: 1px solid var(--line); }
+
+/* Приветствие */
+.pff-sec { scroll-margin-top: 60px; display: flex; flex-direction: column; gap: 14px; }
+.pf-folio .pff-hero { position: relative; overflow: hidden; padding: 30px 30px 22px; border-radius: 24px; border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+  background: var(--surface-2); }
+.pf-folio .pff-banner { position: absolute; inset: 0; height: auto; opacity: .32; filter: saturate(1.2) blur(1px); -webkit-mask-image: linear-gradient(110deg, transparent 30%, #000 100%); mask-image: linear-gradient(110deg, transparent 30%, #000 100%); }
+.pf-folio .pff-banner::after { content: none; }
+.pff-hero-row { position: relative; display: flex; align-items: flex-start; gap: 28px; justify-content: space-between; }
+.pff-intro { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pff-hi { margin: 0; font-size: 30px; line-height: 1.15; font-weight: 600; letter-spacing: -.025em; color: var(--ink-soft); }
+.pff-hi b { color: var(--ink); font-weight: 800; }
+.pff-role { display: flex; align-items: center; gap: 10px; min-height: 22px; }
+.pff-role-t { font-size: 15px; font-weight: 600; color: var(--ink-dim); transition: opacity .26s, filter .26s, transform .26s var(--pff-ease); }
+.pff-role-t.out { opacity: 0; filter: blur(6px); transform: translateY(4px); }
+.pff-status { margin: 4px 0 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+.pff-bio { margin: 0; max-width: 520px; font-size: 14px; line-height: 1.6; color: var(--ink-soft); }
+.pff-bio.empty { color: var(--ink-dim); font-style: italic; }
+.pff-clock { font-size: 13px; color: var(--ink-dim); font-style: italic; font-family: "Segoe Script", "Segoe Print", cursive; letter-spacing: .01em; }
+.pff-clock .on { color: #4ade80; font-family: inherit; font-style: normal; margin-left: 4px; }
+.pf-folio .pff-av { flex: none; padding: 0; border-radius: 22px; background: none; box-shadow: none; animation: pff-wipe .9s .15s var(--pff-ease) both; }
+.pf-folio .pff-av .avatar.xl { width: 132px; height: 132px; border-radius: 20px; font-size: 44px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent), 0 24px 50px -24px rgba(0, 0, 0, .9); }
+.pf-folio .pff-av .avatar.xl img { border-radius: 20px; }
+.pf-folio .pff-av[class*="tier-"] .avatar.xl { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--tier-c, var(--gold)), 0 24px 50px -24px rgba(0, 0, 0, .9); }
+.pf-folio .pff-av.tier-bronze { --tier-c: #b0774a; } .pf-folio .pff-av.tier-silver { --tier-c: #b9c2cc; } .pf-folio .pff-av.tier-gold { --tier-c: var(--gold); }
+.pff-actions { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
+
+/* Цифры — ровной строкой с тонкими разделителями */
+.pf-folio .pff-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); border-radius: 20px; overflow: hidden; background: var(--surface-2); }
+.pf-folio .pff-stats .pf-kpi { border: 0; border-radius: 0; background: none; box-shadow: none; padding: 18px 20px; }
+.pf-folio .pff-stats .pf-kpi + .pf-kpi { border-left: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
+.pf-folio .pff-stats .pf-kpi b { font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
+
+/* Заголовки секций и карточки внутри */
+.pff-h { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); display: flex; align-items: center; gap: 12px; }
+.pff-h::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 12%, transparent), transparent); }
+.pf-folio .pf-card { border-radius: 20px; }
+.pff-two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: stretch; }
+.pff-two > *, .pff-two > .bcell.wide { margin: 0; min-width: 0; grid-column: auto; }
+.pf-folio .pf-rep { transition: background .2s, transform .25s var(--pff-ease); }
+.pf-folio .pf-rep:hover { transform: translateX(3px); }
+.pf-folio .pf-badges { gap: 10px; }
+.pf-folio .pf-badge { transition: transform .3s var(--pff-ease), box-shadow .3s; }
+.pf-folio .pf-badge.won:hover { transform: translateY(-3px) rotate(-1deg); box-shadow: 0 16px 30px -18px rgba(var(--fire-rgb), .7); }
+
+/* Подвал: цитата и светящаяся плашка с бегущей кромкой */
+.pff-foot { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 30px 0 6px; text-align: center; }
+.pff-foot blockquote { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.45; color: var(--ink); max-width: 460px; }
+.pff-foot cite { display: block; margin-top: 6px; font-size: 11.5px; font-style: normal; font-weight: 500; color: var(--ink-dim); }
+.pff-glow { position: relative; padding: 1.5px; border-radius: 99px; overflow: hidden; isolation: isolate; }
+.pff-glow::before { content: ""; position: absolute; inset: -150%; z-index: -1; background: conic-gradient(from 0deg, transparent 0 55%, var(--gold) 70%, var(--fire) 80%, #ff5fa2 88%, transparent 100%); animation: pff-spin 4s linear infinite; }
+.pff-glow span { display: block; padding: 7px 16px; border-radius: 99px; background: var(--bg); font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.pff-glow b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.pff-cta { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+
+@keyframes pff-in { from { opacity: 0; transform: translateY(12px); filter: blur(4px); } }
+@keyframes pff-wipe { from { clip-path: inset(0 100% 0 0 round 20px); } to { clip-path: inset(0 0 0 0 round 20px); } }
+@keyframes pff-spin { to { transform: rotate(1turn); } }
+@media (max-width: 760px) {
+  .pff-two, .pf-folio .pff-stats { grid-template-columns: 1fr 1fr; }
+  .pff-hero-row { flex-direction: column-reverse; }
+  .pff-pill button { padding: 6px 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-folio > *, .pf-folio .pff-av, .pff-glow::before { animation: none; }
+  .pff-role-t, .pff-pill, .pf-folio .pf-rep, .pf-folio .pf-badge { transition: none; }
+}
