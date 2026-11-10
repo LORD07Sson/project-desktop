@@ -63,8 +63,14 @@ function openEditor(hero, telegramId) {
   const ctx = canvas.getContext("2d");
   const sctx = stroke.getContext("2d");
 
+  // Сохранённый рисунок берём файлом (fetch → ImageBitmap), а не через <img> с сервера: картинка с чужого адреса
+  // «пачкает» холст, и дальше getImageData (Очистить, Отменить, Сохранить) падает с SecurityError.
   const old = hero.querySelector(".pf-graffiti");
-  if (old && old.naturalWidth > 1) ctx.drawImage(old, Math.round((W - old.naturalWidth) / 2), 0);
+  if (old && old.naturalWidth > 1) {
+    fetch(old.src).then(r => (r.ok ? r.blob() : Promise.reject(new Error(r.status)))).then(b => window.createImageBitmap(b))
+      .then(bmp => { ctx.drawImage(bmp, Math.round((W - bmp.width) / 2), 0); bmp.close(); })
+      .catch(() => toast("Не удалось загрузить сохранённое граффити — рисуете с чистого листа.", "error"));
+  }
   if (old) old.style.visibility = "hidden";
 
   let tool = "felt", color = COLORS[2], size = 7;
