@@ -450,8 +450,8 @@ export async function loadProfile() {
 
 function folioRoles(d) {
   const roles = (Array.isArray(d.roles) ? d.roles : (d.role ? [d.role] : [])).filter(r => r && r.toLowerCase() !== "user");
-  const extra = (d.role_breakdown || []).map(rb => rb.role).filter(r => r && !roles.includes(r));
-  const list = [...roles, ...extra];
+  // Только назначенные роли: этапы из отчётов (role_breakdown, напр. «Даббер») ролью человека не являются.
+  const list = [...roles];
   if (d.is_developer || d.is_owner) list.push("Разработчик Project");
   return list.length ? list : ["Участник Project"];
 }
