@@ -1,130 +1,147 @@
-/* Строка меню шапки (#tabstrip.mb-bar) — разделы четырьмя словами,
-   у каждого выпадающее меню. Логика — src/app/titlebar-menus.js.
-   Все правила — внутри #tabstrip / .titlebar, общих правил не трогаем.
+/* Веер разделов (#tabstrip.fan) — круглая кнопка в правом нижнем углу,
+   пункты разлетаются вверх по дуге. Логика и раскладка (--x, --y, --r, --i
+   на каждом пункте) — src/app/titlebar-menus.js. Все правила — внутри
+   #tabstrip, общих правил не трогаем.
 
-   Замеры с референса (покадрово, 60 к/с): появление ~130 мс с перелётом
-   ~6% и посадкой к ~220 мс, пункты по очереди с шагом ~16–20 мс,
-   растворение+размытие на входе; уход ~110 мс. У каждого раздела свой
-   неоновый цвет (--mb-c задан на .mb-wrap в index.html). */
+   Замеры с референса (60 к/с, кадр 0 — клик):
+   - к5 пункты возникают сжатыми у кнопки (~40% пути, полупрозрачные, размытые);
+   - к6–к9 раскрываются по дуге, к9–к12 перелёт ~15–20 px, посадка к ~к16 (270 мс);
+   - выбор: пункты сходятся в выбранный за ~100 мс, там проявляется кнопка
+     и за ~200 мс съезжает в угол; фон перетекает в цвет раздела за ~350 мс. */
 
-/* ---------- сама строка: плоская, без «острова» ---------- */
-/* Как в строке меню ОС — сразу за названием программы, а не по центру. */
-#tabstrip.mb-bar {
-  margin: 0 auto 0 6px; gap: 2px; padding: 0; border: 0; border-radius: 0;
-  background: none; box-shadow: none; backdrop-filter: none;
-}
-#tabstrip.mb-bar::before { content: none; }
-:root[data-theme="light"] #tabstrip.mb-bar { background: none; }
-#tabstrip .mb-wrap[hidden] { display: none; }
+@property --fan-c { syntax: "<color>"; inherits: true; initial-value: #ffd23f; }
 
-#tabstrip .mb-btn {
-  position: relative; display: flex; align-items: center; height: 28px; padding: 0 11px;
-  border: 0; border-radius: 7px; background: transparent; color: var(--ink-soft);
-  font: inherit; font-size: 13px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; cursor: default;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, .55); /* читается и поверх баннера шапки */
-  transition: background .12s, color .12s;
+#tabstrip.fan {
+  position: fixed; right: 24px; bottom: 24px; z-index: 230;
+  width: 48px; height: 48px; margin: 0; padding: 0; border: 0; background: none; box-shadow: none;
+  transition: --fan-c .4s ease; /* цвет раздела перетекает, а не прыгает */
 }
-#tabstrip .mb-btn:hover { color: var(--ink); background: rgba(255, 255, 255, .06); }
-:root[data-theme="light"] #tabstrip .mb-btn:hover { background: rgba(60, 30, 10, .07); }
-/* Открытое меню — слово залито своим цветом, как выделение в строке меню ОС. */
-#tabstrip .mb-btn[aria-expanded="true"] {
-  color: #0d0d10; text-shadow: none; background: var(--mb-c);
-  box-shadow: 0 0 18px -4px var(--mb-c);
+body:has(#titlebar-apps[hidden]) #tabstrip.fan { display: none; } /* до входа разделов нет */
+#tabstrip.fan > .sg-in { display: none; } /* сезонная гирлянда вешается на #tabstrip — у кнопки ей не место */
+/* Подкраска окна цветом текущего раздела: мягкое свечение из угла, кликам не мешает. */
+#tabstrip.fan::before {
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background: radial-gradient(120% 90% at 100% 100%, color-mix(in srgb, var(--fan-c) 22%, transparent), transparent 55%);
+  mix-blend-mode: screen; opacity: .55;
 }
-#tabstrip .mb-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--mb-c); }
-#tabstrip .mb-btn[aria-expanded="true"]:focus-visible { box-shadow: 0 0 18px -4px var(--mb-c); }
-/* Слово, в котором сейчас открытый раздел: неоновая черта снизу. */
-#tabstrip .mb-btn.active { color: var(--ink); }
-#tabstrip .mb-btn.active::after {
-  content: ""; position: absolute; left: 50%; bottom: -3px; width: 16px; height: 2px; margin-left: -8px; border-radius: 2px;
-  background: var(--mb-c); box-shadow: 0 0 10px var(--mb-c);
-}
-#tabstrip .mb-btn[aria-expanded="true"]::after { opacity: 0; }
-#tabstrip .mb-btn.has-badge::before {
-  content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--mb-c); box-shadow: 0 0 0 2px var(--bg), 0 0 8px var(--mb-c);
-}
-/* Выбор пункта: слово коротко вспыхивает цветом раздела (в референсе пункт «втягивается» в кнопку). */
-#tabstrip .mb-btn.mb-picked { animation: mb-picked .32s ease-out; }
-@keyframes mb-picked { from { background: color-mix(in srgb, var(--mb-c) 40%, transparent); color: var(--ink); } }
+:root[data-theme="light"] #tabstrip.fan::before { mix-blend-mode: multiply; opacity: .25; }
 
-/* ---------- выпадающее меню ---------- */
-#tabstrip .mb-menu {
-  left: -4px; right: auto; top: calc(100% + 6px); width: max-content; min-width: 236px; max-width: 340px;
-  padding: 5px; border-radius: 11px;
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
-  backdrop-filter: blur(24px) saturate(1.6);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
-  border: 1px solid rgba(255, 255, 255, .1);
-  box-shadow:
-    0 0 0 .5px rgba(0, 0, 0, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .06),
-    0 22px 48px -14px rgba(0, 0, 0, .75),
-    0 0 40px -22px var(--mb-c);
-  transform-origin: 18px 0;
-  animation: mb-in .22s cubic-bezier(.2, 1.35, .45, 1) both;
+/* Затемнение под открытым веером — читаемость поверх любого раздела; клик закрывает. */
+#tabstrip .fan-scrim {
+  position: fixed; inset: 0; z-index: -1;
+  background: radial-gradient(70% 110% at 100% 100%, rgba(4, 4, 8, .94), rgba(4, 4, 8, .8) 50%, rgba(4, 4, 8, .45));
+  opacity: 0; transition: opacity .25s ease;
 }
-:root[data-theme="light"] #tabstrip .mb-menu {
-  background: color-mix(in srgb, #fff 78%, transparent);
-  border-color: rgba(0, 0, 0, .08);
-  box-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 18px 40px -14px rgba(40, 20, 10, .35);
-}
-#tabstrip .mb-menu.mb-closing { animation: mb-out .11s ease-in both; pointer-events: none; }
-@keyframes mb-in { from { opacity: 0; transform: translateY(-6px) scale(.96); filter: blur(6px); } }
-@keyframes mb-out { to { opacity: 0; transform: translateY(-3px) scale(.98); filter: blur(3px); } }
+#tabstrip.fan-open .fan-scrim { opacity: 1; }
+:root[data-theme="light"] #tabstrip .fan-scrim { background: radial-gradient(90% 100% at 100% 100%, rgba(255, 250, 245, .9), rgba(255, 250, 245, .4) 60%, rgba(255, 250, 245, .1)); }
 
-/* Пункты: строка 30 px, значок цвета раздела, справа бейдж и Ctrl+N. */
-#tabstrip .mb-menu .tb-mi {
-  position: relative; display: flex; align-items: center; gap: 10px; width: 100%; height: 30px; padding: 0 9px;
-  border: 0; border-radius: 6px; background: none; color: var(--ink);
-  font: inherit; font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; text-align: left; cursor: default;
-  transition: none;
-  animation: mb-item-in .2s cubic-bezier(.2, 1.3, .45, 1) both;
-  animation-delay: calc(var(--i, 0) * 18ms + 30ms);
+/* ---------- кнопка ---------- */
+#tabstrip .fan-btn {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--fan-c) 38%, transparent);
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--fan-c) 22%, #15151b), color-mix(in srgb, var(--fan-c) 8%, #0c0c10));
+  color: var(--fan-c);
+  box-shadow: 0 10px 28px -8px rgba(0, 0, 0, .8), 0 0 22px -6px var(--fan-c), inset 0 1px 0 rgba(255, 255, 255, .08);
+  transition: transform .24s cubic-bezier(.2, .9, .3, 1), opacity .16s ease;
 }
-@keyframes mb-item-in { from { opacity: 0; transform: translateY(-4px); filter: blur(3px); } }
-#tabstrip .mb-menu .tb-mi::before, #tabstrip .mb-menu .tb-mi::after { content: none; }
-#tabstrip .mb-menu .tb-mi .tab-ic {
-  display: grid; place-items: center; width: 16px; height: 16px; flex: none;
-  background: none; box-shadow: none; border-radius: 0; color: var(--mb-c);
+#tabstrip .fan-btn:hover { transform: scale(1.06); }
+#tabstrip .fan-btn:focus-visible { outline: 2px solid var(--fan-c); outline-offset: 3px; }
+#tabstrip .fan-btn-ic { display: grid; place-items: center; width: 22px; height: 22px; }
+#tabstrip .fan-btn-ic svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--fan-c) 70%, transparent));
 }
-#tabstrip .mb-menu .tb-mi .tab-ic svg {
-  width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round;
-  color: inherit; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mb-c) 55%, transparent));
+#tabstrip .fan-btn.has-badge::after {
+  content: ""; position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--fire, #ff5c3a); box-shadow: 0 0 0 2px #0c0c10, 0 0 8px var(--fire, #ff5c3a);
 }
-#tabstrip .mb-menu .tm-txt { display: flex; flex: 1; min-width: 0; }
-#tabstrip .mb-menu .tm-txt small { display: none; }
-#tabstrip .mb-menu .tab-lbl { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#tabstrip .mb-menu .tab-badge { position: static; margin: 0; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 9px; font-size: 10px; box-shadow: none; }
-#tabstrip .mb-kbd {
-  flex: none; margin-left: auto; padding: 0; background: none; border: 0;
-  font: 500 11.5px/1 var(--font, inherit); color: var(--ink-dim); letter-spacing: .02em;
+/* Открыт веер — кнопка растворяется: её место занимает нижний пункт. */
+#tabstrip.fan-open .fan-btn { opacity: 0; transform: scale(.6); pointer-events: none; }
+/* Выбор: кнопка мгновенно встаёт на место выбранного пункта и проявляется там… */
+#tabstrip.fan-picking .fan-btn {
+  opacity: 1; pointer-events: none;
+  transform: translate(var(--px, 0px), var(--py, 0px));
+  transition: transform 0s, opacity .12s ease .04s;
 }
-#tabstrip .mb-menu .tab-badge:not([hidden]) + .mb-kbd { margin-left: 4px; }
+/* …затем съезжает обратно в угол. */
+#tabstrip.fan-picking.fan-glide .fan-btn { transition: transform .24s cubic-bezier(.25, .8, .3, 1), opacity .1s; }
 
-/* Подсветка — заливка цветом раздела, как выделенная строка системного меню. */
-#tabstrip .mb-menu .tb-mi:hover,
-#tabstrip .mb-menu .tb-mi:focus-visible,
-#tabstrip .mb-menu .tb-mi:focus { outline: none; background: var(--mb-c); color: #0d0d10; box-shadow: 0 0 16px -6px var(--mb-c); }
-#tabstrip .mb-menu .tb-mi:is(:hover, :focus) .tab-ic,
-#tabstrip .mb-menu .tb-mi:is(:hover, :focus) .mb-kbd { color: rgba(13, 13, 16, .75); }
-#tabstrip .mb-menu .tb-mi:is(:hover, :focus) .tab-ic svg { filter: none; }
-/* Открытый сейчас раздел — точка цвета раздела слева от значка. */
-#tabstrip .mb-menu .tab-btn.active { background: color-mix(in srgb, var(--mb-c) 12%, transparent); }
-#tabstrip .mb-menu .tab-btn.active .tab-lbl { font-weight: 600; }
-#tabstrip .mb-menu .tab-btn.active::before {
-  content: ""; position: absolute; left: 2px; top: 50%; width: 3px; height: 14px; margin-top: -7px; border-radius: 2px;
-  background: var(--mb-c); box-shadow: 0 0 8px var(--mb-c);
+/* ---------- пункты ---------- */
+#tabstrip .fan-menu { position: absolute; right: 0; bottom: 0; width: 0; height: 0; }
+#tabstrip .fan-menu[hidden] { display: none; }
+#tabstrip .fan-it {
+  position: absolute; right: 0; bottom: 6px; display: flex; align-items: center; gap: 10px;
+  height: 36px; width: auto; padding: 0 8px 0 14px; margin: 0; border: 0; border-radius: 18px;
+  background: rgba(12, 12, 16, .55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  color: var(--c); font: inherit; font-size: 14px; font-weight: 650; letter-spacing: .005em; white-space: nowrap; cursor: pointer;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+  transform-origin: calc(100% - 24px) 50%;
+  /* сжатое состояние у кнопки — отсюда стартует раскрытие */
+  transform: translate(calc(var(--x) * .4), calc(var(--y) * .4)) scale(.6);
+  opacity: 0; filter: blur(4px);
+  transition:
+    transform .26s cubic-bezier(.3, 1.32, .55, 1) calc(var(--i, 0) * 3ms),
+    opacity .14s ease calc(var(--i, 0) * 3ms),
+    filter .2s ease calc(var(--i, 0) * 3ms),
+    background .12s, box-shadow .12s;
 }
-#tabstrip .mb-menu .tab-btn.active:is(:hover, :focus)::before { background: #0d0d10; box-shadow: none; }
-#tabstrip .mb-menu .tb-sep { height: 1px; margin: 5px 9px; background: rgba(255, 255, 255, .09); }
-#tabstrip .mb-menu .tb-sep[hidden] { display: none; }
-:root[data-theme="light"] #tabstrip .mb-menu .tb-sep { background: rgba(0, 0, 0, .08); }
+#tabstrip .fan-it::before { content: none; }
+#tabstrip.fan-open .fan-it { transform: translate(var(--x), var(--y)) rotate(var(--r)); opacity: 1; filter: none; }
+/* Закрытие без выбора — обратно в кнопку. */
+#tabstrip.fan-closing:not(.fan-picking) .fan-it {
+  transform: translate(0, 0) scale(.5); opacity: 0; filter: blur(3px);
+  transition: transform .16s cubic-bezier(.5, 0, .9, .5), opacity .14s ease, filter .14s;
+}
+/* Выбор — все сходятся в выбранный пункт и гаснут. */
+#tabstrip.fan-picking .fan-it {
+  transform: translate(var(--px), var(--py)) scale(.55); opacity: 0; filter: blur(2px);
+  transition: transform .13s cubic-bezier(.5, 0, .9, .5), opacity .13s ease, filter .13s;
+}
 
-/* ---------- без анимаций: только мгновенное появление ---------- */
-:root[data-motion="off"] #tabstrip .mb-menu,
-:root[data-motion="off"] #tabstrip .mb-menu .tb-mi,
-:root[data-motion="off"] #tabstrip .mb-btn { animation: none; transition: none; }
+#tabstrip .fan-it .tab-lbl {
+  order: 1; font-size: inherit; font-weight: inherit; color: inherit; overflow: visible;
+  transform: translateX(8px); transition: transform .3s cubic-bezier(.2, 1.2, .4, 1) calc(var(--i, 0) * 3ms + 40ms);
+}
+#tabstrip.fan-open .fan-it .tab-lbl { transform: none; }
+#tabstrip .fan-it .tm-txt { order: 1; display: flex; }
+#tabstrip .fan-it .tm-txt small { display: none; }
+#tabstrip .fan-it .tab-badge { order: 2; position: static; margin: 0; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 9px; font-size: 10px; box-shadow: none; text-shadow: none; }
+#tabstrip .fan-it .tab-ic {
+  order: 3; display: grid; place-items: center; width: 32px; height: 32px; flex: none; margin: 0;
+  background: none; box-shadow: none; color: var(--c);
+}
+#tabstrip .fan-it .tab-ic svg {
+  width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--c) 70%, transparent));
+}
+/* Подсказка Ctrl+N — слева, видна у пункта под курсором/фокусом. */
+#tabstrip .fan-kbd {
+  order: 0; font: 600 10.5px/1 var(--font, inherit); color: rgba(255, 255, 255, .5); text-shadow: none;
+  padding: 0; background: none; border: 0; opacity: 0; transition: opacity .12s;
+}
+#tabstrip .fan-it:is(:hover, :focus) .fan-kbd { opacity: 1; }
+
+#tabstrip .fan-it:is(:hover, :focus) {
+  outline: none; background: color-mix(in srgb, var(--c) 18%, rgba(12, 12, 16, .8));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent), 0 0 20px -6px var(--c);
+}
+/* Текущий раздел — светящаяся точка справа от значка (в референсе — шеврон). */
+#tabstrip .fan-it.active::after {
+  content: ""; position: absolute; right: -9px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%;
+  background: var(--c); box-shadow: 0 0 8px var(--c);
+}
+#tabstrip .fan-it.active .tab-lbl { font-weight: 750; }
+
+:root[data-theme="light"] #tabstrip .fan-it {
+  background: rgba(255, 255, 255, .8); color: color-mix(in srgb, var(--c) 62%, #1a1020); text-shadow: none;
+}
+:root[data-theme="light"] #tabstrip .fan-it .tab-ic { color: color-mix(in srgb, var(--c) 70%, #1a1020); }
+:root[data-theme="light"] #tabstrip .fan-kbd { color: rgba(0, 0, 0, .45); }
+
+/* ---------- без анимаций: всё мгновенно, без перелётов и размытия ---------- */
+:root[data-motion="off"] #tabstrip.fan { transition: none; }
+:root[data-motion="off"] #tabstrip :is(.fan-it, .fan-it .tab-lbl, .fan-btn, .fan-scrim) { transition: none !important; filter: none; }
 @media (prefers-reduced-motion: reduce) {
-  #tabstrip .mb-menu, #tabstrip .mb-menu .tb-mi, #tabstrip .mb-btn { animation: none; transition: none; }
+  #tabstrip.fan { transition: none; }
+  #tabstrip :is(.fan-it, .fan-it .tab-lbl, .fan-btn, .fan-scrim) { transition: none !important; filter: none; }
 }

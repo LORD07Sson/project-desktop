@@ -1,190 +1,230 @@
-// Меню шапки. Разделы — строкой меню (#tabstrip: «Работа», «Тайтлы»,
-// «Команда», «Ещё»), справа — «Инструменты» (QC, ffmpeg, тема, обновить,
-// клавиши, настройки) и профиль (аватар → «Мой профиль» / «Выйти»).
-// Пункты внутри меню — те же .tab-btn[data-tab], #open-qc, #refresh-btn,
-// #logout-btn и т.д., их обработчики живут в своих модулях; здесь только
-// открыть/закрыть меню и клавиатура.
-//
-// Поведение строки меню как в настольных ОС: пока одно меню открыто,
-// наведение на соседнее слово сразу открывает его; ←/→ — соседнее меню,
-// ↑/↓/Home/End и первая буква — по пунктам, Esc — закрыть, F10 — фокус
-// на строку меню.
+// Меню шапки и веер разделов.
+// - «Инструменты» (QC, ffmpeg, тема, обновить, клавиши, настройки) и профиль
+//   (аватар → «Мой профиль» / «Выйти») — выпадающие меню справа в шапке.
+// - Разделы — веер (#tabstrip.fan): круглая кнопка в правом нижнем углу со
+//   значком и цветом текущего раздела; по клику пункты разлетаются вверх по
+//   дуге, выбор втягивает веер в пункт, и кнопка съезжает обратно в угол.
+// Пункты — те же .tab-btn[data-tab], #open-qc, #refresh-btn, #logout-btn и т.д.,
+// их обработчики живут в своих модулях; здесь только открыть/закрыть и клавиатура.
 
 import { state } from "./state.js";
 import { $, $all, esc } from "./utils.js";
 import { loadAvatars } from "./profile.js";
 
+const reducedMotion = () => document.documentElement.dataset.motion === "off"
+  || !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+// Пункт виден, если его не убрали правами: hidden, [data-perm-hidden] или CSS роли «участник».
+const isShown = el => !el.hidden && globalThis.getComputedStyle?.(el)?.display !== "none";
+
+// ---------- выпадающие меню шапки ----------
 const MENUS = $all(".tb-menu-wrap").map(wrap => ({
   wrap,
   btn: wrap.querySelector(":scope > button[aria-haspopup]"),
   menu: wrap.querySelector(":scope > .tb-menu"),
-  bar: wrap.classList.contains("mb-wrap"),
 })).filter(m => m.btn && m.menu);
 
-const reducedMotion = () => document.documentElement.dataset.motion === "off"
-  || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
-// Пункт виден, если его не убрали правами: hidden, [data-perm-hidden] или CSS роли «участник».
-const isShown = el => !el.hidden && globalThis.getComputedStyle?.(el)?.display !== "none";
-const itemsOf = m => [...m.menu.querySelectorAll(".tb-mi:not([disabled])")].filter(isShown);
-const barMenus = () => MENUS.filter(m => m.bar && !m.wrap.hidden);
-const openMenu = () => MENUS.find(m => !m.menu.hidden && !m.menu.classList.contains("mb-closing"));
-
-function hide(m, instant) {
-  const { menu, btn } = m;
-  if (menu.hidden) return;
-  btn.setAttribute("aria-expanded", "false");
-  m.wrap.classList.remove("mb-open");
-  if (instant || reducedMotion() || !m.bar) { menu.classList.remove("mb-closing"); menu.hidden = true; return; }
-  // Короткое растворение (как в референсе: ~110 мс), потом hidden.
-  menu.classList.add("mb-closing");
-  clearTimeout(m.t);
-  m.t = setTimeout(() => { menu.classList.remove("mb-closing"); if (btn.getAttribute("aria-expanded") === "false") menu.hidden = true; }, 120);
-}
-
-function closeAll(except, instant) {
-  MENUS.forEach(m => { if (m !== except) hide(m, instant); });
-}
-
-function show(m, focus) {
-  // Переход между соседними меню строки — без анимации ухода, иначе два меню на миг висят вместе.
-  closeAll(m, true);
-  clearTimeout(m.t);
-  m.menu.classList.remove("mb-closing");
-  itemsOf(m).forEach((it, i) => it.style.setProperty("--i", i));
-  m.menu.hidden = false;
-  m.btn.setAttribute("aria-expanded", "true");
-  m.wrap.classList.add("mb-open");
-  const items = itemsOf(m);
-  if (focus === "first") items[0]?.focus({ preventScroll: true });
-  else if (focus === "last") items[items.length - 1]?.focus({ preventScroll: true });
-}
-
-// Соседнее меню строки (по кругу), пропуская скрытые правами.
-function neighbour(m, dir) {
-  const bar = barMenus();
-  const i = bar.indexOf(m);
-  return i < 0 ? null : bar[(i + dir + bar.length) % bar.length];
+function closeMenus(except) {
+  MENUS.forEach(m => {
+    if (m === except || m.menu.hidden) return;
+    m.menu.hidden = true;
+    m.btn.setAttribute("aria-expanded", "false");
+  });
 }
 
 MENUS.forEach(m => {
   const { btn, menu } = m;
   btn.addEventListener("click", e => {
     e.stopPropagation();
-    if (menu.hidden || menu.classList.contains("mb-closing")) show(m, e.detail === 0 ? "first" : null);
-    else hide(m);
+    closeMenus(m);
+    closeFan(true);
+    menu.hidden = !menu.hidden;
+    btn.setAttribute("aria-expanded", String(!menu.hidden));
+    if (!menu.hidden) menu.querySelector(".tb-mi")?.focus({ preventScroll: true });
   });
-  // Пока какое-то меню строки открыто — наведение переключает меню без клика.
-  if (m.bar) btn.addEventListener("pointerenter", () => {
-    const cur = openMenu();
-    if (cur && cur !== m && cur.bar) { show(m); btn.focus({ preventScroll: true }); }
-  });
-  btn.addEventListener("keydown", e => {
-    if (e.key === "ArrowDown" || ((e.key === "Enter" || e.key === " ") && m.bar)) { e.preventDefault(); show(m, "first"); return; }
-    if (e.key === "ArrowUp") { e.preventDefault(); show(m, "last"); return; }
-    if (!m.bar) return;
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-      e.preventDefault();
-      const n = neighbour(m, e.key === "ArrowRight" ? 1 : -1);
-      if (!n) return;
-      if (openMenu()) show(n);
-      n.btn.focus();
-    }
-    if (e.key === "Escape" && openMenu()) { e.stopPropagation(); closeAll(); }
-  });
-
   // Пункт выбран — меню закрываем; сам клик дальше обработает модуль кнопки.
-  menu.addEventListener("click", e => {
-    if (!e.target.closest(".tb-mi")) return;
-    closeAll(null, true);
-    if (m.bar) { btn.classList.remove("mb-picked"); void btn.offsetWidth; btn.classList.add("mb-picked"); }
+  menu.addEventListener("click", e => { if (e.target.closest(".tb-mi")) closeMenus(); });
+  menu.addEventListener("keydown", e => {
+    const items = [...menu.querySelectorAll(".tb-mi:not([disabled])")].filter(isShown);
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length]?.focus(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
+    if (e.key === "Escape") { e.stopPropagation(); closeMenus(); btn.focus(); }
+  });
+});
+
+document.addEventListener("click", e => { if (!e.target.closest(".tb-menu-wrap")) closeMenus(); });
+window.addEventListener("blur", () => { closeMenus(); closeFan(true); });
+
+// ---------- веер разделов ----------
+// Замеры с референса (60 к/с): пункты появляются все почти сразу, сжатыми у
+// кнопки, раскрываются по дуге с перелётом и садятся к ~270 мс; при выборе
+// сходятся в выбранный пункт (~100 мс), там проявляется кнопка и съезжает
+// в угол (~200 мс), фон перетекает в цвет раздела (~350 мс).
+const fan = $("#tabstrip.fan");
+const fanBtn = $("#fan-btn");
+const fanMenu = $("#fan-menu");
+const scrim = $("#fan-scrim");
+const R = 900;          // радиус дуги, px: чем выше пункт, тем левее и сильнее наклонён
+const STEP = 40;        // шаг между пунктами, px (сжимается, если окно низкое)
+const GAP = 10;         // дополнительный зазор между группами разделов
+const TILT = 0.35;      // наклон пункта = доля угла дуги
+let fanTimer = 0;
+
+const fanItems = () => fanMenu ? [...fanMenu.querySelectorAll(".fan-it")].filter(isShown) : [];
+const fanOpen = () => !!fanMenu && !fanMenu.hidden && !fan.classList.contains("fan-closing");
+
+// Раскладка по дуге: нижний пункт — на месте кнопки, дальше вверх и влево.
+function layoutFan() {
+  const items = fanItems();
+  if (!items.length) return;
+  const groups = new Set(items.map(it => it.dataset.grp)).size - 1;
+  const room = window.innerHeight - 120;
+  const step = Math.min(STEP, (room - groups * GAP) / Math.max(1, items.length - 1));
+  let y = 0, prev = items[0].dataset.grp;
+  items.forEach((it, i) => {
+    if (it.dataset.grp !== prev) { y += GAP; prev = it.dataset.grp; }
+    const th = y / R;
+    it.style.setProperty("--x", `${(-R * (1 - Math.cos(th))).toFixed(1)}px`);
+    it.style.setProperty("--y", `${(-y).toFixed(1)}px`);
+    it.style.setProperty("--r", `${(th * TILT * 180 / Math.PI).toFixed(2)}deg`);
+    it.style.setProperty("--i", i);
+    y += step;
+  });
+}
+
+// Кнопка повторяет значок и цвет активного раздела; фон окна подкрашивается им же.
+function syncFanButton() {
+  if (!fanBtn) return;
+  const cur = fanMenu.querySelector(".tab-btn.active");
+  const color = cur?.style.getPropertyValue("--c") || "#ffd23f";
+  fan.style.setProperty("--fan-c", color);
+  const ic = cur?.querySelector(".tab-ic svg");
+  const holder = $("#fan-btn-ic");
+  if (ic && holder.dataset.tab !== cur.dataset.tab) {
+    holder.innerHTML = ic.outerHTML;
+    holder.dataset.tab = cur.dataset.tab;
+    fanBtn.setAttribute("aria-label", `Разделы — сейчас «${cur.querySelector(".tab-lbl")?.textContent || ""}»`);
+  }
+  fanBtn.classList.toggle("has-badge", !!fanMenu.querySelector(".fan-it .tab-badge:not([hidden])"));
+}
+
+function openFan(focus) {
+  if (!fan || fanOpen()) return;
+  closeMenus();
+  clearTimeout(fanTimer);
+  fan.classList.remove("fan-closing", "fan-picking", "fan-glide");
+  fan.style.removeProperty("--px"); fan.style.removeProperty("--py");
+  layoutFan();
+  fanMenu.hidden = false;
+  scrim.hidden = false;
+  fanBtn.setAttribute("aria-expanded", "true");
+  // Следующий кадр — чтобы переходы стартовали из «сжатого» состояния.
+  void fanMenu.offsetWidth;
+  fan.classList.add("fan-open");
+  const items = fanItems();
+  const cur = items.find(it => it.classList.contains("active"));
+  const target = focus === "last" ? items[items.length - 1] : cur || items[0];
+  target?.focus({ preventScroll: true });
+}
+
+// picked — пункт, в который сходится веер (выбор раздела); без него — обратно в кнопку.
+function closeFan(instant, picked) {
+  if (!fan || fanMenu.hidden) return;
+  clearTimeout(fanTimer);
+  fanBtn.setAttribute("aria-expanded", "false");
+  const done = () => {
+    fan.classList.remove("fan-open", "fan-closing", "fan-picking", "fan-glide");
+    fan.style.removeProperty("--px"); fan.style.removeProperty("--py");
+    fanMenu.hidden = true;
+    scrim.hidden = true;
+  };
+  if (instant || reducedMotion()) { done(); return; }
+  if (picked) {
+    fan.style.setProperty("--px", picked.style.getPropertyValue("--x"));
+    fan.style.setProperty("--py", picked.style.getPropertyValue("--y"));
+    fan.classList.add("fan-picking");
+  }
+  fan.classList.add("fan-closing");
+  fan.classList.remove("fan-open");
+  if (!picked) { fanTimer = setTimeout(done, 200); return; }
+  // Сначала пункты сходятся в выбранный (≈130 мс), затем кнопка съезжает в угол (≈220 мс).
+  fanTimer = setTimeout(() => {
+    fan.classList.add("fan-glide");
+    fan.style.removeProperty("--px"); fan.style.removeProperty("--py");
+    fanTimer = setTimeout(done, 240);
+  }, 140);
+}
+
+if (fan && fanBtn && fanMenu) {
+  // В шапке у предков бывают backdrop-filter/transform — тогда position: fixed считался бы от шапки.
+  // Кнопку держим прямо в <body>; прячется она вместе с шапкой разделов до входа (menubar.css).
+  document.body.appendChild(fan);
+  fanBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    if (fanOpen()) closeFan(); else openFan();
+  });
+  fanBtn.addEventListener("keydown", e => {
+    if (e.key === "ArrowUp") { e.preventDefault(); openFan(); }
+  });
+  scrim.addEventListener("click", () => { closeFan(); fanBtn.focus({ preventScroll: true }); });
+  fanMenu.addEventListener("click", e => {
+    const it = e.target.closest(".fan-it");
+    if (!it) return;
+    closeFan(false, it);
+    fanBtn.focus({ preventScroll: true });
   });
   // Подсветка следует за мышью, а стрелки продолжают с того же пункта.
-  menu.addEventListener("pointermove", e => {
-    const it = e.target.closest(".tb-mi");
-    if (it && document.activeElement !== it && !it.disabled) it.focus({ preventScroll: true });
+  fanMenu.addEventListener("pointermove", e => {
+    const it = e.target.closest(".fan-it");
+    if (it && document.activeElement !== it) it.focus({ preventScroll: true });
   });
-  menu.addEventListener("keydown", e => {
-    const items = itemsOf(m);
+  fanMenu.addEventListener("keydown", e => {
+    const items = fanItems();
     const i = items.indexOf(document.activeElement);
     const go = j => { e.preventDefault(); items[(j + items.length) % items.length]?.focus(); };
-    if (e.key === "ArrowDown") return go(i + 1);
-    if (e.key === "ArrowUp") return go(i < 0 ? -1 : i - 1);
+    // Веер растёт вверх: ↑ — следующий (выше), ↓ — предыдущий (ниже).
+    if (e.key === "ArrowUp") return go(i + 1);
+    if (e.key === "ArrowDown") return go(i < 0 ? 0 : i - 1);
     if (e.key === "Home") return go(0);
     if (e.key === "End") return go(-1);
-    if (e.key === "Escape") { e.stopPropagation(); hide(m); btn.focus(); return; }
-    if (e.key === "Tab") { hide(m, true); return; }
-    if (m.bar && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-      e.preventDefault();
-      const n = neighbour(m, e.key === "ArrowRight" ? 1 : -1);
-      if (n) { show(n, "first"); }
-      return;
-    }
+    if (e.key === "Escape") { e.stopPropagation(); closeFan(); fanBtn.focus({ preventScroll: true }); return; }
+    if (e.key === "Tab") { closeFan(true); fanBtn.focus({ preventScroll: true }); e.preventDefault(); return; }
     // Первая буква — к следующему пункту на эту букву.
     if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && /\S/.test(e.key)) {
       const k = e.key.toLowerCase();
-      const label = it => (it.querySelector(".tab-lbl, span:not(.tab-ic)")?.textContent || it.textContent).trim().toLowerCase();
       for (let s = 1; s <= items.length; s++) {
         const it = items[(i + s) % items.length];
-        if (label(it).startsWith(k)) { e.preventDefault(); it.focus(); return; }
+        if ((it.querySelector(".tab-lbl")?.textContent || "").trim().toLowerCase().startsWith(k)) { e.preventDefault(); it.focus(); return; }
       }
     }
   });
-});
+  // F10 — открыть веер с клавиатуры (как вызов меню в настольных программах).
+  document.addEventListener("keydown", e => {
+    if (e.key !== "F10" || e.ctrlKey || e.altKey || e.metaKey || $("#titlebar-apps")?.hidden) return;
+    e.preventDefault();
+    if (fanOpen()) closeFan(); else openFan();
+  });
+  window.addEventListener("resize", () => { if (fanOpen()) layoutFan(); });
 
-document.addEventListener("click", e => { if (!e.target.closest(".tb-menu-wrap")) closeAll(); });
-window.addEventListener("blur", () => closeAll(null, true));
-// F10 — фокус на первое слово строки меню (без открытия), как в настольных программах.
-document.addEventListener("keydown", e => {
-  if (e.key !== "F10" || e.ctrlKey || e.altKey || e.metaKey || $("#titlebar-apps")?.hidden) return;
-  e.preventDefault();
-  barMenus()[0]?.btn.focus();
-});
+  // Подсказка Ctrl+N у пункта — по тому же порядку .tab-btn, что и сочетание в shortcuts-help.js.
+  $all(".tab-btn").forEach((b, i) => {
+    if (i < 9 && b.closest("#tabstrip")) b.insertAdjacentHTML("beforeend", `<kbd class="fan-kbd" aria-hidden="true">Ctrl ${i + 1}</kbd>`);
+  });
+
+  // Активный раздел, бейджи и права меняются атрибутами — следим и обновляем кнопку.
+  let queued = false;
+  const queue = () => { if (!queued) { queued = true; setTimeout(() => { queued = false; syncFanButton(); if (fanOpen()) layoutFan(); }); } };
+  new MutationObserver(queue).observe(fanMenu, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "class", "data-perm-hidden", "data-perm-show"] });
+  new MutationObserver(queue).observe(document.documentElement, { attributes: true, attributeFilter: ["data-role", "data-nyaa", "data-perm-reports"] });
+  syncFanButton();
+}
 
 $("#me-profile")?.addEventListener("click", () => {
   import("./tabs.js").then(m => m.switchTab("profile"));
 });
 
-// «Настройки» в меню «Ещё» — та же кнопка, что в «Инструментах».
+// «Настройки» в веере — та же кнопка, что в «Инструментах».
 $("#more-settings")?.addEventListener("click", () => $("#open-settings")?.click());
-
-// Подсказка Ctrl+N справа у пункта — по тому же порядку .tab-btn, что и
-// сочетание в shortcuts-help.js.
-$all(".tab-btn").forEach((b, i) => {
-  if (i < 9 && b.closest("#tabstrip")) b.insertAdjacentHTML("beforeend", `<kbd class="mb-kbd" aria-hidden="true">Ctrl ${i + 1}</kbd>`);
-});
-
-// Состояние слов строки меню:
-// - меню, где права не оставили ни одного пункта, прячется целиком;
-// - слово подсвечено, если открыт один из его разделов;
-// - точка на слове, пока внутри есть непустой бейдж (лента, профиль, чат).
-function syncBar() {
-  for (const m of MENUS) {
-    if (m.bar) {
-      const empty = !itemsOf(m).length;
-      // Разделитель без видимых пунктов с одной из сторон (права всё убрали) — прячем.
-      for (const sep of m.menu.querySelectorAll(".tb-sep")) {
-        const side = dir => { for (let el = sep[dir]; el && !el.classList.contains("tb-sep"); el = el[dir]) if (el.classList.contains("tb-mi") && isShown(el)) return true; return false; };
-        const need = side("previousElementSibling") && side("nextElementSibling");
-        if (sep.hidden === need) sep.hidden = !need;
-      }
-      if (m.wrap.hidden !== empty) m.wrap.hidden = empty;
-      const active = !!m.menu.querySelector(".tab-btn.active");
-      if (m.btn.classList.contains("active") !== active) m.btn.classList.toggle("active", active);
-    }
-    const dot = !!m.menu.querySelector(".tab-badge:not([hidden])");
-    if (m.btn.classList.contains("has-badge") !== dot) m.btn.classList.toggle("has-badge", dot);
-  }
-}
-let syncQueued = false;
-const queueSync = () => { if (!syncQueued) { syncQueued = true; setTimeout(() => { syncQueued = false; syncBar(); }); /* не rAF: в свёрнутом окне он стоит */ } };
-const bar = $("#tabstrip");
-if (bar) {
-  new MutationObserver(queueSync).observe(bar, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "class", "data-perm-hidden", "data-perm-show", "style"] });
-  // Роль/права/доступ к Релизам приходят атрибутами на <html> (perm-visibility, auth).
-  new MutationObserver(queueSync).observe(document.documentElement, { attributes: true });
-  syncBar();
-}
 
 // Аватар и имя в меню профиля. Зовётся из setDisplayName (auth.js):
 // имя приходит не сразу — после /me.
