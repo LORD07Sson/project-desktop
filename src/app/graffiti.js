@@ -1,5 +1,5 @@
-// Граффити на шапке профиля: прозрачный PNG поверх шапки (/api/graffiti/{id}).
-// Видят все, рисуют только разработчики — прямо на шапке, инструменты: карандаш, фломастер, маркер, баллончик, ластик.
+// Граффити на профиле: прозрачный PNG поверх всей страницы профиля (/api/graffiti/{id}).
+// Видят все, рисуют только разработчики — прямо по странице, инструменты: карандаш, фломастер, маркер, баллончик, ластик.
 
 import { state } from "./state.js";
 import { api, mediaUrl, toast, askConfirm } from "./api.js";
@@ -29,7 +29,7 @@ export function loadGraffiti(hero, telegramId) {
 }
 
 export function wireGraffiti(root, telegramId) {
-  const hero = root.querySelector(".pff-hero");
+  const hero = root.querySelector(".pf-folio");
   loadGraffiti(hero, telegramId);
   const btn = root.querySelector("[data-graffiti-edit]");
   if (btn && state.isDeveloper) btn.addEventListener("click", () => openEditor(hero, telegramId));
@@ -38,8 +38,9 @@ export function wireGraffiti(root, telegramId) {
 function openEditor(hero, telegramId) {
   if (!hero || hero.querySelector(".gf-canvas")) return;
   const rect = hero.getBoundingClientRect();
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const W = Math.round(rect.width * dpr), H = Math.round(rect.height * dpr);
+  // Холст на всю длину профиля — в 1×, иначе на длинной странице выходят десятки мегапикселей.
+  const dpr = 1;
+  const W = Math.round(rect.width), H = Math.round(hero.scrollHeight);
   const canvas = document.createElement("canvas");
   canvas.className = "gf-canvas";
   canvas.width = W; canvas.height = H;
@@ -50,7 +51,7 @@ function openEditor(hero, telegramId) {
   const sctx = stroke.getContext("2d");
 
   const old = hero.querySelector(".pf-graffiti");
-  if (old && old.naturalWidth > 1) ctx.drawImage(old, 0, 0, W, H);
+  if (old && old.naturalWidth > 1) ctx.drawImage(old, 0, 0, W, old.naturalHeight * (W / old.naturalWidth));
   if (old) old.style.visibility = "hidden";
 
   let tool = "felt", color = COLORS[2], size = 7;
@@ -70,7 +71,7 @@ function openEditor(hero, telegramId) {
     </div>`;
   hero.append(canvas, stroke);
   hero.classList.add("gf-editing");
-  hero.after(bar);
+  hero.append(bar);
   const range = bar.querySelector(".gf-size input");
 
   bar.addEventListener("click", async e => {
