@@ -184,7 +184,11 @@ function ganttHtml(data) {
     .filter(r => r.status !== "cancelled" && r.deadline <= ymd(days[RANGE_DAYS - 1])
       && (r.deadline >= ymd(days[0]) || (r.status !== "completed" && dayDiff(today, days[0]) >= 0 && dayDiff(today, days[0]) < RANGE_DAYS)))
     .sort((a, b) => a.deadline.localeCompare(b.deadline)) : [];
-  const shown = rows.slice(0, 12);
+  // 12 строк, но серии со сроком сегодня и завтра — всегда на виду: раньше их вытесняли старые просрочки
+  // (порядок по сроку), и «сдать сегодня» оказывалось в «ещё N в списке».
+  const urgent = new Set(rows.filter(r => r.status !== "completed" && [0, 1].includes(dayDiff(parseDay(r.deadline), today))).slice(0, 12));
+  const shown = [...urgent, ...rows.filter(r => !urgent.has(r))].slice(0, Math.max(12, urgent.size))
+    .sort((a, b) => a.deadline.localeCompare(b.deadline));
   // Серии в работе без срока — полоса от создания до сегодня, открытая справа: видно, что серия идёт, но срока нет.
   const undated = f.deadlines ? (data.undated || []).slice(0, Math.max(0, 12 - shown.length)) : [];
   const head = days.map((d, i) => {
