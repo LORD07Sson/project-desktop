@@ -1,0 +1,218 @@
+/* Коллекция наград (src/app/award-cards.js). Всё под префиксом .ac-,
+   общие правила kadr.css/styles.css не трогаем. */
+.ac-overlay {
+  --ac-ink: #f4f1ea;
+  position: fixed; inset: 0; z-index: 9000;
+  display: grid; place-items: center;
+  background: rgba(6, 7, 12, .72);
+  backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity .24s ease-out;
+}
+.ac-overlay.in { opacity: 1; }
+.ac-panel {
+  width: min(1180px, calc(100vw - 48px)); max-height: calc(100vh - 64px);
+  display: flex; flex-direction: column;
+  background: var(--bg-1, #121318); color: var(--text, #eee);
+  border: 1px solid rgba(255,255,255,.08); border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.5);
+  transform: translateY(10px) scale(.985); transition: transform .3s cubic-bezier(.16,.84,.24,1);
+}
+.ac-overlay.in .ac-panel { transform: none; }
+.ac-head { display: flex; align-items: baseline; gap: 12px; padding: 20px 24px 8px; }
+.ac-head h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.ac-count { color: var(--muted, #8a8f98); font-size: 13px; font-variant-numeric: tabular-nums; }
+.ac-close { margin-left: auto; background: none; border: 0; color: inherit; font-size: 16px; cursor: pointer; opacity: .6; }
+.ac-close:hover { opacity: 1; }
+.ac-empty { grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--muted, #8a8f98); }
+
+.ac-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: 34px 26px; padding: 34px 28px 30px; overflow: auto;
+}
+
+/* Палитра по редкости: фон марки, акцент, свечение. */
+.ac-card.r-common, .ac-big.r-common { --a: #7fd6c2; --b1: #16403b; --b2: #0d2420; --f1: #d9f5ec; --f2: #7fbfae; }
+.ac-card.r-rare, .ac-big.r-rare { --a: #6fb6ff; --b1: #133a6b; --b2: #0a1d3a; --f1: #d6ebff; --f2: #4f8fd6; }
+.ac-card.r-epic, .ac-big.r-epic { --a: #c58bff; --b1: #3d1c6b; --b2: #1b0d33; --f1: #ead6ff; --f2: #8a52d1; }
+.ac-card.r-legendary, .ac-big.r-legendary { --a: #ffcf5a; --b1: #6b4413; --b2: #2e1a06; --f1: #fff1c2; --f2: #c8901f; }
+.ac-card.r-custom, .ac-big.r-custom { --a: #ff5fc8; --b1: #5c1650; --b2: #200a2b; --f1: #ffd6f1; --f2: #d0389a; }
+
+.ac-card {
+  position: relative; display: block; padding: 0; border: 0; background: none; color: inherit;
+  cursor: pointer; perspective: 800px; font: inherit; text-align: left;
+  transform: rotate(var(--rot, 0deg));
+  transition: transform .32s cubic-bezier(.16,.84,.24,1), filter .18s ease-out, opacity .18s ease-out;
+}
+.ac-card:focus-visible { outline: 2px solid var(--a); outline-offset: 6px; border-radius: 6px; }
+.ac-grid.hovering .ac-card:not(.hot) { filter: grayscale(1) brightness(.7); }
+.ac-card.hot { transform: rotate(0deg) translateY(-10px) scale(1.04); z-index: 2; }
+.ac-card.lifted { opacity: 0; }
+
+/* Марка: перфорация маской, тень через drop-shadow (box-shadow маска срежет). */
+.ac-stamp {
+  --r: 5px;
+  display: block; aspect-ratio: 3 / 4;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.45));
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform .45s cubic-bezier(.16,.84,.24,1);
+}
+.ac-card.hot .ac-stamp { transition-duration: .12s; }
+.ac-card.hot .ac-stamp { filter: drop-shadow(0 18px 26px rgba(0,0,0,.55)) drop-shadow(0 0 18px color-mix(in srgb, var(--a) 45%, transparent)); }
+.ac-face {
+  position: relative; display: flex; flex-direction: column; height: 100%; box-sizing: border-box;
+  padding: calc(2 * var(--r) + 6px);
+  background:
+    linear-gradient(135deg, var(--f1) 0%, var(--f2) 38%, var(--f1) 62%, var(--f2) 100%);
+  -webkit-mask:
+    radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) / calc(3 * var(--r)) calc(3 * var(--r)),
+    linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r));
+  mask:
+    radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) / calc(3 * var(--r)) calc(3 * var(--r)),
+    linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r));
+  overflow: hidden;
+}
+/* Внутреннее поле марки — цветной «оттиск» с полутоном. */
+.ac-face::before {
+  content: ""; position: absolute; inset: calc(2 * var(--r) + 2px);
+  background:
+    radial-gradient(circle at 70% 18%, color-mix(in srgb, var(--a) 55%, transparent), transparent 55%),
+    radial-gradient(rgba(255,255,255,.16) 1px, transparent 1.4px) 0 0 / 5px 5px,
+    linear-gradient(160deg, var(--b1), var(--b2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 70%, transparent), inset 0 0 0 3px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18);
+}
+.ac-face > * { position: relative; }
+.ac-top { display: flex; justify-content: space-between; font: 600 9.5px/1 ui-monospace, "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--a); }
+.ac-no { color: rgba(255,255,255,.55); }
+.ac-art { flex: 1; display: grid; place-items: center; }
+.ac-ic { font-size: 46px; line-height: 1; filter: drop-shadow(0 0 14px color-mix(in srgb, var(--a) 70%, transparent)); }
+.ac-lb { font-weight: 700; font-size: 14px; line-height: 1.2; color: #fff; text-wrap: balance; }
+.ac-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: 500 10.5px/1 ui-monospace, "JetBrains Mono", monospace; color: rgba(255,255,255,.7); }
+.ac-bar { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.15); overflow: hidden; }
+.ac-bar i { display: block; height: 100%; background: var(--a); }
+/* Голографический блик (по референсу: ромбовая сетка-гильош проявляется
+   пятном под курсором, перелив золото→голубой, мягкий глянец). Слои:
+   ::before — штриховка, ::after — радужная плёнка, сам элемент — глянец. */
+.ac-sheen {
+  position: absolute !important; inset: calc(2 * var(--r) + 2px); pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.32), rgba(255,255,255,.08) 25%, transparent 50%);
+  mix-blend-mode: screen;
+  transition: opacity .25s ease-out;
+}
+.ac-sheen::before, .ac-sheen::after { content: ""; position: absolute; inset: 0; }
+.ac-sheen::before {
+  background:
+    repeating-linear-gradient(55deg, rgba(255,255,255,.34) 0 1.2px, transparent 1.2px 6px),
+    repeating-linear-gradient(-55deg, rgba(255,255,255,.34) 0 1.2px, transparent 1.2px 6px);
+  -webkit-mask: radial-gradient(ellipse 60% 45% at var(--mx) var(--my), #000 0%, rgba(0,0,0,.35) 45%, transparent 75%);
+  mask: radial-gradient(ellipse 60% 45% at var(--mx) var(--my), #000 0%, rgba(0,0,0,.35) 45%, transparent 75%);
+  mix-blend-mode: screen;
+}
+.ac-sheen::after {
+  background: linear-gradient(115deg, transparent 20%, #ffd98a 36%, #fff3cf 44%, #8fe3ff 54%, #6f8bff 62%, transparent 78%)
+    calc(100% - var(--mx)) calc(100% - var(--my)) / 260% 260%;
+  -webkit-mask: radial-gradient(circle at var(--mx) var(--my), #000, transparent 70%);
+  mask: radial-gradient(circle at var(--mx) var(--my), #000, transparent 70%);
+  mix-blend-mode: color-dodge; opacity: .65;
+}
+.ac-card.hot .ac-sheen, .ac-big .ac-sheen { opacity: 1; }
+.ac-card.locked .ac-sheen::after { opacity: .2; }
+/* Полученные легендарные/особые и без наведения медленно переливаются. */
+.ac-card.won.r-legendary .ac-sheen, .ac-card.won.r-custom .ac-sheen { opacity: .45; animation: ac-drift 7s ease-in-out infinite alternate; }
+.ac-card.hot.won .ac-sheen { animation: none; opacity: 1; }
+@keyframes ac-drift { from { --mx: 15%; --my: 20%; } to { --mx: 85%; --my: 70%; } }
+@property --mx { syntax: "<percentage>"; inherits: true; initial-value: 50%; }
+@property --my { syntax: "<percentage>"; inherits: true; initial-value: 30%; }
+/* Объём: иконка и подпись чуть «всплывают» над полем при наклоне. */
+.ac-art, .ac-lb { transform: translate(calc(var(--tx, 0) * 6px), calc(var(--ty, 0) * 6px)); transition: transform .14s ease-out; }
+
+.ac-card.locked .ac-face::before { filter: grayscale(.85) brightness(.75); }
+.ac-card.locked .ac-ic { filter: grayscale(1); opacity: .55; }
+.ac-card.near .ac-face { box-shadow: inset 0 0 0 2px var(--a); }
+
+.ac-chip {
+  position: absolute; left: 50%; top: -24px; z-index: 3; white-space: nowrap;
+  padding: 4px 8px; border-radius: 4px; background: #0b0c10; color: #fff;
+  font: 600 9.5px/1 ui-monospace, "JetBrains Mono", monospace; letter-spacing: .06em;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--a) 60%, transparent);
+  opacity: 0; transform: translate(-50%, 4px) scale(.94); pointer-events: none;
+  transition: opacity .1s ease-out, transform .14s ease-out;
+}
+.ac-card.hot .ac-chip { opacity: 1; transform: translate(-50%, 0) scale(1); }
+
+/* Фокус: чёрный фон, марка крупно по центру. */
+.ac-focus {
+  position: fixed; inset: 0; z-index: 9001; display: grid; place-items: center;
+  background: rgba(0,0,0,0); transition: background .3s ease-out; cursor: zoom-out;
+}
+.ac-focus.on { background: rgba(0,0,0,.92); }
+.ac-big { width: min(360px, 42vh); --r: 9px; }
+.ac-big .ac-ic { font-size: 108px; }
+.ac-big .ac-lb { font-size: 26px; }
+.ac-big .ac-top, .ac-big .ac-foot { font-size: 13px; }
+.ac-big.locked .ac-face::before { filter: grayscale(.85) brightness(.75); }
+.ac-big.locked .ac-ic { filter: grayscale(1); opacity: .55; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-overlay, .ac-panel, .ac-card, .ac-stamp, .ac-chip, .ac-sheen, .ac-focus { transition: none; }
+  .ac-card.hot { transform: rotate(var(--rot, 0deg)); }
+  .ac-stamp, .ac-art, .ac-lb { transform: none; }
+  .ac-sheen { animation: none !important; }
+}
+
+/* Неполученные — рамка нейтральная серебристая, цвет только у полученных. */
+.ac-card.locked, .ac-big.locked { --f1: #d9dce2; --f2: #8a9099; }
+
+/* Блёстки: россыпь искр по всей марке (и по рамке, и по полю). Два слоя
+   с разным шагом сетки (простые числа — узор не повторяется на глаз)
+   мерцают в противофазе. У полученных видны всегда, при наведении и в
+   фокусе — ярче и стягиваются к свету курсора. */
+.ac-glit { position: absolute !important; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s ease-out; mix-blend-mode: screen; }
+.ac-glit::before, .ac-glit::after { content: ""; position: absolute; inset: 0; }
+.ac-glit::before {
+  background:
+    radial-gradient(circle at 30% 40%, #fff 0 .8px, transparent 1.6px) 0 0 / 23px 29px,
+    radial-gradient(circle at 70% 20%, var(--f1) 0 .7px, transparent 1.5px) 0 0 / 37px 31px,
+    radial-gradient(circle at 50% 80%, #fff 0 1px, transparent 2px) 0 0 / 53px 47px;
+  animation: ac-twinkle 2.4s ease-in-out infinite;
+}
+.ac-glit::after {
+  background:
+    radial-gradient(circle at 60% 60%, #fff 0 .9px, transparent 1.8px) 0 0 / 29px 41px,
+    radial-gradient(circle at 20% 30%, var(--a) 0 .8px, transparent 1.7px) 0 0 / 43px 37px,
+    radial-gradient(circle at 40% 55%, #fff 0 1.3px, rgba(255,255,255,.35) 2px, transparent 3.5px) 13px 9px / 71px 67px;
+  animation: ac-twinkle 2.4s ease-in-out -1.2s infinite;
+}
+@keyframes ac-twinkle { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
+.ac-card.won .ac-glit { opacity: .55; }
+.ac-card.won.r-legendary .ac-glit, .ac-card.won.r-custom .ac-glit { opacity: .8; }
+.ac-card.hot .ac-glit, .ac-big.won .ac-glit { opacity: 1;
+  -webkit-mask: radial-gradient(circle at var(--mx) var(--my), #000 0 30%, rgba(0,0,0,.35) 65%);
+  mask: radial-gradient(circle at var(--mx) var(--my), #000 0 30%, rgba(0,0,0,.35) 65%); }
+.ac-card.locked .ac-glit { opacity: 0; }
+.ac-card.hot.locked .ac-glit { opacity: .3; }
+@media (prefers-reduced-motion: reduce) {
+  .ac-glit::before, .ac-glit::after { animation: none; opacity: .6; }
+}
+
+/* Персонаж на марке: обрезан по внутреннему полю (не лезет на рамку),
+   стоит снизу и растворяется книзу под подпись; иконка награды уходит
+   в медальон в углу. Неполученные — тёмный силуэт. */
+.ac-field { position: absolute !important; inset: calc(2 * var(--r) + 2px); overflow: hidden; pointer-events: none; }
+.ac-char {
+  position: absolute; left: 50%; bottom: 0; height: 104%; max-width: 125%;
+  transform: translateX(calc(-50% + var(--tx, 0) * -4px)); object-fit: contain; object-position: bottom;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.55));
+  -webkit-mask: linear-gradient(to top, transparent 0, #000 30%);
+  mask: linear-gradient(to top, transparent 0, #000 30%);
+  transition: transform .14s ease-out;
+}
+.ac-art.has-char .ac-ic {
+  position: absolute; right: -4px; top: -2px; font-size: 18px;
+  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%;
+  background: color-mix(in srgb, var(--b2) 80%, transparent); box-shadow: 0 0 0 1.5px var(--a), 0 0 12px color-mix(in srgb, var(--a) 60%, transparent);
+}
+.ac-big .ac-art.has-char .ac-ic { width: 54px; height: 54px; font-size: 32px; }
+.ac-art.has-char { align-self: stretch; }
+.ac-lb, .ac-foot, .ac-top { z-index: 1; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+.ac-card.locked .ac-char, .ac-big.locked .ac-char { filter: grayscale(1) brightness(.35) contrast(1.1); }
+@media (prefers-reduced-motion: reduce) { .ac-char { transform: translateX(-50%); } }
