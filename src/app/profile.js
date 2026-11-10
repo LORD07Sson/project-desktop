@@ -395,6 +395,7 @@ export async function loadProfile() {
           <section class="pf-card pf-tenure"><h3>Стаж в команде</h3>${tenureProgressHtml(me.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
         </div>
       </section>
+      <div class="pff-duo">
       <section class="pff-sec pff-rv" id="pff-activity">
         <h2 class="pff-h">Активность</h2>
         <section class="pf-card pff-pulse" id="pulse-card">
@@ -418,6 +419,7 @@ export async function loadProfile() {
         <h2 class="pff-h">Награды</h2>
         ${myBadgesHtml(me) || `<div class="pf-quiet">Наград пока нет — они появятся за закрытые серии и стаж.</div>`}
       </section>
+      </div>
       ${folioFooterHtml(me)}
       ${devModeActive() ? devPanelHtml(me) + vaultEntryHtml() : ""}
     </div>
@@ -1189,6 +1191,7 @@ export async function openUserProfile(telegramId) {
         </div>
         ${manage ? teamTeaserHtml(d) : ""}
       </section>
+      <div class="pff-duo">
       <section class="pff-sec pff-rv" id="pff-activity">
         <h2 class="pff-h">Активность</h2>
         <section class="pf-card pff-pulse" id="pulse-card">
@@ -1204,6 +1207,7 @@ export async function openUserProfile(telegramId) {
         <h2 class="pff-h">Награды</h2>
         ${myBadgesHtml(d) || `<div class="pf-quiet">Наград пока нет.</div>`}
       </section>
+      </div>
       ${folioFooterHtml(d, false)}
       ${devModeActive() ? devPanelHtml(d) : ""}
       ${state.isDeveloper && String(telegramId) !== String(state.telegramId) ? `<div class="sheet-actions"><button class="btn danger" data-purge-chats title="Только владелец команды">Удалить личные переписки</button></div>` : ""}
