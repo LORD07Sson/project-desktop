@@ -5086,3 +5086,4 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-pill .pff-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #pulse-body.done .pff-heat-g i, #pulse-body.done .pff-heat-b i { animation: none; }
 .pff-act-r { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.sheet .pf-folio h2.pff-h { position: static; margin: 0; padding: 0; background: none; border: 0; font-size: 13px; font-weight: 800; letter-spacing: .14em; }
