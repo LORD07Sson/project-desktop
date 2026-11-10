@@ -56,48 +56,63 @@ document.addEventListener("click", e => { if (!e.target.closest(".tb-menu-wrap")
 window.addEventListener("blur", () => { closeMenus(); closeFan(true); });
 
 // ---------- веер разделов ----------
-// Замеры с референса (60 к/с): пункты появляются все почти сразу, сжатыми у
-// кнопки, раскрываются по дуге с перелётом и садятся к ~270 мс; при выборе
-// сходятся в выбранный пункт (~100 мс), там проявляется кнопка и съезжает
-// в угол (~200 мс), фон перетекает в цвет раздела (~350 мс).
+// Тайминги сняты покадрово с референса (60 к/с, шаг 16,7 мс; таблица — в коммите
+// и в menubar.css):
+// - открытие: текущий раздел вылетает из кнопки сразу, остальные возникают уже
+//   на ~45% пути; все приходят на место вместе (~150 мс), перелёт ~8% к ~200 мс,
+//   покой к ~370 мс; задержки между пунктами нет;
+// - наведение: весь фон перетекает в цвет пункта под курсором за ~175 мс;
+// - выбор: остальные ускоряются к кнопке и гаснут к ~90 мс, выбранный пружиной
+//   падает в кнопку (у кнопки ~150 мс, покой ~370 мс) и сам становится кнопкой.
 const fan = $("#tabstrip.fan");
 const fanBtn = $("#fan-btn");
 const fanMenu = $("#fan-menu");
 const scrim = $("#fan-scrim");
-const R = 900;          // радиус дуги, px: чем выше пункт, тем левее и сильнее наклонён
 const STEP = 40;        // шаг между пунктами, px (сжимается, если окно низкое)
 const GAP = 10;         // дополнительный зазор между группами разделов
-const TILT = 0.35;      // наклон пункта = доля угла дуги
+// Дуга — окружность с центром СПРАВА (как в референсе): середина веера левее
+// всего, низ чуть левее кнопки, верх возвращается к ней; наклон подписи — угол
+// радиуса: снизу −6°, сверху +15°.
+const TH_BOT = -6 * Math.PI / 180;
+const TH_TOP = 15 * Math.PI / 180;
+const PICK_MS = 420;    // выбранный пункт успокоился у кнопки (~370 мс) + запас
+const CLOSE_MS = 140;   // остальные пункты погасли
 let fanTimer = 0;
 
 const fanItems = () => fanMenu ? [...fanMenu.querySelectorAll(".fan-it")].filter(isShown) : [];
 const fanOpen = () => !!fanMenu && !fanMenu.hidden && !fan.classList.contains("fan-closing");
 
-// Раскладка по дуге: нижний пункт — на месте кнопки, дальше вверх и влево.
 function layoutFan() {
   const items = fanItems();
   if (!items.length) return;
   const groups = new Set(items.map(it => it.dataset.grp)).size - 1;
   const room = window.innerHeight - 120;
   const step = Math.min(STEP, (room - groups * GAP) / Math.max(1, items.length - 1));
+  const ys = [];
   let y = 0, prev = items[0].dataset.grp;
-  items.forEach((it, i) => {
+  items.forEach(it => {
     if (it.dataset.grp !== prev) { y += GAP; prev = it.dataset.grp; }
-    const th = y / R;
-    it.style.setProperty("--x", `${(-R * (1 - Math.cos(th))).toFixed(1)}px`);
-    it.style.setProperty("--y", `${(-y).toFixed(1)}px`);
-    it.style.setProperty("--r", `${(th * TILT * 180 / Math.PI).toFixed(2)}deg`);
-    it.style.setProperty("--i", i);
+    ys.push(y);
     y += step;
+  });
+  const H = Math.max(1, ys[ys.length - 1]);
+  const R = H / (Math.sin(TH_TOP) - Math.sin(TH_BOT));
+  items.forEach((it, i) => {
+    const th = Math.asin(Math.sin(TH_BOT) + ys[i] / R);
+    it.style.setProperty("--x", `${(-R * (Math.cos(th) - Math.cos(TH_TOP))).toFixed(1)}px`);
+    it.style.setProperty("--y", `${(-ys[i]).toFixed(1)}px`);
+    it.style.setProperty("--r", `${(th * 180 / Math.PI).toFixed(2)}deg`);
   });
 }
 
-// Кнопка повторяет значок и цвет активного раздела; фон окна подкрашивается им же.
+// Цвет фона: под курсором/фокусом — цвет пункта, иначе — текущего раздела.
+const setTint = color => fan.style.setProperty("--fan-c", color);
+
+// Кнопка повторяет значок и цвет активного раздела.
 function syncFanButton() {
   if (!fanBtn) return;
   const cur = fanMenu.querySelector(".tab-btn.active");
-  const color = cur?.style.getPropertyValue("--c") || "#ffd23f";
-  fan.style.setProperty("--fan-c", color);
+  if (!fanOpen()) setTint(cur?.style.getPropertyValue("--c") || "#ffd23f");
   const ic = cur?.querySelector(".tab-ic svg");
   const holder = $("#fan-btn-ic");
   if (ic && holder.dataset.tab !== cur.dataset.tab) {
@@ -108,17 +123,21 @@ function syncFanButton() {
   fanBtn.classList.toggle("has-badge", !!fanMenu.querySelector(".fan-it .tab-badge:not([hidden])"));
 }
 
+function resetFan() {
+  fan.classList.remove("fan-open", "fan-closing", "fan-picking");
+  fanMenu.querySelector(".fan-chosen")?.classList.remove("fan-chosen");
+}
+
 function openFan(focus) {
   if (!fan || fanOpen()) return;
   closeMenus();
   clearTimeout(fanTimer);
-  fan.classList.remove("fan-closing", "fan-picking", "fan-glide");
-  fan.style.removeProperty("--px"); fan.style.removeProperty("--py");
+  resetFan();
   layoutFan();
   fanMenu.hidden = false;
   scrim.hidden = false;
   fanBtn.setAttribute("aria-expanded", "true");
-  // Следующий кадр — чтобы переходы стартовали из «сжатого» состояния.
+  // Стартовое («сжатое») состояние должно отрисоваться, иначе переходам не из чего идти.
   void fanMenu.offsetWidth;
   fan.classList.add("fan-open");
   const items = fanItems();
@@ -127,32 +146,26 @@ function openFan(focus) {
   target?.focus({ preventScroll: true });
 }
 
-// picked — пункт, в который сходится веер (выбор раздела); без него — обратно в кнопку.
+// picked — выбранный пункт: он падает в кнопку; без него всё гаснет в кнопке.
 function closeFan(instant, picked) {
   if (!fan || fanMenu.hidden) return;
   clearTimeout(fanTimer);
   fanBtn.setAttribute("aria-expanded", "false");
   const done = () => {
-    fan.classList.remove("fan-open", "fan-closing", "fan-picking", "fan-glide");
-    fan.style.removeProperty("--px"); fan.style.removeProperty("--py");
+    // Кнопка уже проявилась под выбранным пунктом — без повторного растворения.
+    fanBtn.style.transition = "none";
+    setTimeout(() => { fanBtn.style.transition = ""; }, 50);
+    resetFan();
     fanMenu.hidden = true;
     scrim.hidden = true;
+    syncFanButton();
   };
+  if (picked) setTint(picked.style.getPropertyValue("--c"));
   if (instant || reducedMotion()) { done(); return; }
-  if (picked) {
-    fan.style.setProperty("--px", picked.style.getPropertyValue("--x"));
-    fan.style.setProperty("--py", picked.style.getPropertyValue("--y"));
-    fan.classList.add("fan-picking");
-  }
+  if (picked) { picked.classList.add("fan-chosen"); fan.classList.add("fan-picking"); }
   fan.classList.add("fan-closing");
   fan.classList.remove("fan-open");
-  if (!picked) { fanTimer = setTimeout(done, 200); return; }
-  // Сначала пункты сходятся в выбранный (≈130 мс), затем кнопка съезжает в угол (≈220 мс).
-  fanTimer = setTimeout(() => {
-    fan.classList.add("fan-glide");
-    fan.style.removeProperty("--px"); fan.style.removeProperty("--py");
-    fanTimer = setTimeout(done, 240);
-  }, 140);
+  fanTimer = setTimeout(done, picked ? PICK_MS : CLOSE_MS);
 }
 
 if (fan && fanBtn && fanMenu) {
@@ -167,16 +180,30 @@ if (fan && fanBtn && fanMenu) {
     if (e.key === "ArrowUp") { e.preventDefault(); openFan(); }
   });
   scrim.addEventListener("click", () => { closeFan(); fanBtn.focus({ preventScroll: true }); });
+  // Выбор пункта. Переключение раздела (tabs.js) синхронно рисует его целиком — это
+  // десятки миллисекунд главного потока, и анимация стартовала бы с опозданием
+  // (замер: ~150 мс). Поэтому сначала запускаем схлопывание, а сам клик пункта
+  // (переключение раздела, «Настройки») повторяем через 40 мс — дальше анимация
+  // transform/opacity идёт на композиторе и тяжёлая отрисовка её не сбивает.
+  let replaying = false;
   fanMenu.addEventListener("click", e => {
     const it = e.target.closest(".fan-it");
-    if (!it) return;
+    if (!it || replaying) return;
+    if (reducedMotion()) { closeFan(true); fanBtn.focus({ preventScroll: true }); return; }
+    e.stopImmediatePropagation();
     closeFan(false, it);
     fanBtn.focus({ preventScroll: true });
-  });
+    setTimeout(() => { replaying = true; try { it.click(); } finally { replaying = false; } }, 40);
+  }, true);
+  // Пункт под курсором/фокусом — фон перетекает в его цвет (как в референсе).
+  const tintFrom = it => { if (it && fanOpen()) setTint(it.style.getPropertyValue("--c")); };
+  fanMenu.addEventListener("focusin", e => tintFrom(e.target.closest(".fan-it")));
   // Подсветка следует за мышью, а стрелки продолжают с того же пункта.
   fanMenu.addEventListener("pointermove", e => {
     const it = e.target.closest(".fan-it");
-    if (it && document.activeElement !== it) it.focus({ preventScroll: true });
+    if (!it) return;
+    tintFrom(it);
+    if (document.activeElement !== it) it.focus({ preventScroll: true });
   });
   fanMenu.addEventListener("keydown", e => {
     const items = fanItems();
