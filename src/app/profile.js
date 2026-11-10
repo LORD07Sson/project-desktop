@@ -359,39 +359,56 @@ export async function loadProfile() {
       <span class="s">${sub}</span>
     </div>`;
 
+  // Свой профиль — как портфолио (эталон: одноколоночный сайт-визитка): приветствие с меняющейся
+  // подписью, ниже секции одна под другой, сверху плавающая «таблетка» с переходом по секциям и
+  // прогрессом прокрутки. Все id/классы, на которые завязаны обработчики и тесты, прежние.
   root.innerHTML = `
-    <div class="pf">
-      ${myHeroHtml(me)}
-      <div class="pf-kpis">
+    <div class="pf pf-folio">
+      <nav class="pff-pill" aria-label="Разделы профиля">
+        <span class="pff-pill-ic" aria-hidden="true"><i></i><i></i></span>
+        ${[["pff-about", "Обо мне"], ["pff-work", "Работа"], ["pff-awards", "Награды"], ["pff-activity", "Активность"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
+        <span class="pff-pct" aria-hidden="true">0%</span>
+      </nav>
+      <section class="pff-sec" id="pff-about">${folioHeroHtml(me)}</section>
+      <div class="pf-kpis pff-stats">
         ${kpi("Сейчас на мне", me.assigned ?? 0, me.overdue ? `<span class="warn">${me.overdue} просрочено</span>` : "всё в сроках")}
         ${kpi("Закрыто", me.completed_total ?? 0, `${me.completed_week ?? 0} за неделю · ${me.completed_month ?? 0} за месяц`)}
         ${kpi("Вовремя", `${me.on_time_pct}%`, me.on_time_pct != null ? "закрыто не позже срока" : "появится после первого отчёта со сроком", me.on_time_pct == null)}
         ${kpi("Средний срок", `${me.avg_days != null ? me.avg_days.toFixed(1) : ""} дн.`, me.avg_days != null ? "на один отчёт" : "появится после первой закрытой серии", me.avg_days == null)}
       </div>
-      <div class="pf-grid">
-        <div class="pf-main">
-          ${prepHtml(me)}
-          ${myWorkHtml(me)}
-          ${myBadgesHtml(me)}
-          <section class="pf-card" id="activity-card">
-            <div class="pf-card-head"><h3>Последние действия</h3><button class="pf-link" id="activity-all">вся активность →</button></div>
-            <div class="pf-acts" id="activity-list"><div class="pf-quiet">загружаю…</div></div>
-          </section>
-        </div>
-        <aside class="pf-side">
+      <section class="pff-sec" id="pff-work">
+        <h2 class="pff-h">Работа</h2>
+        ${prepHtml(me)}
+        ${myWorkHtml(me)}
+        <div class="pff-two">
           ${goalCardHtml}
           <section class="pf-card pf-tenure">${tenureProgressHtml(me.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
+        </div>
+      </section>
+      <section class="pff-sec" id="pff-awards">
+        <h2 class="pff-h">Награды</h2>
+        ${myBadgesHtml(me) || `<div class="pf-quiet">Наград пока нет — они появятся за закрытые серии и стаж.</div>`}
+      </section>
+      <section class="pff-sec" id="pff-activity">
+        <h2 class="pff-h">Активность</h2>
+        <section class="pf-card" id="activity-card">
+          <div class="pf-card-head"><h3>Последние действия</h3><button class="pf-link" id="activity-all">вся активность →</button></div>
+          <div class="pf-acts" id="activity-list"><div class="pf-quiet">загружаю…</div></div>
+        </section>
+        <div class="pff-two">
           <section class="pf-card pf-notif">
             <h3>Уведомления</h3>
             <div class="pf-notif-row" id="reminders-card" role="button" tabindex="0"></div>
             <div class="pf-notif-row" id="pause-card" role="button" tabindex="0"></div>
           </section>
           ${teamTeaserHtml(me)}
-        </aside>
-      </div>
+        </div>
+      </section>
+      ${folioFooterHtml(me)}
       ${devModeActive() ? devPanelHtml(me) + vaultEntryHtml() : ""}
     </div>
   `;
+  wireFolio(root);
   wireProfileCommon(root, me.telegram_id, () => loadProfile());
   // Обе догрузки — без await: профиль уже отрисован, и ждать ради
   // подсказки в одном блоке незачем (иначе на них ждала бы и кнопка
@@ -411,6 +428,116 @@ export async function loadProfile() {
   });
   if (devModeActive()) { wireDevPanel(root, me.telegram_id, () => loadProfile(), me); wireVaultEntry(root); }
   notifyGoalReachedIfNeeded(me, goalSet, goalOver, goalDone);
+}
+
+// ---------- Портфолио (свой профиль) ----------
+
+function folioRoles(d) {
+  const roles = (Array.isArray(d.roles) ? d.roles : (d.role ? [d.role] : [])).filter(r => r && r.toLowerCase() !== "user");
+  const extra = (d.role_breakdown || []).map(rb => rb.role).filter(r => r && !roles.includes(r));
+  const list = [...roles, ...extra];
+  if (d.is_developer || d.is_owner) list.push("Разработчик Project");
+  return list.length ? list : ["Участник Project"];
+}
+
+function folioHeroHtml(d) {
+  const tier = tenureTier(d.member_since_days);
+  const name = d.display_name || d.name || "";
+  const first = name.split(/\s+/)[0] || name;
+  const roles = folioRoles(d);
+  let joined = "";
+  if (d.created_at) {
+    const jd = new Date(d.created_at.replace(" ", "T") + "Z");
+    if (!isNaN(jd.getTime())) joined = `с ${jd.getUTCDate()} ${MONTHS_RU[jd.getUTCMonth() + 1]}. ${jd.getUTCFullYear()}`;
+  }
+  const meta = [
+    d.username ? `@${esc(d.username)}` : "",
+    d.internal_id != null ? `<span class="id-chip">#${d.internal_id}</span>` : "",
+    joined ? `в команде ${joined}` : "",
+  ].filter(Boolean).join(`<i class="dot"></i>`);
+  const bio = d.status_text || d.bio
+    ? `${d.status_text ? `<p class="pff-status">${esc(d.status_text)}</p>` : ""}${d.bio ? `<p class="pff-bio">${esc(d.bio)}</p>` : ""}`
+    : `<p class="pff-bio empty">Статус и пара слов о себе — их видят коллеги в карточке профиля. Нажмите «Изменить».</p>`;
+  return `
+    <div class="pf-hero pff-hero">
+      <div class="pf-banner pff-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}" data-editable="1"></div>
+      <div class="pff-hero-row">
+        <div class="pff-intro">
+          <h1 class="pff-hi">Привет, я <b>${esc(first)}</b>${d.is_developer || d.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</h1>
+          <div class="pff-role" aria-live="polite"><span class="pff-role-t" data-pff-roles="${esc(JSON.stringify(roles))}">${esc(roles[0])}</span>${rankTagHtml(d.studio_rank)}</div>
+          ${bio}
+          <div class="pf-meta">${meta}</div>
+          <div class="pff-clock"><span data-pff-clock></span>${d.is_online ? `<span class="on">· в сети</span>` : ""}</div>
+        </div>
+        <span class="avatar-ring pff-av${tier ? " tier-" + tier : ""}">${avatarHtml(d.telegram_id, name, "xl")}</span>
+      </div>
+      <div class="pff-actions">
+        ${profileRolesHtml(d, true)}
+        <button class="btn pf-edit" id="btn-edit-profile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/></svg>Изменить</button>
+      </div>
+    </div>`;
+}
+
+function folioFooterHtml(d) {
+  const days = d.member_since_days;
+  const won = (d.badges || []).filter(b => b.unlocked).length;
+  return `
+    <footer class="pff-foot">
+      <blockquote>«Хороший дубляж не слышно — слышно историю.»<cite>девиз студии</cite></blockquote>
+      ${days != null ? `<div class="pff-glow"><span>Вы в команде <b>${days}</b> ${pluralDays(days)}${won ? ` · наград: <b>${won}</b>` : ""}</span></div>` : ""}
+      <p class="pff-cta">Возьмём следующую серию?</p>
+    </footer>`;
+}
+
+// Плавающая таблетка: переход по секциям, подсветка текущей и процент прокрутки; подпись роли
+// меняется по кругу (с размытием, как в эталоне); часы — локальное время.
+function wireFolio(root) {
+  const folio = root.querySelector(".pf-folio");
+  if (!folio) return;
+  const reduce = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  let scroller = folio.parentElement;
+  while (scroller && scroller !== document.body && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+  if (!scroller || scroller === document.body) scroller = document.scrollingElement || document.documentElement;
+  const pill = folio.querySelector(".pff-pill");
+  const pct = pill.querySelector(".pff-pct");
+  const btns = [...pill.querySelectorAll("[data-pff-go]")];
+  pill.addEventListener("click", e => {
+    const b = e.target.closest("[data-pff-go]");
+    if (b) folio.querySelector(`#${b.dataset.pffGo}`)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  });
+  const onScroll = () => {
+    if (!folio.isConnected) { scroller.removeEventListener("scroll", onScroll); return; }
+    const max = scroller.scrollHeight - scroller.clientHeight;
+    pct.textContent = `${max > 0 ? Math.round(Math.min(1, scroller.scrollTop / max) * 100) : 100}%`;
+    const top = scroller === document.documentElement || scroller === document.scrollingElement ? 0 : scroller.getBoundingClientRect().top;
+    let cur = btns[0];
+    for (const b of btns) {
+      const sec = folio.querySelector(`#${b.dataset.pffGo}`);
+      if (sec && sec.getBoundingClientRect().top - top < 160) cur = b;
+    }
+    btns.forEach(b => b.classList.toggle("on", b === cur));
+    pill.classList.toggle("lifted", scroller.scrollTop > 12);
+  };
+  scroller.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  const clock = folio.querySelector("[data-pff-clock]");
+  const role = folio.querySelector("[data-pff-roles]");
+  let roles = [];
+  try { roles = JSON.parse(role?.dataset.pffRoles || "[]"); } catch (_) { /* подпись останется первой ролью */ }
+  let i = 0, n = 0;
+  const tick = () => {
+    const now = new Date();
+    if (clock) clock.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} — у вас сейчас`;
+  };
+  const timer = setInterval(() => {
+    if (!folio.isConnected) { clearInterval(timer); return; }
+    tick();
+    if (reduce || roles.length < 2 || !role || ++n % 3) return;
+    role.classList.add("out");
+    setTimeout(() => { i = (i + 1) % roles.length; role.textContent = roles[i]; role.classList.remove("out"); }, 260);
+  }, 1000);
+  tick();
 }
 
 function myHeroHtml(d, isSelf = true) {
