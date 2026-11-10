@@ -14,8 +14,18 @@ const TOOLS = [
 ];
 
 // Показывает сохранённое граффити поверх шапки. Возвращает слой (img) или null.
+// Ближайший прокручиваемый предок профиля; по бокам его подрезаем, чтобы широкий рисунок не давал горизонтальной прокрутки.
+function scrollerOf(el) {
+  let sc = el.parentElement;
+  while (sc && sc !== document.body && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+  if (!sc || sc === document.body) return null;
+  sc.style.overflowX = "clip";
+  return sc;
+}
+
 export function loadGraffiti(hero, telegramId) {
   if (!hero || !telegramId) return;
+  scrollerOf(hero);
   hero.querySelector(".pf-graffiti")?.remove();
   const src = mediaUrl(`/graffiti/${encodeURIComponent(telegramId)}`, { t: Date.now() });
   if (!src) return;
@@ -23,7 +33,8 @@ export function loadGraffiti(hero, telegramId) {
   img.className = "pf-graffiti";
   img.alt = "";
   img.draggable = false;
-  img.onload = () => { if (img.naturalWidth > 1) hero.append(img); };
+  // Рисунок в своих пикселях и по центру профиля: колонка профиля центрирована, так штрихи остаются на месте при любой ширине окна.
+  img.onload = () => { if (img.naturalWidth > 1) { img.style.width = `${img.naturalWidth}px`; img.style.height = `${img.naturalHeight}px`; hero.append(img); } };
   img.onerror = () => {};
   img.src = src;
 }
@@ -37,21 +48,23 @@ export function wireGraffiti(root, telegramId) {
 
 function openEditor(hero, telegramId) {
   if (!hero || hero.querySelector(".gf-canvas")) return;
-  const rect = hero.getBoundingClientRect();
   // Холст на всю длину профиля — в 1×, иначе на длинной странице выходят десятки мегапикселей.
   const dpr = 1;
-  const W = Math.round(rect.width), H = Math.round(hero.scrollHeight);
+  // Ширина — всё окно прокрутки (поля слева и справа тоже), высота — весь профиль.
+  const sc = scrollerOf(hero);
+  const W = Math.round(sc ? sc.clientWidth : window.innerWidth), H = Math.round(hero.scrollHeight);
   const canvas = document.createElement("canvas");
   canvas.className = "gf-canvas";
   canvas.width = W; canvas.height = H;
   const stroke = document.createElement("canvas"); // текущий штрих — отдельно, чтобы полупрозрачный маркер не темнел на самопересечениях
   stroke.className = "gf-canvas gf-stroke";
   stroke.width = W; stroke.height = H;
+  for (const c of [canvas, stroke]) { c.style.width = `${W}px`; c.style.height = `${H}px`; }
   const ctx = canvas.getContext("2d");
   const sctx = stroke.getContext("2d");
 
   const old = hero.querySelector(".pf-graffiti");
-  if (old && old.naturalWidth > 1) ctx.drawImage(old, 0, 0, W, old.naturalHeight * (W / old.naturalWidth));
+  if (old && old.naturalWidth > 1) ctx.drawImage(old, Math.round((W - old.naturalWidth) / 2), 0);
   if (old) old.style.visibility = "hidden";
 
   let tool = "felt", color = COLORS[2], size = 7;

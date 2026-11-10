@@ -5069,8 +5069,8 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 
 /* ---------- Граффити на шапке профиля (graffiti.js) ---------- */
 .pf-folio { position: relative; }
-.pf-folio .pf-graffiti { position: absolute; top: 0; left: 0; width: 100%; height: auto; z-index: 4; pointer-events: none; user-select: none; }
-.pf-folio .gf-canvas { position: absolute; top: 0; left: 0; width: 100%; height: auto; z-index: 6; touch-action: none; }
+.pf-folio .pf-graffiti { position: absolute; top: 0; left: 50%; transform: translateX(-50%); max-width: none; z-index: 4; pointer-events: none; user-select: none; }
+.pf-folio .gf-canvas { position: absolute; top: 0; left: 50%; transform: translateX(-50%); max-width: none; z-index: 6; touch-action: none; }
 .pf-folio .gf-stroke { z-index: 7; cursor: crosshair; }
 .pf-folio.gf-editing { outline: 2px dashed rgba(var(--fire-rgb), .55); outline-offset: 6px; border-radius: 12px; }
 .gf-bar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); z-index: 30; box-shadow: 0 18px 40px -16px rgba(0,0,0,.9); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 10px; padding: 10px 12px; border-radius: 16px;
