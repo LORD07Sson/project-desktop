@@ -5182,5 +5182,5 @@ button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; o
 .pff-pill .pff-days { padding: 0 10px; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); white-space: nowrap; }
 .pff-pill .pff-days b { color: var(--ink); }
 /* Календарь: «просрочено N дн.» — справа от ромбика срока, за полоской (в узкой полоске текст не помещался). */
-.kcal-bar .kcal-late-lbl { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); white-space: nowrap; font-style: normal; font-size: 12px; font-weight: 700; color: #ff7a85; pointer-events: none; z-index: 2; padding: 1px 6px; border-radius: 6px; background: rgba(20, 12, 28, .85); }
+.kcal-bar .kcal-late-lbl { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); z-index: 2; white-space: nowrap; font-style: normal; font-size: 11.5px; font-weight: 650; line-height: 1; padding: 5px 9px; border-radius: 99px; color: #ffb3ba; background: #2a1520; border: 1px solid rgba(255, 92, 110, .35); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); pointer-events: none; }
 .kcal-late { display: inline-block; width: 14px; height: 8px; border-radius: 3px; background: color-mix(in srgb, var(--s-stop) 55%, transparent); border: 1px solid var(--s-stop); vertical-align: middle; margin-right: 6px; }

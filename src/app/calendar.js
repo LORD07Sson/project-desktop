@@ -155,6 +155,7 @@ function stageOf(r) {
 function seriesName(r) { return r.title_name || String(r.title || "").replace(/\s*[,—–-]\s*сери[яи].*$/i, ""); }
 // Номер серии — тем же разбором, что на «Доске» и в «Списке»: отчёты пишут и «4 серия», и «Кредит - 05».
 function epOf(r) { const m = /(\d+)$/.exec(seriesParts(r).ep); return m ? Number(m[1]) : null; }
+function daysWord(n) { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? "день" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "дня" : "дней"; }
 function dueWords(n) { return n < 0 ? "просрочено" : n === 0 ? "сегодня" : n === 1 ? "завтра" : `через ${n} дн.`; }
 
 function headerHtml() {
@@ -203,7 +204,7 @@ function ganttHtml(data) {
     const poster = r.poster_url ? mediaUrl("/img_proxy", { url: r.poster_url }) : "";
     return `<div class="kcal-r">
       <div class="kcal-who">${poster ? `<img src="${poster}" alt="" loading="lazy">` : `<span class="kcal-ph"></span>`}<div><b>${esc(seriesName(r))}</b><span>${esc(r.public_id)}${ep != null ? ` · EP ${pad2(ep)}` : ""}</span></div></div>
-      <button type="button" class="kcal-bar${cut ? " cut" : ""}${late ? " late" : left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${late ? "--s-stop" : STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}${late ? ` · просрочено ${-left} дн.` : ""}"><span>${esc(stageOf(r))}</span><em></em>${late ? `<i class="kcal-late-lbl">просрочено ${-left} дн.</i>` : ""}</button>
+      <button type="button" class="kcal-bar${cut ? " cut" : ""}${late ? " late" : left <= 1 ? " hot" : ""}" data-cal-report="${esc(r.public_id)}" style="--c:var(${late ? "--s-stop" : STATUS_COLOR_VAR[r.status] || "--s-draft"}); grid-column:${st + 2} / ${end + 3}" title="${esc(r.title)}${late ? ` · просрочено ${-left} дн.` : ""}"><span>${esc(stageOf(r))}</span><em></em>${late ? `<i class="kcal-late-lbl">просрочено на ${-left} ${daysWord(-left)}</i>` : ""}</button>
     </div>`;
   }).join("");
   const undatedBody = undated.map(r => {
