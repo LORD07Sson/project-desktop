@@ -4862,8 +4862,15 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-sec { scroll-margin-top: 60px; display: flex; flex-direction: column; gap: 14px; }
 .pf-folio .pff-hero { position: relative; overflow: hidden; padding: 30px 30px 22px; border-radius: 24px; border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
   background: var(--surface-2); }
-.pf-folio .pff-banner { position: absolute; inset: 0; height: auto; opacity: .32; filter: saturate(1.2) blur(1px); -webkit-mask-image: linear-gradient(110deg, transparent 30%, #000 100%); mask-image: linear-gradient(110deg, transparent 30%, #000 100%); }
-.pf-folio .pff-banner::after { content: none; }
+/* Баннер лежит над содержимым, но пропускает клики (кроме своих кнопок): иначе кнопку «Положение» закрывали аватар и текст.
+   Приглушение — накладкой, а не opacity, чтобы кнопки баннера оставались яркими. Кнопки — по центру нижней строки, где свободно. */
+.pf-folio .pff-hero { isolation: isolate; }
+.pf-folio .pff-banner { position: absolute; inset: 0; z-index: auto; height: auto; opacity: 1; filter: none; pointer-events: none; -webkit-mask-image: none; mask-image: none; }
+.pf-folio .pff-banner::after { content: ""; display: block; position: absolute; inset: 0; opacity: 1; pointer-events: none; transition: opacity .25s;
+  background: linear-gradient(110deg, var(--surface-2) 30%, color-mix(in srgb, var(--surface-2) 66%, transparent) 100%); }
+.pf-folio .pff-banner .pf-ban-move, .pf-folio .pff-banner .pf-ban-bar { pointer-events: auto; top: auto; right: auto; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 3; }
+.pf-folio .pff-banner.adjust { pointer-events: auto; z-index: 2; }
+.pf-folio .pff-banner.adjust::after { opacity: 0; }
 .pff-hero-row { position: relative; display: flex; align-items: flex-start; gap: 28px; justify-content: space-between; }
 .pff-intro { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .pff-hi { margin: 0; font-size: 30px; line-height: 1.15; font-weight: 600; letter-spacing: -.025em; color: var(--ink-soft); }
