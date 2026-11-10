@@ -5179,3 +5179,5 @@ button.note-time { border: 0; cursor: pointer; font-weight: 700; transition: fil
 .pf-folio .gf-dust { position: absolute; z-index: 4; transform: translateX(0); pointer-events: none; }
 .pf-folio .gf-dust canvas { position: absolute; will-change: transform, opacity; }
 button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; opacity: .8; }
+.pff-pill .pff-days { padding: 0 10px; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); white-space: nowrap; }
+.pff-pill .pff-days b { color: var(--ink); }

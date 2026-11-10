@@ -377,6 +377,7 @@ export async function loadProfile() {
       <nav class="pff-pill" aria-label="Разделы профиля">
         <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(me.telegram_id, me.display_name || me.name, "sm")}</span>
         ${[["pff-about", "Обо мне"], ["pff-work", "Работа"], ["pff-activity", "Активность"], ["pff-awards", "Награды"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
+        ${pillDaysHtml(me, true)}
         <span class="pff-pct" aria-hidden="true">0%</span>
       </nav>
       <section class="pff-sec" id="pff-about">${folioHeroHtml(me)}</section>
@@ -508,12 +509,16 @@ function folioHeroHtml(d, isSelf = true) {
     </div>`;
 }
 
+// «Lissa в команде 20 дней» — в верхней плашке профиля, рядом с аватаром.
+function pillDaysHtml(d, isSelf) {
+  const days = d && d.member_since_days;
+  if (days == null) return "";
+  return `<span class="pff-days">${isSelf ? "Вы" : esc((d.display_name || d.name || "").split(/\s+/)[0])} в команде <b>${days}</b> ${pluralDays(days)}</span>`;
+}
+
 function folioFooterHtml(d, isSelf = true) {
-  const days = d.member_since_days;
-  const won = (d.badges || []).filter(b => b.unlocked).length;
   return `
     <footer class="pff-foot">
-      ${days != null ? `<div class="pff-glow"><span>${isSelf ? "Вы" : esc((d.display_name || d.name || "").split(/\s+/)[0])} в команде <b>${days}</b> ${pluralDays(days)}${won ? ` · наград: <b>${won}</b>` : ""}</span></div>` : ""}
       ${isSelf ? `<p class="pff-cta">Возьмём следующую серию?</p>` : ""}
     </footer>`;
 }
@@ -1166,6 +1171,7 @@ export async function openUserProfile(telegramId) {
         <button class="pff-back" type="button" data-close title="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H6M11 6l-6 6 6 6"/></svg></button>
         <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(telegramId, d.display_name || d.name, "sm")}</span>
         ${[["pff-about", "О человеке"], ["pff-work", "Работа"], ["pff-activity", "Активность"], ["pff-awards", "Награды"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
+        ${pillDaysHtml(d, false)}
         <span class="pff-pct" aria-hidden="true">0%</span>
       </nav>
       <section class="pff-sec" id="pff-about">${folioHeroHtml(d, false)}</section>
