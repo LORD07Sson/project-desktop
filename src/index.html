@@ -35,8 +35,8 @@
     <div class="logo brand-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19"/><path class="bm-b" d="M19 5L5 19"/></svg></div>
     <span class="tb-brand" data-tauri-drag-region><b data-tauri-drag-region>Project</b><span id="whoami" data-tauri-drag-region></span></span>
   </div>
-  <div class="titlebar-right">
-    <div class="titlebar-apps" id="titlebar-apps" hidden>
+  <div class="titlebar-right" data-tauri-drag-region>
+    <div class="titlebar-apps" id="titlebar-apps" data-tauri-drag-region hidden>
       <!-- Разделы — веер из круглой кнопки в правом нижнем углу (titlebar-menus.js,
            menubar.css): кнопка показывает значок и цвет текущего раздела, по клику
            пункты разлетаются вверх по дуге. Пункты — прежние .tab-btn[data-tab]:
@@ -63,7 +63,7 @@
         </div>
         <button class="fan-btn" id="fan-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="fan-menu" title="Разделы (F10)"><span class="fan-btn-ic" id="fan-btn-ic"></span></button>
       </nav>
-      <div class="tb-actions">
+      <div class="tb-actions" data-tauri-drag-region>
         <div class="team-teaser titlebar-team" id="titlebar-team" title="Команда" hidden></div>
         <button id="open-cmdk" class="tb-search" title="Поиск и команды (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span class="tb-search-lbl">Поиск: серии, тайтлы, люди, команды</span><kbd>Ctrl K</kbd></button>
         <!-- Lofi-радио (lofi.js): кнопка с пластинкой, панель станций под ней. -->
