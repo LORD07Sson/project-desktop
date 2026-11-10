@@ -376,7 +376,7 @@ export async function loadProfile() {
     <div class="pf pf-folio">
       <nav class="pff-pill" aria-label="Разделы профиля">
         <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(me.telegram_id, me.display_name || me.name, "sm")}</span>
-        ${[["pff-about", "Обо мне"], ["pff-work", "Работа"], ["pff-awards", "Награды"], ["pff-activity", "Активность"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
+        ${[["pff-about", "Обо мне"], ["pff-work", "Работа"], ["pff-activity", "Активность"], ["pff-awards", "Награды"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
         <span class="pff-pct" aria-hidden="true">0%</span>
       </nav>
       <section class="pff-sec" id="pff-about">${folioHeroHtml(me)}</section>
@@ -394,10 +394,6 @@ export async function loadProfile() {
           ${goalCardHtml}
           <section class="pf-card pf-tenure"><h3>Стаж в команде</h3>${tenureProgressHtml(me.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
         </div>
-      </section>
-      <section class="pff-sec pff-rv" id="pff-awards">
-        <h2 class="pff-h">Награды</h2>
-        ${myBadgesHtml(me) || `<div class="pf-quiet">Наград пока нет — они появятся за закрытые серии и стаж.</div>`}
       </section>
       <section class="pff-sec pff-rv" id="pff-activity">
         <h2 class="pff-h">Активность</h2>
@@ -417,6 +413,10 @@ export async function loadProfile() {
           </section>
           ${teamTeaserHtml(me)}
         </div>
+      </section>
+      <section class="pff-sec pff-rv" id="pff-awards">
+        <h2 class="pff-h">Награды</h2>
+        ${myBadgesHtml(me) || `<div class="pf-quiet">Наград пока нет — они появятся за закрытые серии и стаж.</div>`}
       </section>
       ${folioFooterHtml(me)}
       ${devModeActive() ? devPanelHtml(me) + vaultEntryHtml() : ""}
@@ -1164,7 +1164,7 @@ export async function openUserProfile(telegramId) {
       <nav class="pff-pill" aria-label="Разделы профиля">
         <button class="pff-back" type="button" data-close title="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H6M11 6l-6 6 6 6"/></svg></button>
         <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(telegramId, d.display_name || d.name, "sm")}</span>
-        ${[["pff-about", "О человеке"], ["pff-work", "Работа"], ["pff-awards", "Награды"], ["pff-activity", "Активность"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
+        ${[["pff-about", "О человеке"], ["pff-work", "Работа"], ["pff-activity", "Активность"], ["pff-awards", "Награды"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
         <span class="pff-pct" aria-hidden="true">0%</span>
       </nav>
       <section class="pff-sec" id="pff-about">${folioHeroHtml(d, false)}</section>
@@ -1189,10 +1189,6 @@ export async function openUserProfile(telegramId) {
         </div>
         ${manage ? teamTeaserHtml(d) : ""}
       </section>
-      <section class="pff-sec pff-rv" id="pff-awards">
-        <h2 class="pff-h">Награды</h2>
-        ${myBadgesHtml(d) || `<div class="pf-quiet">Наград пока нет.</div>`}
-      </section>
       <section class="pff-sec pff-rv" id="pff-activity">
         <h2 class="pff-h">Активность</h2>
         <section class="pf-card pff-pulse" id="pulse-card">
@@ -1203,6 +1199,10 @@ export async function openUserProfile(telegramId) {
           <div class="pf-card-head"><h3>Последние действия</h3></div>
           <div class="pf-acts" id="activity-list"><div class="pf-quiet">загружаю…</div></div>
         </section>
+      </section>
+      <section class="pff-sec pff-rv" id="pff-awards">
+        <h2 class="pff-h">Награды</h2>
+        ${myBadgesHtml(d) || `<div class="pf-quiet">Наград пока нет.</div>`}
       </section>
       ${folioFooterHtml(d, false)}
       ${devModeActive() ? devPanelHtml(d) : ""}
