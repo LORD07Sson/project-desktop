@@ -5178,3 +5178,4 @@ button.note-time { border: 0; cursor: pointer; font-weight: 700; transition: fil
 @media (prefers-reduced-motion: reduce) { .note-acts, .note-hint { transition: none; } }
 .pf-folio .gf-dust { position: absolute; z-index: 4; transform: translateX(0); pointer-events: none; }
 .pf-folio .gf-dust canvas { position: absolute; will-change: transform, opacity; }
+button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; opacity: .8; }

@@ -1157,7 +1157,7 @@ function noteHtml(n, ctx = {}) {
       ${acts}
     </div>
     <div class="note-body">
-      ${t ? `<button type="button" class="note-time" data-seek="${t.seconds}" title="Перемотать дорожку на ${esc(t.label)}">▶ ${esc(t.label)}</button>` : ""}
+      ${t ? `<button type="button" class="note-time" data-seek="${t.seconds}" title="Перемотать дорожку на ${esc(t.label)}">${esc(t.label)}</button>` : ""}
       ${text}
     </div>
     ${n.attach ? `<div class="note-att">${attachHtml(n.attach)}</div>` : ""}
