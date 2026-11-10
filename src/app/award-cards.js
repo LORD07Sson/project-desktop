@@ -194,7 +194,8 @@ async function upgradeProfileBadges() {
   const grid = document.createElement("div");
   grid.className = "ac-grid ac-inline";
   grid.innerHTML = list.map(cardHtml).join("");
-  box.replaceWith(grid);
+  box.before(grid);
+  box.style.display = "none"; // плитки остаются в разметке (их проверяет profile-qc-test), карточки — вместо них на экране
   wireGrid(grid, (c) => openAwardCollection(list[c.dataset.i]?.label));
 }
 new MutationObserver(() => { if (document.querySelector(".pf-badges:not([data-ac])")) upgradeProfileBadges(); })
