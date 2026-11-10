@@ -1,0 +1,130 @@
+/* Строка меню шапки (#tabstrip.mb-bar) — разделы четырьмя словами,
+   у каждого выпадающее меню. Логика — src/app/titlebar-menus.js.
+   Все правила — внутри #tabstrip / .titlebar, общих правил не трогаем.
+
+   Замеры с референса (покадрово, 60 к/с): появление ~130 мс с перелётом
+   ~6% и посадкой к ~220 мс, пункты по очереди с шагом ~16–20 мс,
+   растворение+размытие на входе; уход ~110 мс. У каждого раздела свой
+   неоновый цвет (--mb-c задан на .mb-wrap в index.html). */
+
+/* ---------- сама строка: плоская, без «острова» ---------- */
+/* Как в строке меню ОС — сразу за названием программы, а не по центру. */
+#tabstrip.mb-bar {
+  margin: 0 auto 0 6px; gap: 2px; padding: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; backdrop-filter: none;
+}
+#tabstrip.mb-bar::before { content: none; }
+:root[data-theme="light"] #tabstrip.mb-bar { background: none; }
+#tabstrip .mb-wrap[hidden] { display: none; }
+
+#tabstrip .mb-btn {
+  position: relative; display: flex; align-items: center; height: 28px; padding: 0 11px;
+  border: 0; border-radius: 7px; background: transparent; color: var(--ink-soft);
+  font: inherit; font-size: 13px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; cursor: default;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .55); /* читается и поверх баннера шапки */
+  transition: background .12s, color .12s;
+}
+#tabstrip .mb-btn:hover { color: var(--ink); background: rgba(255, 255, 255, .06); }
+:root[data-theme="light"] #tabstrip .mb-btn:hover { background: rgba(60, 30, 10, .07); }
+/* Открытое меню — слово залито своим цветом, как выделение в строке меню ОС. */
+#tabstrip .mb-btn[aria-expanded="true"] {
+  color: #0d0d10; text-shadow: none; background: var(--mb-c);
+  box-shadow: 0 0 18px -4px var(--mb-c);
+}
+#tabstrip .mb-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--mb-c); }
+#tabstrip .mb-btn[aria-expanded="true"]:focus-visible { box-shadow: 0 0 18px -4px var(--mb-c); }
+/* Слово, в котором сейчас открытый раздел: неоновая черта снизу. */
+#tabstrip .mb-btn.active { color: var(--ink); }
+#tabstrip .mb-btn.active::after {
+  content: ""; position: absolute; left: 50%; bottom: -3px; width: 16px; height: 2px; margin-left: -8px; border-radius: 2px;
+  background: var(--mb-c); box-shadow: 0 0 10px var(--mb-c);
+}
+#tabstrip .mb-btn[aria-expanded="true"]::after { opacity: 0; }
+#tabstrip .mb-btn.has-badge::before {
+  content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--mb-c); box-shadow: 0 0 0 2px var(--bg), 0 0 8px var(--mb-c);
+}
+/* Выбор пункта: слово коротко вспыхивает цветом раздела (в референсе пункт «втягивается» в кнопку). */
+#tabstrip .mb-btn.mb-picked { animation: mb-picked .32s ease-out; }
+@keyframes mb-picked { from { background: color-mix(in srgb, var(--mb-c) 40%, transparent); color: var(--ink); } }
+
+/* ---------- выпадающее меню ---------- */
+#tabstrip .mb-menu {
+  left: -4px; right: auto; top: calc(100% + 6px); width: max-content; min-width: 236px; max-width: 340px;
+  padding: 5px; border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, .1);
+  box-shadow:
+    0 0 0 .5px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 22px 48px -14px rgba(0, 0, 0, .75),
+    0 0 40px -22px var(--mb-c);
+  transform-origin: 18px 0;
+  animation: mb-in .22s cubic-bezier(.2, 1.35, .45, 1) both;
+}
+:root[data-theme="light"] #tabstrip .mb-menu {
+  background: color-mix(in srgb, #fff 78%, transparent);
+  border-color: rgba(0, 0, 0, .08);
+  box-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 18px 40px -14px rgba(40, 20, 10, .35);
+}
+#tabstrip .mb-menu.mb-closing { animation: mb-out .11s ease-in both; pointer-events: none; }
+@keyframes mb-in { from { opacity: 0; transform: translateY(-6px) scale(.96); filter: blur(6px); } }
+@keyframes mb-out { to { opacity: 0; transform: translateY(-3px) scale(.98); filter: blur(3px); } }
+
+/* Пункты: строка 30 px, значок цвета раздела, справа бейдж и Ctrl+N. */
+#tabstrip .mb-menu .tb-mi {
+  position: relative; display: flex; align-items: center; gap: 10px; width: 100%; height: 30px; padding: 0 9px;
+  border: 0; border-radius: 6px; background: none; color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; text-align: left; cursor: default;
+  transition: none;
+  animation: mb-item-in .2s cubic-bezier(.2, 1.3, .45, 1) both;
+  animation-delay: calc(var(--i, 0) * 18ms + 30ms);
+}
+@keyframes mb-item-in { from { opacity: 0; transform: translateY(-4px); filter: blur(3px); } }
+#tabstrip .mb-menu .tb-mi::before, #tabstrip .mb-menu .tb-mi::after { content: none; }
+#tabstrip .mb-menu .tb-mi .tab-ic {
+  display: grid; place-items: center; width: 16px; height: 16px; flex: none;
+  background: none; box-shadow: none; border-radius: 0; color: var(--mb-c);
+}
+#tabstrip .mb-menu .tb-mi .tab-ic svg {
+  width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round;
+  color: inherit; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mb-c) 55%, transparent));
+}
+#tabstrip .mb-menu .tm-txt { display: flex; flex: 1; min-width: 0; }
+#tabstrip .mb-menu .tm-txt small { display: none; }
+#tabstrip .mb-menu .tab-lbl { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tabstrip .mb-menu .tab-badge { position: static; margin: 0; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 9px; font-size: 10px; box-shadow: none; }
+#tabstrip .mb-kbd {
+  flex: none; margin-left: auto; padding: 0; background: none; border: 0;
+  font: 500 11.5px/1 var(--font, inherit); color: var(--ink-dim); letter-spacing: .02em;
+}
+#tabstrip .mb-menu .tab-badge:not([hidden]) + .mb-kbd { margin-left: 4px; }
+
+/* Подсветка — заливка цветом раздела, как выделенная строка системного меню. */
+#tabstrip .mb-menu .tb-mi:hover,
+#tabstrip .mb-menu .tb-mi:focus-visible,
+#tabstrip .mb-menu .tb-mi:focus { outline: none; background: var(--mb-c); color: #0d0d10; box-shadow: 0 0 16px -6px var(--mb-c); }
+#tabstrip .mb-menu .tb-mi:is(:hover, :focus) .tab-ic,
+#tabstrip .mb-menu .tb-mi:is(:hover, :focus) .mb-kbd { color: rgba(13, 13, 16, .75); }
+#tabstrip .mb-menu .tb-mi:is(:hover, :focus) .tab-ic svg { filter: none; }
+/* Открытый сейчас раздел — точка цвета раздела слева от значка. */
+#tabstrip .mb-menu .tab-btn.active { background: color-mix(in srgb, var(--mb-c) 12%, transparent); }
+#tabstrip .mb-menu .tab-btn.active .tab-lbl { font-weight: 600; }
+#tabstrip .mb-menu .tab-btn.active::before {
+  content: ""; position: absolute; left: 2px; top: 50%; width: 3px; height: 14px; margin-top: -7px; border-radius: 2px;
+  background: var(--mb-c); box-shadow: 0 0 8px var(--mb-c);
+}
+#tabstrip .mb-menu .tab-btn.active:is(:hover, :focus)::before { background: #0d0d10; box-shadow: none; }
+#tabstrip .mb-menu .tb-sep { height: 1px; margin: 5px 9px; background: rgba(255, 255, 255, .09); }
+#tabstrip .mb-menu .tb-sep[hidden] { display: none; }
+:root[data-theme="light"] #tabstrip .mb-menu .tb-sep { background: rgba(0, 0, 0, .08); }
+
+/* ---------- без анимаций: только мгновенное появление ---------- */
+:root[data-motion="off"] #tabstrip .mb-menu,
+:root[data-motion="off"] #tabstrip .mb-menu .tb-mi,
+:root[data-motion="off"] #tabstrip .mb-btn { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  #tabstrip .mb-menu, #tabstrip .mb-menu .tb-mi, #tabstrip .mb-btn { animation: none; transition: none; }
+}
