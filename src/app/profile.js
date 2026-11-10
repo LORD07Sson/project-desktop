@@ -513,7 +513,6 @@ function folioFooterHtml(d, isSelf = true) {
   const won = (d.badges || []).filter(b => b.unlocked).length;
   return `
     <footer class="pff-foot">
-      <blockquote>«Хороший дубляж не слышно — слышно историю.»<cite>девиз студии</cite></blockquote>
       ${days != null ? `<div class="pff-glow"><span>${isSelf ? "Вы" : esc((d.display_name || d.name || "").split(/\s+/)[0])} в команде <b>${days}</b> ${pluralDays(days)}${won ? ` · наград: <b>${won}</b>` : ""}</span></div>` : ""}
       ${isSelf ? `<p class="pff-cta">Возьмём следующую серию?</p>` : ""}
     </footer>`;
