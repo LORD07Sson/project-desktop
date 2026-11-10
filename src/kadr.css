@@ -5176,3 +5176,5 @@ button.note-time { border: 0; cursor: pointer; font-weight: 700; transition: fil
 .note-hint { max-height: 0; overflow: hidden; margin-top: 0; font-size: 11px; color: var(--ink-dim); opacity: 0; transition: max-height .2s, opacity .2s, margin .2s; }
 .note-add-row:focus-within + .note-hint { max-height: 20px; opacity: 1; margin-top: 6px; }
 @media (prefers-reduced-motion: reduce) { .note-acts, .note-hint { transition: none; } }
+.pf-folio .gf-dust { position: absolute; z-index: 4; transform: translateX(0); pointer-events: none; }
+.pf-folio .gf-dust canvas { position: absolute; will-change: transform, opacity; }

@@ -34,9 +34,88 @@ export function loadGraffiti(hero, telegramId) {
   img.alt = "";
   img.draggable = false;
   // Рисунок в своих пикселях и по центру профиля: колонка профиля центрирована, так штрихи остаются на месте при любой ширине окна.
-  img.onload = () => { if (img.naturalWidth > 1) { img.style.width = `${img.naturalWidth}px`; img.style.height = `${img.naturalHeight}px`; hero.append(img); } };
+  img.onload = () => {
+    if (img.naturalWidth <= 1) return;
+    img.style.width = `${img.naturalWidth}px`; img.style.height = `${img.naturalHeight}px`;
+    hero.append(img);
+    snapCycle(hero, img);
+  };
   img.onerror = () => {};
   img.src = src;
+}
+
+// ===== Появление и «щелчок Таноса» =====
+// При открытии профиля рисунок проявляется (будто его наносят), держится и рассыпается пылью слоями слева
+// направо — до следующего открытия профиля. Пыль — DUST_LAYERS холстов: каждый непрозрачный пиксель случайно (со сдвигом
+// по X) отдаётся одному слою, и слои по очереди улетают вверх-вправо, тая и размываясь.
+const HOLD_MS = 7000, DUST_LAYERS = 18, DUST_MAX_PX = 1_200_000;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const alive = (hero, img) => img.isConnected && !hero.classList.contains("gf-editing") && hero.querySelector(".pf-graffiti") === img;
+
+async function snapCycle(hero, img) {
+  await img.animate([
+    { clipPath: "inset(0 100% 0 0)", filter: "blur(6px) brightness(1.8)", opacity: 0 },
+    { clipPath: "inset(0 0 0 0)", filter: "blur(0) brightness(1)", opacity: 1 },
+  ], { duration: 1400, easing: "cubic-bezier(.2,.7,.2,1)" }).finished.catch(() => {});
+  await sleep(HOLD_MS);
+  if (!alive(hero, img)) return;
+  let dust;
+  try { dust = await dustLayers(img); } catch (_) { return; } // не вышло разобрать — просто остаётся на месте
+  if (alive(hero, img)) await snap(hero, img, dust);
+}
+
+// Готовит слои пыли один раз: рисунок берём файлом (иначе холст «чужой» и пиксели не прочитать),
+// режем по рамке нарисованного и при необходимости уменьшаем, чтобы не держать в памяти десятки мегапикселей.
+async function dustLayers(img) {
+  const bmp = await fetch(img.src).then(r => r.blob()).then(b => window.createImageBitmap(b));
+  const k = Math.min(1, Math.sqrt(DUST_MAX_PX / (bmp.width * bmp.height)));
+  const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+  const src = document.createElement("canvas"); src.width = w; src.height = h;
+  const sctx = src.getContext("2d", { willReadFrequently: true });
+  sctx.drawImage(bmp, 0, 0, w, h); bmp.close();
+  const all = sctx.getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (all[(y * w + x) * 4 + 3]) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < 0) throw new Error("empty");
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  const px = sctx.getImageData(x0, y0, bw, bh).data;
+  const outs = Array.from({ length: DUST_LAYERS }, () => new window.ImageData(bw, bh));
+  for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+    const i = (y * bw + x) * 4;
+    if (!px[i + 3]) continue;
+    const L = Math.min(DUST_LAYERS - 1, Math.floor(DUST_LAYERS * (Math.random() * 0.55 + (x / bw) * 0.45)));
+    const d = outs[L].data; d[i] = px[i]; d[i + 1] = px[i + 1]; d[i + 2] = px[i + 2]; d[i + 3] = px[i + 3];
+  }
+  return { k, x0, y0, bw, bh, outs };
+}
+
+async function snap(hero, img, dust) {
+  const wrap = document.createElement("div");
+  wrap.className = "gf-dust";
+  // Рисунок сдвинут transform-ом к центру (offsetLeft этого не видит), поэтому место берём из реальных рамок.
+  const ir = img.getBoundingClientRect(), hr = hero.getBoundingClientRect();
+  Object.assign(wrap.style, { left: `${ir.left - hr.left - hero.clientLeft}px`, top: `${ir.top - hr.top - hero.clientTop}px`, width: `${ir.width}px`, height: `${ir.height}px` });
+  const s = 1 / dust.k;
+  const layers = dust.outs.map(data => {
+    const c = document.createElement("canvas"); c.width = dust.bw; c.height = dust.bh;
+    c.getContext("2d").putImageData(data, 0, 0);
+    Object.assign(c.style, { left: `${dust.x0 * s}px`, top: `${dust.y0 * s}px`, width: `${dust.bw * s}px`, height: `${dust.bh * s}px` });
+    wrap.append(c);
+    return c;
+  });
+  hero.append(wrap);
+  img.style.visibility = "hidden";
+  await Promise.all(layers.map((c, i) => {
+    const a = (Math.random() - 0.3) * Math.PI / 3;
+    const dist = 90 + Math.random() * 140;
+    return c.animate([
+      { transform: "none", opacity: 1, filter: "blur(0)" },
+      { transform: `translate(${Math.cos(a) * dist}px, ${-Math.abs(Math.sin(a)) * dist - 40}px) rotate(${(Math.random() - 0.5) * 30}deg)`, opacity: 0, filter: "blur(2px)" },
+    ], { duration: 1500 + Math.random() * 500, delay: i * 95, easing: "cubic-bezier(.45,0,.9,.6)", fill: "forwards" }).finished.catch(() => {});
+  }));
+  wrap.remove();
 }
 
 export function wireGraffiti(root, telegramId) {
