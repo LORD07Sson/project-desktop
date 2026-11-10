@@ -25,6 +25,7 @@ const ACTIONS = [
   { label: "Аналитика", icon: "📈", run: () => switchTab("analytics") },
   { label: "Команда", icon: "👥", run: () => switchTab("team") },
   { label: "Я", icon: "👤", run: () => switchTab("profile") },
+  { label: "Коллекция наград", icon: "🏅", sub: "карточки достижений", run: () => import("./award-cards.js").then(m => m.openAwardCollection()) },
   // Инструменты из меню шапки — те же кнопки, просто с клавиатуры.
   { label: "Смотреть", icon: "▶", run: () => $("#open-watch").click() },
   { label: "Lofi-радио: играть / пауза", icon: "📻", run: () => import("./lofi.js").then(m => m.toggleLofi()) },

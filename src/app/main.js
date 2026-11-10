@@ -51,6 +51,7 @@ import "./file-drop.js";
 import "./force-update.js";
 import "./lofi.js";
 import "./avatar-hover.js";
+import "./award-cards.js";
 import "./feed-badge.js";
 import "./title-hover.js";
 import "./clip-title.js";
