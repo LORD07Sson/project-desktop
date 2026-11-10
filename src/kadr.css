@@ -5105,3 +5105,13 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   .pf-folio > .pff-duo > #pff-activity { right: calc(100% + 28px); }
   .pf-folio > .pff-duo > #pff-awards { left: calc(100% + 28px); }
 }
+/* Боковые колонки спокойнее: уже, дальше от краёв, марки по 3, в ленте 4 последних действия. */
+@media (min-width: 1720px) {
+  .pf-folio > .pff-duo > .pff-sec { width: min(360px, calc((100vw - 900px) / 2 - 110px)); }
+  .pf-folio > .pff-duo > #pff-activity { right: calc(100% + 44px); }
+  .pf-folio > .pff-duo > #pff-awards { left: calc(100% + 44px); }
+  .pf-folio > .pff-duo .ac-grid.ac-inline { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 12px; padding: 18px 2px 4px; }
+  .pf-folio > .pff-duo .ac-inline .ac-lb { font-size: 11px; }
+  .pf-folio > .pff-duo .pf-acts > .pf-act:nth-child(n+5) { display: none; }
+  .pf-folio > .pff-duo .ac-inline .ac-no { display: none; }
+}
