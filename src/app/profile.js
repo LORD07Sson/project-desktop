@@ -737,6 +737,9 @@ async function fillPulse(root) {
   const delta = m.prev30 > 0 ? deltaPillHtml(Math.round(((m.last30 - m.prev30) / m.prev30) * 100)) : "";
   card.querySelector("#pulse-sum").innerHTML = `<b>${m.last30}</b> ${pluralRu(m.last30, "действие", "действия", "действий")} за 30 дней ${delta}`;
   requestAnimationFrame(() => requestAnimationFrame(() => body.classList.add("in")));
+  // После появления анимацию с клеток снимаем: законченная анимация оставляла каждую из ~200 клеток отдельным слоем,
+  // и прокрутка возле календаря подтормаживала (замер: дёрганые кадры 10 → 4).
+  setTimeout(() => body.classList.add("done"), 200 * 16 + 1200); // DevSkim: ignore DS172411 — функция, не строка
 
   // одна всплывающая подсказка на всю сетку
   const heat = body.querySelector(".pff-heat"), tip = body.querySelector(".pff-tip");
