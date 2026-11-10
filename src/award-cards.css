@@ -230,3 +230,5 @@
 .ac-inline .ac-card:not(.hot) .ac-sheen { animation: none; }
 .ac-inline .ac-card.won:not(.hot) .ac-glit { opacity: .28; }
 .ac-inline .ac-card.won.r-legendary:not(.hot) .ac-glit, .ac-inline .ac-card.won.r-custom:not(.hot) .ac-glit { opacity: .4; }
+/* В двухколоночном профиле (Активность | Награды) колонка узкая: четыре марки в ряд сжимались до нечитаемых. */
+.pff-duo .ac-grid.ac-inline { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 18px; }
