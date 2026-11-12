@@ -13,33 +13,54 @@ const GRID = 20;
 const KINDS = {
   hub:       { label: "Главный блок",   w: 300, h: 92,  color: "#ef4444" },
   circle:    { label: "Круг",           w: 210, h: 210, color: "#ff3b3b" },
-  pill:      { label: "Система",        w: 280, h: 66,  color: "#38d9e8" },
-  box:       { label: "Подсистема",     w: 240, h: 54,  color: "#38d9e8" },
+  pill:      { label: "Система",        w: 280, h: 72,  color: "#38d9e8" },
+  box:       { label: "Подсистема",     w: 250, h: 66,  color: "#38d9e8" },
   square:    { label: "Внешний сервис", w: 180, h: 180, color: "#fcd34d" },
-  tag:       { label: "Клиент",         w: 240, h: 110, color: "#8b5cf6" },
+  tag:       { label: "Клиент",         w: 250, h: 92, color: "#8b5cf6" },
   milestone: { label: "Веха",           w: 130, h: 130, color: "#22c55e" },
-  note:      { label: "Заметка",        w: 210, h: 130, color: "#fde68a" },
+  note:      { label: "Заметка",        w: 220, h: 120, color: "#fcd34d" },
   text:      { label: "Текст",          w: 220, h: 40,  color: "transparent" },
 };
 const COLORS = ["#ef4444", "#f97316", "#fcd34d", "#22c55e", "#38d9e8", "#3b82f6", "#8b5cf6", "#ec4899", "#94a3b8", "#1f2937", "#ffffff"];
 const STATUS = { "": "Без статуса", plan: "План", work: "В работе", done: "Готово", risk: "Риск" };
 const STATUS_COLOR = { plan: "#94a3b8", work: "#f59e0b", done: "#22c55e", risk: "#ef4444" };
-const ICONS = ["", "👥", "🌐", "⚙️", "🗄️", "🤖", "📱", "💳", "📈", "🔒", "📞", "✉️", "🎬", "🎙️", "🚀", "⭐", "📦", "🧩"];
+// Линейные иконки (24×24, как в остальном приложении) — эмодзи в SVG рисуются не везде.
+const ICON_PATHS = {
+  users: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="7" r="2.4"/><path d="M17 13c2.4.3 4 2.2 4 5"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.7 5.7 3.7 9s-1.2 6.3-3.7 9c-2.5-2.7-3.7-5.7-3.7-9S9.5 5.7 12 3z"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+  db: '<ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
+  bot: '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16h5"/>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18h2"/>',
+  card: '<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>',
+  film: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 4v16M17 4v16M3 9h4M17 9h4M3 15h4M17 15h4"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+  rocket: '<path d="M5 15c-1.5 1.5-2 4.5-2 6 1.5 0 4.5-.5 6-2M9 15l-3-3c1-4 4.5-9 15-9 0 10.5-5 14-9 15z"/><circle cx="15" cy="9" r="1.8"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  box: '<path d="m12 3 8.5 4.5v9L12 21l-8.5-4.5v-9z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5M12 12v9"/>',
+  code: '<path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>',
+  cloud: '<path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 8.5a4.8 4.8 0 0 1-.5 9.5z"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
+};
+const ICONS = ["", ...Object.keys(ICON_PATHS)];
+// Старые карты хранили эмодзи — переводим в иконки.
+const EMOJI_ICON = { "👥": "users", "🌐": "globe", "⚙️": "gear", "🗄️": "db", "🤖": "bot", "📱": "phone", "💳": "card", "📈": "chart", "🔒": "lock", "✉️": "mail", "🎬": "film", "🎙️": "mic", "🚀": "rocket", "⚡": "bolt", "📦": "box", "📞": "phone", "⭐": "target", "🧩": "box" };
+const iconKey = i => ICON_PATHS[i] ? i : EMOJI_ICON[i] || "";
+function iconSvg(i, cx, cy, size, color) {
+  const k = iconKey(i);
+  if (!k) return "";
+  const sc = size / 24;
+  return `<g transform="translate(${cx - size / 2},${cy - size / 2}) scale(${sc})" fill="none" stroke="${color}" stroke-width="${1.7 / Math.max(sc, .6) * .9}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none">${ICON_PATHS[k]}</g>`;
+}
 
 let st = null; // состояние открытой вкладки
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const clone = o => JSON.parse(JSON.stringify(o));
 const snap = v => (st.grid ? Math.round(v / GRID) * GRID : Math.round(v));
-
-// Тёмный текст на светлых заливках, белый — на тёмных.
-function inkFor(hex) {
-  if (!hex || hex === "transparent") return "var(--ink)";
-  const m = hex.replace("#", "");
-  const n = parseInt(m.length === 3 ? m.replace(/./g, c => c + c) : m, 16);
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? "#111318" : "#ffffff";
-}
 
 function emptyData() { return { nodes: [], edges: [], view: { x: 0, y: 0, z: 1 } }; }
 
@@ -49,7 +70,7 @@ function node(kind, x, y, text, extra = {}) {
   return { id: uid(), kind, x, y, w: k.w, h: k.h, text, color: k.color, ...extra };
 }
 function edge(from, to, extra = {}) {
-  return { id: uid(), from: from.id, to: to.id, style: "dotted", arrows: "end", curve: "straight", color: "#cbd5e1", flow: true, label: "", ...extra };
+  return { id: uid(), from: from.id, to: to.id, style: "dotted", arrows: "end", curve: "straight", color: "#64748b", flow: true, label: "", ...extra };
 }
 
 const TEMPLATES = {
@@ -57,14 +78,14 @@ const TEMPLATES = {
   links: {
     label: "Диаграмма связей",
     make() {
-      const main = node("circle", 700, 130, "Главный\nблок");
-      const s1 = node("pill", 120, 270, "Система №1", { icon: "👥" });
+      const main = node("circle", 700, 130, "Главный\nблок", { color: "#f43f5e", icon: "bolt" });
+      const s1 = node("pill", 120, 270, "Система №1", { icon: "users" });
       const s1a = node("box", 140, 390, "Подсистема №1");
       const s1b = node("box", 140, 490, "Подсистема №2");
-      const s2 = node("pill", 670, 560, "Система №2", { icon: "🌐" });
+      const s2 = node("pill", 670, 560, "Система №2", { icon: "globe" });
       const s2a = node("box", 690, 670, "Подсистема №1");
       const s2b = node("box", 690, 770, "Подсистема №2");
-      const ext = node("square", 1220, 130, "Внешний\nсервис");
+      const ext = node("square", 1220, 130, "Внешний\nсервис", { color: "#f59e0b" });
       const c1 = node("tag", 1200, 520, "Клиент №1");
       const c2 = node("tag", 1200, 680, "Клиент №2");
       return {
@@ -83,13 +104,13 @@ const TEMPLATES = {
   mind: {
     label: "Карта проекта",
     make() {
-      const hub = node("hub", 620, 380, "Студия озвучки");
-      const a = node("box", 1060, 150, "Сайт: основная часть", { num: 1, color: "#1f2937", status: "done", items: ["Главная", "Каталог тайтлов", "Расписание", "Контакты"] });
-      const b = node("box", 160, 250, "CRM / бот", { num: 2, color: "#1f2937", status: "work", items: ["Заявки", "Отчёты", "Уведомления"], itemsSide: "left" });
-      const c = node("box", 1060, 560, "Личный кабинет", { num: 3, color: "#1f2937", status: "plan", items: ["Мои серии", "Файлы", "Выплаты"] });
-      const d = node("box", 1060, 380, "Продвижение", { num: 4, color: "#1f2937", status: "work" });
-      const e = node("box", 160, 600, "Система задач", { num: 5, color: "#1f2937", status: "plan", items: ["Очередь", "Доска", "Календарь"], itemsSide: "left" });
-      const f = node("box", 160, 90, "Интеграции", { num: 6, color: "#1f2937", status: "risk" });
+      const hub = node("hub", 620, 380, "Студия озвучки", { color: "#a78bfa", sub: "Центр" });
+      const a = node("box", 1060, 150, "Сайт: основная часть", { num: 1, color: "#38bdf8", status: "done", items: ["Главная", "Каталог тайтлов", "Расписание", "Контакты"] });
+      const b = node("box", 160, 250, "CRM / бот", { num: 2, color: "#38bdf8", status: "work", items: ["Заявки", "Отчёты", "Уведомления"], itemsSide: "left" });
+      const c = node("box", 1060, 560, "Личный кабинет", { num: 3, color: "#38bdf8", status: "plan", items: ["Мои серии", "Файлы", "Выплаты"] });
+      const d = node("box", 1060, 380, "Продвижение", { num: 4, color: "#38bdf8", status: "work" });
+      const e = node("box", 160, 600, "Система задач", { num: 5, color: "#38bdf8", status: "plan", items: ["Очередь", "Доска", "Календарь"], itemsSide: "left" });
+      const f = node("box", 160, 90, "Интеграции", { num: 6, color: "#38bdf8", status: "risk" });
       const trunk = { style: "solid", arrows: "none", curve: "curve", color: "#64748b", flow: false };
       const red = { style: "dotted", arrows: "end", curve: "curve", color: "#f87171", flow: true };
       return {
@@ -160,64 +181,97 @@ function edgeGeom(e, A, B) {
 }
 
 // ---------- отрисовка ----------
-function shapeSvg(n) {
-  const fill = n.color || "transparent", w = n.w, h = n.h;
+// Узел — тёмная «стеклянная» карточка: цвет узла только акцент (рамка, свечение, полоска, иконка).
+const gid = c => `rm-g-${String(c).replace(/[^a-z0-9]/gi, "")}`;
+function accent(n) {
+  const c = n.color;
+  if (!c || c === "transparent" || !/^#[0-9a-f]{6}$/i.test(c)) return c && c !== "transparent" ? c : "#94a3b8";
+  const v = parseInt(c.slice(1), 16), lum = ((v >> 16) * 299 + ((v >> 8) & 255) * 587 + (v & 255) * 114) / 1000;
+  return lum < 70 ? "#94a3b8" : c; // слишком тёмный акцент на тёмной карточке не виден
+}
+function outline(n) {
+  const w = n.w, h = n.h;
   switch (n.kind) {
-    case "circle": return `<ellipse class="rm-shape" cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${fill}"/>`;
-    case "pill": return `<rect class="rm-shape" width="${w}" height="${h}" rx="${h / 2}" fill="${fill}"/>`;
-    case "square": return `<rect class="rm-shape" width="${w}" height="${h}" rx="4" fill="${fill}"/>`;
-    case "tag": return `<path class="rm-shape" d="M0,0 H${w - h / 2} L${w},${h / 2} L${w - h / 2},${h} H0 Z" fill="${fill}"/>`;
-    case "milestone": return `<path class="rm-shape" d="M${w / 2},0 L${w},${h / 2} L${w / 2},${h} L0,${h / 2} Z" fill="${fill}"/>`;
-    case "hub": return `<rect class="rm-shape" width="${w}" height="${h}" rx="14" fill="${fill}" stroke="rgba(255,255,255,.35)" stroke-width="2"/>`;
-    case "note": return `<path class="rm-shape" d="M0,0 H${w} V${h - 22} L${w - 22},${h} H0 Z" fill="${fill}"/><path d="M${w},${h - 22} L${w - 22},${h - 22} V${h} Z" fill="rgba(0,0,0,.18)"/>`;
-    case "text": return `<rect class="rm-shape" width="${w}" height="${h}" fill="transparent"/>`;
-    default: return `<rect class="rm-shape" width="${w}" height="${h}" rx="6" fill="${fill}"/>`;
+    case "circle": return { tag: "ellipse", a: `cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}"` };
+    case "pill": return { tag: "rect", a: `width="${w}" height="${h}" rx="${h / 2}"` };
+    case "tag": return { tag: "path", a: `d="M12,0 H${w - h / 2} L${w},${h / 2} L${w - h / 2},${h} H12 Q0,${h} 0,${h - 12} V12 Q0,0 12,0 Z"` };
+    case "milestone": return { tag: "path", a: `d="M${w / 2},0 L${w},${h / 2} L${w / 2},${h} L0,${h / 2} Z"` };
+    case "hub": return { tag: "rect", a: `width="${w}" height="${h}" rx="18"` };
+    case "text": return { tag: "rect", a: `width="${w}" height="${h}" rx="6"` };
+    default: return { tag: "rect", a: `width="${w}" height="${h}" rx="12"` };
   }
+}
+function shapeSvg(n) {
+  const c = accent(n), o = outline(n), w = n.w, h = n.h;
+  if (n.kind === "text") return `<${o.tag} class="rm-shape" ${o.a} fill="transparent"/>`;
+  let s = `<${o.tag} class="rm-shape rm-card" ${o.a} fill="var(--rm-card)" stroke="${c}" stroke-opacity=".55" stroke-width="1.2" style="--glow:${c}"/>`;
+  s += `<${o.tag} ${o.a} fill="url(#${gid(c)})" pointer-events="none"/>`;
+  if (n.kind === "box" || n.kind === "note") s += `<rect x="0" y="10" width="3" height="${h - 20}" rx="1.5" fill="${c}" pointer-events="none"/>`;
+  if (n.kind === "hub") s += `<rect x="1" y="1" width="${w - 2}" height="3" rx="1.5" fill="${c}" pointer-events="none" opacity=".9"/>`;
+  if (n.kind === "square") {
+    const k = 16, b = `stroke="${c}" stroke-width="2.4" fill="none" stroke-linecap="round" pointer-events="none"`;
+    s += `<path d="M0,${k} V0 H${k} M${w - k},0 H${w} V${k} M${w},${h - k} V${h} H${w - k} M${k},${h} H0 V${h - k}" ${b}/>`;
+  }
+  if (n.kind === "circle") {
+    s += `<ellipse class="rm-orbit" cx="${w / 2}" cy="${h / 2}" rx="${w / 2 + 12}" ry="${h / 2 + 12}" fill="none" stroke="${c}" stroke-opacity=".45" stroke-dasharray="2 10" stroke-linecap="round" pointer-events="none"/>`;
+    s += `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2 - 14}" ry="${h / 2 - 14}" fill="none" stroke="${c}" stroke-opacity=".18" pointer-events="none"/>`;
+  }
+  if (n.kind === "note") s += `<path d="M${w - 18},0 H${w} V18" fill="none" stroke="${c}" stroke-opacity=".6" pointer-events="none"/>`;
+  return s;
 }
 
 function textSvg(n) {
-  const ink = n.kind === "text" ? "var(--ink)" : inkFor(n.color);
+  const c = accent(n);
   const lines = String(n.text || "").split("\n");
-  const big = n.kind === "circle" || n.kind === "hub" || n.kind === "square";
-  const fs = n.fs || (big ? 24 : n.kind === "note" ? 15 : 18);
-  const lh = fs * 1.3;
-  const iconPad = n.icon && (n.kind === "pill" || n.kind === "box") ? 0 : 0;
-  const tx = n.kind === "tag" ? (n.w - n.h / 2) / 2 : n.kind === "note" ? 14 : n.w / 2 + iconPad;
-  const anchor = n.kind === "note" ? "start" : "middle";
-  const y0 = n.kind === "note" ? 26 : n.h / 2 - ((lines.length - 1) * lh) / 2;
-  const weight = n.kind === "hub" ? 800 : big ? 600 : 500;
-  return `<text class="rm-txt" x="${tx}" y="${y0}" fill="${ink}" font-size="${fs}" font-weight="${weight}" text-anchor="${anchor}" dominant-baseline="central">${
+  const big = n.kind === "circle" || n.kind === "hub" || n.kind === "square" || n.kind === "milestone";
+  const fs = n.fs || (n.kind === "hub" ? 22 : big ? 19 : n.kind === "note" ? 14 : 16);
+  const lh = fs * 1.28;
+  const cap = n.kind === "text" ? "" : (n.sub ?? (n.kind === "circle" ? "" : KINDS[n.kind].label));
+  const hasIcon = n.icon && (n.kind === "pill" || n.kind === "box" || n.kind === "tag");
+  const left = n.kind === "note" || (hasIcon && n.kind !== "tag") || n.kind === "box";
+  const tx = n.kind === "note" ? 16 : n.kind === "box" ? 18 + (hasIcon ? 38 : 0) : hasIcon ? n.h * 0.5 + 28 : n.kind === "tag" ? (n.w - n.h / 2) / 2 : n.w / 2;
+  const anchor = left || (hasIcon && n.kind === "pill") ? "start" : "middle";
+  const block = lines.length * lh + (cap ? 16 : 0);
+  let y0 = n.kind === "note" ? 22 : n.h / 2 - block / 2 + (cap ? 16 : 0) + lh / 2;
+  let s = "";
+  if (cap && n.kind !== "milestone") {
+    s += `<text class="rm-cap" x="${tx}" y="${y0 - lh / 2 - 6}" fill="${c}" text-anchor="${anchor}" dominant-baseline="central">${esc(String(cap).toUpperCase())}</text>`;
+  } else if (n.kind === "milestone") { y0 = n.h / 2 - ((lines.length - 1) * lh) / 2; }
+  s += `<text class="rm-txt" x="${tx}" y="${y0}" fill="var(--ink)" font-size="${fs}" font-weight="${n.kind === "hub" ? 700 : 600}" text-anchor="${anchor}" dominant-baseline="central">${
     lines.map((l, i) => `<tspan x="${tx}" dy="${i ? lh : 0}">${esc(l) || " "}</tspan>`).join("")}</text>`;
+  return s;
 }
 
 function decoSvg(n) {
+  const c = accent(n);
   let s = "";
-  if (n.kind === "hub") s += `<text x="22" y="${n.h / 2}" font-size="22" dominant-baseline="central" fill="${inkFor(n.color)}">★</text>`;
   if (n.icon) {
-    const inside = n.kind === "pill" || n.kind === "box";
-    s += inside
-      ? `<circle cx="${n.w - n.h / 2}" cy="${n.h / 2}" r="${n.h * 0.34}" fill="rgba(255,255,255,.55)"/><text class="rm-emo" x="${n.w - n.h / 2}" y="${n.h / 2 + 1}" font-size="${n.h * 0.36}" text-anchor="middle" dominant-baseline="central">${esc(n.icon)}</text>`
-      : `<text class="rm-emo" x="-14" y="${n.h / 2}" font-size="30" text-anchor="end" dominant-baseline="central">${esc(n.icon)}</text>`;
+    if (n.kind === "pill" || n.kind === "box" || n.kind === "tag") {
+      const r = Math.min(17, n.h * 0.3), cx = n.kind === "box" ? 18 + r : n.kind === "tag" ? 14 + r : n.h * 0.5, cy = n.h / 2;
+      s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${c}" fill-opacity=".16" stroke="${c}" stroke-opacity=".5"/>${iconSvg(n.icon, cx, cy, r * 1.05, c)}`;
+    } else s += iconSvg(n.icon, n.w / 2, n.kind === "circle" ? n.h * 0.27 : 28, 24, c);
   }
   if (n.num) {
-    const col = STATUS_COLOR[n.status] || "#ef4444";
-    s += `<g class="rm-num"><circle cx="0" cy="${n.kind === "circle" || n.kind === "milestone" ? n.h / 2 : 0}" r="15" fill="${col}" stroke="var(--rm-bg)" stroke-width="3"/><text x="0" y="${n.kind === "circle" || n.kind === "milestone" ? n.h / 2 : 0}" font-size="14" font-weight="800" fill="#fff" text-anchor="middle" dominant-baseline="central">${n.num}</text></g>`;
+    const col = STATUS_COLOR[n.status] || c;
+    const y = n.kind === "circle" || n.kind === "milestone" ? n.h / 2 - 12 : -12;
+    s += `<g class="rm-num" transform="translate(-12,${y})"><rect width="24" height="24" rx="7" fill="var(--rm-card)" stroke="${col}"/><text x="12" y="12.5" font-size="12" font-weight="700" fill="${col}" text-anchor="middle" dominant-baseline="central">${String(n.num).padStart(2, "0")}</text></g>`;
   }
   if (n.status) {
     const col = STATUS_COLOR[n.status];
     const label = STATUS[n.status] + (n.due ? ` · ${fmtDue(n.due)}` : "");
-    const w = label.length * 7.4 + 22;
-    s += `<g class="rm-st ${n.status}" transform="translate(${n.w / 2 - w / 2},${n.h + 8})"><rect width="${w}" height="22" rx="11" fill="${col}22" stroke="${col}"/><circle cx="11" cy="11" r="4" fill="${col}"${n.status === "work" ? ' class="rm-blink"' : ""}/><text x="20" y="11.5" font-size="12" font-weight="600" fill="${col}" dominant-baseline="central">${esc(label)}</text></g>`;
+    const w = label.length * 6.6 + 24;
+    s += `<g class="rm-st ${n.status}" transform="translate(${n.w / 2 - w / 2},${n.h + 10})"><rect width="${w}" height="20" rx="10" fill="var(--rm-card)" stroke="${col}" stroke-opacity=".5"/><circle cx="11" cy="10" r="3.5" fill="${col}"${n.status === "work" ? ' class="rm-blink"' : ""}/><text x="20" y="10.5" font-size="11" font-weight="600" fill="${col}" dominant-baseline="central">${esc(label)}</text></g>`;
     if (n.status === "work") s += `<g class="rm-ring">${ringSvg(n, col)}</g>`;
   } else if (n.due) {
-    s += `<text x="${n.w / 2}" y="${n.h + 18}" font-size="12" fill="var(--ink-dim)" text-anchor="middle">${esc(fmtDue(n.due))}</text>`;
+    s += `<text x="${n.w / 2}" y="${n.h + 18}" font-size="11" fill="var(--ink-dim)" text-anchor="middle">${esc(fmtDue(n.due))}</text>`;
   }
   return s;
 }
 function ringSvg(n, col) {
-  const p = 6;
-  if (n.kind === "circle") return `<ellipse cx="${n.w / 2}" cy="${n.h / 2}" rx="${n.w / 2 + p}" ry="${n.h / 2 + p}" fill="none" stroke="${col}" stroke-width="2"/>`;
-  return `<rect x="${-p}" y="${-p}" width="${n.w + 2 * p}" height="${n.h + 2 * p}" rx="${n.kind === "pill" ? n.h / 2 + p : 10}" fill="none" stroke="${col}" stroke-width="2"/>`;
+  const p = 5;
+  if (n.kind === "circle") return `<ellipse cx="${n.w / 2}" cy="${n.h / 2}" rx="${n.w / 2 + p}" ry="${n.h / 2 + p}" fill="none" stroke="${col}" stroke-width="1.5"/>`;
+  if (n.kind === "milestone") return "";
+  return `<rect x="${-p}" y="${-p}" width="${n.w + 2 * p}" height="${n.h + 2 * p}" rx="${n.kind === "pill" ? n.h / 2 + p : 16}" fill="none" stroke="${col}" stroke-width="1.5"/>`;
 }
 function fmtDue(d) {
   const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -246,15 +300,17 @@ function render() {
   const { data } = st.map;
   const svg = st.svg;
   const byId = new Map(data.nodes.map(n => [n.id, n]));
-  const colors = new Set(data.edges.map(e => e.color || "#cbd5e1"));
+  const colors = new Set(data.edges.map(e => e.color || "#64748b"));
   const defs = [...colors].map(c => `
-    <marker id="${markerId(c)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L10,5 L0,10 L2.5,5 Z" fill="${c}"/></marker>
-    <marker id="${markerId(c, 1)}" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M10,0 L0,5 L10,10 L7.5,5 Z" fill="${c}"/></marker>`).join("");
+    <marker id="${markerId(c)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L10,5 L0,9 L3,5 Z" fill="${c}"/></marker>
+    <marker id="${markerId(c, 1)}" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,1 L0,5 L10,9 L7,5 Z" fill="${c}"/></marker>`).join("");
+  const ncol = new Set(data.nodes.map(accent));
+  const grads = [...ncol].map(c => `<linearGradient id="rm-g-${c.replace(/[^a-z0-9]/gi, "")}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".22"/><stop offset=".55" stop-color="${c}" stop-opacity=".05"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`).join("");
   const intro = st.intro;
   let order = 0;
   const nodesSvg = [...data.nodes].sort((a, b) => (a.kind === "note") - (b.kind === "note")).map(n => {
     const sel = st.sel.has(n.id);
-    const d = order++ * 70;
+    const d = order++ * 45;
     return `<g class="rm-node k-${n.kind}${sel ? " sel" : ""}" data-id="${n.id}" transform="translate(${n.x},${n.y})">
       <g class="rm-in" style="--d:${d}ms">
         ${shapeSvg(n)}${textSvg(n)}${decoSvg(n)}
@@ -269,20 +325,20 @@ function render() {
     const A = byId.get(e.from), B = byId.get(e.to);
     if (!A || !B) return "";
     const g = edgeGeom(e, A, B);
-    const col = e.color || "#cbd5e1";
+    const col = e.color || "#64748b";
     const sel = st.selEdge === e.id;
     const dash = dashFor(e.style);
     const me = e.arrows !== "none" ? ` marker-end="url(#${markerId(col)})"` : "";
     const ms = e.arrows === "both" ? ` marker-start="url(#${markerId(col, 1)})"` : "";
     const dur = 2.4;
-    return `<g class="rm-edge${sel ? " sel" : ""}${e.flow ? " flow" : ""}" data-edge="${e.id}" style="--d:${300 + i * 60}ms">
+    return `<g class="rm-edge${sel ? " sel" : ""}${e.flow ? " flow" : ""}" data-edge="${e.id}" style="--d:${200 + i * 35}ms">
       <path class="rm-hit" d="${g.d}"/>
-      <path class="rm-line" d="${g.d}" stroke="${col}" stroke-width="${e.w || 2.4}" stroke-dasharray="${dash}" stroke-linecap="round" fill="none"${me}${ms}/>
-      ${e.flow && st.anim ? `<circle class="rm-spark" r="4" fill="${col}"><animateMotion dur="${dur}s" repeatCount="indefinite" begin="${(i * 0.37) % dur}s" path="${g.d}"/></circle>` : ""}
+      <path class="rm-line" d="${g.d}" stroke="${col}" stroke-width="${e.w || 1.6}" stroke-dasharray="${dash}" stroke-linecap="round" fill="none"${me}${ms}/>
+      ${e.flow && st.anim ? `<circle class="rm-spark" r="3" fill="${col}"><animateMotion dur="${dur}s" repeatCount="indefinite" begin="${(i * 0.37) % dur}s" path="${g.d}"/></circle>` : ""}
       ${e.label ? `<text class="rm-elabel" x="${g.mid.x}" y="${g.mid.y}" text-anchor="middle" dominant-baseline="central">${esc(e.label)}</text>` : ""}
     </g>`;
   }).join("");
-  svg.innerHTML = `<defs>${defs}
+  svg.innerHTML = `<defs>${defs}${grads}
       <pattern id="rm-grid" width="${GRID}" height="${GRID}" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="var(--rm-dot)"/></pattern>
       <filter id="rm-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     </defs>
@@ -340,13 +396,14 @@ function renderInspector() {
   if (n) {
     box.innerHTML = `<h4>${esc(KINDS[n.kind].label)}</h4>
       <div class="rm-f"><label>Текст</label><textarea data-k="text" rows="2">${esc(n.text)}</textarea></div>
+      <div class="rm-f"><label>Надпись над текстом</label><input data-k="sub" value="${esc(n.sub ?? KINDS[n.kind].label)}" placeholder="пусто — без надписи"></div>
       <div class="rm-f"><label>Форма</label><select data-k="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === n.kind ? " selected" : ""}>${v.label}</option>`).join("")}</select></div>
       <div class="rm-f"><label>Цвет</label>${swatches("color", n.color)}</div>
       <div class="rm-f two"><div><label>Номер</label><input data-k="num" type="number" min="0" max="99" value="${n.num || ""}"></div>
         <div><label>Шрифт</label><input data-k="fs" type="number" min="10" max="60" placeholder="авто" value="${n.fs || ""}"></div></div>
       <div class="rm-f"><label>Статус этапа</label><div class="rm-seg st">${Object.entries(STATUS).map(([k, v]) => `<button data-set="status" data-v="${k}" class="${(n.status || "") === k ? "on" : ""} ${k}">${v}</button>`).join("")}</div></div>
       <div class="rm-f"><label>Срок</label><input data-k="due" type="date" value="${esc(n.due || "")}"></div>
-      <div class="rm-f"><label>Иконка</label><div class="rm-icons">${ICONS.map(i => `<button data-set="icon" data-v="${i}" class="${(n.icon || "") === i ? "on" : ""}">${i || "—"}</button>`).join("")}</div></div>
+      <div class="rm-f"><label>Иконка</label><div class="rm-icons">${ICONS.map(i => `<button data-set="icon" data-v="${i}" class="${iconKey(n.icon || "") === i ? "on" : ""}" title="${i || "без иконки"}">${i ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[i]}</svg>` : "—"}</button>`).join("")}</div></div>
       <div class="rm-f"><label>Ветки (по строке)</label><textarea data-k="items" rows="3" placeholder="Главная&#10;Контакты">${esc((n.items || []).join("\n"))}</textarea>
         <div class="rm-seg sm"><button data-set="itemsSide" data-v="left" class="${n.itemsSide === "left" ? "on" : ""}">← слева</button><button data-set="itemsSide" data-v="right" class="${n.itemsSide !== "left" ? "on" : ""}">справа →</button></div></div>
       <div class="rm-f two"><div><label>Ширина</label><input data-k="w" type="number" min="40" value="${n.w}"></div><div><label>Высота</label><input data-k="h" type="number" min="24" value="${n.h}"></div></div>
@@ -360,7 +417,7 @@ function renderInspector() {
       <div class="rm-f"><label>Форма</label><div class="rm-seg">${[["straight", "Прямая"], ["curve", "Плавная"], ["elbow", "Ломаная"]].map(([k, v]) => `<button data-eset="curve" data-v="${k}" class="${e.curve === k ? "on" : ""}">${v}</button>`).join("")}</div></div>
       <div class="rm-f"><label>Стрелки</label><div class="rm-seg">${[["end", "→"], ["both", "↔"], ["none", "—"]].map(([k, v]) => `<button data-eset="arrows" data-v="${k}" class="${e.arrows === k ? "on" : ""}">${v}</button>`).join("")}</div></div>
       <div class="rm-f"><label>Цвет</label>${swatches("ecolor", e.color)}</div>
-      <div class="rm-f two"><div><label>Толщина</label><input data-ek="w" type="number" min="1" max="10" step=".5" value="${e.w || 2.4}"></div>
+      <div class="rm-f two"><div><label>Толщина</label><input data-ek="w" type="number" min="1" max="10" step=".5" value="${e.w || 1.6}"></div>
         <div><label>Поток</label><label class="rm-sw"><input type="checkbox" data-ek="flow"${e.flow ? " checked" : ""}><span>бегущие точки</span></label></div></div>
       <div class="rm-row"><button class="btn ghost" data-act="flip">⇄ Развернуть</button><button class="btn danger" data-act="del">Удалить</button></div>`;
     return;
@@ -933,7 +990,7 @@ export async function loadRoadmap() {
       map: { id: 0, title: "", data: emptyData() }, list: [],
       sel: new Set(), selEdge: null, undo: [], redo: [], last: "{}",
       grid: true, anim: true, tool: "box", drag: null, intro: false,
-      edgeDefaults: { style: "dotted", arrows: "end", curve: "curve", color: "#cbd5e1", flow: true },
+      edgeDefaults: { style: "dotted", arrows: "end", curve: "curve", color: "#64748b", flow: true },
     };
     bindCanvas();
     bindInspector();

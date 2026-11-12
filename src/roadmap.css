@@ -1,10 +1,10 @@
 /* «Дорожная карта» — редактор схем связей (app/roadmap.js). */
 .rm-wrap {
-  --rm-bg: #0e0f14; --rm-dot: rgba(255, 255, 255, .09); --rm-branch: rgba(148, 163, 184, .55); --rm-panel: rgba(22, 23, 30, .82);
+  --rm-bg: #0a0b10; --rm-card: #12131a; --rm-dot: rgba(255, 255, 255, .06); --rm-branch: rgba(148, 163, 184, .55); --rm-panel: rgba(22, 23, 30, .82);
   --rm-acc: #7c5cff;
   display: grid; grid-template-columns: 250px 1fr; gap: 14px; height: calc(100vh - 120px); min-height: 520px; padding: 4px 4px 12px;
 }
-:root[data-theme="light"] .rm-wrap { --rm-bg: #f7f7fb; --rm-dot: rgba(20, 20, 50, .12); --rm-branch: rgba(71, 85, 105, .5); --rm-panel: rgba(255, 255, 255, .9); }
+:root[data-theme="light"] .rm-wrap { --rm-card: #ffffff; --rm-bg: #f7f7fb; --rm-dot: rgba(20, 20, 50, .12); --rm-branch: rgba(71, 85, 105, .5); --rm-panel: rgba(255, 255, 255, .9); }
 
 .rm-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .rm-side-h { font-weight: 800; font-size: 16px; letter-spacing: .01em; }
@@ -47,8 +47,8 @@
 .rm-tool[data-cmd] svg { stroke: currentColor; }
 .rm-sep { height: 1px; background: var(--line); margin: 4px 2px; }
 
-.rm-canvas { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: var(--rm-bg);
-  background-image: radial-gradient(1200px 500px at 15% -10%, rgba(124, 92, 255, .10), transparent 60%), radial-gradient(900px 500px at 110% 110%, rgba(56, 217, 232, .08), transparent 60%); }
+.rm-canvas { position: relative; border-radius: 16px; box-shadow: inset 0 0 120px rgba(0, 0, 0, .5); overflow: hidden; border: 1px solid var(--line); background: var(--rm-bg);
+  background-image: radial-gradient(1200px 500px at 15% -10%, rgba(124, 92, 255, .07), transparent 60%), radial-gradient(900px 500px at 110% 110%, rgba(56, 189, 248, .05), transparent 60%); }
 #rm-svg { width: 100%; height: 100%; display: block; cursor: default; user-select: none; touch-action: none; font-family: inherit; }
 #rm-svg.panning { cursor: grabbing; }
 .rm-zoombar { position: absolute; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 11px; background: var(--rm-panel); border: 1px solid var(--line); backdrop-filter: blur(10px); font-size: 12px; }
@@ -59,8 +59,12 @@
 /* узлы */
 .rm-node { cursor: grab; }
 .rm-node .rm-in { transform-box: fill-box; transform-origin: center; }
-.rm-node .rm-shape { filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .28)); transition: filter .2s; }
-.rm-node:hover .rm-shape { filter: drop-shadow(0 8px 22px rgba(0, 0, 0, .38)) brightness(1.06); }
+.rm-node .rm-card { filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .45)) drop-shadow(0 0 14px color-mix(in srgb, var(--glow) 22%, transparent)); transition: filter .25s, stroke-opacity .25s; }
+.rm-node:hover .rm-card, .rm-node.sel .rm-card { filter: drop-shadow(0 12px 28px rgba(0, 0, 0, .5)) drop-shadow(0 0 22px color-mix(in srgb, var(--glow) 45%, transparent)); stroke-opacity: 1; }
+.rm-cap { font-size: 10px; font-weight: 700; letter-spacing: .14em; opacity: .85; pointer-events: none; }
+.rm-orbit { transform-box: fill-box; transform-origin: center; }
+.anim .rm-orbit { animation: rm-spin 40s linear infinite; }
+@keyframes rm-spin { to { transform: rotate(360deg); } }
 .rm-node.k-text .rm-shape, .rm-node.k-text:hover .rm-shape { filter: none; }
 .rm-emo { font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; pointer-events: none; }
 .rm-txt { pointer-events: none; letter-spacing: .005em; }
@@ -76,11 +80,11 @@
 /* связи */
 .rm-hit { stroke: transparent; stroke-width: 16; fill: none; cursor: pointer; }
 .rm-edge .rm-line { transition: stroke-width .15s; pointer-events: none; }
-.rm-edge:hover .rm-line { stroke-width: 3.4; }
-.rm-edge.sel .rm-line { filter: url(#rm-glow); stroke-width: 3.4; }
+.rm-edge:hover .rm-line { stroke-width: 2.6; }
+.rm-edge.sel .rm-line { filter: url(#rm-glow); stroke-width: 2.6; }
 .anim .rm-edge.flow .rm-line { animation: rm-flow 1.1s linear infinite; }
 .rm-spark { filter: url(#rm-glow); pointer-events: none; }
-.rm-elabel { font-size: 13px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--rm-bg); stroke-width: 6px; stroke-linejoin: round; font-style: italic; pointer-events: none; }
+.rm-elabel { font-size: 12px; letter-spacing: .02em; fill: var(--ink-soft); paint-order: stroke; stroke: var(--rm-bg); stroke-width: 6px; stroke-linejoin: round; pointer-events: none; }
 .rm-ghost { stroke: var(--rm-acc); stroke-width: 2.4; stroke-dasharray: 3 6; fill: none; stroke-linecap: round; animation: rm-flow .6s linear infinite; }
 .rm-target { fill: color-mix(in srgb, var(--rm-acc) 10%, transparent); stroke: var(--rm-acc); stroke-width: 2; }
 .rm-marq { fill: color-mix(in srgb, var(--rm-acc) 10%, transparent); stroke: var(--rm-acc); stroke-dasharray: 4 3; }
@@ -123,8 +127,9 @@
 .rm-swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px var(--rm-acc); }
 .rm-sw-row input[type=color] { width: 26px; height: 24px; border: 0; padding: 0; background: none; cursor: pointer; }
 .rm-icons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
-.rm-icons button { font-family: "Segoe UI Emoji", sans-serif; font-size: 15px; height: 30px; border-radius: 7px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); cursor: pointer; color: var(--ink-dim); }
-.rm-icons button.on { border-color: var(--rm-acc); background: color-mix(in srgb, var(--rm-acc) 20%, transparent); }
+.rm-icons button { display: grid; place-items: center; font-size: 15px; height: 30px; border-radius: 7px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); cursor: pointer; color: var(--ink-dim); }
+.rm-icons button:hover { color: var(--ink); }
+.rm-icons button.on { color: var(--ink); border-color: var(--rm-acc); background: color-mix(in srgb, var(--rm-acc) 20%, transparent); }
 .rm-sw { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); text-transform: none !important; letter-spacing: 0 !important; padding-top: 6px; }
 .rm-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .rm-row .btn { flex: 1; }
