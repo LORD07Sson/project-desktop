@@ -82,18 +82,14 @@
 .rm-edge .rm-line { transition: stroke-width .15s; pointer-events: none; }
 .rm-edge:hover .rm-line { stroke-width: 2.6; }
 .rm-edge.sel .rm-line { filter: url(#rm-glow); stroke-width: 2.6; }
-.anim .rm-edge.flow .rm-line { animation: rm-flow 1.1s linear infinite; }
-.rm-spark { filter: url(#rm-glow); pointer-events: none; }
-.rm-elabel { font-size: 12px; letter-spacing: .02em; fill: var(--ink-soft); paint-order: stroke; stroke: var(--rm-bg); stroke-width: 6px; stroke-linejoin: round; pointer-events: none; }
+.rm-elabel { pointer-events: none; }
+.rm-elabel rect { fill: var(--rm-card); stroke: rgba(255, 255, 255, .1); }
+.rm-elabel text { font-size: 11.5px; font-weight: 500; letter-spacing: .01em; fill: var(--ink-soft); }
 .rm-ghost { stroke: var(--rm-acc); stroke-width: 2.4; stroke-dasharray: 3 6; fill: none; stroke-linecap: round; animation: rm-flow .6s linear infinite; }
 .rm-target { fill: color-mix(in srgb, var(--rm-acc) 10%, transparent); stroke: var(--rm-acc); stroke-width: 2; }
 .rm-marq { fill: color-mix(in srgb, var(--rm-acc) 10%, transparent); stroke: var(--rm-acc); stroke-dasharray: 4 3; }
 
 /* появление (кнопка ▶ и открытие карты) */
-.intro .rm-in { animation: rm-pop .6s cubic-bezier(.2, .9, .3, 1.25) both; animation-delay: var(--d); }
-.intro .rm-edge { animation: rm-fade .7s ease-out both; animation-delay: var(--d); }
-.intro .rm-edge .rm-line { animation: rm-draw 1s ease-out both; animation-delay: var(--d); }
-.intro .rm-item { animation: rm-slide .5s ease-out both; animation-delay: calc(var(--d) + 400ms); }
 @keyframes rm-pop { from { opacity: 0; transform: scale(.4) translateY(20px); } 70% { opacity: 1; transform: scale(1.05); } to { transform: none; } }
 @keyframes rm-fade { from { opacity: 0; } }
 @keyframes rm-draw { from { stroke-dashoffset: 300; opacity: 0; } 30% { opacity: 1; } }
@@ -190,3 +186,56 @@
 .ro .rm-tools, .ro [data-cmd="delmap"], .ro .rm-insp, .ro .rm-port, .ro .rm-resize { display: none; }
 .ro .rm-stage { grid-template-columns: 1fr; }
 .ro .rm-title { pointer-events: none; }
+
+/* ===== живая схема: связи ===== */
+.rm-edge .rm-line { opacity: .55; transition: opacity .25s, stroke-width .2s; }
+.rm-edge.auto .rm-line { opacity: .65; }
+.rm-edge:hover .rm-line, .rm-edge.sel .rm-line { opacity: 1; }
+.rm-drawin { opacity: 0; pointer-events: none; }
+.rm-comet { pointer-events: none; stroke-dasharray: 9 91; stroke-dashoffset: 100; opacity: 0; filter: url(#rm-soft); }
+.anim .rm-comet { opacity: .95; animation: rm-comet var(--dur, 2.4s) linear infinite; animation-delay: var(--off, 0s); }
+@keyframes rm-comet { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+.anim .rm-edge.flow .rm-line[stroke-dasharray]:not([stroke-dasharray=""]) { animation: rm-flow 1.6s linear infinite; }
+
+/* ===== волна появления от центра ===== */
+.intro .rm-in { animation: rm-rise .85s cubic-bezier(.16, 1, .3, 1) both; animation-delay: var(--d); }
+.intro .rm-in .rm-card { animation: rm-flare 1.1s ease-out both; animation-delay: var(--d); }
+.intro .rm-edge .rm-line, .intro .rm-edge .rm-elabel, .intro .rm-edge .rm-comet { animation: rm-fadein .5s ease-out both; animation-delay: calc(var(--d) + 520ms); }
+.intro .rm-edge .rm-drawin { animation: rm-drawin .75s cubic-bezier(.65, 0, .35, 1) both; animation-delay: var(--d); }
+.intro .rm-item .rm-branch { stroke-dasharray: 1; animation: rm-branch .6s cubic-bezier(.65, 0, .35, 1) both; animation-delay: var(--d); }
+.intro .rm-item circle, .intro .rm-item text { animation: rm-fadein .45s ease-out both; animation-delay: calc(var(--d) + 380ms); }
+@keyframes rm-rise { from { opacity: 0; transform: translateY(18px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes rm-flare { 0% { stroke-opacity: 0; } 35% { stroke-opacity: 1; stroke-width: 2.4; } 100% { stroke-opacity: .55; } }
+@keyframes rm-fadein { from { opacity: 0; } }
+@keyframes rm-drawin { 0% { opacity: 1; stroke-dasharray: 1; stroke-dashoffset: 1; } 80% { opacity: 1; stroke-dasharray: 1; stroke-dashoffset: 0; } 100% { opacity: 0; stroke-dasharray: 1; stroke-dashoffset: 0; } }
+@keyframes rm-branch { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* ===== фокус при наведении ===== */
+#rm-svg .rm-node, #rm-svg .rm-edge, #rm-svg .rm-item { transition: opacity .28s ease; }
+#rm-svg.focus .rm-node:not(.hl):not(.k-frame), #rm-svg.focus .rm-item:not(.hl) { opacity: .22; }
+#rm-svg.focus .rm-edge:not(.hl) { opacity: .1; }
+#rm-svg.focus .rm-edge.hl .rm-line { opacity: 1; stroke-width: 2.4; }
+.rm-node .rm-in { transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+.rm-node.hl:hover .rm-in, .rm-node:hover .rm-in { transform: translateY(-2px); }
+
+/* ===== статусы служб ===== */
+.anim .rm-st.down rect { animation: rm-alarm 1.2s ease-in-out infinite; }
+.anim .rm-st.up circle { animation: rm-breath 2.6s ease-in-out infinite; }
+@keyframes rm-alarm { 50% { fill: rgba(239, 68, 68, .35); } }
+@keyframes rm-breath { 50% { opacity: .35; } }
+
+/* ===== мини-карта ===== */
+.rm-mini { position: absolute; right: 12px; bottom: 54px; padding: 5px; opacity: .72; transition: opacity .2s; border-radius: 12px; background: var(--rm-panel); border: 1px solid var(--line); backdrop-filter: blur(10px); cursor: pointer; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+.rm-mini[hidden] { display: none; }
+.rm-mini svg { display: block; }
+.rm-mini-vp { fill: color-mix(in srgb, var(--rm-acc) 14%, transparent); stroke: var(--rm-acc); stroke-width: 1.2; }
+
+/* ===== фон: медленное «северное сияние» и сетка, которая гаснет при отдалении ===== */
+.rm-canvas::before { content: ""; position: absolute; inset: -20%; pointer-events: none; opacity: .55;
+  background: radial-gradient(40% 35% at 20% 20%, rgba(124, 92, 255, .16), transparent 70%), radial-gradient(35% 30% at 80% 75%, rgba(56, 189, 248, .11), transparent 70%), radial-gradient(30% 30% at 60% 30%, rgba(236, 72, 153, .07), transparent 70%); }
+.anim .rm-canvas::before, .rm-wrap.anim .rm-canvas::before { animation: rm-aurora 28s ease-in-out infinite alternate; }
+@keyframes rm-aurora { to { transform: translate(6%, -4%) rotate(8deg) scale(1.08); } }
+.rm-canvas > #rm-svg { position: relative; }
+.rm-gridbg { transition: opacity .3s; }
+.far .rm-gridbg { opacity: .35; }
+.rm-mini:hover { opacity: 1; }

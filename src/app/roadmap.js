@@ -168,22 +168,30 @@ function sidePoint(n, side) {
 function edgeGeom(e, A, B) {
   const ca = center(A), cb = center(B);
   const dx = cb.x - ca.x, dy = cb.y - ca.y;
-  const horiz = Math.abs(dx) >= Math.abs(dy);
+  // Соседей по горизонтали соединяем боковыми сторонами даже при заметном перепаде по высоте — так линии не
+  // втыкаются в верх и низ карточек и не пересекают их.
+  const horiz = Math.abs(dx) >= Math.abs(dy) * 0.6 || Math.abs(dx) > (A.w + B.w) / 2 + 60;
   if (e.curve === "straight") {
     const a = border(A, dx, dy), b = border(B, -dx, -dy);
-    return { d: `M${a.x},${a.y} L${b.x},${b.y}`, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+    return { d: `M${a.x},${a.y} L${b.x},${b.y}`, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, a, b };
   }
   const a = sidePoint(A, horiz ? (dx > 0 ? "r" : "l") : (dy > 0 ? "b" : "t"));
   const b = sidePoint(B, horiz ? (dx > 0 ? "l" : "r") : (dy > 0 ? "t" : "b"));
   if (e.curve === "elbow") {
-    if (horiz) { const mx = (a.x + b.x) / 2; return { d: `M${a.x},${a.y} H${mx} V${b.y} H${b.x}`, mid: { x: mx, y: (a.y + b.y) / 2 } }; }
-    const my = (a.y + b.y) / 2; return { d: `M${a.x},${a.y} V${my} H${b.x} V${b.y}`, mid: { x: (a.x + b.x) / 2, y: my } };
+    // Ломаная со скруглёнными углами (r = 14), а не острыми.
+    const r = 14;
+    if (horiz) {
+      const mx = (a.x + b.x) / 2, sy = Math.sign(b.y - a.y) || 1, sx = Math.sign(b.x - a.x) || 1, rr = Math.min(r, Math.abs(b.y - a.y) / 2, Math.abs(mx - a.x));
+      return { d: `M${a.x},${a.y} H${mx - sx * rr} Q${mx},${a.y} ${mx},${a.y + sy * rr} V${b.y - sy * rr} Q${mx},${b.y} ${mx + sx * rr},${b.y} H${b.x}`, mid: { x: mx, y: (a.y + b.y) / 2 }, a, b };
+    }
+    const my = (a.y + b.y) / 2, sx = Math.sign(b.x - a.x) || 1, sy = Math.sign(b.y - a.y) || 1, rr = Math.min(r, Math.abs(b.x - a.x) / 2, Math.abs(my - a.y));
+    return { d: `M${a.x},${a.y} V${my - sy * rr} Q${a.x},${my} ${a.x + sx * rr},${my} H${b.x - sx * rr} Q${b.x},${my} ${b.x},${my + sy * rr} V${b.y}`, mid: { x: (a.x + b.x) / 2, y: my }, a, b };
   }
   const k = horiz ? Math.abs(b.x - a.x) / 2 : Math.abs(b.y - a.y) / 2;
   const c1 = horiz ? { x: a.x + Math.sign(dx) * k, y: a.y } : { x: a.x, y: a.y + Math.sign(dy) * k };
   const c2 = horiz ? { x: b.x - Math.sign(dx) * k, y: b.y } : { x: b.x, y: b.y - Math.sign(dy) * k };
   const mid = { x: (a.x + 3 * c1.x + 3 * c2.x + b.x) / 8, y: (a.y + 3 * c1.y + 3 * c2.y + b.y) / 8 };
-  return { d: `M${a.x},${a.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${b.x},${b.y}`, mid };
+  return { d: `M${a.x},${a.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${b.x},${b.y}`, mid, a, b };
 }
 
 // ---------- отрисовка ----------
@@ -219,6 +227,7 @@ function shapeSvg(n) {
   }
   let s = `<${o.tag} class="rm-shape rm-card" ${o.a} fill="var(--rm-card)" stroke="${c}" stroke-opacity=".55" stroke-width="1.2" style="--glow:${c}"/>`;
   s += `<${o.tag} ${o.a} fill="url(#${gid(c)})" pointer-events="none"/>`;
+  if (n.kind !== "milestone" && n.kind !== "circle") s += `<${o.tag} ${o.a} fill="url(#rm-sheen)" pointer-events="none"/>`;
   if (n.kind === "box" || n.kind === "note") s += `<rect x="0" y="10" width="3" height="${h - 20}" rx="1.5" fill="${c}" pointer-events="none"/>`;
   if (n.kind === "hub") s += `<rect x="1" y="1" width="${w - 2}" height="3" rx="1.5" fill="${c}" pointer-events="none" opacity=".9"/>`;
   if (n.kind === "square") {
@@ -236,7 +245,7 @@ function shapeSvg(n) {
 function textSvg(n) {
   if (n.kind === "frame") {
     const c = accent(n);
-    return `<text class="rm-cap" x="18" y="-12" fill="${c}" dominant-baseline="central">${esc(String(n.sub ?? "ГРУППА").toUpperCase())}</text><text class="rm-txt" x="18" y="22" fill="var(--ink)" font-size="${n.fs || 18}" font-weight="700" dominant-baseline="central">${esc(n.text || "")}</text>`;
+    return `${n.sub ? `<text class="rm-cap" x="18" y="-12" fill="${c}" dominant-baseline="central">${esc(String(n.sub).toUpperCase())}</text>` : ""}<text class="rm-txt" x="18" y="22" fill="var(--ink)" font-size="${n.fs || 18}" font-weight="700" dominant-baseline="central">${esc(n.text || "")}</text>`;
   }
   if (n.kind === "image") return n.text && n.text !== "Картинка" ? `<text class="rm-txt" x="${n.w / 2}" y="${n.h + 16}" fill="var(--ink-soft)" font-size="13" text-anchor="middle" dominant-baseline="central">${esc(n.text)}</text>` : "";
   const c = accent(n);
@@ -307,7 +316,8 @@ function itemsSvg(n, i0) {
   return items.map((t, i) => {
     const y = c.y + (i - (items.length - 1) / 2) * step;
     const d = `M${sx},${sy} C${sx + (left ? -40 : 40)},${sy} ${ex + (left ? 40 : -40)},${y} ${ex},${y}`;
-    return `<g class="rm-item" style="--d:${(i0 + i) * 40}ms"><path d="${d}" fill="none" stroke="var(--rm-branch)" stroke-width="1.5"/><text x="${ex + (left ? -8 : 8)}" y="${y}" font-size="14" fill="${t.startsWith("✓") ? "#4ade80" : t.startsWith("✕") ? "#f87171" : t.startsWith("◐") ? "#fbbf24" : "var(--ink-soft)"}" text-anchor="${left ? "end" : "start"}" dominant-baseline="central">${esc(t)}</text></g>`;
+    const ac = accent(n);
+    return `<g class="rm-item" data-of="${n.id}" style="--d:${(i0 || 0) + 260 + i * 35}ms"><path class="rm-branch" d="${d}" pathLength="1" fill="none" stroke="${ac}" stroke-opacity=".45" stroke-width="1.4"/><circle cx="${ex}" cy="${y}" r="2.6" fill="${ac}"/><text x="${ex + (left ? -9 : 9)}" y="${y}" font-size="14" fill="${t.startsWith("✓") ? "#4ade80" : t.startsWith("✕") ? "#f87171" : t.startsWith("◐") ? "#fbbf24" : "var(--ink-soft)"}" text-anchor="${left ? "end" : "start"}" dominant-baseline="central">${esc(t)}</text></g>`;
   }).join("");
 }
 
@@ -346,10 +356,19 @@ function render() {
   const ncol = new Set(data.nodes.map(accent));
   const grads = [...ncol].map(c => `<linearGradient id="rm-g-${c.replace(/[^a-z0-9]/gi, "")}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".22"/><stop offset=".55" stop-color="${c}" stop-opacity=".05"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`).join("");
   const intro = st.intro;
-  let order = 0;
+  const depth = graphDepth(data);
+  const delayOf = new Map();
+  const perLevel = {};
+  for (const n of zOrder(data.nodes)) {
+    const lv = depth.get(n.id) ?? 0;
+    const k = (perLevel[lv] = (perLevel[lv] || 0) + 1) - 1;
+    delayOf.set(n.id, lv * 230 + Math.min(k, 12) * 45);
+  }
+  const accentOf = new Map(data.nodes.map(n => [n.id, accent(n)]));
+  const egrads = [];
   const nodesSvg = zOrder(data.nodes).map(n => {
     const sel = st.sel.has(n.id);
-    const d = order++ * 45;
+    const d = delayOf.get(n.id) || 0;
     return `<g class="rm-node k-${n.kind}${sel ? " sel" : ""}" data-id="${n.id}" transform="translate(${n.x},${n.y})">
       <g class="rm-in" style="--d:${d}ms">
         ${shapeSvg(n)}${textSvg(n)}${decoSvg(n)}
@@ -359,7 +378,7 @@ function render() {
       ${["t", "r", "b", "l"].map(s => { const p = sidePoint({ ...n, x: 0, y: 0 }, s); return `<circle class="rm-port" data-port="${s}" cx="${p.x}" cy="${p.y}" r="6"/>`; }).join("")}
     </g>`;
   }).join("");
-  const itemSvg = data.nodes.map(n => itemsSvg(n, 0)).join("");
+  const itemSvg = data.nodes.map(n => itemsSvg(n, delayOf.get(n.id) || 0)).join("");
   const edgesSvg = data.edges.map((e, i) => {
     const A = byId.get(e.from), B = byId.get(e.to);
     if (!A || !B) return "";
@@ -369,20 +388,34 @@ function render() {
     const dash = dashFor(e.style);
     const me = e.arrows !== "none" ? ` marker-end="url(#${markerId(col)})"` : "";
     const ms = e.arrows === "both" ? ` marker-start="url(#${markerId(col, 1)})"` : "";
-    const dur = 2.4;
-    return `<g class="rm-edge${sel ? " sel" : ""}${e.flow ? " flow" : ""}" data-edge="${e.id}" style="--d:${200 + i * 35}ms">
+    // Серые связи без своего цвета красим плавным переходом от цвета одного узла к цвету другого.
+    const auto = !e.color || e.color === "#64748b" || e.color === "#475569";
+    let paint = col;
+    if (auto && g.a && g.b) {
+      const id = `rm-eg-${String(e.id).replace(/[^a-z0-9_-]/gi, "")}`;
+      egrads.push(`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${g.a.x}" y1="${g.a.y}" x2="${g.b.x}" y2="${g.b.y}"><stop offset="0" stop-color="${accentOf.get(e.from)}"/><stop offset="1" stop-color="${accentOf.get(e.to)}"/></linearGradient>`);
+      paint = `url(#${id})`;
+    }
+    const len = g.a && g.b ? Math.hypot(g.b.x - g.a.x, g.b.y - g.a.y) * 1.2 : 300;
+    const dur = Math.max(1.4, Math.min(5, len / 190));
+    const d0 = (delayOf.get(e.from) || 0) + 160;
+    const lw = e.label ? Math.min(260, e.label.length * 6.4 + 18) : 0;
+    return `<g class="rm-edge${sel ? " sel" : ""}${e.flow ? " flow" : ""}${auto ? " auto" : ""}" data-edge="${e.id}" data-from="${e.from}" data-to="${e.to}" style="--d:${d0}ms;--dur:${dur.toFixed(2)}s;--off:${(-(i * 0.61) % dur).toFixed(2)}s">
       <path class="rm-hit" d="${g.d}"/>
-      <path class="rm-line" d="${g.d}" stroke="${col}" stroke-width="${e.w || 1.6}" stroke-dasharray="${dash}" stroke-linecap="round" fill="none"${me}${ms}/>
-      ${e.flow && st.anim ? `<circle class="rm-spark" r="3" fill="${col}"><animateMotion dur="${dur}s" repeatCount="indefinite" begin="${(i * 0.37) % dur}s" path="${g.d}"/></circle>` : ""}
-      ${e.label ? `<text class="rm-elabel" x="${g.mid.x}" y="${g.mid.y}" text-anchor="middle" dominant-baseline="central">${esc(e.label)}</text>` : ""}
+      <path class="rm-line" d="${g.d}" stroke="${paint}" stroke-width="${e.w || 1.6}" stroke-dasharray="${dash}" stroke-linecap="round" fill="none"${me}${ms}/>
+      <path class="rm-drawin" d="${g.d}" pathLength="1" stroke="${paint}" stroke-width="${(e.w || 1.6) + 0.6}" fill="none" stroke-linecap="round"/>
+      ${e.flow && st.anim ? `<path class="rm-comet" d="${g.d}" pathLength="100" stroke="${auto ? accentOf.get(e.to) : col}" stroke-width="${(e.w || 1.6) + 1.4}" fill="none" stroke-linecap="round"/>` : ""}
+      ${e.label ? `<g class="rm-elabel" transform="translate(${g.mid.x},${g.mid.y})"><rect x="${-lw / 2}" y="-11" width="${lw}" height="22" rx="11"/><text text-anchor="middle" dominant-baseline="central" y="0.5">${esc(e.label)}</text></g>` : ""}
     </g>`;
   }).join("");
-  svg.innerHTML = `<defs>${defs}${grads}
+  svg.innerHTML = `<defs>${defs}${grads}${egrads.join("")}
+      <linearGradient id="rm-sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".07"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      <filter id="rm-soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       <pattern id="rm-grid" width="${GRID}" height="${GRID}" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="var(--rm-dot)"/></pattern>
       <filter id="rm-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     </defs>
     <g class="rm-vp" transform="translate(${data.view.x},${data.view.y}) scale(${data.view.z})">
-      ${st.grid ? `<rect x="-20000" y="-20000" width="40000" height="40000" fill="url(#rm-grid)"/>` : ""}
+      ${st.grid ? `<rect class="rm-gridbg" x="-20000" y="-20000" width="40000" height="40000" fill="url(#rm-grid)"/>` : ""}
       <g class="rm-items">${itemSvg}</g>
       <g class="rm-edges">${edgesSvg}</g>
       <g class="rm-nodes">${nodesSvg}</g>
@@ -392,15 +425,115 @@ function render() {
   st.wrap.classList.toggle("intro", !!intro);
   st.wrap.classList.toggle("anim", !!st.anim);
   st.vp = svg.querySelector(".rm-vp");
+  st.wrap.classList.toggle("far", data.view.z < 0.38);
+  renderMini();
   renderInspector();
   renderStats();
   $("#rm-zoom").textContent = `${Math.round(data.view.z * 100)}%`;
+}
+
+// Глубина узла от «центра» схемы (главный блок или самый связанный узел) — для волны появления.
+function graphDepth(data) {
+  const deg = new Map();
+  const adj = new Map(data.nodes.map(n => [n.id, []]));
+  for (const e of data.edges) {
+    if (!adj.has(e.from) || !adj.has(e.to)) continue;
+    adj.get(e.from).push(e.to); adj.get(e.to).push(e.from);
+    deg.set(e.from, (deg.get(e.from) || 0) + 1); deg.set(e.to, (deg.get(e.to) || 0) + 1);
+  }
+  const hub = data.nodes.find(n => n.kind === "hub") || [...data.nodes].sort((a, b) => (deg.get(b.id) || 0) - (deg.get(a.id) || 0))[0];
+  const depth = new Map();
+  if (!hub) return depth;
+  const q = [hub.id]; depth.set(hub.id, 0);
+  while (q.length) {
+    const id = q.shift();
+    for (const nb of adj.get(id) || []) if (!depth.has(nb)) { depth.set(nb, depth.get(id) + 1); q.push(nb); }
+  }
+  const max = Math.max(0, ...depth.values());
+  for (const n of data.nodes) if (!depth.has(n.id)) depth.set(n.id, max + 1);
+  return depth;
+}
+
+// Плавный перелёт камеры (вписать, кнопки масштаба, клик по мини-карте).
+function animateView(to, ms = 520) {
+  const v = st.map.data.view, from = { ...v };
+  cancelAnimationFrame(st.camRaf);
+  const t0 = window.performance.now();
+  const ease = t => 1 - Math.pow(1 - t, 4);
+  const step = now => {
+    const t = Math.min(1, (now - t0) / ms), k = ease(t);
+    v.x = from.x + (to.x - from.x) * k; v.y = from.y + (to.y - from.y) * k; v.z = from.z + (to.z - from.z) * k;
+    applyView();
+    if (t < 1) st.camRaf = requestAnimationFrame(step);
+  };
+  st.camRaf = requestAnimationFrame(step);
+}
+
+// Ширина веток-подпунктов узла по самой длинной строке — чтобы «вписать» не обрезал подписи.
+const itemsW = n => (n.items?.length ? 90 + Math.max(...n.items.map(t => String(t).length)) * 7.3 : 0);
+function bounds() {
+  const ns = st.map.data.nodes;
+  if (!ns.length) return null;
+  return {
+    x0: Math.min(...ns.map(n => n.x - (n.itemsSide === "left" ? itemsW(n) : 0))),
+    y0: Math.min(...ns.map(n => n.y)),
+    x1: Math.max(...ns.map(n => n.x + n.w + (n.itemsSide !== "left" ? itemsW(n) : 0))),
+    y1: Math.max(...ns.map(n => n.y + n.h)),
+  };
+}
+// Мини-карта в углу: вся схема крупными мазками и рамка видимой области; клик/тяни — перелёт туда.
+function renderMini() {
+  const box = st.wrap.querySelector(".rm-mini");
+  if (!box) return;
+  const b = bounds();
+  box.hidden = !b || st.map.data.nodes.length < 4;
+  if (box.hidden) return;
+  const W = 150, H = 96, pad = 60;
+  const bw = b.x1 - b.x0 + pad * 2, bh = b.y1 - b.y0 + pad * 2;
+  const k = Math.min(W / bw, H / bh);
+  st.mini = { k, ox: b.x0 - pad - (W / k - bw) / 2, oy: b.y0 - pad - (H / k - bh) / 2 };
+  const m = st.mini;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${st.map.data.nodes.map(n => `<rect x="${((n.x - m.ox) * k).toFixed(1)}" y="${((n.y - m.oy) * k).toFixed(1)}" width="${Math.max(2, n.w * k).toFixed(1)}" height="${Math.max(2, n.h * k).toFixed(1)}" rx="1.5" fill="${accent(n)}" opacity="${n.kind === "frame" ? 0.15 : 0.75}"/>`).join("")}<rect class="rm-mini-vp" rx="3"/></svg>`;
+  miniViewport();
+}
+function miniViewport() {
+  const r = st.wrap.querySelector(".rm-mini-vp");
+  if (!r || !st.mini) return;
+  const v = st.map.data.view, s = st.svg.getBoundingClientRect(), m = st.mini;
+  r.setAttribute("x", ((-v.x / v.z - m.ox) * m.k).toFixed(1)); r.setAttribute("y", ((-v.y / v.z - m.oy) * m.k).toFixed(1));
+  r.setAttribute("width", (s.width / v.z * m.k).toFixed(1)); r.setAttribute("height", (s.height / v.z * m.k).toFixed(1));
+}
+function miniJump(ev, smooth) {
+  const box = st.wrap.querySelector(".rm-mini svg");
+  if (!box || !st.mini) return;
+  const r = box.getBoundingClientRect(), s = st.svg.getBoundingClientRect(), v = st.map.data.view, m = st.mini;
+  const wx = (ev.clientX - r.left) / m.k + m.ox, wy = (ev.clientY - r.top) / m.k + m.oy;
+  const to = { z: v.z, x: s.width / 2 - wx * v.z, y: s.height / 2 - wy * v.z };
+  if (smooth) animateView(to, 380); else { Object.assign(v, to); applyView(); }
+}
+
+// Наведение на узел: он, его связи и соседи — ярко, остальное приглушается.
+function focusOn(id) {
+  const svg = st.svg;
+  svg.querySelectorAll(".hl").forEach(x => x.classList.remove("hl"));
+  if (!id) { svg.classList.remove("focus"); return; }
+  const near = new Set([id]);
+  svg.querySelectorAll(".rm-edge").forEach(g => {
+    if (g.dataset.from === id || g.dataset.to === id) { g.classList.add("hl"); near.add(g.dataset.from); near.add(g.dataset.to); }
+  });
+  near.forEach(n => {
+    svg.querySelector(`.rm-node[data-id="${window.CSS.escape(n)}"]`)?.classList.add("hl");
+    svg.querySelectorAll(`.rm-item[data-of="${window.CSS.escape(n)}"]`).forEach(x => x.classList.add("hl"));
+  });
+  svg.classList.add("focus");
 }
 
 function applyView() {
   const v = st.map.data.view;
   st.vp?.setAttribute("transform", `translate(${v.x},${v.y}) scale(${v.z})`);
   $("#rm-zoom").textContent = `${Math.round(v.z * 100)}%`;
+  st.wrap.classList.toggle("far", v.z < 0.38);
+  miniViewport();
 }
 
 function renderStats() {
@@ -436,7 +569,7 @@ function renderInspector() {
   if (n) {
     box.innerHTML = `<h4>${esc(KINDS[n.kind].label)}</h4>
       <div class="rm-f"><label>Текст</label><textarea data-k="text" rows="2">${esc(n.text)}</textarea></div>
-      <div class="rm-f"><label>Надпись над текстом</label><input data-k="sub" value="${esc(n.sub ?? KINDS[n.kind].label)}" placeholder="пусто — без надписи"></div>
+      <div class="rm-f"><label>Надпись над текстом</label><input data-k="sub" value="${esc(n.sub ?? (n.kind === "frame" || n.kind === "circle" || n.kind === "text" ? "" : KINDS[n.kind].label))}" placeholder="пусто — без надписи"></div>
       <div class="rm-f"><label>Форма</label><select data-k="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === n.kind ? " selected" : ""}>${v.label}</option>`).join("")}</select></div>
       <div class="rm-f"><label>Цвет</label>${swatches("color", n.color)}</div>
       <div class="rm-f two"><div><label>Номер</label><input data-k="num" type="number" min="0" max="99" value="${n.num || ""}"></div>
@@ -523,7 +656,7 @@ function nodeAt(p) {
   for (let i = ns.length - 1; i >= 0; i--) { const n = ns[i]; if (p.x >= n.x && p.x <= n.x + n.w && p.y >= n.y && p.y <= n.y + n.h) return n; }
   return null;
 }
-function fit() {
+function fit(smooth) {
   // Рисунки тоже входят в рамку «вписать»: каждый штрих — как маленький узел по своим границам.
   const sk = (st.map.data.draw || []).filter(x => x.pts.length).map(x => {
     const xs = x.pts.map(q => q[0]), ys = x.pts.map(q => q[1]);
@@ -532,12 +665,14 @@ function fit() {
   const ns = st.map.data.nodes.concat(sk);
   const r = st.svg.getBoundingClientRect();
   if (!ns.length) { st.map.data.view = { x: r.width / 2 - 200, y: r.height / 2 - 100, z: 1 }; applyView(); return; }
-  const x0 = Math.min(...ns.map(n => n.x - (n.itemsSide === "left" && n.items?.length ? 200 : 0))) - 60;
+  const x0 = Math.min(...ns.map(n => n.x - (n.itemsSide === "left" ? itemsW(n) : 0))) - 40;
   const y0 = Math.min(...ns.map(n => n.y)) - 60;
-  const x1 = Math.max(...ns.map(n => n.x + n.w + (n.itemsSide !== "left" && n.items?.length ? 220 : 0))) + 60;
+  const x1 = Math.max(...ns.map(n => n.x + n.w + (n.itemsSide !== "left" ? itemsW(n) : 0))) + 40;
   const y1 = Math.max(...ns.map(n => n.y + n.h)) + 80;
   const z = Math.max(0.2, Math.min(1.4, Math.min(r.width / (x1 - x0), r.height / (y1 - y0))));
-  st.map.data.view = { z, x: (r.width - (x1 - x0) * z) / 2 - x0 * z, y: (r.height - (y1 - y0) * z) / 2 - y0 * z };
+  const to = { z, x: (r.width - (x1 - x0) * z) / 2 - x0 * z, y: (r.height - (y1 - y0) * z) / 2 - y0 * z };
+  if (smooth) { animateView(to); return; }
+  st.map.data.view = to;
   applyView();
 }
 function zoomAt(f, cx, cy) {
@@ -629,6 +764,7 @@ function bindCanvas() {
 
   svg.addEventListener("pointerdown", e => {
     if (e.button === 2) return;
+    if (svg.classList.contains("focus")) focusOn(null);
     const p = toWorld(e);
     const t = e.target;
     const panNow = () => { st.drag = { mode: "pan", cx: e.clientX, cy: e.clientY, vx: st.map.data.view.x, vy: st.map.data.view.y }; svg.classList.add("panning"); };
@@ -985,7 +1121,7 @@ function onKey(e) {
     st.map.data.nodes.forEach(n => { if (st.sel.has(n.id)) { n.x += dx; n.y += dy; } });
     commit();
   }
-  else if (k === "f") fit();
+  else if (k === "f") fit(true);
   else if (!ctrl && !e.altKey && !st.ro && Object.values(MODES).some(m => m[1].toLowerCase() === k)) setMode(Object.keys(MODES).find(x => MODES[x][1].toLowerCase() === k));
   else if (k === " " && !st.space) { st.space = true; st.wrap.classList.add("space"); e.preventDefault(); }
   else if (k === "g") { st.grid = !st.grid; render(); }
@@ -999,7 +1135,7 @@ function exportSvgString() {
   const x1 = Math.max(...ns.map(n => n.x + n.w + (n.items?.length && n.itemsSide !== "left" ? 240 : 0))) + 40;
   const y1 = Math.max(...ns.map(n => n.y + n.h)) + 60;
   const clone2 = st.svg.cloneNode(true);
-  clone2.querySelectorAll(".rm-port,.rm-selbox,.rm-resize,.rm-spark,.rm-hit,.rm-temp").forEach(x => x.remove());
+  clone2.querySelectorAll(".rm-port,.rm-selbox,.rm-resize,.rm-comet,.rm-drawin,.rm-hit,.rm-temp").forEach(x => x.remove());
   clone2.querySelector(".rm-vp").setAttribute("transform", `translate(${-x0},${-y0})`);
   clone2.querySelector('rect[fill="url(#rm-grid)"]')?.remove();
   const cs = getComputedStyle(st.wrap);
@@ -1043,7 +1179,8 @@ async function exportAs(kind) {
 function play() {
   st.intro = true; render();
   clearTimeout(st.introT);
-  st.introT = setTimeout(() => { st.intro = false; st.wrap.classList.remove("intro"); }, 900 + st.map.data.nodes.length * 70 + st.map.data.edges.length * 60);
+  const levels = Math.max(0, ...graphDepth(st.map.data).values());
+  st.introT = setTimeout(() => { st.intro = false; st.wrap.classList.remove("intro"); }, 1800 + levels * 230 + 12 * 45);
 }
 
 // ---------- список карт ----------
@@ -1177,7 +1314,7 @@ async function createMap(tpl) {
   const data = t.make();
   const title = tpl === "blank" ? "Новая карта" : t.label;
   const r = await apiPost("/roadmaps", { title, data });
-  st.list.unshift({ id: r.id, title, nodes: data.nodes.length, edges: data.edges.length, updated_at: new Date().toISOString().slice(0, 19).replace("T", " ") });
+  st.list.unshift({ id: r.id, title, can_edit: true, nodes: data.nodes.length, edges: data.edges.length, updated_at: new Date().toISOString().slice(0, 19).replace("T", " ") });
   await openMap(r.id);
   if (tpl !== "blank") fit();
 }
@@ -1257,6 +1394,7 @@ function layout() {
         </div>
         <div class="rm-canvas" id="rm-canvas">
           <svg id="rm-svg" xmlns="${NS}"></svg>
+          <div class="rm-mini" hidden title="Мини-карта: кликните или тяните, чтобы перейти"></div>
           <div class="rm-zoombar">
             <button data-cmd="zout" title="Отдалить">−</button><span id="rm-zoom">100%</span><button data-cmd="zin" title="Приблизить">+</button><button data-cmd="fit" title="Вписать (F)">⤢</button>
           </div>
@@ -1290,6 +1428,17 @@ export async function loadRoadmap() {
     };
     bindCanvas();
     bindInspector();
+    st.svg.addEventListener("pointerover", e => {
+      if (st.drag || st.mode !== "select") return;
+      const n = e.target.closest?.(".rm-node");
+      const id = n && !n.classList.contains("k-frame") ? n.dataset.id : null;
+      if (id !== st.focusId) { st.focusId = id; clearTimeout(st.focusT); st.focusT = setTimeout(() => focusOn(st.focusId), id ? 90 : 0); }
+    });
+    st.svg.addEventListener("pointerleave", () => { st.focusId = null; clearTimeout(st.focusT); focusOn(null); });
+    const mini = st.wrap.querySelector(".rm-mini");
+    mini.addEventListener("pointerdown", e => { e.preventDefault(); mini.setPointerCapture(e.pointerId); st.miniDrag = true; miniJump(e, true); });
+    mini.addEventListener("pointermove", e => { if (st.miniDrag && e.buttons) miniJump(e, false); });
+    mini.addEventListener("pointerup", () => { st.miniDrag = false; });
     st.wrap.addEventListener("click", async e => {
       const b = e.target.closest("button");
       if (!b) return;
@@ -1306,8 +1455,12 @@ export async function loadRoadmap() {
           const c = b.dataset.cmd;
           if (c === "undo") undo(); else if (c === "redo") redo();
           else if (c === "grid") { st.grid = !st.grid; b.classList.toggle("on", st.grid); render(); }
-          else if (c === "fit") fit();
-          else if (c === "zin" || c === "zout") { const r = st.svg.getBoundingClientRect(); zoomAt(c === "zin" ? 1.2 : 1 / 1.2, r.width / 2, r.height / 2); }
+          else if (c === "fit") fit(true);
+          else if (c === "zin" || c === "zout") {
+            const r = st.svg.getBoundingClientRect(), v = st.map.data.view;
+            const z = Math.max(0.15, Math.min(3, v.z * (c === "zin" ? 1.35 : 1 / 1.35))), cx = r.width / 2, cy = r.height / 2;
+            animateView({ z, x: cx - ((cx - v.x) * z) / v.z, y: cy - ((cy - v.y) * z) / v.z }, 300);
+          }
           else if (c === "play") play();
           else if (c === "anim") { st.anim = !st.anim; b.classList.toggle("on", st.anim); render(); }
           else if (c === "png" || c === "svg") await exportAs(c);
