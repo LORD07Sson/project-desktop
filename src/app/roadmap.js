@@ -230,7 +230,7 @@ function textSvg(n) {
   const hasIcon = n.icon && (n.kind === "pill" || n.kind === "box" || n.kind === "tag");
   const left = n.kind === "note" || (hasIcon && n.kind !== "tag") || n.kind === "box";
   const tx = n.kind === "note" ? 16 : n.kind === "box" ? 18 + (hasIcon ? 38 : 0) : hasIcon ? n.h * 0.5 + 28 : n.kind === "tag" ? (n.w - n.h / 2) / 2 : n.w / 2;
-  const anchor = left || (hasIcon && n.kind === "pill") ? "start" : "middle";
+  const anchor = left || hasIcon ? "start" : "middle";
   const block = lines.length * lh + (cap ? 16 : 0);
   let y0 = n.kind === "note" ? 22 : n.h / 2 - block / 2 + (cap ? 16 : 0) + lh / 2;
   let s = "";
