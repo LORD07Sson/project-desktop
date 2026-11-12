@@ -968,7 +968,7 @@ export async function openReportDetail(publicId) {
           editingNote = null;
           await render();
         } else if (kind === "delete") {
-          if (!window.confirm("Удалить заметку? Её не будет ни здесь, ни в боте. Ответы на неё останутся.")) return;
+          if (!(await askConfirm("Удалить заметку? Её не будет ни здесь, ни в боте. Ответы на неё останутся."))) return;
           await apiPost(`/report/${publicId}/notes/${id}/delete`, {});
           await render();
         }
