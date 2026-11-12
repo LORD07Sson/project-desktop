@@ -160,7 +160,6 @@
 .rm-auto { font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .08em; color: #22c55e; border: 1px solid rgba(34, 197, 94, .45); border-radius: 5px; padding: 1px 5px; margin-right: 6px; vertical-align: 1px; }
 .automap .rm-tools [data-add], .automap [data-cmd="delmap"], .automap .rm-insp, .automap .rm-port, .automap .rm-resize { display: none; }
 .automap .rm-title { pointer-events: none; }
-.automap .rm-stats { visibility: hidden; }
 
 /* режимы рисования */
 .rm-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding-bottom: 4px; }
@@ -239,3 +238,9 @@
 .rm-gridbg { transition: opacity .3s; }
 .far .rm-gridbg { opacity: .35; }
 .rm-mini:hover { opacity: 1; }
+
+/* ореол главного блока */
+.rm-halo { stroke-opacity: calc(.28 / var(--k)); stroke-width: 1.2; }
+.anim .rm-halo { transform-box: fill-box; transform-origin: center; animation: rm-halo 3.6s ease-in-out infinite; animation-delay: calc(var(--k) * .45s); }
+@keyframes rm-halo { 0%, 100% { stroke-opacity: 0; transform: scale(.985); } 45% { stroke-opacity: calc(.4 / var(--k)); transform: scale(1); } }
+.rm-chip.risk::first-letter, .rm-chip.done::first-letter { font-size: 9px; }

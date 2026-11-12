@@ -56,10 +56,11 @@ const ICONS = ["", ...Object.keys(ICON_PATHS)];
 const EMOJI_ICON = { "👥": "users", "🌐": "globe", "⚙️": "gear", "🗄️": "db", "🤖": "bot", "📱": "phone", "💳": "card", "📈": "chart", "🔒": "lock", "✉️": "mail", "🎬": "film", "🎙️": "mic", "🚀": "rocket", "⚡": "bolt", "📦": "box", "📞": "phone", "⭐": "target", "🧩": "box" };
 const iconKey = i => ICON_PATHS[i] ? i : EMOJI_ICON[i] || "";
 function iconSvg(i, cx, cy, size, color) {
-  const k = iconKey(i);
-  if (!k) return "";
+  const raw = typeof i === "string" && i.startsWith("svg:") ? i.slice(4) : "";
+  const k = raw ? "" : iconKey(i);
+  if (!k && !raw) return "";
   const sc = size / 24;
-  return `<g transform="translate(${cx - size / 2},${cy - size / 2}) scale(${sc})" fill="none" stroke="${color}" stroke-width="${1.7 / Math.max(sc, .6) * .9}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none">${ICON_PATHS[k]}</g>`;
+  return `<g transform="translate(${cx - size / 2},${cy - size / 2}) scale(${sc})" fill="none" stroke="${color}" stroke-width="${1.7 / Math.max(sc, .6) * .9}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none">${raw || ICON_PATHS[k]}</g>`;
 }
 
 let st = null; // состояние открытой вкладки
@@ -229,7 +230,10 @@ function shapeSvg(n) {
   s += `<${o.tag} ${o.a} fill="url(#${gid(c)})" pointer-events="none"/>`;
   if (n.kind !== "milestone" && n.kind !== "circle") s += `<${o.tag} ${o.a} fill="url(#rm-sheen)" pointer-events="none"/>`;
   if (n.kind === "box" || n.kind === "note") s += `<rect x="0" y="10" width="3" height="${h - 20}" rx="1.5" fill="${c}" pointer-events="none"/>`;
-  if (n.kind === "hub") s += `<rect x="1" y="1" width="${w - 2}" height="3" rx="1.5" fill="${c}" pointer-events="none" opacity=".9"/>`;
+  if (n.kind === "hub") {
+    s += `<rect x="1" y="1" width="${w - 2}" height="3" rx="1.5" fill="${c}" pointer-events="none" opacity=".9"/>`;
+    s = [1, 2, 3].map(k => `<rect class="rm-halo" style="--k:${k}" x="${-8 * k}" y="${-8 * k}" width="${w + 16 * k}" height="${h + 16 * k}" rx="${18 + 8 * k}" fill="none" stroke="${c}" pointer-events="none"/>`).join("") + s;
+  }
   if (n.kind === "square") {
     const k = 16, b = `stroke="${c}" stroke-width="2.4" fill="none" stroke-linecap="round" pointer-events="none"`;
     s += `<path d="M0,${k} V0 H${k} M${w - k},0 H${w} V${k} M${w},${h - k} V${h} H${w - k} M${k},${h} H0 V${h - k}" ${b}/>`;
@@ -536,7 +540,28 @@ function applyView() {
   miniViewport();
 }
 
+function autoStats() {
+  const d = st.map.data, ns = d.nodes;
+  const chip = (cls, t) => `<span class="rm-chip ${cls}">${t}</span>`;
+  if (d.auto === "infra") {
+    const up = ns.filter(n => n.status === "up").length, down = ns.filter(n => n.status === "down").length;
+    const srv = ns.find(n => n.id === "srv");
+    return `${chip(down ? "risk" : "done", down ? `● ${down} не работает` : "● все службы работают")}${chip("plan", `${up + down} служб`)}${srv ? `<span class="rm-hint">${esc(srv.sub || "")}</span>` : ""}`;
+  }
+  if (d.auto === "roles") {
+    const roles = ns.filter(n => n.kind === "box");
+    const none = roles.filter(n => (n.items || []).some(t => t.startsWith("✕ Ничего"))).length;
+    return `${chip("plan", `${roles.length} ролей`)}${none ? chip("risk", `${none} без прав`) : ""}<span class="rm-hint">обновляется при смене прав</span>`;
+  }
+  if (d.auto === "project") {
+    const tabs = ns.filter(n => String(n.id).startsWith("t-"));
+    const open = tabs.filter(n => (n.items || []).includes("✓ У вас: открыт")).length;
+    return `${chip("plan", `${tabs.length} разделов`)}${chip("done", `${open} открыто вам`)}${tabs.length - open ? chip("risk", `${tabs.length - open} закрыто`) : ""}`;
+  }
+  return "";
+}
 function renderStats() {
+  if (st.map.data.auto) { $("#rm-stats").innerHTML = autoStats(); return; }
   const ns = st.map.data.nodes;
   const c = s => ns.filter(n => n.status === s).length;
   const total = ns.filter(n => n.status).length;
@@ -1212,6 +1237,16 @@ function buildProjectMap() {
     label: (b.querySelector(".tab-lbl")?.textContent || b.title || b.dataset.tab).trim(),
     desc: (b.querySelector("small")?.textContent || b.title || "").trim(),
     color: (b.style.getPropertyValue("--c") || "").trim(),
+    // Иконка раздела — та же, что в меню (только линии и круги, без скриптов и атрибутов событий).
+    icon: (() => {
+      const svg = b.querySelector(".tab-ic svg");
+      if (!svg) return "";
+      const parts = [...svg.querySelectorAll("path,circle,rect,line,polyline,ellipse")].map(el => {
+        const keep = ["d", "cx", "cy", "r", "x", "y", "width", "height", "rx", "x1", "y1", "x2", "y2", "points", "rx", "ry"];
+        return `<${el.tagName.toLowerCase()} ${keep.filter(a => el.hasAttribute(a)).map(a => `${a}="${esc(el.getAttribute(a))}"`).join(" ")}/>`;
+      });
+      return parts.length ? `svg:${parts.join("")}` : "";
+    })(),
   }));
   const access = k => {
     if (MEMBER_TABS.has(k)) return "✓ Доступ: все участники";
@@ -1221,7 +1256,7 @@ function buildProjectMap() {
   };
   const nodes = [{ id: "hub", kind: "hub", x: 1040, y: 0, w: 360, h: 104, text: "Проект «Кадр»", color: "#a78bfa", sub: `Автосхема · разделов: ${tabs.length}` }];
   const edges = [];
-  const trunk = { style: "solid", arrows: "none", curve: "curve", color: "#475569", flow: false, label: "" };
+  const trunk = { style: "solid", arrows: "none", curve: "curve", color: "#475569", flow: true, label: "", w: 2.2 };
   const colY = [0, 0];
   const placed = [];
   GROUPS.forEach((g, gi) => {
@@ -1232,20 +1267,21 @@ function buildProjectMap() {
     const gid = `g${gi}`;
     list.forEach((t, i) => {
       const id = `t-${t.key}`;
-      nodes.push({ id, kind: "box", x: side ? 1980 : 120, y: top + i * 150, w: 300, h: 70, text: t.label, sub: t.desc ? t.desc.slice(0, 44) : "Раздел",
-        color: t.color || g.color, items: [t.desc || t.label, access(t.key), tabAllowed(t.key) ? "✓ У вас: открыт" : "✕ У вас: закрыт"].filter((x, j, a) => a.indexOf(x) === j),
+      const desc = t.desc && t.desc !== t.label ? t.desc : "";
+      nodes.push({ id, kind: "box", x: side ? 1980 : 120, y: top + i * 150, w: 320, h: 74, text: t.label, sub: g.name, icon: t.icon,
+        color: t.color || g.color, items: [desc, access(t.key), tabAllowed(t.key) ? "✓ У вас: открыт" : "✕ У вас: закрыт"].filter(Boolean),
         itemsSide: side ? "right" : "left" });
-      edges.push({ id: `e-${t.key}`, from: gid, to: id, ...trunk, color: g.color, style: "dotted", flow: true, arrows: "end" });
+      edges.push({ id: `e-${t.key}`, from: gid, to: id, ...trunk, color: "#64748b", style: "solid", flow: true, arrows: "none" });
     });
     const h = list.length * 150;
     placed.push({ id: gid, kind: "pill", x: side ? 1500 : 600, y: top + h / 2 - 70, w: 320, h: 72, text: g.name, sub: g.sub, color: g.color, icon: g.icon, num: gi + 1 });
-    edges.push({ id: `h-${gi}`, from: "hub", to: gid, ...trunk });
+    edges.push({ id: `h-${gi}`, from: "hub", to: gid, ...trunk, label: `${list.length} ${list.length === 1 ? "раздел" : list.length < 5 ? "раздела" : "разделов"}` });
     colY[side] += h + 90;
   });
   nodes.push(...placed);
   nodes[0].y = Math.max(...colY) / 2 - 140;
-  nodes.push({ id: "legend", kind: "note", x: 1030, y: nodes[0].y + 170, w: 380, h: 130, color: "#94a3b8", sub: "Как читать",
-    text: "Строится из меню приложения сама:\nновый раздел в обновлении — новый блок.\n✓ открыто · ◐ по праву · ✕ закрыто" });
+  nodes.push({ id: "legend", kind: "note", x: 1050, y: nodes[0].y + 170, w: 340, h: 64, color: "#94a3b8", sub: "Автосхема",
+    text: "Строится из меню приложения сама" });
   return { auto: "project", nodes, edges, view: { x: 0, y: 0, z: 1 } };
 }
 
