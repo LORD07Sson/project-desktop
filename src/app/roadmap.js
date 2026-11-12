@@ -5,6 +5,7 @@
 
 import { apiGet, apiPost, toast, askConfirm } from "./api.js";
 import { $, esc, relTime, showContextMenu } from "./utils.js";
+import { TAB_PERMS, MEMBER_TABS, tabAllowed } from "./tabs.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const GRID = 20;
@@ -1047,12 +1048,86 @@ function renderList() {
   const box = $("#rm-list");
   box.innerHTML = st.list.length ? st.list.map(m => `
     <button class="rm-li${st.map && st.map.id === m.id ? " on" : ""}" data-open="${m.id}">
-      <b>${m.auto ? '<i class="rm-auto">АВТО</i>' : ""}${esc(m.title)}</b><small>${m.auto ? "обновляется сама" : `${m.author ? `${esc(m.author)} · ` : ""}${esc(relTime(m.updated_at))}${m.can_edit ? "" : " · просмотр"}`}</small>
+      <b>${m.auto ? '<i class="rm-auto">АВТО</i>' : ""}${esc(m.title)}</b><small>${m.auto === "project" ? "из меню приложения" : m.auto ? "обновляется сама" : `${m.author ? `${esc(m.author)} · ` : ""}${esc(relTime(m.updated_at))}${m.can_edit ? "" : " · просмотр"}`}</small>
     </button>`).join("") : `<div class="rm-empty-l">Карт пока нет</div>`;
 }
+// ---------- автосхема «Проект «Кадр»: все разделы» ----------
+// Строится прямо из меню приложения (кнопки .tab-btn в index.html): новая вкладка в обновлении — новый узел на схеме,
+// без правки этой схемы руками. Доступ к разделу — из тех же правил, по которым вкладка открывается (tabs.js).
+const PROJECT_ID = "auto-project";
+const PERM_LABELS = {
+  "reports.feed": "Лента", "reports.board": "Доска", "reports.overview": "Обзор", "reports.list": "Список",
+  "reports.calendar": "Календарь", "reports.analytics": "Аналитика", "parser.use": "Парсер видео",
+  "a365.view": "Anime 365: смотреть", "a365.upload": "Anime 365: заливать",
+};
+const GROUPS = [
+  { name: "Работа над сериями", sub: "Очередь · отчёты · сроки", color: "#f97316", icon: "target" },
+  { name: "Контент и релизы", sub: "Тайтлы · раздачи · заливка", color: "#22c55e", icon: "film" },
+  { name: "Команда и общение", sub: "Чат · лента · люди", color: "#ec4899", icon: "users" },
+  { name: "Аналитика и сервисы", sub: "Цифры · инструменты · профиль", color: "#38bdf8", icon: "chart" },
+];
+function buildProjectMap() {
+  const tabs = [...document.querySelectorAll(".tab-btn[data-tab]")].filter((b, i, a) => a.findIndex(x => x.dataset.tab === b.dataset.tab) === i).map(b => ({
+    key: b.dataset.tab, grp: Number(b.dataset.grp || 0),
+    label: (b.querySelector(".tab-lbl")?.textContent || b.title || b.dataset.tab).trim(),
+    desc: (b.querySelector("small")?.textContent || b.title || "").trim(),
+    color: (b.style.getPropertyValue("--c") || "").trim(),
+  }));
+  const access = k => {
+    if (MEMBER_TABS.has(k)) return "✓ Доступ: все участники";
+    if (k === "nyaa") return "◐ Доступ: право «Релизы (Nyaa)» или админ";
+    if (TAB_PERMS[k]) return `◐ Доступ: право ${[].concat(TAB_PERMS[k]).map(x => `«${PERM_LABELS[x] || x}»`).join(" или ")}`;
+    return "✕ Доступ: только админы";
+  };
+  const nodes = [{ id: "hub", kind: "hub", x: 1040, y: 0, w: 360, h: 104, text: "Проект «Кадр»", color: "#a78bfa", sub: `Автосхема · разделов: ${tabs.length}` }];
+  const edges = [];
+  const trunk = { style: "solid", arrows: "none", curve: "curve", color: "#475569", flow: false, label: "" };
+  const colY = [0, 0];
+  const placed = [];
+  GROUPS.forEach((g, gi) => {
+    const list = tabs.filter(t => t.grp === gi);
+    if (!list.length) return;
+    const side = gi < 2 ? 0 : 1;
+    const top = colY[side];
+    const gid = `g${gi}`;
+    list.forEach((t, i) => {
+      const id = `t-${t.key}`;
+      nodes.push({ id, kind: "box", x: side ? 1980 : 120, y: top + i * 150, w: 300, h: 70, text: t.label, sub: t.desc ? t.desc.slice(0, 44) : "Раздел",
+        color: t.color || g.color, items: [t.desc || t.label, access(t.key), tabAllowed(t.key) ? "✓ У вас: открыт" : "✕ У вас: закрыт"].filter((x, j, a) => a.indexOf(x) === j),
+        itemsSide: side ? "right" : "left" });
+      edges.push({ id: `e-${t.key}`, from: gid, to: id, ...trunk, color: g.color, style: "dotted", flow: true, arrows: "end" });
+    });
+    const h = list.length * 150;
+    placed.push({ id: gid, kind: "pill", x: side ? 1500 : 600, y: top + h / 2 - 70, w: 320, h: 72, text: g.name, sub: g.sub, color: g.color, icon: g.icon, num: gi + 1 });
+    edges.push({ id: `h-${gi}`, from: "hub", to: gid, ...trunk });
+    colY[side] += h + 90;
+  });
+  nodes.push(...placed);
+  nodes[0].y = Math.max(...colY) / 2 - 140;
+  nodes.push({ id: "legend", kind: "note", x: 1030, y: nodes[0].y + 170, w: 380, h: 130, color: "#94a3b8", sub: "Как читать",
+    text: "Строится из меню приложения сама:\nновый раздел в обновлении — новый блок.\n✓ открыто · ◐ по праву · ✕ закрыто" });
+  return { auto: "project", nodes, edges, view: { x: 0, y: 0, z: 1 } };
+}
+
 async function openMap(id) {
+  if (id === PROJECT_ID) {
+    clearTimeout(st.saveT);
+    if (st.map?.id && !st.map.auto && !st.ro) await save();
+    const data = buildProjectMap();
+    st.map = { id: PROJECT_ID, title: "Проект «Кадр»: все разделы", data, auto: "project", author: "" };
+    st.ro = true;
+    st.wrap.classList.add("automap", "ro");
+    st.undo = []; st.redo = []; st.last = JSON.stringify(data);
+    st.sel = new Set(); st.selEdge = null; st.selDraw = null;
+    setMode("select");
+    $("#rm-title").value = st.map.title;
+    st.wrap.classList.remove("nomap");
+    renderList(); render(); fit(); play();
+    setSaveState("Автосхема · из меню приложения", "ok");
+    return;
+  }
   clearTimeout(st.saveT);
-  if (st.map?.id && st.map.id !== id) await save();
+  if (st.map?.id && st.map.id !== id && !st.map.auto && !st.ro) await save();
   const m = await apiGet(`/roadmaps/${id}`);
   const data = { ...emptyData(), ...(m.data || {}) };
   st.map = { id: m.id, title: m.title, data, auto: data.auto || "", author: m.author || "" };
@@ -1075,7 +1150,7 @@ async function openMap(id) {
 // Автосхема (роли и права) строится сервером из живых данных: перечитываем её при каждом открытии вкладки и раз в
 // 30 с, пока вкладка на экране. Если роли или права поменяли — схема перерисовывается с подсветкой изменившихся узлов.
 async function refreshAuto() {
-  if (!st?.map?.auto || !st.wrap.offsetParent || st.drag) return;
+  if (!st?.map?.auto || st.map.id === PROJECT_ID || !st.wrap.offsetParent || st.drag) return;
   const id = st.map.id;
   let m;
   try { m = await apiGet(`/roadmaps/${id}`); } catch (_) { return; }
@@ -1213,7 +1288,7 @@ export async function loadRoadmap() {
       if (!b) return;
       try {
         if (b.dataset.tpl) await createMap(b.dataset.tpl);
-        else if (b.dataset.open) await openMap(Number(b.dataset.open));
+        else if (b.dataset.open) await openMap(b.dataset.open === PROJECT_ID ? PROJECT_ID : Number(b.dataset.open));
         else if (b.dataset.add) {
           if (!st.map.id) { toast("Сначала создайте карту."); return; }
           if (b.dataset.add === "image") { st.wrap.querySelector("[data-imgfile]").click(); return; }
@@ -1257,7 +1332,7 @@ export async function loadRoadmap() {
   }
   try {
     const r = await apiGet("/roadmaps");
-    st.list = r.maps || [];
+    st.list = [{ id: PROJECT_ID, title: "Проект «Кадр»: все разделы", auto: "project", can_edit: false }, ...(r.maps || [])];
   } catch (e) {
     body.querySelector(".rm-list").innerHTML = `<div class="rm-empty-l">Не удалось загрузить: ${esc(e.message)}</div>`;
     return false;
