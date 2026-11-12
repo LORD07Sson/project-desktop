@@ -18,6 +18,7 @@ import { loadUploads } from "./kodik.js";
 import { loadTeam } from "./team.js";
 import { loadQueue } from "./queue.js";
 import { loadParser } from "./parser.js";
+import { loadRoadmap } from "./roadmap.js";
 import { startTab } from "./ui-prefs.js";
 import { clearDirectoryCache } from "./titles-admin.js";
 import { refreshTeamNotice, clearTeamNotice } from "./team-notice.js";
@@ -43,11 +44,12 @@ const LOADERS = {
   team: loadTeam,
   profile: loadProfile,
   parser: loadParser,
+  roadmap: loadRoadmap,
 };
 
 // Контейнеры вкладок — чистятся при выходе из аккаунта, чтобы данные
 // предыдущего пользователя не остались висеть в DOM.
-const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#services-body", "#a365-body", "#team-body", "#profile-body", "#reports-body", "#parser-body"];
+const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#services-body", "#a365-body", "#team-body", "#profile-body", "#reports-body", "#parser-body", "#roadmap-body"];
 
 // Последняя открытая вкладка переживает не только смену пользователя
 // (см. комментарий у state.activeTab в state.js — это настройка
