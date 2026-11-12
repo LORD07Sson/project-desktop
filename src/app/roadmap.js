@@ -27,6 +27,9 @@ const KINDS = {
 const COLORS = ["#ef4444", "#f97316", "#fcd34d", "#22c55e", "#38d9e8", "#3b82f6", "#8b5cf6", "#ec4899", "#94a3b8", "#1f2937", "#ffffff"];
 const STATUS = { "": "Без статуса", plan: "План", work: "В работе", done: "Готово", risk: "Риск" };
 const STATUS_COLOR = { plan: "#94a3b8", work: "#f59e0b", done: "#22c55e", risk: "#ef4444" };
+// Статусы служб на автосхеме «Боты и всё» — в выборе статуса этапа их нет.
+const SERVICE_STATUS = { up: "Работает", down: "Не работает" };
+Object.assign(STATUS_COLOR, { up: "#22c55e", down: "#ef4444" });
 // Линейные иконки (24×24, как в остальном приложении) — эмодзи в SVG рисуются не везде.
 const ICON_PATHS = {
   users: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="7" r="2.4"/><path d="M17 13c2.4.3 4 2.2 4 5"/>',
@@ -273,7 +276,7 @@ function decoSvg(n) {
   }
   if (n.status) {
     const col = STATUS_COLOR[n.status];
-    const label = STATUS[n.status] + (n.due ? ` · ${fmtDue(n.due)}` : "");
+    const label = (STATUS[n.status] || SERVICE_STATUS[n.status] || "") + (n.due ? ` · ${fmtDue(n.due)}` : "");
     const w = label.length * 6.6 + 24;
     s += `<g class="rm-st ${n.status}" transform="translate(${n.w / 2 - w / 2},${n.h + 10})"><rect width="${w}" height="20" rx="10" fill="var(--rm-card)" stroke="${col}" stroke-opacity=".5"/><circle cx="11" cy="10" r="3.5" fill="${col}"${n.status === "work" ? ' class="rm-blink"' : ""}/><text x="20" y="10.5" font-size="11" font-weight="600" fill="${col}" dominant-baseline="central">${esc(label)}</text></g>`;
     if (n.status === "work") s += `<g class="rm-ring">${ringSvg(n, col)}</g>`;
@@ -1162,7 +1165,11 @@ async function refreshAuto() {
   st.map.data = { ...emptyData(), ...m.data, view };
   st.last = JSON.stringify(st.map.data);
   render();
-  for (const n of st.map.data.nodes) if (n.id !== "legend" && before.get(n.id) !== JSON.stringify(n)) pop(n.id);
+  const meaning = n => JSON.stringify([n.text, n.status, n.items]);
+  for (const n of st.map.data.nodes) {
+    const was = before.get(n.id);
+    if (n.id !== "legend" && (!was || meaning(JSON.parse(was)) !== meaning(n))) pop(n.id);
+  }
   setSaveState(`Обновлено ${new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`, "ok");
 }
 async function createMap(tpl) {
