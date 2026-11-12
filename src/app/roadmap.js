@@ -555,7 +555,7 @@ function autoStats() {
   }
   if (d.auto === "project") {
     const tabs = ns.filter(n => String(n.id).startsWith("t-"));
-    const open = tabs.filter(n => (n.items || []).includes("✓ У вас: открыт")).length;
+    const open = tabs.filter(n => n.mine).length;
     return `${chip("plan", `${tabs.length} разделов`)}${chip("done", `${open} открыто вам`)}${tabs.length - open ? chip("risk", `${tabs.length - open} закрыто`) : ""}`;
   }
   return "";
@@ -1249,10 +1249,10 @@ function buildProjectMap() {
     })(),
   }));
   const access = k => {
-    if (MEMBER_TABS.has(k)) return "✓ Доступ: все участники";
-    if (k === "nyaa") return "◐ Доступ: право «Релизы (Nyaa)» или админ";
-    if (TAB_PERMS[k]) return `◐ Доступ: право ${[].concat(TAB_PERMS[k]).map(x => `«${PERM_LABELS[x] || x}»`).join(" или ")}`;
-    return "✕ Доступ: только админы";
+    if (MEMBER_TABS.has(k)) return "Доступ: все участники";
+    if (k === "nyaa") return "Доступ: право «Релизы (Nyaa)» или админ";
+    if (TAB_PERMS[k]) return `Доступ: право ${[].concat(TAB_PERMS[k]).map(x => `«${PERM_LABELS[x] || x}»`).join(" или ")}`;
+    return "Доступ: только админы";
   };
   const nodes = [{ id: "hub", kind: "hub", x: 1040, y: 0, w: 360, h: 104, text: "Проект «Кадр»", color: "#a78bfa", sub: `Автосхема · разделов: ${tabs.length}` }];
   const edges = [];
@@ -1269,7 +1269,7 @@ function buildProjectMap() {
       const id = `t-${t.key}`;
       const desc = t.desc && t.desc !== t.label ? t.desc : "";
       nodes.push({ id, kind: "box", x: side ? 1980 : 120, y: top + i * 150, w: 320, h: 74, text: t.label, sub: g.name, icon: t.icon,
-        color: t.color || g.color, items: [desc, access(t.key), tabAllowed(t.key) ? "✓ У вас: открыт" : "✕ У вас: закрыт"].filter(Boolean),
+        color: t.color || g.color, mine: tabAllowed(t.key), items: [desc, access(t.key), MEMBER_TABS.has(t.key) ? "" : tabAllowed(t.key) ? "✓ У вас: открыт" : "✕ У вас: закрыт"].filter(Boolean),
         itemsSide: side ? "right" : "left" });
       edges.push({ id: `e-${t.key}`, from: gid, to: id, ...trunk, color: "#64748b", style: "solid", flow: true, arrows: "none" });
     });
