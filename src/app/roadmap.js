@@ -20,6 +20,8 @@ const KINDS = {
   milestone: { label: "Веха",           w: 130, h: 130, color: "#22c55e" },
   note:      { label: "Заметка",        w: 220, h: 120, color: "#fcd34d" },
   text:      { label: "Текст",          w: 220, h: 40,  color: "transparent" },
+  frame:     { label: "Рамка-группа",   w: 520, h: 320, color: "#a78bfa" },
+  image:     { label: "Картинка",       w: 320, h: 200, color: "#94a3b8" },
 };
 const COLORS = ["#ef4444", "#f97316", "#fcd34d", "#22c55e", "#38d9e8", "#3b82f6", "#8b5cf6", "#ec4899", "#94a3b8", "#1f2937", "#ffffff"];
 const STATUS = { "": "Без статуса", plan: "План", work: "В работе", done: "Готово", risk: "Риск" };
@@ -204,6 +206,13 @@ function outline(n) {
 function shapeSvg(n) {
   const c = accent(n), o = outline(n), w = n.w, h = n.h;
   if (n.kind === "text") return `<${o.tag} class="rm-shape" ${o.a} fill="transparent"/>`;
+  if (n.kind === "frame") return `<rect class="rm-shape rm-frame" width="${w}" height="${h}" rx="18" fill="${c}" fill-opacity=".05" stroke="${c}" stroke-opacity=".55" stroke-width="1.4" stroke-dasharray="8 6"/>`;
+  if (n.kind === "image") {
+    const cid = `rm-clip-${n.id}`;
+    return `<clipPath id="${cid}"><rect width="${w}" height="${h}" rx="12"/></clipPath><rect class="rm-shape rm-card" width="${w}" height="${h}" rx="12" fill="var(--rm-card)" style="--glow:${c}"/>`
+      + (n.src ? `<image href="${esc(n.src)}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid ${n.fit === "contain" ? "meet" : "slice"}" clip-path="url(#${cid})" pointer-events="none"/>` : "")
+      + `<rect width="${w}" height="${h}" rx="12" fill="none" stroke="${c}" stroke-opacity=".35" pointer-events="none"/>`;
+  }
   let s = `<${o.tag} class="rm-shape rm-card" ${o.a} fill="var(--rm-card)" stroke="${c}" stroke-opacity=".55" stroke-width="1.2" style="--glow:${c}"/>`;
   s += `<${o.tag} ${o.a} fill="url(#${gid(c)})" pointer-events="none"/>`;
   if (n.kind === "box" || n.kind === "note") s += `<rect x="0" y="10" width="3" height="${h - 20}" rx="1.5" fill="${c}" pointer-events="none"/>`;
@@ -221,6 +230,11 @@ function shapeSvg(n) {
 }
 
 function textSvg(n) {
+  if (n.kind === "frame") {
+    const c = accent(n);
+    return `<text class="rm-cap" x="18" y="-12" fill="${c}" dominant-baseline="central">${esc(String(n.sub ?? "ГРУППА").toUpperCase())}</text><text class="rm-txt" x="18" y="22" fill="var(--ink)" font-size="${n.fs || 18}" font-weight="700" dominant-baseline="central">${esc(n.text || "")}</text>`;
+  }
+  if (n.kind === "image") return n.text && n.text !== "Картинка" ? `<text class="rm-txt" x="${n.w / 2}" y="${n.h + 16}" fill="var(--ink-soft)" font-size="13" text-anchor="middle" dominant-baseline="central">${esc(n.text)}</text>` : "";
   const c = accent(n);
   const lines = String(n.text || "").split("\n");
   const big = n.kind === "circle" || n.kind === "hub" || n.kind === "square" || n.kind === "milestone";
@@ -296,11 +310,32 @@ function itemsSvg(n, i0) {
 function dashFor(style) { return style === "dotted" ? "2 7" : style === "dashed" ? "10 7" : ""; }
 function markerId(color, rev) { return `rm-ah-${rev ? "s" : "e"}-${color.replace(/[^a-z0-9]/gi, "")}`; }
 
+const zRank = n => (n.kind === "frame" ? 0 : n.kind === "note" ? 2 : 1);
+const zOrder = ns => [...ns].sort((a, b) => zRank(a) - zRank(b));
+
+// Рисунки карандашом/маркером/стрелкой: сглаженный путь по точкам.
+function strokePath(pts) {
+  if (!pts.length) return "";
+  if (pts.length < 3) return `M${pts.map(q => q.join(",")).join(" L")}`;
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
+    d += ` Q${pts[i][0]},${pts[i][1]} ${mx.toFixed(1)},${my.toFixed(1)}`;
+  }
+  const l = pts[pts.length - 1];
+  return `${d} L${l[0]},${l[1]}`;
+}
+function strokeSvg(sk, sel) {
+  const d = sk.t === "arrow" ? `M${sk.pts[0].join(",")} L${sk.pts[sk.pts.length - 1].join(",")}` : strokePath(sk.pts);
+  const me = sk.t === "arrow" ? ` marker-end="url(#${markerId(sk.c)})"` : "";
+  return `<g class="rm-stroke${sel ? " sel" : ""}" data-draw="${sk.id}"><path class="rm-hit" d="${d}"/><path d="${d}" fill="none" stroke="${sk.c}" stroke-width="${sk.w}" stroke-linecap="round" stroke-linejoin="round" opacity="${sk.t === "marker" ? 0.38 : 1}"${me}/></g>`;
+}
+
 function render() {
   const { data } = st.map;
   const svg = st.svg;
   const byId = new Map(data.nodes.map(n => [n.id, n]));
-  const colors = new Set(data.edges.map(e => e.color || "#64748b"));
+  const colors = new Set([...data.edges.map(e => e.color || "#64748b"), ...(data.draw || []).filter(x => x.t === "arrow").map(x => x.c)]);
   const defs = [...colors].map(c => `
     <marker id="${markerId(c)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L10,5 L0,9 L3,5 Z" fill="${c}"/></marker>
     <marker id="${markerId(c, 1)}" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,1 L0,5 L10,9 L7,5 Z" fill="${c}"/></marker>`).join("");
@@ -308,7 +343,7 @@ function render() {
   const grads = [...ncol].map(c => `<linearGradient id="rm-g-${c.replace(/[^a-z0-9]/gi, "")}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".22"/><stop offset=".55" stop-color="${c}" stop-opacity=".05"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`).join("");
   const intro = st.intro;
   let order = 0;
-  const nodesSvg = [...data.nodes].sort((a, b) => (a.kind === "note") - (b.kind === "note")).map(n => {
+  const nodesSvg = zOrder(data.nodes).map(n => {
     const sel = st.sel.has(n.id);
     const d = order++ * 45;
     return `<g class="rm-node k-${n.kind}${sel ? " sel" : ""}" data-id="${n.id}" transform="translate(${n.x},${n.y})">
@@ -347,6 +382,7 @@ function render() {
       <g class="rm-items">${itemSvg}</g>
       <g class="rm-edges">${edgesSvg}</g>
       <g class="rm-nodes">${nodesSvg}</g>
+      <g class="rm-draw">${(data.draw || []).map(sk => strokeSvg(sk, st.selDraw === sk.id)).join("")}</g>
       <g class="rm-temp"></g>
     </g>`;
   st.wrap.classList.toggle("intro", !!intro);
@@ -455,6 +491,7 @@ function redo() {
 function scheduleSave() {
   clearTimeout(st.saveT);
   if (st.map.auto) { setSaveState("Автосхема — правки не сохраняются", "busy"); return; }
+  if (st.ro) { setSaveState("Только просмотр — сделайте копию, чтобы править", "busy"); return; }
   setSaveState("Сохраняю…", "busy");
   st.saveT = setTimeout(save, 900);
 }
@@ -478,12 +515,17 @@ function toWorld(ev) {
   return { x: (ev.clientX - r.left - v.x) / v.z, y: (ev.clientY - r.top - v.y) / v.z };
 }
 function nodeAt(p) {
-  const ns = st.map.data.nodes;
+  const ns = zOrder(st.map.data.nodes);
   for (let i = ns.length - 1; i >= 0; i--) { const n = ns[i]; if (p.x >= n.x && p.x <= n.x + n.w && p.y >= n.y && p.y <= n.y + n.h) return n; }
   return null;
 }
 function fit() {
-  const ns = st.map.data.nodes;
+  // Рисунки тоже входят в рамку «вписать»: каждый штрих — как маленький узел по своим границам.
+  const sk = (st.map.data.draw || []).filter(x => x.pts.length).map(x => {
+    const xs = x.pts.map(q => q[0]), ys = x.pts.map(q => q[1]);
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  });
+  const ns = st.map.data.nodes.concat(sk);
   const r = st.svg.getBoundingClientRect();
   if (!ns.length) { st.map.data.view = { x: r.width / 2 - 200, y: r.height / 2 - 100, z: 1 }; applyView(); return; }
   const x0 = Math.min(...ns.map(n => n.x - (n.itemsSide === "left" && n.items?.length ? 200 : 0))) - 60;
@@ -535,6 +577,7 @@ function duplicate() {
 }
 function removeSelected() {
   const data = st.map.data;
+  if (st.selDraw) { data.draw = (data.draw || []).filter(x => x.id !== st.selDraw); st.selDraw = null; commit(); return; }
   if (st.selEdge) data.edges = data.edges.filter(e => e.id !== st.selEdge);
   if (st.sel.size) {
     data.nodes = data.nodes.filter(n => !st.sel.has(n.id));
@@ -584,6 +627,31 @@ function bindCanvas() {
     if (e.button === 2) return;
     const p = toWorld(e);
     const t = e.target;
+    const panNow = () => { st.drag = { mode: "pan", cx: e.clientX, cy: e.clientY, vx: st.map.data.view.x, vy: st.map.data.view.y }; svg.classList.add("panning"); };
+    if (e.button === 1 || st.mode === "hand" || st.space || (st.ro && !t.closest?.(".rm-node,.rm-edge"))) { svg.setPointerCapture(e.pointerId); panNow(); return; }
+    if (st.ro) { svg.setPointerCapture(e.pointerId); const ne = t.closest?.(".rm-node"); st.sel = ne ? new Set([ne.dataset.id]) : new Set(); render(); return; }
+    if (!st.map.id) return;
+    if (st.mode === "pen" || st.mode === "marker" || st.mode === "arrow") {
+      svg.setPointerCapture(e.pointerId);
+      const w = st.mode === "marker" ? st.pen.w * 5 : st.pen.w;
+      st.drag = { mode: "draw", sk: { id: uid(), t: st.mode, c: st.pen.c, w, pts: [[Math.round(p.x), Math.round(p.y)]] } };
+      return;
+    }
+    if (st.mode === "eraser") { svg.setPointerCapture(e.pointerId); st.drag = { mode: "erase", hit: false, last: p }; eraseAt(p); return; }
+    if (st.mode === "frame") { svg.setPointerCapture(e.pointerId); st.drag = { mode: "frame", sx: p.x, sy: p.y }; return; }
+    if (st.mode === "text") {
+      const nn = addNode("text", { x: p.x - 10, y: p.y - 20 });
+      nn.text = ""; editText(nn); setMode("select"); return;
+    }
+    const strokeEl = t.closest?.(".rm-stroke");
+    if (strokeEl) {
+      svg.setPointerCapture(e.pointerId);
+      st.sel.clear(); st.selEdge = null; st.selDraw = strokeEl.dataset.draw;
+      const sk = (st.map.data.draw || []).find(x => x.id === st.selDraw);
+      st.drag = { mode: "moveDraw", sk, sx: p.x, sy: p.y, pts: sk.pts.map(q => [...q]), moved: false };
+      render(); return;
+    }
+    st.selDraw = null;
     const port = t.closest?.(".rm-port");
     const nodeEl = t.closest?.(".rm-node");
     const edgeEl = t.closest?.(".rm-edge");
@@ -623,6 +691,27 @@ function bindCanvas() {
     const temp = svg.querySelector(".rm-temp");
     if (d.mode === "pan") {
       st.map.data.view.x = d.vx + e.clientX - d.cx; st.map.data.view.y = d.vy + e.clientY - d.cy; applyView();
+    } else if (d.mode === "draw") {
+      const pts = d.sk.pts, last = pts[pts.length - 1];
+      const q = [Math.round(p.x), Math.round(p.y)];
+      if (d.sk.t === "arrow") { pts[1] = q; pts.length = 2; }
+      else if (Math.hypot(q[0] - last[0], q[1] - last[1]) * st.map.data.view.z >= 2) pts.push(q);
+      if (d.sk.t === "arrow" && !temp.querySelector("defs")) temp.innerHTML = "";
+      temp.innerHTML = strokeSvg(d.sk, false);
+    } else if (d.mode === "erase") {
+      // Курсор мог проскочить штрих между событиями — проверяем и промежуточные точки.
+      const from = d.last || p, steps = Math.max(1, Math.ceil(Math.hypot(p.x - from.x, p.y - from.y) * st.map.data.view.z / 5));
+      for (let i = 1; i <= steps; i++) eraseAt({ x: from.x + (p.x - from.x) * i / steps, y: from.y + (p.y - from.y) * i / steps });
+      d.last = p;
+    } else if (d.mode === "frame") {
+      const x = Math.min(d.sx, p.x), y = Math.min(d.sy, p.y), w = Math.abs(p.x - d.sx), h = Math.abs(p.y - d.sy);
+      temp.innerHTML = `<rect class="rm-marq" x="${x}" y="${y}" width="${w}" height="${h}" rx="18"/>`;
+      d.box = { x, y, w, h };
+    } else if (d.mode === "moveDraw") {
+      const dx = p.x - d.sx, dy = p.y - d.sy;
+      if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+      d.sk.pts = d.pts.map(([x, y]) => [Math.round(x + dx), Math.round(y + dy)]);
+      render();
     } else if (d.mode === "move") {
       const dx = p.x - d.sx, dy = p.y - d.sy;
       if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
@@ -649,6 +738,25 @@ function bindCanvas() {
     if (!d) return;
     const temp = svg.querySelector(".rm-temp");
     if (temp) temp.innerHTML = "";
+    if (d.mode === "draw") {
+      if (d.sk.pts.length > 1 || d.sk.t !== "arrow") {
+        if (d.sk.pts.length === 1) d.sk.pts.push([d.sk.pts[0][0] + 0.5, d.sk.pts[0][1] + 0.5]);
+        (st.map.data.draw ||= []).push(d.sk);
+        commit();
+      }
+      return;
+    }
+    if (d.mode === "erase") { if (d.hit) commit(); return; }
+    if (d.mode === "frame") {
+      const b = d.box;
+      if (b && b.w > 30 && b.h > 30) {
+        const fr = node("frame", snap(b.x), snap(b.y), "Группа", { w: snap(b.w), h: snap(b.h), color: st.pen.c });
+        st.map.data.nodes.push(fr); st.sel = new Set([fr.id]); commit(); editText(fr);
+      }
+      setMode("select");
+      return;
+    }
+    if (d.mode === "moveDraw") { if (d.moved) commit(false); return; }
     if (d.mode === "move" && d.moved) commit(false);
     else if (d.mode === "resize") commit(false);
     else if (d.mode === "link") {
@@ -699,6 +807,71 @@ function bindCanvas() {
     }
   });
 }
+function eraseAt(p) {
+  const r = 10 / st.map.data.view.z;
+  const list = st.map.data.draw || [];
+  const keep = list.filter(sk => !sk.pts.some(([x, y], i) => {
+    if (Math.hypot(x - p.x, y - p.y) <= r + sk.w / 2) return true;
+    const q = sk.pts[i + 1];
+    if (!q) return false;
+    const vx = q[0] - x, vy = q[1] - y, len = vx * vx + vy * vy || 1;
+    const t = Math.max(0, Math.min(1, ((p.x - x) * vx + (p.y - y) * vy) / len));
+    return Math.hypot(x + t * vx - p.x, y + t * vy - p.y) <= r + sk.w / 2;
+  }));
+  if (keep.length !== list.length) { st.map.data.draw = keep; if (st.drag) st.drag.hit = true; render(); }
+}
+
+const MODES = {
+  select: ["Выбор", "V", '<path d="M5 3l14 8-6 2-2 6z"/>'],
+  hand: ["Рука — двигать холст", "H", '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4.5a1.5 1.5 0 0 1 3 0V12M14 11.5V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L3 14a1.5 1.5 0 0 1 2.5-1.7L8 15"/>'],
+  pen: ["Карандаш", "P", '<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>'],
+  marker: ["Маркер-выделитель", "M", '<path d="M9 15l-4 4h5l2-2M9 15l7-7 3 3-7 7z"/><path d="M4 21h16" opacity=".5"/>'],
+  arrow: ["Стрелка от руки", "L", '<path d="M5 19 19 5M10 5h9v9"/>'],
+  frame: ["Рамка-группа — обведите область", "R", '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5" stroke-dasharray="3 2.5"/>'],
+  text: ["Текст — клик по холсту", "T", '<path d="M5 6h14M12 6v13M9 19h6"/>'],
+  eraser: ["Ластик для рисунков", "E", '<path d="m7 21-4-4L14 6l6 6-9 9z"/><path d="M11 21h10M9 11l6 6"/>'],
+};
+const PEN_COLORS = ["#f8fafc", "#f43f5e", "#f59e0b", "#fcd34d", "#22c55e", "#38bdf8", "#a78bfa", "#ec4899"];
+function setMode(m) {
+  st.mode = m;
+  st.wrap.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+  st.wrap.dataset.mode = m;
+  st.wrap.querySelector(".rm-pen")?.classList.toggle("open", ["pen", "marker", "arrow", "frame"].includes(m));
+}
+
+// Картинка: Ctrl+V или кнопка. Ужимаем до 1200 px (webp), чтобы схема оставалась лёгкой.
+async function addImage(file, at) {
+  if (!file || !/^image\//.test(file.type)) return;
+  if (st.ro || !st.map.id) { toast("Картинку можно вставить только в свою карту."); return; }
+  const bmp = await window.createImageBitmap(file);
+  const k = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  const src = c.toDataURL("image/webp", 0.82);
+  if (src.length > 2_500_000) { toast("Картинка слишком большая даже после сжатия.", "error"); return; }
+  const w = Math.min(420, c.width), h = Math.round(w * c.height / c.width);
+  const r = st.svg.getBoundingClientRect(), v = st.map.data.view;
+  const p = at || { x: (r.width / 2 - v.x) / v.z - w / 2, y: (r.height / 2 - v.y) / v.z - h / 2 };
+  const n = node("image", snap(p.x), snap(p.y), "Картинка", { w, h, src });
+  st.map.data.nodes.push(n); st.sel = new Set([n.id]); commit(); pop(n.id);
+}
+function onPaste(e) {
+  if (!st || !st.wrap.offsetParent) return;
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea") return;
+  const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith("image/"));
+  if (f) { e.preventDefault(); addImage(f).catch(err => toast(`Не вставилось: ${err.message}`, "error")); }
+}
+async function copyMap() {
+  const data = clone(st.map.data); delete data.auto;
+  const title = `Копия — ${st.map.title}`.slice(0, 120);
+  const r = await apiPost("/roadmaps", { title, data });
+  st.list.unshift({ id: r.id, title, can_edit: true, nodes: data.nodes.length, updated_at: new Date().toISOString().slice(0, 19).replace("T", " ") });
+  await openMap(r.id);
+  toast("Копия создана — теперь её можно править.");
+}
+
 function drawIn(edgeId) {
   const path = st.svg.querySelector(`.rm-edge[data-edge="${edgeId}"] .rm-line`);
   if (!path) return;
@@ -780,6 +953,7 @@ function commitSoft(full) {
 // ---------- клавиатура ----------
 function onKey(e) {
   if (!st || !document.body.contains(st.wrap) || !st.wrap.offsetParent) return;
+  if (st.ro && (e.ctrlKey || e.metaKey) && /^[zydv]$/i.test(e.key)) return;
   const tag = (e.target.tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable) return;
   const k = e.key.toLowerCase();
@@ -797,7 +971,7 @@ function onKey(e) {
     st.sel = new Set(map.values()); st.clip.nodes.forEach(n => { n.x += 60; n.y += 60; });
     commit();
   }
-  else if (k === "delete" || k === "backspace") { if (st.sel.size || st.selEdge) { e.preventDefault(); removeSelected(); } }
+  else if (k === "delete" || k === "backspace") { if (!st.ro && (st.sel.size || st.selEdge || st.selDraw)) { e.preventDefault(); removeSelected(); } }
   else if (k === "escape") { st.sel.clear(); st.selEdge = null; render(); }
   else if (k === "enter" && st.sel.size === 1) { e.preventDefault(); editText(st.map.data.nodes.find(n => st.sel.has(n.id))); }
   else if (k.startsWith("arrow") && st.sel.size) {
@@ -808,6 +982,8 @@ function onKey(e) {
     commit();
   }
   else if (k === "f") fit();
+  else if (!ctrl && !e.altKey && !st.ro && Object.values(MODES).some(m => m[1].toLowerCase() === k)) setMode(Object.keys(MODES).find(x => MODES[x][1].toLowerCase() === k));
+  else if (k === " " && !st.space) { st.space = true; st.wrap.classList.add("space"); e.preventDefault(); }
   else if (k === "g") { st.grid = !st.grid; render(); }
 }
 
@@ -871,7 +1047,7 @@ function renderList() {
   const box = $("#rm-list");
   box.innerHTML = st.list.length ? st.list.map(m => `
     <button class="rm-li${st.map && st.map.id === m.id ? " on" : ""}" data-open="${m.id}">
-      <b>${m.auto ? '<i class="rm-auto">АВТО</i>' : ""}${esc(m.title)}</b><small>${m.auto ? "обновляется сама" : `${m.nodes} узл. · ${esc(relTime(m.updated_at))}`}</small>
+      <b>${m.auto ? '<i class="rm-auto">АВТО</i>' : ""}${esc(m.title)}</b><small>${m.auto ? "обновляется сама" : `${m.author ? `${esc(m.author)} · ` : ""}${esc(relTime(m.updated_at))}${m.can_edit ? "" : " · просмотр"}`}</small>
     </button>`).join("") : `<div class="rm-empty-l">Карт пока нет</div>`;
 }
 async function openMap(id) {
@@ -879,8 +1055,12 @@ async function openMap(id) {
   if (st.map?.id && st.map.id !== id) await save();
   const m = await apiGet(`/roadmaps/${id}`);
   const data = { ...emptyData(), ...(m.data || {}) };
-  st.map = { id: m.id, title: m.title, data, auto: data.auto || "" };
+  st.map = { id: m.id, title: m.title, data, auto: data.auto || "", author: m.author || "" };
+  st.ro = !!st.map.auto || m.can_edit === false;
   st.wrap.classList.toggle("automap", !!st.map.auto);
+  st.wrap.classList.toggle("ro", st.ro);
+  st.selDraw = null;
+  setMode("select");
   st.undo = []; st.redo = []; st.last = JSON.stringify(data);
   st.sel = new Set(); st.selEdge = null;
   $("#rm-title").value = m.title;
@@ -942,6 +1122,8 @@ const SHAPE_ICONS = {
   milestone: '<path d="m12 3 9 9-9 9-9-9z"/>',
   note: '<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/>',
   text: '<path d="M5 6h14M12 6v13M9 19h6"/>',
+  frame: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5" stroke-dasharray="3 2.5"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 4 4 3-3 4 4"/>',
 };
 function layout() {
   return `<div class="rm-wrap nomap">
@@ -970,11 +1152,21 @@ function layout() {
           <button class="icon-btn" data-cmd="anim" title="Анимация потоков">≋</button>
           <button class="btn ghost" data-cmd="png">PNG</button>
           <button class="btn ghost" data-cmd="svg">SVG</button>
+          <button class="btn ghost rm-copy" data-cmd="copy" title="Сделать свою копию карты">Копия</button>
           <button class="icon-btn danger" data-cmd="delmap" title="Удалить карту">🗑</button>
+          <input type="file" accept="image/*" data-imgfile hidden>
         </div>
       </header>
       <div class="rm-stage">
         <div class="rm-tools">
+          <div class="rm-modes">${Object.entries(MODES).map(([k, [t, key, ic]]) => `<button class="rm-mode${k === "select" ? " on" : ""}" data-mode="${k}" title="${t} (${key})"><svg viewBox="0 0 24 24">${ic}</svg></button>`).join("")}
+            <button class="rm-mode" data-cmd="img" title="Картинка из файла (или Ctrl+V)"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg></button>
+          </div>
+          <div class="rm-pen">
+            <div class="rm-pen-c">${PEN_COLORS.map((c, i) => `<button class="rm-swatch${i === 1 ? " on" : ""}" data-pen="${c}" style="--c:${c}"></button>`).join("")}</div>
+            <input type="range" min="1" max="14" value="3" data-penw title="Толщина">
+          </div>
+          <i class="rm-sep"></i>
           ${Object.entries(KINDS).map(([k, v]) => `<button class="rm-tool" data-add="${k}" title="${v.label} — клик добавить, или выберите и дважды кликните по холсту" style="--c:${v.color === "transparent" ? "var(--ink-soft)" : v.color}"><svg viewBox="0 0 24 24">${SHAPE_ICONS[k]}</svg><span>${v.label}</span></button>`).join("")}
           <i class="rm-sep"></i>
           <button class="rm-tool" data-cmd="undo" title="Отменить (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><span>Отменить</span></button>
@@ -1012,6 +1204,7 @@ export async function loadRoadmap() {
       sel: new Set(), selEdge: null, undo: [], redo: [], last: "{}",
       grid: true, anim: true, tool: "box", drag: null, intro: false,
       edgeDefaults: { style: "dotted", arrows: "end", curve: "curve", color: "#64748b", flow: true },
+      mode: "select", pen: { c: "#f43f5e", w: 3 }, ro: false, selDraw: null, space: false,
     };
     bindCanvas();
     bindInspector();
@@ -1023,6 +1216,7 @@ export async function loadRoadmap() {
         else if (b.dataset.open) await openMap(Number(b.dataset.open));
         else if (b.dataset.add) {
           if (!st.map.id) { toast("Сначала создайте карту."); return; }
+          if (b.dataset.add === "image") { st.wrap.querySelector("[data-imgfile]").click(); return; }
           st.tool = b.dataset.add;
           st.wrap.querySelectorAll("[data-add]").forEach(x => x.classList.toggle("on", x === b));
           addNode(b.dataset.add);
@@ -1036,6 +1230,14 @@ export async function loadRoadmap() {
           else if (c === "anim") { st.anim = !st.anim; b.classList.toggle("on", st.anim); render(); }
           else if (c === "png" || c === "svg") await exportAs(c);
           else if (c === "delmap") await deleteMap();
+          else if (c === "copy") await copyMap();
+          else if (c === "img") st.wrap.querySelector("[data-imgfile]").click();
+        }
+        if (b.dataset.mode) setMode(b.dataset.mode);
+        if (b.dataset.pen) {
+          st.pen.c = b.dataset.pen;
+          st.wrap.querySelectorAll("[data-pen]").forEach(x => x.classList.toggle("on", x === b));
+          if (st.selDraw) { const sk = st.map.data.draw.find(x => x.id === st.selDraw); if (sk) { sk.c = st.pen.c; commit(); } }
         }
       } catch (err) { toast(`Не получилось: ${err.message}`, "error"); }
     });
@@ -1044,6 +1246,12 @@ export async function loadRoadmap() {
     $("#rm-title").addEventListener("input", e => { if (!st.map.id) return; st.map.title = e.target.value.trim() || "Без названия"; scheduleSave(); });
     $("#rm-title").addEventListener("change", () => renderList());
     document.addEventListener("keydown", onKey);
+    document.addEventListener("keyup", e => { if (e.key === " " && st?.space) { st.space = false; st.wrap.classList.remove("space"); } });
+    document.addEventListener("paste", onPaste);
+    st.wrap.querySelector("[data-penw]").addEventListener("input", e => { st.pen.w = Number(e.target.value); });
+    st.wrap.querySelector("[data-imgfile]").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; addImage(f).catch(err => toast(`Не вставилось: ${err.message}`, "error")); });
+    st.svg.addEventListener("dragover", e => e.preventDefault());
+    st.svg.addEventListener("drop", e => { const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith("image/")); if (f) { e.preventDefault(); const p = toWorld(e); addImage(f, { x: p.x, y: p.y }).catch(err => toast(`Не вставилось: ${err.message}`, "error")); } });
     window.addEventListener("resize", () => { if (st?.map.id) applyView(); });
     render();
   }

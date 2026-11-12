@@ -165,3 +165,28 @@
 .automap .rm-tools [data-add], .automap [data-cmd="delmap"], .automap .rm-insp, .automap .rm-port, .automap .rm-resize { display: none; }
 .automap .rm-title { pointer-events: none; }
 .automap .rm-stats { visibility: hidden; }
+
+/* режимы рисования */
+.rm-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding-bottom: 4px; }
+.rm-mode { display: grid; place-items: center; height: 34px; border-radius: 9px; border: 1px solid transparent; background: none; color: var(--ink-soft); cursor: pointer; transition: background .15s, color .15s; }
+.rm-mode svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rm-mode:hover { background: rgba(255, 255, 255, .06); color: var(--ink); }
+.rm-mode.on { background: color-mix(in srgb, var(--rm-acc) 22%, transparent); border-color: color-mix(in srgb, var(--rm-acc) 60%, transparent); color: var(--ink); }
+.rm-pen { display: none; flex-direction: column; gap: 8px; padding: 8px 4px; border-top: 1px solid var(--line); }
+.rm-pen.open { display: flex; }
+.rm-pen-c { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; justify-items: center; }
+.rm-pen input[type=range] { width: 100%; accent-color: var(--rm-acc); }
+.rm-wrap[data-mode="pen"] #rm-svg, .rm-wrap[data-mode="marker"] #rm-svg, .rm-wrap[data-mode="arrow"] #rm-svg, .rm-wrap[data-mode="frame"] #rm-svg { cursor: crosshair; }
+.rm-wrap[data-mode="text"] #rm-svg { cursor: text; }
+.rm-wrap[data-mode="eraser"] #rm-svg { cursor: cell; }
+.rm-wrap[data-mode="hand"] #rm-svg, .rm-wrap.space #rm-svg, .rm-wrap.ro #rm-svg { cursor: grab; }
+.rm-stroke { cursor: pointer; }
+.rm-stroke.sel path:last-child { filter: url(#rm-glow); }
+.rm-wrap:not([data-mode="select"]) .rm-stroke, .rm-wrap:not([data-mode="select"]) .rm-port { pointer-events: none; }
+.rm-node.k-frame .rm-shape { filter: none; }
+/* чужая карта — только просмотр */
+.rm-copy { display: none; }
+.ro .rm-copy { display: inline-flex; }
+.ro .rm-tools, .ro [data-cmd="delmap"], .ro .rm-insp, .ro .rm-port, .ro .rm-resize { display: none; }
+.ro .rm-stage { grid-template-columns: 1fr; }
+.ro .rm-title { pointer-events: none; }
