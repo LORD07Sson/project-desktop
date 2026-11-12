@@ -777,7 +777,7 @@ function exportSvgString() {
   const bgr = document.createElementNS(NS, "rect");
   bgr.setAttribute("width", "100%"); bgr.setAttribute("height", "100%"); bgr.setAttribute("fill", bg);
   clone2.insertBefore(bgr, clone2.querySelector(".rm-vp"));
-  return { s: new XMLSerializer().serializeToString(clone2), w, h };
+  return { s: new window.XMLSerializer().serializeToString(clone2), w, h };
 }
 async function exportAs(kind) {
   if (!st.map.data.nodes.length) { toast("Карта пустая."); return; }
