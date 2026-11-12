@@ -159,3 +159,9 @@
   .rm-stage { height: 70vh; }
   .rm-tool span { display: none; }
 }
+
+/* автосхема: только просмотр */
+.rm-auto { font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .08em; color: #22c55e; border: 1px solid rgba(34, 197, 94, .45); border-radius: 5px; padding: 1px 5px; margin-right: 6px; vertical-align: 1px; }
+.automap .rm-tools [data-add], .automap [data-cmd="delmap"], .automap .rm-insp, .automap .rm-port, .automap .rm-resize { display: none; }
+.automap .rm-title { pointer-events: none; }
+.automap .rm-stats { visibility: hidden; }

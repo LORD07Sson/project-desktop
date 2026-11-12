@@ -289,7 +289,7 @@ function itemsSvg(n, i0) {
   return items.map((t, i) => {
     const y = c.y + (i - (items.length - 1) / 2) * step;
     const d = `M${sx},${sy} C${sx + (left ? -40 : 40)},${sy} ${ex + (left ? 40 : -40)},${y} ${ex},${y}`;
-    return `<g class="rm-item" style="--d:${(i0 + i) * 40}ms"><path d="${d}" fill="none" stroke="var(--rm-branch)" stroke-width="1.5"/><text x="${ex + (left ? -8 : 8)}" y="${y}" font-size="14" fill="var(--ink-soft)" text-anchor="${left ? "end" : "start"}" dominant-baseline="central">${esc(t)}</text></g>`;
+    return `<g class="rm-item" style="--d:${(i0 + i) * 40}ms"><path d="${d}" fill="none" stroke="var(--rm-branch)" stroke-width="1.5"/><text x="${ex + (left ? -8 : 8)}" y="${y}" font-size="14" fill="${t.startsWith("✓") ? "#4ade80" : t.startsWith("✕") ? "#f87171" : t.startsWith("◐") ? "#fbbf24" : "var(--ink-soft)"}" text-anchor="${left ? "end" : "start"}" dominant-baseline="central">${esc(t)}</text></g>`;
   }).join("");
 }
 
@@ -454,6 +454,7 @@ function redo() {
 }
 function scheduleSave() {
   clearTimeout(st.saveT);
+  if (st.map.auto) { setSaveState("Автосхема — правки не сохраняются", "busy"); return; }
   setSaveState("Сохраняю…", "busy");
   st.saveT = setTimeout(save, 900);
 }
@@ -870,7 +871,7 @@ function renderList() {
   const box = $("#rm-list");
   box.innerHTML = st.list.length ? st.list.map(m => `
     <button class="rm-li${st.map && st.map.id === m.id ? " on" : ""}" data-open="${m.id}">
-      <b>${esc(m.title)}</b><small>${m.nodes} узл. · ${esc(relTime(m.updated_at))}</small>
+      <b>${m.auto ? '<i class="rm-auto">АВТО</i>' : ""}${esc(m.title)}</b><small>${m.auto ? "обновляется сама" : `${m.nodes} узл. · ${esc(relTime(m.updated_at))}`}</small>
     </button>`).join("") : `<div class="rm-empty-l">Карт пока нет</div>`;
 }
 async function openMap(id) {
@@ -878,7 +879,8 @@ async function openMap(id) {
   if (st.map?.id && st.map.id !== id) await save();
   const m = await apiGet(`/roadmaps/${id}`);
   const data = { ...emptyData(), ...(m.data || {}) };
-  st.map = { id: m.id, title: m.title, data };
+  st.map = { id: m.id, title: m.title, data, auto: data.auto || "" };
+  st.wrap.classList.toggle("automap", !!st.map.auto);
   st.undo = []; st.redo = []; st.last = JSON.stringify(data);
   st.sel = new Set(); st.selEdge = null;
   $("#rm-title").value = m.title;
@@ -887,7 +889,26 @@ async function openMap(id) {
   render();
   if (!m.data?.view || (m.data.view.x === 0 && m.data.view.y === 0 && m.data.view.z === 1)) fit();
   play();
-  setSaveState("Сохранено", "ok");
+  setSaveState(st.map.auto ? "Автосхема · обновляется сама" : "Сохранено", "ok");
+}
+
+// Автосхема (роли и права) строится сервером из живых данных: перечитываем её при каждом открытии вкладки и раз в
+// 30 с, пока вкладка на экране. Если роли или права поменяли — схема перерисовывается с подсветкой изменившихся узлов.
+async function refreshAuto() {
+  if (!st?.map?.auto || !st.wrap.offsetParent || st.drag) return;
+  const id = st.map.id;
+  let m;
+  try { m = await apiGet(`/roadmaps/${id}`); } catch (_) { return; }
+  if (!st.map || st.map.id !== id) return;
+  const sig = d => JSON.stringify((d.nodes || []).filter(n => n.id !== "legend"));
+  if (sig(m.data || {}) === sig(st.map.data)) return;
+  const before = new Map(st.map.data.nodes.map(n => [n.id, JSON.stringify(n)]));
+  const view = st.map.data.view;
+  st.map.data = { ...emptyData(), ...m.data, view };
+  st.last = JSON.stringify(st.map.data);
+  render();
+  for (const n of st.map.data.nodes) if (n.id !== "legend" && before.get(n.id) !== JSON.stringify(n)) pop(n.id);
+  setSaveState(`Обновлено ${new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`, "ok");
 }
 async function createMap(tpl) {
   const t = TEMPLATES[tpl] || TEMPLATES.blank;
@@ -1035,5 +1056,7 @@ export async function loadRoadmap() {
   }
   renderList();
   if (!st.map.id && st.list.length) await openMap(st.list[0].id);
+  else if (st.map.auto) await refreshAuto();
+  if (!st.autoT) st.autoT = setInterval(() => { refreshAuto(); }, 30000);
   return true;
 }
