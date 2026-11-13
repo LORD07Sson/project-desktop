@@ -1528,7 +1528,7 @@ export async function loadRoadmap() {
   }
   try {
     const r = await apiGet("/roadmaps");
-    st.list = [{ id: PROJECT_ID, title: "Проект «Кадр»: все разделы", auto: "project", can_edit: false }, ...(r.maps || [])];
+    st.list = r.maps || [];
   } catch (e) {
     body.querySelector(".rm-list").innerHTML = `<div class="rm-empty-l">Не удалось загрузить: ${esc(e.message)}</div>`;
     return false;
