@@ -18,7 +18,6 @@ import { loadUploads } from "./kodik.js";
 import { loadTeam } from "./team.js";
 import { loadQueue } from "./queue.js";
 import { loadParser } from "./parser.js";
-import { loadRoadmap } from "./roadmap.js";
 import { startTab } from "./ui-prefs.js";
 import { clearDirectoryCache } from "./titles-admin.js";
 import { refreshTeamNotice, clearTeamNotice } from "./team-notice.js";
@@ -44,12 +43,11 @@ const LOADERS = {
   team: loadTeam,
   profile: loadProfile,
   parser: loadParser,
-  roadmap: loadRoadmap,
 };
 
 // Контейнеры вкладок — чистятся при выходе из аккаунта, чтобы данные
 // предыдущего пользователя не остались висеть в DOM.
-const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#services-body", "#a365-body", "#team-body", "#profile-body", "#reports-body", "#parser-body", "#roadmap-body"];
+const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-body", "#calendar-body", "#messages-body", "#feed-body", "#nyaa-body", "#analytics-body", "#services-body", "#a365-body", "#team-body", "#profile-body", "#reports-body", "#parser-body"];
 
 // Последняя открытая вкладка переживает не только смену пользователя
 // (см. комментарий у state.activeTab в state.js — это настройка
@@ -60,7 +58,7 @@ const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-bod
 const LAST_TAB_KEY = "project-last-tab";
 
 // Вкладки, которые видит рядовой участник студии.
-export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile", "roadmap"]);
+export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
 // Какое право открывает админскую вкладку; остальные (Сервисы, Anime 365, Релизы) — только для админа.
 export const TAB_PERMS = { a365: ["a365.view", "a365.upload"], feed: "reports.feed", board: "reports.board", overview: "reports.overview", list: "reports.list", calendar: "reports.calendar", analytics: "reports.analytics", parser: "parser.use" };
