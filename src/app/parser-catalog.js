@@ -1,7 +1,7 @@
 // Загрузчик: каталог авторов закрытого источника. Что за источник и его адреса знает только сервер —
 // здесь лишь сетка карточек, посты автора и выбор поста для загрузки.
 import { apiGet, apiPost, toast } from "./api.js";
-import { invoke } from "./tauri.js";
+import { invoke, openExternal } from "./tauri.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cssUrl = u => `url("${String(u || "").replace(/["\\\n\r]/g, encodeURIComponent)}")`;
@@ -262,10 +262,125 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     };
   }
 
+  const KIND = { video: "Видео", archive: "Архив", audio: "Аудио", other: "Файл" };
+  const fmtDur = s => (s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "");
+
+  // Страница поста прямо в каталоге: обложка и картинки, текст, файлы с размерами, ссылки.
+  async function showPost(url, back) {
+    const my = ++seq;
+    toTop();
+    const backBtn = `<button type="button" class="btn sm" data-pp-back>← Назад</button>`;
+    box.innerHTML = `<div class="pc-wrap"><div class="pc-bar">${backBtn}</div>${skel("pc-pp-skel", 2)}</div>`;
+    box.onclick = ev => { if (ev.target.closest("[data-pp-back]")) back(); };
+    let d;
+    try {
+      d = await apiGet("/parser/access/post", { url });
+    } catch (e) {
+      if (my === seq) box.innerHTML = `<div class="pc-wrap"><div class="pc-bar">${backBtn}</div><div class="pc-empty">Пост недоступен: ${esc(e.message || e)}</div></div>`;
+      return;
+    }
+    if (my !== seq) return;
+    const a = d.author || {};
+    const files = d.files || [];
+    // Пост только с видео: обложкой служит превью ролика.
+    const imgs = (d.images || []).length ? d.images : [...new Set(files.map(f => f.thumb).filter(Boolean))].map(thumb => ({ thumb }));
+    const links = d.links || [];
+    const big = i => esc(imgs[i]?.full || imgs[i]?.thumb || "");
+    box.innerHTML = `<div class="pc-wrap">
+      <div class="pc-bar">${backBtn}
+        <span class="pp-nav">${d.prev ? `<button type="button" class="btn sm" data-pp-go="${esc(d.prev)}">‹ Новее</button>` : ""}${d.next ? `<button type="button" class="btn sm" data-pp-go="${esc(d.next)}">Старше ›</button>` : ""}</span>
+      </div>
+      <article class="pp">
+        <header class="pp-head">
+          <button type="button" class="pp-author" data-pp-author="${esc(a.service)}/${esc(a.id)}" title="Все посты автора">
+            <img src="${esc(a.icon)}" alt="" referrerpolicy="no-referrer"><span><b>${esc(a.name)}</b><span class="pc-badge" data-svc="${esc(a.service)}">${esc(a.service_name)}</span></span>
+          </button>
+          <h3 class="pp-title">${esc(d.title)}</h3>
+          <small class="pp-date">${esc(fmtDate(d.published))}${d.edited && d.edited !== d.published ? ` · изменён ${esc(fmtDate(d.edited))}` : ""}${(d.tags || []).length ? ` · ${d.tags.map(t => `#${esc(t)}`).join(" ")}` : ""}</small>
+        </header>
+        <div class="pp-body${imgs.length ? "" : " no-media"}">
+          ${imgs.length ? `<div class="pp-media">
+            <button type="button" class="pp-main" data-pp-zoom="0"><img src="${big(0)}" alt="" referrerpolicy="no-referrer"></button>
+            ${imgs.length > 1 ? `<div class="pp-strip">${imgs.map((im, i) => `<button type="button" class="pp-th${i ? "" : " on"}" data-pp-pick="${i}"><img src="${esc(im.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`).join("")}</div>` : ""}
+            <small class="pp-count">Картинок: ${imgs.length}</small>
+          </div>` : ""}
+          <div class="pp-side">
+            ${files.length ? `<section class="pp-sec"><h4>Файлы <small>${files.length}</small></h4>
+              ${files.map((f, i) => `<div class="pp-file" data-kind="${esc(f.kind)}">
+                <span class="pp-fk">${esc(KIND[f.kind] || "Файл")}<small>${esc((f.ext || "").toUpperCase())}</small></span>
+                <span class="pp-fmain"><b title="${esc(f.name)}">${esc(f.name)}</b>
+                  <small><span data-pp-size="${i}">${f.size ? fmtBytes(f.size) : ""}</span>${f.duration ? ` · ${fmtDur(f.duration)}` : ""}${f.resolution ? ` · ${esc(f.resolution)}` : ""}</small></span>
+                <span class="pp-fact"><button type="button" class="btn sm primary" data-pp-dl="${i}" title="Сервер скачает файл, потом заберёте его из «Очереди и загрузок»">Скачать</button></span>
+              </div>`).join("")}</section>` : ""}
+            ${links.length ? `<section class="pp-sec"><h4>Ссылки в посте</h4>
+              ${links.map((l, i) => `<div class="pp-file">
+                <span class="pp-fk">${l.downloadable ? "Облако" : "Сайт"}</span>
+                <span class="pp-fmain"><b title="${esc(l.url)}">${esc(l.label)}</b><small>${esc(l.url)}</small></span>
+                <span class="pp-fact">${l.downloadable ? `<button type="button" class="btn sm primary" data-pp-link="${i}">Скачать</button>` : ""}<button type="button" class="btn sm" data-pp-open="${esc(l.url)}">Открыть</button></span>
+              </div>`).join("")}</section>` : ""}
+            ${!files.length && !links.length ? `<div class="pc-empty">В посте нет файлов для загрузки${imgs.length ? " — только картинки" : ""}.</div>` : ""}
+            ${d.text ? `<section class="pp-sec"><h4>Описание</h4><div class="pp-text">${esc(d.text)}</div></section>` : ""}
+            <div class="pp-foot"><button type="button" class="btn sm" data-pp-analyze>Открыть в загрузчике</button><button type="button" class="btn sm" data-pp-copy>Ссылка на пост</button></div>
+          </div>
+        </div>
+      </article>
+    </div>`;
+    box.querySelectorAll(".pp img").forEach(im => im.addEventListener("error", () => { im.closest(".pp-th")?.remove(); if (im.closest(".pp-main") && imgs[0]?.thumb && !im.src.includes("thumbnail")) im.src = imgs[0].thumb; }));
+    // Размеры, которых нет в ответе (у одного из источников), — по одному в секунду, как просит сайт.
+    (async () => {
+      for (const [i, f] of files.entries()) {
+        if (f.size || my !== seq) continue;
+        try {
+          const r = await apiGet("/parser/access/file-size", { url: f.url });
+          const el = box.querySelector(`[data-pp-size="${i}"]`);
+          if (r?.size && el && my === seq) el.textContent = fmtBytes(r.size);
+        } catch (_) { /* без размера */ }
+      }
+    })();
+    const queue = async (btn, body) => {
+      btn.disabled = true;
+      try {
+        await apiPost("/parser/download", body);
+        btn.textContent = "В очереди";
+        toast("Файл в очереди загрузок: когда будет готов, нажмите «Сохранить»", "success");
+        onQueued?.();
+      } catch (e) { btn.disabled = false; toast(String(e?.message || e), "error"); }
+    };
+    box.onclick = async ev => {
+      const el = ev.target.closest("button");
+      if (!el) return;
+      if (el.matches("[data-pp-back]")) { back(); return; }
+      if (el.dataset.ppGo) { showPost(el.dataset.ppGo, back); return; }
+      if (el.dataset.ppAuthor) { const [s, id] = el.dataset.ppAuthor.split("/"); showPosts(s, id, 1); return; }
+      if (el.dataset.ppPick) {
+        const i = +el.dataset.ppPick;
+        box.querySelector(".pp-main img").src = imgs[i].full || imgs[i].thumb;
+        box.querySelector(".pp-main").dataset.ppZoom = String(i);
+        box.querySelectorAll(".pp-th").forEach((t, k) => t.classList.toggle("on", k === i));
+        return;
+      }
+      if (el.dataset.ppZoom) {
+        const ov = document.createElement("div");
+        ov.className = "pp-zoom";
+        ov.innerHTML = `<img src="${big(+el.dataset.ppZoom)}" alt="" referrerpolicy="no-referrer">`;
+        ov.addEventListener("click", () => ov.remove());
+        document.body.append(ov);
+        return;
+      }
+      if (el.dataset.ppDl) { const f = files[+el.dataset.ppDl]; queue(el, { url: f.url, name: f.name.replace(/\.[^.]+$/, ""), headers: f.headers || {} }); return; }
+      if (el.dataset.ppLink) { const l = links[+el.dataset.ppLink]; queue(el, { url: l.url, name: d.title }); return; }
+      if (el.dataset.ppOpen) { openExternal(el.dataset.ppOpen).catch(e => toast(String(e), "error")); return; }
+      if (el.matches("[data-pp-analyze]")) { seq++; box.onclick = null; onPick(d.url); return; }
+      if (el.matches("[data-pp-copy]")) {
+        try { await navigator.clipboard.writeText(d.url); toast("Ссылка в буфере", "info"); } catch { toast("Не вышло скопировать", "error"); }
+      }
+    };
+  }
+
   async function randomPick(kind) {
     try {
       const r = await apiGet(`/parser/access/random/${kind}`, { site });
-      if (kind === "post") { seq++; box.onclick = null; onPick(r.url); } else showPosts(r.service, r.id, 1);
+      if (kind === "post") showPost(r.url, showFeed); else showPosts(r.service, r.id, 1);
     } catch (e) { toast(String(e?.message || e), "error"); }
   }
 
@@ -331,7 +446,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       const au = ev.target.closest("[data-pc-author]");
       if (au) { const [service, id] = au.dataset.pcAuthor.split("/"); showPosts(service, id, 1); return; }
       const post = ev.target.closest("[data-pc-post]");
-      if (post) { seq++; box.onclick = null; onPick(post.dataset.pcPost); }
+      if (post) { showPost(post.dataset.pcPost, showFeed); }
     };
   }
 
@@ -416,7 +531,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       const pg = ev.target.closest("[data-pc-ppage]");
       if (pg) { toTop(); showPosts(service, id, +pg.dataset.pcPpage); return; }
       const post = ev.target.closest("[data-pc-post]");
-      if (post) { seq++; box.onclick = null; onPick(post.dataset.pcPost); }
+      if (post) { showPost(post.dataset.pcPost, () => showPosts(service, id, page)); }
     };
   }
 
