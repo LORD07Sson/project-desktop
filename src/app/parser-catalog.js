@@ -1,6 +1,6 @@
 // Загрузчик: каталог авторов закрытого источника. Что за источник и его адреса знает только сервер —
 // здесь лишь сетка карточек, посты автора и выбор поста для загрузки.
-import { apiGet, toast } from "./api.js";
+import { apiGet, apiPost, toast } from "./api.js";
 import { invoke } from "./tauri.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -22,8 +22,8 @@ function pager(page, pages, attr) {
 const tabs = active => `<div class="pc-tabs">${[["authors", "Авторы"], ["releases", "Раздачи"]].map(([id, n]) =>
   `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${n}</button>`).join("")}</div>`;
 
-/** Каталог в box. onPick(url) — выбран пост; onClose() — назад к обычному поиску. */
-export function openCatalog(box, { onPick, onClose }) {
+/** Каталог в box. onPick(url) — выбран пост; onClose() — назад к обычному поиску; onQueued() — задача ушла в очередь. */
+export function openCatalog(box, { onPick, onClose, onQueued }) {
   const st = { q: "", service: "", sort: "favorited", page: 1, services: [] };
   const rs = { q: "", category: "", sort: "id", page: 1 };
   let seq = 0;
@@ -65,7 +65,7 @@ export function openCatalog(box, { onPick, onClose }) {
             <span class="pc-badge">${esc(x.category_name)}</span>
             <b class="pc-ptitle" title="${esc(x.title)}">${esc(x.title)}</b>
             <small class="pc-rstats"><span>${esc(x.size)}</span><span class="up">▲ ${x.seeders}</span><span class="down">▼ ${x.leechers}</span><span>⬇ ${fmtNum(x.downloads)}</span><span>${esc(fmtTs(x.published))}</span></small>
-            <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-magnet="${i}">Скачать</button><button type="button" class="btn sm" data-pc-copy="${i}">Копировать magnet</button></span>
+            <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-server="${i}" title="Сервер скачает раздачу через VPN, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-magnet="${i}">В торрент-клиент</button><button type="button" class="btn sm" data-pc-copy="${i}">Magnet</button></span>
           </span>
         </div>`).join("") || `<div class="pc-empty">Ничего не нашлось.</div>`}</div>
       ${nav}
@@ -89,6 +89,19 @@ export function openCatalog(box, { onPick, onClose }) {
       if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
       const pg = ev.target.closest("[data-pc-rpage]");
       if (pg && !pg.disabled) { rs.page = +pg.dataset.pcRpage; showReleases(); return; }
+      const sv = ev.target.closest("[data-pc-server]");
+      if (sv) {
+        // Раздачу качает сервер (до 20 ГБ), готовый файл сохраняется из очереди и удаляется с сервера.
+        const x = d.items[+sv.dataset.pcServer];
+        sv.disabled = true;
+        try {
+          await apiPost("/parser/download", { url: x.magnet, name: x.title });
+          sv.textContent = "В очереди";
+          toast("Раздача в очереди загрузок: когда будет готова, нажмите «Сохранить»", "success");
+          onQueued?.();
+        } catch (e) { sv.disabled = false; toast(String(e?.message || e), "error"); }
+        return;
+      }
       const mg = ev.target.closest("[data-pc-magnet]");
       if (mg) {
         try { await invoke("open_magnet", { magnet: d.items[+mg.dataset.pcMagnet].magnet }); toast("Открыто в торрент-клиенте", "success"); }

@@ -146,6 +146,7 @@ export async function loadParser() {
     openCatalog(results, {
       onPick: url => { input.value = url; results.onclick = null; analyze(false); },
       onClose: () => { results.innerHTML = ""; },
+      onQueued: () => loadHistory(true),
     });
   });
   deepBtn.addEventListener("click", () => analyze(true));
