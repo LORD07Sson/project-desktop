@@ -141,12 +141,15 @@ export async function loadParser() {
     .then(r => (r.ok ? r.json() : null))
     .then(d => { if (d?.unlocked) { catalogBtn.hidden = false; catalogLabels = d.labels || {}; } })
     .catch(() => { /* без каталога */ });
+  // В каталоге панель поиска по ссылке не нужна: прячем её и возвращаем при выходе или выборе поста.
+  const hero = $("#pr-hero");
   catalogBtn.addEventListener("click", () => {
     status.hidden = true;
     setBackdrop(null);
+    hero.hidden = true;
     openCatalog(results, {
-      onPick: url => { input.value = url; results.onclick = null; analyze(false); },
-      onClose: () => { results.innerHTML = ""; },
+      onPick: url => { hero.hidden = false; input.value = url; results.onclick = null; analyze(false); },
+      onClose: () => { hero.hidden = false; results.innerHTML = ""; },
       onQueued: () => loadHistory(true),
       labels: catalogLabels,
     });
