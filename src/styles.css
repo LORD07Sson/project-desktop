@@ -6301,6 +6301,9 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pc-badge[data-svc="subscribestar"] { background: #009688; }
 .pc-badge[data-svc="discord"] { background: #5865f2; }
 .pc-badge[data-svc="dlsite"] { background: #0050a0; }
+.pc-badge[data-svc="onlyfans"] { background: #00aff0; }
+.pc-badge[data-svc="fansly"] { background: #1d9bf0; }
+.pc-badge[data-svc="candfans"] { background: #e8467c; }
 .pc-post, .pc-rel, .pc-rdetail { border-radius: 12px; transition: transform .15s ease, border-color .15s ease; }
 .pc-post:hover { transform: translateY(-2px); border-color: rgba(183, 148, 246, .7); }
 .pc-post .pc-thumb img { transition: transform .25s ease; }
@@ -6333,3 +6336,13 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 @media (max-width: 720px) { .pc-rmain { grid-template-columns: 1fr; } }
 @keyframes pc-sk { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .pc-sk { animation: none; } .pc-card, .pc-post, .pc-post .pc-thumb img { transition: none; } }
+/* Переключатель источника во вкладке каталога */
+.pc-tab { display: inline-flex; align-items: center; gap: 6px; }
+.pc-src { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 7px; background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .22); cursor: pointer; transition: background .15s ease; }
+.pc-src:hover { background: rgba(255, 255, 255, .26); }
+.pc-tab:not(.on) .pc-src { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .1); }
+.pc-src-ico { width: 13px; height: 13px; opacity: .8; }
+.pc-src-sep { opacity: .6; }
+.pc-src.flip { animation: pc-flip .45s cubic-bezier(.2, .8, .2, 1); }
+@keyframes pc-flip { 0% { transform: rotateX(90deg); opacity: 0; } 60% { transform: rotateX(-12deg); opacity: 1; } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pc-src.flip { animation: none; } }

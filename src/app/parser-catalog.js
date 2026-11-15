@@ -26,7 +26,19 @@ const tabs = active => `<div class="pc-top">
   <div class="pc-headline"><span><b>Каталог</b><small>${esc((TABS.find(t => t[0] === active) || TABS[0])[2])}</small></span>
     <button type="button" class="btn sm" data-pc-close title="Вернуться к поиску по ссылке">✕ Закрыть</button></div>
   <div class="pc-tabs">${TABS.map(([id, n]) =>
-    `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${esc(tabLabels[id] || n)}</button>`).join("")}</div></div>`;
+    `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${srcChip(id)}${esc(tabLabels[id] || n)}</button>`).join("")}</div></div>`;
+
+// Авторы и посты есть у двух сайтов одного движка: имя сайта во вкладке кликабельно и переключает источник.
+let site = "a";
+let flipNext = false;
+const SRC_ICON = `<svg class="pc-src-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function srcChip(tab) {
+  const names = tabLabels.sources;
+  if (!names || (tab !== "authors" && tab !== "posts") || !names[site]) return "";
+  const others = Object.keys(names).filter(k => k !== site).map(k => names[k]).join(", ");
+  return `<span class="pc-src${flipNext ? " flip" : ""}" data-pc-src title="Сменить на ${esc(others)}">${esc(names[site])}${SRC_ICON}</span><span class="pc-src-sep">·</span>`;
+}
+const SITE_KEY = "pc-last-site";
 
 // Заглушки-«скелеты», пока грузится список: вёрстка не прыгает.
 const skel = (cls, n) => `<div class="${cls}">${`<div class="pc-sk"></div>`.repeat(n)}</div>`;
@@ -46,6 +58,19 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
 
   function tabClick(ev) {
     if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return true; }
+    const sw = ev.target.closest("[data-pc-src]");
+    if (sw) {
+      const keys = Object.keys(tabLabels.sources || {});
+      site = keys[(keys.indexOf(site) + 1) % keys.length] || "a";
+      try { localStorage.setItem(SITE_KEY, site); } catch (_) { /* без памяти */ }
+      flipNext = true;
+      Object.assign(st, { service: "", page: 1 });
+      Object.assign(fs, { page: 1, tag: fs.mode === "tag" ? "" : fs.tag, mode: fs.mode === "tag" ? "tags" : fs.mode });
+      const tab = sw.closest("[data-pc-tab]")?.dataset.pcTab;
+      saveTab(tab);
+      if (tab === "posts") showFeed(); else showAuthors();
+      return true;
+    }
     const t = ev.target.closest("[data-pc-tab]");
     if (!t) return false;
     const tab = t.dataset.pcTab;
@@ -239,7 +264,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
 
   async function randomPick(kind) {
     try {
-      const r = await apiGet(`/parser/access/random/${kind}`);
+      const r = await apiGet(`/parser/access/random/${kind}`, { site });
       if (kind === "post") { seq++; box.onclick = null; onPick(r.url); } else showPosts(r.service, r.id, 1);
     } catch (e) { toast(String(e?.message || e), "error"); }
   }
@@ -258,13 +283,14 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.onclick = ev => { tabClick(ev); };
     let d;
     try {
-      d = fs.mode === "tags" ? await apiGet("/parser/access/tags")
-        : await apiGet("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: fs.page });
+      d = fs.mode === "tags" ? await apiGet("/parser/access/tags", { site })
+        : await apiGet("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: fs.page, site });
     } catch (e) {
       if (my === seq) box.innerHTML = head(`<div class="pc-empty">Посты недоступны: ${esc(e.message || e)}</div></div>`);
       return;
     }
     if (my !== seq) return;
+    flipNext = false;
     let body, sub = "";
     if (fs.mode === "tags") {
       body = `<div class="pc-tags">${(d.items || []).map(t => `<button type="button" class="pc-tagb" data-pc-tag="${esc(t.tag)}">${esc(t.tag)} <small>${fmtNum(t.count)}</small></button>`).join("") || `<div class="pc-empty">Тегов нет.</div>`}</div>`;
@@ -312,12 +338,13 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.onclick = ev => { tabClick(ev); };
     let d;
     try {
-      d = await apiGet("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: st.page });
+      d = await apiGet("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: st.page, site });
     } catch (e) {
       if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("authors")}<div class="pc-empty">Каталог недоступен: ${esc(e.message || e)}</div></div>`;
       return;
     }
     if (my !== seq) return;
+    flipNext = false;
     st.services = d.services || st.services;
     const services = [["", "Все сервисы"], ...st.services.map(s => [s.id, s.name])];
     box.innerHTML = `<div class="pc-wrap">${tabs("authors")}
@@ -357,7 +384,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.innerHTML = `<div class="pc-wrap">${skel("pc-posts", 12)}</div>`;
     let d;
     try {
-      d = await apiGet(`/parser/access/creator/${encodeURIComponent(service)}/${encodeURIComponent(id)}`, { page });
+      d = await apiGet(`/parser/access/creator/${encodeURIComponent(service)}/${encodeURIComponent(id)}`, { page, site });
     } catch (e) {
       if (my === seq) box.innerHTML = `<div class="pc-wrap"><button type="button" class="btn sm" data-pc-back>← К авторам</button><div class="pc-empty">Посты недоступны: ${esc(e.message || e)}</div></div>`;
       box.onclick = ev => { if (ev.target.closest("[data-pc-back]")) showAuthors(); };
@@ -390,6 +417,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     };
   }
 
+  try { const v = localStorage.getItem(SITE_KEY); if (v && tabLabels.sources?.[v]) site = v; } catch (_) { /* по умолчанию первый */ }
   let last = "authors";
   try { last = localStorage.getItem(TAB_KEY) || "authors"; } catch (_) { /* по умолчанию авторы */ }
   toTop();
