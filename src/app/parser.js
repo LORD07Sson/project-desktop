@@ -136,9 +136,10 @@ export async function loadParser() {
 
   // Кнопка каталога видна только аккаунтам с открытым доступом; сервер отвечает unlocked: true/false.
   const catalogBtn = $("#pr-catalog");
+  let catalogLabels = {};
   fetch(`${API_BASE}/parser/access/status`, { headers: clientHeaders() })
     .then(r => (r.ok ? r.json() : null))
-    .then(d => { if (d?.unlocked) catalogBtn.hidden = false; })
+    .then(d => { if (d?.unlocked) { catalogBtn.hidden = false; catalogLabels = d.labels || {}; } })
     .catch(() => { /* без каталога */ });
   catalogBtn.addEventListener("click", () => {
     status.hidden = true;
@@ -147,6 +148,7 @@ export async function loadParser() {
       onPick: url => { input.value = url; results.onclick = null; analyze(false); },
       onClose: () => { results.innerHTML = ""; },
       onQueued: () => loadHistory(true),
+      labels: catalogLabels,
     });
   });
   deepBtn.addEventListener("click", () => analyze(true));

@@ -19,11 +19,14 @@ function pager(page, pages, attr) {
   return `<div class="pc-pager">${btn(1, "«", false, page === 1)}${btn(page - 1, "‹", false, page === 1)}${nums.map(n => btn(n, n, n === page)).join("")}${btn(page + 1, "›", false, page === pages)}${btn(pages, "»", false, page === pages)}</div>`;
 }
 
+// Подписи вкладок присылает сервер (labels); здесь — нейтральные заглушки.
+let tabLabels = {};
 const tabs = active => `<div class="pc-tabs">${[["authors", "Авторы"], ["releases", "Раздачи"]].map(([id, n]) =>
-  `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${n}</button>`).join("")}</div>`;
+  `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${esc(tabLabels[id] || n)}</button>`).join("")}</div>`;
 
 /** Каталог в box. onPick(url) — выбран пост; onClose() — назад к обычному поиску; onQueued() — задача ушла в очередь. */
-export function openCatalog(box, { onPick, onClose, onQueued }) {
+export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
+  tabLabels = labels || {};
   const st = { q: "", service: "", sort: "favorited", page: 1, services: [] };
   const rs = { q: "", category: "", sort: "id", page: 1 };
   let seq = 0;
@@ -80,7 +83,15 @@ export function openCatalog(box, { onPick, onClose, onQueued }) {
       if (!en.isIntersecting) return;
       io.unobserve(en.target);
       apiGet(`/parser/access/release-cover/${encodeURIComponent(en.target.dataset.pcCover)}`)
-        .then(c => { if (c?.url && en.target.isConnected) en.target.innerHTML = `<img src="${esc(c.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`; })
+        .then(c => {
+          if (!c?.url || !en.target.isConnected) return;
+          const img = document.createElement("img");
+          img.alt = "";
+          img.referrerPolicy = "no-referrer";
+          img.addEventListener("error", () => img.remove());  // inline onerror режет CSP — значок битой картинки оставался
+          img.src = c.url;
+          en.target.replaceChildren(img);
+        })
         .catch(() => { /* без обложки */ });
     }), { rootMargin: "200px" });
     box.querySelectorAll("[data-pc-cover]").forEach(el => io.observe(el));
