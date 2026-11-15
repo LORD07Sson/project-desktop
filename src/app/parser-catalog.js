@@ -270,13 +270,16 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   }
 
   const MODES = [["search", "Новые и поиск"], ["popular", "Популярные"], ["tags", "Теги"]];
+  // Что умеет текущий сайт (присылает сервер); без списка — всё.
+  const can = f => { const list = tabLabels.features?.[site]; return !list || list.includes(f); };
 
   async function showFeed() {
     const my = ++seq;
+    if ((fs.mode === "popular" && !can("popular")) || ((fs.mode === "tags" || fs.mode === "tag") && !can("tags"))) fs.mode = "search";
     const head = (extra, sub = "") => `<div class="pc-wrap">${tabs("posts")}
       <div class="pc-bar">
-        ${MODES.map(([m, n]) => `<button type="button" class="btn sm${(fs.mode === m || (m === "tags" && fs.mode === "tag")) ? " primary" : ""}" data-pc-mode="${m}">${n}</button>`).join("")}
-        <button type="button" class="btn sm" data-pc-random="post">${DICE}Случайный пост</button>
+        ${MODES.filter(([m]) => m === "search" || can(m)).map(([m, n]) => `<button type="button" class="btn sm${(fs.mode === m || (m === "tags" && fs.mode === "tag")) ? " primary" : ""}" data-pc-mode="${m}">${n}</button>`).join("")}
+        ${can("random") ? `<button type="button" class="btn sm" data-pc-random="post">${DICE}Случайный пост</button>` : ""}
         ${sub}
       </div>${extra}`;
     box.innerHTML = head(`${skel(fs.mode === "tags" ? "pc-tags" : "pc-posts", 12)}</div>`);
@@ -299,7 +302,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         ? `<select class="pc-select" data-pc-period>${(d.periods || []).map(x => `<option value="${esc(x.id)}"${x.id === fs.period ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select><span class="pc-count">${esc(d.range || "")}</span>`
         : fs.mode === "tag" ? `<span class="pc-count">Тег: <b>${esc(fs.tag)}</b></span>`
           : `<input type="search" class="pc-search" placeholder="Текст в названии или описании" value="${esc(fs.q)}" spellcheck="false">`;
-      body = `<div class="pc-count">Постов: ${fmtNum(d.total)}${d.pages > 1 ? ` · страница ${d.page} из ${fmtNum(d.pages)}` : ""}</div>
+      body = `<div class="pc-count">${d.approx ? `Страница ${d.page}` : `Постов: ${fmtNum(d.total)}${d.pages > 1 ? ` · страница ${d.page} из ${fmtNum(d.pages)}` : ""}`}</div>
         ${pager(d.page, d.pages, "data-pc-fpage")}
         <div class="pc-posts">${(d.items || []).map(p => `
           <button type="button" class="pc-post${p.media ? " has-media" : ""}" data-pc-post="${esc(p.url)}" title="${esc(p.title)}">
@@ -352,7 +355,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         <input type="search" class="pc-search" placeholder="Имя автора или id" value="${esc(st.q)}" spellcheck="false">
         <select class="pc-select" data-pc-service>${services.map(([v, n]) => `<option value="${esc(v)}"${v === st.service ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>
         <select class="pc-select" data-pc-sort>${SORTS.map(([v, n]) => `<option value="${v}"${v === st.sort ? " selected" : ""}>${n}</option>`).join("")}</select>
-        <button type="button" class="btn sm" data-pc-random="author">${DICE}Случайный</button>
+        ${can("random") ? `<button type="button" class="btn sm" data-pc-random="author">${DICE}Случайный</button>` : ""}
       </div>
       <div class="pc-count">Авторов: ${fmtNum(d.total)}${d.pages > 1 ? ` · страница ${d.page} из ${fmtNum(d.pages)}` : ""}</div>
       ${pager(d.page, d.pages, "data-pc-page")}
