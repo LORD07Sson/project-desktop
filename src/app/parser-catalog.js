@@ -5,7 +5,7 @@ import { invoke } from "./tauri.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cssUrl = u => `url("${String(u || "").replace(/["\\\n\r]/g, encodeURIComponent)}")`;
-const SORTS = [["favorited", "Популярные"], ["updated", "Обновлённые"], ["name", "По имени"]];
+const SORTS = [["favorited", "Популярные"], ["updated", "Недавние"], ["name", "По имени"]];
 const fmtNum = n => Number(n || 0).toLocaleString("ru-RU");
 const fmtDate = s => { const d = new Date(s); return isNaN(d) ? "" : d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }); };
 
@@ -21,7 +21,7 @@ function pager(page, pages, attr) {
 
 // Подписи вкладок присылает сервер (labels); здесь — нейтральные заглушки.
 let tabLabels = {};
-const tabs = active => `<div class="pc-tabs">${[["authors", "Авторы"], ["releases", "Раздачи"]].map(([id, n]) =>
+const tabs = active => `<div class="pc-tabs">${[["authors", "Авторы"], ["posts", "Посты"], ["releases", "Раздачи"]].map(([id, n]) =>
   `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${esc(tabLabels[id] || n)}</button>`).join("")}</div>`;
 
 /** Каталог в box. onPick(url) — выбран пост; onClose() — назад к обычному поиску; onQueued() — задача ушла в очередь. */
@@ -29,12 +29,14 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   tabLabels = labels || {};
   const st = { q: "", service: "", sort: "favorited", page: 1, services: [] };
   const rs = { q: "", category: "", sort: "id", page: 1 };
+  const fs = { mode: "search", q: "", tag: "", period: "week", page: 1 };
   let seq = 0;
 
   function tabClick(ev) {
     const t = ev.target.closest("[data-pc-tab]");
     if (!t) return false;
-    if (t.dataset.pcTab === "releases") showReleases(); else showAuthors();
+    const tab = t.dataset.pcTab;
+    if (tab === "releases") showReleases(); else if (tab === "posts") showFeed(); else showAuthors();
     return true;
   }
 
@@ -127,6 +129,77 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     };
   }
 
+  async function randomPick(kind) {
+    try {
+      const r = await apiGet(`/parser/access/random/${kind}`);
+      if (kind === "post") { seq++; box.onclick = null; onPick(r.url); } else showPosts(r.service, r.id, 1);
+    } catch (e) { toast(String(e?.message || e), "error"); }
+  }
+
+  const MODES = [["search", "Новые и поиск"], ["popular", "Популярные"], ["tags", "Теги"]];
+
+  async function showFeed() {
+    const my = ++seq;
+    const head = extra => `<div class="pc-wrap">${tabs("posts")}
+      <div class="pc-bar">
+        <button type="button" class="btn sm" data-pc-close>← Поиск по ссылке</button>
+        ${MODES.map(([m, n]) => `<button type="button" class="btn sm${(fs.mode === m || (m === "tags" && fs.mode === "tag")) ? " primary" : ""}" data-pc-mode="${m}">${n}</button>`).join("")}
+        <button type="button" class="btn sm" data-pc-random="post">🎲 Случайный пост</button>
+      </div>${extra}`;
+    box.innerHTML = head(`<div class="pc-empty">Загружаю…</div></div>`);
+    box.onclick = ev => { tabClick(ev); };
+    let d;
+    try {
+      d = fs.mode === "tags" ? await apiGet("/parser/access/tags")
+        : await apiGet("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: fs.page });
+    } catch (e) {
+      if (my === seq) box.innerHTML = head(`<div class="pc-empty">Посты недоступны: ${esc(e.message || e)}</div></div>`);
+      return;
+    }
+    if (my !== seq) return;
+    let body;
+    if (fs.mode === "tags") {
+      body = `<div class="pc-tags">${(d.items || []).map(t => `<button type="button" class="pc-tagb" data-pc-tag="${esc(t.tag)}">${esc(t.tag)} <small>${fmtNum(t.count)}</small></button>`).join("") || `<div class="pc-empty">Тегов нет.</div>`}</div>`;
+    } else {
+      const sub = fs.mode === "popular"
+        ? `<select class="pc-select" data-pc-period>${(d.periods || []).map(x => `<option value="${esc(x.id)}"${x.id === fs.period ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select><span class="pc-count">${esc(d.range || "")}</span>`
+        : fs.mode === "tag" ? `<span class="pc-count">Тег: <b>${esc(fs.tag)}</b></span>`
+          : `<input type="search" class="pc-search" placeholder="Текст в названии или описании" value="${esc(fs.q)}" spellcheck="false">`;
+      body = `<div class="pc-bar">${sub}</div>
+        <div class="pc-count">Постов: ${fmtNum(d.total)}${d.pages > 1 ? ` · страница ${d.page} из ${fmtNum(d.pages)}` : ""}</div>
+        ${pager(d.page, d.pages, "data-pc-fpage")}
+        <div class="pc-posts">${(d.items || []).map(p => `
+          <button type="button" class="pc-post${p.media ? " has-media" : ""}" data-pc-post="${esc(p.url)}" title="${esc(p.title)}">
+            <span class="pc-thumb">${p.thumb ? `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
+              ${p.media ? `<span class="pc-flag">${p.media} для загрузки</span>` : ""}</span>
+            <b class="pc-ptitle">${esc(p.title)}</b>
+            <small><span class="pc-badge" data-svc="${esc(p.service)}">${esc(p.service_name)}</span> ${esc(fmtDate(p.published))}${p.favs ? ` · ♥ ${fmtNum(p.favs)}` : ""}</small>
+            <small class="pc-alink" data-pc-author="${esc(p.service)}/${esc(p.user)}">Все посты автора →</small>
+          </button>`).join("") || `<div class="pc-empty">Ничего не нашлось.</div>`}</div>
+        ${pager(d.page, d.pages, "data-pc-fpage")}`;
+    }
+    box.innerHTML = head(body + "</div>");
+    const search = box.querySelector(".pc-search");
+    let timer;
+    search?.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { fs.q = search.value.trim(); fs.page = 1; showFeed(); }, 450); });
+    box.querySelector("[data-pc-period]")?.addEventListener("change", e => { fs.period = e.target.value; fs.page = 1; showFeed(); });
+    box.onclick = ev => {
+      if (tabClick(ev)) return;
+      if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
+      if (ev.target.closest("[data-pc-random]")) { randomPick("post"); return; }
+      const md = ev.target.closest("[data-pc-mode]");
+      if (md) { fs.mode = md.dataset.pcMode; fs.page = 1; showFeed(); return; }
+      const tg = ev.target.closest("[data-pc-tag]");
+      if (tg) { fs.mode = "tag"; fs.tag = tg.dataset.pcTag; fs.page = 1; showFeed(); return; }
+      const pg = ev.target.closest("[data-pc-fpage]");
+      if (pg && !pg.disabled) { fs.page = +pg.dataset.pcFpage; showFeed(); return; }
+      const au = ev.target.closest("[data-pc-author]");
+      if (au) { const [service, id] = au.dataset.pcAuthor.split("/"); showPosts(service, id, 1); return; }
+      const post = ev.target.closest("[data-pc-post]");
+      if (post) { seq++; box.onclick = null; onPick(post.dataset.pcPost); }
+    };
+  }
+
   async function showAuthors() {
     const my = ++seq;
     box.innerHTML = `<div class="pc-wrap"><div class="pc-empty">Загружаю каталог…</div></div>`;
@@ -146,6 +219,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         <input type="search" class="pc-search" placeholder="Имя автора или id" value="${esc(st.q)}" spellcheck="false">
         <select class="pc-select" data-pc-service>${services.map(([v, n]) => `<option value="${esc(v)}"${v === st.service ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>
         <select class="pc-select" data-pc-sort>${SORTS.map(([v, n]) => `<option value="${v}"${v === st.sort ? " selected" : ""}>${n}</option>`).join("")}</select>
+        <button type="button" class="btn sm" data-pc-random="author">🎲 Случайный</button>
       </div>
       <div class="pc-count">Авторов: ${fmtNum(d.total)}${d.pages > 1 ? ` · страница ${d.page} из ${fmtNum(d.pages)}` : ""}</div>
       ${pager(d.page, d.pages, "data-pc-page")}
@@ -167,6 +241,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
       const pg = ev.target.closest("[data-pc-page]");
       if (pg) { st.page = +pg.dataset.pcPage; showAuthors(); return; }
+      if (ev.target.closest("[data-pc-random]")) { randomPick("author"); return; }
       const card = ev.target.closest("[data-pc-author]");
       if (card) { const [service, id] = card.dataset.pcAuthor.split("/"); showPosts(service, id, 1); }
     };

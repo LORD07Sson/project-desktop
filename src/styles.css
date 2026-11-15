@@ -6242,5 +6242,11 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pc-rbody { display: grid; align-content: start; gap: 5px; min-width: 0; color: var(--ink); }
 .pc-rstats { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--ink-dim); }
 .pc-rstats .up { color: #3fb950; font-weight: 700; }
+.pc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.pc-tagb { border: 1px solid var(--line, #333); background: transparent; color: inherit; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.pc-tagb:hover { border-color: var(--accent, #7aa2ff); }
+.pc-tagb small { color: var(--ink-dim); margin-left: 4px; }
+.pc-alink { color: var(--accent, #7aa2ff); cursor: pointer; }
+.pc-alink:hover { text-decoration: underline; }
 .pc-rstats .down { color: #e5484d; }
 .pc-ract { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
