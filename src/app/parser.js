@@ -495,13 +495,19 @@ export async function loadParser() {
     });
   }
 
-  function saveJob(jobId, savePath) {
-    return downloadWithCard({
+  // После удачного сохранения файл на сервере больше не нужен — удаляем сразу, а не через 6 часов.
+  async function saveJob(jobId, savePath) {
+    const ok = await downloadWithCard({
       command: "download_api_file",
       args: { apiPath: `parser/download/${jobId}/file` },
       savePath,
       name: savePath.split(/[\\/]/).pop(),
     });
+    if (ok) {
+      await fetch(`${API_BASE}/parser/download/${jobId}/delete`, { method: "POST", headers: clientHeaders() }).catch(() => {});
+      loadHistory();
+    }
+    return ok;
   }
 
   const JOB_STATUS = { queued: "в очереди", analyzing: "ищу поток", running: "загружается", done: "готово", error: "ошибка", cancelled: "отменено" };
