@@ -377,6 +377,12 @@ export async function loadParser() {
         }
       }
     };
+
+    // Единственный пригодный поток выбирать не из чего — сразу запускаем его загрузку.
+    const only = r.candidates || [];
+    if (only.length === 1 && !only[0].audio_only && !only[0].drm && only[0].alive !== false) {
+      results.querySelector('[data-dl="0"]')?.click();
+    }
   }
 
   async function downloadCandidate(c, title, btn) {
