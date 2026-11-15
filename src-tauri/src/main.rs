@@ -1110,6 +1110,32 @@ async fn api_fallback(
     result
 }
 
+#[derive(serde::Serialize)]
+struct FastResponse {
+    status: u16,
+    body: String,
+}
+
+/// Быстрый GET каталога загрузчика. WebView перед каждым новым адресом шлёт CORS-предзапрос (лишний круг до
+/// сервера, ~100 мс), а общий клиент `http()` держит соединение открытым и предзапросов не делает. Только наш
+/// сервер (API_BASE) и только пути /parser/access/; из заголовков — авторизация, версия и предпросмотр роли.
+#[tauri::command]
+async fn api_get_fast(path: String, headers: std::collections::HashMap<String, String>) -> Result<FastResponse, String> {
+    if !path.starts_with("/parser/access/") || path.contains("..") || path.contains('#') || path.contains('\\') {
+        return Err("path not allowed".into());
+    }
+    let mut req = http().get(format!("{API_BASE}{path}")).timeout(std::time::Duration::from_secs(60));
+    for (name, value) in headers {
+        if matches!(name.as_str(), "X-Init-Data" | "X-App-Version" | "X-Preview-Role") {
+            req = req.header(name, value);
+        }
+    }
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let status = resp.status().as_u16();
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    Ok(FastResponse { status, body })
+}
+
 /// Параметры видео, лежащего на этом компьютере, для плана сборки (читается только выбранный пользователем файл).
 #[tauri::command(async)]
 fn local_render_probe(app: tauri::AppHandle, path: String) -> Result<local_render::LocalVideoInfo, String> {
@@ -1828,6 +1854,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             desktop_notify::notify_desktop,
             api_fallback,
+            api_get_fast,
             local_render_prepare,
             upscale_image,
             upscale_read,
