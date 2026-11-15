@@ -113,6 +113,10 @@ export async function loadParser() {
     return true;
   }
   body.innerHTML = layout();
+  // Очередь загрузок: объявлено до первого loadHistory() — иначе let в «мёртвой зоне» и ReferenceError.
+  const JOB_STATUS = { queued: "в очереди", analyzing: "ищу поток", running: "загружается", done: "готово", error: "ошибка", cancelled: "отменено" };
+  const JOB_OPEN = new Set(["queued", "analyzing", "running"]);
+  let historyTimer = null;
   const form = $("#pr-form");
   const input = $("#pr-url");
   const cookieInput = $("#pr-cookies");
@@ -566,9 +570,6 @@ export async function loadParser() {
     return ok;
   }
 
-  const JOB_STATUS = { queued: "в очереди", analyzing: "ищу поток", running: "загружается", done: "готово", error: "ошибка", cancelled: "отменено" };
-  const JOB_OPEN = new Set(["queued", "analyzing", "running"]);
-  let historyTimer = null;
 
   async function loadHistory(open = false) {
     const box = $("#pr-history");
