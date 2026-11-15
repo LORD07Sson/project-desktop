@@ -33,6 +33,24 @@ function cget(path, q) {
   if (memo.size > 400) memo.delete(memo.keys().next().value);
   return p;
 }
+// Кнопка «В очереди» помнит свою задачу: отменили или упала — кнопка снова «Скачать» (очередь шлёт parser:jobs).
+function markQueued(btn, jobId, html) {
+  if (!jobId) return;
+  btn.dataset.idle ??= btn.innerHTML;
+  btn.dataset.jobId = jobId;
+  btn.innerHTML = html;
+}
+document.addEventListener("parser:jobs", ev => {
+  for (const j of ev.detail || []) {
+    if (j.status !== "cancelled" && j.status !== "error") continue;
+    document.querySelectorAll(`[data-job-id="${window.CSS.escape(String(j.id))}"]`).forEach(b => {
+      b.disabled = false;
+      b.classList.remove("done");
+      if (b.dataset.idle) b.innerHTML = b.dataset.idle;
+      delete b.dataset.jobId;
+    });
+  }
+});
 const prefetch = (path, q) => { cget(path, q).catch(() => { /* не страшно: загрузим по клику */ }); };
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -192,8 +210,9 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         const x = d.items[+sv.dataset.pcServer];
         sv.disabled = true;
         try {
-          await apiPost("/parser/download", { url: x.magnet, name: x.title });
-          sv.textContent = "В очереди";
+          const r = await apiPost("/parser/download", { url: x.magnet, name: x.title });
+          markQueued(sv, r?.job_id, "В очереди");
+          if (!r?.job_id) sv.textContent = "В очереди";
           toast("Раздача в очереди загрузок: когда будет готова, нажмите «Сохранить»", "success");
           onQueued?.();
         } catch (e) { sv.disabled = false; toast(String(e?.message || e), "error"); }
@@ -288,8 +307,9 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         const on = boxes.filter(b => b.checked).map(b => files[+b.dataset.pcFile].path);
         get.disabled = true;
         try {
-          await apiPost("/parser/download", { url: x.magnet, name: x.title, ...(on.length < boxes.length ? { files: on } : {}) });
-          get.textContent = "В очереди";
+          const r = await apiPost("/parser/download", { url: x.magnet, name: x.title, ...(on.length < boxes.length ? { files: on } : {}) });
+          markQueued(get, r?.job_id, "В очереди");
+          if (!r?.job_id) get.textContent = "В очереди";
           toast("Раздача в очереди загрузок: когда будет готова, нажмите «Сохранить»", "success");
           onQueued?.();
         } catch (e) { get.disabled = false; toast(String(e?.message || e), "error"); }
@@ -421,9 +441,10 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (btn.classList.contains("done")) return true;
       btn.disabled = true;
       try {
-        await apiPost("/parser/download", body);
+        const r = await apiPost("/parser/download", body);
         btn.classList.add("done");
-        btn.innerHTML = `${svg("ok")}<span>В очереди</span>`;
+        markQueued(btn, r?.job_id, `${svg("ok")}<span>В очереди</span>`);
+        if (!r?.job_id) btn.innerHTML = `${svg("ok")}<span>В очереди</span>`;
         if (!quiet) { toast("В очереди загрузок: когда будет готово, нажмите «Сохранить»", "success"); onQueued?.(); }
         return true;
       } catch (e) { btn.disabled = false; toast(String(e?.message || e), "error"); return false; }
