@@ -264,8 +264,19 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
 
   const KIND = { video: "Видео", archive: "Архив", audio: "Аудио", other: "Файл" };
   const fmtDur = s => (s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "");
+  const ICON = {
+    video: `<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h7A2.5 2.5 0 0 1 16 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 4 17.5zM16 10l4-2.5v9L16 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>`,
+    archive: `<path d="M5 4h14v4H5zM6 8v11a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8M10 12h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`,
+    audio: `<path d="M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm10-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" fill="none" stroke="currentColor" stroke-width="1.8"/>`,
+    other: `<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm7 0v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>`,
+    link: `<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`,
+    down: `<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+    ok: `<path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
+    ext: `<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+  };
+  const svg = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ICON.other}</svg>`;
 
-  // Страница поста прямо в каталоге: обложка и картинки, текст, файлы с размерами, ссылки.
+  // Страница поста прямо в каталоге: слева медиа, справа карточка с автором, файлами и действиями.
   async function showPost(url, back) {
     const my = ++seq;
     toTop();
@@ -282,70 +293,97 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     if (my !== seq) return;
     const a = d.author || {};
     const files = d.files || [];
+    const links = d.links || [];
     // Пост только с видео: обложкой служит превью ролика.
     const imgs = (d.images || []).length ? d.images : [...new Set(files.map(f => f.thumb).filter(Boolean))].map(thumb => ({ thumb }));
-    const links = d.links || [];
+    const sizes = files.map(f => f.size || 0);
     const big = i => esc(imgs[i]?.full || imgs[i]?.thumb || "");
+    const counts = Object.entries(files.reduce((m, f) => ({ ...m, [f.kind]: (m[f.kind] || 0) + 1 }), {}))
+      .map(([k, n]) => `${n} ${{ video: "видео", archive: n === 1 ? "архив" : "архива", audio: "аудио", other: n === 1 ? "файл" : "файла" }[k] || "файл"}`);
+    const downloadable = files.length + links.filter(l => l.downloadable).length;
+    const longText = (d.text || "").length > 420;
+
     box.innerHTML = `<div class="pc-wrap">
       <div class="pc-bar">${backBtn}
         <span class="pp-nav">${d.prev ? `<button type="button" class="btn sm" data-pp-go="${esc(d.prev)}">‹ Новее</button>` : ""}${d.next ? `<button type="button" class="btn sm" data-pp-go="${esc(d.next)}">Старше ›</button>` : ""}</span>
       </div>
-      <article class="pp">
-        <header class="pp-head">
+      <article class="pp${imgs.length ? "" : " no-media"}">
+        ${imgs.length ? `<div class="pp-media">
+          <button type="button" class="pp-main" data-pp-zoom="0" style="--pp-bg:${esc(cssUrl(imgs[0].thumb))}"><img src="${big(0)}" alt="" referrerpolicy="no-referrer"><span class="pp-zoomhint">Нажмите, чтобы увеличить</span></button>
+          ${imgs.length > 1 ? `<div class="pp-strip">${imgs.map((im, i) => `<button type="button" class="pp-th${i ? "" : " on"}" data-pp-pick="${i}"><img src="${esc(im.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`).join("")}</div>` : ""}
+        </div>` : ""}
+        <div class="pp-info">
           <button type="button" class="pp-author" data-pp-author="${esc(a.service)}/${esc(a.id)}" title="Все посты автора">
-            <img src="${esc(a.icon)}" alt="" referrerpolicy="no-referrer"><span><b>${esc(a.name)}</b><span class="pc-badge" data-svc="${esc(a.service)}">${esc(a.service_name)}</span></span>
+            <img src="${esc(a.icon)}" alt="" referrerpolicy="no-referrer">
+            <span><b>${esc(a.name)}</b><small>${esc(a.service_name)} · все посты →</small></span>
           </button>
           <h3 class="pp-title">${esc(d.title)}</h3>
-          <small class="pp-date">${esc(fmtDate(d.published))}${d.edited && d.edited !== d.published ? ` · изменён ${esc(fmtDate(d.edited))}` : ""}${(d.tags || []).length ? ` · ${d.tags.map(t => `#${esc(t)}`).join(" ")}` : ""}</small>
-        </header>
-        <div class="pp-body${imgs.length ? "" : " no-media"}">
-          ${imgs.length ? `<div class="pp-media">
-            <button type="button" class="pp-main" data-pp-zoom="0"><img src="${big(0)}" alt="" referrerpolicy="no-referrer"></button>
-            ${imgs.length > 1 ? `<div class="pp-strip">${imgs.map((im, i) => `<button type="button" class="pp-th${i ? "" : " on"}" data-pp-pick="${i}"><img src="${esc(im.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`).join("")}</div>` : ""}
-            <small class="pp-count">Картинок: ${imgs.length}</small>
-          </div>` : ""}
-          <div class="pp-side">
-            ${files.length ? `<section class="pp-sec"><h4>Файлы <small>${files.length}</small></h4>
-              ${files.map((f, i) => `<div class="pp-file" data-kind="${esc(f.kind)}">
-                <span class="pp-fk">${esc(KIND[f.kind] || "Файл")}<small>${esc((f.ext || "").toUpperCase())}</small></span>
-                <span class="pp-fmain"><b title="${esc(f.name)}">${esc(f.name)}</b>
-                  <small><span data-pp-size="${i}">${f.size ? fmtBytes(f.size) : ""}</span>${f.duration ? ` · ${fmtDur(f.duration)}` : ""}${f.resolution ? ` · ${esc(f.resolution)}` : ""}</small></span>
-                <span class="pp-fact"><button type="button" class="btn sm primary" data-pp-dl="${i}" title="Сервер скачает файл, потом заберёте его из «Очереди и загрузок»">Скачать</button></span>
-              </div>`).join("")}</section>` : ""}
-            ${links.length ? `<section class="pp-sec"><h4>Ссылки в посте</h4>
-              ${links.map((l, i) => `<div class="pp-file">
-                <span class="pp-fk">${l.downloadable ? "Облако" : "Сайт"}</span>
-                <span class="pp-fmain"><b title="${esc(l.url)}">${esc(l.label)}</b><small>${esc(l.url)}</small></span>
-                <span class="pp-fact">${l.downloadable ? `<button type="button" class="btn sm primary" data-pp-link="${i}">Скачать</button>` : ""}<button type="button" class="btn sm" data-pp-open="${esc(l.url)}">Открыть</button></span>
-              </div>`).join("")}</section>` : ""}
-            ${!files.length && !links.length ? `<div class="pc-empty">В посте нет файлов для загрузки${imgs.length ? " — только картинки" : ""}.</div>` : ""}
-            ${d.text ? `<section class="pp-sec"><h4>Описание</h4><div class="pp-text">${esc(d.text)}</div></section>` : ""}
-            <div class="pp-foot"><button type="button" class="btn sm" data-pp-analyze>Открыть в загрузчике</button><button type="button" class="btn sm" data-pp-copy>Ссылка на пост</button></div>
+          <div class="pp-chips">
+            ${d.published ? `<span class="pp-chip">${esc(fmtDate(d.published))}</span>` : ""}
+            ${counts.map(c => `<span class="pp-chip">${esc(c)}</span>`).join("")}
+            ${imgs.length && (d.images || []).length ? `<span class="pp-chip">${imgs.length} ${imgs.length === 1 ? "картинка" : "картинок"}</span>` : ""}
+            <span class="pp-chip" data-pp-total hidden></span>
+            ${(d.tags || []).slice(0, 6).map(t => `<span class="pp-chip tag">#${esc(t)}</span>`).join("")}
           </div>
+          ${downloadable > 1 ? `<button type="button" class="btn primary pp-all" data-pp-all>${svg("down")}Скачать всё · ${downloadable}</button>` : ""}
+          ${files.length ? `<div class="pp-list">${files.map((f, i) => `
+            <div class="pp-row" data-kind="${esc(f.kind)}">
+              <span class="pp-ico">${svg(f.kind)}</span>
+              <span class="pp-rmain"><b title="${esc(f.name)}">${esc(f.name)}</b>
+                <small><span data-pp-size="${i}">${f.size ? fmtBytes(f.size) : `<i class="pp-wait">размер…</i>`}</span>${f.duration ? ` · ${fmtDur(f.duration)}` : ""}${f.resolution ? ` · ${esc(f.resolution)}` : ""} · ${esc(KIND[f.kind] || "Файл")} ${esc((f.ext || "").toUpperCase())}</small></span>
+              <button type="button" class="pp-get" data-pp-dl="${i}" title="Сервер скачает файл — потом заберёте его в «Очереди и загрузках»">${svg("down")}<span>Скачать</span></button>
+            </div>`).join("")}</div>` : ""}
+          ${links.length ? `<div class="pp-list">${links.map((l, i) => `
+            <div class="pp-row" data-kind="link">
+              <span class="pp-ico">${svg("link")}</span>
+              <span class="pp-rmain"><b title="${esc(l.url)}">${esc(l.label)}</b><small>${l.downloadable ? "облако — сервер скачает сам" : "внешний сайт"}</small></span>
+              ${l.downloadable
+                ? `<button type="button" class="pp-get" data-pp-link="${i}">${svg("down")}<span>Скачать</span></button>`
+                : `<button type="button" class="pp-get ghost" data-pp-open="${esc(l.url)}">${svg("ext")}<span>Открыть</span></button>`}
+            </div>`).join("")}</div>` : ""}
+          ${!downloadable ? `<div class="pp-none">В посте нет файлов для загрузки${imgs.length ? " — только картинки" : ""}.</div>` : ""}
+          <div class="pp-more"><button type="button" class="btn sm" data-pp-analyze>Открыть в загрузчике</button><button type="button" class="btn sm" data-pp-copy>Скопировать ссылку</button></div>
         </div>
       </article>
+      ${d.text ? `<section class="pp-desc${longText ? " clamp" : ""}"><h4>Описание</h4><div class="pp-text">${esc(d.text)}</div>${longText ? `<button type="button" class="pp-expand" data-pp-expand>Показать полностью</button>` : ""}</section>` : ""}
     </div>`;
-    box.querySelectorAll(".pp img").forEach(im => im.addEventListener("error", () => { im.closest(".pp-th")?.remove(); if (im.closest(".pp-main") && imgs[0]?.thumb && !im.src.includes("thumbnail")) im.src = imgs[0].thumb; }));
+
+    box.querySelectorAll(".pp img").forEach(im => im.addEventListener("error", () => {
+      if (im.closest(".pp-th")) { im.closest(".pp-th").remove(); return; }
+      if (im.closest(".pp-main") && imgs[0]?.thumb && im.src !== imgs[0].thumb) im.src = imgs[0].thumb;
+      else if (im.closest(".pp-author")) im.remove();
+    }));
+    const showTotal = () => {
+      const sum = sizes.reduce((n, x) => n + x, 0);
+      const el = box.querySelector("[data-pp-total]");
+      if (el && sum && sizes.every(Boolean)) { el.textContent = `всего ${fmtBytes(sum)}`; el.hidden = false; }
+    };
+    showTotal();
     // Размеры, которых нет в ответе (у одного из источников), — по одному в секунду, как просит сайт.
     (async () => {
       for (const [i, f] of files.entries()) {
         if (f.size || my !== seq) continue;
-        try {
-          const r = await apiGet("/parser/access/file-size", { url: f.url });
-          const el = box.querySelector(`[data-pp-size="${i}"]`);
-          if (r?.size && el && my === seq) el.textContent = fmtBytes(r.size);
-        } catch (_) { /* без размера */ }
+        let size = 0;
+        try { size = (await apiGet("/parser/access/file-size", { url: f.url }))?.size || 0; } catch (_) { /* без размера */ }
+        const el = box.querySelector(`[data-pp-size="${i}"]`);
+        if (!el || my !== seq) return;
+        el.textContent = size ? fmtBytes(size) : "размер неизвестен";
+        sizes[i] = size;
+        showTotal();
       }
     })();
-    const queue = async (btn, body) => {
+    const queue = async (btn, body, quiet = false) => {
+      if (btn.classList.contains("done")) return true;
       btn.disabled = true;
       try {
         await apiPost("/parser/download", body);
-        btn.textContent = "В очереди";
-        toast("Файл в очереди загрузок: когда будет готов, нажмите «Сохранить»", "success");
-        onQueued?.();
-      } catch (e) { btn.disabled = false; toast(String(e?.message || e), "error"); }
+        btn.classList.add("done");
+        btn.innerHTML = `${svg("ok")}<span>В очереди</span>`;
+        if (!quiet) { toast("В очереди загрузок: когда будет готово, нажмите «Сохранить»", "success"); onQueued?.(); }
+        return true;
+      } catch (e) { btn.disabled = false; toast(String(e?.message || e), "error"); return false; }
     };
+    const fileBody = f => ({ url: f.url, name: f.name.replace(/\.[^.]+$/, ""), headers: f.headers || {} });
     box.onclick = async ev => {
       const el = ev.target.closest("button");
       if (!el) return;
@@ -354,8 +392,10 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (el.dataset.ppAuthor) { const [s, id] = el.dataset.ppAuthor.split("/"); showPosts(s, id, 1); return; }
       if (el.dataset.ppPick) {
         const i = +el.dataset.ppPick;
-        box.querySelector(".pp-main img").src = imgs[i].full || imgs[i].thumb;
-        box.querySelector(".pp-main").dataset.ppZoom = String(i);
+        const main = box.querySelector(".pp-main");
+        main.querySelector("img").src = imgs[i].full || imgs[i].thumb;
+        main.style.setProperty("--pp-bg", cssUrl(imgs[i].thumb));
+        main.dataset.ppZoom = String(i);
         box.querySelectorAll(".pp-th").forEach((t, k) => t.classList.toggle("on", k === i));
         return;
       }
@@ -367,8 +407,21 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         document.body.append(ov);
         return;
       }
-      if (el.dataset.ppDl) { const f = files[+el.dataset.ppDl]; queue(el, { url: f.url, name: f.name.replace(/\.[^.]+$/, ""), headers: f.headers || {} }); return; }
-      if (el.dataset.ppLink) { const l = links[+el.dataset.ppLink]; queue(el, { url: l.url, name: d.title }); return; }
+      if (el.matches("[data-pp-expand]")) { el.closest(".pp-desc").classList.remove("clamp"); el.remove(); return; }
+      if (el.dataset.ppDl) { queue(el, fileBody(files[+el.dataset.ppDl])); return; }
+      if (el.dataset.ppLink) { queue(el, { url: links[+el.dataset.ppLink].url, name: d.title }); return; }
+      if (el.matches("[data-pp-all]")) {
+        el.disabled = true;
+        let ok = 0;
+        for (const b of box.querySelectorAll("[data-pp-dl], [data-pp-link]")) {
+          const body = b.dataset.ppDl ? fileBody(files[+b.dataset.ppDl]) : { url: links[+b.dataset.ppLink].url, name: d.title };
+          if (await queue(b, body, true)) ok++;
+        }
+        el.innerHTML = `${svg("ok")}В очереди · ${ok}`;
+        toast(`В очереди загрузок: ${ok}. Когда будут готовы — «Сохранить все готовые»`, "success");
+        onQueued?.();
+        return;
+      }
       if (el.dataset.ppOpen) { openExternal(el.dataset.ppOpen).catch(e => toast(String(e), "error")); return; }
       if (el.matches("[data-pp-analyze]")) { seq++; box.onclick = null; onPick(d.url); return; }
       if (el.matches("[data-pp-copy]")) {
