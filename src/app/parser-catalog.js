@@ -3,6 +3,22 @@
 import { apiGet, apiPost, toast } from "./api.js";
 import { invoke, openExternal } from "./tauri.js";
 
+// Кэш ответов каталога в памяти (5 минут, как на сервере): «назад», смена вкладки и повторное открытие — без сети.
+// Следующую страницу и пост под курсором подгружаем заранее, поэтому переход тоже мгновенный.
+const CACHE_MS = 5 * 60 * 1000;
+const memo = new Map();
+function cget(path, q) {
+  const key = `${path}?${JSON.stringify(q || {})}`;
+  const hit = memo.get(key);
+  if (hit && Date.now() - hit.t < CACHE_MS) return hit.p;
+  const p = apiGet(path, q);
+  memo.set(key, { t: Date.now(), p });
+  p.catch(() => memo.delete(key));
+  if (memo.size > 400) memo.delete(memo.keys().next().value);
+  return p;
+}
+const prefetch = (path, q) => { cget(path, q).catch(() => { /* не страшно: загрузим по клику */ }); };
+
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cssUrl = u => `url("${String(u || "").replace(/["\\\n\r]/g, encodeURIComponent)}")`;
 const SORTS = [["favorited", "Популярные"], ["updated", "Недавние"], ["name", "По имени"]];
@@ -53,6 +69,18 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   const rs = { q: "", category: "", sort: "id", page: 1 };
   const fs = { mode: "search", q: "", tag: "", period: "week", page: 1 };
   let seq = 0;
+  // Курсор задержался на карточке — начинаем грузить пост или посты автора, к клику они уже в кэше.
+  let hoverTimer = 0;
+  box.onpointerover = ev => {
+    const el = ev.target.closest("[data-pc-post],[data-pc-author]");
+    clearTimeout(hoverTimer);
+    if (!el) return;
+    hoverTimer = setTimeout(() => {
+      if (el.dataset.pcPost) { prefetch("/parser/access/post", { url: el.dataset.pcPost }); return; }
+      const [svc, id] = el.dataset.pcAuthor.split("/");
+      prefetch(`/parser/access/creator/${encodeURIComponent(svc)}/${encodeURIComponent(id)}`, { page: 1, site });
+    }, 120);
+  };
 
   const toTop = () => box.scrollIntoView({ block: "start" });
 
@@ -85,7 +113,8 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.onclick = ev => { tabClick(ev); };
     let d;
     try {
-      d = await apiGet("/parser/access/releases", { q: rs.q, category: rs.category, sort: rs.sort, page: rs.page });
+      d = await cget("/parser/access/releases", { q: rs.q, category: rs.category, sort: rs.sort, page: rs.page });
+      prefetch("/parser/access/releases", { q: rs.q, category: rs.category, sort: rs.sort, page: rs.page + 1 });
     } catch (e) {
       if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("releases")}<div class="pc-empty">Раздачи недоступны: ${esc(e.message || e)}</div></div>`;
       return;
@@ -122,7 +151,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     const io = new window.IntersectionObserver(entries => entries.forEach(en => {
       if (!en.isIntersecting) return;
       io.unobserve(en.target);
-      apiGet(`/parser/access/release-cover/${encodeURIComponent(en.target.dataset.pcCover)}`)
+      cget(`/parser/access/release-cover/${encodeURIComponent(en.target.dataset.pcCover)}`)
         .then(c => {
           if (!c?.url || !en.target.isConnected) return;
           const img = document.createElement("img");
@@ -180,7 +209,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.onclick = ev => { if (tabClick(ev)) return; if (ev.target.closest("[data-pc-rback]")) showReleases(); };
     let d;
     try {
-      d = await apiGet(`/parser/access/release/${encodeURIComponent(x.id)}`);
+      d = await cget(`/parser/access/release/${encodeURIComponent(x.id)}`);
     } catch (e) {
       if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("releases")}<div class="pc-bar">${back}</div><div class="pc-empty">Раздача недоступна: ${esc(e.message || e)}</div></div>`;
       return;
@@ -212,7 +241,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       </div>
     </div>`;
     box.querySelectorAll(".pc-gallery img").forEach(img => img.addEventListener("error", () => img.remove()));
-    apiGet(`/parser/access/release-cover/${encodeURIComponent(x.id)}`).then(c => {
+    cget(`/parser/access/release-cover/${encodeURIComponent(x.id)}`).then(c => {
       const slot = box.querySelector(".pc-dcover");
       if (!c?.url || !slot) { slot?.remove(); return; }
       const img = document.createElement("img");
@@ -285,7 +314,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.onclick = ev => { if (ev.target.closest("[data-pp-back]")) back(); };
     let d;
     try {
-      d = await apiGet("/parser/access/post", { url });
+      d = await cget("/parser/access/post", { url });
     } catch (e) {
       if (my === seq) box.innerHTML = `<div class="pc-wrap"><div class="pc-bar">${backBtn}</div><div class="pc-empty">Пост недоступен: ${esc(e.message || e)}</div></div>`;
       return;
@@ -364,7 +393,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       for (const [i, f] of files.entries()) {
         if (f.size || my !== seq) continue;
         let size = 0;
-        try { size = (await apiGet("/parser/access/file-size", { url: f.url }))?.size || 0; } catch (_) { /* без размера */ }
+        try { size = (await cget("/parser/access/file-size", { url: f.url }))?.size || 0; } catch (_) { /* без размера */ }
         const el = box.querySelector(`[data-pp-size="${i}"]`);
         if (!el || my !== seq) return;
         el.textContent = size ? fmtBytes(size) : "размер неизвестен";
@@ -454,8 +483,9 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.onclick = ev => { tabClick(ev); };
     let d;
     try {
-      d = fs.mode === "tags" ? await apiGet("/parser/access/tags", { site })
-        : await apiGet("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: fs.page, site });
+      d = fs.mode === "tags" ? await cget("/parser/access/tags", { site })
+        : await cget("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: fs.page, site });
+      if (fs.mode !== "tags") prefetch("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: fs.page + 1, site });
     } catch (e) {
       if (my === seq) box.innerHTML = head(`<div class="pc-empty">Посты недоступны: ${esc(e.message || e)}</div></div>`);
       return;
@@ -509,7 +539,8 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.onclick = ev => { tabClick(ev); };
     let d;
     try {
-      d = await apiGet("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: st.page, site });
+      d = await cget("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: st.page, site });
+      if (st.page < (d.pages || 1)) prefetch("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: st.page + 1, site });
     } catch (e) {
       if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("authors")}<div class="pc-empty">Каталог недоступен: ${esc(e.message || e)}</div></div>`;
       return;
@@ -555,7 +586,8 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.innerHTML = `<div class="pc-wrap">${skel("pc-posts", 12)}</div>`;
     let d;
     try {
-      d = await apiGet(`/parser/access/creator/${encodeURIComponent(service)}/${encodeURIComponent(id)}`, { page, site });
+      d = await cget(`/parser/access/creator/${encodeURIComponent(service)}/${encodeURIComponent(id)}`, { page, site });
+      prefetch(`/parser/access/creator/${encodeURIComponent(service)}/${encodeURIComponent(id)}`, { page: page + 1, site });
     } catch (e) {
       if (my === seq) box.innerHTML = `<div class="pc-wrap"><button type="button" class="btn sm" data-pc-back>← К авторам</button><div class="pc-empty">Посты недоступны: ${esc(e.message || e)}</div></div>`;
       box.onclick = ev => { if (ev.target.closest("[data-pc-back]")) showAuthors(); };
