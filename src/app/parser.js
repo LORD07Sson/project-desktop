@@ -58,11 +58,12 @@ function askKemonoKey() {
 }
 
 function engineOf(c) {
+  if (/^https:\/\/(www\.)?mega\.(nz|io)\//i.test(c.url || "")) return "megatools";
   return /m3u8|dash|mpd|ism|mss/i.test(`${c.protocol || ""} ${c.ext || ""}`) ? "N_m3u8DL-RE" : "yt-dlp";
 }
 
 const ENGINE_KEY = "project_parser_engine";
-const ENGINE_NAMES = { nm3u8: "N_m3u8DL-RE", ytdlp: "yt-dlp" };
+const ENGINE_NAMES = { nm3u8: "N_m3u8DL-RE", ytdlp: "yt-dlp", megatools: "megatools" };
 
 function readEngine() {
   try { const v = localStorage.getItem(ENGINE_KEY); return v === "nm3u8" || v === "ytdlp" ? v : "auto"; } catch (_) { return "auto"; }
