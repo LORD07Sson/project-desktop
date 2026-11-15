@@ -221,8 +221,21 @@ const STATUS_LOOK = {
 };
 
 // Срок по-человечески: «просрочено 2 дн», «сегодня», «завтра», «через 5 дн», «12.11».
+// moved_at — SQLite CURRENT_TIMESTAMP, т.е. UTC без зоны.
+function doneAgo(movedAt) {
+  const t = movedAt ? new Date(`${movedAt.replace(" ", "T")}Z`) : null;
+  if (!t || isNaN(t)) return null;
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  const ago = s < 60 ? "только что" : s < 3600 ? `${Math.floor(s / 60)} мин назад`
+    : s < 86400 ? `${Math.floor(s / 3600)} ч назад` : `${Math.floor(s / 86400)} дн назад`;
+  return { ago, full: t.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) };
+}
+
 function dueChip(item) {
-  if (item.is_done) return `<span class="psb-due done">сдано</span>`;
+  if (item.is_done) {
+    const when = doneAgo(item.moved_at);
+    return when ? `<span class="psb-due done" title="Отмечено ${esc(when.full)}">сдано · ${esc(when.ago)}</span>` : `<span class="psb-due done">сдано</span>`;
+  }
   if (item.submitted_by_deadline) return `<span class="psb-due done">сдано вовремя</span>`;
   if (!item.deadline) return `<span class="psb-due">без срока</span>`;
   const [y, m, d] = item.deadline.slice(0, 10).split("-").map(Number);
