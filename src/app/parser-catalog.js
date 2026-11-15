@@ -1,17 +1,33 @@
 // Загрузчик: каталог авторов закрытого источника. Что за источник и его адреса знает только сервер —
 // здесь лишь сетка карточек, посты автора и выбор поста для загрузки.
-import { apiGet, apiPost, toast } from "./api.js";
+import { apiGet, apiPost, toast, clientHeaders } from "./api.js";
 import { invoke, openExternal } from "./tauri.js";
 
 // Кэш ответов каталога в памяти (5 минут, как на сервере): «назад», смена вкладки и повторное открытие — без сети.
 // Следующую страницу и пост под курсором подгружаем заранее, поэтому переход тоже мгновенный.
 const CACHE_MS = 5 * 60 * 1000;
 const memo = new Map();
+// Через Rust (api_get_fast): соединение держится открытым и нет CORS-предзапроса — новый адрес за один круг до
+// сервера вместо двух. Не 200 или старая сборка без команды — обычный путь, он же разбирает ошибки и выход из сессии.
+let fastBroken = false;
+async function fastGet(path, q) {
+  const tauri = window.__TAURI_INTERNALS__;
+  if (tauri && !fastBroken) {
+    const qs = q ? `?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== "" && v != null))}` : "";
+    try {
+      const r = await tauri.invoke("api_get_fast", { path: path + qs, headers: clientHeaders({}) });
+      if (r.status === 200) return JSON.parse(r.body);
+    } catch (e) {
+      if (/not found|unknown|not allowed/i.test(String(e))) fastBroken = true;
+    }
+  }
+  return apiGet(path, q);
+}
 function cget(path, q) {
   const key = `${path}?${JSON.stringify(q || {})}`;
   const hit = memo.get(key);
   if (hit && Date.now() - hit.t < CACHE_MS) return hit.p;
-  const p = apiGet(path, q);
+  const p = fastGet(path, q);
   memo.set(key, { t: Date.now(), p });
   p.catch(() => memo.delete(key));
   if (memo.size > 400) memo.delete(memo.keys().next().value);
