@@ -6347,9 +6347,12 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 @keyframes pc-flip { 0% { transform: rotateX(90deg); opacity: 0; } 60% { transform: rotateX(-12deg); opacity: 1; } 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .pc-src.flip { animation: none; } }
 /* Загрузчик: панель «Настройки» */
-.pr-gear { display: inline-flex; align-items: center; gap: 6px; }
-.pr-gear svg { width: 16px; height: 16px; }
-.pr-gear.on { border-color: rgba(183, 148, 246, .7); background: rgba(168, 85, 247, .18); }
+.pr-hero-body { position: relative; }
+.pr-gear { position: absolute; top: 16px; right: 16px; z-index: 2; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(0, 0, 0, .25); color: rgba(255, 255, 255, .75); cursor: pointer; transition: color .15s ease, background .15s ease, transform .3s ease; }
+.pr-gear svg { width: 18px; height: 18px; }
+.pr-gear:hover { color: #fff; background: rgba(255, 255, 255, .1); }
+.pr-gear.on { color: #fff; border-color: rgba(183, 148, 246, .7); background: rgba(168, 85, 247, .25); transform: rotate(60deg); }
+@media (prefers-reduced-motion: reduce) { .pr-gear { transition: none; } }
 .pr-settings { display: grid; gap: 10px; margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(0, 0, 0, .25); border: 1px solid rgba(255, 255, 255, .08); }
 .pr-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pr-set-col { flex-direction: column; align-items: stretch; }
