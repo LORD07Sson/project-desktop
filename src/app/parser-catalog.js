@@ -166,7 +166,9 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       ${nav}
       <div class="pc-rels">${(d.items || []).map((x, i) => `
         <div class="pc-rel${x.trusted ? " trusted" : ""}${x.remake ? " remake" : ""}">
-          <span class="pc-cover" data-pc-cover="${esc(x.id)}" data-pc-open="${i}" title="Подробнее"></span>
+          ${"cover" in x  // сервер уже нашёл обложку — сразу картинка, без отдельного запроса
+            ? `<span class="pc-cover" data-pc-open="${i}" title="Подробнее">${x.cover ? `<img src="${esc(x.cover)}" alt="" referrerpolicy="no-referrer">` : ""}</span>`
+            : `<span class="pc-cover" data-pc-cover="${esc(x.id)}" data-pc-open="${i}" title="Подробнее"></span>`}
           <span class="pc-rbody">
             <span class="pc-badge">${esc(x.category_name)}</span>
             <b class="pc-ptitle pc-open" data-pc-open="${i}" title="${esc(x.title)}">${esc(x.title)}</b>
@@ -198,6 +200,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         .catch(() => { /* без обложки */ });
     }), { rootMargin: "200px" });
     box.querySelectorAll("[data-pc-cover]").forEach(el => io.observe(el));
+    box.querySelectorAll(".pc-cover > img").forEach(img => img.addEventListener("error", () => img.remove()));
     box.onclick = async ev => {
       if (tabClick(ev)) return;
       const pg = ev.target.closest("[data-pc-rpage]");
