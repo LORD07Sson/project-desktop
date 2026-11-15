@@ -625,4 +625,10 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   try { last = localStorage.getItem(TAB_KEY) || "authors"; } catch (_) { /* по умолчанию авторы */ }
   toTop();
   if (last === "releases") showReleases(); else if (last === "posts") showFeed(); else showAuthors();
+  // Первые страницы соседних вкладок — заранее, чтобы переключение было мгновенным.
+  setTimeout(() => {
+    prefetch("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: 1, site });
+    prefetch("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: 1, site });
+    prefetch("/parser/access/releases", { q: rs.q, category: rs.category, sort: rs.sort, page: 1 });
+  }, 600);
 }
