@@ -323,7 +323,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
             ${counts.map(c => `<span class="pp-chip">${esc(c)}</span>`).join("")}
             ${imgs.length && (d.images || []).length ? `<span class="pp-chip">${imgs.length} ${imgs.length === 1 ? "картинка" : "картинок"}</span>` : ""}
             <span class="pp-chip" data-pp-total hidden></span>
-            ${(d.tags || []).slice(0, 6).map(t => `<span class="pp-chip tag">#${esc(t)}</span>`).join("")}
+            ${(Array.isArray(d.tags) ? d.tags : []).slice(0, 6).map(t => `<span class="pp-chip tag">#${esc(t)}</span>`).join("")}
           </div>
           ${downloadable > 1 ? `<button type="button" class="btn primary pp-all" data-pp-all>${svg("down")}Скачать всё · ${downloadable}</button>` : ""}
           ${files.length ? `<div class="pp-list">${files.map((f, i) => `
