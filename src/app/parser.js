@@ -45,7 +45,7 @@ function layout() {
         <div class="pr-hero-bg" id="pr-hero-bg" aria-hidden="true"></div>
         <div class="pr-hero-body">
           <div class="pr-head">
-            <h2>Парсер видео <span class="pr-beta">Beta</span></h2>
+            <h2>Загрузчик видео <span class="pr-beta">Beta</span></h2>
             <small>Вставьте ссылку: найдём постер, потоки и качества. Если сайт прячет плеер в JS, поможет глубокий анализ.</small>
           </div>
           <form class="pr-form" id="pr-form">
@@ -76,7 +76,7 @@ export async function loadParser() {
   const body = $("#parser-body");
   if (!body) return;
   if (!can("parser.use")) {
-    body.innerHTML = `<div class="pr-wrap"><div class="empty">Нет права «Парсер видео». Его выдаёт владелец в настройках ролей.</div></div>`;
+    body.innerHTML = `<div class="pr-wrap"><div class="empty">Нет права «Загрузчик видео». Его выдаёт владелец в настройках ролей.</div></div>`;
     return true;
   }
   body.innerHTML = layout();
@@ -167,7 +167,7 @@ export async function loadParser() {
       renderResults(state.result);
     } catch (err) {
       status.textContent = `Ошибка: ${err.message || err}`;
-      toast(`Парсер: ${err.message || err}`, "error");
+      toast(`Загрузчик: ${err.message || err}`, "error");
     } finally {
       submit.disabled = deepBtn.disabled = false;
       submit.textContent = "Найти";
