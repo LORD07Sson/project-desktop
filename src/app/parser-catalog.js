@@ -71,7 +71,7 @@ function pager(page, pages, attr) {
 
 // Подписи вкладок присылает сервер (labels); здесь — нейтральные заглушки.
 let tabLabels = {};
-const TABS = [["authors", "Авторы", "Профили авторов с постами и файлами"], ["posts", "Посты", "Лента: новые, популярные, теги"], ["releases", "Раздачи", "Торренты: сервер скачает через VPN"]];
+const TABS = [["authors", "Авторы", "Профили авторов с постами и файлами"], ["posts", "Посты", "Лента: новые, популярные, теги"], ["releases", "Раздачи", "Торренты: качает сервер — можно закрыть вкладку"]];
 const tabs = active => `<div class="pc-top">
   <div class="pc-headline"><span><b>Каталог</b><small>${esc((TABS.find(t => t[0] === active) || TABS[0])[2])}</small></span>
     <button type="button" class="btn sm" data-pc-close title="Вернуться к поиску по ссылке">✕ Закрыть</button></div>
@@ -171,7 +171,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
             <span class="pc-badge">${esc(x.category_name)}</span>
             <b class="pc-ptitle pc-open" data-pc-open="${i}" title="${esc(x.title)}">${esc(x.title)}</b>
             <small class="pc-rstats"><span>${esc(x.size)}</span><span class="up">▲ ${x.seeders}</span><span class="down">▼ ${x.leechers}</span><span>⬇ ${fmtNum(x.downloads)}</span><span>${esc(fmtTs(x.published))}</span></small>
-            <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-server="${i}" title="Сервер скачает раздачу через VPN, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-magnet="${i}">В торрент-клиент</button><button type="button" class="btn sm" data-pc-copy="${i}">Magnet</button></span>
+            <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-server="${i}" title="Сервер скачает раздачу сам, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-magnet="${i}">В торрент-клиент</button><button type="button" class="btn sm" data-pc-copy="${i}">Magnet</button></span>
           </span>
         </div>`).join("") || `<div class="pc-empty">Ничего не нашлось.</div>`}</div>
       ${nav}
@@ -264,7 +264,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
             <span class="pc-badge">${esc(x.category_name)}</span>
             <b class="pc-rtitle">${esc(x.title)}</b>
             <small class="pc-rstats"><span>${esc(x.size)}</span><span class="up">▲ ${x.seeders}</span><span class="down">▼ ${x.leechers}</span><span>⬇ ${fmtNum(x.downloads)}</span></small>
-  <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-get title="Сервер скачает выбранное через VPN, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-dmagnet>В торрент-клиент</button><button type="button" class="btn sm" data-pc-dcopy>Magnet</button></span>
+  <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-get title="Сервер скачает выбранное сам, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-dmagnet>В торрент-клиент</button><button type="button" class="btn sm" data-pc-dcopy>Magnet</button></span>
             ${d.description ? `<div class="pc-rdesc">${esc(d.description.replace(/\*\*/g, ""))}</div>` : ""}
           </div>
         </div>
