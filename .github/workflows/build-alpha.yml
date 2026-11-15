@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Rust stable и .NET 8 SDK уже стоят на windows-latest — отдельные шаги установки съедали ~45 с.
 
       # Кэш скомпилированных зависимостей (tauri, windows-rs, tokio…) —
       # без него каждая альфа собирала их с нуля, это основная часть
@@ -57,9 +57,11 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - uses: actions/setup-dotnet@v6
+      # vpk ставится dotnet tool'ом; кэш избавляет от скачивания на каждой сборке.
+      - uses: actions/cache@v4
         with:
-          dotnet-version: "8.0.x"
+          path: ~/.dotnet/tools
+          key: vpk-${{ runner.os }}-v1
 
       # Node 24 — активная LTS (поддержка до апреля 2028). На 20 CI стоять
       # больше не может: линия EOL с апреля 2026, а devDependency jsdom
@@ -109,17 +111,25 @@ jobs:
 
       # Фронтенд теперь собирается Vite (src/ -> dist/) — обязательно
       # ПОСЛЕ подстановки версии выше, см. build.yml за тем же самым.
-      - name: npm ci, lint && vite build
+      # Lint и тесты гоняет checks.yml параллельно (на push в main тоже) — здесь только сборка.
+      - name: npm ci && vite build
         shell: bash
         run: |
-          npm ci
-          npm run lint
+          npm ci --prefer-offline --no-audit --no-fund
           npm run build
-          npm test
+
+      - uses: actions/cache@v4
+        id: ffmpeg-cache
+        with:
+          path: |
+            src-tauri/binaries/ffmpeg.exe
+            src-tauri/binaries/ffprobe.exe
+          key: ffmpeg-N-127271-32b374c9
 
       # FFmpeg SHA синхронизирован с build.yml после проверки runner checksum.\n      # Тот же закреплённый ffmpeg.exe, что и в build.yml — держать в
       # синхроне руками при обновлении URL/SHA256 там.
       - name: Скачать и проверить статичный ffmpeg.exe
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -e
@@ -157,7 +167,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          dotnet tool update -g vpk
+          dotnet tool update -g vpk || dotnet tool install -g vpk
+          export PATH="$HOME/.dotnet/tools:$PATH"
           mkdir -p pack_dir
           cp src-tauri/target/release/project-desktop.exe pack_dir/
           cp src-tauri/binaries/ffmpeg.exe pack_dir/

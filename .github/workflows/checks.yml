@@ -6,6 +6,12 @@ name: Checks
 # и не публикуется, только проверки.
 on:
   pull_request:
+  # Альфа (build-alpha.yml) больше не гоняет lint/тесты сама — они идут здесь параллельно сборке.
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   workflow_dispatch: {}
 
 permissions:
