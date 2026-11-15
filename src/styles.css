@@ -6346,3 +6346,23 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pc-src.flip { animation: pc-flip .45s cubic-bezier(.2, .8, .2, 1); }
 @keyframes pc-flip { 0% { transform: rotateX(90deg); opacity: 0; } 60% { transform: rotateX(-12deg); opacity: 1; } 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .pc-src.flip { animation: none; } }
+/* Загрузчик: панель «Настройки» */
+.pr-gear { display: inline-flex; align-items: center; gap: 6px; }
+.pr-gear svg { width: 16px; height: 16px; }
+.pr-gear.on { border-color: rgba(183, 148, 246, .7); background: rgba(168, 85, 247, .18); }
+.pr-settings { display: grid; gap: 10px; margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(0, 0, 0, .25); border: 1px solid rgba(255, 255, 255, .08); }
+.pr-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pr-set-col { flex-direction: column; align-items: stretch; }
+.pr-set-row > span:first-child { display: grid; gap: 2px; min-width: 0; }
+.pr-set-row b { font-size: 13.5px; }
+.pr-set-row small { font-size: 12px; color: var(--ink-dim); }
+.pr-set-row + .pr-set-row, .pr-set-owner { padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .07); }
+.pr-set-owner { display: grid; gap: 8px; }
+.pr-set-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.pr-acc-list { display: grid; gap: 6px; }
+.pr-acc { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line); }
+.pr-acc-main { display: grid; gap: 2px; min-width: 0; }
+.pr-acc-main small { font-size: 12px; color: var(--ink-dim); }
+.pr-acc-empty { font-size: 13px; color: var(--ink-dim); padding: 6px 2px; }
+.pr-access-field { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-dim); }
+.pr-access-form { display: grid; gap: 10px; }

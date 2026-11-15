@@ -1,9 +1,10 @@
 import { can } from "./state.js";
-import { clientHeaders, API_BASE, toast, openSheet, dismissSheet } from "./api.js";
+import { clientHeaders, API_BASE, toast } from "./api.js";
 import { $ } from "./utils.js";
 import { pickOutputDir, pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
 import { openCatalog } from "./parser-catalog.js";
+import { askCatalogLogin, catalogLogout, mountOwnerAccounts } from "./parser-settings.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -22,40 +23,6 @@ function fmtDur(s) {
 async function errorText(res) {
   try { const j = await res.json(); if (j.detail) return j.detail; } catch (_) { /* не json */ }
   return `HTTP ${res.status}`;
-}
-
-// Часть источников открывается кодовым словом на аккаунт: сервер хранит только его хэш.
-function askAccessKey() {
-  return new Promise(resolve => {
-    const overlay = openSheet(`
-      <h3>Доступ закрыт</h3>
-      <p class="sub">Введите кодовое слово. Доступ откроется для вашего аккаунта.</p>
-      <form class="pr-access-form">
-        <input type="password" class="pr-access-key" autocomplete="off" spellcheck="false" aria-label="Кодовое слово" required>
-        <div class="pr-access-err" hidden></div>
-        <div class="sheet-actions"><button type="button" class="btn" data-cancel>Отмена</button><button type="submit" class="btn primary">Открыть</button></div>
-      </form>`);
-    const form = overlay.querySelector("form");
-    const input = form.querySelector("input");
-    const err = form.querySelector(".pr-access-err");
-    let done = false;
-    const finish = ok => { if (done) return; done = true; dismissSheet(overlay); resolve(ok); };
-    overlay.addEventListener("sheet-dismissed", () => { if (!done) { done = true; resolve(false); } });
-    form.querySelector("[data-cancel]").addEventListener("click", () => finish(false));
-    form.addEventListener("submit", async e => {
-      e.preventDefault();
-      const res = await fetch(`${API_BASE}/parser/access/unlock`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...clientHeaders() },
-        body: JSON.stringify({ key: input.value }),
-      });
-      input.value = "";
-      if (res.ok) { toast("Доступ открыт", "success"); finish(true); return; }
-      err.hidden = false;
-      err.textContent = await errorText(res);
-    });
-    setTimeout(() => input.focus(), 0);
-  });
 }
 
 // Фильтр диалога сохранения под реальное расширение: архив сохраняется не как mp4.
@@ -105,17 +72,30 @@ function layout() {
             <input id="pr-url" type="url" placeholder="https://… ссылка на страницу с видео" autocomplete="off" required>
             <button class="btn primary" type="submit" id="pr-submit">Найти</button>
             <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
-            <button class="btn" type="button" id="pr-catalog" title="Каталог авторов" hidden>Каталог</button>
+            <button class="btn" type="button" id="pr-catalog" title="Каталог">Каталог</button>
+            <button class="btn pr-gear" type="button" id="pr-settings-btn" title="Настройки загрузчика" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+              Настройки
+            </button>
           </form>
-          <details class="pr-cookies-wrap">
-            <summary class="pr-cookies-toggle">Cookies <small>· только для глубокого анализа</small></summary>
-            <input id="pr-cookies" type="password" class="pr-cookies-input" placeholder="name=value; name2=value2" aria-label="Cookies для глубокого анализа" autocomplete="off" spellcheck="false">
-            <small>Chromium использует cookies для исходного сайта. Они не передаются загрузчику.</small>
-          </details>
-          <div class="pr-engines" id="pr-engines" role="group" aria-label="Загрузчик">
-            <button type="button" class="pr-engine" data-engine="auto" title="Сначала N_m3u8DL-RE, если не вышло — yt-dlp">Авто <small>по очереди</small></button>
-            <button type="button" class="pr-engine" data-engine="nm3u8" title="Только N_m3u8DL-RE: HLS и DASH">N_m3u8DL-RE <small>HLS и DASH</small></button>
-            <button type="button" class="pr-engine" data-engine="ytdlp" title="Только yt-dlp">yt-dlp <small>поддерживаемые сайты</small></button>
+          <div class="pr-settings" id="pr-settings" hidden>
+            <div class="pr-set-row pr-set-col">
+              <span><b>Загрузчик</b><small>Каким движком качать потоки.</small></span>
+              <div class="pr-engines" id="pr-engines" role="group" aria-label="Загрузчик">
+                <button type="button" class="pr-engine" data-engine="auto" title="Сначала N_m3u8DL-RE, если не вышло — yt-dlp">Авто <small>по очереди</small></button>
+                <button type="button" class="pr-engine" data-engine="nm3u8" title="Только N_m3u8DL-RE: HLS и DASH">N_m3u8DL-RE <small>HLS и DASH</small></button>
+                <button type="button" class="pr-engine" data-engine="ytdlp" title="Только yt-dlp">yt-dlp <small>поддерживаемые сайты</small></button>
+              </div>
+            </div>
+            <div class="pr-set-row pr-set-col">
+              <span><b>Cookies</b><small>Только для глубокого анализа: Chromium подставит их исходному сайту, загрузчику они не уходят.</small></span>
+              <input id="pr-cookies" type="password" class="pr-cookies-input" placeholder="name=value; name2=value2" aria-label="Cookies для глубокого анализа" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="pr-set-row" id="pr-set-session" hidden>
+              <span><b>Каталог</b><small>Вы вошли в каталог.</small></span>
+              <button type="button" class="btn sm" id="pr-catalog-logout">Выйти</button>
+            </div>
+            <div class="pr-set-owner" id="pr-set-owner" hidden></div>
           </div>
         </div>
       </section>
@@ -144,16 +124,43 @@ export async function loadParser() {
 
   form.addEventListener("submit", e => { e.preventDefault(); analyze(false); });
 
-  // Кнопка каталога видна только аккаунтам с открытым доступом; сервер отвечает unlocked: true/false.
+  // Каталог: кнопка видна всем, без входа она спрашивает логин и пароль. Подписи вкладок приходят только после входа.
   const catalogBtn = $("#pr-catalog");
-  let catalogLabels = {};
-  fetch(`${API_BASE}/parser/access/status`, { headers: clientHeaders() })
-    .then(r => (r.ok ? r.json() : null))
-    .then(d => { if (d?.unlocked) { catalogBtn.hidden = false; catalogLabels = d.labels || {}; } })
-    .catch(() => { /* без каталога */ });
+  let access = { unlocked: false, settings: false, labels: {} };
+  const settingsBtn = $("#pr-settings-btn");
+  const settingsBox = $("#pr-settings");
+  const ownerBox = $("#pr-set-owner");
+  let closeOwner = null;
+  async function refreshAccess() {
+    try {
+      const r = await fetch(`${API_BASE}/parser/access/status`, { headers: clientHeaders() });
+      if (r.ok) access = { ...access, ...(await r.json()) };
+    } catch (_) { /* без каталога */ }
+    $("#pr-set-session").hidden = !access.unlocked;
+    if (access.settings && !closeOwner) { ownerBox.hidden = false; closeOwner = mountOwnerAccounts(ownerBox); }
+  }
+  refreshAccess();
+  settingsBtn.addEventListener("click", () => {
+    const open = settingsBox.hidden;
+    settingsBox.hidden = !open;
+    settingsBtn.setAttribute("aria-expanded", String(open));
+    settingsBtn.classList.toggle("on", open);
+    if (!open) closeOwner?.();  // закрыли панель — пароль владельца спросим снова
+  });
+  $("#pr-catalog-logout").addEventListener("click", async () => {
+    await catalogLogout();
+    access = { ...access, unlocked: false, labels: {} };
+    await refreshAccess();
+    toast("Вы вышли из каталога", "info");
+  });
   // В каталоге панель поиска по ссылке не нужна: прячем её и возвращаем при выходе или выборе поста.
   const hero = $("#pr-hero");
-  catalogBtn.addEventListener("click", () => {
+  catalogBtn.addEventListener("click", async () => {
+    if (!access.unlocked) {
+      if (!await askCatalogLogin()) return;
+      await refreshAccess();
+      if (!access.unlocked) return;
+    }
     status.hidden = true;
     setBackdrop(null);
     hero.hidden = true;
@@ -161,7 +168,7 @@ export async function loadParser() {
       onPick: url => { hero.hidden = false; input.value = url; results.onclick = null; analyze(false); },
       onClose: () => { hero.hidden = false; results.innerHTML = ""; },
       onQueued: () => loadHistory(true),
-      labels: catalogLabels,
+      labels: access.labels || {},
     });
   });
   deepBtn.addEventListener("click", () => analyze(true));
@@ -232,7 +239,7 @@ export async function loadParser() {
       if (res.status === 403) {
         const detail = await errorText(res);
         if (detail !== "source_locked") throw new Error(detail);
-        if (!await askAccessKey()) { status.textContent = "Доступ закрыт: нужен ключ."; return; }
+        if (!await askCatalogLogin()) { status.textContent = "Доступ закрыт: нужен вход в каталог."; return; }
         res = await start();
       }
       if (!res.ok) throw new Error(await errorText(res));
