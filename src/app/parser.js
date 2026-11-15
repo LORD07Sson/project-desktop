@@ -1,5 +1,5 @@
 import { can } from "./state.js";
-import { clientHeaders, API_BASE, toast } from "./api.js";
+import { clientHeaders, API_BASE, toast, openSheet, dismissSheet } from "./api.js";
 import { $ } from "./utils.js";
 import { pickOutputDir, pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
@@ -21,6 +21,40 @@ function fmtDur(s) {
 async function errorText(res) {
   try { const j = await res.json(); if (j.detail) return j.detail; } catch (_) { /* не json */ }
   return `HTTP ${res.status}`;
+}
+
+// Kemono открывается кодовым словом на аккаунт: сервер хранит только его хэш.
+function askKemonoKey() {
+  return new Promise(resolve => {
+    const overlay = openSheet(`
+      <h3>Kemono закрыт</h3>
+      <p class="sub">Введите кодовое слово. Доступ откроется для вашего аккаунта.</p>
+      <form class="pr-kemono-form">
+        <input type="password" class="pr-kemono-key" autocomplete="off" spellcheck="false" aria-label="Кодовое слово" required>
+        <div class="pr-kemono-err" hidden></div>
+        <div class="sheet-actions"><button type="button" class="btn" data-cancel>Отмена</button><button type="submit" class="btn primary">Открыть</button></div>
+      </form>`);
+    const form = overlay.querySelector("form");
+    const input = form.querySelector("input");
+    const err = form.querySelector(".pr-kemono-err");
+    let done = false;
+    const finish = ok => { if (done) return; done = true; dismissSheet(overlay); resolve(ok); };
+    overlay.addEventListener("sheet-dismissed", () => { if (!done) { done = true; resolve(false); } });
+    form.querySelector("[data-cancel]").addEventListener("click", () => finish(false));
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const res = await fetch(`${API_BASE}/parser/kemono/unlock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...clientHeaders() },
+        body: JSON.stringify({ key: input.value }),
+      });
+      input.value = "";
+      if (res.ok) { toast("Kemono открыт", "success"); finish(true); return; }
+      err.hidden = false;
+      err.textContent = await errorText(res);
+    });
+    setTimeout(() => input.focus(), 0);
+  });
 }
 
 function engineOf(c) {
@@ -148,11 +182,18 @@ export async function loadParser() {
     results.innerHTML = "";
     setBackdrop(null);
     try {
-      const res = await fetch(`${API_BASE}/parser/analyze/start`, {
+      const start = () => fetch(`${API_BASE}/parser/analyze/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...clientHeaders() },
         body: JSON.stringify({ url, deep, referer, ...(deep && cookies ? { cookies } : {}) }),
       });
+      let res = await start();
+      if (res.status === 403) {
+        const detail = await errorText(res);
+        if (detail !== "kemono_locked") throw new Error(detail);
+        if (!await askKemonoKey()) { status.textContent = "Kemono закрыт: нужен ключ."; return; }
+        res = await start();
+      }
       if (!res.ok) throw new Error(await errorText(res));
       const { analysis_id } = await res.json();
       let state;
@@ -331,7 +372,7 @@ export async function loadParser() {
   }
 
   async function downloadCandidate(c, title, btn) {
-    const defaultName = (title || "video").replace(/[\\/:*?"<>|]+/g, "_").trim().slice(0, 100) || "video";
+    const defaultName = ((c.name || "").replace(/\.[^.]+$/, "") || title || "video").replace(/[\\/:*?"<>|]+/g, "_").trim().slice(0, 100) || "video";
     const savePath = await pickOutputFile(`${defaultName}.mp4`, [{ name: "Видео MP4", extensions: ["mp4"] }]);
     if (!savePath) return;
     toast(`Сохраню в ${savePath}`, "info");
@@ -340,7 +381,7 @@ export async function loadParser() {
     const start = await fetch(`${API_BASE}/parser/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...clientHeaders() },
-      body: JSON.stringify({ url: c.url, headers: c.headers || {}, name: title || "video", engine, ...(c.keys?.length ? { keys: c.keys } : {}) }),
+      body: JSON.stringify({ url: c.url, headers: c.headers || {}, name: (c.name || "").replace(/\.[^.]+$/, "") || title || "video", engine, ...(c.keys?.length ? { keys: c.keys } : {}) }),
     });
     if (!start.ok) throw new Error(await errorText(start));
     const { job_id } = await start.json();
