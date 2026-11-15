@@ -65,10 +65,10 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       ${nav}
       <div class="pc-rels">${(d.items || []).map((x, i) => `
         <div class="pc-rel${x.trusted ? " trusted" : ""}${x.remake ? " remake" : ""}">
-          <span class="pc-cover" data-pc-cover="${esc(x.id)}"></span>
+          <span class="pc-cover" data-pc-cover="${esc(x.id)}" data-pc-open="${i}" title="Подробнее"></span>
           <span class="pc-rbody">
             <span class="pc-badge">${esc(x.category_name)}</span>
-            <b class="pc-ptitle" title="${esc(x.title)}">${esc(x.title)}</b>
+            <b class="pc-ptitle pc-open" data-pc-open="${i}" title="${esc(x.title)}">${esc(x.title)}</b>
             <small class="pc-rstats"><span>${esc(x.size)}</span><span class="up">▲ ${x.seeders}</span><span class="down">▼ ${x.leechers}</span><span>⬇ ${fmtNum(x.downloads)}</span><span>${esc(fmtTs(x.published))}</span></small>
             <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-server="${i}" title="Сервер скачает раздачу через VPN, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-magnet="${i}">В торрент-клиент</button><button type="button" class="btn sm" data-pc-copy="${i}">Magnet</button></span>
           </span>
@@ -102,6 +102,8 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
       const pg = ev.target.closest("[data-pc-rpage]");
       if (pg && !pg.disabled) { rs.page = +pg.dataset.pcRpage; showReleases(); return; }
+      const op = ev.target.closest("[data-pc-open]");
+      if (op) { showRelease(d.items[+op.dataset.pcOpen]); return; }
       const sv = ev.target.closest("[data-pc-server]");
       if (sv) {
         // Раздачу качает сервер (до 20 ГБ), готовый файл сохраняется из очереди и удаляется с сервера.
@@ -124,6 +126,82 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       const cp = ev.target.closest("[data-pc-copy]");
       if (cp) {
         try { await navigator.clipboard.writeText(d.items[+cp.dataset.pcCopy].magnet); toast("Magnet в буфере", "info"); }
+        catch { toast("Не вышло скопировать", "error"); }
+      }
+    };
+  }
+
+  // Размер из списка файлов («1.3 GiB», «77 Bytes») → байты, чтобы считать выбранное.
+  const UNIT = { bytes: 1, kib: 1024, mib: 1024 ** 2, gib: 1024 ** 3, tib: 1024 ** 4 };
+  const toBytes = s => { const m = /([\d.]+)\s*(\w+)/.exec(s || ""); return m ? +m[1] * (UNIT[m[2].toLowerCase()] || 1) : 0; };
+  const fmtBytes = n => n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} МБ` : `${Math.ceil(n / 1024)} КБ`;
+
+  async function showRelease(x) {
+    const my = ++seq;
+    const back = `<button type="button" class="btn sm" data-pc-rback>← К раздачам</button>`;
+    box.innerHTML = `<div class="pc-wrap">${tabs("releases")}<div class="pc-bar">${back}</div><div class="pc-empty">Загружаю раздачу…</div></div>`;
+    box.onclick = ev => { if (tabClick(ev)) return; if (ev.target.closest("[data-pc-rback]")) showReleases(); };
+    let d;
+    try {
+      d = await apiGet(`/parser/access/release/${encodeURIComponent(x.id)}`);
+    } catch (e) {
+      if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("releases")}<div class="pc-bar">${back}</div><div class="pc-empty">Раздача недоступна: ${esc(e.message || e)}</div></div>`;
+      return;
+    }
+    if (my !== seq) return;
+    const files = d.files || [];
+    box.innerHTML = `<div class="pc-wrap">${tabs("releases")}
+      <div class="pc-bar">${back}</div>
+      <div class="pc-rdetail">
+        <span class="pc-badge">${esc(x.category_name)}</span>
+        <b class="pc-rtitle">${esc(x.title)}</b>
+        <small class="pc-rstats"><span>${esc(x.size)}</span><span class="up">▲ ${x.seeders}</span><span class="down">▼ ${x.leechers}</span><span>⬇ ${fmtNum(x.downloads)}</span></small>
+        ${(d.images || []).length ? `<div class="pc-gallery">${d.images.map(u => `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join("")}</div>` : ""}
+        ${d.description ? `<div class="pc-rdesc">${esc(d.description)}</div>` : ""}
+        <div class="pc-files">
+          <div class="pc-fhead"><label><input type="checkbox" data-pc-fall checked> Файлы (${files.length})</label><span data-pc-fsum></span></div>
+          ${files.map((f, i) => `<label class="pc-file"><input type="checkbox" data-pc-file="${i}" checked><span class="pc-fname" title="${esc(f.path)}">${esc(f.path)}</span><small>${esc(f.size)}</small></label>`).join("") || `<div class="pc-empty">Список файлов не указан — скачается вся раздача.</div>`}
+        </div>
+        <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-get title="Сервер скачает выбранное через VPN, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-dmagnet>В торрент-клиент</button><button type="button" class="btn sm" data-pc-dcopy>Magnet</button></span>
+      </div>
+    </div>`;
+    box.querySelectorAll(".pc-gallery img").forEach(img => img.addEventListener("error", () => img.remove()));
+    const boxes = [...box.querySelectorAll("[data-pc-file]")];
+    const all = box.querySelector("[data-pc-fall]");
+    const get = box.querySelector("[data-pc-get]");
+    const sum = () => {
+      const on = boxes.filter(b => b.checked);
+      const bytes = on.reduce((n, b) => n + toBytes(files[+b.dataset.pcFile].size), 0);
+      box.querySelector("[data-pc-fsum]").textContent = files.length ? `выбрано ${on.length} · ${fmtBytes(bytes)}` : "";
+      all.checked = on.length === boxes.length;
+      all.indeterminate = on.length > 0 && on.length < boxes.length;
+      get.disabled = files.length > 0 && !on.length;
+      get.textContent = on.length && on.length < boxes.length ? `Скачать выбранное (${on.length})` : "Скачать";
+    };
+    all.addEventListener("change", () => { boxes.forEach(b => { b.checked = all.checked; }); sum(); });
+    boxes.forEach(b => b.addEventListener("change", sum));
+    sum();
+    box.onclick = async ev => {
+      if (tabClick(ev)) return;
+      if (ev.target.closest("[data-pc-rback]")) { showReleases(); return; }
+      if (ev.target.closest("[data-pc-get]")) {
+        const on = boxes.filter(b => b.checked).map(b => files[+b.dataset.pcFile].path);
+        get.disabled = true;
+        try {
+          await apiPost("/parser/download", { url: x.magnet, name: x.title, ...(on.length < boxes.length ? { files: on } : {}) });
+          get.textContent = "В очереди";
+          toast("Раздача в очереди загрузок: когда будет готова, нажмите «Сохранить»", "success");
+          onQueued?.();
+        } catch (e) { get.disabled = false; toast(String(e?.message || e), "error"); }
+        return;
+      }
+      if (ev.target.closest("[data-pc-dmagnet]")) {
+        try { await invoke("open_magnet", { magnet: x.magnet }); toast("Открыто в торрент-клиенте", "success"); }
+        catch (e) { toast(String(e?.message || e), "error"); }
+        return;
+      }
+      if (ev.target.closest("[data-pc-dcopy]")) {
+        try { await navigator.clipboard.writeText(x.magnet); toast("Magnet в буфере", "info"); }
         catch { toast("Не вышло скопировать", "error"); }
       }
     };

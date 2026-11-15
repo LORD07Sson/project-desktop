@@ -6250,3 +6250,16 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pc-alink:hover { text-decoration: underline; }
 .pc-rstats .down { color: #e5484d; }
 .pc-ract { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.pc-open, .pc-cover[data-pc-open] { cursor: pointer; }
+.pc-open:hover { text-decoration: underline; }
+.pc-rdetail { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
+.pc-rtitle { font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+.pc-gallery { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.pc-gallery img { height: 220px; max-width: 360px; object-fit: contain; border-radius: 7px; background: rgba(255, 255, 255, .05); flex: none; }
+.pc-rdesc { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: var(--ink-dim); max-height: 220px; overflow: auto; }
+.pc-files { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow: auto; border-top: 1px solid var(--line); padding-top: 8px; }
+.pc-fhead { display: flex; justify-content: space-between; gap: 10px; font-weight: 700; font-size: 13px; padding-bottom: 4px; }
+.pc-fhead span { font-weight: 400; color: var(--ink-dim); }
+.pc-file { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 13px; padding: 3px 0; cursor: pointer; min-width: 0; }
+.pc-fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-file small { color: var(--ink-dim); }

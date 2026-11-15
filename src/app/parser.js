@@ -71,7 +71,17 @@ function engineOf(c) {
 }
 
 const ENGINE_KEY = "project_parser_engine";
-const ENGINE_NAMES = { nm3u8: "N_m3u8DL-RE", ytdlp: "yt-dlp", megatools: "megatools", direct: "напрямую" };
+const ENGINE_NAMES = { nm3u8: "N_m3u8DL-RE", ytdlp: "yt-dlp", megatools: "megatools", direct: "напрямую", torrent: "торрент" };
+
+// Строка прогресса торрента в очереди: сиды/пиры, скорость, остаток времени.
+function torrentStats(j) {
+  const peers = `сиды ${j.seeds || 0} · пиры ${j.peers || 0}`;
+  if (j.phase === "metadata") return `ищу участников раздачи · ${peers}`;
+  const mb = n => (n / 1024 / 1024).toFixed(0);
+  const eta = j.eta ? ` · ещё ${j.eta >= 3600 ? `${Math.floor(j.eta / 3600)} ч ${Math.round(j.eta % 3600 / 60)} мин` : `${Math.max(1, Math.round(j.eta / 60))} мин`}` : "";
+  const spd = j.speed ? ` · ${(j.speed / 1024 / 1024).toFixed(1)} МБ/с` : (j.total ? " · стоит" : "");
+  return `${j.percent || 0}% · ${mb(j.downloaded || 0)}/${mb(j.total || 0)} МБ${spd}${eta} · ${peers}`;
+}
 
 function readEngine() {
   try { const v = localStorage.getItem(ENGINE_KEY); return v === "nm3u8" || v === "ytdlp" ? v : "auto"; } catch (_) { return "auto"; }
@@ -570,7 +580,7 @@ export async function loadParser() {
       ${done.length > 1 ? `<button type="button" class="btn sm" id="pr-save-all">Сохранить все готовые (${done.length}) в папку</button>` : ""}
       <div class="pr-req-list">${jobs.map(j => `
       <div class="pr-req">
-        <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${ENGINE_NAMES[j.active_engine] ? `${esc(ENGINE_NAMES[j.active_engine])} · ` : ""}${j.percent || 0}%` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
+        <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${ENGINE_NAMES[j.active_engine] ? `${esc(ENGINE_NAMES[j.active_engine])} · ` : ""}${j.active_engine === "torrent" ? esc(torrentStats(j)) : `${j.percent || 0}%`}` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
         <div class="pr-req-url" title="${esc(j.filename || j.name)}">${esc(j.filename || j.name)}</div>
         <div class="pr-req-actions">
           ${j.status === "done" ? `<button type="button" class="btn sm primary" data-job-save="${esc(j.id)}">Сохранить</button>` : ""}
