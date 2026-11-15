@@ -1,6 +1,7 @@
 // Загрузчик: каталог авторов закрытого источника. Что за источник и его адреса знает только сервер —
 // здесь лишь сетка карточек, посты автора и выбор поста для загрузки.
-import { apiGet } from "./api.js";
+import { apiGet, toast } from "./api.js";
+import { invoke } from "./tauri.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cssUrl = u => `url("${String(u || "").replace(/["\\\n\r]/g, encodeURIComponent)}")`;
@@ -18,10 +19,89 @@ function pager(page, pages, attr) {
   return `<div class="pc-pager">${btn(1, "«", false, page === 1)}${btn(page - 1, "‹", false, page === 1)}${nums.map(n => btn(n, n, n === page)).join("")}${btn(page + 1, "›", false, page === pages)}${btn(pages, "»", false, page === pages)}</div>`;
 }
 
+const tabs = active => `<div class="pc-tabs">${[["authors", "Авторы"], ["releases", "Раздачи"]].map(([id, n]) =>
+  `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${n}</button>`).join("")}</div>`;
+
 /** Каталог в box. onPick(url) — выбран пост; onClose() — назад к обычному поиску. */
 export function openCatalog(box, { onPick, onClose }) {
   const st = { q: "", service: "", sort: "favorited", page: 1, services: [] };
+  const rs = { q: "", category: "", sort: "id", page: 1 };
   let seq = 0;
+
+  function tabClick(ev) {
+    const t = ev.target.closest("[data-pc-tab]");
+    if (!t) return false;
+    if (t.dataset.pcTab === "releases") showReleases(); else showAuthors();
+    return true;
+  }
+
+  async function showReleases() {
+    const my = ++seq;
+    box.innerHTML = `<div class="pc-wrap">${tabs("releases")}<div class="pc-empty">Загружаю раздачи…</div></div>`;
+    box.onclick = ev => { tabClick(ev); };
+    let d;
+    try {
+      d = await apiGet("/parser/access/releases", { q: rs.q, category: rs.category, sort: rs.sort, page: rs.page });
+    } catch (e) {
+      if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("releases")}<div class="pc-empty">Раздачи недоступны: ${esc(e.message || e)}</div></div>`;
+      return;
+    }
+    if (my !== seq) return;
+    const fmtTs = t => (t ? new Date(t * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
+    const nav = `<div class="pc-pager"><button type="button" class="pc-page" data-pc-rpage="${rs.page - 1}"${rs.page === 1 ? " disabled" : ""}>‹ Назад</button>
+      <span class="pc-page on">${rs.page}</span><button type="button" class="pc-page" data-pc-rpage="${rs.page + 1}"${d.has_next ? "" : " disabled"}>Вперёд ›</button></div>`;
+    box.innerHTML = `<div class="pc-wrap">${tabs("releases")}
+      <div class="pc-bar">
+        <button type="button" class="btn sm" data-pc-close>← Поиск по ссылке</button>
+        <input type="search" class="pc-search" placeholder="Название, студия, RJ-код" value="${esc(rs.q)}" spellcheck="false">
+        <select class="pc-select" data-pc-rcat>${(d.categories || []).map(c => `<option value="${esc(c.id)}"${c.id === rs.category ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
+        <select class="pc-select" data-pc-rsort>${(d.sorts || []).map(c => `<option value="${esc(c.id)}"${c.id === rs.sort ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
+      </div>
+      ${nav}
+      <div class="pc-rels">${(d.items || []).map((x, i) => `
+        <div class="pc-rel${x.trusted ? " trusted" : ""}${x.remake ? " remake" : ""}">
+          <span class="pc-cover" data-pc-cover="${esc(x.id)}"></span>
+          <span class="pc-rbody">
+            <span class="pc-badge">${esc(x.category_name)}</span>
+            <b class="pc-ptitle" title="${esc(x.title)}">${esc(x.title)}</b>
+            <small class="pc-rstats"><span>${esc(x.size)}</span><span class="up">▲ ${x.seeders}</span><span class="down">▼ ${x.leechers}</span><span>⬇ ${fmtNum(x.downloads)}</span><span>${esc(fmtTs(x.published))}</span></small>
+            <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-magnet="${i}">Скачать</button><button type="button" class="btn sm" data-pc-copy="${i}">Копировать magnet</button></span>
+          </span>
+        </div>`).join("") || `<div class="pc-empty">Ничего не нашлось.</div>`}</div>
+      ${nav}
+    </div>`;
+    const search = box.querySelector(".pc-search");
+    let timer;
+    search.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { rs.q = search.value.trim(); rs.page = 1; showReleases(); }, 450); });
+    box.querySelector("[data-pc-rcat]").addEventListener("change", e => { rs.category = e.target.value; rs.page = 1; showReleases(); });
+    box.querySelector("[data-pc-rsort]").addEventListener("change", e => { rs.sort = e.target.value; rs.page = 1; showReleases(); });
+    // Обложки — по мере появления карточек на экране: сервер достаёт картинку из описания раздачи.
+    const io = new window.IntersectionObserver(entries => entries.forEach(en => {
+      if (!en.isIntersecting) return;
+      io.unobserve(en.target);
+      apiGet(`/parser/access/release-cover/${encodeURIComponent(en.target.dataset.pcCover)}`)
+        .then(c => { if (c?.url && en.target.isConnected) en.target.innerHTML = `<img src="${esc(c.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`; })
+        .catch(() => { /* без обложки */ });
+    }), { rootMargin: "200px" });
+    box.querySelectorAll("[data-pc-cover]").forEach(el => io.observe(el));
+    box.onclick = async ev => {
+      if (tabClick(ev)) return;
+      if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
+      const pg = ev.target.closest("[data-pc-rpage]");
+      if (pg && !pg.disabled) { rs.page = +pg.dataset.pcRpage; showReleases(); return; }
+      const mg = ev.target.closest("[data-pc-magnet]");
+      if (mg) {
+        try { await invoke("open_magnet", { magnet: d.items[+mg.dataset.pcMagnet].magnet }); toast("Открыто в торрент-клиенте", "success"); }
+        catch (e) { toast(String(e?.message || e), "error"); }
+        return;
+      }
+      const cp = ev.target.closest("[data-pc-copy]");
+      if (cp) {
+        try { await navigator.clipboard.writeText(d.items[+cp.dataset.pcCopy].magnet); toast("Magnet в буфере", "info"); }
+        catch { toast("Не вышло скопировать", "error"); }
+      }
+    };
+  }
 
   async function showAuthors() {
     const my = ++seq;
@@ -36,7 +116,7 @@ export function openCatalog(box, { onPick, onClose }) {
     if (my !== seq) return;
     st.services = d.services || st.services;
     const services = [["", "Все сервисы"], ...st.services.map(s => [s.id, s.name])];
-    box.innerHTML = `<div class="pc-wrap">
+    box.innerHTML = `<div class="pc-wrap">${tabs("authors")}
       <div class="pc-bar">
         <button type="button" class="btn sm" data-pc-close>← Поиск по ссылке</button>
         <input type="search" class="pc-search" placeholder="Имя автора или id" value="${esc(st.q)}" spellcheck="false">
@@ -59,6 +139,7 @@ export function openCatalog(box, { onPick, onClose }) {
     box.querySelector("[data-pc-service]").addEventListener("change", e => { st.service = e.target.value; st.page = 1; showAuthors(); });
     box.querySelector("[data-pc-sort]").addEventListener("change", e => { st.sort = e.target.value; st.page = 1; showAuthors(); });
     box.onclick = ev => {
+      if (tabClick(ev)) return;
       if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
       const pg = ev.target.closest("[data-pc-page]");
       if (pg) { st.page = +pg.dataset.pcPage; showAuthors(); return; }
