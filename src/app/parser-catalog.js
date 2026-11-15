@@ -21,8 +21,18 @@ function pager(page, pages, attr) {
 
 // Подписи вкладок присылает сервер (labels); здесь — нейтральные заглушки.
 let tabLabels = {};
-const tabs = active => `<div class="pc-tabs">${[["authors", "Авторы"], ["posts", "Посты"], ["releases", "Раздачи"]].map(([id, n]) =>
-  `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${esc(tabLabels[id] || n)}</button>`).join("")}</div>`;
+const TABS = [["authors", "Авторы", "Профили авторов с постами и файлами"], ["posts", "Посты", "Лента: новые, популярные, теги"], ["releases", "Раздачи", "Торренты: сервер скачает через VPN"]];
+const tabs = active => `<div class="pc-top">
+  <div class="pc-headline"><span><b>Каталог</b><small>${esc((TABS.find(t => t[0] === active) || TABS[0])[2])}</small></span>
+    <button type="button" class="btn sm" data-pc-close title="Вернуться к поиску по ссылке">✕ Закрыть</button></div>
+  <div class="pc-tabs">${TABS.map(([id, n]) =>
+    `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${esc(tabLabels[id] || n)}</button>`).join("")}</div></div>`;
+
+// Заглушки-«скелеты», пока грузится список: вёрстка не прыгает.
+const skel = (cls, n) => `<div class="${cls}">${`<div class="pc-sk"></div>`.repeat(n)}</div>`;
+const DICE = `<svg class="pc-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg>`;
+const TAB_KEY = "pc-last-tab";
+const saveTab = t => { try { localStorage.setItem(TAB_KEY, t); } catch (_) { /* без памяти */ } };
 
 /** Каталог в box. onPick(url) — выбран пост; onClose() — назад к обычному поиску; onQueued() — задача ушла в очередь. */
 export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
@@ -32,17 +42,21 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   const fs = { mode: "search", q: "", tag: "", period: "week", page: 1 };
   let seq = 0;
 
+  const toTop = () => box.scrollIntoView({ block: "start" });
+
   function tabClick(ev) {
+    if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return true; }
     const t = ev.target.closest("[data-pc-tab]");
     if (!t) return false;
     const tab = t.dataset.pcTab;
+    saveTab(tab);
     if (tab === "releases") showReleases(); else if (tab === "posts") showFeed(); else showAuthors();
     return true;
   }
 
   async function showReleases() {
     const my = ++seq;
-    box.innerHTML = `<div class="pc-wrap">${tabs("releases")}<div class="pc-empty">Загружаю раздачи…</div></div>`;
+    box.innerHTML = `<div class="pc-wrap">${tabs("releases")}${skel("pc-rels", 8)}</div>`;
     box.onclick = ev => { tabClick(ev); };
     let d;
     try {
@@ -57,7 +71,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       <span class="pc-page on">${rs.page}</span><button type="button" class="pc-page" data-pc-rpage="${rs.page + 1}"${d.has_next ? "" : " disabled"}>Вперёд ›</button></div>`;
     box.innerHTML = `<div class="pc-wrap">${tabs("releases")}
       <div class="pc-bar">
-        <button type="button" class="btn sm" data-pc-close>← Поиск по ссылке</button>
         <input type="search" class="pc-search" placeholder="Название, студия, RJ-код" value="${esc(rs.q)}" spellcheck="false">
         <select class="pc-select" data-pc-rcat>${(d.categories || []).map(c => `<option value="${esc(c.id)}"${c.id === rs.category ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
         <select class="pc-select" data-pc-rsort>${(d.sorts || []).map(c => `<option value="${esc(c.id)}"${c.id === rs.sort ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
@@ -99,9 +112,8 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.querySelectorAll("[data-pc-cover]").forEach(el => io.observe(el));
     box.onclick = async ev => {
       if (tabClick(ev)) return;
-      if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
       const pg = ev.target.closest("[data-pc-rpage]");
-      if (pg && !pg.disabled) { rs.page = +pg.dataset.pcRpage; showReleases(); return; }
+      if (pg && !pg.disabled) { rs.page = +pg.dataset.pcRpage; toTop(); showReleases(); return; }
       const op = ev.target.closest("[data-pc-open]");
       if (op) { showRelease(d.items[+op.dataset.pcOpen]); return; }
       const sv = ev.target.closest("[data-pc-server]");
@@ -150,22 +162,40 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     }
     if (my !== seq) return;
     const files = d.files || [];
+    // Общую корневую папку не повторяем в каждой строке — она в заголовке списка.
+    const root = files.length > 1 && files.every(f => f.path.includes("/")) && new Set(files.map(f => f.path.split("/")[0])).size === 1
+      ? files[0].path.split("/")[0] : "";
+    const shown = p => (root ? p.slice(root.length + 1) : p);
     box.innerHTML = `<div class="pc-wrap">${tabs("releases")}
       <div class="pc-bar">${back}</div>
       <div class="pc-rdetail">
-        <span class="pc-badge">${esc(x.category_name)}</span>
-        <b class="pc-rtitle">${esc(x.title)}</b>
-        <small class="pc-rstats"><span>${esc(x.size)}</span><span class="up">▲ ${x.seeders}</span><span class="down">▼ ${x.leechers}</span><span>⬇ ${fmtNum(x.downloads)}</span></small>
-        ${(d.images || []).length ? `<div class="pc-gallery">${d.images.map(u => `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join("")}</div>` : ""}
-        ${d.description ? `<div class="pc-rdesc">${esc(d.description)}</div>` : ""}
-        <div class="pc-files">
-          <div class="pc-fhead"><label><input type="checkbox" data-pc-fall checked> Файлы (${files.length})</label><span data-pc-fsum></span></div>
-          ${files.map((f, i) => `<label class="pc-file"><input type="checkbox" data-pc-file="${i}" checked><span class="pc-fname" title="${esc(f.path)}">${esc(f.path)}</span><small>${esc(f.size)}</small></label>`).join("") || `<div class="pc-empty">Список файлов не указан — скачается вся раздача.</div>`}
+        <div class="pc-rmain">
+          <span class="pc-cover pc-dcover"></span>
+          <div class="pc-rinfo">
+            <span class="pc-badge">${esc(x.category_name)}</span>
+            <b class="pc-rtitle">${esc(x.title)}</b>
+            <small class="pc-rstats"><span>${esc(x.size)}</span><span class="up">▲ ${x.seeders}</span><span class="down">▼ ${x.leechers}</span><span>⬇ ${fmtNum(x.downloads)}</span></small>
+  <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-get title="Сервер скачает выбранное через VPN, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-dmagnet>В торрент-клиент</button><button type="button" class="btn sm" data-pc-dcopy>Magnet</button></span>
+            ${d.description ? `<div class="pc-rdesc">${esc(d.description.replace(/\*\*/g, ""))}</div>` : ""}
+          </div>
         </div>
-        <span class="pc-ract"><button type="button" class="btn sm primary" data-pc-get title="Сервер скачает выбранное через VPN, потом заберёте файл из «Очереди и загрузок»">Скачать</button><button type="button" class="btn sm" data-pc-dmagnet>В торрент-клиент</button><button type="button" class="btn sm" data-pc-dcopy>Magnet</button></span>
+        ${(d.images || []).length > 1 ? `<div class="pc-gallery">${d.images.map(u => `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join("")}</div>` : ""}
+        <div class="pc-files">
+          <div class="pc-fhead"><label><input type="checkbox" data-pc-fall checked> Файлы (${files.length})${root ? ` <small class="pc-froot">📁 ${esc(root)}</small>` : ""}</label><span data-pc-fsum></span></div>
+          ${files.map((f, i) => `<label class="pc-file"><input type="checkbox" data-pc-file="${i}" checked><span class="pc-fname" title="${esc(f.path)}">${esc(shown(f.path))}</span><small>${esc(f.size)}</small></label>`).join("") || `<div class="pc-empty">Список файлов не указан — скачается вся раздача.</div>`}
+        </div>
       </div>
     </div>`;
     box.querySelectorAll(".pc-gallery img").forEach(img => img.addEventListener("error", () => img.remove()));
+    apiGet(`/parser/access/release-cover/${encodeURIComponent(x.id)}`).then(c => {
+      const slot = box.querySelector(".pc-dcover");
+      if (!c?.url || !slot) { slot?.remove(); return; }
+      const img = document.createElement("img");
+      img.alt = ""; img.referrerPolicy = "no-referrer";
+      img.addEventListener("error", () => slot.remove());
+      img.src = c.url;
+      slot.replaceChildren(img);
+    }).catch(() => box.querySelector(".pc-dcover")?.remove());
     const boxes = [...box.querySelectorAll("[data-pc-file]")];
     const all = box.querySelector("[data-pc-fall]");
     const get = box.querySelector("[data-pc-get]");
@@ -218,13 +248,13 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
 
   async function showFeed() {
     const my = ++seq;
-    const head = extra => `<div class="pc-wrap">${tabs("posts")}
+    const head = (extra, sub = "") => `<div class="pc-wrap">${tabs("posts")}
       <div class="pc-bar">
-        <button type="button" class="btn sm" data-pc-close>← Поиск по ссылке</button>
         ${MODES.map(([m, n]) => `<button type="button" class="btn sm${(fs.mode === m || (m === "tags" && fs.mode === "tag")) ? " primary" : ""}" data-pc-mode="${m}">${n}</button>`).join("")}
-        <button type="button" class="btn sm" data-pc-random="post">🎲 Случайный пост</button>
+        <button type="button" class="btn sm" data-pc-random="post">${DICE}Случайный пост</button>
+        ${sub}
       </div>${extra}`;
-    box.innerHTML = head(`<div class="pc-empty">Загружаю…</div></div>`);
+    box.innerHTML = head(`${skel(fs.mode === "tags" ? "pc-tags" : "pc-posts", 12)}</div>`);
     box.onclick = ev => { tabClick(ev); };
     let d;
     try {
@@ -235,16 +265,15 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       return;
     }
     if (my !== seq) return;
-    let body;
+    let body, sub = "";
     if (fs.mode === "tags") {
       body = `<div class="pc-tags">${(d.items || []).map(t => `<button type="button" class="pc-tagb" data-pc-tag="${esc(t.tag)}">${esc(t.tag)} <small>${fmtNum(t.count)}</small></button>`).join("") || `<div class="pc-empty">Тегов нет.</div>`}</div>`;
     } else {
-      const sub = fs.mode === "popular"
+      sub = fs.mode === "popular"
         ? `<select class="pc-select" data-pc-period>${(d.periods || []).map(x => `<option value="${esc(x.id)}"${x.id === fs.period ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select><span class="pc-count">${esc(d.range || "")}</span>`
         : fs.mode === "tag" ? `<span class="pc-count">Тег: <b>${esc(fs.tag)}</b></span>`
           : `<input type="search" class="pc-search" placeholder="Текст в названии или описании" value="${esc(fs.q)}" spellcheck="false">`;
-      body = `<div class="pc-bar">${sub}</div>
-        <div class="pc-count">Постов: ${fmtNum(d.total)}${d.pages > 1 ? ` · страница ${d.page} из ${fmtNum(d.pages)}` : ""}</div>
+      body = `<div class="pc-count">Постов: ${fmtNum(d.total)}${d.pages > 1 ? ` · страница ${d.page} из ${fmtNum(d.pages)}` : ""}</div>
         ${pager(d.page, d.pages, "data-pc-fpage")}
         <div class="pc-posts">${(d.items || []).map(p => `
           <button type="button" class="pc-post${p.media ? " has-media" : ""}" data-pc-post="${esc(p.url)}" title="${esc(p.title)}">
@@ -256,21 +285,20 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
           </button>`).join("") || `<div class="pc-empty">Ничего не нашлось.</div>`}</div>
         ${pager(d.page, d.pages, "data-pc-fpage")}`;
     }
-    box.innerHTML = head(body + "</div>");
+    box.innerHTML = head(body + "</div>", sub);
     const search = box.querySelector(".pc-search");
     let timer;
     search?.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { fs.q = search.value.trim(); fs.page = 1; showFeed(); }, 450); });
     box.querySelector("[data-pc-period]")?.addEventListener("change", e => { fs.period = e.target.value; fs.page = 1; showFeed(); });
     box.onclick = ev => {
       if (tabClick(ev)) return;
-      if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
       if (ev.target.closest("[data-pc-random]")) { randomPick("post"); return; }
       const md = ev.target.closest("[data-pc-mode]");
       if (md) { fs.mode = md.dataset.pcMode; fs.page = 1; showFeed(); return; }
       const tg = ev.target.closest("[data-pc-tag]");
       if (tg) { fs.mode = "tag"; fs.tag = tg.dataset.pcTag; fs.page = 1; showFeed(); return; }
       const pg = ev.target.closest("[data-pc-fpage]");
-      if (pg && !pg.disabled) { fs.page = +pg.dataset.pcFpage; showFeed(); return; }
+      if (pg && !pg.disabled) { fs.page = +pg.dataset.pcFpage; toTop(); showFeed(); return; }
       const au = ev.target.closest("[data-pc-author]");
       if (au) { const [service, id] = au.dataset.pcAuthor.split("/"); showPosts(service, id, 1); return; }
       const post = ev.target.closest("[data-pc-post]");
@@ -280,12 +308,13 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
 
   async function showAuthors() {
     const my = ++seq;
-    box.innerHTML = `<div class="pc-wrap"><div class="pc-empty">Загружаю каталог…</div></div>`;
+    box.innerHTML = `<div class="pc-wrap">${tabs("authors")}${skel("pc-grid", 12)}</div>`;
+    box.onclick = ev => { tabClick(ev); };
     let d;
     try {
       d = await apiGet("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: st.page });
     } catch (e) {
-      if (my === seq) box.innerHTML = `<div class="pc-wrap"><div class="pc-empty">Каталог недоступен: ${esc(e.message || e)}</div></div>`;
+      if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("authors")}<div class="pc-empty">Каталог недоступен: ${esc(e.message || e)}</div></div>`;
       return;
     }
     if (my !== seq) return;
@@ -293,11 +322,10 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     const services = [["", "Все сервисы"], ...st.services.map(s => [s.id, s.name])];
     box.innerHTML = `<div class="pc-wrap">${tabs("authors")}
       <div class="pc-bar">
-        <button type="button" class="btn sm" data-pc-close>← Поиск по ссылке</button>
         <input type="search" class="pc-search" placeholder="Имя автора или id" value="${esc(st.q)}" spellcheck="false">
         <select class="pc-select" data-pc-service>${services.map(([v, n]) => `<option value="${esc(v)}"${v === st.service ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>
         <select class="pc-select" data-pc-sort>${SORTS.map(([v, n]) => `<option value="${v}"${v === st.sort ? " selected" : ""}>${n}</option>`).join("")}</select>
-        <button type="button" class="btn sm" data-pc-random="author">🎲 Случайный</button>
+        <button type="button" class="btn sm" data-pc-random="author">${DICE}Случайный</button>
       </div>
       <div class="pc-count">Авторов: ${fmtNum(d.total)}${d.pages > 1 ? ` · страница ${d.page} из ${fmtNum(d.pages)}` : ""}</div>
       ${pager(d.page, d.pages, "data-pc-page")}
@@ -305,7 +333,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         <button type="button" class="pc-card" data-pc-author="${esc(a.service)}/${esc(a.id)}" style="--pc-banner:${esc(cssUrl(a.banner))}">
           <img class="pc-ava" src="${esc(a.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer">
           <span class="pc-meta"><span class="pc-badge" data-svc="${esc(a.service)}">${esc(a.service_name)}</span>
-            <b class="pc-name">${esc(a.name)}</b><small>${fmtNum(a.favorited)} в избранном</small></span>
+            <b class="pc-name">${esc(a.name)}</b><small>♥ ${fmtNum(a.favorited)}</small></span>
         </button>`).join("") || `<div class="pc-empty">Никого не нашлось.</div>`}</div>
       ${pager(d.page, d.pages, "data-pc-page")}
     </div>`;
@@ -316,9 +344,8 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.querySelector("[data-pc-sort]").addEventListener("change", e => { st.sort = e.target.value; st.page = 1; showAuthors(); });
     box.onclick = ev => {
       if (tabClick(ev)) return;
-      if (ev.target.closest("[data-pc-close]")) { seq++; box.onclick = null; onClose(); return; }
       const pg = ev.target.closest("[data-pc-page]");
-      if (pg) { st.page = +pg.dataset.pcPage; showAuthors(); return; }
+      if (pg) { st.page = +pg.dataset.pcPage; toTop(); showAuthors(); return; }
       if (ev.target.closest("[data-pc-random]")) { randomPick("author"); return; }
       const card = ev.target.closest("[data-pc-author]");
       if (card) { const [service, id] = card.dataset.pcAuthor.split("/"); showPosts(service, id, 1); }
@@ -327,7 +354,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
 
   async function showPosts(service, id, page) {
     const my = ++seq;
-    box.innerHTML = `<div class="pc-wrap"><div class="pc-empty">Загружаю посты…</div></div>`;
+    box.innerHTML = `<div class="pc-wrap">${skel("pc-posts", 12)}</div>`;
     let d;
     try {
       d = await apiGet(`/parser/access/creator/${encodeURIComponent(service)}/${encodeURIComponent(id)}`, { page });
@@ -357,11 +384,14 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     box.onclick = ev => {
       if (ev.target.closest("[data-pc-back]")) { showAuthors(); return; }
       const pg = ev.target.closest("[data-pc-ppage]");
-      if (pg) { showPosts(service, id, +pg.dataset.pcPpage); return; }
+      if (pg) { toTop(); showPosts(service, id, +pg.dataset.pcPpage); return; }
       const post = ev.target.closest("[data-pc-post]");
       if (post) { seq++; box.onclick = null; onPick(post.dataset.pcPost); }
     };
   }
 
-  showAuthors();
+  let last = "authors";
+  try { last = localStorage.getItem(TAB_KEY) || "authors"; } catch (_) { /* по умолчанию авторы */ }
+  toTop();
+  if (last === "releases") showReleases(); else if (last === "posts") showFeed(); else showAuthors();
 }
