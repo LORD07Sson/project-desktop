@@ -555,7 +555,7 @@ export async function loadParser() {
     });
   }
 
-  // После удачного сохранения файл на сервере больше не нужен — удаляем сразу, а не через 6 часов.
+  // После удачного сохранения файл на сервере больше не нужен — удаляем сразу, а не через 30 минут.
   async function saveJob(jobId, savePath) {
     const ok = await downloadWithCard({
       command: "download_api_file",
@@ -583,7 +583,7 @@ export async function loadParser() {
     if (!jobs.length) { box.innerHTML = ""; return; }
     const wasOpen = open || box.querySelector("details")?.open;
     const done = jobs.filter(j => j.status === "done");
-    box.innerHTML = `<details class="pr-reqs"${wasOpen ? " open" : ""}><summary>Очередь и загрузки (${jobs.length}) — файлы хранятся 6 часов</summary>
+    box.innerHTML = `<details class="pr-reqs"${wasOpen ? " open" : ""}><summary>Очередь и загрузки (${jobs.length}) — файлы хранятся 30 минут</summary>
       ${done.length > 1 ? `<button type="button" class="btn sm" id="pr-save-all">Сохранить все готовые (${done.length}) в папку</button>` : ""}
       <div class="pr-req-list">${jobs.map(j => `
       <div class="pr-req">
