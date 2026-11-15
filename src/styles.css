@@ -6132,6 +6132,11 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pr-req:hover { border-color: var(--line); background: rgba(255,255,255,.02); }
 .pr-req-ct { font-size: 11.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pr-req-url { font-size: 11.5px; color: var(--ink-soft); font-family: var(--mono, ui-monospace, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Очередь загрузок: имя сверху, статус целиком под ним (у торрента — МБ, скорость, сколько ещё, сиды и пиры). */
+.pr-job { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "url act" "ct act"; row-gap: 2px; }
+.pr-job .pr-req-url { grid-area: url; }
+.pr-job .pr-req-ct { grid-area: ct; white-space: normal; font-variant-numeric: tabular-nums; }
+.pr-job .pr-req-actions { grid-area: act; }
 .pr-req-actions { display: flex; gap: 4px; }
 .pr-req.on { background: rgba(80, 200, 120, .08); border-color: rgba(80, 200, 120, .35); }
 .pr-dl-progress { position: relative; min-width: 160px; overflow: hidden; z-index: 0; font-variant-numeric: tabular-nums; }

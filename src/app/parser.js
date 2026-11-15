@@ -590,7 +590,7 @@ export async function loadParser() {
     box.innerHTML = `<details class="pr-reqs"${wasOpen ? " open" : ""}><summary>Очередь и загрузки (${jobs.length}) — файлы хранятся 30 минут</summary>
       ${done.length > 1 ? `<button type="button" class="btn sm" id="pr-save-all">Сохранить все готовые (${done.length}) в папку</button>` : ""}
       <div class="pr-req-list">${jobs.map(j => `
-      <div class="pr-req">
+      <div class="pr-req pr-job">
         <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${ENGINE_NAMES[j.active_engine] ? `${esc(ENGINE_NAMES[j.active_engine])} · ` : ""}${j.active_engine === "torrent" ? esc(torrentStats(j)) : `${j.percent || 0}%`}` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
         <div class="pr-req-url" title="${esc(j.filename || j.name)}">${esc(j.filename || j.name)}</div>
         <div class="pr-req-actions">
