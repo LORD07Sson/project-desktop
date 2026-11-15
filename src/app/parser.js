@@ -1,4 +1,4 @@
-import { can } from "./state.js";
+import { can, state } from "./state.js";
 import { clientHeaders, API_BASE, toast } from "./api.js";
 import { $ } from "./utils.js";
 import { pickOutputDir, pickOutputFile } from "./tauri.js";
@@ -141,10 +141,12 @@ export async function loadParser() {
     } catch (_) { /* без каталога */ }
     $("#pr-set-session").hidden = !access.unlocked;
     if (access.settings && !closeOwner) { ownerBox.hidden = false; closeOwner = mountOwnerAccounts(ownerBox); }
+    if (!access.settings && closeOwner) { closeOwner(); closeOwner = null; ownerBox.hidden = true; ownerBox.innerHTML = ""; }
   }
   refreshAccess();
   settingsBtn.addEventListener("click", () => {
     const open = settingsBox.hidden;
+    if (open) refreshAccess();  // доступ мог смениться (предпросмотр роли, выход)
     settingsBox.hidden = !open;
     settingsBtn.setAttribute("aria-expanded", String(open));
     settingsBtn.classList.toggle("on", open);
@@ -159,6 +161,8 @@ export async function loadParser() {
   // В каталоге панель поиска по ссылке не нужна: прячем её и возвращаем при выходе или выборе поста.
   const hero = $("#pr-hero");
   catalogBtn.addEventListener("click", async () => {
+    await refreshAccess();  // статус мог устареть: «Смотреть как…» закрывает каталог
+    if (!access.unlocked && state.previewRole) { toast("В режиме предпросмотра каталог недоступен", "info"); return; }
     if (!access.unlocked) {
       if (!await askCatalogLogin()) return;
       await refreshAccess();
