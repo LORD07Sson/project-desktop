@@ -69,7 +69,8 @@ export function deadlineKpi(deadline, { status = "", overdue = false, now = new 
   const today = Date.parse(`${part("year")}-${part("month")}-${part("day")}T00:00:00Z`);
   const days = Math.round((Date.parse(`${dateKey}T00:00:00Z`) - today) / 86400000);
   const dueAt = time ? Date.parse(`${dateKey}T${time[1]}:00+03:00`) : Date.parse(`${dateKey}T23:59:59+03:00`);
-  const lateDays = Math.floor((now.getTime() - dueAt) / 86400000);
+  // Срок без времени — календарными днями (как список, Доска, Календарь), со временем — полными сутками.
+  const lateDays = time ? Math.floor((now.getTime() - dueAt) / 86400000) : -days;
   if (overdue) return { label: lateDays > 0 ? `просрочено ${lateDays} дн.` : "просрочено", date, tone: "bad" };
   if (days === 0) return { label: "сегодня", date, tone: "soon" };
   if (days === 1) return { label: "завтра", date, tone: "soon" };
@@ -82,7 +83,8 @@ export function overviewKpis({ files, pipeline, status, deadline, overdue = fals
   const { done, total } = pipelineCounts(pipeline);
   const prog = overallProgress({ files, pipeline, status });
   const due = deadlineKpi(deadline, { status, overdue, now });
-  const waiting = (pipeline || []).filter(s => !(s.done || s.submitted_at)).map(nameOf).filter(Boolean);
+  // Один человек на двух ролях — одно имя в «ждём».
+  const waiting = [...new Set((pipeline || []).filter(s => !(s.done || s.submitted_at)).map(nameOf).filter(Boolean))];
   const voiceSub = !total ? "пайплайн не задан"
     : waiting.length ? `ждём: ${waiting.slice(0, 4).join(", ")}${waiting.length > 4 ? ` и ещё ${waiting.length - 4}` : ""}` : "все сдали";
   return [
