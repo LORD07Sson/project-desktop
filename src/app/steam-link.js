@@ -23,5 +23,3 @@ export function linkSteam() {
   })().finally(() => { busy = null; });
   return busy;
 }
-
-export const isLinking = () => !!busy;

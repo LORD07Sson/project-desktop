@@ -332,8 +332,6 @@ export function availableTours() {
 // ---------- движок ----------
 let T = null; // идущий урок
 
-export function tourRunning() { return !!T; }
-
 export async function startTour(id) {
   const tour = byId[id];
   if (!tour || (tour.admin && !state.isAdmin)) return;

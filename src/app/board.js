@@ -750,7 +750,7 @@ async function renderBoard(root) {
 }
 
 // Заливка прогресс-бара карточки едет из 0 до реального значения при
-// появлении доски — тот же приём, что у playTimelineIntro/playSegBarIntro.
+// появлении доски — тот же приём, что у playTimelineIntro.
 function playBoardCardsIntro(root) {
   const bars = root.querySelectorAll(".board-card-progress-track i");
   bars.forEach(el => { el.style.background = "var(--accent-dot)"; });

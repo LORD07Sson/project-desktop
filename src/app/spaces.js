@@ -23,8 +23,6 @@ const wait = ms => new Promise(r => setTimeout(r, reduced() ? 0 : ms)); // DevSk
 const onStart = () => { try { return localStorage.getItem(ON_START_KEY) !== "0"; } catch (_) { return true; } };
 const setOnStart = v => { try { localStorage.setItem(ON_START_KEY, v ? "1" : "0"); } catch (_) { /* не запомнится */ } };
 
-export const currentSpace = () => space;
-
 function ensure() {
   let el = $("#space-chooser");
   if (el) return el;

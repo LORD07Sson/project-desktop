@@ -11,10 +11,9 @@
 
 import { state } from "./state.js";
 import { apiGet, apiPost, openSheet, toast, askConfirm } from "./api.js";
-import { esc, STATUS_COLOR_VAR } from "./utils.js";
+import { esc } from "./utils.js";
 
 const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-const PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/></svg>';
 const PASS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6"/></svg>';
 
 export function fmtDay(iso) {
@@ -39,50 +38,6 @@ export async function fetchPerson(telegramId) {
     const p = await apiGet(`/people/${telegramId}`);
     return p && p.telegram_id && Array.isArray(p.load) ? p : null;
   } catch (_) { return null; }
-}
-
-function pauseLine(p) {
-  return p.paused_until
-    ? `<span class="pp-pause on">${PAUSE_ICON}На паузе до ${esc(fmtDay(p.paused_until))}${p.pause_note ? ` — ${esc(p.pause_note)}` : ""}</span>`
-    : `<span class="pp-pause">${PAUSE_ICON}Напоминания приходят</span>`;
-}
-
-// Блок «Работа» в профиле человека.
-export function workSectionHtml(p) {
-  const today = new Date().toISOString().slice(0, 10);
-  const st = p.stats || {};
-  return `
-    <div class="pp-work" id="pp-work">
-      <div class="pp-work-head">
-        <span class="sec-title" style="margin:0;">Работа</span>
-        ${pauseLine(p)}
-        <span style="flex:1"></span>
-        ${p.can_pause ? `<button type="button" class="btn" data-pp-pause>${p.paused_until ? "Изменить паузу" : "Поставить паузу"}</button>` : ""}
-        ${p.can_transfer && p.load.length ? `<button type="button" class="btn" data-pp-transfer>${PASS_ICON}Передать дела · ${p.load.length}</button>` : ""}
-      </div>
-      <div class="pp-stats">
-        <div><b>${st.assigned_total ?? 0}</b><span>назначено всего</span></div>
-        <div><b>${st.completed_count ?? 0}</b><span>завершено</span></div>
-        <div><b class="${st.overdue_count ? "danger" : ""}">${st.overdue_count ?? 0}</b><span>просрочено</span></div>
-        <div><b>${st.avg_days != null ? `${st.avg_days} дн.` : "—"}</b><span>средний срок</span></div>
-      </div>
-      ${p.load.length ? `
-      <div class="pp-load">
-        <div class="pp-load-title">Сейчас в работе — ${p.load.length}</div>
-        ${p.load.map(r => {
-          const late = typeof r.personal_overdue === "boolean"
-            ? r.personal_overdue
-            : !!(r.deadline && r.deadline < today);
-          return `<button type="button" class="pp-load-row" data-open-report="${esc(r.public_id)}">
-            <span class="pp-dot" style="--c: var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"></span>
-            <span class="pp-rid">${esc(r.public_id)}</span>
-            <span class="pp-title">${esc(r.title)}</span>
-            <span class="pp-status">${esc(String(r.status_label || "").replace(/^(?:[\p{Extended_Pictographic}️‍]\s*)+/u, ""))}</span>
-            <span class="pp-deadline${late ? " late" : ""}">${r.deadline ? `${late ? "просрочено · " : "до "}${esc(fmtDay(r.deadline))}` : "без срока"}</span>
-          </button>`;
-        }).join("")}
-      </div>` : `<div class="no-assignee" style="margin-top:8px;">Сейчас в работе ничего нет</div>`}
-    </div>`;
 }
 
 export function wireWorkSection(root, p, onChange) {

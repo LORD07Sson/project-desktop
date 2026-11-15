@@ -605,11 +605,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
    разным углам вместо соседства — спарклайн/кольцо теперь прижимаются
    вправо собственным margin-left:auto. */
 .kpi-row { display: flex; align-items: center; gap: 10px; }
-.kpi-spark { flex: none; opacity: .9; margin-left: auto; max-width: 100px; overflow: hidden; }
-.sparkline { display: block; overflow: visible; }
-.sparkline-area { opacity: .16; }
-.sparkline-line { stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.kpi-ring-wrap { flex: none; margin-left: auto; }
 
 /* Цветная иконка-плашка перед числом KPI-плитки — перенесено вживую с
    референса пользователя (Dribbble: Xentra Digital Marketing
@@ -636,8 +631,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
    background: color-mix(currentVar 20%, surface)), чтобы box-shadow
    светился в тон иконке, а не в нейтральный ink. Цвет прокидывается
    инлайн-стилем `color` рядом с `background` в Overview.jsx. */
-.kpi-ring-track { stroke: var(--surface-2); }
-.kpi-ring-fill { transition: stroke-dashoffset 1s var(--ease); }
 
 .bento-empty {
   text-align: center;
@@ -679,34 +672,8 @@ body.window-maximized .win-btn .ic-restore { display: block; }
    «Projects Performance»: бейджи с числом над полосой, сама полоса из
    цветных долей, легенда без цифр под ней (цифры уже в бейджах). */
 
-.seg-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-.seg-badge {
-  display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
-  padding-right: 10px; border-right: 1px solid var(--line);
-}
-.seg-badge:last-child { padding-right: 0; border-right: none; }
-.seg-badge .dot { width: 6px; height: 6px; }
 
-.seg-bar {
-  display: flex;
-  align-items: stretch;
-  height: 8px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--surface-2);
-  margin-top: 6px;
-  gap: 2px;
-}
-.seg-bar-item {
-  width: 0%;
-  height: 100%;
-  transition: width 1s cubic-bezier(.22,.9,.3,1);
-  min-width: 3px;
-}
 
-.seg-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; }
-.seg-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); }
-.seg-legend-item .dot { flex: none; }
 
 .delta-pill {
   font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums;
@@ -4198,29 +4165,11 @@ body.watch-open #app-screen { pointer-events: none; }
 /* ================================================================
    Карточка человека: работа, пауза, передача дел
    ================================================================ */
-.pp-work { margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 12px; }
-.pp-work-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pp-pause { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); padding: 3px 10px; border-radius: 999px; background: var(--surface-2); }
 .pp-pause svg { width: 11px; height: 11px; fill: currentColor; }
 .pp-pause.on { color: var(--s-work); background: color-mix(in srgb, var(--s-work) 14%, transparent); font-weight: 600; }
-.pp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.pp-stats > div { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; }
-.pp-stats b { font-size: 18px; font-variant-numeric: tabular-nums; }
-.pp-stats b.danger { color: var(--s-stop); }
-.pp-stats span { font-size: 11px; color: var(--ink-dim); }
-.pp-load { display: flex; flex-direction: column; gap: 2px; }
-.pp-load-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--ink-dim); margin-bottom: 4px; }
-.pp-load-row {
-  display: grid; grid-template-columns: 10px 72px minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
-  padding: 7px 8px; border-radius: 8px; border: none; background: transparent; color: var(--ink); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
-}
-.pp-load-row:hover { background: var(--surface-2); }
-.pp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 .pp-rid { color: var(--fire); font-weight: 700; font-variant-numeric: tabular-nums; }
-.pp-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-status { color: var(--ink-soft); font-size: 11.5px; white-space: nowrap; }
-.pp-deadline { color: var(--ink-dim); font-size: 11.5px; white-space: nowrap; }
-.pp-deadline.late { color: var(--s-stop); font-weight: 600; }
 .pp-pause-form { display: flex; flex-direction: column; gap: 10px; }
 .pp-pause-form label, .pp-to { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-soft); }
 .pp-pause-form input, .pp-to select {
@@ -4232,7 +4181,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .pp-transfer-item { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-transfer-item b { color: var(--fire); margin-right: 6px; }
 #pause-card.pp-paused { border-color: color-mix(in srgb, var(--s-work) 45%, var(--line)); }
-@media (max-width: 800px) { .pp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ================================================================
    Напоминания и сроки

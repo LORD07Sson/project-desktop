@@ -37,10 +37,6 @@ export function toggleFavorite(publicId) {
   return on;
 }
 
-export function favoritesCount() {
-  return readSet().size;
-}
-
 export function favoriteIds() {
   return readSet();
 }

@@ -32,11 +32,6 @@ export function setLocalVideo(publicId, value) {
   changed(publicId);
 }
 
-export function clearLocalVideo(publicId) {
-  stopTracking(publicId);
-  setLocalVideo(publicId, null);
-}
-
 function stopTracking(publicId) {
   const t = timers.get(publicId);
   if (t) clearInterval(t);
