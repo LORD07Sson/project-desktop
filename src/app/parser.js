@@ -596,7 +596,8 @@ export async function loadParser() {
         <div class="pr-req-url" title="${esc(j.filename || j.name)}">${esc(j.filename || j.name)}</div>
         <div class="pr-req-actions">
           ${j.status === "done" ? `<button type="button" class="btn sm primary" data-job-save="${esc(j.id)}">Сохранить</button>` : ""}
-          ${JOB_OPEN.has(j.status) ? `<button type="button" class="btn sm" data-job-cancel="${esc(j.id)}">Отмена</button>` : ""}
+          ${JOB_OPEN.has(j.status) ? `<button type="button" class="btn sm" data-job-cancel="${esc(j.id)}">Отмена</button>`
+            : `<button type="button" class="btn sm" data-job-remove="${esc(j.id)}" title="${j.status === "done" ? "Убрать из списка и удалить файл с сервера" : "Убрать из списка"}">✕</button>`}
         </div>
       </div>`).join("")}</div></details>`;
     box.onclick = async ev => {
@@ -604,6 +605,13 @@ export async function loadParser() {
       if (cancel) {
         cancel.disabled = true;
         await fetch(`${API_BASE}/parser/download/${cancel.dataset.jobCancel}/cancel`, { method: "POST", headers: clientHeaders() }).catch(() => {});
+        loadHistory();
+        return;
+      }
+      const remove = ev.target.closest("[data-job-remove]");
+      if (remove) {
+        remove.disabled = true;
+        await fetch(`${API_BASE}/parser/download/${remove.dataset.jobRemove}/delete`, { method: "POST", headers: clientHeaders() }).catch(() => {});
         loadHistory();
         return;
       }
