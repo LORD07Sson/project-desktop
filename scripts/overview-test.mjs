@@ -43,7 +43,9 @@ assert.deepEqual(deadlineKpi("2026-11-06", { now }), { label: "сегодня", 
 assert.deepEqual(deadlineKpi("2026-11-07 18:00", { now }), { label: "завтра", date: "07.11 · 18:00 МСК", tone: "soon" });
 assert.deepEqual(deadlineKpi("2026-11-09", { now }), { label: "через 3 дн.", date: "09.11", tone: "soon" });
 assert.deepEqual(deadlineKpi("2026-11-20", { now }), { label: "через 14 дн.", date: "20.11", tone: "ok" });
-assert.deepEqual(deadlineKpi("2026-11-04", { now, overdue: true }), { label: "просрочено 1 дн.", date: "04.11", tone: "bad" });
+// срок без времени — календарными днями, как список/Доска/Календарь: 04.11 → 06.11 = 2
+assert.deepEqual(deadlineKpi("2026-11-04", { now, overdue: true }), { label: "просрочено 2 дн.", date: "04.11", tone: "bad" });
+assert.equal(deadlineKpi("2026-11-04 18:00", { now, overdue: true }).label, "просрочено 1 дн.");   // со временем — полными сутками
 assert.equal(deadlineKpi("2026-11-06 11:00", { now, overdue: true }).label, "просрочено");   // меньше суток
 assert.equal(deadlineKpi("2026-11-01", { now, status: "completed", overdue: true }).label, "выполнено");
 assert.equal(deadlineKpi("2026-11-01", { now, status: "cancelled" }).tone, "none");
