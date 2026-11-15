@@ -23,33 +23,33 @@ async function errorText(res) {
   return `HTTP ${res.status}`;
 }
 
-// Kemono открывается кодовым словом на аккаунт: сервер хранит только его хэш.
-function askKemonoKey() {
+// Часть источников открывается кодовым словом на аккаунт: сервер хранит только его хэш.
+function askAccessKey() {
   return new Promise(resolve => {
     const overlay = openSheet(`
-      <h3>Kemono закрыт</h3>
+      <h3>Доступ закрыт</h3>
       <p class="sub">Введите кодовое слово. Доступ откроется для вашего аккаунта.</p>
-      <form class="pr-kemono-form">
-        <input type="password" class="pr-kemono-key" autocomplete="off" spellcheck="false" aria-label="Кодовое слово" required>
-        <div class="pr-kemono-err" hidden></div>
+      <form class="pr-access-form">
+        <input type="password" class="pr-access-key" autocomplete="off" spellcheck="false" aria-label="Кодовое слово" required>
+        <div class="pr-access-err" hidden></div>
         <div class="sheet-actions"><button type="button" class="btn" data-cancel>Отмена</button><button type="submit" class="btn primary">Открыть</button></div>
       </form>`);
     const form = overlay.querySelector("form");
     const input = form.querySelector("input");
-    const err = form.querySelector(".pr-kemono-err");
+    const err = form.querySelector(".pr-access-err");
     let done = false;
     const finish = ok => { if (done) return; done = true; dismissSheet(overlay); resolve(ok); };
     overlay.addEventListener("sheet-dismissed", () => { if (!done) { done = true; resolve(false); } });
     form.querySelector("[data-cancel]").addEventListener("click", () => finish(false));
     form.addEventListener("submit", async e => {
       e.preventDefault();
-      const res = await fetch(`${API_BASE}/parser/kemono/unlock`, {
+      const res = await fetch(`${API_BASE}/parser/access/unlock`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...clientHeaders() },
         body: JSON.stringify({ key: input.value }),
       });
       input.value = "";
-      if (res.ok) { toast("Kemono открыт", "success"); finish(true); return; }
+      if (res.ok) { toast("Доступ открыт", "success"); finish(true); return; }
       err.hidden = false;
       err.textContent = await errorText(res);
     });
@@ -57,7 +57,7 @@ function askKemonoKey() {
   });
 }
 
-// Фильтр диалога сохранения под реальное расширение: архивы из Kemono — не mp4.
+// Фильтр диалога сохранения под реальное расширение: архив сохраняется не как mp4.
 function saveFilter(ext) {
   const e = String(ext || "mp4").toLowerCase().replace(/^\./, "");
   return [{ name: ["zip", "rar", "7z"].includes(e) ? `Архив ${e.toUpperCase()}` : `Файл ${e.toUpperCase()}`, extensions: [e] }];
@@ -198,8 +198,8 @@ export async function loadParser() {
       let res = await start();
       if (res.status === 403) {
         const detail = await errorText(res);
-        if (detail !== "kemono_locked") throw new Error(detail);
-        if (!await askKemonoKey()) { status.textContent = "Kemono закрыт: нужен ключ."; return; }
+        if (detail !== "source_locked") throw new Error(detail);
+        if (!await askAccessKey()) { status.textContent = "Доступ закрыт: нужен ключ."; return; }
         res = await start();
       }
       if (!res.ok) throw new Error(await errorText(res));
