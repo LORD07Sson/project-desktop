@@ -3,6 +3,7 @@ import { clientHeaders, API_BASE, toast, openSheet, dismissSheet } from "./api.j
 import { $ } from "./utils.js";
 import { pickOutputDir, pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
+import { openCatalog } from "./parser-catalog.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -94,6 +95,7 @@ function layout() {
             <input id="pr-url" type="url" placeholder="https://… ссылка на страницу с видео" autocomplete="off" required>
             <button class="btn primary" type="submit" id="pr-submit">Найти</button>
             <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
+            <button class="btn" type="button" id="pr-catalog" title="Каталог авторов" hidden>Каталог</button>
           </form>
           <details class="pr-cookies-wrap">
             <summary class="pr-cookies-toggle">Cookies <small>· только для глубокого анализа</small></summary>
@@ -131,6 +133,21 @@ export async function loadParser() {
   const results = $("#pr-results");
 
   form.addEventListener("submit", e => { e.preventDefault(); analyze(false); });
+
+  // Кнопка каталога видна только аккаунтам с открытым доступом; сервер отвечает unlocked: true/false.
+  const catalogBtn = $("#pr-catalog");
+  fetch(`${API_BASE}/parser/access/status`, { headers: clientHeaders() })
+    .then(r => (r.ok ? r.json() : null))
+    .then(d => { if (d?.unlocked) catalogBtn.hidden = false; })
+    .catch(() => { /* без каталога */ });
+  catalogBtn.addEventListener("click", () => {
+    status.hidden = true;
+    setBackdrop(null);
+    openCatalog(results, {
+      onPick: url => { input.value = url; results.onclick = null; analyze(false); },
+      onClose: () => { results.innerHTML = ""; },
+    });
+  });
   deepBtn.addEventListener("click", () => analyze(true));
   loadHistory();
 
