@@ -1400,6 +1400,8 @@ const ALLOWED_UPLOAD_EXT: &[&str] = &[
 // Потолок локального Bot API на сервере — 2000 МБ (сервер и nginx пропускают
 // файл потоком, см. _spooled в miniapp/server.py).
 const MAX_UPLOAD_BYTES: u64 = 2000 * 1024 * 1024;
+// Скачивание готового файла загрузчика: сервер разрешает торренты до 20 ГБ (+ запас на zip).
+const MAX_PARSER_BYTES: u64 = 25 * 1024 * 1024 * 1024;
 
 // Файл разрешён к загрузке, если пользователь сам его указал ЛЮБЫМ из
 // двух способов — перетащил в окно (DroppedFiles) или выбрал в
@@ -1527,7 +1529,7 @@ async fn download_report_file(
             tokio::time::sleep(std::time::Duration::from_secs(5 * attempt as u64)).await;
         };
 
-        save_response_to_file(resp, &save_path, job.map(|j| (app.clone(), j))).await
+        save_response_to_file(resp, &save_path, job.map(|j| (app.clone(), j)), MAX_UPLOAD_BYTES).await
     }
     .await;
     log_result("download_report_file", result)
@@ -1593,7 +1595,9 @@ async fn download_api_file(
             attempt += 1;
             tokio::time::sleep(std::time::Duration::from_secs(5 * attempt as u64)).await;
         };
-        save_response_to_file(resp, &save_path, job.map(|j| (app.clone(), j))).await
+        // Готовые файлы загрузчика (торренты, папки) сервер держит до 20 ГБ — у вложений потолок 2 ГБ.
+        let max = if api_path.trim_start_matches('/').starts_with("parser/") { MAX_PARSER_BYTES } else { MAX_UPLOAD_BYTES };
+        save_response_to_file(resp, &save_path, job.map(|j| (app.clone(), j)), max).await
     }
     .await;
     log_result("download_api_file", result)
@@ -1607,6 +1611,7 @@ async fn save_response_to_file(
     mut resp: reqwest::Response,
     save_path: &std::path::Path,
     progress: Option<(tauri::AppHandle, String)>,
+    max: u64,
 ) -> Result<(), String> {
     use std::io::Write;
     let declared = resp.content_length().unwrap_or(0);
@@ -1620,7 +1625,7 @@ async fn save_response_to_file(
         }
     };
     if let Some(len) = resp.content_length() {
-        if len > MAX_UPLOAD_BYTES {
+        if len > max {
             return Err(format!("Файл слишком большой ({} МБ).", len / 1024 / 1024));
         }
     }
@@ -1633,7 +1638,7 @@ async fn save_response_to_file(
             .map_err(|e| format!("Обрыв при скачивании: {e}"))?
         {
             total += chunk.len() as u64;
-            if total > MAX_UPLOAD_BYTES {
+            if total > max {
                 return Err("Файл слишком большой.".into());
             }
             out.write_all(&chunk).map_err(|e| format!("Не удалось сохранить файл: {e}"))?;
