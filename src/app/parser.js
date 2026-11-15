@@ -256,7 +256,8 @@ export async function loadParser() {
       </div>`;
 
     const rowsHtml = (r.candidates || []).map((c, i) => {
-      const q = typeof c.quality === "number" ? `${c.quality}p` : esc(c.quality || "?");
+      // Файл с именем (вложение поста): в узкой колонке тип, имя — строкой в описании.
+      const q = c.name ? esc((c.ext || "файл").toUpperCase()) : typeof c.quality === "number" ? `${c.quality}p` : esc(c.quality || "?");
       const protoExt = [c.protocol, c.ext].filter(Boolean).join(" · ");
       const size = c.filesize ? `${c.filesize_estimated ? "≈ " : ""}${fmtSize(c.filesize)}` : "";
       const extras = [
@@ -271,6 +272,7 @@ export async function loadParser() {
         <div class="pr-row">
           <div class="pr-col pr-q">${q}</div>
           <div class="pr-col pr-info">
+            ${c.name ? `<div class="pr-name" title="${esc(c.name)}">${esc(c.name)}</div>` : ""}
             <div class="pr-src"><span class="pr-engine sm" data-auto-engine="${engineOf(c)}">${engineOf(c)}</span> ${esc(c.source || "")} ${protoExt ? `· ${esc(protoExt)}` : ""} ${size ? `· ${size}` : ""}${extras}</div>
             <div class="pr-url" title="${esc(c.url)}">${esc(c.url)}</div>
             ${c.drm ? `<div class="pr-key-row"><input type="text" class="pr-key-input" data-key="${i}" placeholder="KID:KEY (hex32:hex32)" spellcheck="false" autocomplete="off"><button type="button" class="btn sm" data-auto-key="${i}" title="Получить ключ автоматически через Widevine CDM">Авто</button></div>` : ""}
