@@ -57,13 +57,20 @@ function askKemonoKey() {
   });
 }
 
+// Фильтр диалога сохранения под реальное расширение: архивы из Kemono — не mp4.
+function saveFilter(ext) {
+  const e = String(ext || "mp4").toLowerCase().replace(/^\./, "");
+  return [{ name: ["zip", "rar", "7z"].includes(e) ? `Архив ${e.toUpperCase()}` : `Файл ${e.toUpperCase()}`, extensions: [e] }];
+}
+
 function engineOf(c) {
+  if (["zip", "rar", "7z"].includes(c.ext)) return "direct";
   if (/^https:\/\/(www\.)?mega\.(nz|io)\//i.test(c.url || "")) return "megatools";
   return /m3u8|dash|mpd|ism|mss/i.test(`${c.protocol || ""} ${c.ext || ""}`) ? "N_m3u8DL-RE" : "yt-dlp";
 }
 
 const ENGINE_KEY = "project_parser_engine";
-const ENGINE_NAMES = { nm3u8: "N_m3u8DL-RE", ytdlp: "yt-dlp", megatools: "megatools" };
+const ENGINE_NAMES = { nm3u8: "N_m3u8DL-RE", ytdlp: "yt-dlp", megatools: "megatools", direct: "напрямую" };
 
 function readEngine() {
   try { const v = localStorage.getItem(ENGINE_KEY); return v === "nm3u8" || v === "ytdlp" ? v : "auto"; } catch (_) { return "auto"; }
@@ -374,7 +381,8 @@ export async function loadParser() {
 
   async function downloadCandidate(c, title, btn) {
     const defaultName = ((c.name || "").replace(/\.[^.]+$/, "") || title || "video").replace(/[\\/:*?"<>|]+/g, "_").trim().slice(0, 100) || "video";
-    const savePath = await pickOutputFile(`${defaultName}.mp4`, [{ name: "Видео MP4", extensions: ["mp4"] }]);
+    const ext = ["zip", "rar", "7z"].includes(c.ext) ? c.ext : "mp4";
+    const savePath = await pickOutputFile(`${defaultName}.${ext}`, saveFilter(ext));
     if (!savePath) return;
     toast(`Сохраню в ${savePath}`, "info");
     btn.textContent = "0%";
@@ -555,7 +563,8 @@ export async function loadParser() {
       const b = ev.target.closest("[data-job-save]");
       if (!b) return;
       const job = jobs.find(j => j.id === b.dataset.jobSave);
-      const savePath = await pickOutputFile(job.filename || `${job.name}.mp4`, [{ name: "Видео MP4", extensions: ["mp4"] }]);
+      const fileName = job.filename || `${job.name}.mp4`;
+      const savePath = await pickOutputFile(fileName, saveFilter(fileName.split(".").pop()));
       if (savePath) await saveJob(job.id, savePath);
     };
     if (jobs.some(j => JOB_OPEN.has(j.status)) && box.isConnected) historyTimer = setTimeout(loadHistory, 2500);
