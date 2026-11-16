@@ -2012,6 +2012,7 @@ fn main() {
             luatools::lt_gamelist_sync,
             luatools::lt_gamelist_read,
             luatools::lt_gamelist_dlc_read,
+            luatools::lt_gamelist_read_kind,
         ])
         .setup(|app| {
             // Первая строка в файловом логе за сеанс — якорь, от которого

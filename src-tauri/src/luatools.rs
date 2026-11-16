@@ -1942,11 +1942,12 @@ fn rand_hex(n: usize) -> String {
 // SteamTools-Team/GameList — daily-updated game+DLC name lists
 // ──────────────────────────────────────────────────────────────────
 
+const GAMELIST_KINDS: [&str; 5] = ["games", "dlc", "hardware", "software", "videos"];
+
+fn gamelist_file(kind: &str) -> PathBuf { dirs_cache_dir().join(format!("steamtools-{kind}.json")) }
+
 #[tauri::command]
 pub async fn lt_gamelist_sync() -> Result<serde_json::Value, String> {
-    let cache_dir = dirs_cache_dir();
-    let games_file = cache_dir.join("steamtools-games.json");
-    let dlc_file = cache_dir.join("steamtools-dlc.json");
     let max_age = std::time::Duration::from_secs(86400);
     let fresh = |p: &std::path::Path| -> bool {
         std::fs::metadata(p).ok()
@@ -1954,50 +1955,41 @@ pub async fn lt_gamelist_sync() -> Result<serde_json::Value, String> {
             .map(|t| t.elapsed().map(|e| e < max_age).unwrap_or(false))
             .unwrap_or(false)
     };
-    if fresh(&games_file) && fresh(&dlc_file) {
+    if GAMELIST_KINDS.iter().all(|k| fresh(&gamelist_file(k))) {
         return Ok(serde_json::json!({"cached": true}));
     }
     let client = lt_client_builder().timeout(std::time::Duration::from_secs(90))
         .build().map_err(|e| e.to_string())?;
-    let _ = std::fs::create_dir_all(&cache_dir);
+    let _ = std::fs::create_dir_all(dirs_cache_dir());
     let base = "https://raw.githubusercontent.com/SteamTools-Team/GameList/main";
     let mut updated = 0u32;
-    for (url, dest) in [
-        (format!("{base}/games.json"), &games_file),
-        (format!("{base}/dlc.json"), &dlc_file),
-    ] {
-        if fresh(dest) { continue; }
-        let resp = client.get(&url).header("User-Agent", "project-desktop")
-            .send().await.map_err(|e| e.to_string())?;
+    for kind in GAMELIST_KINDS {
+        let dest = gamelist_file(kind);
+        if fresh(&dest) { continue; }
+        let Ok(resp) = client.get(format!("{base}/{kind}.json")).header("User-Agent", "project-desktop").send().await else { continue };
         if !resp.status().is_success() { continue; }
-        let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-        std::fs::write(dest, &bytes).map_err(|e| e.to_string())?;
+        let Ok(bytes) = resp.bytes().await else { continue };
+        // Битый ответ не должен затереть рабочий список.
+        if serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).is_err() { continue; }
+        std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
         updated += 1;
     }
     Ok(serde_json::json!({"updated": updated}))
 }
 
+/// Один из списков GameList: games | dlc | hardware | software | videos. Нет файла — пустой список.
 #[tauri::command]
-pub fn lt_gamelist_read() -> Result<String, String> {
-    let cache_dir = dirs_cache_dir();
-    let games_file = cache_dir.join("steamtools-games.json");
-    if games_file.exists() {
-        std::fs::read_to_string(&games_file).map_err(|e| e.to_string())
-    } else {
-        Ok("[]".into())
-    }
+pub fn lt_gamelist_read_kind(kind: String) -> Result<String, String> {
+    if !GAMELIST_KINDS.contains(&kind.as_str()) { return Err("Неизвестный список".into()); }
+    let file = gamelist_file(&kind);
+    if file.exists() { std::fs::read_to_string(&file).map_err(|e| e.to_string()) } else { Ok("[]".into()) }
 }
 
 #[tauri::command]
-pub fn lt_gamelist_dlc_read() -> Result<String, String> {
-    let cache_dir = dirs_cache_dir();
-    let dlc_file = cache_dir.join("steamtools-dlc.json");
-    if dlc_file.exists() {
-        std::fs::read_to_string(&dlc_file).map_err(|e| e.to_string())
-    } else {
-        Ok("[]".into())
-    }
-}
+pub fn lt_gamelist_read() -> Result<String, String> { lt_gamelist_read_kind("games".into()) }
+
+#[tauri::command]
+pub fn lt_gamelist_dlc_read() -> Result<String, String> { lt_gamelist_read_kind("dlc".into()) }
 
 // ──────────────────────────────────────────────────────────────────
 // Hubcap source

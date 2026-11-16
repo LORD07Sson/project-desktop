@@ -142,11 +142,17 @@ async function loadGameNames() {
     // SteamTools-Team/GameList — ежедневно обновляемый список (перезаписывает поверх applist)
     try {
       invoke("lt_gamelist_sync").catch(() => {});
-      const [gRaw, dRaw] = await Promise.all([
-        invoke("lt_gamelist_read"), invoke("lt_gamelist_dlc_read")
-      ]);
-      for (const list of [JSON.parse(gRaw), JSON.parse(dRaw)])
-        for (const a of list) if (a.appid && a.name) gameNames[a.appid] = a.name;
+      const kinds = ["games", "dlc", "hardware", "software", "videos"];
+      const lists = await Promise.all(kinds.map(kind => invoke("lt_gamelist_read_kind", { kind }).then(JSON.parse).catch(() => [])));
+      lists.forEach((list, i) => {
+        // Железо, софт и видео — в фильтр «Скрывать железо/софт» вместе со списком jsnli.
+        const nonGame = i >= 2;
+        for (const a of list) {
+          if (!a.appid) continue;
+          if (a.name) gameNames[a.appid] = a.name;
+          if (nonGame) hardwareAppIds.add(a.appid);
+        }
+      });
     } catch { /* GameList unavailable — applist names are enough */ }
     if (Object.keys(gameNames).length && ["home", "builds", "manage"].includes(currentPage)) renderPage(currentPage);
     _namesLoading = null;
@@ -357,7 +363,7 @@ async function refreshAll(body) {
   await restoreEncryptedSession();
   if (ltConfig.store_button) invoke("lt_store_button_state").catch(() => {});
   if (ltConfig.filter_hardware !== false) {
-    invoke("lt_hardware_appids").then(ids => { hardwareAppIds = new Set(ids); }).catch(() => {});
+    invoke("lt_hardware_appids").then(ids => { for (const id of ids) hardwareAppIds.add(id); }).catch(() => {});
   }
   loadGameNames();
   const ver = body.querySelector("#lt-sidebar-ver");
