@@ -1581,6 +1581,11 @@ async function renderSettings(el) {
       <label class="lt-info-row"><input type="checkbox" id="lt-src-hubcap" ${cfg.src_hubcap ? 'checked' : ''}> Hubcap (нужен API-ключ)</label>
     </div></div>
 
+    <div class="lt-section"><h3>Сеть</h3>
+    <div class="lt-settings-list">
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-doh" ${cfg.use_doh ? 'checked' : ''}> DNS-over-HTTPS (1.1.1.1) — если провайдер блокирует lua.tools или GitHub</label>
+    </div></div>
+
     <div class="lt-section"><h3>API-сервер</h3>
     <div class="lt-settings-list">
       <div class="lt-info-row"><label>Base URL: <input type="text" class="lt-input" id="lt-cfg-apibase" value="${esc(cfg.api_base || '')}" placeholder="https://lua.tools (по умолчанию)" style="width:300px"></label></div>
@@ -1621,6 +1626,7 @@ async function renderSettings(el) {
   saveOn("#lt-cfg-hardfilter", "filter_hardware");
   saveOn("#lt-src-sushi", "src_sushi");
   saveOn("#lt-src-hubcap", "src_hubcap");
+  saveOn("#lt-cfg-doh", "use_doh");
   el.querySelector("#lt-cfg-apibase-save")?.addEventListener("click", async () => {
     const v = el.querySelector("#lt-cfg-apibase").value.trim();
     try {

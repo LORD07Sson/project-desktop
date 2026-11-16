@@ -887,7 +887,7 @@ pub async fn lt_install_mode(mode: String) -> Result<String, String> {
     }
     let was_running = stop_steam().await;
 
-    let client = reqwest::Client::builder()
+    let client = lt_client_builder()
         .timeout(std::time::Duration::from_secs(120))
         .build().map_err(|e| e.to_string())?;
 
@@ -1196,7 +1196,7 @@ pub struct ModeVersionInfo {
 
 #[tauri::command]
 pub async fn lt_check_mode_update(mode: String) -> Result<ModeVersionInfo, String> {
-    let client = reqwest::Client::builder()
+    let client = lt_client_builder()
         .timeout(std::time::Duration::from_secs(15))
         .build().map_err(|e| e.to_string())?;
     // BST uses a plain-text latest.toml, not GitHub releases
@@ -1249,7 +1249,7 @@ pub async fn lt_download(
     token: String,
     dest_dir: String,
 ) -> Result<String, String> {
-    let client = reqwest::Client::builder()
+    let client = lt_client_builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
         .map_err(|e| e.to_string())?;
@@ -1367,7 +1367,7 @@ pub async fn lt_hardware_appids() -> Result<Vec<u64>, String> {
             }
         }
     }
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(20))
         .build().map_err(|e| e.to_string())?;
     let text = client.get("https://raw.githubusercontent.com/jsnli/steamappidlist/master/data/hardware_appid.json")
         .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
@@ -1395,7 +1395,7 @@ pub async fn lt_applist_mirror() -> Result<String, String> {
             }
         }
     }
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(60))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(60))
         .build().map_err(|e| e.to_string())?;
     let mut text: Option<String> = None;
     if let Ok(r) = client.get("https://applist.morrenus.xyz/")
@@ -1417,6 +1417,47 @@ pub async fn lt_applist_mirror() -> Result<String, String> {
 // ──────────────────────────────────────────────────────────────────
 // DNS-over-HTTPS resolve (1.1.1.1)
 // ──────────────────────────────────────────────────────────────────
+
+// ── DNS-over-HTTPS ─────────────────────────────────────────────────
+//
+// With "use_doh" on, every client built here resolves names via Cloudflare's
+// 1.1.1.1 JSON API (reached by IP, so no DNS needed), falling back to the
+// system resolver. Gets around ISP DNS poisoning of lua.tools / GitHub.
+
+struct DohResolver;
+
+async fn doh_lookup(host: &str) -> Result<Vec<std::net::IpAddr>, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(8)).build().map_err(|e| e.to_string())?;
+    let json: serde_json::Value = client.get("https://1.1.1.1/dns-query")
+        .query(&[("name", host), ("type", "A")])
+        .header("accept", "application/dns-json")
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let ips: Vec<std::net::IpAddr> = json["Answer"].as_array().map(|a| a.iter()
+        .filter_map(|x| x["data"].as_str().and_then(|s| s.parse().ok())).collect()).unwrap_or_default();
+    if ips.is_empty() { Err("DoH: пустой ответ".into()) } else { Ok(ips) }
+}
+
+impl reqwest::dns::Resolve for DohResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_string();
+        Box::pin(async move {
+            let addrs: Vec<std::net::SocketAddr> = match doh_lookup(&host).await {
+                Ok(ips) => ips.into_iter().map(|ip| std::net::SocketAddr::new(ip, 0)).collect(),
+                Err(_) => tokio::net::lookup_host((host.as_str(), 0)).await?.collect(),
+            };
+            let it: reqwest::dns::Addrs = Box::new(addrs.into_iter());
+            Ok(it)
+        })
+    }
+}
+
+fn lt_client_builder() -> reqwest::ClientBuilder {
+    let b = reqwest::Client::builder();
+    if lt_config_get()["use_doh"].as_bool().unwrap_or(false) {
+        b.dns_resolver(std::sync::Arc::new(DohResolver))
+    } else { b }
+}
 
 #[tauri::command]
 pub async fn lt_doh_resolve(host: String) -> Result<Vec<String>, String> {
@@ -1459,7 +1500,7 @@ pub async fn lt_depot_downloader_info() -> Result<DdmInfo, String> {
     let dir = ddm_dir();
     let exe = dir.join("DepotDownloaderMod.exe");
     let installed = exe.exists();
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(15))
         .build().map_err(|e| e.to_string())?;
     let json: serde_json::Value = client.get("https://api.github.com/repos/mendy-tools/DepotDownloaderMod/releases/latest")
         .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
@@ -1478,7 +1519,7 @@ pub async fn lt_depot_downloader_install() -> Result<String, String> {
     let url = info.download_url.ok_or("Нет URL для скачивания")?;
     let dir = ddm_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(300))
         .build().map_err(|e| e.to_string())?;
     let bytes = gh_download(&client, &url).await?;
     let tmp = std::env::temp_dir().join("ddm.zip");
@@ -1600,7 +1641,7 @@ pub async fn lt_fetch_missing_manifests(app_id: u64, token: String) -> Result<Ma
     let dir = depotcache_dir(&steam);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let base = lt_config_get()["api_base"].as_str().unwrap_or("https://lua.tools").trim_end_matches('/').to_string();
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
     let mut res = ManifestFetchResult { fetched: 0, present: 0, failed: vec![] };
     for (depot, gid) in manifest_pins(&lua) {
         let dest = dir.join(format!("{depot}_{gid}.manifest"));
@@ -1687,7 +1728,7 @@ pub fn lt_steamless_info() -> SteamlessInfo {
 
 #[tauri::command]
 pub async fn lt_steamless_install() -> Result<String, String> {
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(120))
         .build().map_err(|e| e.to_string())?;
     let api_url = "https://api.github.com/repos/atom0s/Steamless/releases/latest";
     let resp = client.get(api_url).header("User-Agent", "project-desktop")
@@ -1753,7 +1794,7 @@ pub fn lt_steamless_run(exe_path: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn lt_source_sushitools(app_id: u64) -> Result<String, String> {
     let url = format!("https://raw.githubusercontent.com/sushi-dev55-alt/sushitools-games-repo-alt/refs/heads/main/{app_id}.zip");
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(120))
         .build().map_err(|e| e.to_string())?;
     let resp = client.get(&url).header("User-Agent", "project-desktop")
         .send().await.map_err(|e| e.to_string())?;
@@ -1796,7 +1837,7 @@ async fn hubcap_error(resp: reqwest::Response) -> String {
 pub async fn lt_hubcap_validate(api_key: String) -> Result<serde_json::Value, String> {
     let api_key = api_key.trim().to_string();
     if api_key.is_empty() { return Err("Введите API-ключ".into()); }
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(15))
         .build().map_err(|e| e.to_string())?;
     let resp = client.get(format!("{HUBCAP_API}/user/stats"))
         .header("X-API-Key", &api_key)
@@ -1814,7 +1855,7 @@ pub async fn lt_hubcap_validate(api_key: String) -> Result<serde_json::Value, St
 pub async fn lt_hubcap_status(app_id: u64, api_key: String) -> Result<serde_json::Value, String> {
     let api_key = api_key.trim().to_string();
     if api_key.is_empty() { return Err("Нет API-ключа Hubcap".into()); }
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(15))
         .build().map_err(|e| e.to_string())?;
     let resp = client.get(format!("{HUBCAP_API}/status/{app_id}"))
         .header("X-API-Key", &api_key)
@@ -1829,7 +1870,7 @@ pub async fn lt_hubcap_status(app_id: u64, api_key: String) -> Result<serde_json
 
 #[tauri::command]
 pub async fn lt_hubcap_fetch(app_id: u64, api_key: String) -> Result<String, String> {
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(120))
         .build().map_err(|e| e.to_string())?;
     let resp = client.get(format!("{HUBCAP_API}/manifest/{app_id}"))
         .header("X-API-Key", api_key.trim())
@@ -1866,7 +1907,7 @@ pub async fn lt_hubcap_fetch(app_id: u64, api_key: String) -> Result<String, Str
 
 #[tauri::command]
 pub async fn lt_mfg_api(endpoint: String, method: Option<String>, body: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(10))
         .build().map_err(|e| e.to_string())?;
     let url = format!("http://127.0.0.1:6767{}", if endpoint.starts_with('/') { endpoint.clone() } else { format!("/{endpoint}") });
     let m = method.unwrap_or_else(|| "GET".into()).to_uppercase();
@@ -1884,7 +1925,7 @@ pub async fn lt_mfg_api(endpoint: String, method: Option<String>, body: Option<s
 
 #[tauri::command]
 pub async fn lt_mfg_ping() -> bool {
-    let client = match reqwest::Client::builder().timeout(std::time::Duration::from_secs(2)).build() {
+    let client = match lt_client_builder().timeout(std::time::Duration::from_secs(2)).build() {
         Ok(c) => c, Err(_) => return false
     };
     client.get("http://127.0.0.1:6767/").send().await.map(|r| r.status().is_success()).unwrap_or(false)
@@ -1896,7 +1937,7 @@ pub async fn lt_mfg_ping() -> bool {
 
 #[tauri::command]
 pub async fn lt_cef_targets() -> Result<serde_json::Value, String> {
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(5))
         .build().map_err(|e| e.to_string())?;
     let targets: serde_json::Value = client.get("http://127.0.0.1:8080/json")
         .send().await.map_err(|e| format!("Steam CEF debug порт недоступен: {e}"))?
@@ -1906,7 +1947,7 @@ pub async fn lt_cef_targets() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub async fn lt_cef_dismiss_loaded_apps() -> Result<String, String> {
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(5))
         .build().map_err(|e| e.to_string())?;
     let resp = client.post("http://127.0.0.1:6767/dismiss-loaded-apps")
         .send().await.map_err(|e| e.to_string())?;
@@ -1967,7 +2008,7 @@ pub fn lt_dpapi_decrypt(ciphertext_b64: String) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn lt_redeem_code(code: String, token: String) -> Result<serde_json::Value, String> {
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(15))
         .build().map_err(|e| e.to_string())?;
     let resp = client.post("https://lua.tools/api/auth/code/redeem")
         .header("Authorization", format!("Bearer {token}"))
@@ -2187,7 +2228,7 @@ pub async fn lt_http(
     if !lt_http_allowed(&parsed) {
         return Err(format!("Хост не разрешён: {}", parsed.host_str().unwrap_or("?")));
     }
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30))
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(30))
         .build().map_err(|e| e.to_string())?;
     let m = reqwest::Method::from_bytes(method.as_deref().unwrap_or("GET").to_uppercase().as_bytes())
         .map_err(|e| e.to_string())?;
@@ -2569,7 +2610,7 @@ pub fn lt_tool_info(tool: String) -> Result<ExtToolInfo, String> {
 #[tauri::command]
 pub async fn lt_tool_latest(tool: String) -> Result<String, String> {
     let t = ext_tool(&tool)?;
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
     let rel: serde_json::Value = client.get(format!("https://api.github.com/repos/{}/releases/latest", t.repo))
         .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
         .json().await.map_err(|e| e.to_string())?;
@@ -2579,7 +2620,7 @@ pub async fn lt_tool_latest(tool: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn lt_tool_install(tool: String) -> Result<String, String> {
     let t = ext_tool(&tool)?;
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(600)).build().map_err(|e| e.to_string())?;
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(600)).build().map_err(|e| e.to_string())?;
     let rel: serde_json::Value = client.get(format!("https://api.github.com/repos/{}/releases/latest", t.repo))
         .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
         .json().await.map_err(|e| e.to_string())?;
