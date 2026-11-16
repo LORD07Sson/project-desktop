@@ -466,9 +466,7 @@ pub async fn lt_restart_steam() -> Result<(), String> {
             return Err("steam.exe не найден".into());
         }
         stop_steam().await;
-        std::process::Command::new(&exe)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        start_steam(&steam);
         Ok(())
     }
     #[cfg(not(windows))]
@@ -922,7 +920,11 @@ async fn stop_steam() -> bool {
 
 fn start_steam(steam: &str) {
     let exe = PathBuf::from(steam).join("steam.exe");
-    if exe.exists() { let _ = std::process::Command::new(exe).spawn(); }
+    if !exe.exists() { return; }
+    let mut cmd = std::process::Command::new(exe);
+    // The store button talks to Steam's CEF over DevTools, which needs this flag.
+    if lt_config_get()["store_button"].as_bool().unwrap_or(false) { cmd.arg("-cef-enable-debugging"); }
+    let _ = cmd.spawn();
 }
 
 async fn install_ltsp(client: &reqwest::Client, steam: &str) -> Result<String, String> {
@@ -2714,6 +2716,204 @@ pub fn lt_find_game_exes(app_id: u64) -> Result<Vec<String>, String> {
     });
     found.sort_by(|a, b| b.0.cmp(&a.0));
     Ok(found.into_iter().take(10).map(|(_, p)| p.to_string_lossy().into_owned()).collect())
+}
+
+// ── Store button (Steam CEF injection) ─────────────────────────────
+//
+// With Steam started with -cef-enable-debugging, its CEF exposes DevTools on
+// 127.0.0.1:8080. We add an "Add to LuaProject" button to store app pages via
+// Runtime.evaluate and poll the clicks back the same way, so the page never
+// makes network requests of its own (no CSP / mixed-content issues).
+
+const STORE_CDP_PORT: u16 = 8080;
+static STORE_LOOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static STORE_STATUS: std::sync::Mutex<Vec<(u64, String)>> = std::sync::Mutex::new(Vec::new());
+
+const STORE_INJECT_JS: &str = r#"(() => {
+  const m = location.href.match(/store\.steampowered\.com\/app\/(\d+)/);
+  if (!m) return;
+  if (!window.__ltp) {
+    window.__ltp = { q: [] };
+    const add = () => {
+      if (document.getElementById("ltp-add")) return;
+      const host = document.querySelector("#queueActionsCtn") || document.querySelector(".game_area_purchase_game");
+      if (!host) return;
+      const b = document.createElement("a");
+      b.id = "ltp-add";
+      b.className = "btnv6_blue_hoverfade btn_medium";
+      b.style.marginLeft = "6px";
+      b.href = "#";
+      const s = document.createElement("span");
+      s.textContent = "Добавить в LuaProject";
+      b.appendChild(s);
+      b.addEventListener("click", e => { e.preventDefault(); window.__ltp.q.push(m[1]); s.textContent = "Отправлено…"; });
+      host.appendChild(b);
+    };
+    add();
+    new MutationObserver(add).observe(document.documentElement, { childList: true, subtree: true });
+  }
+  window.__ltpSet = (id, text) => { const b = document.getElementById("ltp-add"); if (b && m[1] === String(id)) b.firstChild.textContent = text; };
+})();"#;
+
+fn cdp_http_get(path: &str) -> Result<String, String> {
+    use std::io::{Read, Write};
+    let mut s = std::net::TcpStream::connect_timeout(&([127, 0, 0, 1], STORE_CDP_PORT).into(), std::time::Duration::from_secs(2))
+        .map_err(|e| e.to_string())?;
+    s.set_read_timeout(Some(std::time::Duration::from_secs(5))).ok();
+    write!(s, "GET {path} HTTP/1.0\r\nHost: 127.0.0.1:{STORE_CDP_PORT}\r\n\r\n").map_err(|e| e.to_string())?;
+    let mut buf = Vec::new();
+    s.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(&buf).into_owned();
+    Ok(text.split_once("\r\n\r\n").map(|(_, b)| b.to_string()).unwrap_or_default())
+}
+
+/// Minimal WebSocket client: enough for one CDP request/response on localhost.
+struct Ws(std::net::TcpStream);
+
+impl Ws {
+    fn connect(url: &str) -> Result<Ws, String> {
+        use std::io::{Read, Write};
+        let rest = url.strip_prefix("ws://").ok_or("bad ws url")?;
+        let (hostport, path) = rest.split_once('/').ok_or("bad ws url")?;
+        // Only ever talk to the local DevTools endpoint.
+        if hostport != format!("127.0.0.1:{STORE_CDP_PORT}") && hostport != format!("localhost:{STORE_CDP_PORT}") {
+            return Err("unexpected ws host".into());
+        }
+        let mut s = std::net::TcpStream::connect_timeout(&([127, 0, 0, 1], STORE_CDP_PORT).into(), std::time::Duration::from_secs(2))
+            .map_err(|e| e.to_string())?;
+        s.set_read_timeout(Some(std::time::Duration::from_secs(5))).ok();
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        use base64::Engine;
+        let key = base64::engine::general_purpose::STANDARD.encode(nonce.to_le_bytes());
+        write!(s, "GET /{path} HTTP/1.1\r\nHost: {hostport}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n")
+            .map_err(|e| e.to_string())?;
+        let mut head = Vec::new();
+        let mut byte = [0u8; 1];
+        while !head.ends_with(b"\r\n\r\n") {
+            s.read_exact(&mut byte).map_err(|e| e.to_string())?;
+            head.push(byte[0]);
+            if head.len() > 8192 { return Err("ws handshake too long".into()); }
+        }
+        if !head.starts_with(b"HTTP/1.1 101") { return Err("ws handshake refused".into()); }
+        Ok(Ws(s))
+    }
+
+    fn send_text(&mut self, text: &str) -> Result<(), String> {
+        use std::io::Write;
+        let payload = text.as_bytes();
+        let mut frame = vec![0x81u8];
+        let len = payload.len();
+        if len < 126 { frame.push(0x80 | len as u8); }
+        else if len <= 0xFFFF { frame.push(0x80 | 126); frame.extend_from_slice(&(len as u16).to_be_bytes()); }
+        else { frame.push(0x80 | 127); frame.extend_from_slice(&(len as u64).to_be_bytes()); }
+        let mask: [u8; 4] = (std::process::id() ^ 0x5a3c_9e17).to_le_bytes();
+        frame.extend_from_slice(&mask);
+        frame.extend(payload.iter().enumerate().map(|(i, b)| b ^ mask[i % 4]));
+        self.0.write_all(&frame).map_err(|e| e.to_string())
+    }
+
+    fn read_text(&mut self) -> Result<String, String> {
+        use std::io::Read;
+        let mut msg = Vec::new();
+        loop {
+            let mut h = [0u8; 2];
+            self.0.read_exact(&mut h).map_err(|e| e.to_string())?;
+            let fin = h[0] & 0x80 != 0;
+            let opcode = h[0] & 0x0F;
+            let mut len = (h[1] & 0x7F) as u64;
+            if len == 126 { let mut b = [0u8; 2]; self.0.read_exact(&mut b).map_err(|e| e.to_string())?; len = u16::from_be_bytes(b) as u64; }
+            else if len == 127 { let mut b = [0u8; 8]; self.0.read_exact(&mut b).map_err(|e| e.to_string())?; len = u64::from_be_bytes(b); }
+            if len > 64 * 1024 * 1024 { return Err("ws frame too large".into()); }
+            let mut mask = [0u8; 4];
+            if h[1] & 0x80 != 0 { self.0.read_exact(&mut mask).map_err(|e| e.to_string())?; }
+            let mut data = vec![0u8; len as usize];
+            self.0.read_exact(&mut data).map_err(|e| e.to_string())?;
+            if h[1] & 0x80 != 0 { for (i, b) in data.iter_mut().enumerate() { *b ^= mask[i % 4]; } }
+            match opcode {
+                0x8 => return Err("ws closed".into()),
+                0x9 | 0xA => continue,
+                _ => msg.extend_from_slice(&data),
+            }
+            if fin { return Ok(String::from_utf8_lossy(&msg).into_owned()); }
+        }
+    }
+}
+
+/// Runs one expression in a CEF tab and returns its string result.
+fn cdp_eval(ws_url: &str, expr: &str) -> Result<String, String> {
+    let mut ws = Ws::connect(ws_url)?;
+    let req = serde_json::json!({ "id": 1, "method": "Runtime.evaluate", "params": { "expression": expr, "returnByValue": true } });
+    ws.send_text(&req.to_string())?;
+    for _ in 0..50 {
+        let msg: serde_json::Value = serde_json::from_str(&ws.read_text()?).unwrap_or_default();
+        if msg["id"] == 1 { return Ok(msg["result"]["result"]["value"].as_str().unwrap_or("").to_string()); }
+    }
+    Err("no CDP reply".into())
+}
+
+fn store_tick(app: &tauri::AppHandle) {
+    let Ok(body) = cdp_http_get("/json") else { return };
+    let targets: Vec<serde_json::Value> = serde_json::from_str(&body).unwrap_or_default();
+    let statuses: Vec<(u64, String)> = std::mem::take(&mut *STORE_STATUS.lock().unwrap_or_else(|e| e.into_inner()));
+    let mut set_js = String::new();
+    for (id, text) in &statuses {
+        set_js.push_str(&format!("window.__ltpSet&&window.__ltpSet({id},{});", serde_json::Value::String(text.clone())));
+    }
+    for t in targets {
+        let url = t["url"].as_str().unwrap_or("");
+        let Some(ws_url) = t["webSocketDebuggerUrl"].as_str() else { continue };
+        if t["type"] != "page" || !url.contains("store.steampowered.com/app/") { continue; }
+        let expr = format!("{STORE_INJECT_JS}{set_js}(()=>{{const q=(window.__ltp&&window.__ltp.q)||[];if(window.__ltp)window.__ltp.q=[];return q.join(',');}})()");
+        if let Ok(v) = cdp_eval(ws_url, &expr) {
+            for id in v.split(',').filter_map(|x| x.trim().parse::<u64>().ok()) {
+                let _ = app.emit("lt-store-add", id);
+            }
+        }
+    }
+}
+
+fn store_loop_start(app: tauri::AppHandle) {
+    if STORE_LOOP.swap(true, std::sync::atomic::Ordering::SeqCst) { return; }
+    std::thread::spawn(move || {
+        while lt_config_get()["store_button"].as_bool().unwrap_or(false) {
+            store_tick(&app);
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+        }
+        STORE_LOOP.store(false, std::sync::atomic::Ordering::SeqCst);
+    });
+}
+
+#[derive(Serialize)]
+pub struct StoreButtonState { pub enabled: bool, pub cef_debug: bool }
+
+#[tauri::command]
+pub fn lt_store_button_state(app: tauri::AppHandle) -> StoreButtonState {
+    let enabled = lt_config_get()["store_button"].as_bool().unwrap_or(false);
+    if enabled { store_loop_start(app); }
+    StoreButtonState { enabled, cef_debug: cdp_http_get("/json/version").is_ok() }
+}
+
+/// Turns the store button on/off. Steam needs -cef-enable-debugging for it,
+/// so it is restarted with that flag when enabling.
+#[tauri::command]
+pub async fn lt_store_button_set(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    lt_config_set("store_button".into(), serde_json::Value::Bool(enabled))?;
+    if enabled {
+        if let Some(steam) = steam_path_from_registry() {
+            if cdp_http_get("/json/version").is_err() {
+                stop_steam().await;
+                start_steam(&steam);
+            }
+        }
+        store_loop_start(app);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lt_store_status(app_id: u64, text: String) {
+    let text: String = text.chars().take(80).collect();
+    STORE_STATUS.lock().unwrap_or_else(|e| e.into_inner()).push((app_id, text));
 }
 
 #[cfg(test)]

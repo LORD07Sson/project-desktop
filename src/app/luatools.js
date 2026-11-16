@@ -263,6 +263,7 @@ function attachImageFallback(body) {
 function attachGlobal(body) {
   attachDropZone(body);
   attachImageFallback(body);
+  listen("lt-store-add", ev => handleStoreAdd(Number(ev.payload)));
   listen("lt-download-progress", ev => {
     const { url, percent } = ev.payload || {};
     const active = dlQueue.items.find(i => i._url === url);
@@ -341,6 +342,7 @@ async function refreshAll(body) {
   try { ltConfig = await invoke("lt_config_get") || {}; } catch { ltConfig = {}; }
   if (ltConfig.api_base) ltSetApiConfig({ api_base: ltConfig.api_base, manifest_backend_url: ltConfig.manifest_backend_url });
   await restoreEncryptedSession();
+  if (ltConfig.store_button) invoke("lt_store_button_state").catch(() => {});
   if (ltConfig.filter_hardware !== false) {
     invoke("lt_hardware_appids").then(ids => { hardwareAppIds = new Set(ids); }).catch(() => {});
   }
@@ -1594,6 +1596,12 @@ async function renderSettings(el) {
       <label class="lt-info-row"><input type="checkbox" id="lt-src-hubcap" ${cfg.src_hubcap ? 'checked' : ''}> Hubcap (нужен API-ключ)</label>
     </div></div>
 
+    <div class="lt-section"><h3>Магазин Steam</h3>
+    <div class="lt-settings-list">
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-store" ${cfg.store_button ? 'checked' : ''}> Кнопка «Добавить в LuaProject» на страницах игр в магазине Steam</label>
+      <div class="lt-muted" id="lt-store-state" style="font-size:.75rem">Steam перезапустится с отладкой CEF (порт 8080, только localhost).</div>
+    </div></div>
+
     <div class="lt-section"><h3>Сеть</h3>
     <div class="lt-settings-list">
       <label class="lt-info-row"><input type="checkbox" id="lt-cfg-doh" ${cfg.use_doh ? 'checked' : ''}> DNS-over-HTTPS (1.1.1.1) — если провайдер блокирует lua.tools или GitHub</label>
@@ -1640,6 +1648,18 @@ async function renderSettings(el) {
   saveOn("#lt-src-sushi", "src_sushi");
   saveOn("#lt-src-hubcap", "src_hubcap");
   saveOn("#lt-cfg-doh", "use_doh");
+  el.querySelector("#lt-cfg-store")?.addEventListener("change", async e => {
+    const on = e.target.checked;
+    try {
+      await invoke("lt_store_button_set", { enabled: on });
+      ltConfig.store_button = on;
+      toast(on ? "Кнопка в магазине включена" : "Кнопка в магазине выключена", "ok");
+    } catch (err) { e.target.checked = !on; toast(errMsg(err), "error"); }
+  });
+  invoke("lt_store_button_state").then(st => {
+    const n = el.querySelector("#lt-store-state");
+    if (n && st.enabled) n.textContent = st.cef_debug ? "Работает: Steam доступен по CEF." : "Включено, но Steam запущен без отладки CEF — перезапустите Steam из LuaProject.";
+  }).catch(() => {});
   el.querySelector("#lt-cfg-apibase-save")?.addEventListener("click", async () => {
     const v = el.querySelector("#lt-cfg-apibase").value.trim();
     try {
@@ -1927,6 +1947,26 @@ async function ensureManifests(appId) {
     if (r.fetched) toast(`Догружено манифестов: ${r.fetched}`, "ok");
     if (r.failed.length) toast(`Манифесты не найдены: ${r.failed.join(", ")}`, "warn");
   } catch { /* lua without pins or Steam missing: nothing to fetch */ }
+}
+
+// Click on "Add to LuaProject" in the Steam store (via the CEF injector).
+async function handleStoreAdd(appId) {
+  if (!appId) return;
+  const status = text => invoke("lt_store_status", { appId, text }).catch(() => {});
+  status("Ищу источник…");
+  try {
+    const name = (await ltGameDetails(String(appId)).catch(() => null))?.name || gameName(appId);
+    let src = null;
+    if (ltIsLoggedIn()) {
+      const sources = await ltCheckSources(String(appId)).catch(() => ({}));
+      src = Object.entries(sources).find(([, v]) => v === "available")?.[0] || null;
+    }
+    if (src) await doDownload(appId, src, name);
+    else if (ltConfig.src_hubcap && ltConfig.hubcap_key) await doAltDownload(appId, "hubcap", name);
+    else if (ltConfig.src_sushi !== false) await doAltDownload(appId, "sushi", name);
+    else { status(ltIsLoggedIn() ? "Нет источников" : "Войдите в LuaProject"); return; }
+    status(installedList.some(i => i.app_id === appId) ? "Добавлено ✓ — перезапустите Steam" : "Не удалось — см. LuaProject");
+  } catch (e) { status("Ошибка: " + errMsg(e)); }
 }
 
 async function doAltDownload(appId, alt, gameName) {
