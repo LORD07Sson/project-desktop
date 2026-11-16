@@ -1979,6 +1979,7 @@ fn main() {
             luatools::lt_config_get,
             luatools::lt_config_set,
             luatools::lt_list_autoupdate_appids,
+            luatools::lt_uninstall_mode,
         ])
         .setup(|app| {
             // Первая строка в файловом логе за сеанс — якорь, от которого

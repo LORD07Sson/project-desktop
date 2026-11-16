@@ -339,35 +339,38 @@ pub fn lt_plugin_status() -> PluginStatus {
         Some(p) => p,
         None => return PluginStatus { installed: false, version: None, dll_path: None, mode: None },
     };
+    // Prefer our own manifest written by extract_unlocker_zip — authoritative source.
+    if let Some(mf) = read_mode_manifest(&steam) {
+        let files = mf["files"].as_array().cloned().unwrap_or_default();
+        let any_exists = files.iter().any(|v| v.as_str().map(|p| Path::new(p).exists()).unwrap_or(false));
+        if any_exists {
+            let dll_path = files.iter().find_map(|v| v.as_str().filter(|p| Path::new(p).exists()).map(String::from));
+            return PluginStatus {
+                installed: true,
+                version: mf["version"].as_str().map(String::from),
+                dll_path,
+                mode: mf["mode"].as_str().map(String::from),
+            };
+        }
+    }
+    // Fallback: heuristic detection for pre-manifest or externally-installed plugins.
     let sp = stplugin_dir(&steam);
     let stplug_dll = sp.join("stplug-in.dll");
     let stplug_dll64 = sp.join("stplug-in64.dll");
     let bst_dll = PathBuf::from(&steam).join("BetterSteamTools.dll");
-    // Hijack DLLs in Steam root (OpenSteamTool / BST / LTSP all inject this way):
-    // the actual behavior-carrying DLL is one of these depending on the mode.
     let hijack_candidates = ["user32.dll", "dwmapi.dll", "xinput1_4.dll", "version.dll", "winmm.dll"];
     let hijack_dll = hijack_candidates.iter()
         .map(|n| PathBuf::from(&steam).join(n))
         .find(|p| p.exists() && is_small_hijack_dll(p));
-    let mode = if bst_dll.exists() {
-        Some("BetterSteamTools".into())
-    } else if stplug_dll.exists() || stplug_dll64.exists() {
-        Some("stplug-in".into())
-    } else if hijack_dll.is_some() {
-        Some("unlocker".into())
-    } else {
-        None
-    };
+    let mode = if bst_dll.exists() { Some("BetterSteamTools".into()) }
+        else if stplug_dll.exists() || stplug_dll64.exists() { Some("stplug-in".into()) }
+        else if hijack_dll.is_some() { Some("unlocker (внешний)".into()) }
+        else { None };
     let installed = mode.is_some();
-    let dll_path = if bst_dll.exists() {
-        Some(bst_dll.to_string_lossy().into_owned())
-    } else if stplug_dll.exists() {
-        Some(stplug_dll.to_string_lossy().into_owned())
-    } else if stplug_dll64.exists() {
-        Some(stplug_dll64.to_string_lossy().into_owned())
-    } else {
-        hijack_dll.as_ref().map(|p| p.to_string_lossy().into_owned())
-    };
+    let dll_path = if bst_dll.exists() { Some(bst_dll.to_string_lossy().into_owned()) }
+        else if stplug_dll.exists() { Some(stplug_dll.to_string_lossy().into_owned()) }
+        else if stplug_dll64.exists() { Some(stplug_dll64.to_string_lossy().into_owned()) }
+        else { hijack_dll.as_ref().map(|p| p.to_string_lossy().into_owned()) };
     let version = dll_path.as_ref().and_then(|p| {
         let meta = std::fs::metadata(p).ok()?;
         let modified = meta.modified().ok()?;
@@ -738,25 +741,44 @@ async fn install_ltsp(client: &reqwest::Client, steam: &str) -> Result<String, S
         .bytes().await.map_err(|e| e.to_string())?;
     let tmp = std::env::temp_dir().join("ltsp_release.zip");
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
-    extract_unlocker_zip(&tmp, steam)?;
+    extract_unlocker_zip(&tmp, steam, "LTSP", tag)?;
     let _ = std::fs::remove_file(&tmp);
     Ok(format!("LTSP {tag} установлен"))
 }
 
 fn remove_unlocker_dlls(steam: &str) {
+    // If we have a manifest, use it (knows exactly what we put there).
+    if let Some(mf) = read_mode_manifest(steam) {
+        if let Some(files) = mf["files"].as_array() {
+            for v in files {
+                if let Some(p) = v.as_str() { let _ = std::fs::remove_file(p); }
+            }
+        }
+        let mp = PathBuf::from(steam).join("config").join("project-desktop").join("mode.json");
+        let _ = std::fs::remove_file(&mp);
+    }
+    // Belt-and-suspenders: also sweep the common names.
     let steam_pb = PathBuf::from(steam);
-    // Hijack loaders in Steam root
-    let root_targets = ["BetterSteamTools.dll", "dwmapi.dll", "xinput1_4.dll", "version.dll", "winmm.dll", "user32.dll"];
-    for name in root_targets {
+    for name in ["BetterSteamTools.dll", "dwmapi.dll", "xinput1_4.dll", "version.dll", "winmm.dll", "user32.dll"] {
         let p = steam_pb.join(name);
         if p.exists() && is_small_hijack_dll(&p) { let _ = std::fs::remove_file(&p); }
     }
-    // stplug-in payload in config/stplug-in/
     let sp = stplugin_dir(steam);
     for name in ["stplug-in.dll", "stplug-in64.dll"] {
         let p = sp.join(name);
         if p.exists() { let _ = std::fs::remove_file(&p); }
     }
+}
+
+#[tauri::command]
+pub fn lt_uninstall_mode() -> Result<(), String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    if is_steam_running() {
+        let _ = std::process::Command::new("taskkill").args(["/F", "/IM", "steam.exe"]).output();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+    remove_unlocker_dlls(&steam);
+    Ok(())
 }
 
 async fn install_bst(client: &reqwest::Client, steam: &str) -> Result<String, String> {
@@ -782,53 +804,79 @@ async fn install_bst(client: &reqwest::Client, steam: &str) -> Result<String, St
     let tmp = std::env::temp_dir().join("bst_release.zip");
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
 
-    extract_unlocker_zip(&tmp, steam)?;
+    extract_unlocker_zip(&tmp, steam, "BetterSteamTools", tag)?;
     let _ = std::fs::remove_file(&tmp);
     Ok(format!("BetterSteamTools {tag} установлен"))
 }
 
-// Extract an unlocker zip into Steam dir, preserving the zip's internal folder
-// layout (so entries like `config/stplug-in/stplug-in.dll` land in the correct
-// subfolder, not flattened to Steam root). Strips a single leading folder if
-// the whole zip is wrapped in one (common GitHub release layout).
-fn extract_unlocker_zip(zip_path: &Path, steam: &str) -> Result<(), String> {
+// Install unlocker DLLs from a zip with OUR canonical layout:
+//   <steam>/dwmapi.dll                     — hijack loader (always this name)
+//   <steam>/config/stplug-in/stplug-in.dll — plugin payload (if present)
+//   <steam>/config/project-desktop/mode.json — our manifest of what we installed
+// We ignore the zip's own folder structure entirely — just pick the files we need.
+fn extract_unlocker_zip(zip_path: &Path, steam: &str, mode_name: &str, version: &str) -> Result<(), String> {
     let file = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-    // Detect common top-level folder
-    let mut top: Option<String> = None;
-    let mut ambiguous = false;
-    for i in 0..archive.len() {
-        if let Ok(e) = archive.by_index(i) {
-            let n = e.name();
-            if let Some(first) = n.split(['/', '\\']).next() {
-                if !first.is_empty() {
-                    match &top {
-                        None => top = Some(first.to_string()),
-                        Some(t) if t != first => { ambiguous = true; break; }
-                        _ => {}
-                    }
-                }
-            }
-        }
-    }
-    let strip = if ambiguous { None } else { top };
     let steam_pb = PathBuf::from(steam);
+
+    // Pass 1: collect every .dll by basename → bytes
+    let mut dlls: Vec<(String, Vec<u8>)> = Vec::new();
     for i in 0..archive.len() {
         let mut entry = match archive.by_index(i) { Ok(e) => e, Err(_) => continue };
         if entry.is_dir() { continue; }
-        let raw = entry.name().replace('\\', "/");
-        let rel = if let Some(prefix) = &strip {
-            raw.strip_prefix(&format!("{prefix}/")).unwrap_or(&raw).to_string()
-        } else { raw };
-        if rel.is_empty() || rel.starts_with("..") || rel.contains("/..") { continue; }
-        // Only install known file kinds; skip READMEs, source, images, etc.
-        let keep = rel.ends_with(".dll") || rel.ends_with(".toml") || rel.ends_with(".ini")
-            || rel.contains("config/stplug-in/") || rel.contains("stplug-in/");
-        if !keep { continue; }
-        let dest = steam_pb.join(&rel);
-        let _ = extract_entry(&mut entry, &dest);
+        let name = entry.name().replace('\\', "/");
+        let fname = match Path::new(&name).file_name() { Some(f) => f.to_string_lossy().to_lowercase(), None => continue };
+        if !fname.ends_with(".dll") { continue; }
+        let mut buf = Vec::new();
+        if std::io::Read::read_to_end(&mut entry, &mut buf).is_err() { continue; }
+        dlls.push((fname, buf));
     }
+    if dlls.is_empty() { return Err("В архиве нет .dll".into()); }
+
+    let mut installed_files: Vec<String> = Vec::new();
+
+    // Plugin payload (OST): any file named stplug-in*.dll → config/stplug-in/
+    let sp_dir = stplugin_dir(steam);
+    let _ = std::fs::create_dir_all(&sp_dir);
+    for (name, data) in &dlls {
+        if name.starts_with("stplug-in") {
+            let dest = sp_dir.join(name);
+            std::fs::write(&dest, data).map_err(|e| e.to_string())?;
+            installed_files.push(dest.to_string_lossy().into_owned());
+        }
+    }
+
+    // Hijack loader at Steam root — always written as dwmapi.dll.
+    // Preference: file named exactly our canonical name, else BetterSteamTools.dll,
+    // else the largest non-stplug-in DLL (most unlocker zips ship one main loader).
+    let loader = dlls.iter().find(|(n, _)| n == "dwmapi.dll")
+        .or_else(|| dlls.iter().find(|(n, _)| n == "bettersteamtools.dll"))
+        .or_else(|| dlls.iter().filter(|(n, _)| !n.starts_with("stplug-in"))
+            .max_by_key(|(_, d)| d.len()));
+    if let Some((_, data)) = loader {
+        let dest = steam_pb.join("dwmapi.dll");
+        std::fs::write(&dest, data).map_err(|e| e.to_string())?;
+        installed_files.push(dest.to_string_lossy().into_owned());
+    }
+
+    // Write our mode.json manifest
+    let manifest_dir = steam_pb.join("config").join("project-desktop");
+    let _ = std::fs::create_dir_all(&manifest_dir);
+    let manifest = serde_json::json!({
+        "mode": mode_name,
+        "version": version,
+        "installed_at": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+        "files": installed_files,
+    });
+    std::fs::write(manifest_dir.join("mode.json"), serde_json::to_string_pretty(&manifest).unwrap_or_default())
+        .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn read_mode_manifest(steam: &str) -> Option<serde_json::Value> {
+    let p = PathBuf::from(steam).join("config").join("project-desktop").join("mode.json");
+    let text = std::fs::read_to_string(&p).ok()?;
+    serde_json::from_str(&text).ok()
 }
 
 async fn install_ost(client: &reqwest::Client, steam: &str) -> Result<String, String> {
@@ -854,7 +902,7 @@ async fn install_ost(client: &reqwest::Client, steam: &str) -> Result<String, St
 
     let tmp = std::env::temp_dir().join("ost_release.zip");
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
-    extract_unlocker_zip(&tmp, steam)?;
+    extract_unlocker_zip(&tmp, steam, "stplug-in", tag)?;
     let _ = std::fs::remove_file(&tmp);
     Ok(format!("OpenSteamTool (Nightly) {tag} установлен"))
 }

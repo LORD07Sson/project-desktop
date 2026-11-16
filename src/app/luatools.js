@@ -494,9 +494,9 @@ async function renderMode(el) {
         <button class="lt-btn" id="lt-install-ltsp">Установить</button>
       </div>
       <div class="lt-mode-option">
-        <h3>Custom</h3>
-        <p class="lt-muted">Ручной режим — удаляет DLL-файлы, вы ставите свои.</p>
-        <button class="lt-btn lt-btn-danger" id="lt-install-custom">Очистить DLL</button>
+        <h3>Удалить</h3>
+        <p class="lt-muted">Полностью удалить плагин (по манифесту установки).</p>
+        <button class="lt-btn lt-btn-danger" id="lt-mode-uninstall">Удалить плагин</button>
       </div>
     </div>
     <div class="lt-section" id="lt-cr-section"></div>`;
@@ -517,7 +517,11 @@ async function renderMode(el) {
   installHandler("#lt-install-bst", "bst");
   installHandler("#lt-install-ost", "ost");
   installHandler("#lt-install-ltsp", "ltsp");
-  installHandler("#lt-install-custom", "custom");
+  el.querySelector("#lt-mode-uninstall")?.addEventListener("click", async () => {
+    if (!await confirmAction("Удалить плагин? Все установленные DLL будут снесены.")) return;
+    try { await invoke("lt_uninstall_mode"); pluginStatus = await invoke("lt_plugin_status"); toast("Удалено", "ok"); renderMode(el); }
+    catch (e) { toast(e.message || e, "error"); }
+  });
 
   // Check versions
   invoke("lt_check_mode_update", { mode: "bst" }).then(v => {
