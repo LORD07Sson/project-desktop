@@ -71,7 +71,7 @@ function pager(page, pages, attr) {
 
 // Подписи вкладок присылает сервер (labels); здесь — нейтральные заглушки.
 let tabLabels = {};
-const TABS = [["authors", "Авторы", "Профили авторов с постами и файлами"], ["posts", "Посты", "Лента: новые, популярные, теги"], ["releases", "Раздачи", "Торренты: качает сервер — можно закрыть вкладку"], ["games", "Игры", "Игры из подключённых источников: обложки и описания из Steam"]];
+const TABS = [["authors", "Авторы", "Профили авторов с постами и файлами"], ["posts", "Посты", "Лента: новые, популярные, теги"], ["releases", "Раздачи", "Торренты: качает сервер — можно закрыть вкладку"]];
 const tabs = active => `<div class="pc-top">
   <div class="pc-headline"><span><b>Каталог</b><small>${esc((TABS.find(t => t[0] === active) || TABS[0])[2])}</small></span>
     <button type="button" class="btn sm" data-pc-close title="Вернуться к поиску по ссылке">✕ Закрыть</button></div>
@@ -101,17 +101,15 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   tabLabels = labels || {};
   const st = { q: "", service: "", sort: "favorited", page: 1, services: [] };
   const rs = { q: "", category: "", sort: "id", page: 1 };
-  const gs = { q: "", sort: "new", page: 1, source: "" };
   const fs = { mode: "search", q: "", tag: "", period: "week", page: 1 };
   let seq = 0;
   // Курсор задержался на карточке — начинаем грузить пост или посты автора, к клику они уже в кэше.
   let hoverTimer = 0;
   box.onpointerover = ev => {
-    const el = ev.target.closest("[data-pc-post],[data-pc-author],[data-pg-gid]");
+    const el = ev.target.closest("[data-pc-post],[data-pc-author]");
     clearTimeout(hoverTimer);
     if (!el) return;
     hoverTimer = setTimeout(() => {
-      if (el.dataset.pgGid) { prefetch(`/parser/access/game/${encodeURIComponent(el.dataset.pgGid)}`); return; }
       if (el.dataset.pcPost) { prefetch("/parser/access/post", { url: el.dataset.pcPost }); return; }
       const [svc, id] = el.dataset.pcAuthor.split("/");
       prefetch(`/parser/access/creator/${encodeURIComponent(svc)}/${encodeURIComponent(id)}`, { page: 1, site });
@@ -139,7 +137,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     if (!t) return false;
     const tab = t.dataset.pcTab;
     saveTab(tab);
-    if (tab === "games") showGames(); else if (tab === "releases") showReleases(); else if (tab === "posts") showFeed(); else showAuthors();
+    if (tab === "releases") showReleases(); else if (tab === "posts") showFeed(); else showAuthors();
     return true;
   }
 
@@ -235,224 +233,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         catch { toast("Не вышло скопировать", "error"); }
       }
     };
-  }
-
-  // Игры: раздачи из JSON-источников, сгруппированные по игре; обложка, описание, трейлеры — из Steam.
-  const fmtTs = t => (t ? new Date(t * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
-  const plural = (n, one = "раздача", few = "раздачи", many = "раздач") => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
-  const tone = pct => (pct >= 70 ? "pos" : pct >= 40 ? "mix" : "neg");
-  const gq = () => ({ q: gs.q, sort: gs.sort, page: gs.page, source: gs.source });
-
-  async function randomGame() {
-    try {
-      const r = await apiGet("/parser/access/games/random", { q: gs.q, source: gs.source });
-      showGame({ id: r.id });
-    } catch (e) { toast(String(e?.message || e), "error"); }
-  }
-
-  async function showGames() {
-    const my = ++seq;
-    box.innerHTML = `<div class="pc-wrap">${tabs("games")}${skel("pc-games", 12)}</div>`;
-    box.onclick = ev => { tabClick(ev); };
-    let d;
-    try {
-      d = await cget("/parser/access/games", gq());
-      if (gs.page < (d.pages || 1)) prefetch("/parser/access/games", { ...gq(), page: gs.page + 1 });
-    } catch (e) {
-      if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("games")}<div class="pc-empty">Игры недоступны: ${esc(e.message || e)}</div></div>`;
-      return;
-    }
-    if (my !== seq) return;
-    const empty = !d.configured
-      ? "Источники не подключены. Владелец добавляет их в настройках загрузчика → «Источники игр»."
-      : "Ничего не нашлось.";
-    const srcs = d.sources || [];
-    box.innerHTML = `<div class="pc-wrap">${tabs("games")}
-      <div class="pc-bar">
-        <input type="search" class="pc-search" placeholder="Название игры" value="${esc(gs.q)}" spellcheck="false">
-        ${srcs.length > 1 ? `<select class="pc-select" data-pg-src><option value="">Все источники</option>${srcs.map(n => `<option value="${esc(n)}"${n === gs.source ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
-        <select class="pc-select" data-pg-sort>${(d.sorts || []).map(c => `<option value="${esc(c.id)}"${c.id === gs.sort ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
-        <button type="button" class="btn sm" data-pg-random title="Случайная игра"${d.total ? "" : " disabled"}>${DICE}<span>Случайная</span></button>
-        <small class="pc-gcount">${d.total ? `${fmtNum(d.total)} ${plural(d.total, "игра", "игры", "игр")}` : ""}</small>
-      </div>
-      ${(d.errors || []).length ? `<div class="pc-gnote">Не загрузились источники: ${d.errors.map(x => esc(`${x.name || x.url} (${x.error})`)).join(", ")}</div>` : ""}
-      ${pager(gs.page, d.pages || 1, "data-pg-page")}
-      <div class="pc-games">${(d.items || []).map((x, i) => `
-        <button type="button" class="pc-game" data-pg-open="${i}" data-pg-gid="${esc(x.id)}" title="${esc(x.name)}">
-          <span class="pc-gcover">${x.cover ? `<img src="${esc(x.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<i>${esc(x.name.slice(0, 1))}</i>`}
-            ${x.reviews ? `<em class="pc-grate ${tone(x.pct)}" title="${fmtNum(x.reviews)} обзоров в Steam">${x.pct}%</em>` : ""}</span>
-          <span class="pc-gbody"><b>${esc(x.steam_name || x.name)}</b>
-            <small><span>${x.count} ${plural(x.count)}</span>${x.size ? `<span>${esc(x.size)}</span>` : ""}${x.year ? `<span>${x.year}</span>` : ""}</small>
-            <small class="pc-gsrc">${esc((x.sources || []).join(" · "))}${x.updated ? `<span class="pc-gdate">${esc(fmtTs(x.updated))}</span>` : ""}</small></span>
-        </button>`).join("") || `<div class="pc-empty">${empty}</div>`}</div>
-      ${pager(gs.page, d.pages || 1, "data-pg-page")}
-    </div>`;
-    box.querySelectorAll(".pc-gcover img").forEach(img => img.addEventListener("error", () => img.remove()));
-    const search = box.querySelector(".pc-search");
-    let timer;
-    search.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { gs.q = search.value.trim(); gs.page = 1; showGames(); }, 450); });
-    box.querySelector("[data-pg-sort]").addEventListener("change", e => { gs.sort = e.target.value; gs.page = 1; showGames(); });
-    box.querySelector("[data-pg-src]")?.addEventListener("change", e => { gs.source = e.target.value; gs.page = 1; showGames(); });
-    box.onclick = ev => {
-      if (tabClick(ev)) return;
-      const pg = ev.target.closest("[data-pg-page]");
-      if (pg && !pg.disabled) { gs.page = +pg.dataset.pgPage; toTop(); showGames(); return; }
-      if (ev.target.closest("[data-pg-random]")) { randomGame(); return; }
-      const op = ev.target.closest("[data-pg-open]");
-      if (op) showGame(d.items[+op.dataset.pgOpen]);
-    };
-  }
-
-  // Галерея: большой кадр и лента миниатюр; трейлеры Steam — HLS через hls.js (WebView2 сам HLS не играет).
-  let hlsLib = null, hls = null;
-  const stopVideo = () => { try { hls?.destroy(); } catch (_) { /* уже */ } hls = null; };
-  async function playHls(video, url) {
-    stopVideo();
-    if (video.canPlayType("application/vnd.apple.mpegurl")) { video.src = url; return; }
-    if (!hlsLib) hlsLib = (await import("hls.js")).default;
-    if (!hlsLib.isSupported()) return;
-    hls = new hlsLib({ capLevelToPlayerSize: true });
-    hls.loadSource(url);
-    hls.attachMedia(video);
-  }
-  function galleryHtml(st) {
-    const items = [
-      ...(st.movies || []).map(m => ({ kind: "video", thumb: m.thumb, hls: m.hls, name: m.name || "Трейлер" })),
-      ...(st.shots || []).map(s => ({ kind: "img", thumb: s.thumb || s.full, full: s.full, name: "Скриншот" })),
-    ];
-    if (!items.length) return { html: "", items };
-    return {
-      items,
-      html: `<div class="pc-ggal">
-        <div class="pc-ggal-main" data-pg-main></div>
-        <div class="pc-ggal-strip">${items.map((it, i) => `<button type="button" class="pc-ggal-th${i === 0 ? " on" : ""}" data-pg-th="${i}" title="${esc(it.name)}"><img src="${esc(it.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">${it.kind === "video" ? `<i>▶</i>` : ""}</button>`).join("")}</div>
-      </div>`,
-    };
-  }
-  function showSlide(items, i, autoplay) {
-    const main = box.querySelector("[data-pg-main]");
-    if (!main) return;
-    const it = items[i];
-    box.querySelectorAll("[data-pg-th]").forEach(b => b.classList.toggle("on", +b.dataset.pgTh === i));
-    box.querySelector(`[data-pg-th="${i}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    stopVideo();
-    if (it.kind === "video") {
-      // Поток грузим только по запросу: до клика — постер с кнопкой, сеть не тратится.
-      main.innerHTML = autoplay
-        ? `<video controls playsinline poster="${esc(it.thumb)}"></video>`
-        : `<button type="button" class="pc-ggal-play" data-pg-play="${i}" title="Смотреть трейлер"><img src="${esc(it.thumb)}" alt="" referrerpolicy="no-referrer"><i>▶</i></button>`;
-      const v = main.querySelector("video");
-      if (v) playHls(v, it.hls).then(() => v.play().catch(() => { /* без автозапуска */ }));
-    } else {
-      main.innerHTML = `<img src="${esc(it.full)}" alt="" referrerpolicy="no-referrer" data-pg-zoom title="Во весь экран">`;
-    }
-    main.dataset.cur = i;
-  }
-
-  function reqHtml(r) {
-    if (!r || (!r.min && !r.rec)) return "";
-    const col = (t, v) => (v ? `<div><h4>${t}</h4><p>${esc(v)}</p></div>` : "");
-    return `<div class="pc-greq"><h3>Системные требования</h3><div class="pc-greq-cols">${col("Минимальные", r.min)}${col("Рекомендуемые", r.rec)}</div></div>`;
-  }
-
-  async function showGame(x) {
-    const my = ++seq;
-    stopVideo();
-    const back = `<button type="button" class="btn sm" data-pg-back>← К играм</button>`;
-    box.innerHTML = `<div class="pc-wrap">${tabs("games")}<div class="pc-bar">${back}</div><div class="pc-empty">Загружаю игру…</div></div>`;
-    box.onclick = ev => { if (tabClick(ev)) return; if (ev.target.closest("[data-pg-back]")) showGames(); };
-    let d;
-    try {
-      d = await cget(`/parser/access/game/${encodeURIComponent(x.id)}`);
-    } catch (e) {
-      if (my === seq) box.innerHTML = `<div class="pc-wrap">${tabs("games")}<div class="pc-bar">${back}</div><div class="pc-empty">Игра недоступна: ${esc(e.message || e)}</div></div>`;
-      return;
-    }
-    if (my !== seq) return;
-    const st = d.steam || {};
-    const facts = [
-      st.release && ["Выход", st.release],
-      (st.developers || []).length && ["Разработчик", st.developers.join(", ")],
-      (st.publishers || []).length && ["Издатель", st.publishers.join(", ")],
-      (st.genres || []).length && ["Жанры", st.genres.join(", ")],
-      st.metacritic && ["Metacritic", st.metacritic],
-      st.languages && ["Языки", st.languages],
-    ].filter(Boolean);
-    const list = d.downloads || [];
-    const cover = st.image || x.cover;
-    const gal = galleryHtml(st);
-    const limit = d.limit_gb ? `больше ${d.limit_gb} ГБ — сервер такую не скачает, только через торрент-клиент` : "";
-    box.innerHTML = `<div class="pc-wrap">${tabs("games")}
-      <div class="pc-bar">${back}${d.appid ? `<button type="button" class="btn sm" data-pg-steam>Страница в Steam</button>` : ""}<button type="button" class="btn sm" data-pg-random title="Случайная игра">${DICE}<span>Случайная</span></button></div>
-      <div class="pc-rdetail pc-gdetail">
-        ${st.hero ? `<div class="pc-gbg" aria-hidden="true"><img src="${esc(st.hero)}" alt="" referrerpolicy="no-referrer"></div>` : ""}
-        <div class="pc-rmain">
-          ${cover ? `<span class="pc-gcover pc-ghero"><img src="${esc(cover)}" alt="" referrerpolicy="no-referrer"></span>` : ""}
-          <div class="pc-rinfo">
-            <b class="pc-rtitle">${esc(st.name || d.name)}</b>
-            ${facts.length ? `<dl class="pc-gfacts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
-            ${st.description ? `<div class="pc-rdesc">${esc(st.description)}</div>` : d.appid ? "" : `<small class="pc-gnote">В Steam не нашлась — показываем только раздачи.</small>`}
-          </div>
-        </div>
-        ${gal.html}
-        <div class="pc-files">
-          <div class="pc-fhead"><span>Раздачи (${list.length})</span></div>
-          ${list.map((r, i) => `
-            <div class="pc-gdl${r.too_big ? " big" : ""}">
-              <span class="pc-gdl-main"><b title="${esc(r.title)}">${esc(r.title)}</b>
-                <small>${r.source ? `<span class="pc-badge">${esc(r.source)}</span>` : ""}${r.size ? `<span>${esc(r.size)}</span>` : ""}${r.date ? `<span>${esc(fmtTs(r.date))}</span>` : ""}${r.too_big ? `<span class="pc-gbig">${esc(limit)}</span>` : ""}</small></span>
-              <span class="pc-ract"><button type="button" class="btn sm primary" data-pg-server="${i}"${r.too_big ? ` disabled title="${esc(limit)}"` : ` title="Сервер скачает раздачу сам, потом заберёте файл из «Очереди и загрузок»"`}>Скачать</button><button type="button" class="btn sm${r.too_big ? " primary" : ""}" data-pg-magnet="${i}">В торрент-клиент</button><button type="button" class="btn sm" data-pg-copy="${i}">Magnet</button></span>
-            </div>`).join("")}
-        </div>
-        ${reqHtml(st.requirements)}
-      </div>
-    </div>`;
-    box.querySelectorAll(".pc-gdetail img").forEach(img => img.addEventListener("error", () => { if (img.closest(".pc-gbg")) img.closest(".pc-gbg").remove(); else img.remove(); }));
-    if (gal.items.length) showSlide(gal.items, 0, false);
-    box.onclick = async ev => {
-      if (tabClick(ev)) { stopVideo(); return; }
-      if (ev.target.closest("[data-pg-back]")) { stopVideo(); showGames(); return; }
-      if (ev.target.closest("[data-pg-random]")) { stopVideo(); randomGame(); return; }
-      if (ev.target.closest("[data-pg-steam]")) { openExternal(`https://store.steampowered.com/app/${d.appid}/`); return; }
-      const play = ev.target.closest("[data-pg-play]");
-      if (play) { showSlide(gal.items, +play.dataset.pgPlay, true); return; }
-      const th = ev.target.closest("[data-pg-th]");
-      if (th) { showSlide(gal.items, +th.dataset.pgTh, true); return; }
-      const zoom = ev.target.closest("[data-pg-zoom]");
-      if (zoom) { openExternal(zoom.src); return; }
-      const sv = ev.target.closest("[data-pg-server]");
-      if (sv) {
-        const r = list[+sv.dataset.pgServer];
-        sv.disabled = true;
-        try {
-          const res = await apiPost("/parser/download", { url: r.magnet, name: r.title });
-          markQueued(sv, res?.job_id, "В очереди");
-          if (!res?.job_id) sv.textContent = "В очереди";
-          toast("Раздача в очереди загрузок: когда будет готова, нажмите «Сохранить»", "success");
-          onQueued?.();
-        } catch (e) { sv.disabled = false; toast(String(e?.message || e), "error"); }
-        return;
-      }
-      const mg = ev.target.closest("[data-pg-magnet]");
-      if (mg) {
-        try { await invoke("open_magnet", { magnet: list[+mg.dataset.pgMagnet].magnet }); toast("Открыто в торрент-клиенте", "success"); }
-        catch (e) { toast(String(e?.message || e), "error"); }
-        return;
-      }
-      const cp = ev.target.closest("[data-pg-copy]");
-      if (cp) {
-        try { await navigator.clipboard.writeText(list[+cp.dataset.pgCopy].magnet); toast("Magnet в буфере", "info"); }
-        catch { toast("Не вышло скопировать", "error"); }
-      }
-    };
-    // Стрелки листают галерею, пока открыта страница игры.
-    const onKey = ev => {
-      if (!box.querySelector("[data-pg-main]")) { document.removeEventListener("keydown", onKey); return; }
-      if ((ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") || /INPUT|TEXTAREA|SELECT|VIDEO/.test(document.activeElement?.tagName || "")) return;
-      const cur = +box.querySelector("[data-pg-main]").dataset.cur || 0;
-      showSlide(gal.items, (cur + (ev.key === "ArrowRight" ? 1 : -1) + gal.items.length) % gal.items.length, false);
-    };
-    document.addEventListener("keydown", onKey);
   }
 
   // Размер из списка файлов («1.3 GiB», «77 Bytes») → байты, чтобы считать выбранное.
@@ -884,12 +664,11 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   let last = "authors";
   try { last = localStorage.getItem(TAB_KEY) || "authors"; } catch (_) { /* по умолчанию авторы */ }
   toTop();
-  if (last === "games") showGames(); else if (last === "releases") showReleases(); else if (last === "posts") showFeed(); else showAuthors();
+  if (last === "releases") showReleases(); else if (last === "posts") showFeed(); else showAuthors();
   // Первые страницы соседних вкладок — заранее, чтобы переключение было мгновенным.
   setTimeout(() => {
     prefetch("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: 1, site });
     prefetch("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: 1, site });
     prefetch("/parser/access/releases", { q: rs.q, category: rs.category, sort: rs.sort, page: 1 });
-    prefetch("/parser/access/games", { q: gs.q, sort: gs.sort, page: 1, source: gs.source });
   }, 600);
 }

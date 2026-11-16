@@ -102,16 +102,6 @@ export function mountOwnerAccounts(box) {
             <button type="button" class="btn sm danger" data-acc-del="${esc(a.login)}">Удалить</button>
           </span>
         </div>`).join("") || `<div class="pr-acc-empty">Аккаунтов пока нет.</div>`}</div>`;
-    // Источники вкладки «Игры»: JSON-списки раздач (name + downloads[]).
-    const gs = await fetch(`${API_BASE}/parser/settings/game-sources`, { headers: { ...clientHeaders(), ...hdr() } });
-    const sources = gs.ok ? (await gs.json()).items : [];
-    box.insertAdjacentHTML("beforeend", `<div class="pr-set-row"><span><b>Источники игр</b><small>Ссылки на JSON-списки раздач (name + downloads[]) для вкладки «Игры».</small></span>
-        <span class="pr-set-acts">${sources.length ? `<button type="button" class="btn sm" data-gs-refresh title="Перечитать все источники сейчас (иначе — раз в 6 часов)">Обновить</button>` : ""}<button type="button" class="btn sm primary" data-gs-add>Добавить</button></span></div>
-      <div class="pr-acc-list">${sources.map(x => `
-        <div class="pr-acc">
-          <span class="pr-acc-main"><b>${esc(x.name || x.url)}</b><small>${esc(x.url)}${x.count != null ? ` · раздач: ${x.count}` : ""}${x.error ? ` · ошибка: ${esc(x.error)}` : ""}${x.loaded_at ? ` · загружен ${esc(new Date(x.loaded_at * 1000).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))}` : ""}</small></span>
-          <span class="pr-set-acts">${x.fixed ? `<small>задан на сервере</small>` : `<button type="button" class="btn sm danger" data-gs-del="${esc(x.url)}">Удалить</button>`}</span>
-        </div>`).join("") || `<div class="pr-acc-empty">Источников пока нет — вкладка «Игры» пустая.</div>`}</div>`);
   }
 
   box.onclick = async ev => {
@@ -157,20 +147,6 @@ export function mountOwnerAccounts(box) {
     } else if (el.dataset.accOut) {
       const problem = await post(`/parser/settings/accounts/${encodeURIComponent(el.dataset.accOut)}/logout`, {}, hdr());
       toast(problem || "Входы сброшены", problem ? "error" : "success");
-      render();
-    } else if (el.matches("[data-gs-add]")) {
-      const ok = await formSheet({
-        title: "Источник игр", sub: "Ссылка https:// на JSON со списком раздач.",
-        fields: [{ name: "url", label: "Ссылка", placeholder: "https://…/source.json" }], submit: "Добавить",
-        onSubmit: v => post("/parser/settings/game-sources/add", v, hdr()),
-      });
-      if (ok) { toast("Источник добавлен", "success"); render(); }
-    } else if (el.matches("[data-gs-refresh]")) {
-      const problem = await post("/parser/settings/game-sources/refresh", {}, hdr());
-      toast(problem || "Источники перечитаются при следующем открытии вкладки «Игры»", problem ? "error" : "success");
-    } else if (el.dataset.gsDel) {
-      const problem = await post("/parser/settings/game-sources/delete", { url: el.dataset.gsDel }, hdr());
-      toast(problem || "Источник удалён", problem ? "error" : "success");
       render();
     } else if (el.dataset.accDel) {
       const login = el.dataset.accDel;
