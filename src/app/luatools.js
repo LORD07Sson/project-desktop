@@ -3,7 +3,7 @@
 
 import { invoke, listen, openExternal, pickInputFiles } from "./tauri.js";
 import { $ } from "./utils.js";
-import { toast, clientHeaders } from "./api.js";
+import { toast, clientHeaders, apiGet } from "./api.js";
 import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
   ltIsLoggedIn, ltSession, ltSaveSession, ltClearSession,
@@ -1834,8 +1834,9 @@ async function openDetail(appId) {
         <div class="lt-detail-sources">
           <h4>Источники${sourceList.length ? ` (${sourceList.length})` : ""}</h4>
           ${sourceList.length ? sourceList.map(s => `<button class="lt-btn lt-btn-primary lt-btn-sm" data-dl-source="${esc(s)}" data-appid="${appId}" data-game-name="${esc(name)}">📥 ${esc(s)}</button>`).join(" ") : '<span class="lt-muted">Нет</span>'}
+          <button class="lt-btn lt-btn-sm" data-dl-alt="server" data-appid="${appId}" data-game-name="${esc(name)}" title="Кэш студии в Telegram">📥 Сервер <span class="lt-muted" id="lt-server-badge">…</span></button>
           ${ltConfig.src_hubcap && ltConfig.hubcap_key ? `<button class="lt-btn lt-btn-sm" id="lt-hubcap-btn" data-dl-alt="hubcap" data-appid="${appId}" data-game-name="${esc(name)}">📥 Hubcap <span class="lt-muted" id="lt-hubcap-badge">…</span></button>` : ''}
-          ${ltConfig.src_kernelua && ltConfig.kernelua_token ? `<button class="lt-btn lt-btn-sm" data-dl-alt="kernelua" data-appid="${appId}" data-game-name="${esc(name)}">📥 KerneLua</button>` : ''}
+          ${ltConfig.src_kernelua && ltConfig.kernelua_token ? `<button class="lt-btn lt-btn-sm" data-dl-alt="kernelua" data-appid="${appId}" data-game-name="${esc(name)}">📥 KerneLua <span class="lt-muted" id="lt-kernelua-badge">…</span></button>` : ''}
         </div>
 
         ${variants.length ? `<div class="lt-section"><h4>Варианты (${variants.length})</h4>
@@ -1879,15 +1880,20 @@ async function openDetail(appId) {
       try { await invoke("lt_vault_restore", { appId, hash }); toast("Версия восстановлена", "ok"); openDetail(appId); }
       catch (err) { toast(errMsg(err), "error"); }
     })));
-    if (el.querySelector("#lt-hubcap-badge")) {
-      invoke("lt_hubcap_status", { appId, apiKey: ltConfig.hubcap_key }).then(st => {
-        const b = el.querySelector("#lt-hubcap-badge");
+    // Значки наличия у источников: «· есть» зелёным, «· нет» красным; не удалось проверить — значок пропадает.
+    const badge = (id, check) => {
+      if (!el.querySelector(id)) return;
+      check().then(ok => {
+        const b = el.querySelector(id);
         if (!b) return;
-        const ok = st && st.available !== false && !/unavail|missing|none/i.test(String(st.status || ""));
         b.textContent = ok ? "· есть" : "· нет";
-        b.className = ok ? "lt-ok" : "lt-muted";
-      }).catch(() => { const b = el.querySelector("#lt-hubcap-badge"); if (b) b.textContent = ""; });
-    }
+        b.className = ok ? "lt-ok" : "lt-error";
+      }).catch(() => { const b = el.querySelector(id); if (b) b.textContent = ""; });
+    };
+    badge("#lt-server-badge", () => apiGet("/lua-cache/has", { appid: appId }).then(r => !!r?.available));
+    badge("#lt-hubcap-badge", () => invoke("lt_hubcap_status", { appId, apiKey: ltConfig.hubcap_key })
+      .then(st => !!st && st.available !== false && !/unavail|missing|none/i.test(String(st.status || ""))));
+    badge("#lt-kernelua-badge", () => invoke("lt_kernelua_status", { appId, token: ltConfig.kernelua_token }));
     el.querySelector("#lt-d-copy")?.addEventListener("click", () => {
       navigator.clipboard.writeText(String(appId)).then(() => toast("AppID скопирован", "ok"), () => toast("Буфер обмена недоступен", "error"));
     });
@@ -2080,6 +2086,7 @@ async function doAltDownload(appId, alt, gameName) {
     try { zipPath = await invoke("lt_cache_get", { key: `man:${appId}:*`, headers: clientHeaders(), destDir: await getTmpDir() }); }
     catch { /* кэш недоступен */ }
     if (zipPath) toast("Взято из кэша студии", "info");
+    else if (alt === "server") throw new Error("На сервере этой игры нет");
     else {
       if (alt === "hubcap") zipPath = await invoke("lt_hubcap_fetch", { appId, apiKey: ltConfig.hubcap_key });
       else if (alt === "kernelua") zipPath = await invoke("lt_kernelua_fetch", { appId, token: ltConfig.kernelua_token });

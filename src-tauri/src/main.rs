@@ -2009,6 +2009,7 @@ fn main() {
             luatools::lt_steamless_run,
             luatools::lt_kernelua_validate,
             luatools::lt_kernelua_fetch,
+            luatools::lt_kernelua_status,
             luatools::lt_gamelist_sync,
             luatools::lt_gamelist_read,
             luatools::lt_gamelist_dlc_read,

@@ -1890,6 +1890,23 @@ pub async fn lt_kernelua_validate(token: String) -> Result<serde_json::Value, St
     Ok(serde_json::from_str(&text).unwrap_or(serde_json::json!({"valid": true})))
 }
 
+/// Есть ли игра в KerneLua: только просим ссылку (gen=1), сам файл не качаем. true/false; ошибка — когда ответ не понять.
+#[tauri::command]
+pub async fn lt_kernelua_status(app_id: u64, token: String) -> Result<bool, String> {
+    let token = token.trim().to_string();
+    if token.is_empty() { return Err("Нет токена KerneLua".into()); }
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(20))
+        .build().map_err(|e| e.to_string())?;
+    let resp = client.get(format!("{KERNELUA_BASE}/v2.php?gen=1&id={app_id}"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND { return Ok(false); }
+    if !resp.status().is_success() { return Err(format!("KerneLua HTTP {}", resp.status())); }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(json["url"].as_str().map(|u| u.starts_with("/games/")).unwrap_or(false))
+}
+
 #[tauri::command]
 pub async fn lt_kernelua_fetch(app_id: u64, token: String) -> Result<String, String> {
     let token = token.trim().to_string();
