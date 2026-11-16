@@ -21,6 +21,11 @@ import { runQc, QC_EXTENSIONS } from "./qc.js";
 let activeReportId = null;
 export function setDropTarget(publicId) { activeReportId = publicId; }
 
+// Вкладка LuaTools принимает свои файлы (.lua/.manifest/.zip) — пока она
+// видна, drop целиком уходит ей (см. luatools.js).
+let luatoolsDrop = null;
+export function setLuatoolsDropHandler(fn) { luatoolsDrop = fn; }
+
 // Всё, что можно приложить к отчёту = то, что понимает QC (аудио/видео)
 // плюс документы и картинки. Тот же список продублирован в Rust
 // (ALLOWED_UPLOAD_EXT в main.rs) — держать в синхроне руками,
@@ -53,6 +58,11 @@ function baseName(path) {
     if (type !== "drop") return;
 
     const paths = event.payload.paths || [];
+
+    if (luatoolsDrop && document.querySelector("#luatools-body")?.offsetParent) {
+      await luatoolsDrop(paths);
+      return;
+    }
 
     // Открыт чат — перетаскивание туда пока не поддерживается (файл до 2 ГБ надо грузить частями, а drop отдаёт только путь).
     if (!activeReportId && document.querySelector("#ms-input")?.offsetParent) {

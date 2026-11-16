@@ -8,10 +8,13 @@ import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
   ltIsLoggedIn, ltSession, ltLoginUrl, ltSaveSession, ltClearSession,
   ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoListings, ltDenuvoFixes,
-  ltSetApiConfig,
+  ltSetApiConfig, ltSetSessionPersist, ltOnSessionChange, ltFetchUser,
 } from "./luatools-api.js";
+import { setLuatoolsDropHandler } from "./file-drop.js";
 import { parseLua, setDepotLocked, setDepotEnabled } from "./luatools-parser.js";
 
+// Ошибки из invoke() приходят строкой, из fetch — Error: показываем оба вида.
+const errMsg = e => (e && typeof e === "object" && e.message) ? e.message : String(e ?? "Ошибка");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // Minimal markdown → HTML (as Markdig does for fix descriptions): headings, bold, italic, code, links, lists.
 function md(src) {
@@ -23,10 +26,12 @@ function md(src) {
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
     .replace(/^- (.+)$/gm, "<li>$1</li>")
-    .replace(/(<li>.+<\/li>\n?)+/g, m => "<ul>" + m + "</ul>")
-    .replace(/\n\n+/g, "</p><p>");
+    .replace(/(<li>.+<\/li>\n?)+/g, m => "<ul>" + m.replace(/\n/g, "") + "</ul>")
+    .replace(/\n\n+/g, "</p><p>")
+    .replace(/(<\/h[34]>|<\/ul>)\n/g, "$1")
+    .replace(/\n/g, "<br>");
   return "<p>" + html + "</p>";
 }
 const fmtSize = b => b > 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : (b / 1024).toFixed(1) + " KB";
@@ -43,8 +48,21 @@ let ltConfig = {};
 let gameNames = {}; // AppID → Name cache from Steam applist
 
 // ── Download queue (in-memory) ─────────────────────────────────────
-const dlQueue = { items: [], history: [] };
+const DL_HISTORY_KEY = "lt_dl_history";
+const dlQueue = { items: [], history: loadDlHistory() };
 let dlIdCounter = 0;
+const retryFns = new Map(); // id → () => Promise (только в этой сессии)
+const inflight = new Set();  // "appId:source" — защита от двойного клика
+
+function loadDlHistory() {
+  try { return JSON.parse(localStorage.getItem(DL_HISTORY_KEY) || "[]").slice(0, 20); } catch { return []; }
+}
+function saveDlHistory() {
+  try {
+    const slim = dlQueue.history.slice(0, 20).map(({ id, label, appId, status, error, startTime }) => ({ id, label, appId, status, error, startTime }));
+    localStorage.setItem(DL_HISTORY_KEY, JSON.stringify(slim));
+  } catch { /* noop */ }
+}
 
 function queueAdd(label, appId) {
   const item = { id: ++dlIdCounter, label, appId, status: "pending", progress: 0, error: null, startTime: Date.now() };
@@ -57,7 +75,21 @@ function queueDone(item, ok, err) {
   item.progress = 100;
   dlQueue.items = dlQueue.items.filter(i => i.id !== item.id);
   dlQueue.history.unshift(item);
+  dlQueue.history.length = Math.min(dlQueue.history.length, 20);
+  saveDlHistory();
   if (currentPage === "downloads") renderPage("downloads");
+}
+function queueStatus(item, status, progress) {
+  item.status = status;
+  if (progress != null) item.progress = progress;
+  if (currentPage === "downloads") renderPage("downloads");
+}
+
+// Блокирует кнопку на время операции (двойной клик = двойной invoke).
+async function withBusy(btn, fn) {
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  try { return await fn(); } finally { if (btn.isConnected) btn.disabled = false; }
 }
 
 // ── Game name cache ────────────────────────────────────────────────
@@ -146,16 +178,21 @@ function attachDropZone(body) {
       if (m) { openDetail(parseInt(m[1], 10)); return; }
     }
 
-    const files = [...(e.dataTransfer.files || [])].filter(f => validExt.test(f.name));
-    if (!files.length) { toast("Неподдерживаемый формат файла", "warn"); return; }
+    // Файлы сюда не доходят: WebView2 отдаёт drop нативному обработчику Tauri
+    // (file-drop.js → installDroppedPaths), у File в вебвью нет пути на диске.
+  });
 
-    for (const f of files) {
-      const appIdMatch = f.name.match(/^(\d+)\./);
+  setLuatoolsDropHandler(async paths => {
+    const files = paths.filter(p => validExt.test(p));
+    if (!files.length) { toast("Неподдерживаемый формат файла (нужен .lua, .manifest или .zip)", "warn"); return; }
+    for (const path of files) {
+      const name = path.split(/[\\/]/).pop();
+      const appIdMatch = name.match(/^(\d+)[._]/);
       const appId = appIdMatch ? parseInt(appIdMatch[1], 10) : 0;
       try {
-        await invoke("lt_install_file", { path: f.path, appId, autoUpdate: false });
-        toast(`Установлено: ${f.name}`, "ok");
-      } catch (err) { toast(`Ошибка: ${err}`, "error"); }
+        await invoke("lt_install_file", { path, appId, autoUpdate: false });
+        toast(`Установлено: ${name}`, "ok");
+      } catch (err) { toast(`${name}: ${errMsg(err)}`, "error"); }
     }
     refreshAll(body);
   });
@@ -174,7 +211,19 @@ function attachGlobal(body) {
     if (e.target.closest("#lt-restart-steam")) { doRestartSteam(); return; }
     if (e.target.closest("#lt-back-btn")) { switchPage("home"); return; }
     if (e.target.closest("#lt-login-btn")) { doLogin(); return; }
-    if (e.target.closest("#lt-logout-btn")) { ltClearSession(); updateAuthUI(); return; }
+    if (e.target.closest("#lt-logout-btn")) {
+      ltClearSession();
+      invoke("lt_config_set", { key: "session_enc", value: null }).catch(() => {});
+      updateAuthUI();
+      return;
+    }
+
+    const retry = e.target.closest("[data-dl-retry]");
+    if (retry) {
+      const fn = retryFns.get(parseInt(retry.dataset.dlRetry, 10));
+      if (fn) { retry.disabled = true; fn(); }
+      return;
+    }
 
     const dl = e.target.closest("[data-dl-source]");
     if (dl) { doDownload(parseInt(dl.dataset.appid, 10), dl.dataset.dlSource, dl.dataset.gameName || ""); return; }
@@ -218,6 +267,7 @@ async function refreshAll(body) {
   try { installedList = await invoke("lt_list_installed"); } catch { installedList = []; }
   try { ltConfig = await invoke("lt_config_get") || {}; } catch { ltConfig = {}; }
   if (ltConfig.api_base) ltSetApiConfig({ api_base: ltConfig.api_base, manifest_backend_url: ltConfig.manifest_backend_url });
+  await restoreEncryptedSession();
   if (ltConfig.filter_hardware !== false) {
     invoke("lt_hardware_appids").then(ids => { hardwareAppIds = new Set(ids); }).catch(() => {});
   }
@@ -310,7 +360,7 @@ async function renderBuilds(el) {
       </div>
       <div class="lt-builds-grid" id="lt-builds-grid">
         ${slice.map(i => `<div class="lt-build-tile" data-appid="${i.app_id}">
-          <img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/header.jpg" alt="" loading="lazy" onerror="this.src='https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/capsule_sm_120.jpg'">
+          <img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/header.jpg" alt="" loading="lazy" onerror="this.onerror=null;this.src='https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/capsule_sm_120.jpg'">
           <div class="lt-build-info">
             <span class="lt-build-name">${esc(gameName(i.app_id))}</span>
             <span class="lt-build-meta">${i.app_id} · ${fmtDate(i.modified)}</span>
@@ -404,7 +454,7 @@ function renderAdd(el) {
       if (ltConfig.filter_hardware !== false && hardwareAppIds.size) items = items.filter(i => !hardwareAppIds.has(i.appId));
       if (!items.length) { r.innerHTML = '<div class="lt-empty">Ничего не нашлось</div>'; return; }
       r.innerHTML = items.map(i => `<button class="lt-card lt-card-search" data-appid="${i.appId}"><img src="${esc(i.icon)}" alt="" loading="lazy"><div class="lt-card-info"><span class="lt-card-name">${esc(i.name)}</span><span class="lt-card-id">${i.appId}</span></div></button>`).join("");
-    } catch (e) { r.innerHTML = `<div class="lt-error">${esc(e.message)}</div>`; }
+    } catch (e) { r.innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; }
   };
   btn.addEventListener("click", doSearch);
   input.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
@@ -488,16 +538,18 @@ async function renderTools(el) {
     </div>`;
 
   el.querySelector("#lt-dlc-gen").addEventListener("click", async () => {
-    const appId = el.querySelector("#lt-dlc-appid").value.trim(); if (!appId) return;
+    const appId = el.querySelector("#lt-dlc-appid").value.trim();
+    const aid = parseInt(appId, 10);
     const r = el.querySelector("#lt-dlc-result");
+    if (!/^\d+$/.test(appId) || !aid) { r.innerHTML = '<span class="lt-warn">Введите числовой AppID</span>'; return; }
     if (!ltIsLoggedIn()) { r.innerHTML = '<span class="lt-warn">Войдите в lua.tools</span>'; return; }
     r.innerHTML = '<div class="lt-loading">Генерирую…</div>';
     try {
       const url = ltDlcGenerateUrl(appId, appId, "");
       const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
-      await invoke("lt_install_file", { path: filePath, appId: parseInt(appId), autoUpdate: false });
+      await invoke("lt_install_file", { path: filePath, appId: aid, autoUpdate: false });
       r.innerHTML = '<span class="lt-ok">✅ DLC установлены</span>';
-    } catch (e) { r.innerHTML = `<span class="lt-error">${esc(e.message)}</span>`; }
+    } catch (e) { r.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; }
   });
 
   el.querySelector("#lt-var-list").addEventListener("click", async () => {
@@ -514,18 +566,18 @@ async function renderTools(el) {
         row.innerHTML = `<span><strong></strong> · ${v.depot_count} депо, ${v.dlc_count} DLC${v.is_pinned ? ' 📌' : ''}</span><span class="lt-muted"></span><button class="lt-btn lt-btn-sm lt-var-load">Загрузить</button><button class="lt-btn lt-btn-sm lt-btn-danger lt-var-del">✕</button>`;
         row.querySelector("strong").textContent = v.name;
         row.querySelector(".lt-muted").textContent = v.hash;
-        row.querySelector(".lt-var-load").addEventListener("click", async () => {
-          await invoke("lt_load_variant", { appId: aid, name: v.name });
-          toast(`Вариант «${v.name}» загружен`, "ok");
-        });
-        row.querySelector(".lt-var-del").addEventListener("click", async () => {
-          await invoke("lt_delete_variant", { appId: aid, name: v.name });
-          toast("Удалён", "ok");
-          el.querySelector("#lt-var-list").click();
-        });
+        row.querySelector(".lt-var-load").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+          try { await invoke("lt_load_variant", { appId: aid, name: v.name }); toast(`Вариант «${v.name}» загружен`, "ok"); }
+          catch (err) { toast(errMsg(err), "error"); }
+        }));
+        row.querySelector(".lt-var-del").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+          if (!await confirmAction(`Удалить вариант «${v.name}»?`)) return;
+          try { await invoke("lt_delete_variant", { appId: aid, name: v.name }); toast("Удалён", "ok"); el.querySelector("#lt-var-list").click(); }
+          catch (err) { toast(errMsg(err), "error"); }
+        }));
         r.appendChild(row);
       }
-    } catch (e) { r.innerHTML = `<span class="lt-error">${esc(e.message)}</span>`; }
+    } catch (e) { r.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; }
   });
 
   if (ltIsLoggedIn()) {
@@ -540,20 +592,21 @@ async function renderTools(el) {
     const e = el.querySelector("#lt-ddm-info"); if (!e) return;
     e.innerHTML = info.installed ? `<span class="lt-ok">Установлен</span> · <span class="lt-muted">${esc(info.exe_path || '')}</span>` : '<span class="lt-warn">Не установлен</span>';
     if (info.latest_tag) e.innerHTML += ` · Последняя: <strong>${esc(info.latest_tag)}</strong>`;
-  }).catch(e => { const r = el.querySelector("#lt-ddm-info"); if (r) r.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; });
+  }).catch(e => { const r = el.querySelector("#lt-ddm-info"); if (r) r.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; });
   el.querySelector("#lt-ddm-install")?.addEventListener("click", async () => {
     try { toast("Скачиваю DepotDownloaderMod…", "info"); const path = await invoke("lt_depot_downloader_install"); toast("Установлено: " + path, "ok"); renderTools(el); }
-    catch (e) { toast(e.message || e, "error"); }
+    catch (e) { toast(errMsg(e), "error"); }
   });
   el.querySelector("#lt-ddm-run")?.addEventListener("click", async () => {
     const appId = el.querySelector("#lt-ddm-appid").value.trim();
     const depot = el.querySelector("#lt-ddm-depot").value.trim();
-    if (!appId || !depot) { toast("Укажите AppID и DepotID", "warn"); return; }
-    const out = el.querySelector("#lt-ddm-out"); out.textContent = "Запускаю…";
-    try {
-      const result = await invoke("lt_depot_downloader_run", { args: ["-app", appId, "-depot", depot] });
-      out.textContent = result;
-    } catch (e) { out.textContent = e.message || String(e); }
+    if (!/^\d+$/.test(appId) || !/^\d+$/.test(depot)) { toast("Укажите числовые AppID и DepotID", "warn"); return; }
+    const out = el.querySelector("#lt-ddm-out"); out.textContent = "Скачиваю… (может занять долго)";
+    await withBusy(el.querySelector("#lt-ddm-run"), async () => {
+      try {
+        out.textContent = await invoke("lt_depot_downloader_run", { appId: Number(appId), depotId: Number(depot) });
+      } catch (e) { out.textContent = errMsg(e); }
+    });
   });
 
   // Hubcap
@@ -567,7 +620,7 @@ async function renderTools(el) {
       const res = await invoke("lt_hubcap_validate", { apiKey: key });
       await invoke("lt_config_set", { key: "hubcap_key", value: key });
       s.innerHTML = `<span class="lt-ok">✅ Валиден${res?.expiry ? ` · до ${esc(res.expiry)}` : ''}</span>`;
-    } catch (e) { s.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; }
+    } catch (e) { s.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; }
   });
 
   // DoH
@@ -575,7 +628,7 @@ async function renderTools(el) {
     const host = el.querySelector("#lt-doh-host").value.trim(); if (!host) return;
     const r = el.querySelector("#lt-doh-result"); r.innerHTML = '<div class="lt-loading">…</div>';
     try { const ips = await invoke("lt_doh_resolve", { host }); r.innerHTML = ips.length ? ips.map(ip => `<code>${esc(ip)}</code>`).join(" ") : '<span class="lt-muted">Нет ответа</span>'; }
-    catch (e) { r.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; }
+    catch (e) { r.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; }
   });
 
   // Steamless
@@ -587,7 +640,7 @@ async function renderTools(el) {
   el.querySelector("#lt-steamless-install-btn")?.addEventListener("click", async () => {
     const s = el.querySelector("#lt-steamless-status"); s.innerHTML = '<div class="lt-loading">Скачиваю…</div>';
     try { const v = await invoke("lt_steamless_install"); s.innerHTML = `<span class="lt-ok">Установлено · ${esc(v)}</span>`; toast("Steamless установлен", "ok"); }
-    catch (e) { s.innerHTML = `<span class="lt-error">${esc(e)}</span>`; }
+    catch (e) { s.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; }
   });
 
   el.querySelector("#lt-steamless-run-btn")?.addEventListener("click", async () => {
@@ -636,7 +689,7 @@ async function renderMode(el) {
 
   const installHandler = (btnId, mode) => {
     el.querySelector(btnId)?.addEventListener("click", async () => {
-      if (!await confirmAction("Установка режима остановит Steam. Продолжить?")) return;
+      if (!await confirmAction("Установка перезапустит Steam. Продолжить?")) return;
       const btn = el.querySelector(btnId);
       btn.disabled = true; btn.textContent = "Устанавливаю…";
       try {
@@ -644,16 +697,16 @@ async function renderMode(el) {
         toast(msg, "ok");
         pluginStatus = await invoke("lt_plugin_status");
         renderMode(el);
-      } catch (e) { toast(e.message || String(e), "error"); btn.disabled = false; btn.textContent = "Ошибка"; }
+      } catch (e) { toast(errMsg(e), "error"); btn.disabled = false; btn.textContent = "Повторить"; }
     });
   };
   installHandler("#lt-install-bst", "bst");
   installHandler("#lt-install-ost", "ost");
   installHandler("#lt-install-ltsp", "ltsp");
   el.querySelector("#lt-mode-uninstall")?.addEventListener("click", async () => {
-    if (!await confirmAction("Удалить плагин? Все установленные DLL будут снесены.")) return;
+    if (!await confirmAction("Удалить плагин? Steam будет перезапущен, DLL плагина удалены.")) return;
     try { await invoke("lt_uninstall_mode"); pluginStatus = await invoke("lt_plugin_status"); toast("Удалено", "ok"); renderMode(el); }
-    catch (e) { toast(e.message || e, "error"); }
+    catch (e) { toast(errMsg(e), "error"); }
   });
 
   // Check versions
@@ -679,11 +732,13 @@ async function renderMode(el) {
         <p class="lt-muted">Steam Cloud revival — работает с BST и OST.</p>
         <div class="lt-info-row">Статус: ${cr.enabled ? '<span class="lt-ok">Включён</span>' : '<span class="lt-muted">Выключен</span>'} ${cr.installed ? '' : '<span class="lt-warn">(DLL не найдена)</span>'}</div>
         <button class="lt-btn ${cr.enabled ? 'lt-btn-danger' : 'lt-btn-primary'}" id="lt-cr-toggle">${cr.enabled ? 'Выключить' : 'Включить'}</button>`;
-      el.querySelector("#lt-cr-toggle")?.addEventListener("click", async () => {
-        await invoke("lt_cloud_redirect_toggle", { enable: !cr.enabled });
-        toast(cr.enabled ? "CloudRedirect выключен" : "CloudRedirect включён", "ok");
-        renderMode(el);
-      });
+      el.querySelector("#lt-cr-toggle")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+        try {
+          await invoke("lt_cloud_redirect_toggle", { enable: !cr.enabled });
+          toast(cr.enabled ? "CloudRedirect выключен" : "CloudRedirect включён", "ok");
+          renderMode(el);
+        } catch (err) { toast(errMsg(err), "error"); }
+      }));
     }
   } catch {}
 }
@@ -769,7 +824,7 @@ async function openFixDetail(appId) {
     const fixes = await ltDenuvoFixes(String(appId));
     const hasBackup = await invoke("lt_has_fix_backup", { appId });
     const gameInfo = await invoke("lt_game_install_path", { appId });
-    const game = fixesCache?.find(g => (g.appid || g.appId) == appId);
+    const game = fixesCache?.find(g => Number(g.appid || g.appId) === appId);
     const name = game?.name || game?.game || `App ${appId}`;
 
     el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад к фиксам</button>
@@ -798,16 +853,18 @@ async function openFixDetail(appId) {
       </div>`;
 
     el.querySelector("#lt-back-fix")?.addEventListener("click", () => { currentPage = "fixes"; renderFixes(el); });
-    el.querySelector("#lt-revert-fix")?.addEventListener("click", async () => {
+    el.querySelector("#lt-revert-fix")?.addEventListener("click", async e => {
+      const btn = e.currentTarget;
       if (!await confirmAction("Откатить фикс? Оригинальные файлы будут восстановлены.")) return;
+      btn.disabled = true;
       try {
         const n = await invoke("lt_revert_fix", { appId });
         toast(`Откачено ${n} файлов`, "ok");
         openFixDetail(appId);
-      } catch (e) { toast(e.message, "error"); }
+      } catch (e) { toast(errMsg(e), "error"); btn.disabled = false; }
     });
 
-    el.querySelectorAll("[data-fix-manifest]").forEach(b => b.addEventListener("click", async () => {
+    el.querySelectorAll("[data-fix-manifest]").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
       if (!ltIsLoggedIn()) { toast("Войдите", "warn"); return; }
       const fixId = b.dataset.fixManifest;
       toast("Скачиваю манифест…", "info");
@@ -816,10 +873,10 @@ async function openFixDetail(appId) {
         const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
         await invoke("lt_install_file", { path: filePath, appId, autoUpdate: true });
         toast("Манифест установлен", "ok");
-      } catch (e) { toast(e.message, "error"); }
-    }));
+      } catch (e) { toast(errMsg(e), "error"); }
+    })));
 
-    el.querySelectorAll("[data-fix-apply]").forEach(b => b.addEventListener("click", async () => {
+    el.querySelectorAll("[data-fix-apply]").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
       if (!ltIsLoggedIn()) { toast("Войдите", "warn"); return; }
       if (!await confirmAction("Применить фикс? Оригинальные файлы будут забэкаплены.")) return;
       const fixId = b.dataset.fixApply;
@@ -830,9 +887,9 @@ async function openFixDetail(appId) {
         const result = await invoke("lt_apply_fix", { appId, zipPath });
         toast(`Фикс применён: ${result.files_extracted} файлов${result.backup_created ? ' (бэкап создан)' : ''}`, "ok");
         openFixDetail(appId);
-      } catch (e) { toast(e.message, "error"); }
-    }));
-  } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(e.message)}</div>`; el.querySelector("#lt-back-fix")?.addEventListener("click", () => { currentPage = "fixes"; renderFixes(el); }); }
+      } catch (e) { toast(errMsg(e), "error"); }
+    })));
+  } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(errMsg(e))}</div>`; el.querySelector("#lt-back-fix")?.addEventListener("click", () => { currentPage = "fixes"; renderFixes(el); }); }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -864,10 +921,11 @@ async function renderDownloads(el) {
     </div>`;
 
   if (dlQueue.items.length) {
-    el.querySelector("#lt-dl-active").innerHTML = dlQueue.items.map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><div class="lt-usage-bar"><div class="lt-usage-fill" style="width:${i.progress}%"></div></div><span class="lt-muted">${i.status}</span></div>`).join("");
+    const ST = { pending: "В очереди", downloading: "Скачиваю", installing: "Устанавливаю" };
+    el.querySelector("#lt-dl-active").innerHTML = dlQueue.items.map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><div class="lt-usage-bar"><div class="lt-usage-fill" style="width:${i.progress}%"></div></div><span class="lt-muted">${esc(ST[i.status] || i.status)}${i.status === "downloading" && i.progress ? ` · ${i.progress}%` : ""}</span></div>`).join("");
   }
   if (dlQueue.history.length) {
-    el.querySelector("#lt-dl-history").innerHTML = dlQueue.history.slice(0, 20).map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><span class="${i.status === 'done' ? 'lt-ok' : 'lt-error'}">${i.status === 'done' ? '✅' : '❌'} ${esc(i.error || 'Готово')}</span></div>`).join("");
+    el.querySelector("#lt-dl-history").innerHTML = dlQueue.history.slice(0, 20).map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><span class="${i.status === 'done' ? 'lt-ok' : 'lt-error'}">${i.status === 'done' ? '✅' : '❌'} ${esc(i.error || 'Готово')}</span>${i.status !== 'done' && retryFns.has(i.id) ? ` <button class="lt-btn lt-btn-sm" data-dl-retry="${i.id}">Повторить</button>` : ''}</div>`).join("");
   }
 
   try {
@@ -877,7 +935,7 @@ async function renderDownloads(el) {
     m.innerHTML = `<table class="lt-table"><thead><tr><th>Файл</th><th>Depot</th><th>Размер</th><th>Дата</th></tr></thead><tbody>
       ${manifests.slice(0, 50).map(m => `<tr><td><code>${esc(m.name)}</code></td><td>${m.depot_id}</td><td>${fmtSize(m.size)}</td><td>${fmtDate(m.modified)}</td></tr>`).join("")}</tbody></table>
       ${manifests.length > 50 ? `<div class="lt-muted">…и ещё ${manifests.length - 50}</div>` : ''}`;
-  } catch (e) { el.querySelector("#lt-manifests").innerHTML = `<div class="lt-error">${esc(e.message)}</div>`; }
+  } catch (e) { el.querySelector("#lt-manifests").innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -898,10 +956,7 @@ async function renderSettings(el) {
 
     <div class="lt-section"><h3>Общие</h3>
     <div class="lt-settings-list">
-      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-autoupdate" ${cfg.autoupdate ? 'checked' : ''}> Авто-обновление lua при старте Steam</label>
-      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-traylock" ${cfg.tray_lock ? 'checked' : ''}> Блокировка в трей (EnableTrayLock)</label>
       <label class="lt-info-row"><input type="checkbox" id="lt-cfg-encrypt" ${cfg.encrypt_token ? 'checked' : ''}> Шифровать токен lua.tools (DPAPI)</label>
-      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-doh" ${cfg.use_doh ? 'checked' : ''}> Использовать DNS-over-HTTPS</label>
       <label class="lt-info-row"><input type="checkbox" id="lt-cfg-hardfilter" ${cfg.filter_hardware !== false ? 'checked' : ''}> Скрывать hardware AppID из поиска</label>
     </div></div>
 
@@ -946,12 +1001,19 @@ async function renderSettings(el) {
   updateAuthUI();
   const saveOn = (id, key, boolVal = true) => el.querySelector(id)?.addEventListener("change", async e => {
     const v = boolVal ? e.target.checked : e.target.value;
-    try { await invoke("lt_config_set", { key, value: v }); toast("Сохранено", "ok"); } catch (err) { toast(err.message || err, "error"); }
+    try { await invoke("lt_config_set", { key, value: v }); ltConfig[key] = v; toast("Сохранено", "ok"); } catch (err) { toast(errMsg(err), "error"); }
   });
-  saveOn("#lt-cfg-autoupdate", "autoupdate");
-  saveOn("#lt-cfg-traylock", "tray_lock");
-  saveOn("#lt-cfg-encrypt", "encrypt_token");
-  saveOn("#lt-cfg-doh", "use_doh");
+  el.querySelector("#lt-cfg-encrypt")?.addEventListener("change", async e => {
+    const on = e.target.checked;
+    try {
+      await invoke("lt_config_set", { key: "encrypt_token", value: on });
+      ltConfig.encrypt_token = on;
+      if (on) await persistEncryptedSession(ltSession());
+      else await invoke("lt_config_set", { key: "session_enc", value: null });
+      ltSetSessionPersist(!on);
+      toast("Сохранено", "ok");
+    } catch (err) { e.target.checked = !on; toast(errMsg(err), "error"); }
+  });
   saveOn("#lt-cfg-hardfilter", "filter_hardware");
   saveOn("#lt-src-sushi", "src_sushi");
   saveOn("#lt-src-hubcap", "src_hubcap");
@@ -1067,31 +1129,28 @@ async function openDetail(appId) {
         ${luaInfo ? renderLuaEntries(luaInfo, appId) : ""}
       </div>`;
 
-    el.querySelector("#lt-save-var-btn")?.addEventListener("click", async () => {
+    el.querySelector("#lt-save-var-btn")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
       const n = el.querySelector("#lt-save-var-name").value.trim();
       if (!n) { toast("Введите имя", "warn"); return; }
-      await invoke("lt_save_variant", { appId, name: n });
-      toast(`Вариант «${n}» сохранён`, "ok");
-      openDetail(appId);
-    });
-    el.querySelectorAll(".lt-var-load-d").forEach(b => b.addEventListener("click", async () => {
-      await invoke("lt_load_variant", { appId, name: b.dataset.vn });
-      toast(`Загружен: ${b.dataset.vn}`, "ok");
-      openDetail(appId);
+      try { await invoke("lt_save_variant", { appId, name: n }); toast(`Вариант «${n}» сохранён`, "ok"); openDetail(appId); }
+      catch (err) { toast(errMsg(err), "error"); }
     }));
-    el.querySelectorAll(".lt-vault-restore-btn").forEach(b => b.addEventListener("click", async () => {
+    el.querySelectorAll(".lt-var-load-d").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
+      try { await invoke("lt_load_variant", { appId, name: b.dataset.vn }); toast(`Загружен: ${b.dataset.vn}`, "ok"); openDetail(appId); }
+      catch (err) { toast(errMsg(err), "error"); }
+    })));
+    el.querySelectorAll(".lt-vault-restore-btn").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
       const hash = b.dataset.vaultHash;
       if (!await confirmAction("Восстановить эту версию? Текущий файл будет сохранён в историю.")) return;
-      await invoke("lt_vault_restore", { appId, hash });
-      toast("Версия восстановлена", "ok");
-      openDetail(appId);
-    }));
+      try { await invoke("lt_vault_restore", { appId, hash }); toast("Версия восстановлена", "ok"); openDetail(appId); }
+      catch (err) { toast(errMsg(err), "error"); }
+    })));
     el.querySelector("#lt-launch-btn")?.addEventListener("click", async () => {
       const args = el.querySelector("#lt-launch-args")?.value?.trim() || "";
       try { await invoke("lt_launch_game", { appId, args }); toast("Запуск через Steam…", "ok"); }
       catch (e) { toast(`Ошибка: ${e}`, "error"); }
     });
-  } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-btn">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(e.message)}</div>`; }
+  } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-btn">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(errMsg(e))}</div>`; }
 }
 
 const EXTRA_LABELS = { token: "AccessToken", appTicket: "AppTicket", eTicket: "ETicket", stat: "SteamID (stats)", cdKey: "CD-Key" };
@@ -1142,52 +1201,78 @@ async function confirmAction(msg) {
     const overlay = document.createElement("div");
     overlay.className = "lt-confirm-overlay";
     overlay.innerHTML = `<div class="lt-confirm-box"><p>${esc(msg)}</p><div class="lt-confirm-actions"><button class="lt-btn lt-btn-primary lt-confirm-yes">Да</button><button class="lt-btn lt-confirm-no">Отмена</button></div></div>`;
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
     document.body.appendChild(overlay);
-    overlay.querySelector(".lt-confirm-yes").addEventListener("click", () => { overlay.remove(); resolve(true); });
-    overlay.querySelector(".lt-confirm-no").addEventListener("click", () => { overlay.remove(); resolve(false); });
+    const prevFocus = document.activeElement;
+    const done = v => {
+      document.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+      try { prevFocus?.focus?.(); } catch { /* noop */ }
+      resolve(v);
+    };
+    const onKey = e => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(false); }
+      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); done(true); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    overlay.addEventListener("click", e => { if (e.target === overlay) done(false); });
+    overlay.querySelector(".lt-confirm-yes").addEventListener("click", () => done(true));
+    overlay.querySelector(".lt-confirm-no").addEventListener("click", () => done(false));
+    overlay.querySelector(".lt-confirm-no").focus();
   });
 }
 
 async function doDownload(appId, source, gameName) {
   if (!ltIsLoggedIn()) { toast("Войдите в lua.tools", "warn"); return; }
+  const key = `${appId}:${source}`;
+  if (inflight.has(key)) { toast("Уже скачивается", "info"); return; }
+  inflight.add(key);
   const url = ltManifestDownloadUrl(appId, source, gameName);
   const item = queueAdd(`${gameName || appId} (${source})`, appId);
   item._url = url;
-  if (currentPage === "downloads") renderPage("downloads");
+  retryFns.set(item.id, () => doDownload(appId, source, gameName));
+  queueStatus(item, "downloading", 0);
   toast("Скачиваю…", "info");
   try {
     const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
-    item.progress = 50;
+    queueStatus(item, "installing", 100);
     toast("Устанавливаю…", "info");
     const result = await invoke("lt_install_file", { path: filePath, appId, autoUpdate: true });
     const parts = [];
     if (result.lua_installed) parts.push("lua");
     if (result.manifest_count) parts.push(`${result.manifest_count} манифестов`);
     if (result.failed.length) parts.push(`ошибки: ${result.failed.join(", ")}`);
-    queueDone(item, true);
+    queueDone(item, !result.failed.length, result.failed.length ? result.failed.join(", ") : null);
     toast(parts.join(", ") || "Готово", result.failed.length ? "warn" : "ok");
     installedList = await invoke("lt_list_installed");
     openDetail(appId);
   } catch (e) {
-    queueDone(item, false, e.message || String(e));
-    toast(`Ошибка: ${e.message || e}`, "error");
-  }
+    queueDone(item, false, errMsg(e));
+    toast(`Ошибка: ${errMsg(e)}`, "error");
+  } finally { inflight.delete(key); }
 }
 
 async function doAltDownload(appId, alt, gameName) {
+  const key = `${appId}:${alt}`;
+  if (inflight.has(key)) { toast("Уже скачивается", "info"); return; }
+  inflight.add(key);
   const item = queueAdd(`${gameName || appId} (${alt})`, appId);
-  if (currentPage === "downloads") renderPage("downloads");
+  retryFns.set(item.id, () => doAltDownload(appId, alt, gameName));
+  queueStatus(item, "downloading", 0);
   try {
     let zipPath;
     if (alt === "sushi") zipPath = await invoke("lt_source_sushitools", { appId });
     else if (alt === "hubcap") zipPath = await invoke("lt_hubcap_fetch", { appId, apiKey: ltConfig.hubcap_key });
     else throw new Error("Неизвестный источник");
+    queueStatus(item, "installing", 100);
     const result = await invoke("lt_install_file", { path: zipPath, appId, autoUpdate: true });
     queueDone(item, true);
     toast(`Установлено${result.manifest_count ? `: ${result.manifest_count} манифестов` : ""}`, "ok");
     installedList = await invoke("lt_list_installed");
     openDetail(appId);
-  } catch (e) { queueDone(item, false, e.message || String(e)); toast(e.message || e, "error"); }
+  } catch (e) { queueDone(item, false, errMsg(e)); toast(errMsg(e), "error"); }
+  finally { inflight.delete(key); }
 }
 
 async function doRemove(appId) {
@@ -1197,7 +1282,7 @@ async function doRemove(appId) {
     toast(`${appId} удалён`, "ok");
     installedList = await invoke("lt_list_installed");
     renderPage(currentPage);
-  } catch (e) { toast(e.message || String(e), "error"); }
+  } catch (e) { toast(errMsg(e), "error"); }
 }
 
 async function doToggleLock(appId, depotId, lock) {
@@ -1207,7 +1292,7 @@ async function doToggleLock(appId, depotId, lock) {
     await invoke("lt_write_lua", { appId, content: text });
     toast(lock ? `${depotId} откреплён` : `${depotId} закреплён`, "ok");
     openDetail(appId);
-  } catch (e) { toast(e.message, "error"); }
+  } catch (e) { toast(errMsg(e), "error"); }
 }
 
 async function doToggleEnable(appId, depotId, enable) {
@@ -1217,13 +1302,13 @@ async function doToggleEnable(appId, depotId, enable) {
     await invoke("lt_write_lua", { appId, content: text });
     toast(enable ? `${depotId} включён` : `${depotId} отключён`, "ok");
     openDetail(appId);
-  } catch (e) { toast(e.message, "error"); }
+  } catch (e) { toast(errMsg(e), "error"); }
 }
 
 async function doRestartSteam() {
   if (!await confirmAction("Перезапустить Steam?")) return;
   toast("Перезапускаю…", "info");
-  try { await invoke("lt_restart_steam"); toast("Steam перезапущен", "ok"); } catch (e) { toast(e.message, "error"); }
+  try { await invoke("lt_restart_steam"); toast("Steam перезапущен", "ok"); } catch (e) { toast(errMsg(e), "error"); }
 }
 
 async function getTmpDir() {
@@ -1231,19 +1316,42 @@ async function getTmpDir() {
   return (await import("@tauri-apps/api/path").then(m => m.tempDir())) + "luatools";
 }
 
-function doLogin() {
-  window.open(ltLoginUrl(), "_blank", "width=500,height=700");
-  toast("Войдите через Discord", "info");
+let loginPending = false;
+async function doLogin() {
+  if (loginPending) { toast("Вход уже открыт в браузере", "info"); return; }
+  loginPending = true;
+  toast("Войдите через Discord в открывшемся браузере", "info");
+  try {
+    const tokens = await invoke("lt_oauth_login", { loginUrl: ltLoginUrl() });
+    let user = null;
+    try { user = await ltFetchUser(tokens.access_token); } catch { /* имя не критично */ }
+    ltSaveSession({ ...tokens, user });
+    updateAuthUI();
+    toast("Вошли в lua.tools", "ok");
+  } catch (e) {
+    toast(`Вход не выполнен: ${errMsg(e)}`, "error");
+  } finally { loginPending = false; }
 }
 
-window.__ltSetSession = async (data) => {
-  ltSaveSession(data);
-  if (ltConfig?.encrypt_token && data?.access_token) {
-    try {
-      const enc = await invoke("lt_dpapi_encrypt", { plaintext: JSON.stringify(data) });
-      await invoke("lt_config_set", { key: "session_enc", value: enc });
-    } catch {}
-  }
-  updateAuthUI();
-  toast("Вошли в lua.tools", "ok");
-};
+async function persistEncryptedSession(data) {
+  if (!data?.access_token) return;
+  const enc = await invoke("lt_dpapi_encrypt", { plaintext: JSON.stringify(data) });
+  await invoke("lt_config_set", { key: "session_enc", value: enc });
+}
+
+// Любая смена сессии (вход, refresh токена) — пересохраняем зашифрованную копию.
+ltOnSessionChange(s => {
+  if (ltConfig?.encrypt_token) persistEncryptedSession(s).catch(() => {});
+});
+
+let sessionRestored = false;
+async function restoreEncryptedSession() {
+  if (!ltConfig.encrypt_token) { ltSetSessionPersist(true); return; }
+  ltSetSessionPersist(false); // убирает открытую копию из localStorage
+  if (sessionRestored || ltSession() || !ltConfig.session_enc) return;
+  sessionRestored = true;
+  try {
+    const data = JSON.parse(await invoke("lt_dpapi_decrypt", { ciphertextB64: ltConfig.session_enc }));
+    if (data?.access_token) ltSaveSession(data);
+  } catch { /* другой пользователь Windows / повреждено — просто нужен повторный вход */ }
+}

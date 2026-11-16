@@ -35,9 +35,34 @@ export function ltSession() {
   return _session;
 }
 
+// persist=false — держим только в памяти (при шифровании DPAPI открытая копия
+// в localStorage не нужна: её хранит luatools_config.json в зашифрованном виде).
+let _persist = true;
+export function ltSetSessionPersist(v) {
+  _persist = !!v;
+  try {
+    if (!_persist) localStorage.removeItem(LT_STORAGE_KEY);
+    else if (_session) localStorage.setItem(LT_STORAGE_KEY, JSON.stringify(_session));
+  } catch { /* noop */ }
+}
+
 export function ltSaveSession(s) {
   _session = s;
-  try { localStorage.setItem(LT_STORAGE_KEY, JSON.stringify(s)); } catch { /* noop */ }
+  try {
+    if (_persist) localStorage.setItem(LT_STORAGE_KEY, JSON.stringify(s));
+    else localStorage.removeItem(LT_STORAGE_KEY);
+  } catch { /* noop */ }
+  for (const fn of _sessionListeners) { try { fn(s); } catch { /* noop */ } }
+}
+
+const _sessionListeners = new Set();
+export function ltOnSessionChange(fn) { _sessionListeners.add(fn); }
+
+export async function ltFetchUser(accessToken) {
+  const res = await fetch(`${cfg("supabase_url")}/auth/v1/user`, {
+    headers: { apikey: cfg("supabase_anon_key"), Authorization: `Bearer ${accessToken}` },
+  });
+  return res.ok ? res.json() : null;
 }
 
 export function ltClearSession() {

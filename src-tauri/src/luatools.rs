@@ -10,6 +10,20 @@ use tauri::Emitter;
 // ── Steam detection ─────────────────────────────────────────────────
 
 fn steam_path_from_registry() -> Option<String> {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    static CACHE: Mutex<Option<(Instant, Option<String>)>> = Mutex::new(None);
+    if let Ok(g) = CACHE.lock() {
+        if let Some((at, v)) = g.as_ref() {
+            if at.elapsed() < Duration::from_secs(30) { return v.clone(); }
+        }
+    }
+    let v = steam_path_from_registry_uncached();
+    if let Ok(mut g) = CACHE.lock() { *g = Some((Instant::now(), v.clone())); }
+    v
+}
+
+fn steam_path_from_registry_uncached() -> Option<String> {
     #[cfg(windows)]
     {
         use windows::Win32::System::Registry::*;
@@ -70,8 +84,8 @@ fn stplugin_dir(steam: &str) -> PathBuf {
     PathBuf::from(steam).join("config").join("stplug-in")
 }
 
-// A "real" Windows system DLL (e.g. genuine dwmapi.dll in system32) is >500 KB.
-// A hijack DLL dropped next to steam.exe is typically 50–300 KB and NOT a Windows file.
+// Genuine Windows system DLLs of these names are usually well over 2 MB;
+// a hijack DLL dropped next to steam.exe is typically 50–300 KB.
 // This heuristic avoids flagging Steam's own distribution DLLs as "unlocker installed".
 fn is_small_hijack_dll(p: &Path) -> bool {
     std::fs::metadata(p).map(|m| m.len() < 2_000_000).unwrap_or(false)
@@ -180,11 +194,29 @@ pub fn lt_install_file(path: String, app_id: u64, auto_update: bool) -> Result<I
         .unwrap_or("")
         .to_lowercase();
     match ext.as_str() {
-        "lua" => install_lua(&steam, &path, app_id, auto_update),
+        "lua" => {
+            let id = if app_id != 0 { app_id } else { app_id_from_name(&path).ok_or("Не удалось определить AppID: назовите файл <AppID>.lua")? };
+            install_lua(&steam, &path, id, auto_update)
+        }
         "manifest" => install_manifest(&steam, &path),
         "zip" => install_zip(&steam, &path, app_id, auto_update),
         _ => Err(format!("Неизвестный тип файла: .{ext}")),
     }
+}
+
+/// `C:\x\12345.lua` / `dir/12345.lua` → 12345.
+fn app_id_from_name(path: &str) -> Option<u64> {
+    let fname = path.rsplit(['/', '\\']).next()?;
+    let stem = fname.split('.').next()?;
+    stem.parse::<u64>().ok().filter(|&id| id != 0)
+}
+
+/// Активная (не закомментированная) строка `setManifestid` — без учёта регистра.
+fn has_active_pin(lua: &str) -> bool {
+    lua.lines().any(|l| {
+        let t = l.trim_start();
+        !t.starts_with("--") && t.to_lowercase().contains("setmanifestid")
+    })
 }
 
 fn comment_out_manifest_pins(lua: &str) -> String {
@@ -251,10 +283,13 @@ fn install_zip(steam: &str, zip_path: &str, app_id: u64, auto_update: bool) -> R
         let lower = name.to_lowercase();
 
         if lower.ends_with(".lua") {
-            let tmp = std::env::temp_dir().join(format!("lt_{}.lua", app_id));
+            // AppID берём из аргумента, иначе из имени файла (`<appid>.lua`).
+            let lua_id = if app_id != 0 { app_id } else { app_id_from_name(&name).unwrap_or(0) };
+            if lua_id == 0 { failed.push(format!("{name}: не удалось определить AppID")); continue; }
+            let tmp = std::env::temp_dir().join(format!("lt_{}.lua", lua_id));
             match extract_entry(&mut entry, &tmp) {
                 Ok(()) => {
-                    match install_lua(steam, &tmp.to_string_lossy(), app_id, auto_update) {
+                    match install_lua(steam, &tmp.to_string_lossy(), lua_id, auto_update) {
                         Ok(_) => lua_installed = true,
                         Err(_) => failed.push(name),
                     }
@@ -263,10 +298,10 @@ fn install_zip(steam: &str, zip_path: &str, app_id: u64, auto_update: bool) -> R
                 Err(_) => failed.push(name),
             }
         } else if lower.ends_with(".manifest") {
-            let fname = Path::new(&name)
-                .file_name()
-                .map(|f| f.to_string_lossy().into_owned())
-                .unwrap_or(name.clone());
+            let fname = match zip_entry_dest(Path::new(""), &entry).and_then(|(p, _)| p.file_name().map(|f| f.to_owned())) {
+                Some(f) => f,
+                None => { failed.push(name); continue; }
+            };
             let dest = depot_dir.join(&fname);
             if dest.exists() {
                 manifest_count += 1;
@@ -296,6 +331,15 @@ fn extract_entry(entry: &mut zip::read::ZipFile<'_, impl std::io::Read>, dest: &
     Ok(())
 }
 
+/// Путь записи zip-элемента внутри `base`: отбрасывает абсолютные пути и `..`
+/// (zip-slip), чтобы архив не мог писать за пределы целевой папки.
+fn zip_entry_dest<R: std::io::Read>(base: &Path, entry: &zip::read::ZipFile<'_, R>) -> Option<(PathBuf, String)> {
+    let rel = entry.enclosed_name()?;
+    if rel.as_os_str().is_empty() { return None; }
+    let rel_str = rel.to_string_lossy().replace('\\', "/");
+    Some((base.join(&rel), rel_str))
+}
+
 fn stamp_now(path: &Path) {
     let _ = filetime::set_file_mtime(path, filetime::FileTime::now());
 }
@@ -307,6 +351,7 @@ pub fn lt_remove_lua(app_id: u64) -> Result<(), String> {
     let steam = steam_path_from_registry().ok_or("Steam не найден")?;
     let path = stplugin_dir(&steam).join(format!("{app_id}.lua"));
     if path.exists() {
+        vault_capture(&steam, app_id, "before-remove");
         std::fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -320,6 +365,7 @@ pub fn lt_write_lua(app_id: u64, content: String) -> Result<(), String> {
     let dir = stplugin_dir(&steam);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = dir.join(format!("{app_id}.lua"));
+    vault_capture(&steam, app_id, "before-edit");
     std::fs::write(&dest, &content).map_err(|e| e.to_string())?;
     stamp_now(&dest);
     Ok(())
@@ -373,24 +419,34 @@ pub fn lt_plugin_status() -> PluginStatus {
         else if stplug_dll.exists() { Some(stplug_dll.to_string_lossy().into_owned()) }
         else if stplug_dll64.exists() { Some(stplug_dll64.to_string_lossy().into_owned()) }
         else { hijack_dll.as_ref().map(|p| p.to_string_lossy().into_owned()) };
+    // No real version for externally-installed DLLs — show the file date instead.
     let version = dll_path.as_ref().and_then(|p| {
-        let meta = std::fs::metadata(p).ok()?;
-        let modified = meta.modified().ok()?;
-        let dt = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
-        let secs = dt.as_secs();
-        let days = secs / 86400;
-        let y = 1970 + days / 365;
-        let m = (days % 365) / 30 + 1;
-        let d = (days % 365) % 30 + 1;
-        Some(format!("{y}.{m}.{d}"))
+        let modified = std::fs::metadata(p).ok()?.modified().ok()?;
+        let secs = modified.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs() as i64;
+        let (y, m, d) = civil_from_days(secs.div_euclid(86400));
+        Some(format!("от {d:02}.{m:02}.{y}"))
     });
     PluginStatus { installed, version, dll_path, mode }
+}
+
+/// Days since 1970-01-01 → (year, month, day), proleptic Gregorian (H. Hinnant).
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    (y, m, d)
 }
 
 // ── Restart Steam ──────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn lt_restart_steam() -> Result<(), String> {
+pub async fn lt_restart_steam() -> Result<(), String> {
     #[cfg(windows)]
     {
         let steam = steam_path_from_registry().ok_or("Steam не найден")?;
@@ -398,10 +454,7 @@ pub fn lt_restart_steam() -> Result<(), String> {
         if !exe.exists() {
             return Err("steam.exe не найден".into());
         }
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "steam.exe"])
-            .output();
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        stop_steam().await;
         std::process::Command::new(&exe)
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -526,36 +579,52 @@ pub fn lt_apply_fix(app_id: u64, zip_path: String) -> Result<FixApplyResult, Str
 
     let backup_dir = fix_backup_dir(&steam, app_id);
     std::fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    let manifest_path = backup_dir.join("_manifest.txt");
+
+    // Повторное применение: файлы, уже записанные прошлым фиксом, остаются в
+    // манифесте, а их бэкап (оригинал) НЕ перезаписывается пропатченной копией.
+    let mut manifest: Vec<String> = std::fs::read_to_string(&manifest_path)
+        .map(|s| s.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+        .unwrap_or_default();
 
     let file = std::fs::File::open(&zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    let game_root = PathBuf::from(&game_path);
 
     let mut extracted = 0u32;
     let mut backed_up = false;
-    let mut manifest = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
 
     for i in 0..archive.len() {
-        let mut entry = match archive.by_index(i) { Ok(e) => e, Err(_) => continue };
+        let mut entry = match archive.by_index(i) { Ok(e) => e, Err(e) => { errors.push(e.to_string()); continue } };
         if entry.is_dir() { continue; }
-        let name = entry.name().to_string();
-        let dest = PathBuf::from(&game_path).join(&name);
-
-        if dest.exists() {
-            let bak = backup_dir.join(&name);
-            if let Some(p) = bak.parent() { let _ = std::fs::create_dir_all(p); }
-            let _ = std::fs::copy(&dest, &bak);
+        let Some((dest, name)) = zip_entry_dest(&game_root, &entry) else {
+            errors.push(format!("{}: недопустимый путь", entry.name()));
+            continue;
+        };
+        let already_tracked = manifest.iter().any(|m| m == &name);
+        let bak = backup_dir.join(&name);
+        if dest.exists() && !already_tracked && !bak.exists() {
+            if let Some(p) = bak.parent() { std::fs::create_dir_all(p).map_err(|e| e.to_string())?; }
+            // Без бэкапа оригинал не трогаем — иначе откат станет невозможен.
+            if let Err(e) = std::fs::copy(&dest, &bak) {
+                errors.push(format!("{name}: бэкап не создан ({e})"));
+                continue;
+            }
             backed_up = true;
         }
-        manifest.push(name.clone());
-
-        if let Some(p) = dest.parent() { let _ = std::fs::create_dir_all(p); }
-        let _ = extract_entry(&mut entry, &dest);
-        extracted += 1;
+        if !already_tracked { manifest.push(name.clone()); }
+        match extract_entry(&mut entry, &dest) {
+            Ok(()) => extracted += 1,
+            Err(e) => errors.push(format!("{name}: {e}")),
+        }
     }
 
-    let manifest_path = backup_dir.join("_manifest.txt");
-    let _ = std::fs::write(&manifest_path, manifest.join("\n"));
+    std::fs::write(&manifest_path, manifest.join("\n")).map_err(|e| e.to_string())?;
 
+    if !errors.is_empty() {
+        return Err(format!("Распаковано {extracted}, ошибки:\n{}", errors.join("\n")));
+    }
     Ok(FixApplyResult { files_extracted: extracted, backup_created: backed_up })
 }
 
@@ -571,21 +640,34 @@ pub fn lt_revert_fix(app_id: u64) -> Result<u32, String> {
 
     let manifest = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
     let mut reverted = 0u32;
+    let mut errors: Vec<String> = Vec::new();
 
     for line in manifest.lines() {
         let line = line.trim();
         if line.is_empty() { continue; }
-        let game_file = PathBuf::from(&game_path).join(line);
-        let backup_file = backup_dir.join(line);
-        if backup_file.exists() {
-            let _ = std::fs::copy(&backup_file, &game_file);
-            reverted += 1;
+        // Манифест лежит на диске — не доверяем ему пути с `..`.
+        let rel = Path::new(line);
+        if rel.is_absolute() || rel.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
+            errors.push(format!("{line}: недопустимый путь"));
+            continue;
+        }
+        let game_file = PathBuf::from(&game_path).join(rel);
+        let backup_file = backup_dir.join(rel);
+        let res = if backup_file.exists() {
+            std::fs::copy(&backup_file, &game_file).map(|_| ())
         } else if game_file.exists() {
-            let _ = std::fs::remove_file(&game_file);
-            reverted += 1;
+            std::fs::remove_file(&game_file)
+        } else { continue };
+        match res {
+            Ok(()) => reverted += 1,
+            Err(e) => errors.push(format!("{line}: {e}")),
         }
     }
 
+    if !errors.is_empty() {
+        // Бэкап не удаляем — откат можно повторить (например, после закрытия игры).
+        return Err(format!("Откачено {reverted}, ошибки:\n{}", errors.join("\n")));
+    }
     let _ = std::fs::remove_dir_all(&backup_dir);
     Ok(reverted)
 }
@@ -684,6 +766,7 @@ pub fn lt_load_variant(app_id: u64, name: String) -> Result<(), String> {
     let variant_path = variants_dir(&steam, app_id).join(format!("{safe_name}.lua"));
     if !variant_path.exists() { return Err("Вариант не найден".into()); }
     let dest = stplugin_dir(&steam).join(format!("{app_id}.lua"));
+    vault_capture(&steam, app_id, "before-variant");
     std::fs::copy(&variant_path, &dest).map_err(|e| e.to_string())?;
     stamp_now(&dest);
     Ok(())
@@ -788,27 +871,47 @@ pub fn lt_vault_restore(app_id: u64, hash: String) -> Result<(), String> {
 pub async fn lt_install_mode(mode: String) -> Result<String, String> {
     let steam = steam_path_from_registry().ok_or("Steam не найден")?;
 
-    if is_steam_running() {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "steam.exe"])
-            .output();
-        std::thread::sleep(std::time::Duration::from_secs(3));
+    if !matches!(mode.as_str(), "bst" | "ost" | "ltsp" | "custom") {
+        return Err(format!("Неизвестный режим: {mode}"));
     }
+    let was_running = stop_steam().await;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build().map_err(|e| e.to_string())?;
 
-    match mode.as_str() {
+    let res = match mode.as_str() {
         "bst" => install_bst(&client, &steam).await,
         "ost" => install_ost(&client, &steam).await,
         "ltsp" => install_ltsp(&client, &steam).await,
-        "custom" => {
+        _ => {
             remove_unlocker_dlls(&steam);
             Ok("Custom режим установлен".into())
         }
-        _ => Err(format!("Неизвестный режим: {mode}")),
+    };
+    // Steam was running before — bring it back regardless of the outcome.
+    if was_running { start_steam(&steam); }
+    res
+}
+
+/// Kills steam.exe if it runs and waits (without blocking the async runtime)
+/// until the process is gone. Returns whether Steam was running.
+async fn stop_steam() -> bool {
+    let running = tauri::async_runtime::spawn_blocking(is_steam_running).await.unwrap_or(false);
+    if !running { return false; }
+    let _ = tauri::async_runtime::spawn_blocking(|| {
+        std::process::Command::new("taskkill").args(["/F", "/IM", "steam.exe"]).output()
+    }).await;
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        if !tauri::async_runtime::spawn_blocking(is_steam_running).await.unwrap_or(false) { break; }
     }
+    true
+}
+
+fn start_steam(steam: &str) {
+    let exe = PathBuf::from(steam).join("steam.exe");
+    if exe.exists() { let _ = std::process::Command::new(exe).spawn(); }
 }
 
 async fn install_ltsp(client: &reqwest::Client, steam: &str) -> Result<String, String> {
@@ -843,13 +946,22 @@ fn remove_unlocker_dlls(steam: &str) {
         let mp = PathBuf::from(steam).join("config").join("project-desktop").join("mode.json");
         let _ = std::fs::remove_file(&mp);
     }
-    // Belt-and-suspenders: also sweep the common names.
+    // Fallback for installs made before mode.json existed. Generic hijack names
+    // (version.dll, winmm.dll…) are only touched when there is clear evidence of
+    // an unlocker (its payload DLL) — otherwise they may belong to another tool.
     let steam_pb = PathBuf::from(steam);
-    for name in ["BetterSteamTools.dll", "dwmapi.dll", "xinput1_4.dll", "version.dll", "winmm.dll", "user32.dll"] {
-        let p = steam_pb.join(name);
-        if p.exists() && is_small_hijack_dll(&p) { let _ = std::fs::remove_file(&p); }
-    }
     let sp = stplugin_dir(steam);
+    let bst = steam_pb.join("BetterSteamTools.dll");
+    let unlocker_evidence = bst.exists()
+        || sp.join("stplug-in.dll").exists()
+        || sp.join("stplug-in64.dll").exists();
+    if bst.exists() { let _ = std::fs::remove_file(&bst); }
+    if unlocker_evidence {
+        for name in ["dwmapi.dll", "xinput1_4.dll", "version.dll", "winmm.dll", "user32.dll"] {
+            let p = steam_pb.join(name);
+            if p.exists() && is_small_hijack_dll(&p) { let _ = std::fs::remove_file(&p); }
+        }
+    }
     for name in ["stplug-in.dll", "stplug-in64.dll"] {
         let p = sp.join(name);
         if p.exists() { let _ = std::fs::remove_file(&p); }
@@ -857,13 +969,11 @@ fn remove_unlocker_dlls(steam: &str) {
 }
 
 #[tauri::command]
-pub fn lt_uninstall_mode() -> Result<(), String> {
+pub async fn lt_uninstall_mode() -> Result<(), String> {
     let steam = steam_path_from_registry().ok_or("Steam не найден")?;
-    if is_steam_running() {
-        let _ = std::process::Command::new("taskkill").args(["/F", "/IM", "steam.exe"]).output();
-        std::thread::sleep(std::time::Duration::from_secs(2));
-    }
+    let was_running = stop_steam().await;
     remove_unlocker_dlls(&steam);
+    if was_running { start_steam(&steam); }
     Ok(())
 }
 
@@ -1011,10 +1121,10 @@ pub fn lt_cloud_redirect_state() -> CloudRedirectState {
     let mut enabled = false;
     if toml_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&toml_path) {
-            enabled = content.lines().any(|l| {
-                let t = l.trim();
-                t.starts_with("cloud_redirect") && t.contains("true")
-            });
+            enabled = content.lines()
+                .take_while(|l| !l.trim_start().starts_with('['))
+                .any(|l| is_toml_key(l, "cloud_redirect")
+                    && l.split('=').nth(1).map(|v| v.split('#').next().unwrap_or("").trim() == "true").unwrap_or(false));
         }
     }
     let bst = PathBuf::from(&steam).join("BetterSteamTools.dll").exists();
@@ -1026,20 +1136,32 @@ pub fn lt_cloud_redirect_state() -> CloudRedirectState {
 pub fn lt_cloud_redirect_toggle(enable: bool) -> Result<(), String> {
     let steam = steam_path_from_registry().ok_or("Steam не найден")?;
     let toml_path = PathBuf::from(&steam).join("opensteamtool.toml");
-    let mut content = std::fs::read_to_string(&toml_path).unwrap_or_default();
-    let key = "cloud_redirect";
-    if content.contains(key) {
-        let new_content: String = content.lines().map(|l| {
-            if l.trim().starts_with(key) {
-                format!("{key} = {enable}")
-            } else { l.to_string() }
-        }).collect::<Vec<_>>().join("\n");
-        content = new_content;
+    let content = std::fs::read_to_string(&toml_path).unwrap_or_default();
+    std::fs::write(&toml_path, set_top_level_bool(&content, "cloud_redirect", enable))
+        .map_err(|e| e.to_string())
+}
+
+/// Is `line` an assignment to exactly `key` (not `key_suffix`)?
+fn is_toml_key(line: &str, key: &str) -> bool {
+    line.trim_start().strip_prefix(key)
+        .map(|rest| rest.trim_start().starts_with('='))
+        .unwrap_or(false)
+}
+
+/// Sets a top-level (before any `[section]`) boolean key, inserting it above the
+/// first section when absent so it never lands inside an unrelated table.
+fn set_top_level_bool(content: &str, key: &str, value: bool) -> String {
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let top_end = lines.iter().position(|l| l.trim_start().starts_with('[')).unwrap_or(lines.len());
+    let assign = format!("{key} = {value}");
+    if let Some(i) = lines[..top_end].iter().position(|l| is_toml_key(l, key)) {
+        lines[i] = assign;
     } else {
-        content.push_str(&format!("\n{key} = {enable}\n"));
+        lines.insert(top_end, assign);
     }
-    std::fs::write(&toml_path, &content).map_err(|e| e.to_string())?;
-    Ok(())
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out
 }
 
 // ── opensteamtool.toml full config ─────────────────────────────────
@@ -1151,10 +1273,11 @@ pub async fn lt_download(
         .headers()
         .get("content-disposition")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| {
-            v.split("filename=").nth(1).map(|s| s.trim_matches('"').to_string())
-        })
-        .unwrap_or_else(|| "download.zip".to_string());
+        .and_then(content_disposition_filename)
+        .unwrap_or_else(|| {
+            let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+            format!("download_{ts}.zip")
+        });
 
     let total = resp.content_length().unwrap_or(0);
     let dest = PathBuf::from(&dest_dir).join(&filename);
@@ -1175,6 +1298,48 @@ pub async fn lt_download(
     }
 
     Ok(dest.to_string_lossy().into_owned())
+}
+
+/// Parses `filename*=UTF-8''…` (preferred) or `filename=…` and strips any path,
+/// so a server can't make us write outside `dest_dir`.
+fn content_disposition_filename(header: &str) -> Option<String> {
+    let mut plain = None;
+    let mut ext = None;
+    for part in header.split(';') {
+        let part = part.trim();
+        if let Some(v) = part.strip_prefix("filename*=") {
+            let v = v.trim_matches('"');
+            let enc = v.splitn(3, '\'').nth(2).unwrap_or(v);
+            ext = Some(percent_decode(enc));
+        } else if let Some(v) = part.strip_prefix("filename=") {
+            plain = Some(v.trim_matches('"').to_string());
+        }
+    }
+    let raw = ext.or(plain)?;
+    let base = raw.rsplit(['/', '\\']).next().unwrap_or("").trim();
+    let clean: String = base.chars()
+        .filter(|c| !matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|') && !c.is_control())
+        .collect();
+    let clean = clean.trim_matches('.').trim().to_string();
+    (!clean.is_empty()).then_some(clean)
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() + 1 && i + 3 <= b.len() {
+            if let Some(v) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -1255,8 +1420,13 @@ pub async fn lt_applist_mirror() -> Result<String, String> {
 pub async fn lt_doh_resolve(host: String) -> Result<Vec<String>, String> {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10))
         .build().map_err(|e| e.to_string())?;
-    let url = format!("https://1.1.1.1/dns-query?name={}&type=A", host);
-    let json: serde_json::Value = client.get(&url)
+    let host = host.trim().trim_end_matches('.');
+    if host.is_empty() || host.len() > 253
+        || !host.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.') {
+        return Err("Некорректное имя хоста".into());
+    }
+    let json: serde_json::Value = client.get("https://1.1.1.1/dns-query")
+        .query(&[("name", host), ("type", "A")])
         .header("accept", "application/dns-json")
         .send().await.map_err(|e| e.to_string())?
         .json().await.map_err(|e| e.to_string())?;
@@ -1318,37 +1488,74 @@ pub async fn lt_depot_downloader_install() -> Result<String, String> {
     for i in 0..archive.len() {
         let mut entry = match archive.by_index(i) { Ok(e) => e, Err(_) => continue };
         if entry.is_dir() { continue; }
-        let name = entry.name().to_string();
-        let fname = Path::new(&name).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or(name);
-        let dest = dir.join(&fname);
-        let _ = extract_entry(&mut entry, &dest);
+        let Some((rel, _)) = zip_entry_dest(Path::new(""), &entry) else { continue };
+        let Some(fname) = rel.file_name() else { continue };
+        let dest = dir.join(fname);
+        extract_entry(&mut entry, &dest)?;
     }
     let _ = std::fs::remove_file(&tmp);
     Ok(dir.to_string_lossy().into_owned())
 }
 
+/// Downloads one depot. Takes typed IDs instead of a free-form argv so the
+/// webview can't run the binary with arbitrary flags. If the depot key is in
+/// the installed lua and its manifest is in depotcache, they are passed along.
 #[tauri::command]
-pub fn lt_depot_downloader_run(args: Vec<String>) -> Result<String, String> {
+pub async fn lt_depot_downloader_run(app_id: u64, depot_id: u64) -> Result<String, String> {
     let exe = ddm_dir().join("DepotDownloaderMod.exe");
     if !exe.exists() { return Err("DepotDownloaderMod не установлен".into()); }
-    let out = std::process::Command::new(&exe).args(&args)
-        .output().map_err(|e| e.to_string())?;
+    let mut args = vec!["-app".to_string(), app_id.to_string(), "-depot".to_string(), depot_id.to_string()];
+    if let Some(steam) = steam_path_from_registry() {
+        if let Ok(lua) = std::fs::read_to_string(stplugin_dir(&steam).join(format!("{app_id}.lua"))) {
+            if let Some(key) = depot_key_from_lua(&lua, depot_id) {
+                let keys = ddm_dir().join(format!("keys_{depot_id}.txt"));
+                if std::fs::write(&keys, format!("{depot_id};{key}\n")).is_ok() {
+                    args.push("-depotkeys".into());
+                    args.push(keys.to_string_lossy().into_owned());
+                }
+            }
+        }
+        if let Ok(rd) = std::fs::read_dir(depotcache_dir(&steam)) {
+            let prefix = format!("{depot_id}_");
+            let newest = rd.flatten()
+                .filter(|e| {
+                    let n = e.file_name().to_string_lossy().into_owned();
+                    n.starts_with(&prefix) && n.ends_with(".manifest")
+                })
+                .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+            if let Some(m) = newest {
+                let name = m.file_name().to_string_lossy().into_owned();
+                if let Some(mid) = name.trim_end_matches(".manifest").split('_').nth(1) {
+                    args.push("-manifest".into());
+                    args.push(mid.to_string());
+                    args.push("-manifestfile".into());
+                    args.push(m.path().to_string_lossy().into_owned());
+                }
+            }
+        }
+    }
+    let out = tauri::async_runtime::spawn_blocking(move || std::process::Command::new(&exe).args(&args).output())
+        .await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() { return Err(format!("{stdout}\n{stderr}")); }
     Ok(stdout)
 }
 
-// ──────────────────────────────────────────────────────────────────
-// SteamAutoCrack launcher
-// ──────────────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn lt_steam_autocrack_launch(exe_path: String, args: Vec<String>) -> Result<(), String> {
-    let p = PathBuf::from(&exe_path);
-    if !p.exists() { return Err("SteamAutoCrack.exe не найден".into()); }
-    std::process::Command::new(&p).args(&args).spawn().map_err(|e| e.to_string())?;
-    Ok(())
+/// `addappid(<depot>, 1, "<hexkey>")` → hexkey (active lines only).
+fn depot_key_from_lua(lua: &str, depot_id: u64) -> Option<String> {
+    let needle = depot_id.to_string();
+    for line in lua.lines() {
+        let t = line.trim_start();
+        if t.starts_with("--") || !t.to_lowercase().starts_with("addappid(") { continue; }
+        let Some(open) = t.find('(') else { continue };
+        let mut parts = t[open + 1..].split(',');
+        if parts.next().map(|p| p.trim()) != Some(needle.as_str()) { continue; }
+        let Some(raw) = parts.nth(1) else { continue };
+        let key = raw.trim().trim_end_matches(')').trim().trim_matches('"');
+        if !key.is_empty() && key.chars().all(|c| c.is_ascii_hexdigit()) { return Some(key.to_string()); }
+    }
+    None
 }
 
 // ── Launch game via Steam ─────────────────────────────────────────
@@ -1423,8 +1630,7 @@ pub async fn lt_steamless_install() -> Result<String, String> {
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
         if entry.is_dir() { continue; }
-        let name = entry.name().to_string();
-        let out_path = dir.join(&name);
+        let Some((out_path, _)) = zip_entry_dest(&dir, &entry) else { continue };
         if let Some(p) = out_path.parent() { let _ = std::fs::create_dir_all(p); }
         let mut buf = vec![];
         std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| e.to_string())?;
@@ -1581,11 +1787,8 @@ fn dpapi_protect(data: &[u8], unprotect: bool) -> Result<Vec<u8>, String> {
             CryptProtectData(&mut input, None, None, None, None, 0, &mut output)
         };
         ok.map_err(|e| format!("DPAPI: {e}"))?;
-        let slice = std::slice::from_raw_parts(output.pbData, output.cbData as usize);
-        let v = slice.to_vec();
-        // LocalFree is not exposed in windows 0.62 — tiny leak per call (few hundred bytes),
-        // acceptable for an infrequent op (login/save session). Alternative would be LocalFree
-        // via FFI, but that pulls another crate in.
+        let v = std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec();
+        let _ = windows::Win32::Foundation::LocalFree(Some(windows::Win32::Foundation::HLOCAL(output.pbData as *mut _)));
         Ok(v)
     }
 }
@@ -1677,12 +1880,121 @@ pub fn lt_list_autoupdate_appids() -> Result<Vec<u64>, String> {
     let mut out = Vec::new();
     for item in installed {
         if let Ok(text) = lt_read_lua(item.app_id) {
-            let has_pin = text.lines().any(|l| {
-                let t = l.trim_start();
-                !t.starts_with("--") && t.contains("setManifestid")
-            });
-            if !has_pin { out.push(item.app_id); }
+            if !has_active_pin(&text) { out.push(item.app_id); }
         }
     }
     Ok(out)
+}
+
+// ──────────────────────────────────────────────────────────────────
+// lua.tools login: Supabase OAuth callback on 127.0.0.1:53789
+// ──────────────────────────────────────────────────────────────────
+//
+// Supabase (implicit flow) returns tokens in the URL *fragment*, which the
+// browser never sends to a server. So /callback serves a tiny page that POSTs
+// `location.hash` back to /token; we parse it and return the tokens to JS.
+
+const LT_OAUTH_PORT: u16 = 53789;
+
+const LT_CALLBACK_PAGE: &str = "<!doctype html><meta charset=utf-8><title>LuaTools</title>\
+<body style=\"font-family:sans-serif;background:#111;color:#eee;text-align:center;padding-top:20vh\">\
+<p id=m>Завершаю вход…</p><script>\
+fetch('/token',{method:'POST',body:location.hash.slice(1)})\
+.then(r=>{document.getElementById('m').textContent=r.ok?'Готово, можно закрыть вкладку.':'Ошибка входа.'})\
+.catch(()=>{document.getElementById('m').textContent='Ошибка входа.'});\
+</script>";
+
+fn parse_form(s: &str) -> std::collections::HashMap<String, String> {
+    s.split('&').filter_map(|kv| {
+        let (k, v) = kv.split_once('=')?;
+        Some((percent_decode(k), percent_decode(&v.replace('+', " "))))
+    }).collect()
+}
+
+fn http_reply(stream: &mut std::net::TcpStream, status: &str, ctype: &str, body: &str) {
+    let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n{body}", body.len());
+}
+
+fn oauth_wait(listener: std::net::TcpListener) -> Result<serde_json::Value, String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
+    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
+    while std::time::Instant::now() < deadline {
+        let (mut stream, _) = match listener.accept() {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                continue;
+            }
+            Err(e) => return Err(e.to_string()),
+        };
+        let _ = stream.set_nonblocking(false);
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
+        let mut buf = vec![0u8; 16 * 1024];
+        let mut len = 0;
+        // Read headers + (small) body.
+        loop {
+            match stream.read(&mut buf[len..]) {
+                Ok(0) => break,
+                Ok(n) => {
+                    len += n;
+                    let text = String::from_utf8_lossy(&buf[..len]);
+                    if let Some(h_end) = text.find("\r\n\r\n") {
+                        let cl = text[..h_end].lines()
+                            .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                            .unwrap_or(0);
+                        if len >= h_end + 4 + cl || len == buf.len() { break; }
+                    }
+                    if len == buf.len() { break; }
+                }
+                Err(_) => break,
+            }
+        }
+        let text = String::from_utf8_lossy(&buf[..len]).into_owned();
+        let first = text.lines().next().unwrap_or("");
+        if first.starts_with("GET /callback") {
+            // Error responses come back as query params.
+            let query = first.split_whitespace().nth(1).and_then(|p| p.split_once('?')).map(|(_, q)| q).unwrap_or("");
+            let q = parse_form(query);
+            if let Some(err) = q.get("error_description").or(q.get("error")) {
+                http_reply(&mut stream, "200 OK", "text/plain; charset=utf-8", "Вход отменён.");
+                return Err(err.clone());
+            }
+            http_reply(&mut stream, "200 OK", "text/html; charset=utf-8", LT_CALLBACK_PAGE);
+        } else if first.starts_with("POST /token") {
+            let body = text.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
+            let f = parse_form(body.trim());
+            if let Some(err) = f.get("error_description").or(f.get("error")) {
+                http_reply(&mut stream, "400 Bad Request", "text/plain", "error");
+                return Err(err.clone());
+            }
+            let Some(access) = f.get("access_token").filter(|v| !v.is_empty()) else {
+                http_reply(&mut stream, "400 Bad Request", "text/plain", "no token");
+                continue;
+            };
+            http_reply(&mut stream, "200 OK", "text/plain", "ok");
+            let expires_in: u64 = f.get("expires_in").and_then(|v| v.parse().ok()).unwrap_or(3600);
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            return Ok(serde_json::json!({
+                "access_token": access,
+                "refresh_token": f.get("refresh_token"),
+                "expires_at": now + expires_in,
+            }));
+        } else {
+            http_reply(&mut stream, "404 Not Found", "text/plain", "");
+        }
+    }
+    Err("Время ожидания входа истекло".into())
+}
+
+/// Opens the lua.tools (Supabase/Discord) login page in the system browser and
+/// waits up to 5 minutes for the redirect. Returns `{access_token, refresh_token, expires_at}`.
+#[tauri::command]
+pub async fn lt_oauth_login(app: tauri::AppHandle, login_url: String) -> Result<serde_json::Value, String> {
+    use tauri_plugin_opener::OpenerExt;
+    if !login_url.starts_with("https://") { return Err("Некорректный адрес входа".into()); }
+    let listener = std::net::TcpListener::bind(("127.0.0.1", LT_OAUTH_PORT))
+        .map_err(|e| format!("Порт {LT_OAUTH_PORT} занят: {e}"))?;
+    app.opener().open_url(&login_url, None::<&str>).map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || oauth_wait(listener))
+        .await.map_err(|e| e.to_string())?
 }
