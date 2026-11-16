@@ -937,9 +937,7 @@ async fn install_ltsp(client: &reqwest::Client, steam: &str) -> Result<String, S
         .ok_or("Zip не найден")?;
     let dl_url = zip_asset["browser_download_url"].as_str().ok_or("Нет URL")?;
     let tag = json["tag_name"].as_str().unwrap_or("unknown");
-    let bytes = client.get(dl_url).header("User-Agent", "project-desktop")
-        .send().await.map_err(|e| e.to_string())?
-        .bytes().await.map_err(|e| e.to_string())?;
+    let bytes = gh_download(&client, dl_url).await?;
     let tmp = std::env::temp_dir().join("ltsp_release.zip");
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
     extract_unlocker_zip(&tmp, steam, "LTSP", tag)?;
@@ -1005,10 +1003,7 @@ async fn install_bst(client: &reqwest::Client, steam: &str) -> Result<String, St
     let dl_url = zip_asset["browser_download_url"].as_str().ok_or("Нет URL")?;
     let tag = json["tag_name"].as_str().unwrap_or("unknown");
 
-    let bytes = client.get(dl_url)
-        .header("User-Agent", "project-desktop")
-        .send().await.map_err(|e| e.to_string())?
-        .bytes().await.map_err(|e| e.to_string())?;
+    let bytes = gh_download(&client, dl_url).await?;
 
     let tmp = std::env::temp_dir().join("bst_release.zip");
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
@@ -1099,10 +1094,7 @@ async fn install_ost(client: &reqwest::Client, steam: &str) -> Result<String, St
     let dl_url = zip_asset["browser_download_url"].as_str().ok_or("Нет URL")?;
     let tag = json["tag_name"].as_str().unwrap_or("unknown");
 
-    let bytes = client.get(dl_url)
-        .header("User-Agent", "project-desktop")
-        .send().await.map_err(|e| e.to_string())?
-        .bytes().await.map_err(|e| e.to_string())?;
+    let bytes = gh_download(&client, dl_url).await?;
 
     let tmp = std::env::temp_dir().join("ost_release.zip");
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
@@ -1488,9 +1480,7 @@ pub async fn lt_depot_downloader_install() -> Result<String, String> {
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300))
         .build().map_err(|e| e.to_string())?;
-    let bytes = client.get(&url).header("User-Agent", "project-desktop")
-        .send().await.map_err(|e| e.to_string())?
-        .bytes().await.map_err(|e| e.to_string())?;
+    let bytes = gh_download(&client, &url).await?;
     let tmp = std::env::temp_dir().join("ddm.zip");
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
     let file = std::fs::File::open(&tmp).map_err(|e| e.to_string())?;
@@ -1550,6 +1540,33 @@ pub async fn lt_depot_downloader_run(app_id: u64, depot_id: u64) -> Result<Strin
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() { return Err(format!("{stdout}\n{stderr}")); }
     Ok(stdout)
+}
+
+/// Mirrors tried when github.com / objects.githubusercontent.com is blocked or
+/// throttled (common in RU/CN). Each takes the full GitHub URL appended.
+const GH_MIRRORS: &[&str] = &["https://ghfast.top/", "https://ghproxy.net/", "https://gh.ddlc.top/"];
+
+/// Downloads a GitHub release asset, falling back to mirrors on failure.
+async fn gh_download(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> {
+    let is_gh = reqwest::Url::parse(url).ok()
+        .and_then(|u| u.host_str().map(|h| h == "github.com" || h.ends_with(".githubusercontent.com")))
+        .unwrap_or(false);
+    let mut candidates = vec![url.to_string()];
+    if is_gh { candidates.extend(GH_MIRRORS.iter().map(|m| format!("{m}{url}"))); }
+    let mut last_err = String::new();
+    for c in candidates {
+        match client.get(&c).header("User-Agent", "project-desktop").send().await {
+            Ok(r) if r.status().is_success() => match r.bytes().await {
+                // A mirror's error page is HTML; release assets never are.
+                Ok(b) if !b.is_empty() && !b.starts_with(b"<!") && !b.starts_with(b"<html") => return Ok(b.to_vec()),
+                Ok(_) => last_err = format!("{c}: пустой или HTML-ответ"),
+                Err(e) => last_err = e.to_string(),
+            },
+            Ok(r) => last_err = format!("HTTP {}", r.status().as_u16()),
+            Err(e) => last_err = e.to_string(),
+        }
+    }
+    Err(format!("Не удалось скачать с GitHub и зеркал: {last_err}"))
 }
 
 /// `setManifestid(<depot>, "<gid>")` pairs from a lua (commented lines too:
@@ -1682,9 +1699,7 @@ pub async fn lt_steamless_install() -> Result<String, String> {
         .iter().find(|a| a["name"].as_str().map(|n| n.contains("Steamless") && n.ends_with(".zip")).unwrap_or(false))
         .ok_or("Steamless zip not found in release")?;
     let dl_url = asset["browser_download_url"].as_str().ok_or("No download URL")?;
-    let bytes = client.get(dl_url).header("User-Agent", "project-desktop")
-        .send().await.map_err(|e| e.to_string())?
-        .bytes().await.map_err(|e| e.to_string())?;
+    let bytes = gh_download(&client, dl_url).await?;
     let dir = steamless_dir();
     let _ = std::fs::create_dir_all(&dir);
     let zip_path = dir.join("steamless.zip");
