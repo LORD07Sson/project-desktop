@@ -1892,7 +1892,8 @@ async function openDetail(appId) {
     };
     badge("#lt-server-badge", () => apiGet("/lua-cache/has", { appid: appId }).then(r => !!r?.available));
     badge("#lt-hubcap-badge", () => invoke("lt_hubcap_status", { appId, apiKey: ltConfig.hubcap_key })
-      .then(st => !!st && st.available !== false && !/unavail|missing|none/i.test(String(st.status || ""))));
+      // Hubcap: {status: "available", manifest_file_exists: true} — есть; "not_found" и прочее — нет.
+      .then(st => !!st && (st.status === "available" || st.manifest_file_exists === true)));
     badge("#lt-kernelua-badge", () => invoke("lt_kernelua_status", { appId, token: ltConfig.kernelua_token }));
     el.querySelector("#lt-d-copy")?.addEventListener("click", () => {
       navigator.clipboard.writeText(String(appId)).then(() => toast("AppID скопирован", "ok"), () => toast("Буфер обмена недоступен", "error"));
