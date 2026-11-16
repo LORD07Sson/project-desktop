@@ -238,7 +238,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
 
   // Игры: раздачи из JSON-источников, сгруппированные по игре; обложка и описание — из Steam.
   const fmtTs = t => (t ? new Date(t * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
-  const plural = n => (n % 10 === 1 && n % 100 !== 11 ? "раздача" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "раздачи" : "раздач");
+  const plural = (n, one = "раздача", few = "раздачи", many = "раздач") => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 
   async function showGames() {
     const my = ++seq;
@@ -260,7 +260,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       <div class="pc-bar">
         <input type="search" class="pc-search" placeholder="Название игры" value="${esc(gs.q)}" spellcheck="false">
         <select class="pc-select" data-pg-sort>${(d.sorts || []).map(c => `<option value="${esc(c.id)}"${c.id === gs.sort ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
-        <small class="pc-gcount">${d.total ? `${fmtNum(d.total)} игр` : ""}</small>
+        <small class="pc-gcount">${d.total ? `${fmtNum(d.total)} ${plural(d.total, "игра", "игры", "игр")}` : ""}</small>
       </div>
       ${(d.errors || []).length ? `<div class="pc-gnote">Не загрузились источники: ${d.errors.map(x => esc(`${x.name || x.url} (${x.error})`)).join(", ")}</div>` : ""}
       ${pager(gs.page, d.pages || 1, "data-pg-page")}
