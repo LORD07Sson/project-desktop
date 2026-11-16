@@ -1,15 +1,37 @@
 // Парсер и редактор lua-файлов stplug-in (порт LuaFileParser.cs + LuaEditor.cs).
+// Поддерживает все функции OST: addappid, addtoken, setManifestid,
+// setAppTicket, setETicket, setStat, setlegacycdkey, fetch_manifest_code[_ex].
 
 const ADD_APPID_RE = /addappid\s*\(\s*(\d+)\s*(?:,\s*\d+\s*(?:,\s*"([^"]*)")?)?\s*\)[ \t]*(?:--[ \t]*(.*?)[ \t]*)?$/i;
 const SET_MANIFEST_RE = /setManifestid\s*\(\s*(\d+)\s*,\s*"(\d+)"\s*(?:,\s*(\d+))?/i;
+const ADD_TOKEN_RE = /addtoken\s*\(\s*(\d+)\s*,\s*"([^"]*)"\s*\)/i;
+const SET_APP_TICKET_RE = /setappticket\s*\(\s*(\d+)\s*,\s*"([^"]*)"\s*\)/i;
+const SET_ETICKET_RE = /seteticket\s*\(\s*(\d+)\s*,\s*"([^"]*)"\s*\)/i;
+const SET_STAT_RE = /setstat\s*\(\s*(\d+)\s*,\s*"([^"]*)"\s*\)/i;
+const SET_CDKEY_RE = /setlegacycdkey\s*\(\s*(\d+)\s*,\s*"([^"]*)"\s*\)/i;
 const COMMENT_TAIL_RE = /\s*\(\d+\)\s*\S*\s*$/;
 
 function cleanComment(raw) {
   if (!raw?.trim()) return null;
   let s = raw.trim();
-  if (/setManifestid|addappid|addtoken/i.test(s)) return null;
+  if (/setManifestid|addappid|addtoken|setappticket|seteticket|setstat|setlegacycdkey/i.test(s)) return null;
   s = s.replace(COMMENT_TAIL_RE, "").trim();
   return s || null;
+}
+
+function parseExtras(line) {
+  const out = [];
+  for (const [re, kind, valIdx] of [
+    [ADD_TOKEN_RE, "token", 2],
+    [SET_APP_TICKET_RE, "appTicket", 2],
+    [SET_ETICKET_RE, "eTicket", 2],
+    [SET_STAT_RE, "stat", 2],
+    [SET_CDKEY_RE, "cdKey", 2],
+  ]) {
+    const m = re.exec(line);
+    if (m) out.push({ appId: parseInt(m[1], 10), kind, value: m[valIdx] });
+  }
+  return out;
 }
 
 export function parseLua(text, appIdFromName) {
@@ -21,6 +43,7 @@ export function parseLua(text, appIdFromName) {
   const commentedManifests = new Map();
   const disabledOrder = [];
   const disabledKeyById = new Map();
+  const extras = []; // addtoken, setAppTicket, setETicket, setStat, setlegacycdkey
 
   for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
@@ -37,6 +60,12 @@ export function parseLua(text, appIdFromName) {
     }
 
     const stripped = commented ? line.replace(/^-+\s*/, "") : line;
+
+    for (const ex of parseExtras(stripped)) {
+      ex.disabled = commented;
+      extras.push(ex);
+    }
+
     const m = ADD_APPID_RE.exec(stripped);
     if (!m) continue;
     const id = parseInt(m[1], 10);
@@ -93,6 +122,7 @@ export function parseLua(text, appIdFromName) {
     baseAppId,
     entries,
     disabledEntries,
+    extras,
     activePins: Object.fromEntries(manifests),
     commentedPins: Object.fromEntries(commentedManifests),
     depotCount: entries.filter(e => e.hasKey).length,

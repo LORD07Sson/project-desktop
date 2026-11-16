@@ -233,6 +233,7 @@
 .lt-table td { padding: 5px 10px; border-bottom: 1px solid var(--border, rgba(255,255,255,.05)); }
 .lt-table code { font-family: inherit; font-size: .8rem; opacity: .7; }
 .lt-row-disabled { opacity: .4; }
+.lt-extra-val { font-size: .8rem; word-break: break-all; }
 .lt-td-actions { display: flex; gap: 4px; }
 
 /* ── Tools ─────────────────────────────────────────────────────── */

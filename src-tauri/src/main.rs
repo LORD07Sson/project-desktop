@@ -1958,6 +1958,8 @@ fn main() {
             luatools::lt_install_mode,
             luatools::lt_cloud_redirect_state,
             luatools::lt_cloud_redirect_toggle,
+            luatools::lt_ost_config_read,
+            luatools::lt_ost_config_write,
             luatools::lt_check_mode_update,
             luatools::lt_hardware_appids,
             luatools::lt_applist_mirror,

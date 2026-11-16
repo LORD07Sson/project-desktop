@@ -964,6 +964,15 @@ async function renderSettings(el) {
 
     <div class="lt-section"><h3>Данные</h3>
       <button class="lt-btn lt-btn-sm" id="lt-reset-onboard">Сбросить onboarding</button>
+    </div>
+
+    <div class="lt-section"><h3>opensteamtool.toml</h3>
+    <p class="lt-muted">Конфигурация OpenSteamTool / BetterSteamTools. Секции: [manifest], [stats], [inject], [lua], [donate], [remote], [log].</p>
+    <textarea id="lt-ost-editor" class="lt-input" style="width:100%;min-height:200px;font-family:monospace;font-size:.8rem;resize:vertical" placeholder="Загружаю…"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="lt-btn lt-btn-sm" id="lt-ost-reload">Перечитать</button>
+      <button class="lt-btn lt-btn-sm lt-btn-primary" id="lt-ost-save">Сохранить</button>
+    </div>
     </div>`;
   updateAuthUI();
   const saveOn = (id, key, boolVal = true) => el.querySelector(id)?.addEventListener("change", async e => {
@@ -996,6 +1005,16 @@ async function renderSettings(el) {
   });
   el.querySelector("#lt-cef-dismiss")?.addEventListener("click", async () => {
     try { const r = await invoke("lt_cef_dismiss_loaded_apps"); toast(r, "ok"); } catch (e) { toast(String(e), "error"); }
+  });
+
+  const ostEditor = el.querySelector("#lt-ost-editor");
+  const loadOstConfig = async () => {
+    try { ostEditor.value = await invoke("lt_ost_config_read"); } catch (e) { ostEditor.value = ""; ostEditor.placeholder = String(e); }
+  };
+  loadOstConfig();
+  el.querySelector("#lt-ost-reload")?.addEventListener("click", async () => { await loadOstConfig(); toast("Перечитано", "ok"); });
+  el.querySelector("#lt-ost-save")?.addEventListener("click", async () => {
+    try { await invoke("lt_ost_config_write", { content: ostEditor.value }); toast("opensteamtool.toml сохранён", "ok"); } catch (e) { toast(String(e), "error"); }
   });
 }
 
@@ -1106,10 +1125,13 @@ async function openDetail(appId) {
   } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-btn">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(e.message)}</div>`; }
 }
 
+const EXTRA_LABELS = { token: "AccessToken", appTicket: "AppTicket", eTicket: "ETicket", stat: "SteamID (stats)", cdKey: "CD-Key" };
+
 function renderLuaEntries(lua, appId) {
   const all = [...lua.entries.map(e => ({ ...e, disabled: false })), ...lua.disabledEntries.map(e => ({ ...e, disabled: true }))];
-  if (!all.length) return "";
-  return `<div class="lt-entries"><h4>Содержимое lua (${all.length})</h4>
+  if (!all.length && !lua.extras?.length) return "";
+
+  let html = `<div class="lt-entries"><h4>Содержимое lua (${all.length})</h4>
     <table class="lt-table"><thead><tr><th>ID</th><th>Тип</th><th>Комментарий</th><th>Манифест</th><th></th></tr></thead><tbody>
     ${all.map(e => {
       const hasMf = e.manifestId || e.commentedManifestId;
@@ -1122,7 +1144,20 @@ function renderLuaEntries(lua, appId) {
           ${!e.disabled ? `<button class="lt-btn lt-btn-sm lt-btn-danger" data-enable-depot="${e.id}" data-enable-appid="${appId}" data-enable-action="disable" title="Отключить">⊘</button>` : `<button class="lt-btn lt-btn-sm" data-enable-depot="${e.id}" data-enable-appid="${appId}" data-enable-action="enable" title="Включить">✓</button>`}
           ${hasMf && !e.disabled ? (e.manifestId ? `<button class="lt-btn lt-btn-sm" data-lock-depot="${e.id}" data-lock-appid="${appId}" data-lock-action="unlock" title="Открепить">🔓</button>` : `<button class="lt-btn lt-btn-sm" data-lock-depot="${e.id}" data-lock-appid="${appId}" data-lock-action="lock" title="Закрепить">🔒</button>`) : ''}
         </td></tr>`;
-    }).join("")}</tbody></table></div>`;
+    }).join("")}</tbody></table>`;
+
+  if (lua.extras?.length) {
+    html += `<h4 style="margin-top:16px">Расширенные записи OST (${lua.extras.length})</h4>
+      <table class="lt-table"><thead><tr><th>AppID</th><th>Тип</th><th>Значение</th><th></th></tr></thead><tbody>
+      ${lua.extras.map(ex => `<tr class="${ex.disabled ? 'lt-row-disabled' : ''}">
+        <td>${ex.appId}</td>
+        <td>${esc(EXTRA_LABELS[ex.kind] || ex.kind)}</td>
+        <td><code class="lt-extra-val">${esc(ex.value.length > 40 ? ex.value.slice(0, 40) + "…" : ex.value)}</code></td>
+        <td>${ex.disabled ? '<span class="lt-muted">выкл</span>' : ''}</td>
+      </tr>`).join("")}</tbody></table>`;
+  }
+
+  return html + "</div>";
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────

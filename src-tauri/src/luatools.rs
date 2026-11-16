@@ -5,6 +5,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 
 // ── Steam detection ─────────────────────────────────────────────────
 
@@ -1039,6 +1040,25 @@ pub fn lt_cloud_redirect_toggle(enable: bool) -> Result<(), String> {
     }
     std::fs::write(&toml_path, &content).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ── opensteamtool.toml full config ─────────────────────────────────
+
+#[tauri::command]
+pub fn lt_ost_config_read() -> Result<String, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let toml_path = PathBuf::from(&steam).join("opensteamtool.toml");
+    if !toml_path.exists() {
+        return Ok(String::new());
+    }
+    std::fs::read_to_string(&toml_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn lt_ost_config_write(content: String) -> Result<(), String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let toml_path = PathBuf::from(&steam).join("opensteamtool.toml");
+    std::fs::write(&toml_path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
 // ── Check mode version from GitHub ─────────────────────────────────
