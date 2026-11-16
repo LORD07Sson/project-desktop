@@ -58,7 +58,7 @@ jobs:
           workspaces: src-tauri
 
       # vpk ставится dotnet tool'ом; кэш избавляет от скачивания на каждой сборке.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.dotnet/tools
           key: vpk-${{ runner.os }}-v1
@@ -118,7 +118,7 @@ jobs:
           npm ci --prefer-offline --no-audit --no-fund
           npm run build
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: ffmpeg-cache
         with:
           path: |
