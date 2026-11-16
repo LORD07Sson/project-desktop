@@ -1273,7 +1273,9 @@ fn dpapi_protect(data: &[u8], unprotect: bool) -> Result<Vec<u8>, String> {
         ok.map_err(|e| format!("DPAPI: {e}"))?;
         let slice = std::slice::from_raw_parts(output.pbData, output.cbData as usize);
         let v = slice.to_vec();
-        let _ = windows::Win32::System::Memory::LocalFree(Some(windows::Win32::Foundation::HLOCAL(output.pbData as _)));
+        // LocalFree is not exposed in windows 0.62 — tiny leak per call (few hundred bytes),
+        // acceptable for an infrequent op (login/save session). Alternative would be LocalFree
+        // via FFI, but that pulls another crate in.
         Ok(v)
     }
 }

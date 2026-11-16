@@ -366,26 +366,30 @@ async function renderTools(el) {
   });
 
   el.querySelector("#lt-var-list").addEventListener("click", async () => {
-    const appId = el.querySelector("#lt-var-appid").value.trim(); if (!appId) return;
+    const rawId = el.querySelector("#lt-var-appid").value.trim(); if (!rawId) return;
+    const aid = parseInt(rawId, 10); if (!Number.isFinite(aid)) return;
     const r = el.querySelector("#lt-var-result");
     try {
-      const variants = await invoke("lt_list_variants", { appId: parseInt(appId) });
+      const variants = await invoke("lt_list_variants", { appId: aid });
       if (!variants.length) { r.innerHTML = '<div class="lt-empty">Нет сохранённых вариантов</div>'; return; }
-      r.innerHTML = variants.map(v => `<div class="lt-var-row">
-        <span><strong>${esc(v.name)}</strong> · ${v.depot_count} депо, ${v.dlc_count} DLC${v.is_pinned ? ' 📌' : ''}</span>
-        <span class="lt-muted">${esc(v.hash)}</span>
-        <button class="lt-btn lt-btn-sm lt-var-load" data-vname="${esc(v.name)}" data-vappid="${appId}">Загрузить</button>
-        <button class="lt-btn lt-btn-sm lt-btn-danger lt-var-del" data-vname="${esc(v.name)}" data-vappid="${appId}">✕</button>
-      </div>`).join("");
-      r.querySelectorAll(".lt-var-load").forEach(b => b.addEventListener("click", async () => {
-        await invoke("lt_load_variant", { appId: parseInt(b.dataset.vappid), name: b.dataset.vname });
-        toast(`Вариант «${b.dataset.vname}» загружен`, "ok");
-      }));
-      r.querySelectorAll(".lt-var-del").forEach(b => b.addEventListener("click", async () => {
-        await invoke("lt_delete_variant", { appId: parseInt(b.dataset.vappid), name: b.dataset.vname });
-        toast("Удалён", "ok");
-        el.querySelector("#lt-var-list").click();
-      }));
+      r.replaceChildren();
+      for (const v of variants) {
+        const row = document.createElement("div");
+        row.className = "lt-var-row";
+        row.innerHTML = `<span><strong></strong> · ${v.depot_count} депо, ${v.dlc_count} DLC${v.is_pinned ? ' 📌' : ''}</span><span class="lt-muted"></span><button class="lt-btn lt-btn-sm lt-var-load">Загрузить</button><button class="lt-btn lt-btn-sm lt-btn-danger lt-var-del">✕</button>`;
+        row.querySelector("strong").textContent = v.name;
+        row.querySelector(".lt-muted").textContent = v.hash;
+        row.querySelector(".lt-var-load").addEventListener("click", async () => {
+          await invoke("lt_load_variant", { appId: aid, name: v.name });
+          toast(`Вариант «${v.name}» загружен`, "ok");
+        });
+        row.querySelector(".lt-var-del").addEventListener("click", async () => {
+          await invoke("lt_delete_variant", { appId: aid, name: v.name });
+          toast("Удалён", "ok");
+          el.querySelector("#lt-var-list").click();
+        });
+        r.appendChild(row);
+      }
     } catch (e) { r.innerHTML = `<span class="lt-error">${esc(e.message)}</span>`; }
   });
 
