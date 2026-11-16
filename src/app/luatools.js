@@ -136,12 +136,19 @@ async function loadGameNames() {
     try {
       const raw = await invoke("lt_applist_mirror");
       const data = JSON.parse(raw);
-      // applist.morrenus.xyz отдаёт голый массив [{appid, name}], Steam — {applist:{apps}}.
       const apps = Array.isArray(data) ? data : (data?.applist?.apps || data?.apps || []);
       for (const a of apps) if (a.appid && a.name) gameNames[a.appid] = a.name;
-      // Названия пришли позже первой отрисовки — перерисовать списки с AppID вместо имён.
-      if (Object.keys(gameNames).length && ["home", "builds", "manage"].includes(currentPage)) renderPage(currentPage);
-    } catch { /* cache miss — names stay as AppIDs */ }
+    } catch { /* cache miss */ }
+    // SteamTools-Team/GameList — ежедневно обновляемый список (перезаписывает поверх applist)
+    try {
+      invoke("lt_gamelist_sync").catch(() => {});
+      const [gRaw, dRaw] = await Promise.all([
+        invoke("lt_gamelist_read"), invoke("lt_gamelist_dlc_read")
+      ]);
+      for (const list of [JSON.parse(gRaw), JSON.parse(dRaw)])
+        for (const a of list) if (a.appid && a.name) gameNames[a.appid] = a.name;
+    } catch { /* GameList unavailable — applist names are enough */ }
+    if (Object.keys(gameNames).length && ["home", "builds", "manage"].includes(currentPage)) renderPage(currentPage);
     _namesLoading = null;
   })();
   return _namesLoading;
@@ -1331,6 +1338,15 @@ async function renderUtilities(el) {
         <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-hubcap-key" placeholder="API-ключ"><button class="lt-btn" id="lt-hubcap-save">Сохранить</button></div>
         <div id="lt-hubcap-status"></div>
       </div>
+      <div class="lt-tool-card"><h3>🎮 KerneLua</h3><p class="lt-muted">kernelos.org — источник через Discord</p>
+        <div id="lt-kernelua-status">${ltConfig.kernelua_token ? '<span class="lt-ok">Подключено</span>' : '<span class="lt-muted">Не авторизован</span>'}</div>
+        <div class="lt-tool-form" style="margin-top:8px">
+          <button class="lt-btn lt-btn-sm" id="lt-kernelua-open">Открыть сайт</button>
+          <input type="text" class="lt-input" id="lt-kernelua-token" placeholder="Токен (из localStorage)" style="flex:1">
+          <button class="lt-btn" id="lt-kernelua-save">Сохранить</button>
+        </div>
+        <p class="lt-muted" style="font-size:.7rem;margin-top:4px">Авторизуйтесь на сайте → DevTools (F12) → Console → <code>localStorage.getItem('kernelua_token')</code></p>
+      </div>
       <div class="lt-tool-card"><h3>🌐 DNS-over-HTTPS</h3><p class="lt-muted">Обход блокировок через 1.1.1.1</p>
         <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-doh-host" value="lua.tools"><button class="lt-btn" id="lt-doh-resolve">Resolve</button></div>
         <div id="lt-doh-result"></div>
@@ -1451,6 +1467,28 @@ async function renderUtilities(el) {
         exp ? `до ${esc(exp)}` : "",
       ].filter(Boolean).join(" · ");
       s.innerHTML = `<span class="lt-ok">✅ Ключ принят${extra ? ` · ${extra}` : ""}</span>`;
+    } catch (err) { s.innerHTML = `<span class="lt-error">${esc(errMsg(err))}</span>`; }
+  }));
+
+  // KerneLua
+  if (ltConfig.kernelua_token) {
+    const inp = el.querySelector("#lt-kernelua-token");
+    if (inp) inp.value = ltConfig.kernelua_token;
+  }
+  el.querySelector("#lt-kernelua-open")?.addEventListener("click", () => {
+    openExternal("https://kernelos.org/games/");
+  });
+  el.querySelector("#lt-kernelua-save")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    const token = el.querySelector("#lt-kernelua-token").value.trim();
+    const s = el.querySelector("#lt-kernelua-status");
+    if (!token) { s.innerHTML = '<span class="lt-error">Введите токен</span>'; return; }
+    s.innerHTML = '<div class="lt-loading">Проверяю…</div>';
+    try {
+      await invoke("lt_kernelua_validate", { token });
+      await invoke("lt_config_set", { key: "kernelua_token", value: token });
+      ltConfig.kernelua_token = token;
+      s.innerHTML = '<span class="lt-ok">Токен принят</span>';
+      toast("KerneLua подключён", "ok");
     } catch (err) { s.innerHTML = `<span class="lt-error">${esc(errMsg(err))}</span>`; }
   }));
 
@@ -1628,6 +1666,7 @@ async function renderSettings(el) {
     <div class="lt-settings-list">
       <label class="lt-info-row"><input type="checkbox" id="lt-src-sushi" ${cfg.src_sushi !== false ? 'checked' : ''}> sushitools-games-repo</label>
       <label class="lt-info-row"><input type="checkbox" id="lt-src-hubcap" ${cfg.src_hubcap ? 'checked' : ''}> Hubcap (нужен API-ключ)</label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-src-kernelua" ${cfg.src_kernelua ? 'checked' : ''}> KerneLua (нужен Discord)</label>
     </div></div>
 
     <div class="lt-section"><h3>Магазин Steam</h3>
@@ -1681,6 +1720,7 @@ async function renderSettings(el) {
   saveOn("#lt-cfg-hardfilter", "filter_hardware");
   saveOn("#lt-src-sushi", "src_sushi");
   saveOn("#lt-src-hubcap", "src_hubcap");
+  saveOn("#lt-src-kernelua", "src_kernelua");
   saveOn("#lt-cfg-doh", "use_doh");
   el.querySelector("#lt-cfg-store")?.addEventListener("change", async e => {
     const on = e.target.checked;
@@ -1790,6 +1830,7 @@ async function openDetail(appId) {
           ${sourceList.length ? sourceList.map(s => `<button class="lt-btn lt-btn-primary lt-btn-sm" data-dl-source="${esc(s)}" data-appid="${appId}" data-game-name="${esc(name)}">📥 ${esc(s)}</button>`).join(" ") : '<span class="lt-muted">Нет</span>'}
           ${ltConfig.src_sushi !== false ? `<button class="lt-btn lt-btn-sm" data-dl-alt="sushi" data-appid="${appId}" data-game-name="${esc(name)}">📥 sushitools</button>` : ''}
           ${ltConfig.src_hubcap && ltConfig.hubcap_key ? `<button class="lt-btn lt-btn-sm" id="lt-hubcap-btn" data-dl-alt="hubcap" data-appid="${appId}" data-game-name="${esc(name)}">📥 Hubcap <span class="lt-muted" id="lt-hubcap-badge">…</span></button>` : ''}
+          ${ltConfig.src_kernelua && ltConfig.kernelua_token ? `<button class="lt-btn lt-btn-sm" data-dl-alt="kernelua" data-appid="${appId}" data-game-name="${esc(name)}">📥 KerneLua</button>` : ''}
         </div>
 
         ${variants.length ? `<div class="lt-section"><h4>Варианты (${variants.length})</h4>
@@ -1997,6 +2038,7 @@ async function handleStoreAdd(appId) {
     }
     if (src) await doDownload(appId, src, name);
     else if (ltConfig.src_hubcap && ltConfig.hubcap_key) await doAltDownload(appId, "hubcap", name);
+    else if (ltConfig.src_kernelua && ltConfig.kernelua_token) await doAltDownload(appId, "kernelua", name);
     else if (ltConfig.src_sushi !== false) await doAltDownload(appId, "sushi", name);
     else { status(ltIsLoggedIn() ? "Нет источников" : "Войдите в LuaProject"); return; }
     status(installedList.some(i => i.app_id === appId) ? "Добавлено ✓ — перезапустите Steam" : "Не удалось — см. LuaProject");
@@ -2017,6 +2059,7 @@ async function doAltDownload(appId, alt, gameName) {
     let zipPath;
     if (alt === "sushi") zipPath = await invoke("lt_source_sushitools", { appId });
     else if (alt === "hubcap") zipPath = await invoke("lt_hubcap_fetch", { appId, apiKey: ltConfig.hubcap_key });
+    else if (alt === "kernelua") zipPath = await invoke("lt_kernelua_fetch", { appId, token: ltConfig.kernelua_token });
     else throw new Error("Неизвестный источник");
     queueStatus(item, "installing", 100);
     const result = await invoke("lt_install_file", { path: zipPath, appId, autoUpdate: true });

@@ -1801,6 +1801,139 @@ pub fn lt_steamless_run(exe_path: String) -> Result<String, String> {
 }
 
 // ──────────────────────────────────────────────────────────────────
+// KerneLua (kernelos.org) — Discord-auth source
+// ──────────────────────────────────────────────────────────────────
+
+const KERNELUA_BASE: &str = "https://kernelos.org/games";
+
+#[tauri::command]
+pub async fn lt_kernelua_validate(token: String) -> Result<serde_json::Value, String> {
+    let token = token.trim().to_string();
+    if token.is_empty() { return Err("Нет токена KerneLua".into()); }
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(15))
+        .build().map_err(|e| e.to_string())?;
+    let resp = client.get(format!("{KERNELUA_BASE}/v2.php?validate=1"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if resp.status() == reqwest::StatusCode::UNAUTHORIZED || resp.status() == reqwest::StatusCode::FORBIDDEN {
+        return Err("Токен KerneLua истёк или недействителен".into());
+    }
+    if !resp.status().is_success() { return Err(format!("KerneLua HTTP {}", resp.status())); }
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    Ok(serde_json::from_str(&text).unwrap_or(serde_json::json!({"valid": true})))
+}
+
+#[tauri::command]
+pub async fn lt_kernelua_fetch(app_id: u64, token: String) -> Result<String, String> {
+    let token = token.trim().to_string();
+    if token.is_empty() { return Err("Нет токена KerneLua".into()); }
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(120))
+        .build().map_err(|e| e.to_string())?;
+    // Step 1: generate a temporary download link
+    let resp = client.get(format!("{KERNELUA_BASE}/v2.php?gen=1&id={app_id}"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND { return Err("Нет в KerneLua".into()); }
+    if resp.status() == reqwest::StatusCode::UNAUTHORIZED || resp.status() == reqwest::StatusCode::FORBIDDEN {
+        return Err("Токен KerneLua истёк".into());
+    }
+    if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS { return Err("KerneLua: слишком много запросов".into()); }
+    if !resp.status().is_success() { return Err(format!("KerneLua HTTP {}", resp.status())); }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let rel_url = json["url"].as_str().ok_or("KerneLua: нет ссылки на скачивание")?;
+    if !rel_url.starts_with("/games/") { return Err("KerneLua: некорректная ссылка".into()); }
+    // Step 2: download the file from the temporary link
+    let download_url = format!("https://kernelos.org{rel_url}&r={}", rand_hex(8));
+    let resp2 = client.get(&download_url)
+        .header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if !resp2.status().is_success() { return Err(format!("KerneLua download HTTP {}", resp2.status())); }
+    let bytes = resp2.bytes().await.map_err(|e| e.to_string())?;
+    let dest_dir = std::env::temp_dir().join("luatools_dl");
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    let ext = if bytes.starts_with(b"PK") { "zip" } else { "lua" };
+    let dest = dest_dir.join(format!("{app_id}_kernelua.{ext}"));
+    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
+fn rand_hex(n: usize) -> String {
+    use std::fmt::Write;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let seed = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let mut s = String::with_capacity(n * 2);
+    let mut h = seed;
+    for _ in 0..n {
+        h = h.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let _ = write!(s, "{:02x}", (h >> 33) as u8);
+    }
+    s
+}
+
+// ──────────────────────────────────────────────────────────────────
+// SteamTools-Team/GameList — daily-updated game+DLC name lists
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn lt_gamelist_sync() -> Result<serde_json::Value, String> {
+    let cache_dir = dirs_cache_dir();
+    let games_file = cache_dir.join("steamtools-games.json");
+    let dlc_file = cache_dir.join("steamtools-dlc.json");
+    let max_age = std::time::Duration::from_secs(86400);
+    let fresh = |p: &std::path::Path| -> bool {
+        std::fs::metadata(p).ok()
+            .and_then(|m| m.modified().ok())
+            .map(|t| t.elapsed().map(|e| e < max_age).unwrap_or(false))
+            .unwrap_or(false)
+    };
+    if fresh(&games_file) && fresh(&dlc_file) {
+        return Ok(serde_json::json!({"cached": true}));
+    }
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(90))
+        .build().map_err(|e| e.to_string())?;
+    let _ = std::fs::create_dir_all(&cache_dir);
+    let base = "https://raw.githubusercontent.com/SteamTools-Team/GameList/main";
+    let mut updated = 0u32;
+    for (url, dest) in [
+        (format!("{base}/games.json"), &games_file),
+        (format!("{base}/dlc.json"), &dlc_file),
+    ] {
+        if fresh(dest) { continue; }
+        let resp = client.get(&url).header("User-Agent", "project-desktop")
+            .send().await.map_err(|e| e.to_string())?;
+        if !resp.status().is_success() { continue; }
+        let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+        std::fs::write(dest, &bytes).map_err(|e| e.to_string())?;
+        updated += 1;
+    }
+    Ok(serde_json::json!({"updated": updated}))
+}
+
+#[tauri::command]
+pub fn lt_gamelist_read() -> Result<String, String> {
+    let cache_dir = dirs_cache_dir();
+    let games_file = cache_dir.join("steamtools-games.json");
+    if games_file.exists() {
+        std::fs::read_to_string(&games_file).map_err(|e| e.to_string())
+    } else {
+        Ok("[]".into())
+    }
+}
+
+#[tauri::command]
+pub fn lt_gamelist_dlc_read() -> Result<String, String> {
+    let cache_dir = dirs_cache_dir();
+    let dlc_file = cache_dir.join("steamtools-dlc.json");
+    if dlc_file.exists() {
+        std::fs::read_to_string(&dlc_file).map_err(|e| e.to_string())
+    } else {
+        Ok("[]".into())
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────
 // Sushitools / Hubcap sources
 // ──────────────────────────────────────────────────────────────────
 

@@ -2006,6 +2006,11 @@ fn main() {
             luatools::lt_steamless_info,
             luatools::lt_steamless_install,
             luatools::lt_steamless_run,
+            luatools::lt_kernelua_validate,
+            luatools::lt_kernelua_fetch,
+            luatools::lt_gamelist_sync,
+            luatools::lt_gamelist_read,
+            luatools::lt_gamelist_dlc_read,
         ])
         .setup(|app| {
             // Первая строка в файловом логе за сеанс — якорь, от которого
