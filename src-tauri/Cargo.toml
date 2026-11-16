@@ -119,6 +119,10 @@ windows = { version = "0.62", features = [
     "Win32_Storage_FileSystem",
     # luatools.rs: доступ к реестру Steam для определения пути установки.
     "Win32_System_Registry",
+    # luatools.rs: DPAPI шифрование токена lua.tools (как в оригинальном
+    # LuaTools-App через System.Security.Cryptography.ProtectedData).
+    "Win32_Security_Cryptography",
+    "Win32_System_Memory",
 ] }
 # Тосты под своим AUMID (desktop_notify.rs) — та же версия, что тянет
 # tauri-plugin-notification, отдельной копии крейта не появляется.

@@ -325,3 +325,13 @@
 
 .lt-user { opacity: .7; font-size: .85rem; }
 .lt-auth-area { display: flex; align-items: center; gap: 8px; }
+
+/* Markdown rendering */
+.lt-md { font-size: .88rem; line-height: 1.5; }
+.lt-md h3 { font-size: 1rem; margin: 10px 0 6px; }
+.lt-md h4 { font-size: .95rem; margin: 8px 0 4px; }
+.lt-md p { margin: 6px 0; }
+.lt-md ul { padding-left: 20px; margin: 6px 0; }
+.lt-md code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 4px; font-size: .85em; }
+.lt-md a { color: var(--accent, #6dd5fa); text-decoration: none; }
+.lt-md a:hover { text-decoration: underline; }

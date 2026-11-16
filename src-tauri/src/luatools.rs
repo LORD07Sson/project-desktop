@@ -698,12 +698,45 @@ pub async fn lt_install_mode(mode: String) -> Result<String, String> {
     match mode.as_str() {
         "bst" => install_bst(&client, &steam).await,
         "ost" => install_ost(&client, &steam).await,
+        "ltsp" => install_ltsp(&client, &steam).await,
         "custom" => {
             remove_unlocker_dlls(&steam);
             Ok("Custom режим установлен".into())
         }
         _ => Err(format!("Неизвестный режим: {mode}")),
     }
+}
+
+async fn install_ltsp(client: &reqwest::Client, steam: &str) -> Result<String, String> {
+    remove_unlocker_dlls(steam);
+    let json: serde_json::Value = client.get("https://api.github.com/repos/madoiscool/LTSP/releases/latest")
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let assets = json["assets"].as_array().ok_or("Нет assets")?;
+    let zip_asset = assets.iter()
+        .find(|a| a["name"].as_str().map(|n| n.ends_with(".zip")).unwrap_or(false))
+        .ok_or("Zip не найден")?;
+    let dl_url = zip_asset["browser_download_url"].as_str().ok_or("Нет URL")?;
+    let tag = json["tag_name"].as_str().unwrap_or("unknown");
+    let bytes = client.get(dl_url).header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?
+        .bytes().await.map_err(|e| e.to_string())?;
+    let tmp = std::env::temp_dir().join("ltsp_release.zip");
+    std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
+    let file = std::fs::File::open(&tmp).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    for i in 0..archive.len() {
+        let mut entry = match archive.by_index(i) { Ok(e) => e, Err(_) => continue };
+        if entry.is_dir() { continue; }
+        let name = entry.name().to_string();
+        let fname = Path::new(&name).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or(name.clone());
+        if fname.ends_with(".dll") {
+            let dest = PathBuf::from(steam).join(&fname);
+            let _ = extract_entry(&mut entry, &dest);
+        }
+    }
+    let _ = std::fs::remove_file(&tmp);
+    Ok(format!("LTSP {tag} установлен"))
 }
 
 fn remove_unlocker_dlls(steam: &str) {
@@ -856,9 +889,27 @@ pub async fn lt_check_mode_update(mode: String) -> Result<ModeVersionInfo, Strin
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build().map_err(|e| e.to_string())?;
+    // BST uses a plain-text latest.toml, not GitHub releases
+    if mode == "bst" {
+        let toml_url = "https://raw.githubusercontent.com/madoiscool/BetterSteamTools/refs/heads/updates/opensteamtool/latest.toml";
+        let text = client.get(toml_url).header("User-Agent", "project-desktop")
+            .send().await.map_err(|e| e.to_string())?
+            .text().await.map_err(|e| e.to_string())?;
+        let mut tag = None;
+        let mut dl = None;
+        for line in text.lines() {
+            let t = line.trim();
+            if let Some(v) = t.strip_prefix("version") {
+                if let Some(val) = v.split('=').nth(1) { tag = Some(val.trim().trim_matches('"').to_string()); }
+            } else if let Some(v) = t.strip_prefix("url") {
+                if let Some(val) = v.split('=').nth(1) { dl = Some(val.trim().trim_matches('"').to_string()); }
+            }
+        }
+        return Ok(ModeVersionInfo { mode, latest_tag: tag, download_url: dl });
+    }
     let repo = match mode.as_str() {
-        "bst" => "madoiscool/BetterSteamTools",
         "ost" => "madoiscool/OST-Nightly",
+        "ltsp" => "madoiscool/LTSP",
         _ => return Err("Неизвестный режим".into()),
     };
     let url = format!("https://api.github.com/repos/{repo}/releases/latest");
@@ -924,4 +975,402 @@ pub async fn lt_download(
     std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
 
     Ok(dest.to_string_lossy().into_owned())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Hardware AppID filter (jsnli/steamappidlist) — 24h cache
+// ──────────────────────────────────────────────────────────────────
+
+fn dirs_cache_dir() -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
+    PathBuf::from(base).join("project-desktop").join("lt_cache")
+}
+
+#[tauri::command]
+pub async fn lt_hardware_appids() -> Result<Vec<u64>, String> {
+    let cache_dir = dirs_cache_dir();
+    let cache_file = cache_dir.join("hardware_appid.json");
+    let max_age = std::time::Duration::from_secs(86400);
+    if let Ok(meta) = std::fs::metadata(&cache_file) {
+        if let Ok(mtime) = meta.modified() {
+            if mtime.elapsed().map(|e| e < max_age).unwrap_or(false) {
+                if let Ok(text) = std::fs::read_to_string(&cache_file) {
+                    if let Ok(v) = serde_json::from_str::<Vec<u64>>(&text) { return Ok(v); }
+                }
+            }
+        }
+    }
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20))
+        .build().map_err(|e| e.to_string())?;
+    let text = client.get("https://raw.githubusercontent.com/jsnli/steamappidlist/master/data/hardware_appid.json")
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
+        .text().await.map_err(|e| e.to_string())?;
+    let v: Vec<serde_json::Value> = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let ids: Vec<u64> = v.iter().filter_map(|x| x.get("appid").and_then(|a| a.as_u64()).or_else(|| x.as_u64())).collect();
+    let _ = std::fs::create_dir_all(&cache_dir);
+    let _ = std::fs::write(&cache_file, serde_json::to_string(&ids).unwrap_or_default());
+    Ok(ids)
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Applist mirror
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn lt_applist_mirror() -> Result<String, String> {
+    let cache_dir = dirs_cache_dir();
+    let cache_file = cache_dir.join("steam-applist.json");
+    let max_age = std::time::Duration::from_secs(86400 * 3);
+    if let Ok(meta) = std::fs::metadata(&cache_file) {
+        if let Ok(mtime) = meta.modified() {
+            if mtime.elapsed().map(|e| e < max_age).unwrap_or(false) {
+                if let Ok(text) = std::fs::read_to_string(&cache_file) { return Ok(text); }
+            }
+        }
+    }
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(60))
+        .build().map_err(|e| e.to_string())?;
+    let mut text: Option<String> = None;
+    if let Ok(r) = client.get("https://applist.morrenus.xyz/")
+        .header("User-Agent", "project-desktop").send().await {
+        if r.status().is_success() { text = r.text().await.ok(); }
+    }
+    if text.is_none() {
+        let r = client.get("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+            .header("User-Agent", "project-desktop").send().await
+            .map_err(|e| e.to_string())?;
+        text = r.text().await.ok();
+    }
+    let out = text.ok_or("Не удалось загрузить applist")?;
+    let _ = std::fs::create_dir_all(&cache_dir);
+    let _ = std::fs::write(&cache_file, &out);
+    Ok(out)
+}
+
+// ──────────────────────────────────────────────────────────────────
+// DNS-over-HTTPS resolve (1.1.1.1)
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn lt_doh_resolve(host: String) -> Result<Vec<String>, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10))
+        .build().map_err(|e| e.to_string())?;
+    let url = format!("https://1.1.1.1/dns-query?name={}&type=A", host);
+    let json: serde_json::Value = client.get(&url)
+        .header("accept", "application/dns-json")
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let ips: Vec<String> = json["Answer"].as_array().map(|a| a.iter()
+        .filter_map(|x| x["data"].as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
+    Ok(ips)
+}
+
+// ──────────────────────────────────────────────────────────────────
+// DepotDownloaderMod
+// ──────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct DdmInfo {
+    pub installed: bool,
+    pub exe_path: Option<String>,
+    pub latest_tag: Option<String>,
+    pub download_url: Option<String>,
+}
+
+fn ddm_dir() -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
+    PathBuf::from(base).join("project-desktop").join("DepotDownloaderMod")
+}
+
+#[tauri::command]
+pub async fn lt_depot_downloader_info() -> Result<DdmInfo, String> {
+    let dir = ddm_dir();
+    let exe = dir.join("DepotDownloaderMod.exe");
+    let installed = exe.exists();
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
+        .build().map_err(|e| e.to_string())?;
+    let json: serde_json::Value = client.get("https://api.github.com/repos/mendy-tools/DepotDownloaderMod/releases/latest")
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let tag = json["tag_name"].as_str().map(String::from);
+    let dl = json["assets"].as_array().and_then(|a| a.iter()
+        .find(|x| x["name"].as_str().map(|n| n.ends_with(".zip") && n.to_lowercase().contains("win")).unwrap_or(false))
+        .or_else(|| a.iter().find(|x| x["name"].as_str().map(|n| n.ends_with(".zip")).unwrap_or(false)))
+        .and_then(|x| x["browser_download_url"].as_str().map(String::from)));
+    Ok(DdmInfo { installed, exe_path: installed.then(|| exe.to_string_lossy().into_owned()), latest_tag: tag, download_url: dl })
+}
+
+#[tauri::command]
+pub async fn lt_depot_downloader_install() -> Result<String, String> {
+    let info = lt_depot_downloader_info().await?;
+    let url = info.download_url.ok_or("Нет URL для скачивания")?;
+    let dir = ddm_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300))
+        .build().map_err(|e| e.to_string())?;
+    let bytes = client.get(&url).header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?
+        .bytes().await.map_err(|e| e.to_string())?;
+    let tmp = std::env::temp_dir().join("ddm.zip");
+    std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
+    let file = std::fs::File::open(&tmp).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    for i in 0..archive.len() {
+        let mut entry = match archive.by_index(i) { Ok(e) => e, Err(_) => continue };
+        if entry.is_dir() { continue; }
+        let name = entry.name().to_string();
+        let fname = Path::new(&name).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or(name);
+        let dest = dir.join(&fname);
+        let _ = extract_entry(&mut entry, &dest);
+    }
+    let _ = std::fs::remove_file(&tmp);
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub fn lt_depot_downloader_run(args: Vec<String>) -> Result<String, String> {
+    let exe = ddm_dir().join("DepotDownloaderMod.exe");
+    if !exe.exists() { return Err("DepotDownloaderMod не установлен".into()); }
+    let out = std::process::Command::new(&exe).args(&args)
+        .output().map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    if !out.status.success() { return Err(format!("{stdout}\n{stderr}")); }
+    Ok(stdout)
+}
+
+// ──────────────────────────────────────────────────────────────────
+// SteamAutoCrack launcher
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn lt_steam_autocrack_launch(exe_path: String, args: Vec<String>) -> Result<(), String> {
+    let p = PathBuf::from(&exe_path);
+    if !p.exists() { return Err("SteamAutoCrack.exe не найден".into()); }
+    std::process::Command::new(&p).args(&args).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Sushitools / Hubcap sources
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn lt_source_sushitools(app_id: u64) -> Result<String, String> {
+    let url = format!("https://raw.githubusercontent.com/sushi-dev55-alt/sushitools-games-repo-alt/refs/heads/main/{app_id}.zip");
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120))
+        .build().map_err(|e| e.to_string())?;
+    let resp = client.get(&url).header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(format!("Нет в sushitools: HTTP {}", resp.status())); }
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    let dest_dir = std::env::temp_dir().join("luatools_dl");
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    let dest = dest_dir.join(format!("{app_id}_sushi.zip"));
+    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub async fn lt_hubcap_validate(api_key: String) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
+        .build().map_err(|e| e.to_string())?;
+    let resp = client.get("https://hubcapmanifest.com/api/validate")
+        .header("X-API-Key", &api_key)
+        .header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
+    resp.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn lt_hubcap_fetch(app_id: u64, api_key: String) -> Result<String, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120))
+        .build().map_err(|e| e.to_string())?;
+    let url = format!("https://hubcapmanifest.com/api/games/{app_id}");
+    let resp = client.get(&url)
+        .header("X-API-Key", &api_key)
+        .header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(format!("Hubcap HTTP {}", resp.status())); }
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    let dest_dir = std::env::temp_dir().join("luatools_dl");
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    let dest = dest_dir.join(format!("{app_id}_hubcap.zip"));
+    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// MFG local plugin HTTP API (127.0.0.1:6767)
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn lt_mfg_api(endpoint: String, method: Option<String>, body: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10))
+        .build().map_err(|e| e.to_string())?;
+    let url = format!("http://127.0.0.1:6767{}", if endpoint.starts_with('/') { endpoint.clone() } else { format!("/{endpoint}") });
+    let m = method.unwrap_or_else(|| "GET".into()).to_uppercase();
+    let mut rb = match m.as_str() {
+        "POST" => client.post(&url),
+        "PUT" => client.put(&url),
+        "DELETE" => client.delete(&url),
+        _ => client.get(&url),
+    };
+    if let Some(b) = body { rb = rb.json(&b); }
+    let resp = rb.send().await.map_err(|e| format!("MFG API недоступен: {e}"))?;
+    if !resp.status().is_success() { return Err(format!("MFG HTTP {}", resp.status())); }
+    resp.json().await.or_else(|_| Ok(serde_json::json!({"ok": true})))
+}
+
+#[tauri::command]
+pub async fn lt_mfg_ping() -> bool {
+    let client = match reqwest::Client::builder().timeout(std::time::Duration::from_secs(2)).build() {
+        Ok(c) => c, Err(_) => return false
+    };
+    client.get("http://127.0.0.1:6767/").send().await.map(|r| r.status().is_success()).unwrap_or(false)
+}
+
+// ──────────────────────────────────────────────────────────────────
+// CEF/Steam WebHelper debug (127.0.0.1:8080/json)
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn lt_cef_targets() -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5))
+        .build().map_err(|e| e.to_string())?;
+    let targets: serde_json::Value = client.get("http://127.0.0.1:8080/json")
+        .send().await.map_err(|e| format!("Steam CEF debug порт недоступен: {e}"))?
+        .json().await.map_err(|e| e.to_string())?;
+    Ok(targets)
+}
+
+#[tauri::command]
+pub async fn lt_cef_dismiss_loaded_apps() -> Result<String, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5))
+        .build().map_err(|e| e.to_string())?;
+    let resp = client.post("http://127.0.0.1:6767/dismiss-loaded-apps")
+        .send().await.map_err(|e| e.to_string())?;
+    if resp.status().is_success() { return Ok("Загруженные приложения сброшены".into()); }
+    Err(format!("HTTP {}", resp.status()))
+}
+
+// ──────────────────────────────────────────────────────────────────
+// DPAPI encrypt/decrypt (Windows)
+// ──────────────────────────────────────────────────────────────────
+
+#[cfg(windows)]
+fn dpapi_protect(data: &[u8], unprotect: bool) -> Result<Vec<u8>, String> {
+    use windows::Win32::Security::Cryptography::{CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB};
+    let mut input = CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr() as *mut u8 };
+    let mut output = CRYPT_INTEGER_BLOB::default();
+    unsafe {
+        let ok = if unprotect {
+            CryptUnprotectData(&mut input, None, None, None, None, 0, &mut output)
+        } else {
+            CryptProtectData(&mut input, None, None, None, None, 0, &mut output)
+        };
+        ok.map_err(|e| format!("DPAPI: {e}"))?;
+        let slice = std::slice::from_raw_parts(output.pbData, output.cbData as usize);
+        let v = slice.to_vec();
+        let _ = windows::Win32::System::Memory::LocalFree(Some(windows::Win32::Foundation::HLOCAL(output.pbData as _)));
+        Ok(v)
+    }
+}
+
+#[tauri::command]
+pub fn lt_dpapi_encrypt(plaintext: String) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        use base64::Engine;
+        let bytes = dpapi_protect(plaintext.as_bytes(), false)?;
+        Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+    }
+    #[cfg(not(windows))]
+    { Ok(plaintext) }
+}
+
+#[tauri::command]
+pub fn lt_dpapi_decrypt(ciphertext_b64: String) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        use base64::Engine;
+        let bytes = base64::engine::general_purpose::STANDARD.decode(&ciphertext_b64).map_err(|e| e.to_string())?;
+        let out = dpapi_protect(&bytes, true)?;
+        String::from_utf8(out).map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    { Ok(ciphertext_b64) }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Promo code redeem
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn lt_redeem_code(code: String, token: String) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
+        .build().map_err(|e| e.to_string())?;
+    let resp = client.post("https://lua.tools/api/auth/code/redeem")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "project-desktop")
+        .json(&serde_json::json!({ "code": code }))
+        .send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let json: serde_json::Value = resp.json().await.unwrap_or(serde_json::json!({}));
+    if !status.is_success() {
+        let msg = json["error"].as_str().unwrap_or("Ошибка").to_string();
+        return Err(msg);
+    }
+    Ok(json)
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Persistent config (autoupdate, tray_lock, hubcap_key, etc.)
+// ──────────────────────────────────────────────────────────────────
+
+fn config_path() -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
+    PathBuf::from(base).join("project-desktop").join("luatools_config.json")
+}
+
+#[tauri::command]
+pub fn lt_config_get() -> serde_json::Value {
+    std::fs::read_to_string(config_path()).ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(serde_json::json!({}))
+}
+
+#[tauri::command]
+pub fn lt_config_set(key: String, value: serde_json::Value) -> Result<(), String> {
+    let mut cfg = lt_config_get();
+    if let Some(obj) = cfg.as_object_mut() { obj.insert(key.clone(), value); }
+    else {
+        let mut m = serde_json::Map::new();
+        m.insert(key.clone(), value);
+        cfg = serde_json::Value::Object(m);
+    }
+    let p = config_path();
+    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
+    std::fs::write(&p, serde_json::to_string_pretty(&cfg).unwrap_or_default()).map_err(|e| e.to_string())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// List AppIDs with lua in auto-update mode (no active manifest pins)
+// ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn lt_list_autoupdate_appids() -> Result<Vec<u64>, String> {
+    let installed = lt_list_installed()?;
+    let mut out = Vec::new();
+    for item in installed {
+        if let Ok(text) = lt_read_lua(item.app_id) {
+            let has_pin = text.lines().any(|l| {
+                let t = l.trim_start();
+                !t.starts_with("--") && t.contains("setManifestid")
+            });
+            if !has_pin { out.push(item.app_id); }
+        }
+    }
+    Ok(out)
 }

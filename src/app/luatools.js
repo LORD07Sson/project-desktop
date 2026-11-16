@@ -12,6 +12,22 @@ import {
 import { parseLua, setDepotLocked, setDepotEnabled } from "./luatools-parser.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Minimal markdown → HTML (as Markdig does for fix descriptions): headings, bold, italic, code, links, lists.
+function md(src) {
+  if (!src) return "";
+  let html = esc(src)
+    .replace(/^### (.+)$/gm, "<h4>$1</h4>")
+    .replace(/^## (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^# (.+)$/gm, "<h3>$1</h3>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.+<\/li>\n?)+/g, m => "<ul>" + m + "</ul>")
+    .replace(/\n\n+/g, "</p><p>");
+  return "<p>" + html + "</p>";
+}
 const fmtSize = b => b > 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : (b / 1024).toFixed(1) + " KB";
 const fmtDate = ts => ts ? new Date(ts * 1000).toLocaleDateString() : "—";
 
@@ -21,6 +37,8 @@ let installedList = [];
 let pluginStatus = null;
 let currentPage = "home";
 let onboardingDone = false;
+let hardwareAppIds = new Set();
+let ltConfig = {};
 
 // ── Download queue (in-memory) ─────────────────────────────────────
 const dlQueue = { items: [], history: [] };
@@ -88,6 +106,9 @@ function attachGlobal(body) {
     const dl = e.target.closest("[data-dl-source]");
     if (dl) { doDownload(parseInt(dl.dataset.appid, 10), dl.dataset.dlSource, dl.dataset.gameName || ""); return; }
 
+    const alt = e.target.closest("[data-dl-alt]");
+    if (alt) { doAltDownload(parseInt(alt.dataset.appid, 10), alt.dataset.dlAlt, alt.dataset.gameName || ""); return; }
+
     const rm = e.target.closest("[data-remove-appid]");
     if (rm) { e.stopPropagation(); doRemove(parseInt(rm.dataset.removeAppid, 10)); return; }
 
@@ -122,6 +143,10 @@ async function refreshAll(body) {
   try { steamInfo = await invoke("lt_steam_info"); } catch { steamInfo = null; }
   try { pluginStatus = await invoke("lt_plugin_status"); } catch { pluginStatus = null; }
   try { installedList = await invoke("lt_list_installed"); } catch { installedList = []; }
+  try { ltConfig = await invoke("lt_config_get") || {}; } catch { ltConfig = {}; }
+  if (ltConfig.filter_hardware !== false) {
+    invoke("lt_hardware_appids").then(ids => { hardwareAppIds = new Set(ids); }).catch(() => {});
+  }
   const ver = body.querySelector("#lt-sidebar-ver");
   if (ver) ver.textContent = pluginStatus?.installed ? `v${pluginStatus.version || "?"}` : "";
 
@@ -243,7 +268,8 @@ function renderAdd(el) {
     const r = el.querySelector("#lt-results");
     r.innerHTML = '<div class="lt-loading">Ищу…</div>';
     try {
-      const items = /^\d+$/.test(q) ? [await ltGameDetails(q)].filter(Boolean).map(d => ({ appId: parseInt(q), name: d.name, icon: d.header_image })) : await ltSearchSteam(q);
+      let items = /^\d+$/.test(q) ? [await ltGameDetails(q)].filter(Boolean).map(d => ({ appId: parseInt(q), name: d.name, icon: d.header_image })) : await ltSearchSteam(q);
+      if (ltConfig.filter_hardware !== false && hardwareAppIds.size) items = items.filter(i => !hardwareAppIds.has(i.appId));
       if (!items.length) { r.innerHTML = '<div class="lt-empty">Ничего не нашлось</div>'; return; }
       r.innerHTML = items.map(i => `<button class="lt-card lt-card-search" data-appid="${i.appId}"><img src="${esc(i.icon)}" alt="" loading="lazy"><div class="lt-card-info"><span class="lt-card-name">${esc(i.name)}</span><span class="lt-card-id">${i.appId}</span></div></button>`).join("");
     } catch (e) { r.innerHTML = `<div class="lt-error">${esc(e.message)}</div>`; }
@@ -299,6 +325,31 @@ async function renderTools(el) {
         <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-var-appid" placeholder="AppID"><button class="lt-btn" id="lt-var-list">Показать</button></div>
         <div id="lt-var-result"></div>
       </div>
+      <div class="lt-tool-card"><h3>⬇ DepotDownloaderMod</h3><p class="lt-muted">Прямая скачка депо без Steam</p>
+        <div id="lt-ddm-info" class="lt-loading">Проверяю…</div>
+        <div class="lt-tool-form" style="margin-top:8px">
+          <input type="text" class="lt-input" id="lt-ddm-appid" placeholder="AppID"><input type="text" class="lt-input" id="lt-ddm-depot" placeholder="DepotID">
+        </div>
+        <div class="lt-tool-form"><button class="lt-btn" id="lt-ddm-install">Установить/Обновить</button><button class="lt-btn lt-btn-primary" id="lt-ddm-run">Скачать</button></div>
+        <pre id="lt-ddm-out" class="lt-muted" style="font-size:.75rem;max-height:200px;overflow:auto;margin-top:8px"></pre>
+      </div>
+      <div class="lt-tool-card"><h3>🎫 Промокод</h3><p class="lt-muted">Активировать промокод lua.tools</p>
+        <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-promo" placeholder="код"><button class="lt-btn lt-btn-primary" id="lt-promo-redeem">Активировать</button></div>
+        <div id="lt-promo-result"></div>
+      </div>
+      <div class="lt-tool-card"><h3>🔑 Hubcap</h3><p class="lt-muted">Альтернативный источник манифестов</p>
+        <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-hubcap-key" placeholder="API-ключ"><button class="lt-btn" id="lt-hubcap-save">Сохранить</button></div>
+        <div id="lt-hubcap-status"></div>
+      </div>
+      <div class="lt-tool-card"><h3>🔌 MFG-плагин API</h3><p class="lt-muted">Локальный HTTP-сервер 127.0.0.1:6767</p>
+        <div id="lt-mfg-status" class="lt-loading">Проверяю…</div>
+        <button class="lt-btn lt-btn-sm" id="lt-mfg-refresh">Обновить</button>
+        <button class="lt-btn lt-btn-sm" id="lt-mfg-dismiss">Сбросить загруженные</button>
+      </div>
+      <div class="lt-tool-card"><h3>🌐 DNS-over-HTTPS</h3><p class="lt-muted">Обход блокировок через 1.1.1.1</p>
+        <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-doh-host" value="lua.tools"><button class="lt-btn" id="lt-doh-resolve">Resolve</button></div>
+        <div id="lt-doh-result"></div>
+      </div>
     </div>`;
 
   el.querySelector("#lt-dlc-gen").addEventListener("click", async () => {
@@ -344,6 +395,71 @@ async function renderTools(el) {
     if (usage) { u.innerHTML = `<div class="lt-usage-bar"><div class="lt-usage-fill" style="width:${Math.min(100, usage.used / usage.limit * 100)}%"></div></div><span>${usage.used} / ${usage.limit}</span>`; }
     else { u.innerHTML = '<span class="lt-muted">Нет данных</span>'; }
   } else { el.querySelector("#lt-usage-info").innerHTML = '<span class="lt-warn">Войдите</span>'; }
+
+  // DepotDownloaderMod
+  invoke("lt_depot_downloader_info").then(info => {
+    const e = el.querySelector("#lt-ddm-info"); if (!e) return;
+    e.innerHTML = info.installed ? `<span class="lt-ok">Установлен</span> · <span class="lt-muted">${esc(info.exe_path || '')}</span>` : '<span class="lt-warn">Не установлен</span>';
+    if (info.latest_tag) e.innerHTML += ` · Последняя: <strong>${esc(info.latest_tag)}</strong>`;
+  }).catch(e => { const r = el.querySelector("#lt-ddm-info"); if (r) r.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; });
+  el.querySelector("#lt-ddm-install")?.addEventListener("click", async () => {
+    try { toast("Скачиваю DepotDownloaderMod…", "info"); const path = await invoke("lt_depot_downloader_install"); toast("Установлено: " + path, "ok"); renderTools(el); }
+    catch (e) { toast(e.message || e, "error"); }
+  });
+  el.querySelector("#lt-ddm-run")?.addEventListener("click", async () => {
+    const appId = el.querySelector("#lt-ddm-appid").value.trim();
+    const depot = el.querySelector("#lt-ddm-depot").value.trim();
+    if (!appId || !depot) { toast("Укажите AppID и DepotID", "warn"); return; }
+    const out = el.querySelector("#lt-ddm-out"); out.textContent = "Запускаю…";
+    try {
+      const result = await invoke("lt_depot_downloader_run", { args: ["-app", appId, "-depot", depot] });
+      out.textContent = result;
+    } catch (e) { out.textContent = e.message || String(e); }
+  });
+
+  // Promo code
+  el.querySelector("#lt-promo-redeem")?.addEventListener("click", async () => {
+    if (!ltIsLoggedIn()) { toast("Войдите", "warn"); return; }
+    const code = el.querySelector("#lt-promo").value.trim(); if (!code) return;
+    const r = el.querySelector("#lt-promo-result"); r.innerHTML = '<div class="lt-loading">…</div>';
+    try {
+      const res = await invoke("lt_redeem_code", { code, token: ltSession()?.access_token });
+      r.innerHTML = `<span class="lt-ok">✅ ${esc(res.message || JSON.stringify(res))}</span>`;
+    } catch (e) { r.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; }
+  });
+
+  // Hubcap
+  invoke("lt_config_get").then(cfg => {
+    const existing = cfg?.hubcap_key; if (existing) el.querySelector("#lt-hubcap-key").value = existing;
+  }).catch(() => {});
+  el.querySelector("#lt-hubcap-save")?.addEventListener("click", async () => {
+    const key = el.querySelector("#lt-hubcap-key").value.trim();
+    const s = el.querySelector("#lt-hubcap-status"); s.innerHTML = '<div class="lt-loading">Валидирую…</div>';
+    try {
+      const res = await invoke("lt_hubcap_validate", { apiKey: key });
+      await invoke("lt_config_set", { key: "hubcap_key", value: key });
+      s.innerHTML = `<span class="lt-ok">✅ Валиден${res?.expiry ? ` · до ${esc(res.expiry)}` : ''}</span>`;
+    } catch (e) { s.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; }
+  });
+
+  // MFG plugin
+  const refreshMfg = () => invoke("lt_mfg_ping").then(ok => {
+    const s = el.querySelector("#lt-mfg-status"); if (s) s.innerHTML = ok ? '<span class="lt-ok">🟢 Доступен</span>' : '<span class="lt-muted">🔴 Недоступен</span>';
+  });
+  refreshMfg();
+  el.querySelector("#lt-mfg-refresh")?.addEventListener("click", refreshMfg);
+  el.querySelector("#lt-mfg-dismiss")?.addEventListener("click", async () => {
+    try { const msg = await invoke("lt_cef_dismiss_loaded_apps"); toast(msg, "ok"); }
+    catch (e) { toast(e.message || e, "error"); }
+  });
+
+  // DoH
+  el.querySelector("#lt-doh-resolve")?.addEventListener("click", async () => {
+    const host = el.querySelector("#lt-doh-host").value.trim(); if (!host) return;
+    const r = el.querySelector("#lt-doh-result"); r.innerHTML = '<div class="lt-loading">…</div>';
+    try { const ips = await invoke("lt_doh_resolve", { host }); r.innerHTML = ips.length ? ips.map(ip => `<code>${esc(ip)}</code>`).join(" ") : '<span class="lt-muted">Нет ответа</span>'; }
+    catch (e) { r.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; }
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -368,6 +484,12 @@ async function renderMode(el) {
         <button class="lt-btn" id="lt-install-ost">${current === 'stplug-in' ? 'Переустановить' : 'Установить'}</button>
       </div>
       <div class="lt-mode-option">
+        <div class="lt-mode-head"><h3>LTSP</h3><span class="lt-badge lt-badge-warn">Альтернатива</span></div>
+        <p class="lt-muted">Третий анлокер (madoiscool/LTSP). Используйте, если BST/OST не работают.</p>
+        <div class="lt-mode-ver" id="lt-ltsp-ver"><span class="lt-loading">Проверяю…</span></div>
+        <button class="lt-btn" id="lt-install-ltsp">Установить</button>
+      </div>
+      <div class="lt-mode-option">
         <h3>Custom</h3>
         <p class="lt-muted">Ручной режим — удаляет DLL-файлы, вы ставите свои.</p>
         <button class="lt-btn lt-btn-danger" id="lt-install-custom">Очистить DLL</button>
@@ -390,6 +512,7 @@ async function renderMode(el) {
   };
   installHandler("#lt-install-bst", "bst");
   installHandler("#lt-install-ost", "ost");
+  installHandler("#lt-install-ltsp", "ltsp");
   installHandler("#lt-install-custom", "custom");
 
   // Check versions
@@ -399,6 +522,10 @@ async function renderMode(el) {
   }).catch(() => {});
   invoke("lt_check_mode_update", { mode: "ost" }).then(v => {
     const e = el.querySelector("#lt-ost-ver");
+    if (e && v.latest_tag) e.innerHTML = `Последняя: <strong>${esc(v.latest_tag)}</strong>`;
+  }).catch(() => {});
+  invoke("lt_check_mode_update", { mode: "ltsp" }).then(v => {
+    const e = el.querySelector("#lt-ltsp-ver");
     if (e && v.latest_tag) e.innerHTML = `Последняя: <strong>${esc(v.latest_tag)}</strong>`;
   }).catch(() => {});
 
@@ -518,7 +645,7 @@ async function openFixDetail(appId) {
         <div class="lt-fix-list" id="lt-fix-items">${!fixes?.length ? '<div class="lt-empty">Нет фиксов</div>' : fixes.map(f => `
           <div class="lt-fix-item">
             <div class="lt-fix-item-head"><strong>${esc(f.title || f.name || 'Fix')}</strong><span class="lt-muted">${esc(f.created_at ? new Date(f.created_at).toLocaleDateString() : '')}</span></div>
-            ${f.description ? `<p class="lt-muted">${esc(f.description)}</p>` : ''}
+            ${f.description ? `<div class="lt-md lt-muted">${md(f.description)}</div>` : ''}
             <div class="lt-fix-item-tags">${(f.tags || []).map(t => `<span class="lt-tag lt-tag-sm">${esc(t.name || t)}</span>`).join("")}</div>
             <div class="lt-fix-item-actions">
               ${f.has_manifest || f.manifest_filename ? `<button class="lt-btn lt-btn-sm lt-btn-primary" data-fix-manifest="${esc(f.id || '')}" data-fix-appid="${appId}">📥 Манифест</button>` : ''}
@@ -616,19 +743,52 @@ async function renderDownloads(el) {
 // SETTINGS
 // ══════════════════════════════════════════════════════════════════
 
-function renderSettings(el) {
+async function renderSettings(el) {
+  let cfg = {};
+  try { cfg = await invoke("lt_config_get") || {}; } catch {}
   el.innerHTML = `<h2 class="lt-page-title">Настройки</h2>
+    <div class="lt-section"><h3>Steam</h3>
     <div class="lt-settings-list">
-      <div class="lt-info-row"><strong>Steam:</strong> ${steamInfo?.path ? esc(steamInfo.path) : '<span class="lt-error">Не найден</span>'}</div>
+      <div class="lt-info-row"><strong>Путь:</strong> ${steamInfo?.path ? esc(steamInfo.path) : '<span class="lt-error">Не найден</span>'}</div>
       <div class="lt-info-row"><strong>stplug-in:</strong> ${steamInfo?.stplugin_dir ? `<code>${esc(steamInfo.stplugin_dir)}</code>` : '—'}</div>
       <div class="lt-info-row"><strong>depotcache:</strong> ${steamInfo?.depotcache_dir ? `<code>${esc(steamInfo.depotcache_dir)}</code>` : '—'}</div>
       <div class="lt-info-row"><strong>Steam запущен:</strong> ${steamInfo?.running ? '<span class="lt-warn">Да</span>' : '<span class="lt-ok">Нет</span>'}</div>
-    </div>
+    </div></div>
+
+    <div class="lt-section"><h3>Общие</h3>
+    <div class="lt-settings-list">
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-autoupdate" ${cfg.autoupdate ? 'checked' : ''}> Авто-обновление lua при старте Steam</label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-traylock" ${cfg.tray_lock ? 'checked' : ''}> Блокировка в трей (EnableTrayLock)</label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-encrypt" ${cfg.encrypt_token ? 'checked' : ''}> Шифровать токен lua.tools (DPAPI)</label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-doh" ${cfg.use_doh ? 'checked' : ''}> Использовать DNS-over-HTTPS</label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-hardfilter" ${cfg.filter_hardware !== false ? 'checked' : ''}> Скрывать hardware AppID из поиска</label>
+    </div></div>
+
+    <div class="lt-section"><h3>Источники</h3>
+    <div class="lt-settings-list">
+      <label class="lt-info-row"><input type="checkbox" id="lt-src-sushi" ${cfg.src_sushi !== false ? 'checked' : ''}> sushitools-games-repo</label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-src-hubcap" ${cfg.src_hubcap ? 'checked' : ''}> Hubcap (нужен API-ключ)</label>
+    </div></div>
+
     <div class="lt-section"><h3>Аккаунт lua.tools</h3><div class="lt-auth-area"></div></div>
+    <div class="lt-section"><h3>Сообщество</h3>
+      <div class="lt-info-row">Discord: <a href="https://discord.gg/luatools" target="_blank">discord.gg/luatools</a></div>
+    </div>
     <div class="lt-section"><h3>Данные</h3>
       <button class="lt-btn lt-btn-sm" id="lt-reset-onboard">Сбросить onboarding</button>
     </div>`;
   updateAuthUI();
+  const saveOn = (id, key, boolVal = true) => el.querySelector(id)?.addEventListener("change", async e => {
+    const v = boolVal ? e.target.checked : e.target.value;
+    try { await invoke("lt_config_set", { key, value: v }); toast("Сохранено", "ok"); } catch (err) { toast(err.message || err, "error"); }
+  });
+  saveOn("#lt-cfg-autoupdate", "autoupdate");
+  saveOn("#lt-cfg-traylock", "tray_lock");
+  saveOn("#lt-cfg-encrypt", "encrypt_token");
+  saveOn("#lt-cfg-doh", "use_doh");
+  saveOn("#lt-cfg-hardfilter", "filter_hardware");
+  saveOn("#lt-src-sushi", "src_sushi");
+  saveOn("#lt-src-hubcap", "src_hubcap");
   el.querySelector("#lt-reset-onboard")?.addEventListener("click", () => { try { localStorage.removeItem("lt_onboarded"); } catch {} toast("Onboarding сброшен", "ok"); });
 }
 
@@ -675,6 +835,8 @@ async function openDetail(appId) {
         <div class="lt-detail-sources">
           <h4>Источники${sourceList.length ? ` (${sourceList.length})` : ""}</h4>
           ${sourceList.length ? sourceList.map(s => `<button class="lt-btn lt-btn-primary lt-btn-sm" data-dl-source="${esc(s)}" data-appid="${appId}" data-game-name="${esc(name)}">📥 ${esc(s)}</button>`).join(" ") : '<span class="lt-muted">Нет</span>'}
+          ${ltConfig.src_sushi !== false ? `<button class="lt-btn lt-btn-sm" data-dl-alt="sushi" data-appid="${appId}" data-game-name="${esc(name)}">📥 sushitools</button>` : ''}
+          ${ltConfig.src_hubcap && ltConfig.hubcap_key ? `<button class="lt-btn lt-btn-sm" data-dl-alt="hubcap" data-appid="${appId}" data-game-name="${esc(name)}">📥 Hubcap</button>` : ''}
         </div>
 
         ${variants.length ? `<div class="lt-section"><h4>Варианты (${variants.length})</h4>
@@ -770,6 +932,22 @@ async function doDownload(appId, source, gameName) {
   }
 }
 
+async function doAltDownload(appId, alt, gameName) {
+  const item = queueAdd(`${gameName || appId} (${alt})`, appId);
+  if (currentPage === "downloads") renderPage("downloads");
+  try {
+    let zipPath;
+    if (alt === "sushi") zipPath = await invoke("lt_source_sushitools", { appId });
+    else if (alt === "hubcap") zipPath = await invoke("lt_hubcap_fetch", { appId, apiKey: ltConfig.hubcap_key });
+    else throw new Error("Неизвестный источник");
+    const result = await invoke("lt_install_file", { path: zipPath, appId, autoUpdate: true });
+    queueDone(item, true);
+    toast(`Установлено${result.manifest_count ? `: ${result.manifest_count} манифестов` : ""}`, "ok");
+    installedList = await invoke("lt_list_installed");
+    openDetail(appId);
+  } catch (e) { queueDone(item, false, e.message || String(e)); toast(e.message || e, "error"); }
+}
+
 async function doRemove(appId) {
   if (!await confirmAction(`Удалить lua для ${appId}?`)) return;
   try {
@@ -816,4 +994,14 @@ function doLogin() {
   toast("Войдите через Discord", "info");
 }
 
-window.__ltSetSession = (data) => { ltSaveSession(data); updateAuthUI(); toast("Вошли в lua.tools", "ok"); };
+window.__ltSetSession = async (data) => {
+  ltSaveSession(data);
+  if (ltConfig?.encrypt_token && data?.access_token) {
+    try {
+      const enc = await invoke("lt_dpapi_encrypt", { plaintext: JSON.stringify(data) });
+      await invoke("lt_config_set", { key: "session_enc", value: enc });
+    } catch {}
+  }
+  updateAuthUI();
+  toast("Вошли в lua.tools", "ok");
+};
