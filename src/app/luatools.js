@@ -613,15 +613,24 @@ async function renderTools(el) {
   invoke("lt_config_get").then(cfg => {
     const existing = cfg?.hubcap_key; if (existing) el.querySelector("#lt-hubcap-key").value = existing;
   }).catch(() => {});
-  el.querySelector("#lt-hubcap-save")?.addEventListener("click", async () => {
+  el.querySelector("#lt-hubcap-save")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
     const key = el.querySelector("#lt-hubcap-key").value.trim();
-    const s = el.querySelector("#lt-hubcap-status"); s.innerHTML = '<div class="lt-loading">Валидирую…</div>';
+    const s = el.querySelector("#lt-hubcap-status"); s.innerHTML = '<div class="lt-loading">Проверяю ключ…</div>';
     try {
       const res = await invoke("lt_hubcap_validate", { apiKey: key });
       await invoke("lt_config_set", { key: "hubcap_key", value: key });
-      s.innerHTML = `<span class="lt-ok">✅ Валиден${res?.expiry ? ` · до ${esc(res.expiry)}` : ''}</span>`;
-    } catch (e) { s.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; }
-  });
+      ltConfig.hubcap_key = key;
+      // Формат /user/stats не документирован — показываем то, что узнаём.
+      const used = res?.daily_usage ?? res?.usage ?? res?.used;
+      const limit = res?.daily_limit ?? res?.limit;
+      const exp = res?.expires_at ?? res?.expiry ?? res?.expires;
+      const extra = [
+        used != null && limit ? `сегодня ${esc(used)} / ${esc(limit)}` : "",
+        exp ? `до ${esc(exp)}` : "",
+      ].filter(Boolean).join(" · ");
+      s.innerHTML = `<span class="lt-ok">✅ Ключ принят${extra ? ` · ${extra}` : ""}</span>`;
+    } catch (err) { s.innerHTML = `<span class="lt-error">${esc(errMsg(err))}</span>`; }
+  }));
 
   // DoH
   el.querySelector("#lt-doh-resolve")?.addEventListener("click", async () => {

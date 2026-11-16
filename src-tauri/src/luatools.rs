@@ -1687,29 +1687,74 @@ pub async fn lt_source_sushitools(app_id: u64) -> Result<String, String> {
     Ok(dest.to_string_lossy().into_owned())
 }
 
+// Hubcap API lives under /api/v1/ (unknown paths fall through to the SPA and
+// return 200 + HTML, so always check that a JSON/binary body actually came back).
+const HUBCAP_API: &str = "https://hubcapmanifest.com/api/v1";
+
+fn is_html(resp: &reqwest::Response) -> bool {
+    resp.headers().get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.starts_with("text/html"))
+        .unwrap_or(false)
+}
+
+/// Error text from a failed Hubcap response: `{"detail": "..."}` or the status.
+async fn hubcap_error(resp: reqwest::Response) -> String {
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    let detail = serde_json::from_str::<serde_json::Value>(&body).ok()
+        .and_then(|v| v["detail"].as_str().or(v["error"].as_str()).map(String::from));
+    match (status.as_u16(), detail) {
+        (401 | 403, Some(d)) => format!("Ключ не принят: {d}"),
+        (401 | 403, None) => "Ключ не принят".into(),
+        (404, _) => "Нет в Hubcap".into(),
+        (_, Some(d)) => format!("Hubcap: {d}"),
+        _ => format!("Hubcap HTTP {status}"),
+    }
+}
+
 #[tauri::command]
 pub async fn lt_hubcap_validate(api_key: String) -> Result<serde_json::Value, String> {
+    let api_key = api_key.trim().to_string();
+    if api_key.is_empty() { return Err("Введите API-ключ".into()); }
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
         .build().map_err(|e| e.to_string())?;
-    let resp = client.get("https://hubcapmanifest.com/api/validate")
+    let resp = client.get(format!("{HUBCAP_API}/user/stats"))
         .header("X-API-Key", &api_key)
         .header("User-Agent", "project-desktop")
         .send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
-    resp.json().await.map_err(|e| e.to_string())
+    if !resp.status().is_success() { return Err(hubcap_error(resp).await); }
+    if is_html(&resp) { return Err("Hubcap вернул страницу вместо ответа API — адрес API изменился".into()); }
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    Ok(serde_json::from_str(&text).unwrap_or(serde_json::json!({})))
 }
 
 #[tauri::command]
 pub async fn lt_hubcap_fetch(app_id: u64, api_key: String) -> Result<String, String> {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120))
         .build().map_err(|e| e.to_string())?;
-    let url = format!("https://hubcapmanifest.com/api/games/{app_id}");
-    let resp = client.get(&url)
-        .header("X-API-Key", &api_key)
+    let resp = client.get(format!("{HUBCAP_API}/manifest/{app_id}"))
+        .header("X-API-Key", api_key.trim())
         .header("User-Agent", "project-desktop")
         .send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(format!("Hubcap HTTP {}", resp.status())); }
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(hubcap_error(resp).await); }
+    if is_html(&resp) { return Err("Hubcap вернул страницу вместо архива — адрес API изменился".into()); }
+    let is_json = resp.headers().get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok()).map(|v| v.contains("json")).unwrap_or(false);
+    let bytes = if is_json {
+        // Some APIs answer with a link to the archive instead of the archive itself.
+        let v: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        let link = v["download_url"].as_str().or(v["url"].as_str())
+            .ok_or_else(|| v["detail"].as_str().or(v["error"].as_str()).unwrap_or("Hubcap: нет ссылки на архив").to_string())?;
+        if !link.starts_with("https://") { return Err("Hubcap: некорректная ссылка на архив".into()); }
+        let r = client.get(link).header("User-Agent", "project-desktop")
+            .send().await.map_err(|e| e.to_string())?;
+        if !r.status().is_success() { return Err(format!("Hubcap HTTP {}", r.status())); }
+        r.bytes().await.map_err(|e| e.to_string())?
+    } else {
+        resp.bytes().await.map_err(|e| e.to_string())?
+    };
+    if !bytes.starts_with(b"PK") { return Err("Hubcap вернул не zip-архив".into()); }
     let dest_dir = std::env::temp_dir().join("luatools_dl");
     std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
     let dest = dest_dir.join(format!("{app_id}_hubcap.zip"));
