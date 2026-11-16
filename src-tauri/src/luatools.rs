@@ -2005,7 +2005,7 @@ pub fn lt_gamelist_dlc_read() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn lt_source_sushitools(app_id: u64) -> Result<String, String> {
-    let url = format!("https://raw.githubusercontent.com/sushi-dev55-alt/sushitools-games-repo-alt/refs/heads/main/{app_id}.zip");
+    let url = format!("https://raw.githubusercontent.com/sushi-dev55/sushitools-games-repo/refs/heads/main/{app_id}.zip");
     let client = lt_client_builder().timeout(std::time::Duration::from_secs(120))
         .build().map_err(|e| e.to_string())?;
     let resp = client.get(&url).header("User-Agent", "project-desktop")
