@@ -204,6 +204,12 @@ export function ltManifestDownloadUrl(appId, source, gameName) {
   return url;
 }
 
+// Скачивание фикса Denuvo: slot=manifest — lua/манифест, slot=fix — архив с файлами игры
+// (как в LuaTools: /api/denuvo/download?fix=<id>&slot=…; старые /fixes/<id>/… отдают 404).
+export function ltDenuvoDownloadUrl(fixId, slot) {
+  return `${cfg("api_base")}/api/denuvo/download?fix=${encodeURIComponent(fixId)}&slot=${encodeURIComponent(slot)}`;
+}
+
 export function ltDlcGenerateUrl(appId, baseAppId, gameName) {
   let url = `${cfg("api_base")}/api/dlc/generate?appid=${appId}&base=${baseAppId}`;
   if (gameName) url += `&game_name=${encodeURIComponent(gameName)}`;

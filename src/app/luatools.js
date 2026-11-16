@@ -7,7 +7,7 @@ import { toast } from "./api.js";
 import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
   ltIsLoggedIn, ltSession, ltLoginUrl, ltSaveSession, ltClearSession,
-  ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoListings, ltDenuvoFixes,
+  ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoDownloadUrl, ltDenuvoListings, ltDenuvoFixes,
   ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser,
 } from "./luatools-api.js";
 import { setLuatoolsDropHandler } from "./file-drop.js";
@@ -1417,7 +1417,7 @@ async function openFixDetail(appId) {
       const fixId = b.dataset.fixManifest;
       toast("Скачиваю манифест…", "info");
       try {
-        const url = `https://lua.tools/api/denuvo/fixes/${fixId}/manifest`;
+        const url = ltDenuvoDownloadUrl(fixId, "manifest");
         const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
         await invoke("lt_install_file", { path: filePath, appId, autoUpdate: true });
         toast("Манифест установлен", "ok");
@@ -1430,7 +1430,7 @@ async function openFixDetail(appId) {
       const fixId = b.dataset.fixApply;
       toast("Скачиваю фикс…", "info");
       try {
-        const url = `https://lua.tools/api/denuvo/fixes/${fixId}/fix`;
+        const url = ltDenuvoDownloadUrl(fixId, "fix");
         const zipPath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
         const result = await invoke("lt_apply_fix", { appId, zipPath });
         toast(`Фикс применён: ${result.files_extracted} файлов${result.backup_created ? ' (бэкап создан)' : ''}`, "ok");
