@@ -8,7 +8,7 @@ import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
   ltIsLoggedIn, ltSession, ltLoginUrl, ltSaveSession, ltClearSession,
   ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoListings, ltDenuvoFixes,
-  ltSetApiConfig, ltSetSessionPersist, ltOnSessionChange, ltFetchUser,
+  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser,
 } from "./luatools-api.js";
 import { setLuatoolsDropHandler } from "./file-drop.js";
 import { parseLua, setDepotLocked, setDepotEnabled } from "./luatools-parser.js";
@@ -997,7 +997,6 @@ async function renderSettings(el) {
 
     <div class="lt-section"><h3>Общие</h3>
     <div class="lt-settings-list">
-      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-encrypt" ${cfg.encrypt_token ? 'checked' : ''}> Шифровать токен lua.tools (DPAPI)</label>
       <label class="lt-info-row"><input type="checkbox" id="lt-cfg-hardfilter" ${cfg.filter_hardware !== false ? 'checked' : ''}> Скрывать hardware AppID из поиска</label>
     </div></div>
 
@@ -1039,17 +1038,6 @@ async function renderSettings(el) {
   const saveOn = (id, key, boolVal = true) => el.querySelector(id)?.addEventListener("change", async e => {
     const v = boolVal ? e.target.checked : e.target.value;
     try { await invoke("lt_config_set", { key, value: v }); ltConfig[key] = v; toast("Сохранено", "ok"); } catch (err) { toast(errMsg(err), "error"); }
-  });
-  el.querySelector("#lt-cfg-encrypt")?.addEventListener("change", async e => {
-    const on = e.target.checked;
-    try {
-      await invoke("lt_config_set", { key: "encrypt_token", value: on });
-      ltConfig.encrypt_token = on;
-      if (on) await persistEncryptedSession(ltSession());
-      else await invoke("lt_config_set", { key: "session_enc", value: null });
-      ltSetSessionPersist(!on);
-      toast("Сохранено", "ok");
-    } catch (err) { e.target.checked = !on; toast(errMsg(err), "error"); }
   });
   saveOn("#lt-cfg-hardfilter", "filter_hardware");
   saveOn("#lt-src-sushi", "src_sushi");
@@ -1375,25 +1363,30 @@ async function doLogin() {
   } finally { loginPending = false; }
 }
 
+// Сессия на диске — только зашифрованная DPAPI (ключ привязан к учётке Windows).
 async function persistEncryptedSession(data) {
-  if (!data?.access_token) return;
+  if (!data?.access_token) {
+    await invoke("lt_config_set", { key: "session_enc", value: null });
+    return;
+  }
   const enc = await invoke("lt_dpapi_encrypt", { plaintext: JSON.stringify(data) });
   await invoke("lt_config_set", { key: "session_enc", value: enc });
 }
 
-// Любая смена сессии (вход, refresh токена) — пересохраняем зашифрованную копию.
-ltOnSessionChange(s => {
-  if (ltConfig?.encrypt_token) persistEncryptedSession(s).catch(() => {});
-});
+// Любая смена сессии (вход, refresh токена, выход) — пересохраняем.
+ltOnSessionChange(s => { persistEncryptedSession(s).catch(() => {}); });
 
 let sessionRestored = false;
 async function restoreEncryptedSession() {
-  if (!ltConfig.encrypt_token) { ltSetSessionPersist(true); return; }
-  ltSetSessionPersist(false); // убирает открытую копию из localStorage
-  if (sessionRestored || ltSession() || !ltConfig.session_enc) return;
+  if (sessionRestored) return;
   sessionRestored = true;
-  try {
-    const data = JSON.parse(await invoke("lt_dpapi_decrypt", { ciphertextB64: ltConfig.session_enc }));
-    if (data?.access_token) ltSaveSession(data);
-  } catch { /* другой пользователь Windows / повреждено — просто нужен повторный вход */ }
+  const legacy = ltTakeLegacySession();
+  if (ltConfig.session_enc) {
+    try {
+      const data = JSON.parse(await invoke("lt_dpapi_decrypt", { ciphertextB64: ltConfig.session_enc }));
+      if (data?.access_token) { ltSaveSession(data); return; }
+    } catch { /* другая учётка Windows / повреждено */ }
+  }
+  // Перенос открытой сессии из старых версий → сразу перешифровывается слушателем выше.
+  if (legacy?.access_token) ltSaveSession(legacy);
 }

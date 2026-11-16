@@ -40,34 +40,25 @@ const LT_STORAGE_KEY = "lt_session";
 
 // ── Session ─────────────────────────────────────────────────────────
 
+// Сессия (access/refresh токены) живёт только в памяти. На диск она попадает
+// исключительно зашифрованной DPAPI (luatools.js → session_enc в
+// luatools_config.json) — открытым текстом в localStorage её больше не пишем.
 let _session = null;
 
-export function ltSession() {
-  if (_session) return _session;
+export function ltSession() { return _session; }
+
+// Старые версии хранили сессию открытым текстом в localStorage: забираем её
+// один раз для переноса в зашифрованное хранилище и сразу удаляем.
+export function ltTakeLegacySession() {
   try {
     const raw = localStorage.getItem(LT_STORAGE_KEY);
-    if (raw) _session = JSON.parse(raw);
-  } catch { /* noop */ }
-  return _session;
-}
-
-// persist=false — держим только в памяти (при шифровании DPAPI открытая копия
-// в localStorage не нужна: её хранит luatools_config.json в зашифрованном виде).
-let _persist = true;
-export function ltSetSessionPersist(v) {
-  _persist = !!v;
-  try {
-    if (!_persist) localStorage.removeItem(LT_STORAGE_KEY);
-    else if (_session) localStorage.setItem(LT_STORAGE_KEY, JSON.stringify(_session));
-  } catch { /* noop */ }
+    localStorage.removeItem(LT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 }
 
 export function ltSaveSession(s) {
   _session = s;
-  try {
-    if (_persist) localStorage.setItem(LT_STORAGE_KEY, JSON.stringify(s));
-    else localStorage.removeItem(LT_STORAGE_KEY);
-  } catch { /* noop */ }
   for (const fn of _sessionListeners) { try { fn(s); } catch { /* noop */ } }
 }
 
@@ -84,6 +75,7 @@ export async function ltFetchUser(accessToken) {
 export function ltClearSession() {
   _session = null;
   try { localStorage.removeItem(LT_STORAGE_KEY); } catch { /* noop */ }
+  for (const fn of _sessionListeners) { try { fn(null); } catch { /* noop */ } }
 }
 
 export function ltIsLoggedIn() {
