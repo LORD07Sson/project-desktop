@@ -810,3 +810,17 @@
    scrollbar, and pinned to the viewport height while the page scrolls. */
 .lt-sidebar { width: 200px; overflow-x: hidden; position: sticky; top: 0; align-self: flex-start; height: calc(100vh - 58px); }
 .lt-sidebar .lt-nav { overflow: hidden; text-overflow: ellipsis; }
+
+/* "Beta" badge next to the title — colors follow the app theme (--fire / --gold). */
+.lt-beta {
+  display: inline-flex; align-items: center; vertical-align: middle;
+  margin-left: 8px; padding: 2px 9px; border-radius: 999px;
+  font-size: .62rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--on-accent, #1b0a04);
+  background: linear-gradient(90deg, var(--fire, #ff6a2b), var(--gold, #ffb444), var(--fire, #ff6a2b));
+  background-size: 200% 100%;
+  box-shadow: 0 0 10px rgba(var(--fire-rgb, 255, 106, 43), .45), 0 0 2px rgba(var(--gold-rgb, 255, 180, 68), .8) inset;
+  animation: lt-beta-flow 4s linear infinite;
+}
+@keyframes lt-beta-flow { to { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .lt-beta { animation: none; } }

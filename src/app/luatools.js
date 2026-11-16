@@ -386,7 +386,7 @@ function updateAuthUI() {
 
 function renderOnboarding(el) {
   el.innerHTML = `<div class="lt-onboarding">
-    <h2>Добро пожаловать в LuaProject</h2>
+    <h2>Добро пожаловать в LuaProject <span class="lt-beta">Beta</span></h2>
     <p>Для работы необходим установленный Steam и плагин (BetterSteamTools или stplug-in).</p>
     <div class="lt-onboard-steps">
       <div class="lt-onboard-step ${steamInfo?.path ? 'lt-ok' : 'lt-error'}">
@@ -496,7 +496,7 @@ async function renderHome(el) {
   const ps = pluginStatus;
   const ver = ps?.version ? ` · v${esc(String(ps.version).replace(/^v/i, ""))}` : "";
   el.innerHTML = `
-    <h2 class="lt-page-title">Добро пожаловать в LuaProject</h2>
+    <h2 class="lt-page-title">Добро пожаловать в LuaProject <span class="lt-beta">Beta</span></h2>
     <div class="lt-hs">
       <div class="lt-hs-card">
         <span class="lt-hs-num">${installedList.length}</span>
