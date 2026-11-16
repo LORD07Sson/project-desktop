@@ -1014,10 +1014,6 @@ async function renderSettings(el) {
       <span class="lt-muted">Оставьте пустым для lua.tools</span>
     </div></div>
 
-    <div class="lt-section"><h3>Аккаунт lua.tools</h3><div class="lt-auth-area"></div></div>
-    <div class="lt-section"><h3>Сообщество</h3>
-      <div class="lt-info-row">Discord: <a href="https://discord.gg/luatools" target="_blank">discord.gg/luatools</a></div>
-    </div>
     <div class="lt-section"><h3>CEF интеграция</h3>
     <p class="lt-muted">Подключение к отладочному порту Steam-клиента (8080) для инъекции в магазин.</p>
     <div style="display:flex;gap:8px;margin-top:8px">
