@@ -2578,11 +2578,15 @@ pub async fn lt_set_launch_options(app_id: u64, value: String) -> Result<(), Str
 // Downloaded from their GitHub releases into our own folder and only ever
 // launched from there — never from a path the webview passes in.
 
-struct ExtTool { key: &'static str, repo: &'static str, exe: &'static str }
+/// `files` are plain release assets (each may have a `<name>.sha256` next to it);
+/// `zip` is an archive extracted as a whole. Names are fixed so downloads go
+/// through `releases/latest/download/<name>` — no GitHub API call, so the
+/// 60 req/h anonymous API limit can't break installs.
+struct ExtTool { key: &'static str, repo: &'static str, exe: &'static str, files: &'static [&'static str], zip: Option<&'static str> }
 
 const EXT_TOOLS: &[ExtTool] = &[
-    ExtTool { key: "cloudredirect", repo: "madoiscool/CloudRedirect", exe: "CloudRedirect.exe" },
-    ExtTool { key: "steamautocrack", repo: "SteamAutoCracks/Steam-auto-crack", exe: "SteamAutoCrack.exe" },
+    ExtTool { key: "cloudredirect", repo: "madoiscool/CloudRedirect", exe: "CloudRedirect.exe", files: &["CloudRedirect.exe", "cloud_redirect.dll"], zip: None },
+    ExtTool { key: "steamautocrack", repo: "SteamAutoCracks/Steam-auto-crack", exe: "SteamAutoCrack.exe", files: &[], zip: Some("SteamAutoCrack.zip") },
 ];
 
 fn ext_tool(key: &str) -> Result<&'static ExtTool, String> {
@@ -2620,69 +2624,61 @@ pub fn lt_tool_info(tool: String) -> Result<ExtToolInfo, String> {
     Ok(ExtToolInfo { installed: ext_tool_exe(t).is_some(), version })
 }
 
+/// Latest release tag from the `releases/latest` redirect (web, not API).
+async fn gh_latest_tag(client: &reqwest::Client, repo: &str) -> Result<String, String> {
+    let resp = client.get(format!("https://github.com/{repo}/releases/latest"))
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?;
+    let url = resp.url().clone();
+    let segs: Vec<&str> = url.path_segments().map(|s| s.collect()).unwrap_or_default();
+    match segs.iter().position(|s| *s == "tag") {
+        Some(i) if i + 1 < segs.len() => Ok(segs[i + 1].to_string()),
+        _ => Err("GitHub: не удалось узнать последнюю версию".into()),
+    }
+}
+
 #[tauri::command]
 pub async fn lt_tool_latest(tool: String) -> Result<String, String> {
     let t = ext_tool(&tool)?;
     let client = lt_client_builder().timeout(std::time::Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
-    let rel: serde_json::Value = client.get(format!("https://api.github.com/repos/{}/releases/latest", t.repo))
-        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| e.to_string())?;
-    rel["tag_name"].as_str().map(|s| s.to_string()).ok_or("GitHub API: нет tag_name".into())
+    gh_latest_tag(&client, t.repo).await
 }
 
 #[tauri::command]
 pub async fn lt_tool_install(tool: String) -> Result<String, String> {
     let t = ext_tool(&tool)?;
     let client = lt_client_builder().timeout(std::time::Duration::from_secs(600)).build().map_err(|e| e.to_string())?;
-    let rel: serde_json::Value = client.get(format!("https://api.github.com/repos/{}/releases/latest", t.repo))
-        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| e.to_string())?;
-    let tag = rel["tag_name"].as_str().unwrap_or("unknown").to_string();
-    let assets = rel["assets"].as_array().ok_or("В релизе нет файлов")?;
-    let asset_url = |name: &str| assets.iter()
-        .find(|a| a["name"].as_str().map(|n| n.eq_ignore_ascii_case(name)).unwrap_or(false))
-        .and_then(|a| a["browser_download_url"].as_str().map(|s| s.to_string()));
+    let tag = gh_latest_tag(&client, t.repo).await.unwrap_or_else(|_| "latest".into());
+    let asset = |name: &str| format!("https://github.com/{}/releases/latest/download/{name}", t.repo);
 
     let dir = ext_tool_dir(t);
     let staging = dir.with_extension("new");
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+    let fail = |e: String| { let _ = std::fs::remove_dir_all(&staging); e };
 
-    // Plain files (CloudRedirect ships the exe + its dll, each with a .sha256).
-    let mut wrote_any = false;
-    for a in assets {
-        let Some(name) = a["name"].as_str() else { continue };
-        let low = name.to_lowercase();
-        if !(low.ends_with(".exe") || low.ends_with(".dll")) || name.contains(['/', '\\']) { continue; }
-        let url = a["browser_download_url"].as_str().ok_or("Нет URL")?;
-        let bytes = gh_download(&client, url).await?;
-        if let Some(sum_url) = asset_url(&format!("{name}.sha256")) {
-            let sum = String::from_utf8_lossy(&gh_download(&client, &sum_url).await?).to_lowercase();
+    for name in t.files {
+        let bytes = gh_download(&client, &asset(name)).await.map_err(&fail)?;
+        // Checksum is optional (older releases have none) but enforced when present.
+        if let Ok(sum) = gh_download(&client, &asset(&format!("{name}.sha256"))).await {
+            let sum = String::from_utf8_lossy(&sum).to_lowercase();
             let want = sum.split_whitespace().next().unwrap_or("");
             if want.len() == 64 && want != sha256_hex(&bytes) {
-                let _ = std::fs::remove_dir_all(&staging);
-                return Err(format!("{name}: контрольная сумма не совпала — файл повреждён или подменён"));
+                return Err(fail(format!("{name}: контрольная сумма не совпала — файл повреждён или подменён")));
             }
         }
-        std::fs::write(staging.join(name), &bytes).map_err(|e| e.to_string())?;
-        wrote_any = true;
+        std::fs::write(staging.join(name), &bytes).map_err(|e| fail(e.to_string()))?;
     }
-    // Zip release (SteamAutoCrack).
-    if !wrote_any {
-        let zip_url = assets.iter()
-            .find(|a| a["name"].as_str().map(|n| n.to_lowercase().ends_with(".zip")).unwrap_or(false))
-            .and_then(|a| a["browser_download_url"].as_str())
-            .ok_or("В релизе нет exe или zip")?;
-        let bytes = gh_download(&client, zip_url).await?;
-        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    if let Some(zip_name) = t.zip {
+        let bytes = gh_download(&client, &asset(zip_name)).await.map_err(&fail)?;
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| fail(e.to_string()))?;
         for i in 0..archive.len() {
-            let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+            let mut entry = archive.by_index(i).map_err(|e| fail(e.to_string()))?;
             if entry.is_dir() { continue; }
             let Some((out_path, _)) = zip_entry_dest(&staging, &entry) else { continue };
             if let Some(p) = out_path.parent() { let _ = std::fs::create_dir_all(p); }
             let mut buf = vec![];
-            std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| e.to_string())?;
-            std::fs::write(&out_path, &buf).map_err(|e| e.to_string())?;
+            std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| fail(e.to_string()))?;
+            std::fs::write(&out_path, &buf).map_err(|e| fail(e.to_string()))?;
         }
     }
     let _ = std::fs::write(staging.join("version.txt"), &tag);
