@@ -5,7 +5,7 @@
 import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
 
-const mb = n => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} МБ` : `${Math.max(1, Math.round(n / 1024))} КБ`);
+const mb = n => (!n ? "0 КБ" : n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} МБ` : `${Math.max(1, Math.round(n / 1024))} КБ`);
 const when = ts => {
   if (!ts) return "—";
   const d = new Date(ts * 1000);
