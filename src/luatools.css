@@ -782,3 +782,26 @@
   .lt-pg { flex-direction: column; gap: 10px; }
   .lt-pg-size { position: static; }
 }
+
+/* Tools → Achievements / Stats / Playtime */
+.lt-ach-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.lt-ach-sum { font-size: .85rem; min-width: 220px; }
+.lt-ach-sum .lt-usage-bar { margin-top: 6px; }
+.lt-ach-note { font-size: .72rem; }
+.lt-ach { display: flex; align-items: center; gap: 12px; padding: 7px 4px; }
+.lt-ach + .lt-ach { border-top: 1px solid rgba(255, 255, 255, .04); }
+.lt-ach img { width: 44px; height: 44px; border-radius: 4px; flex: none; background: rgba(255, 255, 255, .06); }
+.lt-ach:not(.is-got) img { opacity: .55; }
+.lt-ach-main { flex: 1; min-width: 0; }
+.lt-ach-name { font-size: .84rem; font-weight: 600; }
+.lt-ach-desc { font-size: .74rem; opacity: .5; }
+.lt-ach-meta { display: flex; gap: 10px; font-size: .7rem; opacity: .55; margin-top: 1px; }
+.lt-ach-meta:empty { display: none; }
+.lt-ach-hidden { color: #a99bf0; opacity: 1; }
+.lt-switch.is-static { cursor: default; pointer-events: none; }
+.lt-pt-now { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 2px; }
+.lt-pt-now strong { font-size: 1.3rem; }
+.lt-row-gap .lt-pt-input { flex: 0 0 140px; width: 140px; }
+.lt-pt-unit { align-self: center; font-size: .82rem; opacity: .7; }
+.lt-pt-note { font-size: .72rem; margin: 10px 0 0; }
+.lt-tabs { flex-wrap: wrap; }

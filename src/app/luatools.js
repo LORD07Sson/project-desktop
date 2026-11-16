@@ -769,7 +769,10 @@ async function renderTools(el) {
       </div>
       <nav class="lt-tabs">
         <button class="lt-tab ${toolsState.tab === "depots" ? "is-active" : ""}" data-tab="depots">Депо</button>
+        <button class="lt-tab ${toolsState.tab === "achievements" ? "is-active" : ""}" data-tab="achievements">Достижения</button>
+        <button class="lt-tab ${toolsState.tab === "stats" ? "is-active" : ""}" data-tab="stats">Статистика</button>
         <button class="lt-tab ${toolsState.tab === "launch" ? "is-active" : ""}" data-tab="launch">Параметры запуска</button>
+        <button class="lt-tab ${toolsState.tab === "playtime" ? "is-active" : ""}" data-tab="playtime">Время в игре</button>
       </nav>
       <div id="lt-tr-body"></div>`;
     right.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => { toolsState.tab = b.dataset.tab; drawRight(); }));
@@ -777,6 +780,110 @@ async function renderTools(el) {
     right.querySelector("#lt-tr-detail").addEventListener("click", () => openDetail(appId));
     right.querySelector("#lt-tr-refresh").addEventListener("click", () => drawRight());
     const body = right.querySelector("#lt-tr-body");
+
+    if (toolsState.tab === "achievements" || toolsState.tab === "stats") {
+      body.innerHTML = '<div class="lt-loading">Читаю данные Steam…</div>';
+      let data = null;
+      try { data = await invoke("lt_game_stats", { appId }); } catch (e) { body.innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; return; }
+      if (appId !== toolsState.appId) return;
+      const root = data.schema ? Object.values(data.schema)[0] : null;
+      const stats = root?.stats || null;
+      if (!stats) {
+        body.innerHTML = `<div class="lt-empty">Steam ещё не скачал список достижений этой игры. Откройте игру в Steam (или запустите её) и нажмите «Обновить».</div>`;
+        return;
+      }
+      const progress = data.user?.cache || {};
+      const loc = v => (v && typeof v === "object") ? (v.russian || v.english || Object.values(v).find(x => typeof x === "string") || "") : String(v ?? "");
+      const isAchType = t => String(t).toUpperCase() === "ACHIEVEMENTS" || String(t) === "4" || String(t).toUpperCase() === "GROUPACHIEVEMENTS" || String(t) === "5";
+
+      if (toolsState.tab === "achievements") {
+        const list = [];
+        for (const [statId, st] of Object.entries(stats)) {
+          if (!st.bits) continue;
+          const mask = (progress[statId]?.data ?? 0) >>> 0;
+          const times = progress[statId]?.AchievementTimes || {};
+          for (const [bit, a] of Object.entries(st.bits)) {
+            const n = parseInt(bit, 10);
+            const got = ((mask >>> n) & 1) === 1;
+            const d = a.display || {};
+            list.push({
+              name: loc(d.name) || a.name, desc: loc(d.desc), hidden: String(d.hidden) === "1",
+              icon: got ? d.icon : (d.icon_gray || d.icon), got, time: times[bit] || 0,
+            });
+          }
+        }
+        const total = list.length, done = list.filter(a => a.got).length;
+        if (!total) { body.innerHTML = '<div class="lt-empty">У этой игры нет достижений.</div>'; return; }
+        body.innerHTML = `<div class="lt-ach-head">
+            <div class="lt-ach-sum"><strong>${done}</strong> из ${total} получено
+              <div class="lt-usage-bar"><div class="lt-usage-fill" style="width:${Math.round(done / total * 100)}%"></div></div></div>
+            <span class="lt-muted lt-ach-note">Только просмотр — данные из кэша Steam</span>
+          </div>
+          <label class="lt-search">${UI_ICONS.search}<input type="text" id="lt-ach-search" placeholder="Поиск достижений"></label>
+          <div id="lt-ach-list"></div>`;
+        const iconUrl = f => f ? `https://shared.akamai.steamstatic.com/community_assets/images/apps/${appId}/${encodeURIComponent(f)}` : "";
+        const draw = q => {
+          q = (q || "").toLowerCase();
+          const rows = list.filter(a => !q || a.name.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q));
+          body.querySelector("#lt-ach-list").innerHTML = rows.length ? rows.map(a => `<div class="lt-ach ${a.got ? "is-got" : ""}">
+              <img src="${esc(iconUrl(a.icon))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+              <div class="lt-ach-main">
+                <div class="lt-ach-name">${esc(a.name)}</div>
+                ${a.desc ? `<div class="lt-ach-desc">${esc(a.desc)}</div>` : ""}
+                <div class="lt-ach-meta">${a.hidden ? '<span class="lt-ach-hidden">Скрытое достижение</span>' : ""}${a.got ? `<span>Получено ${a.time ? esc(new Date(a.time * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" })) : ""}</span>` : ""}</div>
+              </div>
+              <span class="lt-switch ${a.got ? "is-on" : ""} is-static" aria-label="${a.got ? "Получено" : "Не получено"}"></span>
+            </div>`).join("") : '<div class="lt-empty">Ни одно достижение не подходит под поиск.</div>';
+        };
+        draw("");
+        body.querySelector("#lt-ach-search").addEventListener("input", e => draw(e.target.value.trim()));
+        return;
+      }
+
+      // Stats tab: everything that isn't an achievements bitfield.
+      const f32 = i => { const dv = new DataView(new ArrayBuffer(4)); dv.setInt32(0, i | 0, true); return dv.getFloat32(0, true); };
+      const rows = Object.entries(stats).filter(([, st]) => !st.bits && !isAchType(st.type)).map(([id, st]) => {
+        const type = String(st.type).toUpperCase();
+        const isFloat = type === "FLOAT" || type === "AVGRATE" || type === "2" || type === "3";
+        const raw = progress[id]?.data;
+        const val = raw == null ? (st.default ?? 0) : (isFloat ? f32(raw) : raw);
+        return { id, name: loc(st.display?.name) || st.name || `Stat ${id}`, api: st.name || "", val: isFloat ? Number(val).toFixed(2) : val, type };
+      });
+      body.innerHTML = rows.length ? `<p class="lt-muted lt-ach-note">Только просмотр — значения из кэша Steam.</p>
+        <table class="lt-table"><thead><tr><th>Статистика</th><th>API-имя</th><th>Тип</th><th>Значение</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${esc(r.name)}</td><td><code>${esc(r.api)}</code></td><td>${esc(r.type)}</td><td><strong>${esc(r.val)}</strong></td></tr>`).join("")}
+        </tbody></table>` : '<div class="lt-empty">У этой игры нет статистики (кроме достижений).</div>';
+      return;
+    }
+
+    if (toolsState.tab === "playtime") {
+      body.innerHTML = '<div class="lt-loading">Читаю localconfig.vdf…</div>';
+      let pt;
+      try { pt = await invoke("lt_get_playtime", { appId }); } catch (e) { body.innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; return; }
+      if (appId !== toolsState.appId) return;
+      const hours = pt.minutes != null ? pt.minutes / 60 : 0;
+      body.innerHTML = `<div class="lt-panel">
+          <div class="lt-panel-title">Время в игре</div>
+          ${pt.known ? `<div class="lt-pt-now"><strong>${pt.minutes != null ? `${hours.toLocaleString(undefined, { maximumFractionDigits: 1 })} ч` : "Steam ещё не записал время для этой игры"}</strong>
+            ${pt.last_played ? `<span class="lt-muted">последний запуск ${esc(new Date(pt.last_played * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</span>` : ""}</div>
+          <div class="lt-row-gap">
+            <input type="number" class="lt-input lt-pt-input" id="lt-pt-hours" min="0" step="0.1" value="${hours ? Number(hours.toFixed(1)) : 0}">
+            <span class="lt-pt-unit">часов</span>
+            <button class="lt-btn lt-btn-accent" id="lt-pt-save">Сохранить</button>
+          </div>
+          <p class="lt-muted lt-pt-note">Steam читает время в игре только при запуске${pt.steam_running ? " — он будет закрыт и открыт заново" : ""}. Перед записью делается копия localconfig.vdf.ltbak.</p>`
+          : '<p class="lt-muted">Steam ещё не записал данные об этой игре. Запустите её хотя бы раз — после этого время можно будет поменять.</p>'}
+        </div>`;
+      body.querySelector("#lt-pt-save")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+        const h = parseFloat(body.querySelector("#lt-pt-hours").value);
+        if (!Number.isFinite(h) || h < 0) { toast("Введите число часов", "warn"); return; }
+        const minutes = Math.round(h * 60);
+        if (pt.steam_running && !await confirmAction("Чтобы записать время, Steam будет закрыт и запущен снова. Продолжить?")) return;
+        try { await invoke("lt_set_playtime", { appId, minutes }); toast(`Время в игре: ${h} ч`, "ok"); drawRight(); }
+        catch (err) { toast(errMsg(err), "error"); }
+      }));
+      return;
+    }
 
     if (toolsState.tab === "launch") {
       const game = await invoke("lt_game_install_path", { appId }).catch(() => ({ installed: false }));

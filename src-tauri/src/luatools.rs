@@ -2131,3 +2131,267 @@ pub fn lt_rename_variant(app_id: u64, from: String, to: String) -> Result<(), St
     if dst.exists() { return Err("Пресет с таким именем уже есть".into()); }
     std::fs::rename(&src, &dst).map_err(|e| e.to_string())
 }
+
+// ──────────────────────────────────────────────────────────────────
+// Game data: achievements / stats (read-only) and playtime
+// ──────────────────────────────────────────────────────────────────
+//
+// Achievements and stats come from Steam's local cache:
+//   appcache/stats/UserGameStatsSchema_<appid>.bin        — schema (names, icons…)
+//   appcache/stats/UserGameStats_<accountid>_<appid>.bin  — user progress
+// Both are binary KeyValues. Playtime lives in the text VDF
+//   userdata/<accountid>/config/localconfig.vdf → …/Steam/apps/<appid>/Playtime (minutes)
+// which Steam only reads at startup and rewrites on exit.
+
+fn kv_read_cstr(b: &[u8], pos: &mut usize) -> Result<String, String> {
+    let start = *pos;
+    let len = b.get(start..).and_then(|s| s.iter().position(|&c| c == 0)).ok_or("KeyValues: строка без конца")?;
+    *pos = start + len + 1;
+    Ok(String::from_utf8_lossy(&b[start..start + len]).into_owned())
+}
+
+fn kv_take<'a>(b: &'a [u8], pos: &mut usize, n: usize) -> Result<&'a [u8], String> {
+    if *pos + n > b.len() { return Err("KeyValues: обрезанный файл".into()); }
+    let v = &b[*pos..*pos + n];
+    *pos += n;
+    Ok(v)
+}
+
+/// Binary KeyValues → JSON. Types: 0 subsection, 1 string, 2 int32, 3 float32,
+/// 4 pointer, 5 wide string, 6 color, 7 uint64, 10 int64, 8/11 end of section.
+fn kv_parse_binary(b: &[u8], pos: &mut usize, depth: u32) -> Result<serde_json::Value, String> {
+    if depth > 64 { return Err("KeyValues: слишком глубокая вложенность".into()); }
+    let mut map = serde_json::Map::new();
+    while *pos < b.len() {
+        let t = b[*pos];
+        *pos += 1;
+        if t == 8 || t == 11 { return Ok(serde_json::Value::Object(map)); }
+        let key = kv_read_cstr(b, pos)?;
+        let val = match t {
+            0 => kv_parse_binary(b, pos, depth + 1)?,
+            1 => serde_json::Value::String(kv_read_cstr(b, pos)?),
+            2 | 4 | 6 => {
+                let v = kv_take(b, pos, 4)?;
+                serde_json::json!(i32::from_le_bytes([v[0], v[1], v[2], v[3]]))
+            }
+            3 => {
+                let v = kv_take(b, pos, 4)?;
+                serde_json::json!(f32::from_le_bytes([v[0], v[1], v[2], v[3]]) as f64)
+            }
+            5 => {
+                let mut units: Vec<u16> = Vec::new();
+                loop {
+                    let v = kv_take(b, pos, 2)?;
+                    let u = u16::from_le_bytes([v[0], v[1]]);
+                    if u == 0 { break; }
+                    units.push(u);
+                }
+                serde_json::Value::String(String::from_utf16_lossy(&units))
+            }
+            7 => {
+                let v = kv_take(b, pos, 8)?;
+                serde_json::json!(u64::from_le_bytes([v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]]))
+            }
+            10 => {
+                let v = kv_take(b, pos, 8)?;
+                serde_json::json!(i64::from_le_bytes([v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]]))
+            }
+            other => return Err(format!("KeyValues: неизвестный тип {other}")),
+        };
+        map.insert(key, val);
+    }
+    Ok(serde_json::Value::Object(map))
+}
+
+fn kv_read_file(path: &Path) -> Option<serde_json::Value> {
+    let bytes = std::fs::read(path).ok()?;
+    let mut pos = 0;
+    kv_parse_binary(&bytes, &mut pos, 0).ok()
+}
+
+/// userdata/<accountid> of the account that used Steam last (newest localconfig.vdf).
+fn steam_user_dir(steam: &str) -> Option<(String, PathBuf)> {
+    let root = PathBuf::from(steam).join("userdata");
+    std::fs::read_dir(&root).ok()?
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().chars().all(|c| c.is_ascii_digit()))
+        .filter_map(|e| {
+            let lc = e.path().join("config").join("localconfig.vdf");
+            let mtime = std::fs::metadata(&lc).and_then(|m| m.modified()).ok()?;
+            Some((mtime, e.file_name().to_string_lossy().into_owned(), e.path()))
+        })
+        .max_by_key(|(t, _, _)| *t)
+        .map(|(_, id, p)| (id, p))
+}
+
+#[derive(Serialize)]
+pub struct GameStatsData {
+    pub account_id: Option<String>,
+    /// Root of UserGameStatsSchema_<appid>.bin, or null when Steam hasn't cached it yet.
+    pub schema: Option<serde_json::Value>,
+    /// Root of UserGameStats_<account>_<appid>.bin, or null when there's no progress.
+    pub user: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+pub fn lt_game_stats(app_id: u64) -> Result<GameStatsData, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let dir = PathBuf::from(&steam).join("appcache").join("stats");
+    let schema = kv_read_file(&dir.join(format!("UserGameStatsSchema_{app_id}.bin")));
+    let account = steam_user_dir(&steam).map(|(id, _)| id);
+    let user = account.as_ref()
+        .and_then(|a| kv_read_file(&dir.join(format!("UserGameStats_{a}_{app_id}.bin"))));
+    Ok(GameStatsData { account_id: account, schema, user })
+}
+
+// ── localconfig.vdf (text KeyValues) ───────────────────────────────
+
+enum VdfTok {
+    /// Quoted string; start/end are byte offsets of the content between the quotes.
+    Str { start: usize, end: usize, text: String },
+    Open(usize),
+    Close,
+}
+
+fn vdf_tokens(s: &str) -> Vec<VdfTok> {
+    let b = s.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'"' => {
+                let start = i + 1;
+                let mut j = start;
+                let mut text: Vec<u8> = Vec::new();
+                while j < b.len() && b[j] != b'"' {
+                    if b[j] == b'\\' && j + 1 < b.len() {
+                        text.push(b[j + 1]);
+                        j += 2;
+                        continue;
+                    }
+                    text.push(b[j]);
+                    j += 1;
+                }
+                out.push(VdfTok::Str { start, end: j, text: String::from_utf8_lossy(&text).into_owned() });
+                i = j + 1;
+            }
+            b'{' => { out.push(VdfTok::Open(i)); i += 1; }
+            b'}' => { out.push(VdfTok::Close); i += 1; }
+            b'/' if i + 1 < b.len() && b[i + 1] == b'/' => {
+                while i < b.len() && b[i] != b'\n' { i += 1; }
+            }
+            _ => i += 1,
+        }
+    }
+    out
+}
+
+struct AppBlock {
+    open: usize,
+    playtime: Option<(usize, usize, String)>,
+    last_played: Option<String>,
+}
+
+/// Finds …/Steam/apps/<appid> { … } in localconfig.vdf.
+fn vdf_find_app_block(s: &str, app_id: u64) -> Option<AppBlock> {
+    let toks = vdf_tokens(s);
+    let app = app_id.to_string();
+    let mut path: Vec<String> = Vec::new();
+    let mut depth_inside: Option<usize> = None;
+    let mut result: Option<AppBlock> = None;
+    let mut i = 0;
+    while i < toks.len() {
+        match &toks[i] {
+            VdfTok::Str { text, .. } => {
+                match toks.get(i + 1) {
+                    Some(VdfTok::Open(pos)) => {
+                        path.push(text.clone());
+                        let n = path.len();
+                        if depth_inside.is_none() && n >= 3 && path[n - 1] == app
+                            && path[n - 2].eq_ignore_ascii_case("apps")
+                            && path[n - 3].eq_ignore_ascii_case("steam")
+                        {
+                            depth_inside = Some(n);
+                            result = Some(AppBlock { open: *pos, playtime: None, last_played: None });
+                        }
+                        i += 2;
+                    }
+                    Some(VdfTok::Str { start, end, text: val }) => {
+                        if let (Some(d), Some(r)) = (depth_inside, result.as_mut()) {
+                            if path.len() == d {
+                                if text.eq_ignore_ascii_case("Playtime") { r.playtime = Some((*start, *end, val.clone())); }
+                                if text.eq_ignore_ascii_case("LastPlayed") { r.last_played = Some(val.clone()); }
+                            }
+                        }
+                        i += 2;
+                    }
+                    _ => i += 1,
+                }
+            }
+            VdfTok::Open(_) => { path.push(String::new()); i += 1; }
+            VdfTok::Close => {
+                if depth_inside == Some(path.len()) { return result; }
+                path.pop();
+                i += 1;
+            }
+        }
+    }
+    result
+}
+
+fn localconfig_path(steam: &str) -> Result<PathBuf, String> {
+    let (_, dir) = steam_user_dir(steam).ok_or("Не найден профиль Steam (userdata)")?;
+    Ok(dir.join("config").join("localconfig.vdf"))
+}
+
+#[derive(Serialize)]
+pub struct PlaytimeInfo {
+    pub minutes: Option<u64>,
+    pub last_played: Option<u64>,
+    /// Steam has a section for this game in localconfig.vdf (else it can't be edited yet).
+    pub known: bool,
+    pub steam_running: bool,
+}
+
+#[tauri::command]
+pub fn lt_get_playtime(app_id: u64) -> Result<PlaytimeInfo, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let text = std::fs::read_to_string(localconfig_path(&steam)?).map_err(|e| format!("localconfig.vdf: {e}"))?;
+    let block = vdf_find_app_block(&text, app_id);
+    let minutes = block.as_ref().and_then(|b| b.playtime.as_ref()).and_then(|(_, _, v)| v.parse().ok());
+    let last_played = block.as_ref().and_then(|b| b.last_played.as_ref()).and_then(|v| v.parse().ok());
+    Ok(PlaytimeInfo { minutes, last_played, known: block.is_some(), steam_running: is_steam_running() })
+}
+
+fn write_playtime(path: &Path, app_id: u64, minutes: u64) -> Result<(), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("localconfig.vdf: {e}"))?;
+    let block = vdf_find_app_block(&text, app_id)
+        .ok_or("Steam ещё не записал данные об этой игре — запустите её хотя бы раз")?;
+    let new_text = match &block.playtime {
+        Some((start, end, _)) => format!("{}{}{}", &text[..*start], minutes, &text[*end..]),
+        None => {
+            // Insert right after the block's "{", reusing that line's indentation.
+            let line_start = text[..block.open].rfind('\n').map(|p| p + 1).unwrap_or(0);
+            let indent: String = text[line_start..block.open].chars().take_while(|c| c.is_whitespace()).collect();
+            let at = block.open + 1;
+            format!("{}\n{}\t\"Playtime\"\t\t\"{}\"{}", &text[..at], indent, minutes, &text[at..])
+        }
+    };
+    let _ = std::fs::copy(path, path.with_extension("vdf.ltbak"));
+    let tmp = path.with_extension("vdf.lttmp");
+    std::fs::write(&tmp, new_text).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+/// Sets playtime (minutes). Steam must be closed while writing — it rewrites
+/// localconfig.vdf on exit — so it is stopped and started again afterwards.
+#[tauri::command]
+pub async fn lt_set_playtime(app_id: u64, minutes: u64) -> Result<(), String> {
+    if minutes > 100_000_000 { return Err("Слишком большое значение".into()); }
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let path = localconfig_path(&steam)?;
+    let was_running = stop_steam().await;
+    let res = write_playtime(&path, app_id, minutes);
+    if was_running { start_steam(&steam); }
+    res
+}
