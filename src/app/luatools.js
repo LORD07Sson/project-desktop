@@ -1697,6 +1697,12 @@ async function openDetail(appId) {
           <img src="${esc(img)}" class="lt-detail-img" alt="">
           <div class="lt-detail-meta">
             <h3>${esc(name)}</h3><span class="lt-card-id">AppID: ${appId}</span>
+            <div class="lt-row-gap" style="margin-top:6px;flex-wrap:wrap">
+              <button class="lt-btn lt-btn-sm" id="lt-d-copy">Копировать AppID</button>
+              ${luaInfo ? '<button class="lt-btn lt-btn-sm" id="lt-d-reveal">Показать lua в папке</button>' : ""}
+              <a class="lt-btn lt-btn-sm" target="_blank" href="https://steamdb.info/app/${appId}/">SteamDB</a>
+              ${gameInfo.installed ? '<button class="lt-btn lt-btn-sm" id="lt-d-drm" title="Steamless: снять SteamStub с exe игры">Снять DRM</button>' : ""}
+            </div>
             ${gameInfo.installed ? `<div class="lt-ok" style="margin-top:6px">📂 ${esc(gameInfo.path)}${gameInfo.size_on_disk ? ` · ${fmtSize(gameInfo.size_on_disk)}` : ''}</div>` : '<div class="lt-muted" style="margin-top:6px">Не установлена на диск</div>'}
             ${luaInfo ? `<div class="lt-ok" style="margin-top:4px">✅ ${luaInfo.depotCount} депо, ${luaInfo.dlcCount} DLC${luaInfo.hasActivePins ? " · Закреплено" : " · Авто-обновление"}</div>` : '<div class="lt-muted" style="margin-top:4px">Lua не установлен</div>'}
             ${gameInfo.installed ? `<div style="margin-top:8px;display:flex;gap:6px;align-items:center">
@@ -1754,6 +1760,25 @@ async function openDetail(appId) {
       try { await invoke("lt_vault_restore", { appId, hash }); toast("Версия восстановлена", "ok"); openDetail(appId); }
       catch (err) { toast(errMsg(err), "error"); }
     })));
+    el.querySelector("#lt-d-copy")?.addEventListener("click", () => {
+      navigator.clipboard.writeText(String(appId)).then(() => toast("AppID скопирован", "ok"), () => toast("Буфер обмена недоступен", "error"));
+    });
+    el.querySelector("#lt-d-reveal")?.addEventListener("click", async () => {
+      try {
+        const info = await invoke("lt_steam_info");
+        await invoke("reveal_in_folder", { path: `${info.path}\\config\\stplug-in\\${appId}.lua` });
+      } catch (err) { toast(errMsg(err), "error"); }
+    });
+    el.querySelector("#lt-d-drm")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+      try {
+        const exes = await invoke("lt_find_game_exes", { appId });
+        if (!exes.length) { toast("Exe игры не найден", "warn"); return; }
+        if (!await confirmAction(`Снять SteamStub DRM с ${exes[0]}? Оригинал сохранится как .exe.bak.`)) return;
+        if (!(await invoke("lt_steamless_info")).installed) { toast("Скачиваю Steamless…", "info"); await invoke("lt_steamless_install"); }
+        await invoke("lt_steamless_run", { exePath: exes[0] });
+        toast("DRM снят", "ok");
+      } catch (err) { toast(errMsg(err), "error"); }
+    }));
     el.querySelector("#lt-launch-btn")?.addEventListener("click", async () => {
       const args = el.querySelector("#lt-launch-args")?.value?.trim() || "";
       try { await invoke("lt_launch_game", { appId, args }); toast("Запуск через Steam…", "ok"); }
