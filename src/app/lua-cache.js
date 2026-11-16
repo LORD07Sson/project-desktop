@@ -52,7 +52,7 @@ export async function mountLuaCache(root) {
           <div class="ar-row" style="display:flex; gap:10px; align-items:center; justify-content:space-between; padding:6px 0; border-top:1px solid var(--line,rgba(127,127,127,.15));">
             <div style="min-width:0;">
               <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(i.label || i.name)}</div>
-              <div class="ar-meta">${esc(i.name)} · ${mb(i.size)} · сверено ${when(i.checked_at)} · из кэша ${i.hits}× · ${i.fresh ? "свежий" : '<span style="color:var(--warn,#e0a030);">устарел</span>'}</div>
+              <div class="ar-meta">${esc(i.name)} · ${mb(i.size)}${i.buildid ? ` · сборка Steam ${esc(i.buildid)}` : ""} · сверено ${when(i.checked_at)} · из кэша ${i.hits}× · ${i.fresh ? "свежий" : '<span style="color:var(--warn,#e0a030);">устарел</span>'}</div>
             </div>
             <div style="display:flex; gap:6px; flex-shrink:0;">
               ${i.fresh ? `<button class="btn" data-lc-expire="${esc(i.key)}" title="Следующая загрузка пойдёт с lua.tools">Устарел</button>` : ""}
