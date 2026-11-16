@@ -440,3 +440,13 @@
 .lt-vault-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .lt-vault-meta code { font-size: .8rem; }
 .lt-vault-meta .lt-muted { font-size: .75rem; }
+
+/* Картинка игры не нашлась ни по одному адресу — нейтральная заглушка вместо «битой» иконки. */
+.lt-img-missing {
+  visibility: hidden;
+}
+.lt-build-tile:has(.lt-img-missing),
+.lt-card:has(.lt-img-missing),
+.lt-manage-item:has(.lt-img-missing) {
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
+}

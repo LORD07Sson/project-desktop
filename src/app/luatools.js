@@ -104,8 +104,11 @@ async function loadGameNames() {
     try {
       const raw = await invoke("lt_applist_mirror");
       const data = JSON.parse(raw);
-      const apps = data?.applist?.apps || data?.apps || [];
+      // applist.morrenus.xyz отдаёт голый массив [{appid, name}], Steam — {applist:{apps}}.
+      const apps = Array.isArray(data) ? data : (data?.applist?.apps || data?.apps || []);
       for (const a of apps) if (a.appid && a.name) gameNames[a.appid] = a.name;
+      // Названия пришли позже первой отрисовки — перерисовать списки с AppID вместо имён.
+      if (Object.keys(gameNames).length && ["home", "builds", "manage"].includes(currentPage)) renderPage(currentPage);
     } catch { /* cache miss — names stay as AppIDs */ }
     _namesLoading = null;
   })();
@@ -198,8 +201,32 @@ function attachDropZone(body) {
   });
 }
 
+// Картинки: у новых игр header.jpg лежит по другому пути CDN (store_item_assets/…/<hash>/),
+// старый адрес отдаёт 404. При ошибке берём header_image из appdetails, иначе — заглушка.
+const imgCache = new Map(); // appId → Promise<string|null>
+function headerImageFor(appId) {
+  if (!imgCache.has(appId)) imgCache.set(appId, ltGameDetails(String(appId)).then(d => d?.header_image || null).catch(() => null));
+  return imgCache.get(appId);
+}
+function attachImageFallback(body) {
+  body.addEventListener("error", async e => {
+    const img = e.target;
+    if (img?.tagName !== "IMG" || !img.dataset?.ltImg) return;
+    const stage = img.dataset.ltStage || "";
+    if (!stage) {
+      img.dataset.ltStage = "details";
+      const url = await headerImageFor(img.dataset.ltImg);
+      if (url && url !== img.src) { img.src = url; return; }
+    }
+    img.dataset.ltStage = "dead";
+    img.removeAttribute("src");
+    img.classList.add("lt-img-missing");
+  }, true);
+}
+
 function attachGlobal(body) {
   attachDropZone(body);
+  attachImageFallback(body);
   listen("lt-download-progress", ev => {
     const { url, percent } = ev.payload || {};
     const active = dlQueue.items.find(i => i._url === url);
@@ -273,7 +300,7 @@ async function refreshAll(body) {
   }
   loadGameNames();
   const ver = body.querySelector("#lt-sidebar-ver");
-  if (ver) ver.textContent = pluginStatus?.installed ? `v${pluginStatus.version || "?"}` : "";
+  if (ver) ver.textContent = pluginStatus?.installed ? `v${String(pluginStatus.version || "?").replace(/^v/i, "")}` : "";
 
   try { onboardingDone = !!localStorage.getItem("lt_onboarded"); } catch { onboardingDone = true; }
   if (!onboardingDone && !steamInfo?.path) {
@@ -360,7 +387,7 @@ async function renderBuilds(el) {
       </div>
       <div class="lt-builds-grid" id="lt-builds-grid">
         ${slice.map(i => `<div class="lt-build-tile" data-appid="${i.app_id}">
-          <img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/header.jpg" alt="" loading="lazy" onerror="this.onerror=null;this.src='https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/capsule_sm_120.jpg'">
+          <img data-lt-img="${i.app_id}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/header.jpg" alt="" loading="lazy">
           <div class="lt-build-info">
             <span class="lt-build-name">${esc(gameName(i.app_id))}</span>
             <span class="lt-build-meta">${i.app_id} · ${fmtDate(i.modified)}</span>
@@ -414,7 +441,7 @@ function renderRecentCards() {
   if (!installedList.length) { grid.innerHTML = '<div class="lt-empty">Пока ничего не установлено</div>'; return; }
   grid.innerHTML = installedList.slice(0, 8).map(i => `
     <button class="lt-card" data-appid="${i.app_id}">
-      <img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/header.jpg" alt="" loading="lazy">
+      <img data-lt-img="${i.app_id}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/header.jpg" alt="" loading="lazy">
       <div class="lt-card-info"><span class="lt-card-name">${esc(gameName(i.app_id))}</span><span class="lt-card-date">${i.app_id} · ${fmtDate(i.modified)}</span></div>
     </button>`).join("");
 }
@@ -480,7 +507,7 @@ async function renderManage(el) {
     const c = el.querySelector("#lt-manage-list");
     c.innerHTML = list.map(i => `
       <div class="lt-manage-item" data-appid="${i.app_id}">
-        <img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/capsule_sm_120.jpg" alt="" loading="lazy">
+        <img data-lt-img="${i.app_id}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/capsule_sm_120.jpg" alt="" loading="lazy">
         <div class="lt-manage-info"><span class="lt-card-name">${esc(gameName(i.app_id))}</span><span class="lt-card-sub">${i.app_id} · ${fmtDate(i.modified)}</span></div>
         <div class="lt-manage-actions">
           <button class="lt-btn lt-btn-sm" data-appid="${i.app_id}">Депо</button>
@@ -797,7 +824,7 @@ async function renderFixes(el) {
       c.innerHTML = `<div class="lt-grid">${slice.map(g => {
         const aid = g.appid || g.appId || 0;
         return `<button class="lt-card lt-fix-card" data-fixappid="${aid}">
-          <img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${aid}/capsule_sm_120.jpg" alt="" loading="lazy">
+          <img data-lt-img="${aid}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${aid}/capsule_sm_120.jpg" alt="" loading="lazy">
           <div class="lt-card-info"><span class="lt-card-name">${esc(g.name || g.game || `App ${aid}`)}</span>
           <span class="lt-card-id">${aid} · ${g.fixCount || g.fix_count || '?'} фиксов</span></div>
         </button>`;
@@ -839,7 +866,7 @@ async function openFixDetail(appId) {
     el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад к фиксам</button>
       <div class="lt-detail" style="margin-top:12px">
         <div class="lt-detail-header">
-          <img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg" class="lt-detail-img" alt="">
+          <img data-lt-img="${appId}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg" class="lt-detail-img" alt="">
           <div class="lt-detail-meta">
             <h3>${esc(name)}</h3><span class="lt-card-id">AppID: ${appId}</span>
             <div style="margin-top:8px">${gameInfo.installed ? `<span class="lt-ok">Установлена: ${esc(gameInfo.path)}</span>` : '<span class="lt-warn">Игра не установлена на диск</span>'}</div>
