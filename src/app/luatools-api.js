@@ -9,6 +9,22 @@ const DEFAULTS = {
   manifest_backend_ua: "secretgoonpoon",
 };
 
+import { invoke } from "./tauri.js";
+
+// fetch() из вебвью до этих API не доходит (CSP connect-src + у Steam store API
+// нет CORS) — запросы идут через Rust (lt_http, список разрешённых хостов там).
+// Возвращает объект с тем же интерфейсом, что нужен коду ниже: ok/status/json/text/headers.get.
+async function ltFetch(url, { method = "GET", headers = {}, body } = {}) {
+  const r = await invoke("lt_http", { method, url, headers, body: body ?? null });
+  return {
+    ok: r.status >= 200 && r.status < 300,
+    status: r.status,
+    headers: { get: k => r.headers[String(k).toLowerCase()] ?? null },
+    text: async () => r.body,
+    json: async () => JSON.parse(r.body),
+  };
+}
+
 let _apiConfig = null;
 
 export function ltSetApiConfig(cfg) { _apiConfig = cfg; }
@@ -59,7 +75,7 @@ const _sessionListeners = new Set();
 export function ltOnSessionChange(fn) { _sessionListeners.add(fn); }
 
 export async function ltFetchUser(accessToken) {
-  const res = await fetch(`${cfg("supabase_url")}/auth/v1/user`, {
+  const res = await ltFetch(`${cfg("supabase_url")}/auth/v1/user`, {
     headers: { apikey: cfg("supabase_anon_key"), Authorization: `Bearer ${accessToken}` },
   });
   return res.ok ? res.json() : null;
@@ -92,7 +108,7 @@ export function ltLoginUrl() {
 export async function ltRefreshToken() {
   const s = ltSession();
   if (!s?.refresh_token) throw new Error("Нет refresh token");
-  const res = await fetch(`${cfg("supabase_url")}/auth/v1/token?grant_type=refresh_token`, {
+  const res = await ltFetch(`${cfg("supabase_url")}/auth/v1/token?grant_type=refresh_token`, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: cfg("supabase_anon_key") },
     body: JSON.stringify({ refresh_token: s.refresh_token }),
@@ -111,7 +127,7 @@ export async function ltRefreshToken() {
 // ── Public endpoints (no auth) ──────────────────────────────────────
 
 export async function ltSearchSteam(query) {
-  const res = await fetch(`${STEAM_SEARCH_URL}?term=${encodeURIComponent(query)}&l=english&cc=US`);
+  const res = await ltFetch(`${STEAM_SEARCH_URL}?term=${encodeURIComponent(query)}&l=english&cc=US`);
   if (!res.ok) return [];
   const data = await res.json();
   return (data.items || []).slice(0, 8).map(i => ({
@@ -123,7 +139,7 @@ export async function ltSearchSteam(query) {
 
 export async function ltFeatured() {
   try {
-    const res = await fetch(`${STEAM_FEATURED_URL}?cc=us&l=english`);
+    const res = await ltFetch(`${STEAM_FEATURED_URL}?cc=us&l=english`);
     if (!res.ok) return { topSellers: [], newReleases: [] };
     const data = await res.json();
     const clean = c => (c?.items || [])
@@ -137,7 +153,7 @@ export async function ltFeatured() {
 
 export async function ltCheckSources(appId) {
   try {
-    const res = await fetch(`${cfg("manifest_backend_url")}/check_apis?appid=${appId}`, {
+    const res = await ltFetch(`${cfg("manifest_backend_url")}/check_apis?appid=${appId}`, {
       headers: { "User-Agent": cfg("manifest_backend_ua") },
     });
     if (!res.ok) return {};
@@ -147,7 +163,7 @@ export async function ltCheckSources(appId) {
 
 export async function ltGameDetails(appId) {
   try {
-    const res = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=english&cc=US`);
+    const res = await ltFetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=english&cc=US`);
     if (!res.ok) return null;
     const data = await res.json();
     const info = data?.[String(appId)];
@@ -160,7 +176,7 @@ export async function ltGameDetails(appId) {
 
 async function ltApi(method, path) {
   const headers = await ltAuthHeaders();
-  const res = await fetch(`${cfg("api_base")}${path}`, { method, headers });
+  const res = await ltFetch(`${cfg("api_base")}${path}`, { method, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { const j = await res.json(); if (j.error) msg = j.error; } catch { /* noop */ }
@@ -173,7 +189,7 @@ export async function ltUsage() {
   try {
     const todayUtc = new Date().toISOString().split("T")[0] + "T00:00:00Z";
     const url = `${cfg("supabase_url")}/rest/v1/user_downloads?select=appid&downloaded_at=gte.${encodeURIComponent(todayUtc)}`;
-    const res = await fetch(url, {
+    const res = await ltFetch(url, {
       method: "HEAD",
       headers: {
         apikey: cfg("supabase_anon_key"),
@@ -211,7 +227,7 @@ export async function ltDlcInfo(appId, baseAppId) {
 
 export async function ltDenuvoListings() {
   try {
-    const res = await fetch(`${cfg("api_base")}/api/denuvo/listings`);
+    const res = await ltFetch(`${cfg("api_base")}/api/denuvo/listings`);
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
@@ -219,7 +235,7 @@ export async function ltDenuvoListings() {
 
 export async function ltDenuvoFixes(appId) {
   try {
-    const res = await fetch(`${cfg("api_base")}/api/denuvo/fixes?appid=${encodeURIComponent(appId)}`);
+    const res = await ltFetch(`${cfg("api_base")}/api/denuvo/fixes?appid=${encodeURIComponent(appId)}`);
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }

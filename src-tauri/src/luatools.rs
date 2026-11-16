@@ -2043,3 +2043,63 @@ pub async fn lt_oauth_login(app: tauri::AppHandle, login_url: String) -> Result<
     tauri::async_runtime::spawn_blocking(move || oauth_wait(listener))
         .await.map_err(|e| e.to_string())?
 }
+
+// ──────────────────────────────────────────────────────────────────
+// HTTP proxy for luatools-api.js
+// ──────────────────────────────────────────────────────────────────
+//
+// The webview can't reach these APIs itself: the app CSP (connect-src) blocks
+// them and the Steam store API sends no CORS headers. So JS goes through this
+// command, limited to the LuaTools hosts (defaults + ones set in LuaTools settings).
+
+const LT_HTTP_HOSTS: &[&str] = &["store.steampowered.com", "lua.tools", "db.lua.tools", "167.235.229.108"];
+
+fn lt_http_allowed(url: &reqwest::Url) -> bool {
+    if !matches!(url.scheme(), "https" | "http") { return false; }
+    let Some(host) = url.host_str() else { return false };
+    if LT_HTTP_HOSTS.iter().any(|h| h.eq_ignore_ascii_case(host)) { return true; }
+    // Hosts the user configured in LuaTools → Settings (own API server).
+    let cfg = lt_config_get();
+    ["api_base", "manifest_backend_url", "supabase_url"].iter()
+        .filter_map(|k| cfg[*k].as_str())
+        .filter_map(|v| reqwest::Url::parse(v).ok())
+        .any(|u| u.host_str().map(|h| h.eq_ignore_ascii_case(host)).unwrap_or(false))
+}
+
+#[derive(Serialize)]
+pub struct LtHttpResponse {
+    pub status: u16,
+    pub headers: std::collections::HashMap<String, String>,
+    pub body: String,
+}
+
+#[tauri::command]
+pub async fn lt_http(
+    method: Option<String>,
+    url: String,
+    headers: Option<std::collections::HashMap<String, String>>,
+    body: Option<String>,
+) -> Result<LtHttpResponse, String> {
+    let parsed = reqwest::Url::parse(&url).map_err(|e| e.to_string())?;
+    if !lt_http_allowed(&parsed) {
+        return Err(format!("Хост не разрешён: {}", parsed.host_str().unwrap_or("?")));
+    }
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30))
+        .build().map_err(|e| e.to_string())?;
+    let m = reqwest::Method::from_bytes(method.as_deref().unwrap_or("GET").to_uppercase().as_bytes())
+        .map_err(|e| e.to_string())?;
+    let headers = headers.unwrap_or_default();
+    let mut rb = client.request(m, parsed);
+    if !headers.keys().any(|k| k.eq_ignore_ascii_case("user-agent")) {
+        rb = rb.header("User-Agent", "project-desktop");
+    }
+    for (k, v) in headers { rb = rb.header(k, v); }
+    if let Some(b) = body { rb = rb.body(b); }
+    let resp = rb.send().await.map_err(|e| e.to_string())?;
+    let status = resp.status().as_u16();
+    let headers = resp.headers().iter()
+        .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.as_str().to_ascii_lowercase(), v.to_string())))
+        .collect();
+    let body = resp.text().await.unwrap_or_default();
+    Ok(LtHttpResponse { status, headers, body })
+}
