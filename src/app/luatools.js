@@ -8,7 +8,7 @@ import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
   ltIsLoggedIn, ltSession, ltLoginUrl, ltSaveSession, ltClearSession,
   ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoDownloadUrl, ltDenuvoListings, ltDenuvoFixes,
-  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser, ltDepotInfo } from "./luatools-api.js";
+  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser, ltDepotInfo, ltRedeemBotCode } from "./luatools-api.js";
 import { setLuatoolsDropHandler } from "./file-drop.js";
 import { parseLua, setDepotLocked, setDepotEnabled } from "./luatools-parser.js";
 
@@ -245,6 +245,7 @@ function attachGlobal(body) {
     if (e.target.closest("#lt-restart-steam")) { doRestartSteam(); return; }
     if (e.target.closest("#lt-back-btn")) { switchPage("home"); return; }
     if (e.target.closest("#lt-login-btn")) { doLogin(); return; }
+    if (e.target.closest("#lt-code-btn")) { doCodeLogin(); return; }
     if (e.target.closest("#lt-logout-btn")) {
       ltClearSession();
       invoke("lt_config_set", { key: "session_enc", value: null }).catch(() => {});
@@ -328,7 +329,7 @@ function updateAuthUI() {
       const who = u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email || "";
       el.innerHTML = ltIsLoggedIn()
         ? `<span>Выполнен вход${who ? ` как ${esc(who)}` : ""}</span><button id="lt-logout-btn" class="lt-btn lt-btn-sm lt-hi-action">Выйти</button>`
-        : `<span class="lt-muted">Вход в lua.tools не выполнен</span><button id="lt-login-btn" class="lt-btn lt-btn-sm lt-hi-action">Войти</button>`;
+        : `<span class="lt-muted">Вход в lua.tools не выполнен</span><button id="lt-login-btn" class="lt-btn lt-btn-sm lt-hi-action">Войти</button><button id="lt-code-btn" class="lt-btn lt-btn-sm lt-hi-action">Код от бота</button>`;
       continue;
     }
     if (ltIsLoggedIn()) {
@@ -920,18 +921,6 @@ async function renderTools(el) {
       <label class="lt-search">${UI_ICONS.search}<input type="text" id="lt-depot-search" placeholder="Поиск депо по названию, ID или типу…" value="${esc(toolsState.depotQ)}"></label>
       <div id="lt-depots"></div>`;
 
-    const promptName = (title, value = "") => new Promise(resolve => {
-      const ov = document.createElement("div");
-      ov.className = "lt-confirm-overlay";
-      ov.innerHTML = `<div class="lt-confirm-box"><p>${esc(title)}</p><input type="text" class="lt-input" value="${esc(value)}" style="width:100%"><div class="lt-confirm-actions"><button class="lt-btn lt-btn-primary">OK</button><button class="lt-btn">Отмена</button></div></div>`;
-      document.body.appendChild(ov);
-      const inp = ov.querySelector("input"); inp.focus(); inp.select();
-      const done = v => { ov.remove(); resolve(v); };
-      const [ok, cancel] = ov.querySelectorAll("button");
-      ok.addEventListener("click", () => done(inp.value.trim() || null));
-      cancel.addEventListener("click", () => done(null));
-      inp.addEventListener("keydown", e => { if (e.key === "Enter") done(inp.value.trim() || null); if (e.key === "Escape") done(null); });
-    });
 
     body.querySelector("#lt-preset-select").addEventListener("change", e => { toolsState.preset = e.target.value; drawRight(); });
     body.querySelector("#lt-pr-apply").addEventListener("click", e => withBusy(e.currentTarget, async () => {
@@ -1861,6 +1850,31 @@ async function doRestartSteam() {
 async function getTmpDir() {
   try { const info = await invoke("lt_steam_info"); if (info?.path) return info.path + "\\config\\luatools_tmp"; } catch {}
   return (await import("@tauri-apps/api/path").then(m => m.tempDir())) + "luatools";
+}
+
+function promptName(title, value = "") {
+  return new Promise(resolve => {
+  const ov = document.createElement("div");
+  ov.className = "lt-confirm-overlay";
+  ov.innerHTML = `<div class="lt-confirm-box"><p>${esc(title)}</p><input type="text" class="lt-input" value="${esc(value)}" style="width:100%"><div class="lt-confirm-actions"><button class="lt-btn lt-btn-primary">OK</button><button class="lt-btn">Отмена</button></div></div>`;
+  document.body.appendChild(ov);
+  const inp = ov.querySelector("input"); inp.focus(); inp.select();
+  const done = v => { ov.remove(); resolve(v); };
+  const [ok, cancel] = ov.querySelectorAll("button");
+  ok.addEventListener("click", () => done(inp.value.trim() || null));
+  cancel.addEventListener("click", () => done(null));
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") done(inp.value.trim() || null); if (e.key === "Escape") done(null); });
+});
+}
+
+async function doCodeLogin() {
+  const code = await promptName("Код из Discord-бота LuaTools");
+  if (!code) return;
+  try {
+    await ltRedeemBotCode(code);
+    updateAuthUI();
+    toast("Вошли в lua.tools", "ok");
+  } catch (e) { toast(`Вход не выполнен: ${errMsg(e)}`, "error"); }
 }
 
 let loginPending = false;

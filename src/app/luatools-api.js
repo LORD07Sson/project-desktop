@@ -271,3 +271,25 @@ export async function ltDepotInfo(appId) {
   _depotInfoCache.set(appId, p);
   return p;
 }
+
+/** Sign in with a one-time code from the LuaTools Discord bot: the code is
+ *  redeemed for a magic-link token hash, which Supabase verifies into a session. */
+export async function ltRedeemBotCode(code) {
+  const r = await ltFetch(`${cfg("api_base")}/api/auth/code/redeem`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: code.trim() }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.token_hash) throw new Error(j.error === "Invalid code" ? "Неверный или просроченный код" : (j.error || `HTTP ${r.status}`));
+  const v = await ltFetch(`${cfg("supabase_url")}/auth/v1/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: cfg("supabase_anon_key") },
+    body: JSON.stringify({ type: j.type || "magiclink", token_hash: j.token_hash }),
+  });
+  const d = await v.json().catch(() => ({}));
+  if (!v.ok || !d.access_token) throw new Error(d.msg || d.error_description || `Проверка не прошла: ${v.status}`);
+  ltSaveSession({
+    access_token: d.access_token, refresh_token: d.refresh_token,
+    expires_at: Math.floor(Date.now() / 1000) + (d.expires_in || 3600), user: d.user,
+  });
+  return ltSession();
+}
