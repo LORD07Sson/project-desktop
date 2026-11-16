@@ -2729,7 +2729,7 @@ const STORE_CDP_PORT: u16 = 8080;
 static STORE_LOOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static STORE_STATUS: std::sync::Mutex<Vec<(u64, String)>> = std::sync::Mutex::new(Vec::new());
 
-const STORE_INJECT_JS: &str = r#"(() => {
+const STORE_INJECT_JS: &str = r##"(() => {
   const m = location.href.match(/store\.steampowered\.com\/app\/(\d+)/);
   if (!m) return;
   if (!window.__ltp) {
@@ -2753,7 +2753,7 @@ const STORE_INJECT_JS: &str = r#"(() => {
     new MutationObserver(add).observe(document.documentElement, { childList: true, subtree: true });
   }
   window.__ltpSet = (id, text) => { const b = document.getElementById("ltp-add"); if (b && m[1] === String(id)) b.firstChild.textContent = text; };
-})();"#;
+})();"##;
 
 fn cdp_http_get(path: &str) -> Result<String, String> {
     use std::io::{Read, Write};
