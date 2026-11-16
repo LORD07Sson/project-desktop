@@ -1940,9 +1940,13 @@ fn main() {
             luatools::lt_steam_info,
             luatools::lt_list_installed,
             luatools::lt_read_lua,
+            luatools::lt_write_lua,
             luatools::lt_install_file,
             luatools::lt_remove_lua,
             luatools::lt_download,
+            luatools::lt_plugin_status,
+            luatools::lt_restart_steam,
+            luatools::lt_list_manifests,
         ])
         .setup(|app| {
             // Первая строка в файловом логе за сеанс — якорь, от которого

@@ -303,6 +303,128 @@ pub fn lt_remove_lua(app_id: u64) -> Result<(), String> {
     Ok(())
 }
 
+// ── Write lua contents ─────────────────────────────────────────────
+
+#[tauri::command]
+pub fn lt_write_lua(app_id: u64, content: String) -> Result<(), String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let dir = stplugin_dir(&steam);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let dest = dir.join(format!("{app_id}.lua"));
+    std::fs::write(&dest, &content).map_err(|e| e.to_string())?;
+    stamp_now(&dest);
+    Ok(())
+}
+
+// ── Plugin status ──────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct PluginStatus {
+    pub installed: bool,
+    pub version: Option<String>,
+    pub dll_path: Option<String>,
+    pub mode: Option<String>,
+}
+
+#[tauri::command]
+pub fn lt_plugin_status() -> PluginStatus {
+    let steam = match steam_path_from_registry() {
+        Some(p) => p,
+        None => return PluginStatus { installed: false, version: None, dll_path: None, mode: None },
+    };
+    let sp = stplugin_dir(&steam);
+    let dll = sp.join("stplug-in.dll");
+    let dll64 = sp.join("stplug-in64.dll");
+    let bst_dll = PathBuf::from(&steam).join("BetterSteamTools.dll");
+    let mode = if bst_dll.exists() {
+        Some("BetterSteamTools".into())
+    } else if dll.exists() || dll64.exists() {
+        Some("stplug-in".into())
+    } else {
+        None
+    };
+    let installed = mode.is_some();
+    let dll_path = if bst_dll.exists() {
+        Some(bst_dll.to_string_lossy().into_owned())
+    } else if dll.exists() {
+        Some(dll.to_string_lossy().into_owned())
+    } else if dll64.exists() {
+        Some(dll64.to_string_lossy().into_owned())
+    } else {
+        None
+    };
+    let version = dll_path.as_ref().and_then(|p| {
+        let meta = std::fs::metadata(p).ok()?;
+        let modified = meta.modified().ok()?;
+        let dt = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
+        let secs = dt.as_secs();
+        let days = secs / 86400;
+        let y = 1970 + days / 365;
+        let m = (days % 365) / 30 + 1;
+        let d = (days % 365) % 30 + 1;
+        Some(format!("{y}.{m}.{d}"))
+    });
+    PluginStatus { installed, version, dll_path, mode }
+}
+
+// ── Restart Steam ──────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn lt_restart_steam() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+        let exe = PathBuf::from(&steam).join("steam.exe");
+        if !exe.exists() {
+            return Err("steam.exe не найден".into());
+        }
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "steam.exe"])
+            .output();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        std::process::Command::new(&exe)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    Err("Поддерживается только Windows".into())
+}
+
+// ── List manifest files ────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct ManifestFile {
+    pub name: String,
+    pub depot_id: u64,
+    pub size: u64,
+    pub modified: u64,
+}
+
+#[tauri::command]
+pub fn lt_list_manifests() -> Result<Vec<ManifestFile>, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let dir = depotcache_dir(&steam);
+    if !dir.exists() { return Ok(vec![]); }
+    let mut result = vec![];
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.ends_with(".manifest") { continue; }
+        let parts: Vec<&str> = name.trim_end_matches(".manifest").split('_').collect();
+        let depot_id = parts.first().and_then(|s| s.parse().ok()).unwrap_or(0);
+        let meta = entry.metadata().ok();
+        let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let modified = meta.and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        result.push(ManifestFile { name, depot_id, size, modified });
+    }
+    result.sort_by(|a, b| b.modified.cmp(&a.modified));
+    Ok(result)
+}
+
 // ── Download from lua.tools API (proxied through Tauri for auth) ────
 
 #[derive(Deserialize)]
