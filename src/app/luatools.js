@@ -2075,10 +2075,17 @@ async function doAltDownload(appId, alt, gameName) {
   try { await queueTurn(item); } catch { inflight.delete(key); return; }
   queueStatus(item, "downloading", 0);
   try {
-    let zipPath;
-    if (alt === "hubcap") zipPath = await invoke("lt_hubcap_fetch", { appId, apiKey: ltConfig.hubcap_key });
-    else if (alt === "kernelua") zipPath = await invoke("lt_kernelua_fetch", { appId, token: ltConfig.kernelua_token });
-    else throw new Error("Неизвестный источник");
+    // Сначала кэш студии: свежая копия этой игры из любого источника. Иначе — сам источник, и файл уходит в кэш.
+    let zipPath = null;
+    try { zipPath = await invoke("lt_cache_get", { key: `man:${appId}:*`, headers: clientHeaders(), destDir: await getTmpDir() }); }
+    catch { /* кэш недоступен */ }
+    if (zipPath) toast("Взято из кэша студии", "info");
+    else {
+      if (alt === "hubcap") zipPath = await invoke("lt_hubcap_fetch", { appId, apiKey: ltConfig.hubcap_key });
+      else if (alt === "kernelua") zipPath = await invoke("lt_kernelua_fetch", { appId, token: ltConfig.kernelua_token });
+      else throw new Error("Неизвестный источник");
+      invoke("lt_cache_put", { key: `man:${appId}:${alt}`, label: `${gameName || appId} · ${alt === "hubcap" ? "Hubcap" : "KerneLua"}`, path: zipPath, headers: clientHeaders() }).catch(() => {});
+    }
     queueStatus(item, "installing", 100);
     const result = await invoke("lt_install_file", { path: zipPath, appId, autoUpdate: true });
     queueDone(item, true);
