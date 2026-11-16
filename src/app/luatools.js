@@ -512,7 +512,6 @@ async function renderHome(el) {
       <div class="lt-hi-row">${HOME_ICONS.steam}${steamInfo?.path
         ? `<span>Steam обнаружен · ${esc(steamInfo.path)}</span>`
         : '<span class="lt-error">Steam не найден</span>'}</div>
-      <div class="lt-hi-row">${HOME_ICONS.user}<span class="lt-auth-area lt-hi-auth" data-variant="row"></span></div>
       ${ps?.mode ? `<div class="lt-hi-row">${HOME_ICONS.mode}<span>Режим · ${esc(ps.mode)}</span></div>` : ""}
       ${steamInfo?.running && !ps?.installed ? `<div class="lt-hi-row lt-hi-warn">${HOME_ICONS.warn}<span>Steam запущен — установка плагина его перезапустит</span></div>` : ""}
     </div>
