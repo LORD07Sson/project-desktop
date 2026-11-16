@@ -1145,8 +1145,12 @@ async function renderMode(el) {
         <p class="lt-mcard-desc">Возвращает встроенную поддержку Steam Cloud через сторонние хранилища, такие как Google Drive / OneDrive / Cloudflare R2 и другие. Пока совместимо только с BetterSteamTools. После включения перезапустите Steam.</p>
         <div class="lt-mcard-status">${!cr.supported ? "Нужен BetterSteamTools" : !cr.installed ? "Ещё не установлено." : cr.enabled ? '<span class="lt-ok">Включено</span>' : "Выключено"}</div>
       </div>
-      <button class="lt-btn lt-btn-ghost" id="lt-cr-toggle" ${cr.supported ? "" : "disabled"}>${cr.enabled ? "Выключить" : "Включить"}</button>
+      <div class="lt-row-gap">
+        <button class="lt-btn lt-btn-ghost" id="lt-cr-manage" title="Настройка облачных хранилищ (CloudRedirect.exe)">Управление</button>
+        <button class="lt-btn lt-btn-ghost" id="lt-cr-toggle" ${cr.supported ? "" : "disabled"}>${cr.enabled ? "Выключить" : "Включить"}</button>
+      </div>
     </div>`;
+    box.querySelector("#lt-cr-manage").addEventListener("click", e => withBusy(e.currentTarget, () => launchTool("cloudredirect", "CloudRedirect")));
     box.querySelector("#lt-cr-toggle").addEventListener("click", e => withBusy(e.currentTarget, async () => {
       try {
         await invoke("lt_cloud_redirect_toggle", { enable: !cr.enabled });
@@ -1286,13 +1290,22 @@ async function renderUtilities(el) {
       <div class="lt-tool-card"><h3>🔓 Steamless</h3><p class="lt-muted">Снятие SteamStub DRM с exe</p>
         <div id="lt-steamless-status" class="lt-loading">Проверяю…</div>
         <div class="lt-tool-form" style="margin-top:8px">
-          <input type="text" class="lt-input" id="lt-steamless-exe" placeholder="Путь к .exe игры">
+          <input type="text" class="lt-input" id="lt-steamless-appid" placeholder="AppID" style="max-width:110px">
+          <button class="lt-btn" id="lt-steamless-find">Найти exe</button>
+        </div>
+        <div class="lt-tool-form">
+          <input type="text" class="lt-input" id="lt-steamless-exe" placeholder="Путь к .exe игры" list="lt-steamless-exes">
+          <datalist id="lt-steamless-exes"></datalist>
         </div>
         <div class="lt-tool-form">
           <button class="lt-btn" id="lt-steamless-install-btn">Установить / Обновить</button>
           <button class="lt-btn lt-btn-primary" id="lt-steamless-run-btn">Снять DRM</button>
         </div>
         <pre id="lt-steamless-out" class="lt-muted" style="font-size:.75rem;max-height:200px;overflow:auto;margin-top:8px"></pre>
+      </div>
+      <div class="lt-tool-card"><h3>🧩 SteamAutoCrack</h3><p class="lt-muted">Эмулятор Steam API (Goldberg) для запуска без Steam. Скачивается с GitHub в папку приложения.</p>
+        <div id="lt-sac-status" class="lt-muted">—</div>
+        <div class="lt-tool-form"><button class="lt-btn lt-btn-primary" id="lt-sac-run">Запустить</button></div>
       </div>
     </div>`;
 
@@ -1401,6 +1414,21 @@ async function renderUtilities(el) {
   });
 
   // Steamless
+  invoke("lt_tool_info", { tool: "steamautocrack" }).then(i => {
+    const s = el.querySelector("#lt-sac-status");
+    if (s) s.textContent = i.installed ? `Установлено · ${i.version || "?"}` : "Не установлено — скачается при запуске (~37 МБ)";
+  }).catch(() => {});
+  el.querySelector("#lt-sac-run")?.addEventListener("click", e => withBusy(e.currentTarget, () => launchTool("steamautocrack", "SteamAutoCrack")));
+  el.querySelector("#lt-steamless-find")?.addEventListener("click", async () => {
+    const aid = parseInt(el.querySelector("#lt-steamless-appid").value, 10);
+    if (!aid) { toast("Введите AppID", "warn"); return; }
+    try {
+      const exes = await invoke("lt_find_game_exes", { appId: aid });
+      if (!exes.length) { toast("Exe не найден", "warn"); return; }
+      el.querySelector("#lt-steamless-exe").value = exes[0];
+      el.querySelector("#lt-steamless-exes").innerHTML = exes.map(x => `<option value="${esc(x)}"></option>`).join("");
+    } catch (err) { toast(errMsg(err), "error"); }
+  });
   invoke("lt_steamless_info").then(info => {
     const s = el.querySelector("#lt-steamless-status");
     if (s) s.innerHTML = info.installed ? `<span class="lt-ok">Установлено${info.version ? ` · ${esc(info.version)}` : ''}</span>` : '<span class="lt-muted">Не установлено</span>';
@@ -1928,6 +1956,20 @@ function promptName(title, value = "") {
   cancel.addEventListener("click", () => done(null));
   inp.addEventListener("keydown", e => { if (e.key === "Enter") done(inp.value.trim() || null); if (e.key === "Escape") done(null); });
 });
+}
+
+async function launchTool(tool, label) {
+  try {
+    const info = await invoke("lt_tool_info", { tool });
+    let latest = null;
+    try { latest = await invoke("lt_tool_latest", { tool }); } catch { /* offline: use what we have */ }
+    if (!info.installed || (latest && info.version && latest !== info.version)) {
+      toast(`${info.installed ? "Обновляю" : "Скачиваю"} ${label}${latest ? ` ${latest}` : ""}…`, "info");
+      await invoke("lt_tool_install", { tool });
+    }
+    await invoke("lt_tool_launch", { tool });
+    toast(`${label} запущен`, "ok");
+  } catch (e) { toast(`${label}: ${errMsg(e)}`, "error"); }
 }
 
 async function doCodeLogin() {

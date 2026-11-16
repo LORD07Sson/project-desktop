@@ -2495,6 +2495,167 @@ pub async fn lt_set_launch_options(app_id: u64, value: String) -> Result<(), Str
     res
 }
 
+// ── External tools (CloudRedirect manager, SteamAutoCrack) ─────────
+//
+// Downloaded from their GitHub releases into our own folder and only ever
+// launched from there — never from a path the webview passes in.
+
+struct ExtTool { key: &'static str, repo: &'static str, exe: &'static str }
+
+const EXT_TOOLS: &[ExtTool] = &[
+    ExtTool { key: "cloudredirect", repo: "madoiscool/CloudRedirect", exe: "CloudRedirect.exe" },
+    ExtTool { key: "steamautocrack", repo: "SteamAutoCracks/Steam-auto-crack", exe: "SteamAutoCrack.exe" },
+];
+
+fn ext_tool(key: &str) -> Result<&'static ExtTool, String> {
+    EXT_TOOLS.iter().find(|t| t.key == key).ok_or_else(|| format!("Неизвестный инструмент: {key}"))
+}
+
+fn ext_tool_dir(t: &ExtTool) -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
+    PathBuf::from(base).join("project-desktop").join(t.key)
+}
+
+/// The tool's exe anywhere under its folder (zips may nest a directory).
+fn ext_tool_exe(t: &ExtTool) -> Option<PathBuf> {
+    fn walk(dir: &Path, name: &str, depth: u8) -> Option<PathBuf> {
+        let rd = std::fs::read_dir(dir).ok()?;
+        let mut subdirs = vec![];
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() { subdirs.push(p); }
+            else if p.file_name().map(|f| f.to_string_lossy().eq_ignore_ascii_case(name)).unwrap_or(false) { return Some(p); }
+        }
+        if depth == 0 { return None; }
+        subdirs.iter().find_map(|d| walk(d, name, depth - 1))
+    }
+    walk(&ext_tool_dir(t), t.exe, 2)
+}
+
+#[derive(Serialize)]
+pub struct ExtToolInfo { pub installed: bool, pub version: Option<String> }
+
+#[tauri::command]
+pub fn lt_tool_info(tool: String) -> Result<ExtToolInfo, String> {
+    let t = ext_tool(&tool)?;
+    let version = std::fs::read_to_string(ext_tool_dir(t).join("version.txt")).ok().map(|s| s.trim().to_string());
+    Ok(ExtToolInfo { installed: ext_tool_exe(t).is_some(), version })
+}
+
+#[tauri::command]
+pub async fn lt_tool_latest(tool: String) -> Result<String, String> {
+    let t = ext_tool(&tool)?;
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    let rel: serde_json::Value = client.get(format!("https://api.github.com/repos/{}/releases/latest", t.repo))
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    rel["tag_name"].as_str().map(|s| s.to_string()).ok_or("GitHub API: нет tag_name".into())
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::Digest;
+    sha2::Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[tauri::command]
+pub async fn lt_tool_install(tool: String) -> Result<String, String> {
+    let t = ext_tool(&tool)?;
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(600)).build().map_err(|e| e.to_string())?;
+    let rel: serde_json::Value = client.get(format!("https://api.github.com/repos/{}/releases/latest", t.repo))
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let tag = rel["tag_name"].as_str().unwrap_or("unknown").to_string();
+    let assets = rel["assets"].as_array().ok_or("В релизе нет файлов")?;
+    let asset_url = |name: &str| assets.iter()
+        .find(|a| a["name"].as_str().map(|n| n.eq_ignore_ascii_case(name)).unwrap_or(false))
+        .and_then(|a| a["browser_download_url"].as_str().map(|s| s.to_string()));
+
+    let dir = ext_tool_dir(t);
+    let staging = dir.with_extension("new");
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+
+    // Plain files (CloudRedirect ships the exe + its dll, each with a .sha256).
+    let mut wrote_any = false;
+    for a in assets {
+        let Some(name) = a["name"].as_str() else { continue };
+        let low = name.to_lowercase();
+        if !(low.ends_with(".exe") || low.ends_with(".dll")) || name.contains(['/', '\\']) { continue; }
+        let url = a["browser_download_url"].as_str().ok_or("Нет URL")?;
+        let bytes = gh_download(&client, url).await?;
+        if let Some(sum_url) = asset_url(&format!("{name}.sha256")) {
+            let sum = String::from_utf8_lossy(&gh_download(&client, &sum_url).await?).to_lowercase();
+            let want = sum.split_whitespace().next().unwrap_or("");
+            if want.len() == 64 && want != sha256_hex(&bytes) {
+                let _ = std::fs::remove_dir_all(&staging);
+                return Err(format!("{name}: контрольная сумма не совпала — файл повреждён или подменён"));
+            }
+        }
+        std::fs::write(staging.join(name), &bytes).map_err(|e| e.to_string())?;
+        wrote_any = true;
+    }
+    // Zip release (SteamAutoCrack).
+    if !wrote_any {
+        let zip_url = assets.iter()
+            .find(|a| a["name"].as_str().map(|n| n.to_lowercase().ends_with(".zip")).unwrap_or(false))
+            .and_then(|a| a["browser_download_url"].as_str())
+            .ok_or("В релизе нет exe или zip")?;
+        let bytes = gh_download(&client, zip_url).await?;
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+            if entry.is_dir() { continue; }
+            let Some((out_path, _)) = zip_entry_dest(&staging, &entry) else { continue };
+            if let Some(p) = out_path.parent() { let _ = std::fs::create_dir_all(p); }
+            let mut buf = vec![];
+            std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| e.to_string())?;
+            std::fs::write(&out_path, &buf).map_err(|e| e.to_string())?;
+        }
+    }
+    let _ = std::fs::write(staging.join("version.txt"), &tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::rename(&staging, &dir).map_err(|e| format!("Не удалось заменить папку (инструмент запущен?): {e}"))?;
+    if ext_tool_exe(t).is_none() { return Err(format!("{} не найден в релизе {tag}", t.exe)); }
+    Ok(tag)
+}
+
+#[tauri::command]
+pub fn lt_tool_launch(tool: String) -> Result<(), String> {
+    let t = ext_tool(&tool)?;
+    let exe = ext_tool_exe(t).ok_or("Инструмент не установлен")?;
+    std::process::Command::new(&exe)
+        .current_dir(exe.parent().unwrap_or(Path::new(".")))
+        .spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Candidate game executables for Steamless, biggest first (the real game exe
+/// is almost always the largest; launchers, crash reporters and redists are skipped).
+#[tauri::command]
+pub fn lt_find_game_exes(app_id: u64) -> Result<Vec<String>, String> {
+    let info = lt_game_install_path(app_id);
+    let root = PathBuf::from(info.path.ok_or("Игра не установлена")?);
+    const SKIP: &[&str] = &["unins", "crash", "redist", "vcredist", "dxsetup", "dotnet", "ue4prereq", "launcherhelper", "easyanticheat", "battleye", "cefprocess", "setup"];
+    let mut found: Vec<(u64, PathBuf)> = vec![];
+    fn walk(dir: &Path, depth: u8, out: &mut Vec<(u64, PathBuf)>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if depth > 0 { walk(&p, depth - 1, out); }
+            } else if p.extension().map(|x| x.eq_ignore_ascii_case("exe")).unwrap_or(false) {
+                out.push((e.metadata().map(|m| m.len()).unwrap_or(0), p));
+            }
+        }
+    }
+    walk(&root, 3, &mut found);
+    found.retain(|(_, p)| {
+        let n = p.file_name().map(|f| f.to_string_lossy().to_lowercase()).unwrap_or_default();
+        !SKIP.iter().any(|s| n.contains(s)) && !n.ends_with(".unpacked.exe")
+    });
+    found.sort_by(|a, b| b.0.cmp(&a.0));
+    Ok(found.into_iter().take(10).map(|(_, p)| p.to_string_lossy().into_owned()).collect())
+}
+
 #[cfg(test)]
 mod parity_tests {
     #[test]
