@@ -3,7 +3,7 @@
 
 import { invoke, listen, openExternal, pickInputFiles } from "./tauri.js";
 import { $ } from "./utils.js";
-import { toast } from "./api.js";
+import { toast, clientHeaders } from "./api.js";
 import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
   ltIsLoggedIn, ltSession, ltSaveSession, ltClearSession,
@@ -1383,7 +1383,7 @@ async function renderUtilities(el) {
     r.innerHTML = '<div class="lt-loading">Генерирую…</div>';
     try {
       const url = ltDlcGenerateUrl(appId, appId, "");
-      const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
+      const filePath = await cachedDownload(`dlc:${aid}`, url, `${gameName(aid)} · DLC`);
       await invoke("lt_install_file", { path: filePath, appId: aid, autoUpdate: false });
       r.innerHTML = '<span class="lt-ok">✅ DLC установлены</span>';
     } catch (e) { r.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; }
@@ -1589,7 +1589,7 @@ async function openFixDetail(appId) {
       toast("Скачиваю манифест…", "info");
       try {
         const url = ltDenuvoDownloadUrl(fixId, "manifest");
-        const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
+        const filePath = await cachedDownload(`fixman:${cacheKeyPart(fixId)}`, url, `${gameName(appId)} · манифест фикса`);
         await invoke("lt_install_file", { path: filePath, appId, autoUpdate: true });
         toast("Манифест установлен", "ok");
       } catch (e) { toast(errMsg(e), "error"); }
@@ -1602,7 +1602,7 @@ async function openFixDetail(appId) {
       toast("Скачиваю фикс…", "info");
       try {
         const url = ltDenuvoDownloadUrl(fixId, "fix");
-        const zipPath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
+        const zipPath = await cachedDownload(`fix:${cacheKeyPart(fixId)}`, url, `${gameName(appId)} · Denuvo-фикс`);
         const result = await invoke("lt_apply_fix", { appId, zipPath });
         toast(`Фикс применён: ${result.files_extracted} файлов${result.backup_created ? ' (бэкап создан)' : ''}`, "ok");
         openFixDetail(appId);
@@ -1980,6 +1980,21 @@ async function confirmAction(msg) {
   });
 }
 
+// Загрузка через кэш студии в Telegram (Автоматизация → «Lua и другие»): свежая копия с сервера, иначе lua.tools —
+// и скачанное уходит в кэш для следующего (тот же файл повторно не заливается, сервер только продлевает дату).
+// Любая ошибка кэша — просто промах, загрузка идёт как раньше.
+const cacheKeyPart = v => String(v || "x").replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 40);
+async function cachedDownload(key, url, label) {
+  const destDir = await getTmpDir();
+  try {
+    const hit = await invoke("lt_cache_get", { key, headers: clientHeaders(), destDir });
+    if (hit) { toast("Взято из кэша студии", "info"); return hit; }
+  } catch { /* кэш недоступен */ }
+  const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir });
+  invoke("lt_cache_put", { key, label: label || "", path: filePath, headers: clientHeaders() }).catch(() => {});
+  return filePath;
+}
+
 async function doDownload(appId, source, gameName) {
   if (!ltIsLoggedIn()) { toast("Войдите в lua.tools", "warn"); return; }
   const key = `${appId}:${source}`;
@@ -1995,7 +2010,7 @@ async function doDownload(appId, source, gameName) {
   queueStatus(item, "downloading", 0);
   toast("Скачиваю…", "info");
   try {
-    const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir: await getTmpDir() });
+    const filePath = await cachedDownload(`man:${appId}:${cacheKeyPart(source)}`, url, `${gameName || appId} · ${source}`);
     queueStatus(item, "installing", 100);
     toast("Устанавливаю…", "info");
     const result = await invoke("lt_install_file", { path: filePath, appId, autoUpdate: true });

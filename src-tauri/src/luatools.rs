@@ -1237,6 +1237,72 @@ pub async fn lt_check_mode_update(mode: String) -> Result<ModeVersionInfo, Strin
     Ok(ModeVersionInfo { mode, latest_tag: tag, download_url: dl })
 }
 
+// ── Кэш загрузок в Telegram (сервер студии: /api/lua-cache) ─────────
+// Скачанное с lua.tools один участник отдаёт серверу, бот кладёт файл в тему «lua и другие»; следующий берёт свежую
+// копию оттуда и не тратит лимит lua.tools. Любая ошибка кэша = промах: дальше обычная загрузка с lua.tools.
+
+const LUA_CACHE_API: &str = concat!(env!("SERVER_ORIGIN"), "/api/lua-cache");
+const LUA_CACHE_MAX_BYTES: u64 = 300 * 1024 * 1024;
+
+fn lua_cache_headers(headers: &std::collections::HashMap<String, String>) -> reqwest::header::HeaderMap {
+    let mut map = reqwest::header::HeaderMap::new();
+    // Только служебные заголовки клиента (X-Init-Data, X-App-Version, X-Preview…), ничего лишнего.
+    for (k, v) in headers {
+        if !k.to_ascii_lowercase().starts_with("x-") { continue; }
+        if let (Ok(name), Ok(value)) = (reqwest::header::HeaderName::from_bytes(k.as_bytes()), reqwest::header::HeaderValue::from_str(v)) {
+            map.insert(name, value);
+        }
+    }
+    map
+}
+
+/// Свежая копия из кэша → путь к файлу в `dest_dir`; нет копии или сервер недоступен → None.
+#[tauri::command]
+pub async fn lt_cache_get(key: String, headers: std::collections::HashMap<String, String>, dest_dir: String) -> Result<Option<String>, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(600)).build().map_err(|e| e.to_string())?;
+    let resp = match client.get(format!("{LUA_CACHE_API}/file")).query(&[("key", &key)]).headers(lua_cache_headers(&headers)).send().await {
+        Ok(r) if r.status().is_success() => r,
+        _ => return Ok(None),
+    };
+    let want = resp.headers().get("x-lua-cache-sha256").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    let Some(filename) = resp.headers().get("content-disposition").and_then(|v| v.to_str().ok()).and_then(content_disposition_filename) else { return Ok(None) };
+    let Ok(bytes) = resp.bytes().await else { return Ok(None) };
+    // Битая/обрезанная копия хуже промаха: ставим только при совпавшем хэше.
+    if want.is_empty() || sha256_hex(&bytes) != want { return Ok(None); }
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    let dest = PathBuf::from(&dest_dir).join(&filename);
+    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    Ok(Some(dest.to_string_lossy().into_owned()))
+}
+
+/// Отдаёт скачанный с lua.tools файл в кэш. Сначала сверка хэша: тот же файл не заливается повторно.
+#[tauri::command]
+pub async fn lt_cache_put(key: String, label: String, path: String, headers: std::collections::HashMap<String, String>) -> Result<bool, String> {
+    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    if meta.len() == 0 || meta.len() > LUA_CACHE_MAX_BYTES { return Ok(false); }
+    let read_path = path.clone();
+    let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(read_path)).await
+        .map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+    let sha = sha256_hex(&bytes);
+    let hdrs = lua_cache_headers(&headers);
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(1800)).build().map_err(|e| e.to_string())?;
+    let touch: serde_json::Value = client.post(format!("{LUA_CACHE_API}/touch")).headers(hdrs.clone())
+        .json(&serde_json::json!({ "key": key, "sha256": sha }))
+        .send().await.map_err(|e| e.to_string())?
+        .error_for_status().map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    if !touch["need_file"].as_bool().unwrap_or(false) { return Ok(touch["stored"].as_bool().unwrap_or(false)); }
+    let name = Path::new(&path).file_name().and_then(|n| n.to_str()).unwrap_or("file.zip").to_string();
+    let form = reqwest::multipart::Form::new()
+        .text("key", key)
+        .text("label", label)
+        .part("file", reqwest::multipart::Part::bytes(bytes).file_name(name));
+    let resp = client.post(format!("{LUA_CACHE_API}/file")).headers(hdrs).multipart(form).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status().as_u16())); }
+    let j: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(j["stored"].as_bool().unwrap_or(false))
+}
+
 // ── Download from lua.tools API (proxied through Tauri for auth) ────
 
 #[derive(Deserialize)]

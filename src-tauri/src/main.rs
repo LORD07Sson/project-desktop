@@ -1944,6 +1944,8 @@ fn main() {
             luatools::lt_install_file,
             luatools::lt_remove_lua,
             luatools::lt_download,
+            luatools::lt_cache_get,
+            luatools::lt_cache_put,
             luatools::lt_plugin_status,
             luatools::lt_restart_steam,
             luatools::lt_list_manifests,

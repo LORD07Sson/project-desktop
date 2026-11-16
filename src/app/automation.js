@@ -11,6 +11,7 @@ const TABS = [
   ["chats", "Чаты бота", '<path d="M4 5h16v11H9l-5 4z"/>'],
   ["reports", "Отчёты", '<path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/>'],
   ["docs", "Документы", '<path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/>'],
+  ["lua", "Lua и другие", '<path d="M12 3v12M7 10l5 5 5-5M4 19h16"/>'],
   ["speed", "Скорость", '<path d="M12 14l4-5M4 17a8 8 0 1 1 16 0"/>'],
   ["logs", "Логи", '<path d="M5 4h14v16H5zM8 9h8M8 13h8M8 17h5"/>'],
 ];
@@ -43,6 +44,11 @@ const HELP = {
     how: ["Файлы отчётов (видео, торренты, субтитры, звук, надписи, архивы) копируются в архивную группу. Если файл уже в Telegram, он пересылается по id без закачки; если лежит на диске сервера, заливается по-настоящему с учётом лимита скорости.",
       "После заливки видео с диска подменяется ссылкой на Telegram-файл, а копия на диске стирается."],
     news: ["Правила по видам файлов и размеру, дедупликация, предпросмотр очереди; готовятся маршруты по направлениям."],
+  },
+  lua: {
+    how: ["Что участник скачал в LuaTools с lua.tools (lua и zip манифестов, DLC, Denuvo-фиксы и их манифесты), бот кладёт в архивную группу, в тему «lua и другие».",
+      "Следующий, кто качает то же самое, получает копию из Telegram, если она свежая (срок задаётся ниже) — лимит lua.tools не тратится. Устаревшая копия качается заново с lua.tools; если файл не изменился, в Telegram он повторно не заливается, только продлевается дата."],
+    news: ["Новая вкладка: кэш LuaTools в Telegram."],
   },
   speed: {
     how: ["Каждый вид загрузки имеет свой потолок скорости, чтобы хостинг не включал ограничение канала (оно приходит выше ~50 Мбит/с надолго).",
@@ -516,6 +522,7 @@ export function mountAutomation(root) {
     else if (name === "reports") import("./reports-archive.js").then(m => m.mountReportsArchive(target));
     else if (name === "docs") mountDocs(target);
     else if (name === "logs") mountLogs(target);
+    else if (name === "lua") import("./lua-cache.js").then(m => m.mountLuaCache(target));
     else mountSpeed(target);
   };
   root.querySelectorAll("[data-au-tab]").forEach(b => b.addEventListener("click", () => show(b.dataset.auTab)));
