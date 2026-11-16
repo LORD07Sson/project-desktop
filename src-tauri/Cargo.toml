@@ -87,6 +87,10 @@ tokio = { version = "1", features = ["net", "io-util", "time", "sync"] }
 # tauri-plugin-shell::Shell::open той же цели deprecated в пользу этого
 # плагина начиная с tauri 2.
 tauri-plugin-opener = "2.5.5"
+# luatools.rs: распаковка zip-архивов с lua/manifest файлами.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# luatools.rs: установка mtime на свежеустановленных файлах.
+filetime = "0.2"
 
 # windows-rs — только на Windows: mpv_embed.rs создаёт нативное child-окно
 # (CreateWindowExW) под видео mpv (--wid) и двигает его SetWindowPos при
@@ -113,6 +117,8 @@ windows = { version = "0.62", features = [
     "Win32_Storage_EnhancedStorage",
     # installs.rs: цель ярлыка (IShellLinkW::GetPath) и тип диска при поиске старых копий программы.
     "Win32_Storage_FileSystem",
+    # luatools.rs: доступ к реестру Steam для определения пути установки.
+    "Win32_System_Registry",
 ] }
 # Тосты под своим AUMID (desktop_notify.rs) — та же версия, что тянет
 # tauri-plugin-notification, отдельной копии крейта не появляется.

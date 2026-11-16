@@ -24,6 +24,7 @@ mod torrent_clients;
 mod media_tools;
 mod token_store;
 mod upscale;
+mod luatools;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -1936,6 +1937,12 @@ fn main() {
             mt_mux_media,
             open_log_folder,
             reveal_in_folder,
+            luatools::lt_steam_info,
+            luatools::lt_list_installed,
+            luatools::lt_read_lua,
+            luatools::lt_install_file,
+            luatools::lt_remove_lua,
+            luatools::lt_download,
         ])
         .setup(|app| {
             // Первая строка в файловом логе за сеанс — якорь, от которого
