@@ -315,7 +315,12 @@ function attachGlobal(body) {
     if (enableBtn) { doToggleEnable(parseInt(enableBtn.dataset.enableAppid, 10), parseInt(enableBtn.dataset.enableDepot, 10), enableBtn.dataset.enableAction === "enable"); return; }
 
     const card = e.target.closest("[data-appid]:not([data-dl-source]):not([data-remove-appid])");
-    if (card) openDetail(parseInt(card.dataset.appid, 10));
+    if (card) {
+      const id = parseInt(card.dataset.appid, 10);
+      // Manage → a side panel with info + actions (like LuaTools); elsewhere the full page.
+      if (currentPage === "manage" && card.classList.contains("lt-gc")) openGameDrawer(id);
+      else openDetail(id);
+    }
   });
 }
 
@@ -1997,6 +2002,125 @@ async function doAltDownload(appId, alt, gameName) {
     openDetail(appId);
   } catch (e) { queueDone(item, false, errMsg(e)); toast(errMsg(e), "error"); }
   finally { inflight.delete(key); }
+}
+
+// ── Manage: game side panel ────────────────────────────────────────
+
+const DRAWER_ICONS = {
+  copy: '<svg class="lt-icon" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  depots: '<svg class="lt-icon" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-12 7"/></svg>',
+  download: '<svg class="lt-icon" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>',
+  play: '<svg class="lt-icon" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg>',
+  drm: '<svg class="lt-icon" viewBox="0 0 24 24"><path d="M7 3v6a5 5 0 0 0 10 0V3M7 21v-4M17 21v-4"/></svg>',
+  globe: '<svg class="lt-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+  ext: '<svg class="lt-icon" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+  folder: '<svg class="lt-icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  trash: '<svg class="lt-icon" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  close: '<svg class="lt-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+};
+
+function closeGameDrawer() {
+  document.querySelector(".lt-drawer-wrap")?.remove();
+  document.removeEventListener("keydown", drawerEsc);
+}
+function drawerEsc(e) { if (e.key === "Escape") closeGameDrawer(); }
+
+async function openGameDrawer(appId) {
+  closeGameDrawer();
+  const inst = installedList.find(i => i.app_id === appId);
+  const wrap = document.createElement("div");
+  wrap.className = "lt-drawer-wrap";
+  wrap.innerHTML = `<div class="lt-drawer-scrim"></div>
+    <aside class="lt-drawer" role="dialog" aria-label="${esc(gameName(appId))}">
+      <button class="lt-btn lt-btn-ghost lt-drawer-close" title="Закрыть">${DRAWER_ICONS.close}</button>
+      <div class="lt-drawer-body"><div class="lt-loading">Загружаю…</div></div>
+    </aside>`;
+  ($("#luatools-body") || document.body).appendChild(wrap);
+  document.addEventListener("keydown", drawerEsc);
+  wrap.querySelector(".lt-drawer-scrim").addEventListener("click", closeGameDrawer);
+  wrap.querySelector(".lt-drawer-close").addEventListener("click", closeGameDrawer);
+
+  const [d, game] = await Promise.all([
+    ltGameDetails(String(appId)).catch(() => null),
+    invoke("lt_game_install_path", { appId }).catch(() => ({ installed: false })),
+  ]);
+  if (!wrap.isConnected) return;
+  const name = d?.name || gameName(appId);
+  const fmtDay = ts => ts ? new Date(ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" }) : "";
+  const released = d?.release_date?.date || "";
+  const genres = (d?.genres || []).map(g => g.description).filter(Boolean);
+  const row = (k, v) => v ? `<div class="lt-drawer-kv"><span>${k}</span><span>${esc(v)}</span></div>` : "";
+  const body = wrap.querySelector(".lt-drawer-body");
+  body.innerHTML = `
+    <img class="lt-drawer-img" data-lt-img="${appId}" src="${esc(d?.header_image || steamHeader(appId))}" alt="">
+    <h3 class="lt-drawer-title">${esc(name)}</h3>
+    <div class="lt-drawer-id">App ID: ${appId} <button class="lt-icon-btn" data-dr="copy" title="Скопировать App ID">${DRAWER_ICONS.copy}</button></div>
+    <div class="lt-drawer-dates">${[inst ? `Добавлено ${fmtDay(inst.modified)}` : "", released ? `Вышла ${esc(released)}` : ""].filter(Boolean).join(" • ")}</div>
+    ${d?.short_description ? `<h4 class="lt-drawer-h">Об игре</h4><p class="lt-drawer-desc">${esc(d.short_description.replace(/<[^>]+>/g, ""))}</p>` : ""}
+    ${row("Разработчик", (d?.developers || []).join(", "))}
+    ${row("Издатель", (d?.publishers || []).join(", "))}
+    ${genres.length ? `<div class="lt-drawer-tags">${genres.map(g => `<span class="lt-chip2">${esc(g)}</span>`).join("")}</div>` : ""}
+    <div class="lt-drawer-actions">
+      <h4 class="lt-drawer-h">Действия</h4>
+      <button class="lt-btn lt-btn-primary" data-dr="depots">${DRAWER_ICONS.depots} Управление депо</button>
+      <button class="lt-btn" data-dr="update">${DRAWER_ICONS.download} Обновить / скачать заново</button>
+      <button class="lt-btn" data-dr="launch">${DRAWER_ICONS.play} Параметры запуска…</button>
+      ${game.installed ? `<button class="lt-btn" data-dr="drm">${DRAWER_ICONS.drm} Удалить DRM Steam</button>` : ""}
+      <div class="lt-drawer-pair">
+        <button class="lt-btn" data-dr="store">${DRAWER_ICONS.globe} Открыть страницу</button>
+        <button class="lt-btn" data-dr="steam">${DRAWER_ICONS.ext} Открыть в Steam</button>
+      </div>
+      <div class="lt-drawer-pair">
+        <button class="lt-btn" data-dr="reveal">${DRAWER_ICONS.folder} Показать .lua</button>
+        <button class="lt-btn" data-dr="copy">${DRAWER_ICONS.copy} Скопировать App ID</button>
+      </div>
+      <button class="lt-btn lt-btn-danger" data-dr="remove">${DRAWER_ICONS.trash} Удалить этот lua</button>
+    </div>`;
+
+  const toTools = tab => { closeGameDrawer(); toolsState.appId = appId; toolsState.tab = tab; toolsState.preset = ""; toolsState.depotQ = ""; switchPage("tools"); };
+  const actions = {
+    copy: () => navigator.clipboard.writeText(String(appId)).then(() => toast("App ID скопирован", "ok"), () => toast("Буфер обмена недоступен", "error")),
+    depots: () => toTools("depots"),
+    launch: () => toTools("launch"),
+    update: async () => {
+      if (!ltIsLoggedIn()) {
+        if (ltConfig.src_sushi !== false) { closeGameDrawer(); return doAltDownload(appId, "sushi", name); }
+        toast("Войдите в lua.tools", "warn"); return;
+      }
+      const sources = await ltCheckSources(String(appId)).catch(() => ({}));
+      const src = Object.entries(sources).find(([, v]) => v === "available")?.[0];
+      if (!src) { toast("Нет доступных источников", "warn"); return; }
+      closeGameDrawer();
+      return doDownload(appId, src, name);
+    },
+    drm: async () => {
+      const exes = await invoke("lt_find_game_exes", { appId });
+      if (!exes.length) { toast("Exe игры не найден", "warn"); return; }
+      if (!await confirmAction(`Снять SteamStub DRM с ${exes[0]}? Оригинал сохранится как .exe.bak.`)) return;
+      if (!(await invoke("lt_steamless_info")).installed) { toast("Скачиваю Steamless…", "info"); await invoke("lt_steamless_install"); }
+      await invoke("lt_steamless_run", { exePath: exes[0] });
+      toast("DRM снят", "ok");
+    },
+    store: () => openExternal(`https://store.steampowered.com/app/${appId}/`),
+    steam: () => invoke("lt_open_in_steam", { appId }),
+    reveal: async () => {
+      const info = await invoke("lt_steam_info");
+      await invoke("reveal_in_folder", { path: `${info.path}\\config\\stplug-in\\${appId}.lua` });
+    },
+    remove: async () => {
+      if (!await confirmAction(`Удалить lua для ${name}? Игра пропадёт из библиотеки Steam после перезапуска.`)) return;
+      await invoke("lt_remove_lua", { appId });
+      toast(`${name}: lua удалён`, "ok");
+      closeGameDrawer();
+      installedList = await invoke("lt_list_installed");
+      renderPage(currentPage);
+    },
+  };
+  body.addEventListener("click", e => {
+    const b = e.target.closest("[data-dr]");
+    if (!b) return;
+    withBusy(b, async () => { try { await actions[b.dataset.dr](); } catch (err) { toast(errMsg(err), "error"); } });
+  });
 }
 
 async function doRemove(appId) {

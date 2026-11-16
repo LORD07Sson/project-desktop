@@ -1979,6 +1979,7 @@ fn main() {
             luatools::lt_store_button_state,
             luatools::lt_store_button_set,
             luatools::lt_store_status,
+            luatools::lt_open_in_steam,
             luatools::lt_source_sushitools,
             luatools::lt_hubcap_validate,
             luatools::lt_hubcap_fetch,

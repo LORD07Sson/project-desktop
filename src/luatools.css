@@ -824,3 +824,29 @@
 }
 @keyframes lt-beta-flow { to { background-position: 200% 0; } }
 @media (prefers-reduced-motion: reduce) { .lt-beta { animation: none; } }
+
+/* Manage → game side panel */
+.lt-drawer-wrap { position: fixed; inset: 0; z-index: 900; }
+.lt-drawer-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .45); }
+.lt-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw; display: flex; flex-direction: column;
+  background: var(--surface-1, #1c1b22); border-left: 1px solid rgba(255, 255, 255, .08); box-shadow: -12px 0 40px rgba(0, 0, 0, .45);
+  animation: lt-drawer-in .18s ease-out; }
+@keyframes lt-drawer-in { from { transform: translateX(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .lt-drawer { animation: none; } }
+.lt-drawer-close { position: absolute; top: 12px; right: 12px; z-index: 1; padding: 6px 10px; }
+.lt-drawer-body { flex: 1; overflow-y: auto; padding: 56px 20px 16px; display: flex; flex-direction: column; }
+.lt-drawer-img { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; border-radius: 6px; background: rgba(255, 255, 255, .05); }
+.lt-drawer-title { margin: 14px 0 4px; font-size: 1.15rem; }
+.lt-drawer-id { display: flex; align-items: center; gap: 6px; font-size: .78rem; opacity: .65; }
+.lt-icon-btn { background: none; border: none; color: inherit; cursor: pointer; padding: 2px; display: inline-flex; opacity: .8; }
+.lt-icon-btn:hover { opacity: 1; }
+.lt-drawer-dates { font-size: .74rem; opacity: .45; margin-top: 2px; }
+.lt-drawer-h { margin: 16px 0 6px; font-size: .82rem; }
+.lt-drawer-desc { margin: 0; font-size: .8rem; line-height: 1.5; opacity: .75; }
+.lt-drawer-kv { display: grid; grid-template-columns: 84px 1fr; gap: 8px; font-size: .78rem; margin-top: 6px; }
+.lt-drawer-kv span:first-child { opacity: .5; }
+.lt-drawer-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.lt-drawer-actions { margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.lt-drawer-actions .lt-btn { justify-content: center; width: 100%; }
+.lt-drawer-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lt-drawer-pair .lt-btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

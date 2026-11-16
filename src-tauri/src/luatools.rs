@@ -1699,6 +1699,17 @@ pub fn lt_launch_game(app_id: u64, args: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Opens the game's store page inside the Steam client.
+#[tauri::command]
+pub fn lt_open_in_steam(app_id: u64) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("cmd").args(["/C", "start", "", &format!("steam://store/{app_id}")])
+            .spawn().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────────
 // Steamless — SteamStub DRM removal
 // ──────────────────────────────────────────────────────────────────
