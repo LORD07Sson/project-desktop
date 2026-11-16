@@ -1716,7 +1716,7 @@ async function openDetail(appId) {
           <h4>Источники${sourceList.length ? ` (${sourceList.length})` : ""}</h4>
           ${sourceList.length ? sourceList.map(s => `<button class="lt-btn lt-btn-primary lt-btn-sm" data-dl-source="${esc(s)}" data-appid="${appId}" data-game-name="${esc(name)}">📥 ${esc(s)}</button>`).join(" ") : '<span class="lt-muted">Нет</span>'}
           ${ltConfig.src_sushi !== false ? `<button class="lt-btn lt-btn-sm" data-dl-alt="sushi" data-appid="${appId}" data-game-name="${esc(name)}">📥 sushitools</button>` : ''}
-          ${ltConfig.src_hubcap && ltConfig.hubcap_key ? `<button class="lt-btn lt-btn-sm" data-dl-alt="hubcap" data-appid="${appId}" data-game-name="${esc(name)}">📥 Hubcap</button>` : ''}
+          ${ltConfig.src_hubcap && ltConfig.hubcap_key ? `<button class="lt-btn lt-btn-sm" id="lt-hubcap-btn" data-dl-alt="hubcap" data-appid="${appId}" data-game-name="${esc(name)}">📥 Hubcap <span class="lt-muted" id="lt-hubcap-badge">…</span></button>` : ''}
         </div>
 
         ${variants.length ? `<div class="lt-section"><h4>Варианты (${variants.length})</h4>
@@ -1760,6 +1760,15 @@ async function openDetail(appId) {
       try { await invoke("lt_vault_restore", { appId, hash }); toast("Версия восстановлена", "ok"); openDetail(appId); }
       catch (err) { toast(errMsg(err), "error"); }
     })));
+    if (el.querySelector("#lt-hubcap-badge")) {
+      invoke("lt_hubcap_status", { appId, apiKey: ltConfig.hubcap_key }).then(st => {
+        const b = el.querySelector("#lt-hubcap-badge");
+        if (!b) return;
+        const ok = st && st.available !== false && !/unavail|missing|none/i.test(String(st.status || ""));
+        b.textContent = ok ? "· есть" : "· нет";
+        b.className = ok ? "lt-ok" : "lt-muted";
+      }).catch(() => { const b = el.querySelector("#lt-hubcap-badge"); if (b) b.textContent = ""; });
+    }
     el.querySelector("#lt-d-copy")?.addEventListener("click", () => {
       navigator.clipboard.writeText(String(appId)).then(() => toast("AppID скопирован", "ok"), () => toast("Буфер обмена недоступен", "error"));
     });

@@ -1975,6 +1975,7 @@ fn main() {
             luatools::lt_tool_install,
             luatools::lt_tool_launch,
             luatools::lt_find_game_exes,
+            luatools::lt_hubcap_status,
             luatools::lt_source_sushitools,
             luatools::lt_hubcap_validate,
             luatools::lt_hubcap_fetch,

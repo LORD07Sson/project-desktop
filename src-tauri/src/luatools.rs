@@ -1808,6 +1808,25 @@ pub async fn lt_hubcap_validate(api_key: String) -> Result<serde_json::Value, St
     Ok(serde_json::from_str(&text).unwrap_or(serde_json::json!({})))
 }
 
+/// Whether Hubcap has a manifest for the app: `null` when it doesn't (404),
+/// otherwise the status JSON as Hubcap returns it.
+#[tauri::command]
+pub async fn lt_hubcap_status(app_id: u64, api_key: String) -> Result<serde_json::Value, String> {
+    let api_key = api_key.trim().to_string();
+    if api_key.is_empty() { return Err("Нет API-ключа Hubcap".into()); }
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15))
+        .build().map_err(|e| e.to_string())?;
+    let resp = client.get(format!("{HUBCAP_API}/status/{app_id}"))
+        .header("X-API-Key", &api_key)
+        .header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND { return Ok(serde_json::Value::Null); }
+    if !resp.status().is_success() { return Err(hubcap_error(resp).await); }
+    if is_html(&resp) { return Err("Hubcap вернул страницу вместо ответа API".into()); }
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    Ok(serde_json::from_str(&text).unwrap_or(serde_json::json!({})))
+}
+
 #[tauri::command]
 pub async fn lt_hubcap_fetch(app_id: u64, api_key: String) -> Result<String, String> {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120))
