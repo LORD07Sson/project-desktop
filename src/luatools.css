@@ -450,3 +450,83 @@
 .lt-manage-item:has(.lt-img-missing) {
   background-image: linear-gradient(135deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
 }
+
+/* ── Home (LuaProject) ─────────────────────────────────────────── */
+
+.lt-hs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.lt-hs-card {
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 12px;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 108px;
+}
+.lt-hs-num { font-size: 1.9rem; font-weight: 700; line-height: 1.1; color: #b4a2f5; }
+.lt-hs-label { font-size: .8rem; opacity: .6; }
+.lt-hs-status { font-size: 1.05rem; font-weight: 600; opacity: .75; }
+.lt-hs-status.is-ok { color: #6ee7a8; opacity: 1; }
+.lt-hs-btn {
+  margin-top: 8px;
+  background: #c4b5f7;
+  border-color: transparent;
+  color: #1b1530;
+  font-weight: 500;
+}
+.lt-hs-btn:hover { background: #d3c7fa; }
+
+.lt-hi {
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 12px;
+  padding: 0 10px;
+  margin-bottom: 12px;
+}
+.lt-hi-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 8px 6px;
+  font-size: .88rem;
+  word-break: break-all;
+}
+.lt-hi-row + .lt-hi-row { border-top: 1px solid rgba(255, 255, 255, .08); }
+.lt-hi-row svg, .lt-hd svg {
+  width: 18px; height: 18px; flex: none;
+  fill: none; stroke: #b4a2f5; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.lt-hi-row:first-child svg { stroke: #6ee7a8; }
+.lt-hi-warn svg { stroke: #f5c26b; }
+.lt-hi-auth { display: flex; align-items: center; gap: 10px; flex: 1; }
+.lt-hi-action { margin-left: auto; }
+
+.lt-drop-zone.lt-hd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+.lt-hd-icon svg { width: 22px; height: 22px; }
+.lt-hd-text { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.lt-hd-text strong { font-size: .9rem; }
+.lt-hd-text .lt-muted { font-size: .78rem; }
+.lt-hd-browse { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; }
+.lt-hd-browse svg { width: 14px; height: 14px; stroke: currentColor; }
+
+@media (max-width: 640px) {
+  .lt-hs { grid-template-columns: 1fr; }
+}

@@ -1,7 +1,7 @@
 // LuaTools — полная интеграция.
 // Главная, Добавить, Управление, Инструменты, Режим, Фиксы, Плагин, Загрузки, Настройки.
 
-import { invoke, listen, openExternal } from "./tauri.js";
+import { invoke, listen, openExternal, pickInputFiles } from "./tauri.js";
 import { $ } from "./utils.js";
 import { toast } from "./api.js";
 import {
@@ -157,7 +157,6 @@ function shell() {
 }
 
 function attachDropZone(body) {
-  const validExt = /\.(lua|manifest|zip)$/i;
   body.addEventListener("dragover", e => {
     if (e.target.closest(".lt-drop-zone")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }
   });
@@ -185,7 +184,13 @@ function attachDropZone(body) {
     // (file-drop.js → installDroppedPaths), у File в вебвью нет пути на диске.
   });
 
-  setLuatoolsDropHandler(async paths => {
+  setLuatoolsDropHandler(paths => installPaths(paths, body));
+}
+
+// Установка файлов, пришедших перетаскиванием или из «Обзор файлов…».
+async function installPaths(paths, body) {
+  const validExt = /\.(lua|manifest|zip)$/i;
+  {
     const files = paths.filter(p => validExt.test(p));
     if (!files.length) { toast("Неподдерживаемый формат файла (нужен .lua, .manifest или .zip)", "warn"); return; }
     for (const path of files) {
@@ -198,7 +203,7 @@ function attachDropZone(body) {
       } catch (err) { toast(`${name}: ${errMsg(err)}`, "error"); }
     }
     refreshAll(body);
-  });
+  }
 }
 
 // Картинки: у новых игр header.jpg лежит по другому пути CDN (store_item_assets/…/<hash>/),
@@ -237,7 +242,7 @@ function attachGlobal(body) {
     const link = e.target.closest('a[target="_blank"][href^="http"]');
     if (link) { e.preventDefault(); openExternal(link.href).catch(err => toast(errMsg(err), "error")); return; }
 
-    const nav = e.target.closest(".lt-nav[data-page]");
+    const nav = e.target.closest("[data-page]");
     if (nav) { switchPage(nav.dataset.page); return; }
     if (e.target.closest("#lt-restart-steam")) { doRestartSteam(); return; }
     if (e.target.closest("#lt-back-btn")) { switchPage("home"); return; }
@@ -316,6 +321,14 @@ async function refreshAll(body) {
 
 function updateAuthUI() {
   for (const el of document.querySelectorAll(".lt-auth-area")) {
+    if (el.dataset.variant === "row") {
+      const u = ltSession()?.user;
+      const who = u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email || "";
+      el.innerHTML = ltIsLoggedIn()
+        ? `<span>Выполнен вход${who ? ` как ${esc(who)}` : ""}</span><button id="lt-logout-btn" class="lt-btn lt-btn-sm lt-hi-action">Выйти</button>`
+        : `<span class="lt-muted">Вход в lua.tools не выполнен</span><button id="lt-login-btn" class="lt-btn lt-btn-sm lt-hi-action">Войти</button>`;
+      continue;
+    }
     if (ltIsLoggedIn()) {
       const u = ltSession()?.user;
       el.innerHTML = `<span class="lt-user">👤 ${esc(u?.user_metadata?.full_name || u?.email || "logged in")}</span> <button id="lt-logout-btn" class="lt-btn lt-btn-sm">Выйти</button>`;
@@ -331,7 +344,7 @@ function updateAuthUI() {
 
 function renderOnboarding(el) {
   el.innerHTML = `<div class="lt-onboarding">
-    <h2>Добро пожаловать в LuaTools</h2>
+    <h2>Добро пожаловать в LuaProject</h2>
     <p>Для работы необходим установленный Steam и плагин (BetterSteamTools или stplug-in).</p>
     <div class="lt-onboard-steps">
       <div class="lt-onboard-step ${steamInfo?.path ? 'lt-ok' : 'lt-error'}">
@@ -415,25 +428,55 @@ async function renderBuilds(el) {
 // HOME
 // ══════════════════════════════════════════════════════════════════
 
+const HOME_ICONS = {
+  steam: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r=".6"/><circle cx="17.5" cy="13" r=".6"/></svg>',
+  user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"/></svg>',
+  mode: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
+  warn: '<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>',
+  drop: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>',
+};
+
 async function renderHome(el) {
+  const ps = pluginStatus;
+  const ver = ps?.version ? ` · v${esc(String(ps.version).replace(/^v/i, ""))}` : "";
   el.innerHTML = `
-    <h2 class="lt-page-title">Добро пожаловать в LuaTools</h2>
-    <div class="lt-home-stats">
-      <div class="lt-stat-card"><span class="lt-stat-num">${installedList.length}</span><span class="lt-stat-label">Lua на борту</span></div>
-      <div class="lt-stat-card"><span class="lt-stat-label">Статус плагина</span><span class="${pluginStatus?.installed ? 'lt-ok' : 'lt-error'}">${pluginStatus?.installed ? 'Установлено' : 'Не установлен'}${pluginStatus?.version ? ` · v${esc(pluginStatus.version)}` : ''}</span></div>
+    <h2 class="lt-page-title">Добро пожаловать в LuaProject</h2>
+    <div class="lt-hs">
+      <div class="lt-hs-card">
+        <span class="lt-hs-num">${installedList.length}</span>
+        <span class="lt-hs-label">Lua на борту</span>
+      </div>
+      <div class="lt-hs-card">
+        <span class="lt-hs-label">Статус плагина</span>
+        <span class="lt-hs-status ${ps?.installed ? "is-ok" : ""}">${ps?.installed ? `Установлено${ver}` : "Не установлено"}</span>
+        ${ps?.installed ? "" : '<button class="lt-btn lt-hs-btn" data-page="mode">Установить</button>'}
+      </div>
     </div>
-    <div class="lt-home-info">
-      <div class="lt-info-row">${steamInfo?.path ? `<span class="lt-ok">✅ Steam обнаружен · ${esc(steamInfo.path)}</span>` : '<span class="lt-error">❌ Steam не найден</span>'}</div>
-      <div class="lt-info-row lt-auth-area"></div>
-      ${pluginStatus?.mode ? `<div class="lt-info-row">⚙ Режим · ${esc(pluginStatus.mode)}</div>` : ''}
-      ${steamInfo?.running ? '<div class="lt-info-row"><span class="lt-warn">⚠ Steam запущен</span></div>' : ''}
+    <div class="lt-hi">
+      <div class="lt-hi-row">${HOME_ICONS.steam}${steamInfo?.path
+        ? `<span>Steam обнаружен · ${esc(steamInfo.path)}</span>`
+        : '<span class="lt-error">Steam не найден</span>'}</div>
+      <div class="lt-hi-row">${HOME_ICONS.user}<span class="lt-auth-area lt-hi-auth" data-variant="row"></span></div>
+      ${ps?.mode ? `<div class="lt-hi-row">${HOME_ICONS.mode}<span>Режим · ${esc(ps.mode)}</span></div>` : ""}
+      ${steamInfo?.running && !ps?.installed ? `<div class="lt-hi-row lt-hi-warn">${HOME_ICONS.warn}<span>Steam запущен — установка плагина его перезапустит</span></div>` : ""}
     </div>
-    <div class="lt-drop-zone" id="lt-drop-home">
-      <div class="lt-drop-inner"><span class="lt-drop-icon">📥</span><div>Перетащите сюда файлы .lua, .manifest или .zip</div>
-      <div class="lt-muted">…или ссылку SteamDB / магазина Steam</div></div>
+    <div class="lt-drop-zone lt-hd" id="lt-drop-home">
+      <span class="lt-hd-icon">${HOME_ICONS.drop}</span>
+      <div class="lt-hd-text">
+        <strong>Перетащите сюда файлы .lua, .manifest или .zip</strong>
+        <span class="lt-muted">…или перетащите сюда ссылку SteamDB / магазина Steam, чтобы добавить эту игру.</span>
+        <button class="lt-btn lt-btn-sm lt-hd-browse" id="lt-browse-files">${HOME_ICONS.folder} Обзор файлов…</button>
+      </div>
     </div>
     <section class="lt-section"><h3>Недавно добавленные</h3><div class="lt-grid" id="lt-recent-grid"></div></section>
     <section class="lt-section"><h3>Популярное</h3><div class="lt-grid lt-grid-featured" id="lt-featured-grid"><div class="lt-loading">Загружаю…</div></div></section>`;
+  el.querySelector("#lt-browse-files")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    try {
+      const paths = await pickInputFiles({ multiple: true, filters: [{ name: "LuaTools", extensions: ["lua", "manifest", "zip"] }] });
+      if (paths?.length) await installPaths(paths, $("#luatools-body"));
+    } catch (err) { toast(errMsg(err), "error"); }
+  }));
   updateAuthUI();
   renderRecentCards();
   loadFeaturedStrip();
