@@ -805,3 +805,8 @@
 .lt-pt-unit { align-self: center; font-size: .82rem; opacity: .7; }
 .lt-pt-note { font-size: .72rem; margin: 10px 0 0; }
 .lt-tabs { flex-wrap: wrap; }
+
+/* Sidebar: wide enough for "Перезапустить Steam", no stray horizontal
+   scrollbar, and pinned to the viewport height while the page scrolls. */
+.lt-sidebar { width: 200px; overflow-x: hidden; position: sticky; top: 0; align-self: flex-start; height: calc(100vh - 58px); }
+.lt-sidebar .lt-nav { overflow: hidden; text-overflow: ellipsis; }

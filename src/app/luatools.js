@@ -659,9 +659,13 @@ function renderAdd(el) {
   </div>`;
   bindBrowse(el);
 
+  // Steam lists its own hardware (Controller, Deck, Frame…) among games.
+  const isHardware = i => hardwareAppIds.has(i.appId) || hardwareAppIds.has(String(i.appId))
+    || /^(Steam (Controller|Deck|Frame|Machine|Link|Index)|Valve Index)/i.test(i.name || "");
   const strip = (items, id) => {
     const box = el.querySelector(id);
     if (!box) return;
+    if (ltConfig.filter_hardware !== false) items = items.filter(i => !isHardware(i));
     box.innerHTML = items.length
       ? items.map(i => gameCardHtml({ appId: i.appId, name: i.name, img: i.image })).join("")
       : '<div class="lt-empty">—</div>';
@@ -1029,7 +1033,7 @@ async function renderTools(el) {
       }
       if (body.isConnected && body.querySelector("#lt-depots")) drawDepots();
     });
-    const typeOf = e => e.hasKey ? "ДЕПО" : (e.id === lua.baseAppId ? "ИГРА" : "DLC");
+    const typeOf = e => (e.id === (lua.baseAppId || appId) ? "ИГРА" : e.hasKey ? "ДЕПО" : "DLC");
     const drawDepots = () => {
       const q = toolsState.depotQ.toLowerCase();
       const list = q ? all.filter(e => String(e.id).includes(q) || (e.comment || "").toLowerCase().includes(q) || typeOf(e).toLowerCase().includes(q)) : all;
@@ -1846,7 +1850,7 @@ function renderLuaEntries(lua, appId) {
       const hasMf = e.manifestId || e.commentedManifestId;
       return `<tr class="${e.disabled ? 'lt-row-disabled' : ''}">
         <td>${e.id}</td>
-        <td>${e.hasKey ? "Депо" : (e.id === lua.baseAppId ? "Base" : "DLC")}</td>
+        <td>${e.id === (lua.baseAppId || appId) ? "Base" : e.hasKey ? "Депо" : "DLC"}</td>
         <td>${esc(e.comment || "")}</td>
         <td>${e.manifestId ? `<code>${e.manifestId}</code>` : (e.commentedManifestId ? `<code class="lt-muted">${e.commentedManifestId}</code>` : "—")}</td>
         <td class="lt-td-actions">
