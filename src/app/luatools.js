@@ -466,18 +466,9 @@ async function renderTools(el) {
         <div class="lt-tool-form"><button class="lt-btn" id="lt-ddm-install">Установить/Обновить</button><button class="lt-btn lt-btn-primary" id="lt-ddm-run">Скачать</button></div>
         <pre id="lt-ddm-out" class="lt-muted" style="font-size:.75rem;max-height:200px;overflow:auto;margin-top:8px"></pre>
       </div>
-      <div class="lt-tool-card"><h3>🎫 Промокод</h3><p class="lt-muted">Активировать промокод lua.tools</p>
-        <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-promo" placeholder="код"><button class="lt-btn lt-btn-primary" id="lt-promo-redeem">Активировать</button></div>
-        <div id="lt-promo-result"></div>
-      </div>
       <div class="lt-tool-card"><h3>🔑 Hubcap</h3><p class="lt-muted">Альтернативный источник манифестов</p>
         <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-hubcap-key" placeholder="API-ключ"><button class="lt-btn" id="lt-hubcap-save">Сохранить</button></div>
         <div id="lt-hubcap-status"></div>
-      </div>
-      <div class="lt-tool-card"><h3>🔌 MFG-плагин API</h3><p class="lt-muted">Локальный HTTP-сервер 127.0.0.1:6767</p>
-        <div id="lt-mfg-status" class="lt-loading">Проверяю…</div>
-        <button class="lt-btn lt-btn-sm" id="lt-mfg-refresh">Обновить</button>
-        <button class="lt-btn lt-btn-sm" id="lt-mfg-dismiss">Сбросить загруженные</button>
       </div>
       <div class="lt-tool-card"><h3>🌐 DNS-over-HTTPS</h3><p class="lt-muted">Обход блокировок через 1.1.1.1</p>
         <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-doh-host" value="lua.tools"><button class="lt-btn" id="lt-doh-resolve">Resolve</button></div>
@@ -565,17 +556,6 @@ async function renderTools(el) {
     } catch (e) { out.textContent = e.message || String(e); }
   });
 
-  // Promo code
-  el.querySelector("#lt-promo-redeem")?.addEventListener("click", async () => {
-    if (!ltIsLoggedIn()) { toast("Войдите", "warn"); return; }
-    const code = el.querySelector("#lt-promo").value.trim(); if (!code) return;
-    const r = el.querySelector("#lt-promo-result"); r.innerHTML = '<div class="lt-loading">…</div>';
-    try {
-      const res = await invoke("lt_redeem_code", { code, token: ltSession()?.access_token });
-      r.innerHTML = `<span class="lt-ok">✅ ${esc(res.message || JSON.stringify(res))}</span>`;
-    } catch (e) { r.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; }
-  });
-
   // Hubcap
   invoke("lt_config_get").then(cfg => {
     const existing = cfg?.hubcap_key; if (existing) el.querySelector("#lt-hubcap-key").value = existing;
@@ -588,17 +568,6 @@ async function renderTools(el) {
       await invoke("lt_config_set", { key: "hubcap_key", value: key });
       s.innerHTML = `<span class="lt-ok">✅ Валиден${res?.expiry ? ` · до ${esc(res.expiry)}` : ''}</span>`;
     } catch (e) { s.innerHTML = `<span class="lt-error">${esc(e.message || e)}</span>`; }
-  });
-
-  // MFG plugin
-  const refreshMfg = () => invoke("lt_mfg_ping").then(ok => {
-    const s = el.querySelector("#lt-mfg-status"); if (s) s.innerHTML = ok ? '<span class="lt-ok">🟢 Доступен</span>' : '<span class="lt-muted">🔴 Недоступен</span>';
-  });
-  refreshMfg();
-  el.querySelector("#lt-mfg-refresh")?.addEventListener("click", refreshMfg);
-  el.querySelector("#lt-mfg-dismiss")?.addEventListener("click", async () => {
-    try { const msg = await invoke("lt_cef_dismiss_loaded_apps"); toast(msg, "ok"); }
-    catch (e) { toast(e.message || e, "error"); }
   });
 
   // DoH
