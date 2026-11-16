@@ -77,7 +77,40 @@ function queueDone(item, ok, err) {
   dlQueue.history.length = Math.min(dlQueue.history.length, 20);
   saveDlHistory();
   if (currentPage === "downloads") renderPage("downloads");
+  queuePump();
 }
+// Downloads run one at a time in queue order; pending ones can be reordered or cancelled.
+function queuePump() {
+  if (dlQueue.items.some(i => i.status === "downloading" || i.status === "installing")) return;
+  const next = dlQueue.items.find(i => i.status === "pending" && i._go);
+  if (next) { const go = next._go; next._go = null; go(); }
+}
+function queueTurn(item) {
+  return new Promise((resolve, reject) => {
+    item._go = resolve;
+    item._cancel = () => reject(new Error("cancelled"));
+    queuePump();
+  });
+}
+function queueCancel(id) {
+  const item = dlQueue.items.find(i => i.id === id && i.status === "pending");
+  if (!item) return;
+  item._cancel?.();
+  queueDone(item, false, "Отменено");
+}
+function queueMove(id, dir) {
+  const idx = dlQueue.items.findIndex(i => i.id === id);
+  const to = idx + dir;
+  if (idx < 0 || to < 0 || to >= dlQueue.items.length) return;
+  if (dlQueue.items[to].status !== "pending" || dlQueue.items[idx].status !== "pending") return;
+  [dlQueue.items[idx], dlQueue.items[to]] = [dlQueue.items[to], dlQueue.items[idx]];
+  if (currentPage === "downloads") renderPage("downloads");
+}
+async function confirmOverwrite(appId) {
+  if (!installedList.some(i => i.app_id === appId)) return true;
+  return confirmAction(`Lua для ${gameName(appId)} уже установлен. Заменить его? Текущий файл сохранится в пресетах (auto).`);
+}
+
 function queueStatus(item, status, progress) {
   item.status = status;
   if (progress != null) item.progress = progress;
@@ -253,6 +286,10 @@ function attachGlobal(body) {
       return;
     }
 
+    const mv = e.target.closest("[data-dl-move]");
+    if (mv) { const [id, dir] = mv.dataset.dlMove.split(":").map(Number); queueMove(id, dir); return; }
+    const cancel = e.target.closest("[data-dl-cancel]");
+    if (cancel) { queueCancel(Number(cancel.dataset.dlCancel)); return; }
     const retry = e.target.closest("[data-dl-retry]");
     if (retry) {
       const fn = retryFns.get(parseInt(retry.dataset.dlRetry, 10));
@@ -1473,7 +1510,7 @@ async function renderDownloads(el) {
 
   if (dlQueue.items.length) {
     const ST = { pending: "В очереди", downloading: "Скачиваю", installing: "Устанавливаю" };
-    el.querySelector("#lt-dl-active").innerHTML = dlQueue.items.map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><div class="lt-usage-bar"><div class="lt-usage-fill" style="width:${i.progress}%"></div></div><span class="lt-muted">${esc(ST[i.status] || i.status)}${i.status === "downloading" && i.progress ? ` · ${i.progress}%` : ""}</span></div>`).join("");
+    el.querySelector("#lt-dl-active").innerHTML = dlQueue.items.map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><div class="lt-usage-bar"><div class="lt-usage-fill" style="width:${i.progress}%"></div></div><span class="lt-muted">${esc(ST[i.status] || i.status)}${i.status === "downloading" && i.progress ? ` · ${i.progress}%` : ""}</span>${i.status === "pending" ? `<button class="lt-btn lt-btn-sm" data-dl-move="${i.id}:-1" title="Выше">▲</button><button class="lt-btn lt-btn-sm" data-dl-move="${i.id}:1" title="Ниже">▼</button><button class="lt-btn lt-btn-sm" data-dl-cancel="${i.id}">Отмена</button>` : ""}</div>`).join("");
   }
   if (dlQueue.history.length) {
     el.querySelector("#lt-dl-history").innerHTML = dlQueue.history.slice(0, 20).map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><span class="${i.status === 'done' ? 'lt-ok' : 'lt-error'}">${i.status === 'done' ? '✅' : '❌'} ${esc(i.error || 'Готово')}</span>${i.status !== 'done' && retryFns.has(i.id) ? ` <button class="lt-btn lt-btn-sm" data-dl-retry="${i.id}">Повторить</button>` : ''}</div>`).join("");
@@ -1772,10 +1809,13 @@ async function doDownload(appId, source, gameName) {
   const key = `${appId}:${source}`;
   if (inflight.has(key)) { toast("Уже скачивается", "info"); return; }
   inflight.add(key);
+  if (!await confirmOverwrite(appId)) { inflight.delete(key); return; }
   const url = ltManifestDownloadUrl(appId, source, gameName);
   const item = queueAdd(`${gameName || appId} (${source})`, appId);
   item._url = url;
   retryFns.set(item.id, () => doDownload(appId, source, gameName));
+  if (currentPage === "downloads") renderPage("downloads");
+  try { await queueTurn(item); } catch { inflight.delete(key); return; }
   queueStatus(item, "downloading", 0);
   toast("Скачиваю…", "info");
   try {
@@ -1812,8 +1852,11 @@ async function doAltDownload(appId, alt, gameName) {
   const key = `${appId}:${alt}`;
   if (inflight.has(key)) { toast("Уже скачивается", "info"); return; }
   inflight.add(key);
+  if (!await confirmOverwrite(appId)) { inflight.delete(key); return; }
   const item = queueAdd(`${gameName || appId} (${alt})`, appId);
   retryFns.set(item.id, () => doAltDownload(appId, alt, gameName));
+  if (currentPage === "downloads") renderPage("downloads");
+  try { await queueTurn(item); } catch { inflight.delete(key); return; }
   queueStatus(item, "downloading", 0);
   try {
     let zipPath;
