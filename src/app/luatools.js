@@ -1654,6 +1654,12 @@ async function renderSettings(el) {
       <div class="lt-info-row"><strong>Steam запущен:</strong> ${steamInfo?.running ? '<span class="lt-warn">Да</span>' : '<span class="lt-ok">Нет</span>'}</div>
     </div></div>
 
+    <div class="lt-section"><h3>Аккаунт lua.tools</h3>
+    <div class="lt-settings-list">
+      <div class="lt-info-row lt-auth-area" data-variant="row"></div>
+      <div class="lt-info-row lt-muted">Без входа загрузки берутся из кэша студии; вход нужен, только если файла там нет.</div>
+    </div></div>
+
     <div class="lt-section"><h3>Общие</h3>
     <div class="lt-settings-list">
       <label class="lt-info-row"><input type="checkbox" id="lt-cfg-hardfilter" ${cfg.filter_hardware !== false ? 'checked' : ''}> Скрывать hardware AppID из поиска</label>
