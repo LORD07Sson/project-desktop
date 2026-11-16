@@ -8,7 +8,6 @@ import { state, resetSessionState } from "./state.js";
 import { api, apiGet, armSessionExpiry, ensureMediaToken, API_BASE } from "./api.js";
 import { $ } from "./utils.js";
 import { refreshAll, clearTabDom, restoreLastTab } from "./tabs.js";
-import { maybeShowChooserOnStart, resetSpaces } from "./spaces.js";
 import { setTitlebarIdentity } from "./titlebar-menus.js";
 import { refreshQueueBadge } from "./queue.js";
 import { resetAssignmentsBaseline } from "./notifications.js";
@@ -70,7 +69,6 @@ export async function tryRestoreSession() {
     restoreLastTab();
     hideSplash();
     hydrateIdentity();
-    maybeShowChooserOnStart();
     await refreshAll();
   } catch (e) {
     // Нет сети — это не отзыв токена: токен не трогаем (иначе после запуска без интернета
@@ -228,7 +226,6 @@ async function submitCode() {
     await ensureMediaToken();
     showApp();
     restoreLastTab();
-    maybeShowChooserOnStart();
     await refreshAll();
   } catch (e) {
     errEl.textContent = e.message;
@@ -372,7 +369,6 @@ renderCodeCells();
 // N новых отчётов» на весь свой список (diff считался относительно
 // списка предыдущего пользователя).
 function logout() {
-  resetSpaces();
   resetTourUi();
   resetSessionState();
   resetAssignmentsBaseline();
