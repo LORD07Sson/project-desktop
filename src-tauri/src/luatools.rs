@@ -2552,11 +2552,6 @@ pub async fn lt_tool_latest(tool: String) -> Result<String, String> {
     rel["tag_name"].as_str().map(|s| s.to_string()).ok_or("GitHub API: нет tag_name".into())
 }
 
-fn sha256_hex(data: &[u8]) -> String {
-    use sha2::Digest;
-    sha2::Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
-}
-
 #[tauri::command]
 pub async fn lt_tool_install(tool: String) -> Result<String, String> {
     let t = ext_tool(&tool)?;
