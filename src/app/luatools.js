@@ -476,7 +476,7 @@ async function renderHome(el) {
     <section class="lt-section"><h3>Популярное</h3><div class="lt-grid lt-grid-featured" id="lt-featured-grid"><div class="lt-loading">Загружаю…</div></div></section>`;
   el.querySelector("#lt-browse-files")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
     try {
-      const paths = await pickInputFiles({ multiple: true, filters: [{ name: "LuaTools", extensions: ["lua", "manifest", "zip"] }] });
+      const paths = await pickInputFiles({ multiple: true, filters: [{ name: "LuaProject", extensions: ["lua", "manifest", "zip"] }] });
       if (paths?.length) await installPaths(paths, $("#luatools-body"));
     } catch (err) { toast(errMsg(err), "error"); }
   }));
@@ -583,7 +583,7 @@ function dropZoneHtml() {
 function bindBrowse(el) {
   el.querySelectorAll("[data-browse-files]").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
     try {
-      const paths = await pickInputFiles({ multiple: true, filters: [{ name: "LuaTools", extensions: ["lua", "manifest", "zip"] }] });
+      const paths = await pickInputFiles({ multiple: true, filters: [{ name: "LuaProject", extensions: ["lua", "manifest", "zip"] }] });
       if (paths?.length) await installPaths(paths, $("#luatools-body"));
     } catch (err) { toast(errMsg(err), "error"); }
   })));
@@ -901,7 +901,7 @@ async function renderTools(el) {
 
 const MODES = [
   { key: "bst", mode: "BetterSteamTools", title: "BetterSteamTools", badges: ["rec", "cloud"],
-    desc: "Форк OpenSteamTools с открытым исходным кодом, который активно поддерживает команда LuaTools. С исправлениями и новыми функциями!" },
+    desc: "Форк OpenSteamTools с открытым исходным кодом, который активно поддерживается: исправления и новые функции!" },
   { key: "ost", mode: "stplug-in", title: "OpenSteamTool (Nightly)", badges: ["exp"],
     desc: "Nightly-сборки upstream OpenSteamTool. Свежие изменения раньше всех, но может быть нестабильным." },
   { key: "ltsp", mode: "LTSP", title: "LTSP", badges: [],
@@ -922,7 +922,7 @@ async function renderMode(el) {
   el.innerHTML = `<div class="lt-narrow lt-narrow-wide">
     <div class="lt-head">
       <div><h2 class="lt-page-title lt-title-tight">Режим</h2>
-      <p class="lt-page-sub">Переключите бэкенд, используемый для разблокировки игр, добавленных через LuaTools.</p></div>
+      <p class="lt-page-sub">Переключите бэкенд, используемый для разблокировки игр, добавленных через LuaProject.</p></div>
       <button class="lt-btn lt-btn-ghost" id="lt-mode-check">${UI_ICONS.refresh} Проверить обновления</button>
     </div>
     ${MODES.map(m => {
