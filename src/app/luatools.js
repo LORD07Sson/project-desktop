@@ -6,9 +6,9 @@ import { $ } from "./utils.js";
 import { toast } from "./api.js";
 import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
-  ltIsLoggedIn, ltSession, ltLoginUrl, ltSaveSession, ltClearSession,
+  ltIsLoggedIn, ltSession, ltSaveSession, ltClearSession,
   ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoDownloadUrl, ltDenuvoListings, ltDenuvoFixes,
-  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser, ltDepotInfo, ltRedeemBotCode } from "./luatools-api.js";
+  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser, ltDepotInfo, ltRedeemBotCode, ltPkceStart, ltPkceExchange } from "./luatools-api.js";
 import { setLuatoolsDropHandler } from "./file-drop.js";
 import { parseLua, setDepotLocked, setDepotEnabled } from "./luatools-parser.js";
 
@@ -2022,9 +2022,12 @@ async function doLogin() {
   loginPending = true;
   toast("Войдите через Discord в открывшемся браузере", "info");
   try {
-    const tokens = await invoke("lt_oauth_login", { loginUrl: ltLoginUrl() });
-    let user = null;
-    try { user = await ltFetchUser(tokens.access_token); } catch { /* имя не критично */ }
+    const pkce = await ltPkceStart();
+    let tokens = await invoke("lt_oauth_login", { loginUrl: pkce.url });
+    // Server answered with a PKCE code (normal) or, on older setups, implicit tokens.
+    if (tokens.code) tokens = await ltPkceExchange(tokens.code, pkce.verifier);
+    let user = tokens.user || null;
+    if (!user) { try { user = await ltFetchUser(tokens.access_token); } catch { /* имя не критично */ } }
     ltSaveSession({ ...tokens, user });
     updateAuthUI();
     toast("Вошли в lua.tools", "ok");

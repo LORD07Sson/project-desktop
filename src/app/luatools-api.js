@@ -97,6 +97,29 @@ export function ltLoginUrl() {
   return `${cfg("supabase_url")}/auth/v1/authorize?provider=discord&redirect_to=http://localhost:${OAUTH_PORT}/callback`;
 }
 
+const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+/** PKCE login (what LuaTools uses): returns { url, verifier }. */
+export async function ltPkceStart() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+  return { verifier, url: `${ltLoginUrl()}&code_challenge=${challenge}&code_challenge_method=s256` };
+}
+
+export async function ltPkceExchange(code, verifier) {
+  const res = await ltFetch(`${cfg("supabase_url")}/auth/v1/token?grant_type=pkce`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: cfg("supabase_anon_key") },
+    body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok || !d.access_token) throw new Error(d.msg || d.error_description || `Обмен кода не удался: ${res.status}`);
+  return {
+    access_token: d.access_token, refresh_token: d.refresh_token,
+    expires_at: Math.floor(Date.now() / 1000) + (d.expires_in || 3600), user: d.user,
+  };
+}
+
 export async function ltRefreshToken() {
   const s = ltSession();
   if (!s?.refresh_token) throw new Error("Нет refresh token");

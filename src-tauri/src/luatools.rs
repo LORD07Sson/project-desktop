@@ -2102,6 +2102,11 @@ fn oauth_wait(listener: std::net::TcpListener) -> Result<serde_json::Value, Stri
                 http_reply(&mut stream, "200 OK", "text/plain; charset=utf-8", "Вход отменён.");
                 return Err(err.clone());
             }
+            // PKCE flow: the auth code arrives as a query param; JS exchanges it.
+            if let Some(code) = q.get("code") {
+                http_reply(&mut stream, "200 OK", "text/plain; charset=utf-8", "Вход выполнен — можно закрыть вкладку.");
+                return Ok(serde_json::json!({ "code": code }));
+            }
             http_reply(&mut stream, "200 OK", "text/html; charset=utf-8", LT_CALLBACK_PAGE);
         } else if first.starts_with("POST /token") {
             let body = text.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
