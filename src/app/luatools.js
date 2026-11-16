@@ -887,12 +887,32 @@ async function renderTools(el) {
 
     if (toolsState.tab === "launch") {
       const game = await invoke("lt_game_install_path", { appId }).catch(() => ({ installed: false }));
+      const current = await invoke("lt_get_launch_options", { appId }).catch(() => null);
+      const saved = (ltConfig.launch_saved || {})[appId];
+      // Steam resets launch options on some updates/reinstalls: offer to put ours back.
+      const drift = saved != null && (current ?? "") !== saved;
       body.innerHTML = `<div class="lt-panel">
         <div class="lt-panel-title">Параметры запуска</div>
         <p class="lt-muted">${game.installed ? `Игра установлена: ${esc(game.path)}` : "Игра не установлена на диск — Steam предложит её скачать."}</p>
-        <div class="lt-row-gap"><input type="text" class="lt-input lt-grow" id="lt-launch-args" placeholder="Например: -windowed -nointro">
-        <button class="lt-btn lt-btn-accent" id="lt-launch-go">▶ Запустить через Steam</button></div>
+        ${drift ? `<p class="lt-warn">Steam сбросил параметры (сейчас: «${esc(current || "пусто")}»). <button class="lt-btn lt-btn-sm" id="lt-launch-reapply">Вернуть «${esc(saved)}»</button></p>` : ""}
+        <div class="lt-row-gap"><input type="text" class="lt-input lt-grow" id="lt-launch-args" placeholder="Например: -windowed -nointro" value="${esc(current ?? "")}">
+        <button class="lt-btn" id="lt-launch-save">Сохранить в Steam</button>
+        <button class="lt-btn lt-btn-accent" id="lt-launch-go">▶ Запустить</button></div>
+        <p class="lt-muted lt-pt-note">«Сохранить» пишет параметры в свойства игры в Steam (Steam будет перезапущен). «Запустить» применяет их только к одному запуску.</p>
       </div>`;
+      const save = async value => {
+        await invoke("lt_set_launch_options", { appId, value });
+        const map = { ...(ltConfig.launch_saved || {}) };
+        if (value) map[appId] = value; else delete map[appId];
+        ltConfig.launch_saved = map;
+        await invoke("lt_config_set", { key: "launch_saved", value: map });
+        toast("Параметры сохранены в Steam", "ok");
+        renderTools(el);
+      };
+      body.querySelector("#lt-launch-save").addEventListener("click", e => withBusy(e.currentTarget, () =>
+        save(body.querySelector("#lt-launch-args").value.trim()).catch(err => toast(errMsg(err), "error"))));
+      body.querySelector("#lt-launch-reapply")?.addEventListener("click", e => withBusy(e.currentTarget, () =>
+        save(saved).catch(err => toast(errMsg(err), "error"))));
       body.querySelector("#lt-launch-go").addEventListener("click", async () => {
         try { await invoke("lt_launch_game", { appId, args: body.querySelector("#lt-launch-args").value.trim() }); toast("Запуск через Steam…", "ok"); }
         catch (e) { toast(errMsg(e), "error"); }

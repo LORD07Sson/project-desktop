@@ -2344,6 +2344,7 @@ struct AppBlock {
     open: usize,
     playtime: Option<(usize, usize, String)>,
     last_played: Option<String>,
+    launch_options: Option<(usize, usize, String)>,
 }
 
 /// Finds …/Steam/apps/<appid> { … } in localconfig.vdf.
@@ -2366,7 +2367,7 @@ fn vdf_find_app_block(s: &str, app_id: u64) -> Option<AppBlock> {
                             && path[n - 3].eq_ignore_ascii_case("steam")
                         {
                             depth_inside = Some(n);
-                            result = Some(AppBlock { open: *pos, playtime: None, last_played: None });
+                            result = Some(AppBlock { open: *pos, playtime: None, last_played: None, launch_options: None });
                         }
                         i += 2;
                     }
@@ -2375,6 +2376,7 @@ fn vdf_find_app_block(s: &str, app_id: u64) -> Option<AppBlock> {
                             if path.len() == d {
                                 if text.eq_ignore_ascii_case("Playtime") { r.playtime = Some((*start, *end, val.clone())); }
                                 if text.eq_ignore_ascii_case("LastPlayed") { r.last_played = Some(val.clone()); }
+                                if text.eq_ignore_ascii_case("LaunchOptions") { r.launch_options = Some((*start, *end, val.clone())); }
                             }
                         }
                         i += 2;
@@ -2417,24 +2419,33 @@ pub fn lt_get_playtime(app_id: u64) -> Result<PlaytimeInfo, String> {
     Ok(PlaytimeInfo { minutes, last_played, known: block.is_some(), steam_running: is_steam_running() })
 }
 
-fn write_playtime(path: &Path, app_id: u64, minutes: u64) -> Result<(), String> {
+fn vdf_escape(v: &str) -> String { v.replace('\\', "\\\\").replace('"', "\\\"") }
+
+/// Sets `key` inside Steam/apps/<appid> in localconfig.vdf (Playtime or LaunchOptions).
+fn write_app_value(path: &Path, app_id: u64, key: &str, value: &str) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("localconfig.vdf: {e}"))?;
     let block = vdf_find_app_block(&text, app_id)
         .ok_or("Steam ещё не записал данные об этой игре — запустите её хотя бы раз")?;
-    let new_text = match &block.playtime {
-        Some((start, end, _)) => format!("{}{}{}", &text[..*start], minutes, &text[*end..]),
+    let existing = if key == "LaunchOptions" { &block.launch_options } else { &block.playtime };
+    let value = vdf_escape(value);
+    let new_text = match existing {
+        Some((start, end, _)) => format!("{}{}{}", &text[..*start], value, &text[*end..]),
         None => {
             // Insert right after the block's "{", reusing that line's indentation.
             let line_start = text[..block.open].rfind('\n').map(|p| p + 1).unwrap_or(0);
             let indent: String = text[line_start..block.open].chars().take_while(|c| c.is_whitespace()).collect();
             let at = block.open + 1;
-            format!("{}\n{}\t\"Playtime\"\t\t\"{}\"{}", &text[..at], indent, minutes, &text[at..])
+            format!("{}\n{}\t\"{}\"\t\t\"{}\"{}", &text[..at], indent, key, value, &text[at..])
         }
     };
     let _ = std::fs::copy(path, path.with_extension("vdf.ltbak"));
     let tmp = path.with_extension("vdf.lttmp");
     std::fs::write(&tmp, new_text).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+fn write_playtime(path: &Path, app_id: u64, minutes: u64) -> Result<(), String> {
+    write_app_value(path, app_id, "Playtime", &minutes.to_string())
 }
 
 /// Sets playtime (minutes). Steam must be closed while writing — it rewrites
@@ -2450,8 +2461,41 @@ pub async fn lt_set_playtime(app_id: u64, minutes: u64) -> Result<(), String> {
     res
 }
 
+#[tauri::command]
+pub fn lt_get_launch_options(app_id: u64) -> Result<Option<String>, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let text = std::fs::read_to_string(localconfig_path(&steam)?).map_err(|e| format!("localconfig.vdf: {e}"))?;
+    Ok(vdf_find_app_block(&text, app_id).and_then(|b| b.launch_options.map(|(_, _, v)| v)))
+}
+
+/// Writes Steam's own per-game launch options (what Properties → General shows).
+#[tauri::command]
+pub async fn lt_set_launch_options(app_id: u64, value: String) -> Result<(), String> {
+    if value.len() > 4096 || value.contains(['\n', '\r']) { return Err("Недопустимые параметры".into()); }
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let path = localconfig_path(&steam)?;
+    let was_running = stop_steam().await;
+    let res = write_app_value(&path, app_id, "LaunchOptions", &value);
+    if was_running { start_steam(&steam); }
+    res
+}
+
 #[cfg(test)]
 mod parity_tests {
+    #[test]
+    fn vdf_launch_options_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("lt_vdf_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("localconfig.vdf");
+        std::fs::write(&p, "\"UserLocalConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"apps\"\n\t\t\t\t{\n\t\t\t\t\t\"10\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"Playtime\"\t\t\"5\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n").unwrap();
+        super::write_app_value(&p, 10, "LaunchOptions", "-novid \"x\"").unwrap();
+        let t = std::fs::read_to_string(&p).unwrap();
+        let b = super::vdf_find_app_block(&t, 10).unwrap();
+        assert_eq!(b.launch_options.unwrap().2, "-novid \"x\"");
+        assert_eq!(b.playtime.unwrap().2, "5");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn parses_manifest_pins() {
         let lua = "addappid(1)\nsetManifestid(553851, \"123456789\", 0)\n-- setManifestid(553852,\"42\")\nsetmanifestid(x, \"1\")";
