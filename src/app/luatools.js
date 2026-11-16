@@ -137,7 +137,6 @@ function shell() {
   <nav class="lt-sidebar">
     <div class="lt-sidebar-top">
       <button class="lt-nav active" data-page="home"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg> Главная</button>
-      <button class="lt-nav" data-page="builds"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"/></svg> Сборки</button>
       <button class="lt-nav" data-page="add"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg> Добавить</button>
       <button class="lt-nav" data-page="manage"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg> Управление</button>
       <button class="lt-nav" data-page="tools"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"/><circle cx="12" cy="12" r="3"/></svg> Инструменты</button>
@@ -146,7 +145,7 @@ function shell() {
       <button class="lt-nav" data-page="plugin"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Плагин</button>
     </div>
     <div class="lt-sidebar-bottom">
-      <button class="lt-nav lt-nav-action" id="lt-restart-steam"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Перезапуск</button>
+      <button class="lt-nav lt-nav-action" id="lt-restart-steam"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Перезапустить Steam</button>
       <button class="lt-nav" data-page="downloads"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Загрузки</button>
       <button class="lt-nav" data-page="settings"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg> Настройки</button>
     </div>
@@ -294,6 +293,7 @@ async function renderPage(page) {
   if (!el) return;
   const renderers = { home: renderHome, builds: renderBuilds, add: renderAdd, manage: renderManage, tools: renderTools, mode: renderMode, fixes: renderFixes, plugin: renderPlugin, downloads: renderDownloads, settings: renderSettings };
   const fn = renderers[page];
+  el.dataset.page = page; // ширина страницы задаётся в luatools.css по data-page
   if (fn) await fn(el);
 }
 
@@ -309,7 +309,10 @@ async function refreshAll(body) {
   }
   loadGameNames();
   const ver = body.querySelector("#lt-sidebar-ver");
-  if (ver) ver.textContent = pluginStatus?.installed ? `v${String(pluginStatus.version || "?").replace(/^v/i, "")}` : "";
+  if (ver) {
+    const v = pluginStatus?.installed ? `v${String(pluginStatus.version || "?").replace(/^v/i, "")}` : "";
+    ver.textContent = [v, ltIsLoggedIn() ? "Выполнен вход" : ""].filter(Boolean).join(" · ");
+  }
 
   try { onboardingDone = !!localStorage.getItem("lt_onboarded"); } catch { onboardingDone = true; }
   if (!onboardingDone && !steamInfo?.path) {
@@ -508,70 +511,589 @@ async function loadFeaturedStrip() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// UI helpers for the redesigned pages
+// ══════════════════════════════════════════════════════════════════
+
+const UI_ICONS = {
+  search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.34-5.66M20 4v4h-4"/></svg>',
+  filter: '<svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
+  download: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  manage: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="5"/><path d="M8 12h3M9.5 10.5v3"/><circle cx="16" cy="12" r=".8"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>',
+  rename: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16M9 4v16"/></svg>',
+  edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>',
+  wrench: '<svg viewBox="0 0 24 24"><path d="M14 6a4 4 0 005 5l-8 8a2 2 0 01-3-3z"/></svg>',
+  cloud: '<svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 010-8 6 6 0 0111 2 3 3 0 010 6z"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="M12 4l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.3 7 19l1.2-5.6L4 9.6l5.6-.6z"/></svg>',
+  puzzle: '<svg viewBox="0 0 24 24"><path d="M9 4h3v3a2 2 0 104 0V4h4v6h-3a2 2 0 100 4h3v6h-6v-3a2 2 0 10-4 0v3H4v-6h3a2 2 0 100-4H4V4z"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>',
+  tag: '<svg viewBox="0 0 24 24"><path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8" cy="8" r="1"/></svg>',
+  ok: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
+  no: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg>',
+  chevL: '<svg viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></svg>',
+  chevR: '<svg viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></svg>',
+};
+
+const steamHeader = id => `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`;
+
+// «Результатов на странице» + номера страниц (1 2 … N), как в LuaTools.
+function pagerHtml(page, pages, perPage, sizes = [12, 24, 48]) {
+  let nums = "";
+  if (pages > 1) {
+    const set = new Set([0, pages - 1, page - 1, page, page + 1].filter(p => p >= 0 && p < pages));
+    let prev = -1;
+    for (const p of [...set].sort((a, b) => a - b)) {
+      if (prev >= 0 && p - prev > 1) nums += '<span class="lt-pg-gap">…</span>';
+      nums += `<button class="lt-pg-num ${p === page ? "is-active" : ""}" data-pg="${p}">${p + 1}</button>`;
+      prev = p;
+    }
+  }
+  return `<div class="lt-pg">
+    <div class="lt-pg-nums">${pages > 1 ? `<button class="lt-pg-arrow" data-pg="${page - 1}" ${page === 0 ? "disabled" : ""}>${UI_ICONS.chevL}</button>${nums}<button class="lt-pg-arrow" data-pg="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>${UI_ICONS.chevR}</button>` : ""}</div>
+    <label class="lt-pg-size">Результатов на странице
+      <select class="lt-select" data-pg-size>${sizes.map(n => `<option ${n === perPage ? "selected" : ""}>${n}</option>`).join("")}</select>
+    </label>
+  </div>`;
+}
+function bindPager(root, onPage, onSize) {
+  root.querySelectorAll("[data-pg]").forEach(b => b.addEventListener("click", () => onPage(parseInt(b.dataset.pg, 10))));
+  root.querySelector("[data-pg-size]")?.addEventListener("change", e => onSize(parseInt(e.target.value, 10)));
+}
+
+function gameCardHtml({ appId, name, img, sub, sub2 }) {
+  return `<button class="lt-gc" data-appid="${appId}">
+    <img data-lt-img="${appId}" src="${esc(img || steamHeader(appId))}" alt="" loading="lazy">
+    <span class="lt-gc-body"><span class="lt-gc-name">${esc(name)}</span>
+    ${sub ? `<span class="lt-gc-sub">${sub}</span>` : ""}${sub2 ? `<span class="lt-gc-sub2">${sub2}</span>` : ""}</span>
+  </button>`;
+}
+
+function dropZoneHtml() {
+  return `<div class="lt-drop-zone lt-hd">
+    <span class="lt-hd-icon">${HOME_ICONS.drop}</span>
+    <div class="lt-hd-text">
+      <strong>Перетащите сюда файлы .lua, .manifest или .zip</strong>
+      <span class="lt-muted">…или перетащите сюда ссылку SteamDB / магазина Steam, чтобы добавить эту игру.</span>
+      <button class="lt-btn lt-btn-sm lt-hd-browse" data-browse-files>${HOME_ICONS.folder} Обзор файлов…</button>
+    </div>
+  </div>`;
+}
+function bindBrowse(el) {
+  el.querySelectorAll("[data-browse-files]").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
+    try {
+      const paths = await pickInputFiles({ multiple: true, filters: [{ name: "LuaTools", extensions: ["lua", "manifest", "zip"] }] });
+      if (paths?.length) await installPaths(paths, $("#luatools-body"));
+    } catch (err) { toast(errMsg(err), "error"); }
+  })));
+}
+
+// ══════════════════════════════════════════════════════════════════
 // ADD
 // ══════════════════════════════════════════════════════════════════
 
 function renderAdd(el) {
-  el.innerHTML = `
-    <h2 class="lt-page-title">Добавить</h2>
-    <div class="lt-search-bar"><input type="text" id="lt-search" class="lt-input" placeholder="Поиск по названию или AppID…"><button id="lt-search-btn" class="lt-btn lt-btn-primary">Найти</button></div>
-    <div id="lt-results" class="lt-results"></div>
-    <div id="lt-detail" class="lt-detail" hidden></div>
-    <div class="lt-drop-zone" style="margin-top:20px"><div class="lt-drop-inner"><span class="lt-drop-icon">📥</span><div>Перетащите файлы .lua, .manifest или .zip</div></div></div>`;
-  const input = el.querySelector("#lt-search"), btn = el.querySelector("#lt-search-btn");
-  const doSearch = async () => {
-    const q = input.value.trim(); if (!q) return;
-    const r = el.querySelector("#lt-results");
-    r.innerHTML = '<div class="lt-loading">Ищу…</div>';
-    try {
-      let items = /^\d+$/.test(q) ? [await ltGameDetails(q)].filter(Boolean).map(d => ({ appId: parseInt(q), name: d.name, icon: d.header_image })) : await ltSearchSteam(q);
-      if (ltConfig.filter_hardware !== false && hardwareAppIds.size) items = items.filter(i => !hardwareAppIds.has(i.appId));
-      if (!items.length) { r.innerHTML = '<div class="lt-empty">Ничего не нашлось</div>'; return; }
-      r.innerHTML = items.map(i => `<button class="lt-card lt-card-search" data-appid="${i.appId}"><img src="${esc(i.icon)}" alt="" loading="lazy"><div class="lt-card-info"><span class="lt-card-name">${esc(i.name)}</span><span class="lt-card-id">${i.appId}</span></div></button>`).join("");
-    } catch (e) { r.innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; }
+  el.innerHTML = `<div class="lt-narrow">
+    <h2 class="lt-page-title lt-title-tight">Погнали за Lua™!</h2>
+    <p class="lt-page-sub">Введите App ID, вставьте ссылку Steam или выполните поиск по названию игры</p>
+    <label class="lt-search">${UI_ICONS.search}<input type="text" id="lt-search" placeholder="Введите App ID или найдите игры…" autocomplete="off"></label>
+    <div id="lt-results" class="lt-add-results" hidden></div>
+    <div id="lt-add-strips">
+      <h3 class="lt-strip-title">Бестселлеры</h3><div class="lt-strip" id="lt-strip-top"><div class="lt-loading">Загружаю…</div></div>
+      <h3 class="lt-strip-title">Новинки</h3><div class="lt-strip" id="lt-strip-new"></div>
+    </div>
+    <h3 class="lt-strip-title">Уже есть файлы?</h3>
+    ${dropZoneHtml()}
+  </div>`;
+  bindBrowse(el);
+
+  const strip = (items, id) => {
+    const box = el.querySelector(id);
+    if (!box) return;
+    box.innerHTML = items.length
+      ? items.map(i => gameCardHtml({ appId: i.appId, name: i.name, img: i.image })).join("")
+      : '<div class="lt-empty">—</div>';
   };
-  btn.addEventListener("click", doSearch);
-  input.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+  ltFeatured().then(({ topSellers, newReleases }) => { strip(topSellers, "#lt-strip-top"); strip(newReleases, "#lt-strip-new"); });
+
+  const input = el.querySelector("#lt-search");
+  const results = el.querySelector("#lt-results");
+  const strips = el.querySelector("#lt-add-strips");
+  let seq = 0, timer = null;
+  const doSearch = async () => {
+    const q = input.value.trim();
+    const my = ++seq;
+    if (!q) { results.hidden = true; strips.hidden = false; return; }
+    const link = q.match(/(?:store\.steampowered\.com\/app|steamdb\.info\/app)\/(\d+)/);
+    if (link) { openDetail(parseInt(link[1], 10)); return; }
+    results.hidden = false; strips.hidden = true;
+    results.innerHTML = '<div class="lt-loading">Ищу…</div>';
+    try {
+      let items = /^\d+$/.test(q)
+        ? [await ltGameDetails(q)].filter(Boolean).map(d => ({ appId: parseInt(q, 10), name: d.name, icon: d.header_image }))
+        : await ltSearchSteam(q);
+      if (my !== seq) return;
+      if (ltConfig.filter_hardware !== false && hardwareAppIds.size) items = items.filter(i => !hardwareAppIds.has(i.appId));
+      results.innerHTML = items.length
+        ? `<div class="lt-gc-grid">${items.map(i => gameCardHtml({ appId: i.appId, name: i.name, img: steamHeader(i.appId), sub: `App ID: ${i.appId}` })).join("")}</div>`
+        : '<div class="lt-empty">Ничего не нашлось</div>';
+    } catch (e) { if (my === seq) results.innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; }
+  };
+  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(doSearch, 350); });
+  input.addEventListener("keydown", e => { if (e.key === "Enter") { clearTimeout(timer); doSearch(); } });
+  input.focus();
 }
 
 // ══════════════════════════════════════════════════════════════════
 // MANAGE
 // ══════════════════════════════════════════════════════════════════
 
+const manageState = { q: "", page: 0, perPage: 24, sort: "added" };
+
 async function renderManage(el) {
-  el.innerHTML = '<div class="lt-loading">Загружаю…</div>';
   try { installedList = await invoke("lt_list_installed"); } catch { installedList = []; }
-  if (!installedList.length) { el.innerHTML = '<h2 class="lt-page-title">Управление</h2><div class="lt-empty">Нет установленных lua-файлов</div>'; return; }
+  await loadGameNames();
+  el.innerHTML = `<div class="lt-head">
+      <h2 class="lt-page-title">Управление</h2>
+      <button class="lt-btn lt-btn-ghost" id="lt-manage-refresh">${UI_ICONS.refresh} Обновить</button>
+    </div>
+    <div class="lt-toolbar">
+      <label class="lt-search lt-grow">${UI_ICONS.search}<input type="text" id="lt-manage-search" placeholder="Поиск по имени или App ID…" value="${esc(manageState.q)}"></label>
+      <label class="lt-btn lt-btn-ghost lt-filter-btn">${UI_ICONS.filter} Фильтры
+        <select id="lt-manage-sort" class="lt-filter-select">
+          <option value="added" ${manageState.sort === "added" ? "selected" : ""}>Сначала новые</option>
+          <option value="name" ${manageState.sort === "name" ? "selected" : ""}>По названию</option>
+          <option value="appid" ${manageState.sort === "appid" ? "selected" : ""}>По App ID</option>
+        </select>
+      </label>
+    </div>
+    <div id="lt-manage-grid"></div>
+    <div id="lt-manage-pager"></div>`;
 
-  el.innerHTML = `<h2 class="lt-page-title">Управление</h2>
-    <div class="lt-search-bar"><input type="text" id="lt-manage-search" class="lt-input" placeholder="Фильтр по названию или AppID…"></div>
-    <p class="lt-muted">${installedList.length} файлов</p>
-    <div class="lt-manage-list" id="lt-manage-list"></div>`;
-
-  const renderList = (filter) => {
-    const q = (filter || "").toLowerCase();
-    const list = q ? installedList.filter(i => String(i.app_id).includes(q) || gameName(i.app_id).toLowerCase().includes(q)) : installedList;
-    const c = el.querySelector("#lt-manage-list");
-    c.innerHTML = list.map(i => `
-      <div class="lt-manage-item" data-appid="${i.app_id}">
-        <img data-lt-img="${i.app_id}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/capsule_sm_120.jpg" alt="" loading="lazy">
-        <div class="lt-manage-info"><span class="lt-card-name">${esc(gameName(i.app_id))}</span><span class="lt-card-sub">${i.app_id} · ${fmtDate(i.modified)}</span></div>
-        <div class="lt-manage-actions">
-          <button class="lt-btn lt-btn-sm" data-appid="${i.app_id}">Депо</button>
-          <button class="lt-btn lt-btn-danger lt-btn-sm" data-remove-appid="${i.app_id}">✕</button>
-        </div>
-      </div>`).join("");
+  const draw = () => {
+    const q = manageState.q.toLowerCase();
+    let list = q ? installedList.filter(i => String(i.app_id).includes(q) || gameName(i.app_id).toLowerCase().includes(q)) : [...installedList];
+    if (manageState.sort === "name") list.sort((a, b) => gameName(a.app_id).localeCompare(gameName(b.app_id)));
+    else if (manageState.sort === "appid") list.sort((a, b) => a.app_id - b.app_id);
+    const pages = Math.max(1, Math.ceil(list.length / manageState.perPage));
+    manageState.page = Math.min(manageState.page, pages - 1);
+    const slice = list.slice(manageState.page * manageState.perPage, (manageState.page + 1) * manageState.perPage);
+    el.querySelector("#lt-manage-grid").innerHTML = list.length
+      ? `<div class="lt-gc-grid">${slice.map(i => gameCardHtml({
+        appId: i.app_id, name: gameName(i.app_id),
+        sub: `App ID: ${i.app_id}`, sub2: `Добавлено ${fmtDate(i.modified)}`,
+      })).join("")}</div>`
+      : `<div class="lt-empty">${installedList.length ? "Ничего не нашлось" : "Нет установленных lua-файлов. Добавьте игру через «Добавить»."}</div>`;
+    const pg = el.querySelector("#lt-manage-pager");
+    pg.innerHTML = pagerHtml(manageState.page, pages, manageState.perPage);
+    bindPager(pg, p => { manageState.page = p; draw(); }, n => { manageState.perPage = n; manageState.page = 0; draw(); });
   };
-  renderList();
-  el.querySelector("#lt-manage-search").addEventListener("input", e => renderList(e.target.value.trim()));
+  draw();
+  el.querySelector("#lt-manage-search").addEventListener("input", e => { manageState.q = e.target.value.trim(); manageState.page = 0; draw(); });
+  el.querySelector("#lt-manage-sort").addEventListener("change", e => { manageState.sort = e.target.value; draw(); });
+  el.querySelector("#lt-manage-refresh").addEventListener("click", e => withBusy(e.currentTarget, () => renderManage(el)));
 }
 
 // ══════════════════════════════════════════════════════════════════
-// TOOLS
+// TOOLS — game list + depot editor with presets
 // ══════════════════════════════════════════════════════════════════
 
+const toolsState = { appId: null, q: "", page: 0, perPage: 10, tab: "depots", depotQ: "", preset: "" };
+
 async function renderTools(el) {
-  el.innerHTML = `<h2 class="lt-page-title">Инструменты</h2>
+  try { installedList = await invoke("lt_list_installed"); } catch { installedList = []; }
+  await loadGameNames();
+  if (!installedList.length) {
+    el.innerHTML = '<h2 class="lt-page-title">Инструменты</h2><div class="lt-empty">Нет установленных lua-файлов. Добавьте игру через «Добавить».</div>';
+    return;
+  }
+  if (!installedList.some(i => i.app_id === toolsState.appId)) toolsState.appId = installedList[0].app_id;
+
+  el.innerHTML = `<div class="lt-tools">
+    <aside class="lt-tl">
+      <label class="lt-search">${UI_ICONS.search}<input type="text" id="lt-tl-search" placeholder="Поиск по имени или App ID…" value="${esc(toolsState.q)}"></label>
+      <div class="lt-tl-list" id="lt-tl-list"></div>
+      <div class="lt-tl-pager" id="lt-tl-pager"></div>
+    </aside>
+    <section class="lt-tr" id="lt-tr"></section>
+  </div>`;
+
+  const drawList = () => {
+    const q = toolsState.q.toLowerCase();
+    const list = q ? installedList.filter(i => String(i.app_id).includes(q) || gameName(i.app_id).toLowerCase().includes(q)) : installedList;
+    const pages = Math.max(1, Math.ceil(list.length / toolsState.perPage));
+    toolsState.page = Math.min(toolsState.page, pages - 1);
+    const slice = list.slice(toolsState.page * toolsState.perPage, (toolsState.page + 1) * toolsState.perPage);
+    el.querySelector("#lt-tl-list").innerHTML = slice.map(i => `<button class="lt-tl-item ${i.app_id === toolsState.appId ? "is-active" : ""}" data-tl-app="${i.app_id}">
+        <img data-lt-img="${i.app_id}" src="${steamHeader(i.app_id)}" alt="" loading="lazy">
+        <span><span class="lt-tl-name">${esc(gameName(i.app_id))}</span><span class="lt-tl-sub">${i.app_id}</span></span>
+      </button>`).join("") || '<div class="lt-empty">Ничего не нашлось</div>';
+    el.querySelectorAll("[data-tl-app]").forEach(b => b.addEventListener("click", () => {
+      toolsState.appId = parseInt(b.dataset.tlApp, 10); toolsState.preset = ""; toolsState.depotQ = "";
+      drawList(); drawRight();
+    }));
+    const pg = el.querySelector("#lt-tl-pager");
+    pg.innerHTML = `<div class="lt-tl-pg">
+        <button class="lt-pg-arrow" data-pg="${toolsState.page - 1}" ${toolsState.page === 0 ? "disabled" : ""}>${UI_ICONS.chevL}</button>
+        <span>Страница ${toolsState.page + 1} из ${pages}</span>
+        <button class="lt-pg-arrow" data-pg="${toolsState.page + 1}" ${toolsState.page >= pages - 1 ? "disabled" : ""}>${UI_ICONS.chevR}</button>
+      </div>
+      <label class="lt-pg-size">Результатов на странице <select class="lt-select" data-pg-size>${[10, 20, 50].map(n => `<option ${n === toolsState.perPage ? "selected" : ""}>${n}</option>`).join("")}</select></label>`;
+    bindPager(pg, p => { toolsState.page = p; drawList(); }, n => { toolsState.perPage = n; toolsState.page = 0; drawList(); });
+  };
+
+  const drawRight = async () => {
+    const right = el.querySelector("#lt-tr");
+    const appId = toolsState.appId;
+    right.innerHTML = '<div class="lt-loading">Загружаю…</div>';
+    let text = "", lua = null, variants = [];
+    try { text = await invoke("lt_read_lua", { appId }); lua = parseLua(text, appId); } catch { /* нет файла */ }
+    try { variants = await invoke("lt_list_variants", { appId }); } catch { /* нет */ }
+    if (appId !== toolsState.appId) return;
+    const curHash = text ? shortHash(text) : null;
+    const activeVariant = variants.find(v => v.hash === curHash);
+    if (!toolsState.preset || !variants.some(v => v.name === toolsState.preset)) toolsState.preset = activeVariant?.name || "";
+    const sel = variants.find(v => v.name === toolsState.preset);
+    const presetMeta = v => v ? `${v.depot_count} депо · ${v.dlc_count} DLC · ${v.is_pinned ? "Закреплена" : "Авто-обновление"}`
+      : (lua ? `${lua.depotCount} депо · ${lua.dlcCount} DLC · ${lua.hasActivePins ? "Закреплена" : "Авто-обновление"}` : "");
+
+    right.innerHTML = `<div class="lt-head">
+        <div><h2 class="lt-page-title lt-title-tight">${esc(gameName(appId))}</h2>
+        <p class="lt-page-sub">App ID: ${appId}</p></div>
+        <div class="lt-head-actions">
+          <button class="lt-btn lt-btn-ghost" id="lt-tr-download">${UI_ICONS.download} Скачать</button>
+          <button class="lt-btn lt-btn-ghost" id="lt-tr-detail">${UI_ICONS.manage} Управление</button>
+          <button class="lt-btn lt-btn-ghost" id="lt-tr-refresh">${UI_ICONS.refresh} Обновить</button>
+        </div>
+      </div>
+      <nav class="lt-tabs">
+        <button class="lt-tab ${toolsState.tab === "depots" ? "is-active" : ""}" data-tab="depots">Депо</button>
+        <button class="lt-tab ${toolsState.tab === "launch" ? "is-active" : ""}" data-tab="launch">Параметры запуска</button>
+      </nav>
+      <div id="lt-tr-body"></div>`;
+    right.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => { toolsState.tab = b.dataset.tab; drawRight(); }));
+    right.querySelector("#lt-tr-download").addEventListener("click", () => openDetail(appId));
+    right.querySelector("#lt-tr-detail").addEventListener("click", () => openDetail(appId));
+    right.querySelector("#lt-tr-refresh").addEventListener("click", () => drawRight());
+    const body = right.querySelector("#lt-tr-body");
+
+    if (toolsState.tab === "launch") {
+      const game = await invoke("lt_game_install_path", { appId }).catch(() => ({ installed: false }));
+      body.innerHTML = `<div class="lt-panel">
+        <div class="lt-panel-title">Параметры запуска</div>
+        <p class="lt-muted">${game.installed ? `Игра установлена: ${esc(game.path)}` : "Игра не установлена на диск — Steam предложит её скачать."}</p>
+        <div class="lt-row-gap"><input type="text" class="lt-input lt-grow" id="lt-launch-args" placeholder="Например: -windowed -nointro">
+        <button class="lt-btn lt-btn-accent" id="lt-launch-go">▶ Запустить через Steam</button></div>
+      </div>`;
+      body.querySelector("#lt-launch-go").addEventListener("click", async () => {
+        try { await invoke("lt_launch_game", { appId, args: body.querySelector("#lt-launch-args").value.trim() }); toast("Запуск через Steam…", "ok"); }
+        catch (e) { toast(errMsg(e), "error"); }
+      });
+      return;
+    }
+
+    if (!lua) { body.innerHTML = '<div class="lt-empty">Lua-файл не найден</div>'; return; }
+    body.innerHTML = `<div class="lt-panel">
+        <div class="lt-panel-title">Активный пресет</div>
+        <label class="lt-preset">
+          <span class="lt-preset-main"><strong>${esc(sel ? sel.name : "Текущий файл")}</strong><span class="lt-muted">${esc(presetMeta(sel))}</span></span>
+          ${(!sel || sel === activeVariant) ? '<span class="lt-badge lt-badge-ok">АКТИВНА</span>' : ""}
+          <select id="lt-preset-select" class="lt-preset-select">
+            <option value="" ${!toolsState.preset ? "selected" : ""}>Текущий файл</option>
+            ${variants.map(v => `<option value="${esc(v.name)}" ${v.name === toolsState.preset ? "selected" : ""}>${esc(v.name)}${v === activeVariant ? " — активен" : ""}</option>`).join("")}
+          </select>
+        </label>
+        <div class="lt-preset-actions">
+          <button class="lt-btn lt-btn-ghost" id="lt-pr-apply" ${!sel || sel === activeVariant ? "disabled" : ""}>${UI_ICONS.check} Применить</button>
+          <button class="lt-btn lt-btn-ghost" id="lt-pr-rename" ${sel ? "" : "disabled"}>${UI_ICONS.rename} Переименовать</button>
+          <button class="lt-btn lt-btn-ghost" id="lt-pr-save">${UI_ICONS.edit} ${sel ? "Перезаписать" : "Сохранить как пресет"}</button>
+          <button class="lt-btn lt-btn-ghost lt-btn-dangertext" id="lt-pr-del" ${sel ? "" : "disabled"}>${UI_ICONS.trash} Удалить</button>
+        </div>
+      </div>
+      <label class="lt-search">${UI_ICONS.search}<input type="text" id="lt-depot-search" placeholder="Поиск депо по названию, ID или типу…" value="${esc(toolsState.depotQ)}"></label>
+      <div id="lt-depots"></div>`;
+
+    const promptName = (title, value = "") => new Promise(resolve => {
+      const ov = document.createElement("div");
+      ov.className = "lt-confirm-overlay";
+      ov.innerHTML = `<div class="lt-confirm-box"><p>${esc(title)}</p><input type="text" class="lt-input" value="${esc(value)}" style="width:100%"><div class="lt-confirm-actions"><button class="lt-btn lt-btn-primary">OK</button><button class="lt-btn">Отмена</button></div></div>`;
+      document.body.appendChild(ov);
+      const inp = ov.querySelector("input"); inp.focus(); inp.select();
+      const done = v => { ov.remove(); resolve(v); };
+      const [ok, cancel] = ov.querySelectorAll("button");
+      ok.addEventListener("click", () => done(inp.value.trim() || null));
+      cancel.addEventListener("click", () => done(null));
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") done(inp.value.trim() || null); if (e.key === "Escape") done(null); });
+    });
+
+    body.querySelector("#lt-preset-select").addEventListener("change", e => { toolsState.preset = e.target.value; drawRight(); });
+    body.querySelector("#lt-pr-apply").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+      try { await invoke("lt_load_variant", { appId, name: sel.name }); toast(`Пресет «${sel.name}» применён`, "ok"); drawRight(); }
+      catch (err) { toast(errMsg(err), "error"); }
+    }));
+    body.querySelector("#lt-pr-rename").addEventListener("click", async () => {
+      const to = await promptName("Новое имя пресета", sel.name);
+      if (!to) return;
+      try { await invoke("lt_rename_variant", { appId, from: sel.name, to }); toolsState.preset = to.replace(/[^\p{L}\p{N}_-]/gu, "_"); drawRight(); }
+      catch (err) { toast(errMsg(err), "error"); }
+    });
+    body.querySelector("#lt-pr-save").addEventListener("click", async () => {
+      const name = sel ? sel.name : await promptName("Имя нового пресета");
+      if (!name) return;
+      if (sel && !await confirmAction(`Перезаписать пресет «${sel.name}» текущим файлом?`)) return;
+      try { await invoke("lt_save_variant", { appId, name }); toolsState.preset = name.replace(/[^\p{L}\p{N}_-]/gu, "_"); toast("Пресет сохранён", "ok"); drawRight(); }
+      catch (err) { toast(errMsg(err), "error"); }
+    });
+    body.querySelector("#lt-pr-del").addEventListener("click", async () => {
+      if (!await confirmAction(`Удалить пресет «${sel.name}»? Текущий lua-файл не изменится.`)) return;
+      try { await invoke("lt_delete_variant", { appId, name: sel.name }); toolsState.preset = ""; drawRight(); }
+      catch (err) { toast(errMsg(err), "error"); }
+    });
+
+    const all = [...lua.entries.map(e => ({ ...e, disabled: false })), ...lua.disabledEntries.map(e => ({ ...e, disabled: true }))];
+    const typeOf = e => e.hasKey ? "ДЕПО" : (e.id === lua.baseAppId ? "ИГРА" : "DLC");
+    const drawDepots = () => {
+      const q = toolsState.depotQ.toLowerCase();
+      const list = q ? all.filter(e => String(e.id).includes(q) || (e.comment || "").toLowerCase().includes(q) || typeOf(e).toLowerCase().includes(q)) : all;
+      body.querySelector("#lt-depots").innerHTML = `<div class="lt-dp-group">В lua <span class="lt-muted">(${all.length})</span></div>` + list.map(e => {
+        const mf = e.manifestId || e.commentedManifestId;
+        return `<div class="lt-dp ${e.disabled ? "is-off" : ""}">
+          <button class="lt-switch ${e.disabled ? "" : "is-on"}" data-dp-toggle="${e.id}" ${e.id === lua.baseAppId ? "disabled title=\"Основное приложение\"" : ""} aria-label="Включить/выключить"></button>
+          <div class="lt-dp-main">
+            <div class="lt-dp-title">${esc(e.comment || `Depot ${e.id}`)} <span class="lt-chip lt-chip-${typeOf(e) === "DLC" ? "dlc" : typeOf(e) === "ИГРА" ? "game" : "depot"}">${typeOf(e)}</span></div>
+            <div class="lt-dp-sub">${e.id}${e.sizeOnDisk ? ` · ${fmtSize(e.sizeOnDisk)}` : ""}</div>
+            ${mf ? `<div class="lt-dp-mf">манифест ${esc(mf)}</div>` : ""}
+          </div>
+          ${mf && !e.disabled ? `<label class="lt-dp-lock"><input type="checkbox" data-dp-lock="${e.id}" ${e.manifestId ? "checked" : ""}> Закрепить</label>` : ""}
+        </div>`;
+      }).join("");
+      body.querySelectorAll("[data-dp-toggle]").forEach(b => b.addEventListener("click", async () => {
+        const id = parseInt(b.dataset.dpToggle, 10);
+        const entry = all.find(x => x.id === id);
+        try {
+          const t = await invoke("lt_read_lua", { appId });
+          await invoke("lt_write_lua", { appId, content: setDepotEnabled(t, id, entry.disabled) });
+          drawRight();
+        } catch (err) { toast(errMsg(err), "error"); }
+      }));
+      body.querySelectorAll("[data-dp-lock]").forEach(c => c.addEventListener("change", async () => {
+        const id = parseInt(c.dataset.dpLock, 10);
+        try {
+          const t = await invoke("lt_read_lua", { appId });
+          await invoke("lt_write_lua", { appId, content: setDepotLocked(t, id, c.checked) });
+          drawRight();
+        } catch (err) { c.checked = !c.checked; toast(errMsg(err), "error"); }
+      }));
+    };
+    drawDepots();
+    body.querySelector("#lt-depot-search").addEventListener("input", e => { toolsState.depotQ = e.target.value.trim(); drawDepots(); });
+  };
+
+  drawList();
+  drawRight();
+  el.querySelector("#lt-tl-search").addEventListener("input", e => { toolsState.q = e.target.value.trim(); toolsState.page = 0; drawList(); });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MODE
+// ══════════════════════════════════════════════════════════════════
+
+const MODES = [
+  { key: "bst", mode: "BetterSteamTools", title: "BetterSteamTools", badges: ["rec", "cloud"],
+    desc: "Форк OpenSteamTools с открытым исходным кодом, который активно поддерживает команда LuaTools. С исправлениями и новыми функциями!" },
+  { key: "ost", mode: "stplug-in", title: "OpenSteamTool (Nightly)", badges: ["exp"],
+    desc: "Nightly-сборки upstream OpenSteamTool. Свежие изменения раньше всех, но может быть нестабильным." },
+  { key: "ltsp", mode: "LTSP", title: "LTSP", badges: [],
+    desc: "Альтернативный анлокер (madoiscool/LTSP). Используйте, если BST и OST не работают." },
+];
+const BADGE = {
+  active: `<span class="lt-badge2 is-ok">${UI_ICONS.check} АКТИВЕН</span>`,
+  rec: `<span class="lt-badge2 is-blue">${UI_ICONS.star} РЕКОМЕНДУЕТСЯ</span>`,
+  cloud: `<span class="lt-badge2 is-violet">${UI_ICONS.cloud} ПОДДЕРЖКА CLOUDREDIRECT</span>`,
+  exp: '<span class="lt-badge2 is-warn">ЭКСПЕРИМЕНТАЛЬНЫЙ</span>',
+};
+const modeLatest = {};
+
+async function renderMode(el) {
+  const current = pluginStatus?.installed ? pluginStatus.mode : null;
+  const curVer = String(pluginStatus?.version || "").replace(/^v/i, "");
+  const anyKnown = MODES.some(m => m.mode === current);
+  el.innerHTML = `<div class="lt-narrow lt-narrow-wide">
+    <div class="lt-head">
+      <div><h2 class="lt-page-title lt-title-tight">Режим</h2>
+      <p class="lt-page-sub">Переключите бэкенд, используемый для разблокировки игр, добавленных через LuaTools.</p></div>
+      <button class="lt-btn lt-btn-ghost" id="lt-mode-check">${UI_ICONS.refresh} Проверить обновления</button>
+    </div>
+    ${MODES.map(m => {
+      const active = current === m.mode;
+      const latest = modeLatest[m.key];
+      const status = active
+        ? (latest && latest.replace(/^v/i, "") !== curVer ? `<span class="lt-warn">Доступно обновление ${esc(latest)}</span>` : "Актуально")
+        : (latest ? `Последняя версия: ${esc(latest)}` : "Неактивен");
+      return `<div class="lt-mcard">
+        <div class="lt-mcard-main">
+          <div class="lt-mcard-title">${UI_ICONS.wrench}<strong>${m.title}</strong>${active ? BADGE.active : ""}${m.badges.map(b => BADGE[b]).join("")}</div>
+          <p class="lt-mcard-desc">${m.desc}</p>
+          <div class="lt-mcard-status">${status}</div>
+        </div>
+        <button class="lt-btn lt-btn-ghost" data-install-mode="${m.key}">${active ? "Переустановить" : "Переключиться на этот"}</button>
+      </div>`;
+    }).join("")}
+    <div class="lt-mcard">
+      <div class="lt-mcard-main">
+        <div class="lt-mcard-title">${UI_ICONS.wrench}<strong>Свой анлокер</strong>${current && !anyKnown ? BADGE.active : ""}</div>
+        <p class="lt-mcard-desc">Используй своё решение для разблокировки — мы в него не лезем. Плагины, установленные этим приложением, будут удалены.</p>
+        <div class="lt-mcard-status">${current && !anyKnown ? `Активен · ${esc(current)}` : "Неактивен"}</div>
+      </div>
+      <button class="lt-btn lt-btn-ghost" data-install-mode="custom">Переключиться на этот</button>
+    </div>
+    <div class="lt-sep"></div>
+    <div id="lt-cr-card"></div>
+  </div>`;
+
+  el.querySelectorAll("[data-install-mode]").forEach(btn => btn.addEventListener("click", async () => {
+    const mode = btn.dataset.installMode;
+    const msg = mode === "custom" ? "Удалить установленный этим приложением плагин и перейти на свой анлокер? Steam будет перезапущен."
+      : "Установка перезапустит Steam. Продолжить?";
+    if (!await confirmAction(msg)) return;
+    btn.disabled = true; btn.textContent = "Устанавливаю…";
+    try {
+      toast(await invoke("lt_install_mode", { mode }), "ok");
+      pluginStatus = await invoke("lt_plugin_status");
+      renderMode(el);
+    } catch (e) { toast(errMsg(e), "error"); btn.disabled = false; btn.textContent = "Повторить"; }
+  }));
+
+  el.querySelector("#lt-mode-check").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    await Promise.all(MODES.map(m => invoke("lt_check_mode_update", { mode: m.key })
+      .then(v => { if (v?.latest_tag) modeLatest[m.key] = v.latest_tag; }).catch(() => {})));
+    renderMode(el);
+  }));
+  if (!Object.keys(modeLatest).length) el.querySelector("#lt-mode-check").click();
+
+  try {
+    const cr = await invoke("lt_cloud_redirect_state");
+    const box = el.querySelector("#lt-cr-card");
+    if (!box) return;
+    box.innerHTML = `<div class="lt-mcard">
+      <div class="lt-mcard-main">
+        <div class="lt-mcard-title lt-cr-title">${UI_ICONS.cloud}<strong>CloudRedirect</strong></div>
+        <p class="lt-mcard-desc">Возвращает встроенную поддержку Steam Cloud через сторонние хранилища, такие как Google Drive / OneDrive / Cloudflare R2 и другие. Пока совместимо только с BetterSteamTools. После включения перезапустите Steam.</p>
+        <div class="lt-mcard-status">${!cr.supported ? "Нужен BetterSteamTools" : !cr.installed ? "Ещё не установлено." : cr.enabled ? '<span class="lt-ok">Включено</span>' : "Выключено"}</div>
+      </div>
+      <button class="lt-btn lt-btn-ghost" id="lt-cr-toggle" ${cr.supported ? "" : "disabled"}>${cr.enabled ? "Выключить" : "Включить"}</button>
+    </div>`;
+    box.querySelector("#lt-cr-toggle").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+      try {
+        await invoke("lt_cloud_redirect_toggle", { enable: !cr.enabled });
+        toast(cr.enabled ? "CloudRedirect выключен" : "CloudRedirect включён — перезапустите Steam", "ok");
+        renderMode(el);
+      } catch (err) { toast(errMsg(err), "error"); }
+    }));
+  } catch { /* нет Steam */ }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FIXES
+// ══════════════════════════════════════════════════════════════════
+
+let fixesCache = null;
+const fixState = { q: "", tag: null, mine: false, page: 0, perPage: 24 };
+
+async function renderFixes(el, force = false) {
+  el.innerHTML = `<div class="lt-head">
+      <h2 class="lt-page-title">Фиксы</h2>
+      <button class="lt-btn lt-btn-ghost" id="lt-fix-refresh">${UI_ICONS.refresh} Обновить</button>
+    </div>
+    <label class="lt-search">${UI_ICONS.search}<input type="text" id="lt-fix-search" placeholder="Поиск по имени или App ID…" value="${esc(fixState.q)}"></label>
+    <div class="lt-chips" id="lt-fix-tags"></div>
+    <div id="lt-fixes-list"><div class="lt-loading">Загружаю…</div></div>
+    <div id="lt-fix-pager"></div>`;
+  el.querySelector("#lt-fix-refresh").addEventListener("click", () => renderFixes(el, true));
+
+  if (!fixesCache || force) {
+    const data = await ltDenuvoListings();
+    fixesCache = Array.isArray(data) ? [...data].sort((a, b) => (b.fixCount || 0) - (a.fixCount || 0)) : [];
+  }
+  if (currentPage !== "fixes") return;
+
+  const tags = new Map();
+  fixesCache.forEach(g => (g.tags || []).forEach(t => tags.set(t.id || t, t.name || t)));
+  const tagBox = el.querySelector("#lt-fix-tags");
+  const drawTags = () => {
+    tagBox.innerHTML = `<button class="lt-chip2 ${fixState.mine ? "is-active" : ""}" data-mine>Мои игры</button>`
+      + [...tags.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+        .map(([id, nm]) => `<button class="lt-chip2 ${fixState.tag === id ? "is-active" : ""}" data-tag="${esc(id)}">${esc(nm)}</button>`).join("");
+    tagBox.querySelector("[data-mine]").addEventListener("click", () => { fixState.mine = !fixState.mine; fixState.page = 0; drawTags(); draw(); });
+    tagBox.querySelectorAll("[data-tag]").forEach(b => b.addEventListener("click", () => {
+      fixState.tag = fixState.tag === b.dataset.tag ? null : b.dataset.tag; fixState.page = 0; drawTags(); draw();
+    }));
+  };
+
+  const draw = () => {
+    const q = fixState.q.toLowerCase();
+    const mine = new Set(installedList.map(i => String(i.app_id)));
+    const list = fixesCache.filter(g =>
+      (!q || (g.name || "").toLowerCase().includes(q) || String(g.appid).includes(q))
+      && (!fixState.mine || mine.has(String(g.appid)))
+      && (!fixState.tag || (g.tags || []).some(t => (t.id || t) === fixState.tag)));
+    const pages = Math.max(1, Math.ceil(list.length / fixState.perPage));
+    fixState.page = Math.min(fixState.page, pages - 1);
+    const slice = list.slice(fixState.page * fixState.perPage, (fixState.page + 1) * fixState.perPage);
+    const box = el.querySelector("#lt-fixes-list");
+    box.innerHTML = slice.length
+      ? `<div class="lt-gc-grid">${slice.map(g => gameCardHtml({ appId: g.appid, name: g.name || `App ${g.appid}`, img: g.header_image, sub: `Фиксов: ${g.fixCount ?? "?"}` }).replace('data-appid=', 'data-fixappid=')).join("")}</div>`
+      : '<div class="lt-empty">Нет фиксов</div>';
+    box.querySelectorAll("[data-fixappid]").forEach(b => b.addEventListener("click", () => openFixDetail(parseInt(b.dataset.fixappid, 10))));
+    const pg = el.querySelector("#lt-fix-pager");
+    pg.innerHTML = pagerHtml(fixState.page, pages, fixState.perPage);
+    bindPager(pg, p => { fixState.page = p; draw(); el.closest(".lt-main")?.scrollTo?.(0, 0); }, n => { fixState.perPage = n; fixState.page = 0; draw(); });
+  };
+  drawTags();
+  draw();
+  el.querySelector("#lt-fix-search").addEventListener("input", e => { fixState.q = e.target.value.trim(); fixState.page = 0; draw(); });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PLUGIN
+// ══════════════════════════════════════════════════════════════════
+
+async function renderPlugin(el) {
+  try { pluginStatus = await invoke("lt_plugin_status"); } catch { /* keep */ }
+  const ps = pluginStatus;
+  const ver = ps?.version ? `v${String(ps.version).replace(/^v/i, "")}` : "—";
+  const loaderOk = !!ps?.dll_path;
+  const row = (ok, label, value) => `<div class="lt-st-row">${ok ? `<span class="lt-st-ok">${UI_ICONS.ok}</span>` : `<span class="lt-st-no">${UI_ICONS.no}</span>`}<span class="lt-st-label">${label}</span><span class="lt-st-val">${value}</span></div>`;
+  el.innerHTML = `<div class="lt-narrow lt-narrow-wide">
+    <h2 class="lt-page-title lt-title-tight">Плагин</h2>
+    <p class="lt-page-sub">Анлокер Steam, через который работают игры, добавленные в LuaProject.</p>
+    <div class="lt-panel lt-st">
+      <div class="lt-st-head">${UI_ICONS.puzzle}<strong>Статус</strong></div>
+      <div class="lt-st-row"><span class="lt-st-tag">${UI_ICONS.tag}</span><span class="lt-st-label">Установленная версия</span><span class="lt-st-val"><strong>${esc(ver)}</strong></span></div>
+      ${row(!!ps?.installed, "Режим", esc(ps?.mode || "Не установлен"))}
+      ${row(loaderOk, "Загрузчик", loaderOk ? `<code>${esc(ps.dll_path)}</code>` : "Не установлено")}
+      ${row(!!steamInfo?.path, "Steam", steamInfo?.path ? esc(steamInfo.path) : "Не найден")}
+      <div class="lt-st-actions">
+        <button class="lt-btn lt-hs-btn" data-page="mode">${ps?.installed ? "Переустановить" : "Установить"}</button>
+        <button class="lt-btn lt-btn-ghost" data-page="mode">Проверить обновления</button>
+      </div>
+    </div>
+    <div class="lt-feat-title">Ключевые возможности</div>
+    <div class="lt-feat"><span class="lt-feat-ic">${UI_ICONS.plus}</span>Игры из lua-файлов появляются в библиотеке Steam и скачиваются как обычные</div>
+    <div class="lt-feat"><span class="lt-feat-ic">${UI_ICONS.refresh}</span>Манифесты обновляются автоматически, если депо не закреплены</div>
+    <div class="lt-feat"><span class="lt-feat-ic">${UI_ICONS.cloud}</span>CloudRedirect — сохранения в облаке для разблокированных игр (BetterSteamTools)</div>
+    <p class="lt-footnote">Плагин устанавливается в папку Steam. Переустановка и смена режима перезапускают Steam.</p>
+  </div>`;
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// UTILITIES (в «Настройках»): DLC, лимиты, DDM, Hubcap, DoH, Steamless
+// ══════════════════════════════════════════════════════════════════
+
+async function renderUtilities(el) {
+  el.innerHTML = `<h3 class="lt-utils-title">Утилиты</h3>
     <div class="lt-tools-grid">
       <div class="lt-tool-card"><h3>🎮 DLC Генератор</h3><p class="lt-muted">Генерация DLC-записей</p>
         <div class="lt-tool-form"><input type="text" class="lt-input" id="lt-dlc-appid" placeholder="AppID"><button class="lt-btn lt-btn-primary" id="lt-dlc-gen">Сгенерировать</button></div>
@@ -668,7 +1190,7 @@ async function renderTools(el) {
     if (info.latest_tag) e.innerHTML += ` · Последняя: <strong>${esc(info.latest_tag)}</strong>`;
   }).catch(e => { const r = el.querySelector("#lt-ddm-info"); if (r) r.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; });
   el.querySelector("#lt-ddm-install")?.addEventListener("click", async () => {
-    try { toast("Скачиваю DepotDownloaderMod…", "info"); const path = await invoke("lt_depot_downloader_install"); toast("Установлено: " + path, "ok"); renderTools(el); }
+    try { toast("Скачиваю DepotDownloaderMod…", "info"); const path = await invoke("lt_depot_downloader_install"); toast("Установлено: " + path, "ok"); renderUtilities(el); }
     catch (e) { toast(errMsg(e), "error"); }
   });
   el.querySelector("#lt-ddm-run")?.addEventListener("click", async () => {
@@ -736,171 +1258,6 @@ async function renderTools(el) {
   });
 }
 
-// ══════════════════════════════════════════════════════════════════
-// MODE
-// ══════════════════════════════════════════════════════════════════
-
-async function renderMode(el) {
-  const current = pluginStatus?.mode || null;
-  el.innerHTML = `<h2 class="lt-page-title">Режим</h2>
-    ${current ? `<div class="lt-mode-current">Текущий: <strong class="lt-ok">${esc(current)}</strong></div>` : '<div class="lt-mode-current"><span class="lt-error">Плагин не установлен</span></div>'}
-    <div class="lt-mode-list" id="lt-mode-list">
-      <div class="lt-mode-option ${current === 'BetterSteamTools' ? 'lt-mode-active' : ''}">
-        <div class="lt-mode-head"><h3>BetterSteamTools</h3><span class="lt-badge lt-badge-ok">Рекомендуется</span></div>
-        <p class="lt-muted">Наш форк OpenSteamTools. Автозагрузка манифестов, DLC, DLL-инъекция, Family Sharing, CloudRedirect.</p>
-        <div class="lt-mode-ver" id="lt-bst-ver"><span class="lt-loading">Проверяю…</span></div>
-        <button class="lt-btn lt-btn-primary" id="lt-install-bst">${current === 'BetterSteamTools' ? 'Переустановить' : 'Установить'}</button>
-      </div>
-      <div class="lt-mode-option ${current === 'stplug-in' ? 'lt-mode-active' : ''}">
-        <div class="lt-mode-head"><h3>OpenSteamTool (Nightly)</h3><span class="lt-badge lt-badge-warn">Экспериментальный</span></div>
-        <p class="lt-muted">Nightly-билды upstream OpenSteamTool. Может быть нестабильным.</p>
-        <div class="lt-mode-ver" id="lt-ost-ver"><span class="lt-loading">Проверяю…</span></div>
-        <button class="lt-btn" id="lt-install-ost">${current === 'stplug-in' ? 'Переустановить' : 'Установить'}</button>
-      </div>
-      <div class="lt-mode-option">
-        <div class="lt-mode-head"><h3>LTSP</h3><span class="lt-badge lt-badge-warn">Альтернатива</span></div>
-        <p class="lt-muted">Третий анлокер (madoiscool/LTSP). Используйте, если BST/OST не работают.</p>
-        <div class="lt-mode-ver" id="lt-ltsp-ver"><span class="lt-loading">Проверяю…</span></div>
-        <button class="lt-btn" id="lt-install-ltsp">Установить</button>
-      </div>
-      <div class="lt-mode-option">
-        <h3>Удалить</h3>
-        <p class="lt-muted">Полностью удалить плагин (по манифесту установки).</p>
-        <button class="lt-btn lt-btn-danger" id="lt-mode-uninstall">Удалить плагин</button>
-      </div>
-    </div>
-    <div class="lt-section" id="lt-cr-section"></div>`;
-
-  const installHandler = (btnId, mode) => {
-    el.querySelector(btnId)?.addEventListener("click", async () => {
-      if (!await confirmAction("Установка перезапустит Steam. Продолжить?")) return;
-      const btn = el.querySelector(btnId);
-      btn.disabled = true; btn.textContent = "Устанавливаю…";
-      try {
-        const msg = await invoke("lt_install_mode", { mode });
-        toast(msg, "ok");
-        pluginStatus = await invoke("lt_plugin_status");
-        renderMode(el);
-      } catch (e) { toast(errMsg(e), "error"); btn.disabled = false; btn.textContent = "Повторить"; }
-    });
-  };
-  installHandler("#lt-install-bst", "bst");
-  installHandler("#lt-install-ost", "ost");
-  installHandler("#lt-install-ltsp", "ltsp");
-  el.querySelector("#lt-mode-uninstall")?.addEventListener("click", async () => {
-    if (!await confirmAction("Удалить плагин? Steam будет перезапущен, DLL плагина удалены.")) return;
-    try { await invoke("lt_uninstall_mode"); pluginStatus = await invoke("lt_plugin_status"); toast("Удалено", "ok"); renderMode(el); }
-    catch (e) { toast(errMsg(e), "error"); }
-  });
-
-  // Check versions
-  invoke("lt_check_mode_update", { mode: "bst" }).then(v => {
-    const e = el.querySelector("#lt-bst-ver");
-    if (e && v.latest_tag) e.innerHTML = `Последняя: <strong>${esc(v.latest_tag)}</strong>`;
-  }).catch(() => {});
-  invoke("lt_check_mode_update", { mode: "ost" }).then(v => {
-    const e = el.querySelector("#lt-ost-ver");
-    if (e && v.latest_tag) e.innerHTML = `Последняя: <strong>${esc(v.latest_tag)}</strong>`;
-  }).catch(() => {});
-  invoke("lt_check_mode_update", { mode: "ltsp" }).then(v => {
-    const e = el.querySelector("#lt-ltsp-ver");
-    if (e && v.latest_tag) e.innerHTML = `Последняя: <strong>${esc(v.latest_tag)}</strong>`;
-  }).catch(() => {});
-
-  // CloudRedirect
-  try {
-    const cr = await invoke("lt_cloud_redirect_state");
-    const s = el.querySelector("#lt-cr-section");
-    if (cr.supported) {
-      s.innerHTML = `<h3>☁ CloudRedirect</h3>
-        <p class="lt-muted">Steam Cloud revival — работает с BST и OST.</p>
-        <div class="lt-info-row">Статус: ${cr.enabled ? '<span class="lt-ok">Включён</span>' : '<span class="lt-muted">Выключен</span>'} ${cr.installed ? '' : '<span class="lt-warn">(модуль CloudRedirect не найден — переустановите плагин)</span>'}</div>
-        <button class="lt-btn ${cr.enabled ? 'lt-btn-danger' : 'lt-btn-primary'}" id="lt-cr-toggle">${cr.enabled ? 'Выключить' : 'Включить'}</button>`;
-      el.querySelector("#lt-cr-toggle")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
-        try {
-          await invoke("lt_cloud_redirect_toggle", { enable: !cr.enabled });
-          toast(cr.enabled ? "CloudRedirect выключен" : "CloudRedirect включён", "ok");
-          renderMode(el);
-        } catch (err) { toast(errMsg(err), "error"); }
-      }));
-    }
-  } catch {}
-}
-
-// ══════════════════════════════════════════════════════════════════
-// FIXES
-// ══════════════════════════════════════════════════════════════════
-
-let fixesCache = null;
-let fixSelectedTag = null;
-let fixMyGamesOnly = false;
-let fixSearchText = "";
-let fixPage = 0;
-const FIX_PAGE_SIZE = 12;
-
-async function renderFixes(el) {
-  el.innerHTML = `<h2 class="lt-page-title">Фиксы</h2>
-    <div class="lt-search-bar">
-      <input type="text" id="lt-fix-search" class="lt-input" placeholder="Поиск…" value="${esc(fixSearchText)}">
-      <label class="lt-btn lt-btn-sm"><input type="checkbox" id="lt-fix-mygames" ${fixMyGamesOnly ? 'checked' : ''}> Мои игры</label>
-    </div>
-    <div class="lt-fix-tags" id="lt-fix-tags"></div>
-    <div id="lt-fixes-list" class="lt-loading">Загружаю…</div>
-    <div class="lt-pagination" id="lt-fix-pages"></div>`;
-
-  if (!fixesCache) {
-    try { fixesCache = await ltDenuvoListings(); } catch { fixesCache = []; }
-  }
-
-  const renderFixGrid = () => {
-    let items = fixesCache || [];
-    if (fixSearchText) items = items.filter(g => (g.name || g.game || "").toLowerCase().includes(fixSearchText.toLowerCase()) || String(g.appid || g.appId || "").includes(fixSearchText));
-    if (fixMyGamesOnly) {
-      const ids = new Set(installedList.map(i => i.app_id));
-      items = items.filter(g => ids.has(g.appid || g.appId));
-    }
-    if (fixSelectedTag) items = items.filter(g => (g.tags || []).some(t => (t.id || t) === fixSelectedTag));
-
-    const total = items.length;
-    const pages = Math.ceil(total / FIX_PAGE_SIZE);
-    if (fixPage >= pages) fixPage = Math.max(0, pages - 1);
-    const slice = items.slice(fixPage * FIX_PAGE_SIZE, (fixPage + 1) * FIX_PAGE_SIZE);
-
-    const c = el.querySelector("#lt-fixes-list");
-    if (!slice.length) { c.innerHTML = '<div class="lt-empty">Нет фиксов</div>'; }
-    else {
-      c.innerHTML = `<div class="lt-grid">${slice.map(g => {
-        const aid = g.appid || g.appId || 0;
-        return `<button class="lt-card lt-fix-card" data-fixappid="${aid}">
-          <img data-lt-img="${aid}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${aid}/capsule_sm_120.jpg" alt="" loading="lazy">
-          <div class="lt-card-info"><span class="lt-card-name">${esc(g.name || g.game || `App ${aid}`)}</span>
-          <span class="lt-card-id">${aid} · ${g.fixCount || g.fix_count || '?'} фиксов</span></div>
-        </button>`;
-      }).join("")}</div>`;
-      c.querySelectorAll("[data-fixappid]").forEach(b => b.addEventListener("click", () => openFixDetail(parseInt(b.dataset.fixappid, 10))));
-    }
-
-    const pEl = el.querySelector("#lt-fix-pages");
-    if (pages > 1) {
-      pEl.innerHTML = Array.from({ length: pages }, (_, i) => `<button class="lt-btn lt-btn-sm ${i === fixPage ? 'lt-btn-primary' : ''}" data-fpage="${i}">${i + 1}</button>`).join(" ");
-      pEl.querySelectorAll("[data-fpage]").forEach(b => b.addEventListener("click", () => { fixPage = parseInt(b.dataset.fpage); renderFixGrid(); }));
-    } else { pEl.innerHTML = ""; }
-  };
-
-  // Tags
-  const allTags = new Map();
-  (fixesCache || []).forEach(g => (g.tags || []).forEach(t => { const id = t.id || t; const nm = t.name || t; allTags.set(id, nm); }));
-  const tagEl = el.querySelector("#lt-fix-tags");
-  tagEl.innerHTML = `<button class="lt-tag ${!fixSelectedTag ? 'lt-tag-active' : ''}" data-tagid="">Все</button>` +
-    [...allTags.entries()].map(([id, nm]) => `<button class="lt-tag ${fixSelectedTag === id ? 'lt-tag-active' : ''}" data-tagid="${esc(id)}">${esc(nm)}</button>`).join("");
-  tagEl.querySelectorAll("[data-tagid]").forEach(b => b.addEventListener("click", () => { fixSelectedTag = b.dataset.tagid || null; fixPage = 0; renderFixGrid(); tagEl.querySelectorAll(".lt-tag").forEach(t => t.classList.toggle("lt-tag-active", (t.dataset.tagid || null) === fixSelectedTag)); }));
-
-  el.querySelector("#lt-fix-search").addEventListener("input", e => { fixSearchText = e.target.value; fixPage = 0; renderFixGrid(); });
-  el.querySelector("#lt-fix-mygames").addEventListener("change", e => { fixMyGamesOnly = e.target.checked; fixPage = 0; renderFixGrid(); });
-
-  renderFixGrid();
-}
-
 async function openFixDetail(appId) {
   const el = $("#lt-page-content");
   el.innerHTML = '<div class="lt-loading">Загружаю фиксы…</div>';
@@ -936,7 +1293,7 @@ async function openFixDetail(appId) {
         </div>
       </div>`;
 
-    el.querySelector("#lt-back-fix")?.addEventListener("click", () => { currentPage = "fixes"; renderFixes(el); });
+    el.querySelector("#lt-back-fix")?.addEventListener("click", () => { switchPage("fixes"); });
     el.querySelector("#lt-revert-fix")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       if (!await confirmAction("Откатить фикс? Оригинальные файлы будут восстановлены.")) return;
@@ -973,23 +1330,7 @@ async function openFixDetail(appId) {
         openFixDetail(appId);
       } catch (e) { toast(errMsg(e), "error"); }
     })));
-  } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(errMsg(e))}</div>`; el.querySelector("#lt-back-fix")?.addEventListener("click", () => { currentPage = "fixes"; renderFixes(el); }); }
-}
-
-// ══════════════════════════════════════════════════════════════════
-// PLUGIN
-// ══════════════════════════════════════════════════════════════════
-
-function renderPlugin(el) {
-  const ps = pluginStatus;
-  el.innerHTML = `<h2 class="lt-page-title">Плагин</h2>
-    <div class="lt-plugin-info">
-      <div class="lt-info-row"><strong>Статус:</strong> ${ps?.installed ? '<span class="lt-ok">Установлен</span>' : '<span class="lt-error">Не установлен</span>'}</div>
-      ${ps?.mode ? `<div class="lt-info-row"><strong>Тип:</strong> ${esc(ps.mode)}</div>` : ''}
-      ${ps?.version ? `<div class="lt-info-row"><strong>Версия:</strong> ${esc(ps.version)}</div>` : ''}
-      ${ps?.dll_path ? `<div class="lt-info-row"><strong>Путь:</strong> <code>${esc(ps.dll_path)}</code></div>` : ''}
-    </div>
-    ${!ps?.installed ? '<p class="lt-warn" style="margin-top:16px">Плагин не обнаружен. Перейдите в раздел <strong>Режим</strong> для установки.</p><button class="lt-btn lt-btn-primary" data-page="mode">Установить</button>' : ''}`;
+  } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(errMsg(e))}</div>`; el.querySelector("#lt-back-fix")?.addEventListener("click", () => { switchPage("fixes"); }); }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1078,6 +1419,10 @@ async function renderSettings(el) {
     </div>
     </div>`;
   updateAuthUI();
+  const utils = document.createElement("div");
+  utils.className = "lt-section lt-utils";
+  el.appendChild(utils);
+  renderUtilities(utils);
   const saveOn = (id, key, boolVal = true) => el.querySelector(id)?.addEventListener("change", async e => {
     const v = boolVal ? e.target.checked : e.target.value;
     try { await invoke("lt_config_set", { key, value: v }); ltConfig[key] = v; toast("Сохранено", "ok"); } catch (err) { toast(errMsg(err), "error"); }
@@ -1361,9 +1706,9 @@ async function doRemove(appId) {
 async function doToggleLock(appId, depotId, lock) {
   try {
     let text = await invoke("lt_read_lua", { appId });
-    text = setDepotLocked(text, depotId, !lock);
+    text = setDepotLocked(text, depotId, lock);
     await invoke("lt_write_lua", { appId, content: text });
-    toast(lock ? `${depotId} откреплён` : `${depotId} закреплён`, "ok");
+    toast(lock ? `${depotId} закреплён` : `${depotId} откреплён`, "ok");
     openDetail(appId);
   } catch (e) { toast(errMsg(e), "error"); }
 }

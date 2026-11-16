@@ -2113,3 +2113,21 @@ pub async fn lt_http(
     let body = resp.text().await.unwrap_or_default();
     Ok(LtHttpResponse { status, headers, body })
 }
+
+fn variant_safe_name(name: &str) -> String {
+    name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect()
+}
+
+/// Rename a saved lua variant (preset). Fails if the target name exists.
+#[tauri::command]
+pub fn lt_rename_variant(app_id: u64, from: String, to: String) -> Result<(), String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let dir = variants_dir(&steam, app_id);
+    let (from_s, to_s) = (variant_safe_name(&from), variant_safe_name(to.trim()));
+    if to_s.is_empty() { return Err("Пустое имя".into()); }
+    let src = dir.join(format!("{from_s}.lua"));
+    let dst = dir.join(format!("{to_s}.lua"));
+    if !src.exists() { return Err("Пресет не найден".into()); }
+    if dst.exists() { return Err("Пресет с таким именем уже есть".into()); }
+    std::fs::rename(&src, &dst).map_err(|e| e.to_string())
+}

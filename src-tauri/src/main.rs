@@ -1974,6 +1974,7 @@ fn main() {
             luatools::lt_mfg_ping,
             luatools::lt_oauth_login,
             luatools::lt_http,
+            luatools::lt_rename_variant,
             luatools::lt_cef_targets,
             luatools::lt_cef_dismiss_loaded_apps,
             luatools::lt_dpapi_encrypt,
