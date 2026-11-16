@@ -229,7 +229,9 @@ export async function ltDenuvoListings() {
   try {
     const res = await ltFetch(`${cfg("api_base")}/api/denuvo/listings`);
     if (!res.ok) return null;
-    return await res.json();
+    // API: { games: [...], tags: [...] } — наружу отдаём массив игр.
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data?.games || []);
   } catch { return null; }
 }
 
@@ -237,6 +239,16 @@ export async function ltDenuvoFixes(appId) {
   try {
     const res = await ltFetch(`${cfg("api_base")}/api/denuvo/fixes?appid=${encodeURIComponent(appId)}`);
     if (!res.ok) return null;
-    return await res.json();
+    // API: { appid, name, header_image, fixes: [{ hasManifest, hasFix, createdAt, ... }] }
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data?.fixes || []);
+    return list.map(f => ({
+      ...f,
+      has_manifest: f.has_manifest ?? f.hasManifest,
+      has_fix: f.has_fix ?? f.hasFix,
+      manifest_filename: f.manifest_filename ?? f.manifestFilename,
+      fix_filename: f.fix_filename ?? f.fixFilename,
+      created_at: f.created_at ?? f.createdAt,
+    }));
   } catch { return null; }
 }

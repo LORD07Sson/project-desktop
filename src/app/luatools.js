@@ -1,7 +1,7 @@
 // LuaTools — полная интеграция.
 // Главная, Добавить, Управление, Инструменты, Режим, Фиксы, Плагин, Загрузки, Настройки.
 
-import { invoke, listen } from "./tauri.js";
+import { invoke, listen, openExternal } from "./tauri.js";
 import { $ } from "./utils.js";
 import { toast } from "./api.js";
 import {
@@ -233,6 +233,10 @@ function attachGlobal(body) {
     if (active) { active.progress = percent; if (currentPage === "downloads") renderPage("downloads"); }
   });
   body.addEventListener("click", e => {
+    // <a target="_blank"> в webview ничего не открывает — отдаём системному браузеру.
+    const link = e.target.closest('a[target="_blank"][href^="http"]');
+    if (link) { e.preventDefault(); openExternal(link.href).catch(err => toast(errMsg(err), "error")); return; }
+
     const nav = e.target.closest(".lt-nav[data-page]");
     if (nav) { switchPage(nav.dataset.page); return; }
     if (e.target.closest("#lt-restart-steam")) { doRestartSteam(); return; }
@@ -650,7 +654,8 @@ async function renderTools(el) {
       // Формат /user/stats не документирован — показываем то, что узнаём.
       const used = res?.daily_usage ?? res?.usage ?? res?.used;
       const limit = res?.daily_limit ?? res?.limit;
-      const exp = res?.expires_at ?? res?.expiry ?? res?.expires;
+      const expRaw = res?.api_key_expires_at ?? res?.expires_at ?? res?.expiry;
+      const exp = expRaw ? (isNaN(Date.parse(expRaw)) ? expRaw : new Date(expRaw).toLocaleDateString()) : null;
       const extra = [
         used != null && limit ? `сегодня ${esc(used)} / ${esc(limit)}` : "",
         exp ? `до ${esc(exp)}` : "",
@@ -1070,6 +1075,11 @@ async function renderSettings(el) {
       out.textContent = arr.length ? arr.map(t => `${t.title || t.url || "?"}`).join("\n") : "Нет открытых вкладок";
     } catch (e) { out.textContent = String(e); }
   });
+  // «Сбросить загруженные» — команда локального MFG-плагина (127.0.0.1:6767), без него не работает.
+  invoke("lt_mfg_ping").then(ok => {
+    const b = el.querySelector("#lt-cef-dismiss");
+    if (b && !ok) { b.disabled = true; b.title = "Нужен запущенный MFG-плагин (127.0.0.1:6767)"; }
+  }).catch(() => {});
   el.querySelector("#lt-cef-dismiss")?.addEventListener("click", async () => {
     try { const r = await invoke("lt_cef_dismiss_loaded_apps"); toast(r, "ok"); } catch (e) { toast(String(e), "error"); }
   });
