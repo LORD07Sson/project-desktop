@@ -1379,7 +1379,6 @@ async function renderUtilities(el) {
     const aid = parseInt(appId, 10);
     const r = el.querySelector("#lt-dlc-result");
     if (!/^\d+$/.test(appId) || !aid) { r.innerHTML = '<span class="lt-warn">Введите числовой AppID</span>'; return; }
-    if (!ltIsLoggedIn()) { r.innerHTML = '<span class="lt-warn">Войдите в lua.tools</span>'; return; }
     r.innerHTML = '<div class="lt-loading">Генерирую…</div>';
     try {
       const url = ltDlcGenerateUrl(appId, appId, "");
@@ -1584,7 +1583,6 @@ async function openFixDetail(appId) {
     });
 
     el.querySelectorAll("[data-fix-manifest]").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
-      if (!ltIsLoggedIn()) { toast("Войдите", "warn"); return; }
       const fixId = b.dataset.fixManifest;
       toast("Скачиваю манифест…", "info");
       try {
@@ -1596,7 +1594,6 @@ async function openFixDetail(appId) {
     })));
 
     el.querySelectorAll("[data-fix-apply]").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
-      if (!ltIsLoggedIn()) { toast("Войдите", "warn"); return; }
       if (!await confirmAction("Применить фикс? Оригинальные файлы будут забэкаплены.")) return;
       const fixId = b.dataset.fixApply;
       toast("Скачиваю фикс…", "info");
@@ -1990,13 +1987,13 @@ async function cachedDownload(key, url, label) {
     const hit = await invoke("lt_cache_get", { key, headers: clientHeaders(), destDir });
     if (hit) { toast("Взято из кэша студии", "info"); return hit; }
   } catch { /* кэш недоступен */ }
+  if (!ltIsLoggedIn()) throw new Error("Нет в кэше студии — войдите в lua.tools");
   const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir });
   invoke("lt_cache_put", { key, label: label || "", path: filePath, headers: clientHeaders() }).catch(() => {});
   return filePath;
 }
 
 async function doDownload(appId, source, gameName) {
-  if (!ltIsLoggedIn()) { toast("Войдите в lua.tools", "warn"); return; }
   const key = `${appId}:${source}`;
   if (inflight.has(key)) { toast("Уже скачивается", "info"); return; }
   inflight.add(key);
