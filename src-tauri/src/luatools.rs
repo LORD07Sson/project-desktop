@@ -24,7 +24,7 @@ fn steam_path_from_registry() -> Option<String> {
             let val_w: Vec<u16> = val_name.encode_utf16().chain(std::iter::once(0)).collect();
             let mut key = HKEY::default();
             let status = unsafe {
-                RegOpenKeyExW(root, windows::core::PCWSTR(sub_w.as_ptr()), 0, KEY_READ, &mut key)
+                RegOpenKeyExW(root, windows::core::PCWSTR(sub_w.as_ptr()), Some(0), KEY_READ, &mut key)
             };
             if status.is_err() {
                 continue;
@@ -276,7 +276,7 @@ fn install_zip(steam: &str, zip_path: &str, app_id: u64, auto_update: bool) -> R
     Ok(InstallResult { lua_installed, manifest_count, failed })
 }
 
-fn extract_entry(entry: &mut zip::read::ZipFile, dest: &Path) -> Result<(), String> {
+fn extract_entry(entry: &mut zip::read::ZipFile<'_, impl std::io::Read>, dest: &Path) -> Result<(), String> {
     let mut buf = Vec::new();
     entry.read_to_end(&mut buf).map_err(|e| e.to_string())?;
     if let Some(parent) = dest.parent() {
