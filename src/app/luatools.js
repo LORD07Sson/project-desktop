@@ -274,7 +274,8 @@ function attachGlobal(body) {
     const link = e.target.closest('a[target="_blank"][href^="http"]');
     if (link) { e.preventDefault(); openExternal(link.href).catch(err => toast(errMsg(err), "error")); return; }
 
-    const nav = e.target.closest("[data-page]");
+    // #lt-page-content carries data-page too (for page-specific CSS) — it is not a nav link.
+    const nav = e.target.closest("[data-page]:not(#lt-page-content)");
     if (nav) { switchPage(nav.dataset.page); return; }
     if (e.target.closest("#lt-restart-steam")) { doRestartSteam(); return; }
     if (e.target.closest("#lt-back-btn")) { switchPage("home"); return; }
