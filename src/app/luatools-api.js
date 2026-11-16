@@ -1,14 +1,22 @@
 // API-клиент для lua.tools: поиск игр, проверка источников, скачивание манифестов.
-// Supabase auth + lua.tools REST API.
+// Supabase auth + lua.tools REST API — или свой бэкенд (переключается в настройках).
 
-const SUPABASE_URL = "https://db.lua.tools";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NzYwMzkzNzYsImV4cCI6MTg5MzQ1NjAwMCwicm9sZSI6ImFub24iLCJpc3MiOiJzdXBhYmFzZSJ9.f_-K38u3odjltP-g_67FVmG32Vg-_-k-lNBvIaVUVBM";
-const API_BASE = "https://lua.tools";
+const DEFAULTS = {
+  supabase_url: "https://db.lua.tools",
+  supabase_anon_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NzYwMzkzNzYsImV4cCI6MTg5MzQ1NjAwMCwicm9sZSI6ImFub24iLCJpc3MiOiJzdXBhYmFzZSJ9.f_-K38u3odjltP-g_67FVmG32Vg-_-k-lNBvIaVUVBM",
+  api_base: "https://lua.tools",
+  manifest_backend_url: "http://167.235.229.108",
+  manifest_backend_ua: "secretgoonpoon",
+};
+
+let _apiConfig = null;
+
+export function ltSetApiConfig(cfg) { _apiConfig = cfg; }
+
+function cfg(key) { return _apiConfig?.[key] || DEFAULTS[key]; }
+
 const STEAM_SEARCH_URL = "https://store.steampowered.com/api/storesearch/";
 const STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories";
-const MANIFEST_BACKEND_URL = "http://167.235.229.108";
-const MANIFEST_BACKEND_UA = "secretgoonpoon";
 const DAILY_LIMIT = 25;
 const OAUTH_PORT = 53789;
 
@@ -53,15 +61,15 @@ async function ltAuthHeaders() {
 // ── Supabase auth (OAuth via browser) ───────────────────────────────
 
 export function ltLoginUrl() {
-  return `${SUPABASE_URL}/auth/v1/authorize?provider=discord&redirect_to=http://localhost:${OAUTH_PORT}/callback`;
+  return `${cfg("supabase_url")}/auth/v1/authorize?provider=discord&redirect_to=http://localhost:${OAUTH_PORT}/callback`;
 }
 
 export async function ltRefreshToken() {
   const s = ltSession();
   if (!s?.refresh_token) throw new Error("Нет refresh token");
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+  const res = await fetch(`${cfg("supabase_url")}/auth/v1/token?grant_type=refresh_token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+    headers: { "Content-Type": "application/json", apikey: cfg("supabase_anon_key") },
     body: JSON.stringify({ refresh_token: s.refresh_token }),
   });
   if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
@@ -104,8 +112,8 @@ export async function ltFeatured() {
 
 export async function ltCheckSources(appId) {
   try {
-    const res = await fetch(`${MANIFEST_BACKEND_URL}/check_apis?appid=${appId}`, {
-      headers: { "User-Agent": MANIFEST_BACKEND_UA },
+    const res = await fetch(`${cfg("manifest_backend_url")}/check_apis?appid=${appId}`, {
+      headers: { "User-Agent": cfg("manifest_backend_ua") },
     });
     if (!res.ok) return {};
     return await res.json();
@@ -127,7 +135,7 @@ export async function ltGameDetails(appId) {
 
 async function ltApi(method, path) {
   const headers = await ltAuthHeaders();
-  const res = await fetch(`${API_BASE}${path}`, { method, headers });
+  const res = await fetch(`${cfg("api_base")}${path}`, { method, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { const j = await res.json(); if (j.error) msg = j.error; } catch { /* noop */ }
@@ -139,11 +147,11 @@ async function ltApi(method, path) {
 export async function ltUsage() {
   try {
     const todayUtc = new Date().toISOString().split("T")[0] + "T00:00:00Z";
-    const url = `${SUPABASE_URL}/rest/v1/user_downloads?select=appid&downloaded_at=gte.${encodeURIComponent(todayUtc)}`;
+    const url = `${cfg("supabase_url")}/rest/v1/user_downloads?select=appid&downloaded_at=gte.${encodeURIComponent(todayUtc)}`;
     const res = await fetch(url, {
       method: "HEAD",
       headers: {
-        apikey: SUPABASE_ANON_KEY,
+        apikey: cfg("supabase_anon_key"),
         Authorization: `Bearer ${ltSession()?.access_token}`,
         Prefer: "count=exact",
       },
@@ -158,13 +166,13 @@ export async function ltUsage() {
 
 // Returns the download URL for Tauri's lt_download command.
 export function ltManifestDownloadUrl(appId, source, gameName) {
-  let url = `${API_BASE}/api/manifest/download?appid=${appId}&source=${encodeURIComponent(source)}`;
+  let url = `${cfg("api_base")}/api/manifest/download?appid=${appId}&source=${encodeURIComponent(source)}`;
   if (gameName) url += `&game_name=${encodeURIComponent(gameName)}`;
   return url;
 }
 
 export function ltDlcGenerateUrl(appId, baseAppId, gameName) {
-  let url = `${API_BASE}/api/dlc/generate?appid=${appId}&base=${baseAppId}`;
+  let url = `${cfg("api_base")}/api/dlc/generate?appid=${appId}&base=${baseAppId}`;
   if (gameName) url += `&game_name=${encodeURIComponent(gameName)}`;
   return url;
 }
@@ -178,7 +186,7 @@ export async function ltDlcInfo(appId, baseAppId) {
 
 export async function ltDenuvoListings() {
   try {
-    const res = await fetch(`${API_BASE}/api/denuvo/listings`);
+    const res = await fetch(`${cfg("api_base")}/api/denuvo/listings`);
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
@@ -186,7 +194,7 @@ export async function ltDenuvoListings() {
 
 export async function ltDenuvoFixes(appId) {
   try {
-    const res = await fetch(`${API_BASE}/api/denuvo/fixes?appid=${encodeURIComponent(appId)}`);
+    const res = await fetch(`${cfg("api_base")}/api/denuvo/fixes?appid=${encodeURIComponent(appId)}`);
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }

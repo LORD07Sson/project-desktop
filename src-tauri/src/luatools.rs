@@ -208,6 +208,7 @@ fn install_lua(steam: &str, src: &str, app_id: u64, auto_update: bool) -> Result
     let dir = stplugin_dir(steam);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = dir.join(format!("{app_id}.lua"));
+    vault_capture(steam, app_id, "auto");
     let content = std::fs::read_to_string(src).map_err(|e| e.to_string())?;
     let final_content = if auto_update { comment_out_manifest_pins(&content) } else { content };
     std::fs::write(&dest, &final_content).map_err(|e| e.to_string())?;
@@ -696,6 +697,90 @@ pub fn lt_delete_variant(app_id: u64, name: String) -> Result<(), String> {
     Ok(())
 }
 
+// ── LuaVault — version history with auto-capture ─────────────────
+
+fn vault_dir(steam: &str, app_id: u64) -> PathBuf {
+    PathBuf::from(steam).join("config").join("stplug-in").join("vault").join(app_id.to_string())
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Sha256, Digest};
+    let hash = Sha256::digest(data);
+    hash.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VaultEntry {
+    pub hash: String,
+    pub timestamp: u64,
+    pub source: String,
+    pub depot_count: u32,
+    pub dlc_count: u32,
+    pub is_pinned: bool,
+}
+
+fn vault_index_path(steam: &str, app_id: u64) -> PathBuf {
+    vault_dir(steam, app_id).join("vault_index.json")
+}
+
+fn read_vault_index(steam: &str, app_id: u64) -> Vec<VaultEntry> {
+    let p = vault_index_path(steam, app_id);
+    std::fs::read_to_string(&p).ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_vault_index(steam: &str, app_id: u64, entries: &[VaultEntry]) -> Result<(), String> {
+    let dir = vault_dir(steam, app_id);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(entries).map_err(|e| e.to_string())?;
+    std::fs::write(vault_index_path(steam, app_id), json).map_err(|e| e.to_string())
+}
+
+fn vault_capture(steam: &str, app_id: u64, source: &str) {
+    let lua_path = stplugin_dir(steam).join(format!("{app_id}.lua"));
+    let content = match std::fs::read(&lua_path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let hash = sha256_hex(&content);
+    let mut index = read_vault_index(steam, app_id);
+    if index.iter().any(|e| e.hash == hash) { return; }
+    let dir = vault_dir(steam, app_id);
+    let _ = std::fs::create_dir_all(&dir);
+    let dest = dir.join(format!("{hash}.lua"));
+    let _ = std::fs::write(&dest, &content);
+    let text = String::from_utf8_lossy(&content);
+    let (dc, dlc, pinned) = count_lua_stats(&text);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    index.insert(0, VaultEntry { hash, timestamp: now, source: source.to_string(), depot_count: dc, dlc_count: dlc, is_pinned: pinned });
+    if index.len() > 50 {
+        let removed: Vec<_> = index.drain(50..).collect();
+        for r in &removed {
+            let _ = std::fs::remove_file(dir.join(format!("{}.lua", r.hash)));
+        }
+    }
+    let _ = write_vault_index(steam, app_id, &index);
+}
+
+#[tauri::command]
+pub fn lt_vault_history(app_id: u64) -> Result<Vec<VaultEntry>, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    Ok(read_vault_index(&steam, app_id))
+}
+
+#[tauri::command]
+pub fn lt_vault_restore(app_id: u64, hash: String) -> Result<(), String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let src = vault_dir(&steam, app_id).join(format!("{hash}.lua"));
+    if !src.exists() { return Err("Файл версии не найден в хранилище".into()); }
+    vault_capture(&steam, app_id, "before-restore");
+    let dest = stplugin_dir(&steam).join(format!("{app_id}.lua"));
+    std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
+    stamp_now(&dest);
+    Ok(())
+}
+
 // ── Install unlocker mode (BST/OST from GitHub) ───────────────────
 
 #[tauri::command]
@@ -1015,6 +1100,7 @@ struct ApiError {
 
 #[tauri::command]
 pub async fn lt_download(
+    app: tauri::AppHandle,
     url: String,
     token: String,
     dest_dir: String,
@@ -1050,10 +1136,23 @@ pub async fn lt_download(
         })
         .unwrap_or_else(|| "download.zip".to_string());
 
+    let total = resp.content_length().unwrap_or(0);
     let dest = PathBuf::from(&dest_dir).join(&filename);
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
-    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+
+    let mut file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+    let mut downloaded: u64 = 0;
+    let mut stream = resp.bytes_stream();
+    use futures_util::StreamExt;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut file, &chunk).map_err(|e| e.to_string())?;
+        downloaded += chunk.len() as u64;
+        let pct = if total > 0 { (downloaded * 100 / total).min(100) } else { 0 };
+        let _ = app.emit("lt-download-progress", serde_json::json!({
+            "url": &url, "downloaded": downloaded, "total": total, "percent": pct
+        }));
+    }
 
     Ok(dest.to_string_lossy().into_owned())
 }
@@ -1230,6 +1329,116 @@ pub fn lt_steam_autocrack_launch(exe_path: String, args: Vec<String>) -> Result<
     if !p.exists() { return Err("SteamAutoCrack.exe не найден".into()); }
     std::process::Command::new(&p).args(&args).spawn().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ── Launch game via Steam ─────────────────────────────────────────
+
+#[tauri::command]
+pub fn lt_launch_game(app_id: u64, args: String) -> Result<(), String> {
+    let url = if args.is_empty() {
+        format!("steam://rungameid/{app_id}")
+    } else {
+        format!("steam://run/{app_id}//{}/", args.replace(' ', "%20"))
+    };
+    #[cfg(windows)]
+    {
+        std::process::Command::new("cmd").args(["/C", "start", "", &url])
+            .spawn().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Steamless — SteamStub DRM removal
+// ──────────────────────────────────────────────────────────────────
+
+fn steamless_dir() -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
+    PathBuf::from(base).join("project-desktop").join("Steamless")
+}
+
+#[derive(Serialize)]
+pub struct SteamlessInfo {
+    pub installed: bool,
+    pub version: Option<String>,
+    pub path: Option<String>,
+}
+
+#[tauri::command]
+pub fn lt_steamless_info() -> SteamlessInfo {
+    let dir = steamless_dir();
+    let exe = dir.join("Steamless.CLI.exe");
+    if exe.exists() {
+        let ver = dir.join("version.txt");
+        let version = std::fs::read_to_string(&ver).ok().map(|s| s.trim().to_string());
+        SteamlessInfo { installed: true, version, path: Some(exe.to_string_lossy().into_owned()) }
+    } else {
+        SteamlessInfo { installed: false, version: None, path: None }
+    }
+}
+
+#[tauri::command]
+pub async fn lt_steamless_install() -> Result<String, String> {
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120))
+        .build().map_err(|e| e.to_string())?;
+    let api_url = "https://api.github.com/repos/atom0s/Steamless/releases/latest";
+    let resp = client.get(api_url).header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err("GitHub API error".into()); }
+    let release: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let tag = release["tag_name"].as_str().unwrap_or("unknown").to_string();
+    let asset = release["assets"].as_array().ok_or("No assets")?
+        .iter().find(|a| a["name"].as_str().map(|n| n.contains("Steamless") && n.ends_with(".zip")).unwrap_or(false))
+        .ok_or("Steamless zip not found in release")?;
+    let dl_url = asset["browser_download_url"].as_str().ok_or("No download URL")?;
+    let bytes = client.get(dl_url).header("User-Agent", "project-desktop")
+        .send().await.map_err(|e| e.to_string())?
+        .bytes().await.map_err(|e| e.to_string())?;
+    let dir = steamless_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let zip_path = dir.join("steamless.zip");
+    std::fs::write(&zip_path, &bytes).map_err(|e| e.to_string())?;
+    let file = std::fs::File::open(&zip_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+        if entry.is_dir() { continue; }
+        let name = entry.name().to_string();
+        let out_path = dir.join(&name);
+        if let Some(p) = out_path.parent() { let _ = std::fs::create_dir_all(p); }
+        let mut buf = vec![];
+        std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| e.to_string())?;
+        std::fs::write(&out_path, &buf).map_err(|e| e.to_string())?;
+    }
+    let _ = std::fs::remove_file(&zip_path);
+    let _ = std::fs::write(dir.join("version.txt"), &tag);
+    Ok(tag)
+}
+
+#[tauri::command]
+pub fn lt_steamless_run(exe_path: String) -> Result<String, String> {
+    let cli = steamless_dir().join("Steamless.CLI.exe");
+    if !cli.exists() { return Err("Steamless не установлен".into()); }
+    let target = PathBuf::from(&exe_path);
+    if !target.exists() { return Err(format!("Файл не найден: {exe_path}")); }
+    let bak = target.with_extension("exe.bak");
+    if !bak.exists() {
+        std::fs::copy(&target, &bak).map_err(|e| e.to_string())?;
+    }
+    let out = std::process::Command::new(&cli)
+        .arg(&exe_path)
+        .output().map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let unpacked = target.with_file_name(format!("{}.unpacked.exe", target.file_stem().unwrap_or_default().to_string_lossy()));
+    if unpacked.exists() {
+        std::fs::copy(&unpacked, &target).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&unpacked);
+        Ok(format!("DRM снят. Бэкап: {}\n{stdout}", bak.display()))
+    } else if !out.status.success() {
+        Err(format!("Steamless ошибка:\n{stdout}"))
+    } else {
+        Err(format!("Steamless не создал unpacked файл:\n{stdout}"))
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────

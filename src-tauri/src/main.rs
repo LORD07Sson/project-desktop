@@ -1980,6 +1980,12 @@ fn main() {
             luatools::lt_config_set,
             luatools::lt_list_autoupdate_appids,
             luatools::lt_uninstall_mode,
+            luatools::lt_vault_history,
+            luatools::lt_vault_restore,
+            luatools::lt_launch_game,
+            luatools::lt_steamless_info,
+            luatools::lt_steamless_install,
+            luatools::lt_steamless_run,
         ])
         .setup(|app| {
             // Первая строка в файловом логе за сеанс — якорь, от которого

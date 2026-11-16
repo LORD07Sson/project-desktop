@@ -5,13 +5,24 @@
 
 import { toast } from "./api.js";
 import { openReportDetail } from "./report-detail.js";
-import { parseProjectLink, reportLink } from "./deeplink-core.js";
+import { parseProjectLink, parseLuaToolsLink, reportLink } from "./deeplink-core.js";
 
 export function openProjectLink(url) {
   const link = parseProjectLink(url);
-  if (!link) return false;
-  openReportDetail(link.id);
-  return true;
+  if (link) { openReportDetail(link.id); return true; }
+
+  const lt = parseLuaToolsLink(url);
+  if (lt) { openLuaToolsLink(lt); return true; }
+
+  return false;
+}
+
+async function openLuaToolsLink(lt) {
+  const { switchTab } = await import("./tabs.js");
+  switchTab("luatools");
+  await new Promise(r => setTimeout(r, 100));
+  const { openDetailFromDeepLink } = await import("./luatools.js");
+  if (typeof openDetailFromDeepLink === "function") openDetailFromDeepLink(lt.appId, lt.kind);
 }
 
 document.addEventListener("click", async e => {
