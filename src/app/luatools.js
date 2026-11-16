@@ -352,7 +352,7 @@ async function refreshAll(body) {
   }
 
   try { onboardingDone = !!localStorage.getItem("lt_onboarded"); } catch { onboardingDone = true; }
-  if (!onboardingDone && !steamInfo?.path) {
+  if (!onboardingDone) {
     renderOnboarding($("#lt-page-content"));
     return;
   }
@@ -395,12 +395,25 @@ function renderOnboarding(el) {
       </div>
     </div>
     ${!pluginStatus?.installed ? '<p>Перейдите в раздел <strong>Режим</strong> чтобы установить плагин автоматически.</p>' : ''}
+    <div class="lt-section" style="margin-top:16px"><h3>Настройки</h3>
+      <div class="lt-settings-list">
+        <label class="lt-info-row"><input type="checkbox" id="lt-ob-sushi" ${ltConfig.src_sushi !== false ? "checked" : ""}> Источник sushitools-games-repo</label>
+        <label class="lt-info-row"><input type="checkbox" id="lt-ob-hw" ${ltConfig.filter_hardware !== false ? "checked" : ""}> Скрывать железо/софт в поиске</label>
+        <label class="lt-info-row"><input type="checkbox" id="lt-ob-doh" ${ltConfig.use_doh ? "checked" : ""}> DNS-over-HTTPS (если lua.tools или GitHub не открываются)</label>
+      </div>
+      <div class="lt-row-gap" style="margin-top:10px">${ltIsLoggedIn() ? '<span class="lt-ok">Вход в lua.tools выполнен</span>' : '<button class="lt-btn" id="lt-login-btn">Войти в lua.tools</button><button class="lt-btn" id="lt-code-btn">Код от бота</button>'}</div>
+    </div>
     <div style="margin-top:20px;display:flex;gap:8px">
       ${!pluginStatus?.installed ? '<button class="lt-btn lt-btn-primary" data-page="mode">Установить плагин</button>' : ''}
       <button class="lt-btn" id="lt-onboard-skip">Продолжить</button>
     </div>
   </div>`;
-  el.querySelector("#lt-onboard-skip")?.addEventListener("click", () => {
+  el.querySelector("#lt-onboard-skip")?.addEventListener("click", async () => {
+    for (const [id, key] of [["#lt-ob-sushi", "src_sushi"], ["#lt-ob-hw", "filter_hardware"], ["#lt-ob-doh", "use_doh"]]) {
+      const v = !!el.querySelector(id)?.checked;
+      ltConfig[key] = v;
+      await invoke("lt_config_set", { key, value: v }).catch(() => {});
+    }
     try { localStorage.setItem("lt_onboarded", "1"); } catch {}
     onboardingDone = true;
     switchPage("home");
