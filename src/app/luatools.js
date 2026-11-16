@@ -8,8 +8,7 @@ import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
   ltIsLoggedIn, ltSession, ltLoginUrl, ltSaveSession, ltClearSession,
   ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoDownloadUrl, ltDenuvoListings, ltDenuvoFixes,
-  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser,
-} from "./luatools-api.js";
+  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser, ltDepotInfo } from "./luatools-api.js";
 import { setLuatoolsDropHandler } from "./file-drop.js";
 import { parseLua, setDepotLocked, setDepotEnabled } from "./luatools-parser.js";
 
@@ -959,6 +958,17 @@ async function renderTools(el) {
     });
 
     const all = [...lua.entries.map(e => ({ ...e, disabled: false })), ...lua.disabledEntries.map(e => ({ ...e, disabled: true }))];
+    ltDepotInfo(appId).then(info => {
+      if (!info || toolsState.appId !== appId) return;
+      for (const e of all) {
+        const d = info.depots[e.id];
+        if (!d) continue;
+        if (!e.comment && d.name) e.comment = d.name;
+        if (!e.sizeOnDisk && d.size) e.sizeOnDisk = d.size;
+        e.latestGid = d.gid;
+      }
+      if (body.isConnected && body.querySelector("#lt-depots")) drawDepots();
+    });
     const typeOf = e => e.hasKey ? "ДЕПО" : (e.id === lua.baseAppId ? "ИГРА" : "DLC");
     const drawDepots = () => {
       const q = toolsState.depotQ.toLowerCase();
@@ -970,7 +980,7 @@ async function renderTools(el) {
           <div class="lt-dp-main">
             <div class="lt-dp-title">${esc(e.comment || `Depot ${e.id}`)} <span class="lt-chip lt-chip-${typeOf(e) === "DLC" ? "dlc" : typeOf(e) === "ИГРА" ? "game" : "depot"}">${typeOf(e)}</span></div>
             <div class="lt-dp-sub">${e.id}${e.sizeOnDisk ? ` · ${fmtSize(e.sizeOnDisk)}` : ""}</div>
-            ${mf ? `<div class="lt-dp-mf">манифест ${esc(mf)}</div>` : ""}
+            ${mf ? `<div class="lt-dp-mf">манифест ${esc(mf)}${e.latestGid && mf !== e.latestGid ? ` <span class="lt-warn">· в Steam новее: ${esc(e.latestGid)}</span>` : ""}</div>` : ""}
           </div>
           ${mf && !e.disabled ? `<label class="lt-dp-lock"><input type="checkbox" data-dp-lock="${e.id}" ${e.manifestId ? "checked" : ""}> Закрепить</label>` : ""}
         </div>`;
@@ -1771,11 +1781,22 @@ async function doDownload(appId, source, gameName) {
     queueDone(item, !result.failed.length, result.failed.length ? result.failed.join(", ") : null);
     toast(parts.join(", ") || "Готово", result.failed.length ? "warn" : "ok");
     installedList = await invoke("lt_list_installed");
+    await ensureManifests(appId);
     openDetail(appId);
   } catch (e) {
     queueDone(item, false, errMsg(e));
     toast(`Ошибка: ${errMsg(e)}`, "error");
   } finally { inflight.delete(key); }
+}
+
+// The lua pins manifest GIDs; Steam can't download a depot without its
+// <depot>_<gid>.manifest, so pull any that the archive didn't include.
+async function ensureManifests(appId) {
+  try {
+    const r = await invoke("lt_fetch_missing_manifests", { appId, token: ltSession()?.access_token || "" });
+    if (r.fetched) toast(`Догружено манифестов: ${r.fetched}`, "ok");
+    if (r.failed.length) toast(`Манифесты не найдены: ${r.failed.join(", ")}`, "warn");
+  } catch { /* lua without pins or Steam missing: nothing to fetch */ }
 }
 
 async function doAltDownload(appId, alt, gameName) {
@@ -1795,6 +1816,7 @@ async function doAltDownload(appId, alt, gameName) {
     queueDone(item, true);
     toast(`Установлено${result.manifest_count ? `: ${result.manifest_count} манифестов` : ""}`, "ok");
     installedList = await invoke("lt_list_installed");
+    await ensureManifests(appId);
     openDetail(appId);
   } catch (e) { queueDone(item, false, errMsg(e)); toast(errMsg(e), "error"); }
   finally { inflight.delete(key); }

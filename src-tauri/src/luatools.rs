@@ -1552,6 +1552,60 @@ pub async fn lt_depot_downloader_run(app_id: u64, depot_id: u64) -> Result<Strin
     Ok(stdout)
 }
 
+/// `setManifestid(<depot>, "<gid>")` pairs from a lua (commented lines too:
+/// the gid is still the manifest Steam will ask for once the pin is restored).
+fn manifest_pins(lua: &str) -> Vec<(u64, String)> {
+    let mut out = vec![];
+    for line in lua.lines() {
+        let t = line.trim_start().trim_start_matches('-').trim_start();
+        let low = t.to_lowercase();
+        let Some(pos) = low.find("setmanifestid(") else { continue };
+        let args = &t[pos + "setmanifestid(".len()..];
+        let mut parts = args.split(',');
+        let depot = parts.next().and_then(|d| d.trim().parse::<u64>().ok());
+        let gid = parts.next().map(|g| g.trim().trim_end_matches(')').trim().trim_matches('"').to_string());
+        if let (Some(d), Some(g)) = (depot, gid) {
+            if !g.is_empty() && g.chars().all(|c| c.is_ascii_digit()) { out.push((d, g)); }
+        }
+    }
+    out
+}
+
+#[derive(Serialize)]
+pub struct ManifestFetchResult { pub fetched: u32, pub present: u32, pub failed: Vec<String> }
+
+/// Fetches `<depot>_<gid>.manifest` files the installed lua references but
+/// depotcache lacks, from `<api_base>/api/givemethemanifestpunk/<depot>/<gid>`.
+#[tauri::command]
+pub async fn lt_fetch_missing_manifests(app_id: u64, token: String) -> Result<ManifestFetchResult, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let lua = std::fs::read_to_string(stplugin_dir(&steam).join(format!("{app_id}.lua"))).map_err(|_| "Lua не установлен".to_string())?;
+    let dir = depotcache_dir(&steam);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let base = lt_config_get()["api_base"].as_str().unwrap_or("https://lua.tools").trim_end_matches('/').to_string();
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
+    let mut res = ManifestFetchResult { fetched: 0, present: 0, failed: vec![] };
+    for (depot, gid) in manifest_pins(&lua) {
+        let dest = dir.join(format!("{depot}_{gid}.manifest"));
+        if dest.exists() { res.present += 1; continue; }
+        let mut req = client.get(format!("{base}/api/givemethemanifestpunk/{depot}/{gid}")).header("User-Agent", "project-desktop");
+        if !token.is_empty() { req = req.bearer_auth(&token); }
+        match req.send().await {
+            Ok(r) if r.status().is_success() => match r.bytes().await {
+                Ok(b) if !b.is_empty() && !b.starts_with(b"<") && !b.starts_with(b"{") => {
+                    let tmp = dest.with_extension("part");
+                    if std::fs::write(&tmp, &b).and_then(|_| std::fs::rename(&tmp, &dest)).is_ok() { res.fetched += 1; }
+                    else { res.failed.push(format!("{depot}: запись не удалась")); }
+                }
+                _ => res.failed.push(format!("{depot}: пустой ответ")),
+            },
+            Ok(r) => res.failed.push(format!("{depot}: HTTP {}", r.status().as_u16())),
+            Err(e) => res.failed.push(format!("{depot}: {e}")),
+        }
+    }
+    Ok(res)
+}
+
 /// `addappid(<depot>, 1, "<hexkey>")` → hexkey (active lines only).
 fn depot_key_from_lua(lua: &str, depot_id: u64) -> Option<String> {
     let needle = depot_id.to_string();
@@ -2062,7 +2116,7 @@ pub async fn lt_oauth_login(app: tauri::AppHandle, login_url: String) -> Result<
 // them and the Steam store API sends no CORS headers. So JS goes through this
 // command, limited to the LuaTools hosts (defaults + ones set in LuaTools settings).
 
-const LT_HTTP_HOSTS: &[&str] = &["store.steampowered.com", "lua.tools", "db.lua.tools", "167.235.229.108"];
+const LT_HTTP_HOSTS: &[&str] = &["store.steampowered.com", "lua.tools", "db.lua.tools", "167.235.229.108", "api.steamcmd.net"];
 
 fn lt_http_allowed(url: &reqwest::Url) -> bool {
     if !matches!(url.scheme(), "https" | "http") { return false; }
@@ -2394,4 +2448,13 @@ pub async fn lt_set_playtime(app_id: u64, minutes: u64) -> Result<(), String> {
     let res = write_playtime(&path, app_id, minutes);
     if was_running { start_steam(&steam); }
     res
+}
+
+#[cfg(test)]
+mod parity_tests {
+    #[test]
+    fn parses_manifest_pins() {
+        let lua = "addappid(1)\nsetManifestid(553851, \"123456789\", 0)\n-- setManifestid(553852,\"42\")\nsetmanifestid(x, \"1\")";
+        assert_eq!(super::manifest_pins(lua), vec![(553851, "123456789".to_string()), (553852, "42".to_string())]);
+    }
 }

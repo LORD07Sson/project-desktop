@@ -1967,6 +1967,7 @@ fn main() {
             luatools::lt_depot_downloader_info,
             luatools::lt_depot_downloader_install,
             luatools::lt_depot_downloader_run,
+            luatools::lt_fetch_missing_manifests,
             luatools::lt_source_sushitools,
             luatools::lt_hubcap_validate,
             luatools::lt_hubcap_fetch,

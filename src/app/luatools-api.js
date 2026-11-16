@@ -250,3 +250,24 @@ export async function ltDenuvoFixes(appId) {
     }));
   } catch { return null; }
 }
+
+const _depotInfoCache = new Map();
+/** Depot names/sizes and branch build info from api.steamcmd.net (public PICS mirror). */
+export async function ltDepotInfo(appId) {
+  if (_depotInfoCache.has(appId)) return _depotInfoCache.get(appId);
+  const p = (async () => {
+    const res = await ltFetch(`https://api.steamcmd.net/v1/info/${encodeURIComponent(appId)}`);
+    if (!res.ok) return null;
+    const app = (await res.json())?.data?.[appId];
+    if (!app) return null;
+    const depots = {};
+    for (const [id, d] of Object.entries(app.depots || {})) {
+      if (!/^\d+$/.test(id) || typeof d !== "object") continue;
+      depots[id] = { name: d.name || "", size: Number(d.manifests?.public?.size) || 0, gid: d.manifests?.public?.gid || "" };
+    }
+    const pub = app.depots?.branches?.public || {};
+    return { depots, buildid: pub.buildid || "", updated: Number(pub.timeupdated) || 0 };
+  })().catch(() => null);
+  _depotInfoCache.set(appId, p);
+  return p;
+}
