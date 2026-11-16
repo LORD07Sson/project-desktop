@@ -1283,6 +1283,30 @@ async function renderPlugin(el) {
 // UTILITIES (в «Настройках»): DLC, лимиты, DDM, Hubcap, DoH, Steamless
 // ══════════════════════════════════════════════════════════════════
 
+// Turns the utility cards into a compact catalog: one collapsed row per tool
+// (icon + name + one-line description); click a row to open just that tool.
+// Children are moved, not re-created, so their event listeners survive.
+function catalogizeUtilities(el) {
+  const grid = el.querySelector(".lt-tools-grid");
+  if (!grid) return;
+  grid.classList.add("lt-catalog");
+  for (const card of [...grid.querySelectorAll(":scope > .lt-tool-card")]) {
+    const det = document.createElement("details");
+    det.className = "lt-tool-card lt-cat-item";
+    const sum = document.createElement("summary");
+    const h = card.querySelector(":scope > h3");
+    const d = card.querySelector(":scope > p.lt-muted");
+    sum.innerHTML = `<span class="lt-cat-name">${h ? h.innerHTML : ""}</span>${d ? `<span class="lt-cat-desc">${d.innerHTML}</span>` : ""}<span class="lt-cat-chev">›</span>`;
+    h?.remove(); d?.remove();
+    det.appendChild(sum);
+    const body = document.createElement("div");
+    body.className = "lt-cat-body";
+    while (card.firstChild) body.appendChild(card.firstChild);
+    det.appendChild(body);
+    card.replaceWith(det);
+  }
+}
+
 async function renderUtilities(el) {
   el.innerHTML = `<h3 class="lt-utils-title">Утилиты</h3>
     <div class="lt-tools-grid">
@@ -1332,6 +1356,7 @@ async function renderUtilities(el) {
         <div class="lt-tool-form"><button class="lt-btn lt-btn-primary" id="lt-sac-run">Запустить</button></div>
       </div>
     </div>`;
+  catalogizeUtilities(el);
 
   el.querySelector("#lt-dlc-gen").addEventListener("click", async () => {
     const appId = el.querySelector("#lt-dlc-appid").value.trim();

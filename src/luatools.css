@@ -850,3 +850,15 @@
 .lt-drawer-actions .lt-btn { justify-content: center; width: 100%; }
 .lt-drawer-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .lt-drawer-pair .lt-btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Utilities catalog: collapsed rows, one tool open at a time on demand */
+.lt-tools-grid.lt-catalog { display: flex; flex-direction: column; gap: 6px; }
+.lt-cat-item { padding: 0 !important; }
+.lt-cat-item > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(180px, 240px) 1fr auto; align-items: center; gap: 12px; padding: 12px 16px; }
+.lt-cat-item > summary::-webkit-details-marker { display: none; }
+.lt-cat-name { font-weight: 600; font-size: .9rem; }
+.lt-cat-desc { font-size: .78rem; opacity: .55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-cat-chev { opacity: .5; transition: transform .15s; font-size: 1.1rem; }
+.lt-cat-item[open] > summary .lt-cat-chev { transform: rotate(90deg); }
+.lt-cat-item > summary:hover { background: rgba(255, 255, 255, .04); border-radius: inherit; }
+.lt-cat-body { padding: 4px 16px 16px; }
