@@ -1947,6 +1947,18 @@ fn main() {
             luatools::lt_plugin_status,
             luatools::lt_restart_steam,
             luatools::lt_list_manifests,
+            luatools::lt_game_install_path,
+            luatools::lt_apply_fix,
+            luatools::lt_revert_fix,
+            luatools::lt_has_fix_backup,
+            luatools::lt_list_variants,
+            luatools::lt_save_variant,
+            luatools::lt_load_variant,
+            luatools::lt_delete_variant,
+            luatools::lt_install_mode,
+            luatools::lt_cloud_redirect_state,
+            luatools::lt_cloud_redirect_toggle,
+            luatools::lt_check_mode_update,
         ])
         .setup(|app| {
             // Первая строка в файловом логе за сеанс — якорь, от которого
