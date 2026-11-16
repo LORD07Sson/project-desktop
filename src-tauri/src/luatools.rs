@@ -2000,24 +2000,8 @@ pub fn lt_gamelist_dlc_read() -> Result<String, String> {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Sushitools / Hubcap sources
+// Hubcap source
 // ──────────────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub async fn lt_source_sushitools(app_id: u64) -> Result<String, String> {
-    let url = format!("https://raw.githubusercontent.com/sushi-dev55/sushitools-games-repo/refs/heads/main/{app_id}.zip");
-    let client = lt_client_builder().timeout(std::time::Duration::from_secs(120))
-        .build().map_err(|e| e.to_string())?;
-    let resp = client.get(&url).header("User-Agent", "project-desktop")
-        .send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(format!("Нет в sushitools: HTTP {}", resp.status())); }
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-    let dest_dir = std::env::temp_dir().join("luatools_dl");
-    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
-    let dest = dest_dir.join(format!("{app_id}_sushi.zip"));
-    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
-    Ok(dest.to_string_lossy().into_owned())
-}
 
 // Hubcap API lives under /api/v1/ (unknown paths fall through to the SPA and
 // return 200 + HTML, so always check that a JSON/binary body actually came back).

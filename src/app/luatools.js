@@ -412,7 +412,6 @@ function renderOnboarding(el) {
     ${!pluginStatus?.installed ? '<p>Перейдите в раздел <strong>Режим</strong> чтобы установить плагин автоматически.</p>' : ''}
     <div class="lt-section" style="margin-top:16px"><h3>Настройки</h3>
       <div class="lt-settings-list">
-        <label class="lt-info-row"><input type="checkbox" id="lt-ob-sushi" ${ltConfig.src_sushi !== false ? "checked" : ""}> Источник sushitools-games-repo</label>
         <label class="lt-info-row"><input type="checkbox" id="lt-ob-hw" ${ltConfig.filter_hardware !== false ? "checked" : ""}> Скрывать железо/софт в поиске</label>
         <label class="lt-info-row"><input type="checkbox" id="lt-ob-doh" ${ltConfig.use_doh ? "checked" : ""}> DNS-over-HTTPS (если lua.tools или GitHub не открываются)</label>
       </div>
@@ -424,7 +423,7 @@ function renderOnboarding(el) {
     </div>
   </div>`;
   el.querySelector("#lt-onboard-skip")?.addEventListener("click", async () => {
-    for (const [id, key] of [["#lt-ob-sushi", "src_sushi"], ["#lt-ob-hw", "filter_hardware"], ["#lt-ob-doh", "use_doh"]]) {
+    for (const [id, key] of [["#lt-ob-hw", "filter_hardware"], ["#lt-ob-doh", "use_doh"]]) {
       const v = !!el.querySelector(id)?.checked;
       ltConfig[key] = v;
       await invoke("lt_config_set", { key, value: v }).catch(() => {});
@@ -1667,7 +1666,6 @@ async function renderSettings(el) {
 
     <div class="lt-section"><h3>Источники</h3>
     <div class="lt-settings-list">
-      <label class="lt-info-row"><input type="checkbox" id="lt-src-sushi" ${cfg.src_sushi !== false ? 'checked' : ''}> sushitools-games-repo</label>
       <label class="lt-info-row"><input type="checkbox" id="lt-src-hubcap" ${cfg.src_hubcap ? 'checked' : ''}> Hubcap (нужен API-ключ)</label>
       <label class="lt-info-row"><input type="checkbox" id="lt-src-kernelua" ${cfg.src_kernelua ? 'checked' : ''}> KerneLua (нужен Discord)</label>
     </div></div>
@@ -1721,7 +1719,6 @@ async function renderSettings(el) {
     try { await invoke("lt_config_set", { key, value: v }); ltConfig[key] = v; toast("Сохранено", "ok"); } catch (err) { toast(errMsg(err), "error"); }
   });
   saveOn("#lt-cfg-hardfilter", "filter_hardware");
-  saveOn("#lt-src-sushi", "src_sushi");
   saveOn("#lt-src-hubcap", "src_hubcap");
   saveOn("#lt-src-kernelua", "src_kernelua");
   saveOn("#lt-cfg-doh", "use_doh");
@@ -1831,7 +1828,6 @@ async function openDetail(appId) {
         <div class="lt-detail-sources">
           <h4>Источники${sourceList.length ? ` (${sourceList.length})` : ""}</h4>
           ${sourceList.length ? sourceList.map(s => `<button class="lt-btn lt-btn-primary lt-btn-sm" data-dl-source="${esc(s)}" data-appid="${appId}" data-game-name="${esc(name)}">📥 ${esc(s)}</button>`).join(" ") : '<span class="lt-muted">Нет</span>'}
-          ${ltConfig.src_sushi !== false ? `<button class="lt-btn lt-btn-sm" data-dl-alt="sushi" data-appid="${appId}" data-game-name="${esc(name)}">📥 sushitools</button>` : ''}
           ${ltConfig.src_hubcap && ltConfig.hubcap_key ? `<button class="lt-btn lt-btn-sm" id="lt-hubcap-btn" data-dl-alt="hubcap" data-appid="${appId}" data-game-name="${esc(name)}">📥 Hubcap <span class="lt-muted" id="lt-hubcap-badge">…</span></button>` : ''}
           ${ltConfig.src_kernelua && ltConfig.kernelua_token ? `<button class="lt-btn lt-btn-sm" data-dl-alt="kernelua" data-appid="${appId}" data-game-name="${esc(name)}">📥 KerneLua</button>` : ''}
         </div>
@@ -2057,7 +2053,6 @@ async function handleStoreAdd(appId) {
     if (src) await doDownload(appId, src, name);
     else if (ltConfig.src_hubcap && ltConfig.hubcap_key) await doAltDownload(appId, "hubcap", name);
     else if (ltConfig.src_kernelua && ltConfig.kernelua_token) await doAltDownload(appId, "kernelua", name);
-    else if (ltConfig.src_sushi !== false) await doAltDownload(appId, "sushi", name);
     else { status(ltIsLoggedIn() ? "Нет источников" : "Войдите в LuaProject"); return; }
     status(installedList.some(i => i.app_id === appId) ? "Добавлено ✓ — перезапустите Steam" : "Не удалось — см. LuaProject");
   } catch (e) { status("Ошибка: " + errMsg(e)); }
@@ -2075,8 +2070,7 @@ async function doAltDownload(appId, alt, gameName) {
   queueStatus(item, "downloading", 0);
   try {
     let zipPath;
-    if (alt === "sushi") zipPath = await invoke("lt_source_sushitools", { appId });
-    else if (alt === "hubcap") zipPath = await invoke("lt_hubcap_fetch", { appId, apiKey: ltConfig.hubcap_key });
+    if (alt === "hubcap") zipPath = await invoke("lt_hubcap_fetch", { appId, apiKey: ltConfig.hubcap_key });
     else if (alt === "kernelua") zipPath = await invoke("lt_kernelua_fetch", { appId, token: ltConfig.kernelua_token });
     else throw new Error("Неизвестный источник");
     queueStatus(item, "installing", 100);
@@ -2169,10 +2163,7 @@ async function openGameDrawer(appId) {
     depots: () => toTools("depots"),
     launch: () => toTools("launch"),
     update: async () => {
-      if (!ltIsLoggedIn()) {
-        if (ltConfig.src_sushi !== false) { closeGameDrawer(); return doAltDownload(appId, "sushi", name); }
-        toast("Войдите в lua.tools", "warn"); return;
-      }
+      if (!ltIsLoggedIn()) { toast("Войдите в lua.tools", "warn"); return; }
       const sources = await ltCheckSources(String(appId)).catch(() => ({}));
       const src = Object.entries(sources).find(([, v]) => v === "available")?.[0];
       if (!src) { toast("Нет доступных источников", "warn"); return; }
