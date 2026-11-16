@@ -1124,8 +1124,11 @@ pub struct CloudRedirectState {
 pub fn lt_cloud_redirect_state() -> CloudRedirectState {
     let steam = match steam_path_from_registry() { Some(p) => p, None => return CloudRedirectState { supported: false, enabled: false, installed: false } };
     let toml_path = PathBuf::from(&steam).join("opensteamtool.toml");
-    let cr_dll = PathBuf::from(&steam).join("CloudRedirect.dll");
-    let installed = cr_dll.exists();
+    let root = PathBuf::from(&steam);
+    // OpenSteamTool/BST have CloudRedirect built into OpenSteamTool.dll
+    // (CR_InitCloudSave, `cloud_redirect` key); a separate CloudRedirect.dll
+    // is only used by the standalone CloudRedirect project.
+    let installed = root.join("CloudRedirect.dll").exists() || root.join("OpenSteamTool.dll").exists();
     let mut enabled = false;
     if toml_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&toml_path) {
@@ -1135,9 +1138,8 @@ pub fn lt_cloud_redirect_state() -> CloudRedirectState {
                     && l.split('=').nth(1).map(|v| v.split('#').next().unwrap_or("").trim() == "true").unwrap_or(false));
         }
     }
-    let bst = PathBuf::from(&steam).join("BetterSteamTools.dll").exists();
-    let ost = PathBuf::from(&steam).join("dwmapi.dll").exists();
-    CloudRedirectState { supported: bst || ost, enabled, installed }
+    let supported = ["BetterSteamTools.dll", "OpenSteamTool.dll", "dwmapi.dll"].iter().any(|n| root.join(n).exists());
+    CloudRedirectState { supported, enabled, installed }
 }
 
 #[tauri::command]

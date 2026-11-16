@@ -771,7 +771,7 @@ async function renderMode(el) {
     if (cr.supported) {
       s.innerHTML = `<h3>☁ CloudRedirect</h3>
         <p class="lt-muted">Steam Cloud revival — работает с BST и OST.</p>
-        <div class="lt-info-row">Статус: ${cr.enabled ? '<span class="lt-ok">Включён</span>' : '<span class="lt-muted">Выключен</span>'} ${cr.installed ? '' : '<span class="lt-warn">(DLL не найдена)</span>'}</div>
+        <div class="lt-info-row">Статус: ${cr.enabled ? '<span class="lt-ok">Включён</span>' : '<span class="lt-muted">Выключен</span>'} ${cr.installed ? '' : '<span class="lt-warn">(модуль CloudRedirect не найден — переустановите плагин)</span>'}</div>
         <button class="lt-btn ${cr.enabled ? 'lt-btn-danger' : 'lt-btn-primary'}" id="lt-cr-toggle">${cr.enabled ? 'Выключить' : 'Включить'}</button>`;
       el.querySelector("#lt-cr-toggle")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
         try {
