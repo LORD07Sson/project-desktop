@@ -906,6 +906,9 @@
 .lt-grid-featured { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 /* Иначе панель прокручивается на свои отступы (50px) под заголовок. */
 #luatools-panel { padding-top: 0; padding-bottom: 0; overflow: hidden; }
+#luatools-body { height: 100%; }
+label.lt-info-row { flex-wrap: nowrap; }
+label.lt-info-row > input { flex-shrink: 0; }
 .lt-drawer-body { padding-bottom: 84px; }
 .lt-drawer-pair .lt-btn { font-size: .8rem; padding-left: 8px; padding-right: 8px; }
 
