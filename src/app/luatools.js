@@ -1,7 +1,7 @@
 // LuaTools — полная интеграция.
 // Главная, Добавить, Управление, Инструменты, Режим, Фиксы, Плагин, Загрузки, Настройки.
 
-import { invoke, listen, openExternal, pickInputFiles } from "./tauri.js";
+import { invoke, listen, openExternal, pickInputFiles, pickInputFile, pickOutputFile } from "./tauri.js";
 import { $ } from "./utils.js";
 import { toast, clientHeaders, apiGet } from "./api.js";
 import {
@@ -356,8 +356,10 @@ function switchPage(page) {
   const body = $("#luatools-body");
   if (!body) return;
   body.querySelectorAll(".lt-nav[data-page]").forEach(b => b.classList.toggle("active", b.dataset.page === page));
+  scrollMainTop();
   renderPage(page);
 }
+function scrollMainTop() { $("#luatools-body .lt-main")?.scrollTo(0, 0); }
 
 async function renderPage(page) {
   const el = $("#lt-page-content");
@@ -812,50 +814,131 @@ function renderAdd(el) {
 // MANAGE
 // ══════════════════════════════════════════════════════════════════
 
-const manageState = { q: "", page: 0, perPage: 24, sort: "added" };
+const manageState = { q: "", page: 0, perPage: 24, sort: "added", onlyOutdated: false, selecting: false, sel: new Set() };
+
+// Перевести все отстающие закреплённые депо игры на актуальный GID и докачать манифесты.
+async function updateOutdatedPins(appId) {
+  const list = await outdatedDepots(appId);
+  if (!list.length) return 0;
+  let text = await invoke("lt_read_lua", { appId });
+  for (const d of list) text = setDepotManifest(text, d.id, d.latest);
+  await invoke("lt_write_lua", { appId, content: text });
+  outdatedCache.delete(appId);
+  await ensureManifests(appId);
+  return list.length;
+}
 
 async function renderManage(el) {
   try { installedList = await invoke("lt_list_installed"); } catch { installedList = []; }
   await loadGameNames();
+  const ms = manageState;
+  ms.sel = new Set([...ms.sel].filter(id => installedList.some(i => i.app_id === id)));
   el.innerHTML = `<div class="lt-head">
       <h2 class="lt-page-title">Управление</h2>
-      <button class="lt-btn lt-btn-ghost" id="lt-manage-refresh">${UI_ICONS.refresh} Обновить</button>
+      <div class="lt-head-actions">
+        <button class="lt-btn lt-btn-ghost" id="lt-manage-upd-all" hidden>${UI_ICONS.refresh} Обновить все устаревшие</button>
+        <button class="lt-btn lt-btn-ghost ${ms.selecting ? "is-active" : ""}" id="lt-manage-select">${UI_ICONS.check} ${ms.selecting ? "Готово" : "Выбрать"}</button>
+        <button class="lt-btn lt-btn-ghost" id="lt-manage-refresh">${UI_ICONS.refresh} Обновить</button>
+      </div>
     </div>
     <div class="lt-toolbar">
-      <label class="lt-search lt-grow">${UI_ICONS.search}<input type="text" id="lt-manage-search" placeholder="Поиск по имени или App ID…" value="${esc(manageState.q)}"></label>
-      <label class="lt-btn lt-btn-ghost lt-filter-btn">${UI_ICONS.filter} Фильтры
+      <label class="lt-search lt-grow">${UI_ICONS.search}<input type="text" id="lt-manage-search" placeholder="Поиск по имени или App ID…" value="${esc(ms.q)}"></label>
+      <label class="lt-btn lt-btn-ghost lt-filter-btn">${UI_ICONS.filter} Сортировка
         <select id="lt-manage-sort" class="lt-filter-select">
-          <option value="added" ${manageState.sort === "added" ? "selected" : ""}>Сначала новые</option>
-          <option value="name" ${manageState.sort === "name" ? "selected" : ""}>По названию</option>
-          <option value="appid" ${manageState.sort === "appid" ? "selected" : ""}>По App ID</option>
+          <option value="added" ${ms.sort === "added" ? "selected" : ""}>Сначала новые</option>
+          <option value="name" ${ms.sort === "name" ? "selected" : ""}>По названию</option>
+          <option value="appid" ${ms.sort === "appid" ? "selected" : ""}>По App ID</option>
         </select>
       </label>
+      <button class="lt-chip2 ${ms.onlyOutdated ? "is-active" : ""}" id="lt-manage-outdated">Только устаревшие</button>
+    </div>
+    <div class="lt-bulk" id="lt-bulk" ${ms.selecting ? "" : "hidden"}>
+      <span id="lt-bulk-count"></span>
+      <button class="lt-btn lt-btn-sm lt-btn-ghost" id="lt-bulk-all">Выбрать все</button>
+      <button class="lt-btn lt-btn-sm" id="lt-bulk-update">${UI_ICONS.refresh} Обновить манифесты</button>
+      <button class="lt-btn lt-btn-sm lt-btn-danger" id="lt-bulk-remove">${UI_ICONS.trash} Удалить lua</button>
     </div>
     <div id="lt-manage-grid"></div>
     <div id="lt-manage-pager"></div>`;
 
+  let visible = [];
+  const outdatedIds = new Set();
+  const syncBulk = () => {
+    const n = ms.sel.size;
+    const c = el.querySelector("#lt-bulk-count");
+    if (c) c.textContent = n ? `Выбрано: ${n}` : "Отметьте игры";
+    el.querySelectorAll("#lt-bulk-update, #lt-bulk-remove").forEach(b => { b.disabled = !n; });
+  };
   const draw = () => {
-    const q = manageState.q.toLowerCase();
+    const q = ms.q.toLowerCase();
     let list = q ? installedList.filter(i => String(i.app_id).includes(q) || gameName(i.app_id).toLowerCase().includes(q)) : [...installedList];
-    if (manageState.sort === "name") list.sort((a, b) => gameName(a.app_id).localeCompare(gameName(b.app_id)));
-    else if (manageState.sort === "appid") list.sort((a, b) => a.app_id - b.app_id);
-    const pages = Math.max(1, Math.ceil(list.length / manageState.perPage));
-    manageState.page = Math.min(manageState.page, pages - 1);
-    const slice = list.slice(manageState.page * manageState.perPage, (manageState.page + 1) * manageState.perPage);
-    el.querySelector("#lt-manage-grid").innerHTML = list.length
-      ? `<div class="lt-gc-grid">${slice.map(i => gameCardHtml({
+    if (ms.onlyOutdated) list = list.filter(i => outdatedIds.has(i.app_id));
+    if (ms.sort === "name") list.sort((a, b) => gameName(a.app_id).localeCompare(gameName(b.app_id)));
+    else if (ms.sort === "appid") list.sort((a, b) => a.app_id - b.app_id);
+    visible = list;
+    const pages = Math.max(1, Math.ceil(list.length / ms.perPage));
+    ms.page = Math.min(ms.page, pages - 1);
+    const slice = list.slice(ms.page * ms.perPage, (ms.page + 1) * ms.perPage);
+    const grid = el.querySelector("#lt-manage-grid");
+    grid.innerHTML = list.length
+      ? `<div class="lt-gc-grid ${ms.selecting ? "is-selecting" : ""}">${slice.map(i => gameCardHtml({
         appId: i.app_id, name: gameName(i.app_id),
         sub: `App ID: ${i.app_id}`, sub2: `Добавлено ${fmtDate(i.modified)}`,
-      })).join("")}</div>`
-      : `<div class="lt-empty">${installedList.length ? "Ничего не нашлось" : "Нет установленных lua-файлов. Добавьте игру через «Добавить»."}</div>`;
+      }).replace('<button class="lt-gc"', `<button class="lt-gc ${ms.sel.has(i.app_id) ? "is-selected" : ""}"`)).join("")}</div>`
+      : `<div class="lt-empty">${!installedList.length ? "Нет установленных lua-файлов. Добавьте игру через «Добавить»." : ms.onlyOutdated ? "Устаревших нет — всё актуально" : "Ничего не нашлось"}</div>`;
     const pg = el.querySelector("#lt-manage-pager");
-    pg.innerHTML = pagerHtml(manageState.page, pages, manageState.perPage, undefined, list.length);
-    bindPager(pg, p => { manageState.page = p; draw(); }, n => { manageState.perPage = n; manageState.page = 0; draw(); });
-    markOutdatedCards(el.querySelector("#lt-manage-grid"));
+    pg.innerHTML = pagerHtml(ms.page, pages, ms.perPage, undefined, list.length);
+    bindPager(pg, p => { ms.page = p; draw(); }, n => { ms.perPage = n; ms.page = 0; draw(); });
+    markOutdatedCards(grid);
+    syncBulk();
   };
   draw();
-  el.querySelector("#lt-manage-search").addEventListener("input", e => { manageState.q = e.target.value.trim(); manageState.page = 0; draw(); });
-  el.querySelector("#lt-manage-sort").addEventListener("change", e => { manageState.sort = e.target.value; draw(); });
+  // Сколько игр отстаёт — для кнопки «Обновить все устаревшие» и фильтра.
+  forEachOutdated(installedList.map(i => i.app_id), (id, list) => {
+    if (!list.length) return;
+    outdatedIds.add(id);
+    const b = el.querySelector("#lt-manage-upd-all");
+    if (b) { b.hidden = false; b.innerHTML = `${UI_ICONS.refresh} Обновить все устаревшие (${outdatedIds.size})`; }
+    if (ms.onlyOutdated) draw();
+  });
+
+  // В режиме выбора клик по карточке отмечает её, а не открывает панель (перехватываем до общего обработчика).
+  el.querySelector("#lt-manage-grid").addEventListener("click", e => {
+    if (!ms.selecting) return;
+    const card = e.target.closest(".lt-gc[data-appid]");
+    if (!card) return;
+    e.stopPropagation();
+    const id = parseInt(card.dataset.appid, 10);
+    if (ms.sel.has(id)) ms.sel.delete(id); else ms.sel.add(id);
+    card.classList.toggle("is-selected", ms.sel.has(id));
+    syncBulk();
+  });
+  el.querySelector("#lt-manage-select").addEventListener("click", () => { ms.selecting = !ms.selecting; if (!ms.selecting) ms.sel.clear(); renderManage(el); });
+  el.querySelector("#lt-bulk-all").addEventListener("click", () => { visible.forEach(i => ms.sel.add(i.app_id)); draw(); });
+  el.querySelector("#lt-manage-outdated").addEventListener("click", () => { ms.onlyOutdated = !ms.onlyOutdated; ms.page = 0; renderManage(el); });
+
+  const bulkUpdate = async ids => {
+    let games = 0, depots = 0;
+    for (const id of ids) {
+      try { const n = await updateOutdatedPins(id); if (n) { games++; depots += n; } }
+      catch (err) { toast(`${gameName(id)}: ${errMsg(err)}`, "error"); }
+    }
+    toast(depots ? `Обновлено: ${games} ${games === 1 ? "игра" : "игр"}, ${depots} депо` : "Закреплённые депо уже актуальны", "ok");
+    renderManage(el);
+  };
+  el.querySelector("#lt-manage-upd-all").addEventListener("click", e => withBusy(e.currentTarget, () => bulkUpdate([...outdatedIds])));
+  el.querySelector("#lt-bulk-update").addEventListener("click", e => withBusy(e.currentTarget, () => bulkUpdate([...ms.sel])));
+  el.querySelector("#lt-bulk-remove").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    const ids = [...ms.sel];
+    if (!await confirmAction(`Удалить lua у ${ids.length} игр? Они пропадут из библиотеки Steam после перезапуска. Файлы останутся в истории версий.`)) return;
+    let ok = 0;
+    for (const id of ids) { try { await invoke("lt_remove_lua", { appId: id }); ok++; ms.sel.delete(id); } catch (err) { toast(`${gameName(id)}: ${errMsg(err)}`, "error"); } }
+    toast(`Удалено: ${ok}`, "ok");
+    renderManage(el);
+  }));
+
+  el.querySelector("#lt-manage-search").addEventListener("input", e => { ms.q = e.target.value.trim(); ms.page = 0; draw(); });
+  el.querySelector("#lt-manage-sort").addEventListener("change", e => { ms.sort = e.target.value; draw(); });
   el.querySelector("#lt-manage-refresh").addEventListener("click", e => withBusy(e.currentTarget, () => { outdatedCache.clear(); return renderManage(el); }));
 }
 
@@ -1726,30 +1809,62 @@ async function openFixDetail(appId) {
 // DOWNLOADS
 // ══════════════════════════════════════════════════════════════════
 
-async function renderDownloads(el) {
-  el.innerHTML = `<h2 class="lt-page-title">Загрузки</h2>
-    <div class="lt-dl-sections">
-      <div class="lt-section"><h3>Активные</h3><div id="lt-dl-active">${dlQueue.items.length ? '' : '<div class="lt-empty">Нет активных загрузок</div>'}</div></div>
-      <div class="lt-section"><h3>История</h3><div id="lt-dl-history">${dlQueue.history.length ? '' : '<div class="lt-empty">Пусто</div>'}</div></div>
-      <div class="lt-section"><h3>Манифесты в depotcache</h3><div id="lt-manifests" class="lt-loading">Загружаю…</div></div>
-    </div>`;
+// Сырые ответы источников («HTTP 404 Not Found») → понятный текст.
+function humanDlError(e) {
+  const t = String(e || "");
+  if (/отмен/i.test(t)) return "Отменено";
+  if (/404|not found|нет в|нет на сервере/i.test(t)) return t.replace(/:?s*HTTP 404 Not Found/i, "").trim() || "Нет в источнике";
+  if (/401|403|unauthor|forbidden/i.test(t)) return "Нет доступа — проверьте вход или ключ";
+  if (/timed? ?out|таймаут|network|сеть|dns/i.test(t)) return "Сеть недоступна — попробуйте DNS-over-HTTPS";
+  return t;
+}
 
-  if (dlQueue.items.length) {
-    const ST = { pending: "В очереди", downloading: "Скачиваю", installing: "Устанавливаю" };
-    el.querySelector("#lt-dl-active").innerHTML = dlQueue.items.map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><div class="lt-usage-bar"><div class="lt-usage-fill" style="width:${i.progress}%"></div></div><span class="lt-muted">${esc(ST[i.status] || i.status)}${i.status === "downloading" && i.progress ? ` · ${i.progress}%` : ""}</span>${i.status === "pending" ? `<button class="lt-btn lt-btn-sm" data-dl-move="${i.id}:-1" title="Выше">▲</button><button class="lt-btn lt-btn-sm" data-dl-move="${i.id}:1" title="Ниже">▼</button><button class="lt-btn lt-btn-sm" data-dl-cancel="${i.id}">Отмена</button>` : ""}</div>`).join("");
+async function renderDownloads(el) {
+  const ST = { pending: "В очереди", downloading: "Скачиваю", installing: "Устанавливаю" };
+  // Подряд идущие одинаковые записи (повторные попытки) схлопываем в одну с «×N».
+  const hist = [];
+  for (const i of dlQueue.history.slice(0, 20)) {
+    const last = hist[hist.length - 1];
+    if (last && last.label === i.label && last.status === i.status && (last.error || "") === (i.error || "")) last.times++;
+    else hist.push({ ...i, times: 1 });
   }
-  if (dlQueue.history.length) {
-    el.querySelector("#lt-dl-history").innerHTML = dlQueue.history.slice(0, 20).map(i => `<div class="lt-dl-item"><span>${esc(i.label)}</span><span class="${i.status === 'done' ? 'lt-ok' : 'lt-error'}">${i.status === 'done' ? '✅' : '❌'} ${esc(i.error || 'Готово')}</span>${i.status !== 'done' && retryFns.has(i.id) ? ` <button class="lt-btn lt-btn-sm" data-dl-retry="${i.id}">Повторить</button>` : ''}</div>`).join("");
-  }
+  const cover = appId => appId ? `<img class="lt-dl-cover" data-lt-img="${appId}" src="${esc(steamHeader(appId))}" alt="" loading="lazy">` : '<span class="lt-dl-cover"></span>';
+  el.innerHTML = `<div class="lt-head"><h2 class="lt-page-title">Загрузки</h2>
+      ${hist.length ? '<button class="lt-btn lt-btn-ghost" id="lt-dl-clear">' + UI_ICONS.trash + ' Очистить историю</button>' : ""}</div>
+    <section class="lt-dl-block"><h3 class="lt-strip-title">Активные</h3>
+      ${dlQueue.items.length ? dlQueue.items.map(i => `<div class="lt-dl-card">
+        ${cover(i.appId)}
+        <div class="lt-dl-main"><div class="lt-dl-title">${esc(i.label)}</div>
+          <div class="lt-usage-bar"><div class="lt-usage-fill" style="width:${i.progress}%"></div></div>
+          <div class="lt-dl-sub">${esc(ST[i.status] || i.status)}${i.status === "downloading" && i.progress ? ` · ${i.progress}%` : ""}</div></div>
+        ${i.status === "pending" ? `<div class="lt-dl-actions"><button class="lt-btn lt-btn-sm" data-dl-move="${i.id}:-1" title="Выше">▲</button><button class="lt-btn lt-btn-sm" data-dl-move="${i.id}:1" title="Ниже">▼</button><button class="lt-btn lt-btn-sm" data-dl-cancel="${i.id}">Отмена</button></div>` : ""}
+      </div>`).join("") : '<div class="lt-empty lt-empty-sm">Нет активных загрузок</div>'}
+    </section>
+    <section class="lt-dl-block"><h3 class="lt-strip-title">История</h3>
+      ${hist.length ? hist.map(i => `<div class="lt-dl-card ${i.status === "done" ? "is-ok" : "is-bad"}">
+        ${cover(i.appId)}
+        <div class="lt-dl-main"><div class="lt-dl-title">${esc(i.label)}${i.times > 1 ? ` <span class="lt-muted">×${i.times}</span>` : ""}</div>
+          <div class="lt-dl-sub">${i.status === "done" ? `<span class="lt-ok">${UI_ICONS.check} Готово</span>` : `<span class="lt-error">${esc(humanDlError(i.error))}</span>`}
+          ${i.startTime ? ` · ${esc(new Date(i.startTime).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}` : ""}</div></div>
+        <div class="lt-dl-actions">
+          ${i.status !== "done" && retryFns.has(i.id) ? `<button class="lt-btn lt-btn-sm" data-dl-retry="${i.id}">Повторить</button>` : ""}
+          ${i.appId ? `<button class="lt-btn lt-btn-sm lt-btn-ghost" data-appid="${i.appId}">Открыть</button>` : ""}
+        </div>
+      </div>`).join("") : '<div class="lt-empty lt-empty-sm">Пусто</div>'}
+    </section>
+    <section class="lt-dl-block"><h3 class="lt-strip-title">Манифесты в depotcache</h3><div id="lt-manifests" class="lt-loading">Загружаю…</div></section>`;
+  el.querySelector("#lt-dl-clear")?.addEventListener("click", () => { dlQueue.history = []; saveDlHistory(); renderDownloads(el); });
 
   try {
     const manifests = await invoke("lt_list_manifests");
     const m = el.querySelector("#lt-manifests");
-    if (!manifests.length) { m.innerHTML = '<div class="lt-empty">Нет манифестов</div>'; return; }
-    m.innerHTML = `<table class="lt-table"><thead><tr><th>Файл</th><th>Depot</th><th>Размер</th><th>Дата</th></tr></thead><tbody>
-      ${manifests.slice(0, 50).map(m => `<tr><td><code>${esc(m.name)}</code></td><td>${m.depot_id}</td><td>${fmtSize(m.size)}</td><td>${fmtDate(m.modified)}</td></tr>`).join("")}</tbody></table>
-      ${manifests.length > 50 ? `<div class="lt-muted">…и ещё ${manifests.length - 50}</div>` : ''}`;
-  } catch (e) { el.querySelector("#lt-manifests").innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; }
+    if (!m) return;
+    m.classList.remove("lt-loading");
+    if (!manifests.length) { m.innerHTML = '<div class="lt-empty lt-empty-sm">Нет манифестов</div>'; return; }
+    m.innerHTML = `<table class="lt-table lt-mf-table"><thead><tr><th>Файл</th><th>Депо</th><th class="lt-num">Размер</th><th class="lt-num">Дата</th></tr></thead><tbody>
+      ${manifests.slice(0, 50).map(m => `<tr><td><code>${esc(m.name)}</code></td><td>${m.depot_id}</td><td class="lt-num">${fmtSize(m.size)}</td><td class="lt-num">${fmtDate(m.modified)}</td></tr>`).join("")}</tbody></table>
+      ${manifests.length > 50 ? `<div class="lt-muted">…и ещё ${manifests.length - 50}</div>` : ""}`;
+  } catch (e) { const m = el.querySelector("#lt-manifests"); if (m) m.innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1776,13 +1891,15 @@ async function renderSettings(el) {
 
     <div class="lt-section"><h3>Общие</h3>
     <div class="lt-settings-list">
-      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-hardfilter" ${cfg.filter_hardware !== false ? 'checked' : ''}> Скрывать hardware AppID из поиска</label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-hardfilter" ${cfg.filter_hardware !== false ? 'checked' : ''}> Скрывать железо и софт Steam (Deck, Controller, Frame…) в поиске и подборках</label>
     </div></div>
 
     <div class="lt-section"><h3>Источники</h3>
     <div class="lt-settings-list">
-      <label class="lt-info-row"><input type="checkbox" id="lt-src-hubcap" ${cfg.src_hubcap ? 'checked' : ''}> Hubcap (нужен API-ключ)</label>
-      <label class="lt-info-row"><input type="checkbox" id="lt-src-kernelua" ${cfg.src_kernelua ? 'checked' : ''}> KerneLua (нужен Discord)</label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-src-hubcap" ${cfg.src_hubcap ? 'checked' : ''}> Hubcap
+        <span class="lt-src-state ${cfg.hubcap_key ? "is-ok" : "is-warn"}">${cfg.hubcap_key ? "ключ задан" : "нет API-ключа — задайте в «Утилиты → Hubcap»"}</span></label>
+      <label class="lt-info-row"><input type="checkbox" id="lt-src-kernelua" ${cfg.src_kernelua ? 'checked' : ''}> KerneLua
+        <span class="lt-src-state ${cfg.kernelua_token ? "is-ok" : "is-warn"}">${cfg.kernelua_token ? "Discord подключён" : "не подключён — «Утилиты → KerneLua»"}</span></label>
     </div></div>
 
     <div class="lt-section"><h3>Магазин Steam</h3>
@@ -1798,9 +1915,9 @@ async function renderSettings(el) {
 
     <div class="lt-section"><h3>API-сервер</h3>
     <div class="lt-settings-list">
-      <div class="lt-info-row"><label>Base URL: <input type="text" class="lt-input" id="lt-cfg-apibase" value="${esc(cfg.api_base || '')}" placeholder="https://lua.tools (по умолчанию)" style="width:300px"></label></div>
-      <button class="lt-btn lt-btn-sm" id="lt-cfg-apibase-save">Сохранить</button>
-      <span class="lt-muted">Оставьте пустым для lua.tools</span>
+      <div class="lt-row-gap"><input type="text" class="lt-input lt-grow" id="lt-cfg-apibase" value="${esc(cfg.api_base || '')}" placeholder="https://lua.tools (по умолчанию)" aria-label="Base URL">
+        <button class="lt-btn lt-btn-sm" id="lt-cfg-apibase-save">Сохранить</button></div>
+      <span class="lt-muted lt-note">Оставьте пустым для lua.tools</span>
     </div></div>
 
     <div class="lt-section"><h3>CEF интеграция</h3>
@@ -1812,8 +1929,13 @@ async function renderSettings(el) {
     <pre id="lt-cef-out" class="lt-muted" style="font-size:.75rem;max-height:150px;overflow:auto;margin-top:8px"></pre>
     </div>
 
-    <div class="lt-section"><h3>Данные</h3>
-      <button class="lt-btn lt-btn-sm" id="lt-reset-onboard">Сбросить onboarding</button>
+    <div class="lt-section"><h3>Бэкап и перенос</h3>
+      <p class="lt-muted lt-note">Все lua вместе с их манифестами в один zip — для переустановки Steam, Windows или переноса на другой ПК.</p>
+      <div class="lt-row-gap">
+        <button class="lt-btn lt-btn-sm lt-btn-primary" id="lt-backup-export">Сохранить бэкап…</button>
+        <button class="lt-btn lt-btn-sm" id="lt-backup-import">Восстановить из бэкапа…</button>
+        <button class="lt-btn lt-btn-sm lt-btn-ghost" id="lt-reset-onboard">Сбросить onboarding</button>
+      </div>
     </div>
 
     <div class="lt-section"><h3>opensteamtool.toml</h3>
@@ -1859,6 +1981,28 @@ async function renderSettings(el) {
       toast("API-сервер обновлён", "ok");
     } catch (e) { toast(String(e), "error"); }
   });
+  el.querySelector("#lt-backup-export")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    try {
+      const d = new Date(), pad = n => String(n).padStart(2, "0");
+      const dest = await pickOutputFile(`luaproject-backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.zip`, [{ name: "Zip", extensions: ["zip"] }]);
+      if (!dest) return;
+      const r = await invoke("lt_backup_export", { dest });
+      toast(`Бэкап сохранён: ${r.lua_count} lua, ${r.manifest_count} манифестов`, "ok");
+      invoke("reveal_in_folder", { path: r.path }).catch(() => {});
+    } catch (err) { toast(errMsg(err), "error"); }
+  }));
+  el.querySelector("#lt-backup-import")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    try {
+      const path = await pickInputFile([{ name: "Zip", extensions: ["zip"] }]);
+      if (!path) return;
+      if (!await confirmAction("Установить все lua и манифесты из бэкапа? Совпадающие lua будут заменены (старые версии останутся в истории).")) return;
+      // Закреплённые версии не трогаем: бэкап должен вернуть ровно то, что было.
+      const r = await invoke("lt_install_file", { path, appId: 0, autoUpdate: false });
+      outdatedCache.clear();
+      toast(`Восстановлено${r.manifest_count ? `: ${r.manifest_count} манифестов` : ""}${r.failed?.length ? ` · ошибок: ${r.failed.length}` : ""}. Перезапустите Steam.`, r.failed?.length ? "warn" : "ok");
+      installedList = await invoke("lt_list_installed");
+    } catch (err) { toast(errMsg(err), "error"); }
+  }));
   el.querySelector("#lt-reset-onboard")?.addEventListener("click", () => { try { localStorage.removeItem("lt_onboarded"); } catch {} toast("Onboarding сброшен", "ok"); });
   el.querySelector("#lt-cef-check")?.addEventListener("click", async () => {
     const out = el.querySelector("#lt-cef-out"); out.textContent = "Подключаюсь…";
@@ -1958,8 +2102,47 @@ function tomlProblems(src) {
 // DETAIL (game/depot page)
 // ══════════════════════════════════════════════════════════════════
 
+// «Почему игры нет в Steam?» — по шагам, с кнопкой исправления там, где это можно сделать отсюда.
+async function runDiagnostics(box, appId, lua) {
+  if (!box) return;
+  const ps = await invoke("lt_plugin_status").catch(() => pluginStatus);
+  const steam = await invoke("lt_steam_info").catch(() => steamInfo);
+  const manifests = await invoke("lt_list_manifests").catch(() => []);
+  const have = new Set(manifests.map(m => m.name));
+  const pins = Object.entries(lua.activePins || {});
+  const missing = pins.filter(([depot, gid]) => !have.has(`${depot}_${gid}.manifest`)).map(([d]) => d);
+  const baseOn = lua.entries.some(e => e.id === (lua.baseAppId || appId));
+  const outdated = await outdatedDepots(appId);
+  const rows = [
+    [!!steam?.path, "Steam найден", steam?.path ? esc(steam.path) : "Steam не найден — установите его"],
+    [!!ps?.installed, "Плагин установлен", ps?.installed ? `${esc(ps.mode)}${ps.version ? ` · v${esc(String(ps.version).replace(/^v/i, ""))}` : ""}` : "Без плагина Steam не видит lua", ps?.installed ? "" : '<button class="lt-btn lt-btn-sm" data-page="mode">Установить</button>'],
+    [true, "Lua на месте", `${lua.depotCount} депо, ${lua.dlcCount} DLC`],
+    [baseOn, "Основное приложение включено", baseOn ? "addappid для игры активен" : "Строка игры выключена — включите её в «Инструменты → Депо»", baseOn ? "" : '<button class="lt-btn lt-btn-sm" data-diag="tools">Открыть</button>'],
+    [!missing.length, "Манифесты скачаны", !pins.length ? "Депо не закреплены — Steam возьмёт актуальные" : missing.length ? `Нет манифестов для депо ${missing.map(esc).join(", ")}` : `${pins.length} из ${pins.length}`, missing.length ? '<button class="lt-btn lt-btn-sm" data-diag="fetch">Догрузить</button>' : ""],
+    [!outdated.length, "Закреплённые версии актуальны", outdated.length ? `${outdated.length} депо отстают от Steam — игра может не обновиться` : "Совпадают со Steam или не закреплены", outdated.length ? '<button class="lt-btn lt-btn-sm" data-diag="tools">Обновить</button>' : ""],
+    [null, "Steam перезапущен после добавления", "Steam читает lua только при запуске. Нет игры в библиотеке — перезапустите его.", '<button class="lt-btn lt-btn-sm" data-diag="restart">Перезапустить Steam</button>'],
+  ];
+  box.innerHTML = rows.map(([ok, title, sub, act = ""]) => `<div class="lt-diag-row">
+      <span class="lt-diag-ic ${ok === true ? "is-ok" : ok === false ? "is-bad" : "is-info"}">${ok === true ? UI_ICONS.ok : ok === false ? UI_ICONS.no : HOME_ICONS.warn}</span>
+      <div class="lt-diag-main"><strong>${title}</strong><span class="lt-muted">${sub}</span></div>${act}
+    </div>`).join("");
+  if (box.dataset.bound) return;
+  box.dataset.bound = "1";
+  box.addEventListener("click", e => {
+    const b = e.target.closest("[data-diag]");
+    if (!b) return;
+    const act = b.dataset.diag;
+    if (act === "tools") { toolsState.appId = appId; toolsState.tab = "depots"; toolsState.preset = ""; switchPage("tools"); return; }
+    withBusy(b, async () => {
+      if (act === "fetch") { await ensureManifests(appId); runDiagnostics(box, appId, lua); }
+      else if (act === "restart") await doRestartSteam();
+    });
+  });
+}
+
 async function openDetail(appId) {
   currentPage = "detail";
+  scrollMainTop();
   const el = $("#lt-page-content");
   el.innerHTML = '<div class="lt-loading">Загружаю…</div>';
 
@@ -1986,35 +2169,61 @@ async function openDetail(appId) {
     let vaultHistory = [];
     try { vaultHistory = await invoke("lt_vault_history", { appId }); } catch {}
 
+    const inst = installedList.find(i => i.app_id === appId);
+    const genres = (details?.genres || []).map(g => g.description).filter(Boolean).slice(0, 5);
+    const devs = (details?.developers || []).join(", ");
+    const released = details?.release_date?.date || "";
+    const desc = (details?.short_description || "").replace(/<[^>]+>/g, "");
+    const SRC_INFO = {
+      server: ["Кэш студии", "Копия, которую уже скачивал кто-то из команды"],
+      hubcap: ["Hubcap", "Альтернативный источник манифестов"],
+      kernelua: ["KerneLua", "kernelos.org через Discord"],
+    };
+    const srcCard = (attr, title, sub, badgeId, known) => `<div class="lt-src-card">
+        <div class="lt-src-main"><strong>${esc(title)}</strong><span class="lt-muted">${esc(sub)}</span></div>
+        <span class="lt-src-badge" id="${badgeId}">${known ? '<span class="lt-ok">есть</span>' : '<span class="lt-muted">проверяю…</span>'}</span>
+        <button class="lt-btn lt-btn-sm" ${attr} data-appid="${appId}" data-game-name="${esc(name)}">${UI_ICONS.download} Скачать</button>
+      </div>`;
     el.innerHTML = `
-      <button class="lt-btn lt-btn-sm" id="lt-back-btn">← Назад</button>
-      <div class="lt-detail" style="margin-top:12px">
-        <div class="lt-detail-header">
-          <img src="${esc(img)}" class="lt-detail-img" alt="">
-          <div class="lt-detail-meta">
-            <h3>${esc(name)}</h3><span class="lt-card-id">AppID: ${appId}</span>
-            <div class="lt-row-gap" style="margin-top:6px;flex-wrap:wrap">
-              <button class="lt-btn lt-btn-sm" id="lt-d-copy">Копировать AppID</button>
-              ${luaInfo ? '<button class="lt-btn lt-btn-sm" id="lt-d-reveal">Показать lua в папке</button>' : ""}
-              <a class="lt-btn lt-btn-sm" target="_blank" href="https://steamdb.info/app/${appId}/">SteamDB</a>
-              ${gameInfo.installed ? '<button class="lt-btn lt-btn-sm" id="lt-d-drm" title="Steamless: снять SteamStub с exe игры">Снять DRM</button>' : ""}
+      <button class="lt-btn lt-btn-sm lt-btn-ghost" id="lt-back-btn">${UI_ICONS.chevL} Назад</button>
+      <div class="lt-detail lt-gd">
+        <div class="lt-gd-hero">
+          <div class="lt-gd-bg" style="background-image:url('${esc(img)}')"></div>
+          <img src="${esc(img)}" data-lt-img="${appId}" class="lt-gd-img" alt="">
+          <div class="lt-gd-info">
+            <h2 class="lt-gd-title">${esc(name)}</h2>
+            <div class="lt-gd-meta">App ID ${appId}${released ? ` · ${esc(released)}` : ""}${devs ? ` · ${esc(devs)}` : ""}</div>
+            ${genres.length ? `<div class="lt-drawer-tags">${genres.map(g => `<span class="lt-chip2">${esc(g)}</span>`).join("")}</div>` : ""}
+            ${desc ? `<p class="lt-gd-desc">${esc(desc)}</p>` : ""}
+            <div class="lt-gd-pills">
+              ${luaInfo ? `<span class="lt-pill is-ok">${UI_ICONS.check} Lua: ${luaInfo.depotCount} депо, ${luaInfo.dlcCount} DLC · ${luaInfo.hasActivePins ? "закреплено" : "авто-обновление"}</span>` : '<span class="lt-pill">Lua не установлен</span>'}
+              ${gameInfo.installed ? `<span class="lt-pill is-ok" title="${esc(gameInfo.path)}">На диске${gameInfo.size_on_disk ? ` · ${fmtSize(gameInfo.size_on_disk)}` : ""}</span>` : '<span class="lt-pill">Не скачана в Steam</span>'}
+              ${inst ? `<span class="lt-pill">Добавлено ${fmtDate(inst.modified)}</span>` : ""}
+              <button class="lt-pill is-warn lt-pill-link" id="lt-gd-fix" hidden></button>
             </div>
-            ${gameInfo.installed ? `<div class="lt-ok" style="margin-top:6px">📂 ${esc(gameInfo.path)}${gameInfo.size_on_disk ? ` · ${fmtSize(gameInfo.size_on_disk)}` : ''}</div>` : '<div class="lt-muted" style="margin-top:6px">Не установлена на диск</div>'}
-            ${luaInfo ? `<div class="lt-ok" style="margin-top:4px">✅ ${luaInfo.depotCount} депо, ${luaInfo.dlcCount} DLC${luaInfo.hasActivePins ? " · Закреплено" : " · Авто-обновление"}</div>` : '<div class="lt-muted" style="margin-top:4px">Lua не установлен</div>'}
-            ${gameInfo.installed ? `<div style="margin-top:8px;display:flex;gap:6px;align-items:center">
-              <button class="lt-btn lt-btn-primary lt-btn-sm" id="lt-launch-btn">▶ Запустить</button>
-              <input type="text" class="lt-input" id="lt-launch-args" placeholder="Параметры запуска" style="max-width:200px;font-size:.8rem">
-            </div>` : ''}
+            <div class="lt-gd-actions">
+              <button class="lt-btn lt-hs-btn lt-gd-primary" id="lt-gd-add">${UI_ICONS.download} ${luaInfo ? "Обновить lua" : "Добавить в LuaProject"}</button>
+              ${gameInfo.installed ? `<button class="lt-btn" id="lt-launch-btn">▶ Запустить</button>
+                <input type="text" class="lt-input lt-gd-args" id="lt-launch-args" placeholder="Параметры запуска">` : ""}
+              <button class="lt-btn lt-btn-ghost" id="lt-d-copy">App ID</button>
+              <a class="lt-btn lt-btn-ghost" target="_blank" href="https://steamdb.info/app/${appId}/">SteamDB</a>
+              ${luaInfo ? '<button class="lt-btn lt-btn-ghost" id="lt-d-reveal">Показать lua</button>' : ""}
+              ${gameInfo.installed ? '<button class="lt-btn lt-btn-ghost" id="lt-d-drm" title="Steamless: снять SteamStub с exe игры">Снять DRM</button>' : ""}
+            </div>
           </div>
         </div>
 
-        <div class="lt-detail-sources">
-          <h4>Источники${sourceList.length ? ` (${sourceList.length})` : ""}</h4>
-          ${sourceList.length ? sourceList.map(s => `<button class="lt-btn lt-btn-primary lt-btn-sm" data-dl-source="${esc(s)}" data-appid="${appId}" data-game-name="${esc(name)}">📥 ${esc(s)}</button>`).join(" ") : '<span class="lt-muted">Нет</span>'}
-          <button class="lt-btn lt-btn-sm" data-dl-alt="server" data-appid="${appId}" data-game-name="${esc(name)}" title="Кэш студии в Telegram">📥 Сервер <span class="lt-muted" id="lt-server-badge">…</span></button>
-          ${ltConfig.src_hubcap && ltConfig.hubcap_key ? `<button class="lt-btn lt-btn-sm" id="lt-hubcap-btn" data-dl-alt="hubcap" data-appid="${appId}" data-game-name="${esc(name)}">📥 Hubcap <span class="lt-muted" id="lt-hubcap-badge">…</span></button>` : ''}
-          ${ltConfig.src_kernelua && ltConfig.kernelua_token ? `<button class="lt-btn lt-btn-sm" data-dl-alt="kernelua" data-appid="${appId}" data-game-name="${esc(name)}">📥 KerneLua <span class="lt-muted" id="lt-kernelua-badge">…</span></button>` : ''}
-        </div>
+        <section class="lt-gd-sec"><h3 class="lt-strip-title">Источники</h3>
+          <div class="lt-src-grid">
+            ${sourceList.map(s => srcCard(`data-dl-source="${esc(s)}"`, s, "lua.tools", `lt-src-lt-${esc(s)}`, true)).join("")}
+            ${!ltIsLoggedIn() ? '<div class="lt-src-card is-off"><div class="lt-src-main"><strong>lua.tools</strong><span class="lt-muted">Основной источник — нужен вход</span></div><button class="lt-btn lt-btn-sm" id="lt-login-btn">Войти</button></div>' : ""}
+            ${srcCard('data-dl-alt="server"', ...SRC_INFO.server, "lt-server-badge")}
+            ${ltConfig.src_hubcap && ltConfig.hubcap_key ? srcCard('data-dl-alt="hubcap"', ...SRC_INFO.hubcap, "lt-hubcap-badge") : ""}
+            ${ltConfig.src_kernelua && ltConfig.kernelua_token ? srcCard('data-dl-alt="kernelua"', ...SRC_INFO.kernelua, "lt-kernelua-badge") : ""}
+          </div>
+        </section>
+
+        ${luaInfo ? '<section class="lt-gd-sec"><h3 class="lt-strip-title">Диагностика — почему игры может не быть в Steam</h3><div class="lt-diag" id="lt-diag"><div class="lt-loading">Проверяю…</div></div></section>' : ""}
 
         ${variants.length ? `<div class="lt-section"><h4>Варианты (${variants.length})</h4>
           <div class="lt-var-list">${variants.map(v => `<div class="lt-var-row ${v.hash === currentHash ? 'lt-var-active' : ''}">
@@ -2058,20 +2267,47 @@ async function openDetail(appId) {
       catch (err) { toast(errMsg(err), "error"); }
     })));
     // Значки наличия у источников: «· есть» зелёным, «· нет» красным; не удалось проверить — значок пропадает.
-    const badge = (id, check) => {
+    // Наличие у альтернативных источников; результат нужен и главной кнопке «Добавить».
+    const srcState = {};
+    for (const src of sourceList) srcState[`lt:${src}`] = Promise.resolve(true);
+    const badge = (id, key, check) => {
       if (!el.querySelector(id)) return;
-      check().then(ok => {
+      srcState[key] = check().then(ok => !!ok, () => null);
+      srcState[key].then(ok => {
         const b = el.querySelector(id);
         if (!b) return;
-        b.textContent = ok ? "· есть" : "· нет";
-        b.className = ok ? "lt-ok" : "lt-error";
-      }).catch(() => { const b = el.querySelector(id); if (b) b.textContent = ""; });
+        b.innerHTML = ok === true ? '<span class="lt-ok">есть</span>' : ok === false ? '<span class="lt-error">нет</span>' : '<span class="lt-muted">не проверить</span>';
+        b.closest(".lt-src-card")?.classList.toggle("is-off", ok === false);
+      });
     };
-    badge("#lt-server-badge", () => apiGet("/lua-cache/has", { appid: appId }).then(r => !!r?.available));
-    badge("#lt-hubcap-badge", () => invoke("lt_hubcap_status", { appId, apiKey: ltConfig.hubcap_key })
+    badge("#lt-server-badge", "server", () => apiGet("/lua-cache/has", { appid: appId }).then(r => !!r?.available));
+    badge("#lt-hubcap-badge", "hubcap", () => invoke("lt_hubcap_status", { appId, apiKey: ltConfig.hubcap_key })
       // Hubcap: {status: "available", manifest_file_exists: true} — есть; "not_found" и прочее — нет.
       .then(st => !!st && (st.status === "available" || st.manifest_file_exists === true)));
-    badge("#lt-kernelua-badge", () => invoke("lt_kernelua_status", { appId, token: ltConfig.kernelua_token }));
+    badge("#lt-kernelua-badge", "kernelua", () => invoke("lt_kernelua_status", { appId, token: ltConfig.kernelua_token }));
+    // Главная кнопка: первый источник, где игра точно есть: lua.tools → кэш студии → Hubcap → KerneLua.
+    el.querySelector("#lt-gd-add")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+      for (const [key, p] of Object.entries(srcState)) {
+        if (await p !== true) continue;
+        if (key.startsWith("lt:")) return doDownload(appId, key.slice(3), name);
+        return doAltDownload(appId, key, name);
+      }
+      toast(ltIsLoggedIn() ? "Ни в одном источнике этой игры нет" : "Ни в одном источнике нет — войдите в lua.tools, там выбор больше", "warn");
+    }));
+    // Фиксы для этой игры (список общий с разделом «Фиксы», грузится один раз).
+    (async () => {
+      if (!fixesCache) {
+        const data = await ltDenuvoListings().catch(() => null);
+        if (Array.isArray(data)) fixesCache = [...data].sort((x, y) => (y.fixCount || 0) - (x.fixCount || 0));
+      }
+      const g = fixesCache?.find(x => Number(x.appid || x.appId) === appId);
+      const pill = el.querySelector("#lt-gd-fix");
+      if (!g || !pill) return;
+      pill.hidden = false;
+      pill.innerHTML = `${UI_ICONS.wrench} Есть фиксы: ${g.fixCount ?? "?"} — открыть`;
+      pill.addEventListener("click", () => { currentPage = "fixes"; openFixDetail(appId); });
+    })();
+    if (luaInfo) runDiagnostics(el.querySelector("#lt-diag"), appId, luaInfo);
     el.querySelector("#lt-d-copy")?.addEventListener("click", () => {
       navigator.clipboard.writeText(String(appId)).then(() => toast("AppID скопирован", "ok"), () => toast("Буфер обмена недоступен", "error"));
     });
@@ -2345,12 +2581,12 @@ async function openGameDrawer(appId) {
       <button class="lt-btn" data-dr="launch">${DRAWER_ICONS.play} Параметры запуска…</button>
       ${game.installed ? `<button class="lt-btn" data-dr="drm">${DRAWER_ICONS.drm} Удалить DRM Steam</button>` : ""}
       <div class="lt-drawer-pair">
-        <button class="lt-btn" data-dr="store">${DRAWER_ICONS.globe} Открыть страницу</button>
-        <button class="lt-btn" data-dr="steam">${DRAWER_ICONS.ext} Открыть в Steam</button>
+        <button class="lt-btn" data-dr="store">${DRAWER_ICONS.globe} Магазин Steam</button>
+        <button class="lt-btn" data-dr="steam">${DRAWER_ICONS.ext} В клиенте Steam</button>
       </div>
       <div class="lt-drawer-pair">
         <button class="lt-btn" data-dr="reveal">${DRAWER_ICONS.folder} Показать .lua</button>
-        <button class="lt-btn" data-dr="copy">${DRAWER_ICONS.copy} Скопировать App ID</button>
+        <button class="lt-btn" data-dr="copy">${DRAWER_ICONS.copy} App ID</button>
       </div>
       <button class="lt-btn lt-btn-danger" data-dr="remove">${DRAWER_ICONS.trash} Удалить этот lua</button>
     </div>`;

@@ -1956,6 +1956,7 @@ fn main() {
             luatools::lt_plugin_status,
             luatools::lt_restart_steam,
             luatools::lt_list_manifests,
+            luatools::lt_backup_export,
             luatools::lt_game_install_path,
             luatools::lt_apply_fix,
             luatools::lt_revert_fix,

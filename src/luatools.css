@@ -908,3 +908,116 @@
 .lt-card-featured .lt-card-info { align-self: stretch; text-align: center; }
 /* После фильтра железа карточек меньше колонок — растягиваем, а не оставляем дыру справа. */
 .lt-grid-featured { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+/* Панель вкладки даёт вертикальные отступы, а оболочка LuaTools — 100% высоты: панель прокручивалась на 50px
+   и заголовок страницы уезжал под верхнюю панель. Прокручивается только .lt-main. */
+#luatools-panel { padding-top: 0; padding-bottom: 0; overflow: hidden; }
+/* Плавающая кнопка чата (правый нижний угол) перекрывала «Удалить этот lua». */
+.lt-drawer-body { padding-bottom: 84px; }
+.lt-drawer-pair .lt-btn { font-size: .8rem; padding-left: 8px; padding-right: 8px; }
+
+/* ── Загрузки ─────────────────────────────────────────────────── */
+.lt-page-content[data-page="downloads"] { max-width: 1000px; }
+.lt-dl-block { margin-bottom: 22px; }
+.lt-empty-sm { text-align: left; padding: 10px 0; font-size: .85rem; }
+.lt-dl-card {
+  display: flex; align-items: center; gap: 14px; padding: 10px 12px; margin-bottom: 8px;
+  border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
+  border-left: 3px solid rgba(196,181,247,.5);
+}
+.lt-dl-card.is-ok { border-left-color: #6ee7a8; }
+.lt-dl-card.is-bad { border-left-color: #f87171; }
+.lt-dl-cover { width: 92px; aspect-ratio: 460 / 215; object-fit: cover; border-radius: 5px; flex: none; background: rgba(255,255,255,.06); }
+.lt-dl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.lt-dl-title { font-weight: 600; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-dl-sub { font-size: .78rem; opacity: .8; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.lt-dl-sub svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; vertical-align: -2px; }
+.lt-dl-actions { display: flex; gap: 6px; flex: none; }
+.lt-mf-table th, .lt-mf-table td { text-align: left; }
+.lt-mf-table th { opacity: .7; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.lt-mf-table .lt-num { text-align: right; white-space: nowrap; }
+
+/* ── Настройки: секции карточками, на широком окне в две колонки ── */
+.lt-page-content[data-page="settings"] { max-width: 1180px; }
+.lt-page-content[data-page="settings"] > .lt-section {
+  background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07);
+  border-radius: 12px; padding: 14px 18px; margin: 0 0 12px;
+}
+.lt-page-content[data-page="settings"] > .lt-section > h3 { margin: 0 0 10px; font-size: .95rem; }
+@media (min-width: 1400px) {
+  .lt-page-content[data-page="settings"] { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .lt-page-content[data-page="settings"] > .lt-page-title,
+  .lt-page-content[data-page="settings"] > .lt-utils,
+  .lt-page-content[data-page="settings"] > .lt-section:has(#lt-ost-editor) { grid-column: 1 / -1; }
+  .lt-page-content[data-page="settings"] > .lt-section { margin: 0; }
+}
+.lt-auth-area[data-variant="row"] { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lt-auth-area[data-variant="row"] > span { margin-right: auto; }
+.lt-auth-area[data-variant="row"] .lt-hi-action { margin-left: 0; }
+.lt-src-state { margin-left: 8px; font-size: .74rem; padding: 1px 8px; border-radius: 99px; background: rgba(255,255,255,.06); }
+.lt-src-state.is-ok { color: #6ee7a8; }
+.lt-src-state.is-warn { color: #f5c26b; }
+.lt-note { display: block; font-size: .78rem; margin: 6px 0 0; }
+
+/* ── Карточка игры ────────────────────────────────────────────── */
+.lt-page-content[data-page="detail"] { max-width: 1180px; }
+.lt-gd { margin-top: 12px; display: flex; flex-direction: column; gap: 18px; }
+.lt-gd-hero {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: grid; grid-template-columns: minmax(260px, 400px) 1fr; gap: 22px; align-items: start;
+  padding: 20px; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); background: rgba(14, 10, 26, .55);
+}
+.lt-gd-bg { position: absolute; inset: -40px; z-index: -1; background-size: cover; background-position: center; filter: blur(40px) saturate(1.2); opacity: .28; }
+.lt-gd-img { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.45); }
+.lt-gd-info { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.lt-gd-title { margin: 0; font-size: 1.6rem; line-height: 1.15; }
+.lt-gd-meta { font-size: .8rem; opacity: .65; }
+.lt-gd-info .lt-drawer-tags { margin-top: 0; }
+.lt-gd-desc { margin: 2px 0 0; font-size: .86rem; line-height: 1.5; opacity: .82; max-width: 70ch; }
+.lt-gd-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.lt-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: .75rem;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.08); color: inherit; font-family: inherit; }
+.lt-pill[hidden] { display: none; }
+.lt-pill svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+.lt-pill.is-ok { color: #6ee7a8; }
+.lt-pill.is-warn { color: #f5c26b; }
+.lt-pill-link { cursor: pointer; }
+.lt-pill-link:hover { background: rgba(245,194,107,.15); }
+.lt-gd-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.lt-gd-primary { margin-top: 0; display: inline-flex; align-items: center; gap: 6px; }
+.lt-gd-actions svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
+.lt-gd-args { max-width: 200px; font-size: .8rem; }
+.lt-gd-sec .lt-strip-title { margin-top: 0; }
+.lt-src-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.lt-src-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.lt-src-card.is-off { opacity: .55; }
+.lt-src-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lt-src-main .lt-muted { font-size: .74rem; }
+.lt-src-badge { font-size: .74rem; white-space: nowrap; }
+.lt-src-card .lt-btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; vertical-align: -2px; }
+.lt-diag { border-radius: 12px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
+.lt-diag-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+.lt-diag-row + .lt-diag-row { border-top: 1px solid rgba(255,255,255,.06); }
+.lt-diag-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; display: block; }
+.lt-diag-ic.is-ok { color: #6ee7a8; } .lt-diag-ic.is-bad { color: #f87171; } .lt-diag-ic.is-info { color: #f5c26b; }
+.lt-diag-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: .86rem; }
+.lt-diag-main .lt-muted { font-size: .76rem; }
+@media (max-width: 1000px) { .lt-gd-hero { grid-template-columns: 1fr; } }
+
+/* ── Управление: выбор нескольких игр ─────────────────────────── */
+.lt-toolbar { align-items: center; }
+.lt-btn.is-active { background: rgba(196,181,247,.18); border-color: rgba(196,181,247,.45); }
+.lt-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 14px;
+  border-radius: 10px; background: rgba(196,181,247,.08); border: 1px solid rgba(196,181,247,.25); position: sticky; top: 0; z-index: 3; backdrop-filter: blur(8px); }
+.lt-bulk[hidden] { display: none; }
+.lt-bulk > span { margin-right: auto; font-size: .85rem; font-weight: 600; }
+.lt-bulk svg, .lt-head-actions svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+.lt-gc-grid.is-selecting .lt-gc::after {
+  content: ""; position: absolute; top: 8px; left: 8px; width: 20px; height: 20px; border-radius: 6px;
+  border: 2px solid rgba(255,255,255,.75); background: rgba(0,0,0,.45);
+}
+.lt-gc-grid.is-selecting .lt-gc.is-selected { border-color: #c4b5f7; box-shadow: 0 0 0 2px rgba(196,181,247,.55); }
+.lt-gc-grid.is-selecting .lt-gc.is-selected::after {
+  background: #c4b5f7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231b1530' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center / 14px no-repeat;
+  border-color: #c4b5f7;
+}

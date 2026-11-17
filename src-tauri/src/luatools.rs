@@ -507,6 +507,73 @@ pub fn lt_list_manifests() -> Result<Vec<ManifestFile>, String> {
     Ok(result)
 }
 
+// ── Backup: all lua + their manifests into one zip ─────────────────
+
+#[derive(serde::Serialize)]
+pub struct BackupResult {
+    pub path: String,
+    pub lua_count: u32,
+    pub manifest_count: u32,
+}
+
+/// Числа из `addappid(<id>` во всех строках (и закомментированных: выключенное депо тоже может понадобиться).
+fn lua_depot_ids(lua: &str) -> std::collections::HashSet<u64> {
+    let mut ids = std::collections::HashSet::new();
+    for line in lua.lines() {
+        let lower = line.to_lowercase();
+        let Some(pos) = lower.find("addappid") else { continue };
+        let rest = lower[pos + 8..].trim_start().trim_start_matches('(').trim_start();
+        let num: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if let Ok(id) = num.parse::<u64>() { ids.insert(id); }
+    }
+    ids
+}
+
+/// Архив для переноса или восстановления: `<appid>.lua` в корне и `depotcache/<depot>_<gid>.manifest`.
+/// Восстанавливается обычной установкой этого zip (`lt_install_file`, app_id = 0).
+#[tauri::command]
+pub fn lt_backup_export(dest: String) -> Result<BackupResult, String> {
+    use std::io::Write;
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let plug = stplugin_dir(&steam);
+    let depot = depotcache_dir(&steam);
+    let file = std::fs::File::create(&dest).map_err(|e| format!("Не удалось создать {dest}: {e}"))?;
+    let mut zw = zip::ZipWriter::new(file);
+    let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let mut depots = std::collections::HashSet::new();
+    let mut lua_count = 0u32;
+    if plug.exists() {
+        for entry in std::fs::read_dir(&plug).map_err(|e| e.to_string())?.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.to_lowercase().ends_with(".lua") || app_id_from_name(&name).is_none() { continue; }
+            let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };
+            depots.extend(lua_depot_ids(&text));
+            zw.start_file(name, opts).map_err(|e| e.to_string())?;
+            zw.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+            lua_count += 1;
+        }
+    }
+    let mut manifest_count = 0u32;
+    if depot.exists() {
+        for entry in std::fs::read_dir(&depot).map_err(|e| e.to_string())?.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".manifest") { continue; }
+            let id = name.split('_').next().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+            if !depots.contains(&id) { continue; }
+            let Ok(bytes) = std::fs::read(entry.path()) else { continue };
+            zw.start_file(format!("depotcache/{name}"), opts).map_err(|e| e.to_string())?;
+            zw.write_all(&bytes).map_err(|e| e.to_string())?;
+            manifest_count += 1;
+        }
+    }
+    zw.finish().map_err(|e| e.to_string())?;
+    if lua_count == 0 {
+        let _ = std::fs::remove_file(&dest);
+        return Err("Нет установленных lua — нечего сохранять".into());
+    }
+    Ok(BackupResult { path: dest, lua_count, manifest_count })
+}
+
 // ── Game install path from Steam libraryfolders.vdf ────────────────
 
 fn steam_library_folders(steam: &str) -> Vec<String> {
