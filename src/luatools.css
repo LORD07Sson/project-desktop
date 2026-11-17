@@ -904,3 +904,7 @@
 .lt-ost-status.is-bad { color: #f87171; }
 .lt-ost-status.is-ok { color: #6ee7a8; }
 .lt-btn[hidden] { display: none; }
+/* Блок названия тянем на всю ширину карточки, иначе ellipsis не срабатывает и длинное имя вылезает. */
+.lt-card-featured .lt-card-info { align-self: stretch; text-align: center; }
+/* После фильтра железа карточек меньше колонок — растягиваем, а не оставляем дыру справа. */
+.lt-grid-featured { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
