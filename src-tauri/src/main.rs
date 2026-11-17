@@ -605,7 +605,14 @@ fn release_program_files(app: &tauri::AppHandle) {
     }
     let me = sysinfo::Pid::from_u32(std::process::id());
     let started = std::time::Instant::now();
-    let mut sys = sysinfo::System::new();
+    // sysinfo 0.40: без System не ждём потомков — Update.exe всё равно запустится.
+    let mut sys = match sysinfo::System::new() {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("release_program_files: sysinfo недоступен ({e:?}), не ждём дочерние процессы");
+            return;
+        }
+    };
     loop {
         sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
         // Потомки нашего процесса на любую глубину (браузерный процесс WebView2 → его рендеры и GPU)

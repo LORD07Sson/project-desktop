@@ -475,7 +475,14 @@ fn monitor(app: AppHandle) {
     let mut settings = load_settings(&app);
     let mut ev = Evaluator::default();
     ev.trusted = settings.trusted.iter().map(|t| lower(t)).collect();
-    let mut sys = System::new();
+    // sysinfo 0.40: System::new() может не инициализироваться — без списка процессов монитор бесполезен.
+    let mut sys = match System::new() {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("behavior monitor: sysinfo недоступен: {e:?}");
+            return;
+        }
+    };
     let kind = ProcessRefreshKind::nothing().with_cpu().with_exe(UpdateKind::OnlyIfNotSet).with_cmd(UpdateKind::OnlyIfNotSet);
     sys.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
     let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as f32;
