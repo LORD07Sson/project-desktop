@@ -2715,15 +2715,26 @@ async function doCodeLogin() {
 }
 
 let loginPending = false;
+// Текущая попытка входа. Сервер lua.tools иногда отвечает 504 на шаге Discord → тогда в приложение
+// ничего не приходит, а локальный приёмник ждёт до 5 минут. Повторный клик открывает новую попытку
+// в браузере; приёмник тот же, а код обменивается с verifier последней попытки.
+let loginPkce = null;
 async function doLogin() {
-  if (loginPending) { toast("Вход уже открыт в браузере", "info"); return; }
+  if (loginPending) {
+    try {
+      loginPkce = await ltPkceStart();
+      await openExternal(loginPkce.url);
+      toast("Открыл вход заново. Если lua.tools снова отвечает ошибкой — попробуйте «Код от бота».", "info");
+    } catch (e) { toast(errMsg(e), "error"); }
+    return;
+  }
   loginPending = true;
   toast("Войдите через Discord в открывшемся браузере", "info");
   try {
-    const pkce = await ltPkceStart();
-    let tokens = await invoke("lt_oauth_login", { loginUrl: pkce.url });
+    loginPkce = await ltPkceStart();
+    let tokens = await invoke("lt_oauth_login", { loginUrl: loginPkce.url });
     // Server answered with a PKCE code (normal) or, on older setups, implicit tokens.
-    if (tokens.code) tokens = await ltPkceExchange(tokens.code, pkce.verifier);
+    if (tokens.code) tokens = await ltPkceExchange(tokens.code, loginPkce.verifier);
     let user = tokens.user || null;
     if (!user) { try { user = await ltFetchUser(tokens.access_token); } catch { /* имя не критично */ } }
     ltSaveSession({ ...tokens, user });
