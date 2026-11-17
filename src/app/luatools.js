@@ -10,7 +10,7 @@ import {
   ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoDownloadUrl, ltDenuvoListings, ltDenuvoFixes,
   ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser, ltDepotInfo, ltRedeemBotCode, ltPkceStart, ltPkceExchange } from "./luatools-api.js";
 import { setLuatoolsDropHandler } from "./file-drop.js";
-import { parseLua, setDepotLocked, setDepotEnabled } from "./luatools-parser.js";
+import { parseLua, setDepotLocked, setDepotEnabled, setDepotManifest } from "./luatools-parser.js";
 
 // Ошибки из invoke() приходят строкой, из fetch — Error: показываем оба вида.
 const errMsg = e => (e && typeof e === "object" && e.message) ? e.message : String(e ?? "Ошибка");
@@ -252,15 +252,29 @@ async function installPaths(paths, body) {
 
 // Картинки: у новых игр header.jpg лежит по другому пути CDN (store_item_assets/…/<hash>/),
 // старый адрес отдаёт 404. При ошибке берём header_image из appdetails, иначе — заглушка.
+// Найденный адрес запоминаем: иначе каждая отрисовка снова бьёт в 404 (WebView режет его как ERR_BLOCKED_BY_ORB).
+const HEADER_KEY = "lt_header_urls";
+let headerUrls = {};
+try { headerUrls = JSON.parse(localStorage.getItem(HEADER_KEY) || "{}") || {}; } catch { headerUrls = {}; }
 const imgCache = new Map(); // appId → Promise<string|null>
 function headerImageFor(appId) {
-  if (!imgCache.has(appId)) imgCache.set(appId, ltGameDetails(String(appId)).then(d => d?.header_image || null).catch(() => null));
+  if (!imgCache.has(appId)) imgCache.set(appId, ltGameDetails(String(appId)).then(d => {
+    const url = d?.header_image || null;
+    if (url) {
+      headerUrls[appId] = url;
+      try { localStorage.setItem(HEADER_KEY, JSON.stringify(headerUrls)); } catch { /* noop */ }
+    }
+    return url;
+  }).catch(() => null));
   return imgCache.get(appId);
 }
 function attachImageFallback(body) {
   body.addEventListener("error", async e => {
     const img = e.target;
-    if (img?.tagName !== "IMG" || !img.dataset?.ltImg) return;
+    if (img?.tagName !== "IMG") return;
+    // Иконки достижений: инлайн-onerror запрещён CSP, прячем здесь.
+    if (img.classList.contains("lt-ach-icon")) { img.style.visibility = "hidden"; return; }
+    if (!img.dataset?.ltImg) return;
     const stage = img.dataset.ltStage || "";
     if (!stage) {
       img.dataset.ltStage = "details";
@@ -477,7 +491,7 @@ async function renderBuilds(el) {
       </div>
       <div class="lt-builds-grid" id="lt-builds-grid">
         ${slice.map(i => `<div class="lt-build-tile" data-appid="${i.app_id}">
-          <img data-lt-img="${i.app_id}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/header.jpg" alt="" loading="lazy">
+          <img data-lt-img="${i.app_id}" src="${esc(steamHeader(i.app_id))}" alt="" loading="lazy">
           <div class="lt-build-info">
             <span class="lt-build-name">${esc(gameName(i.app_id))}</span>
             <span class="lt-build-meta">${i.app_id} · ${fmtDate(i.modified)}</span>
@@ -532,6 +546,8 @@ async function renderHome(el) {
         : '<span class="lt-error">Steam не найден</span>'}</div>
       ${ps?.mode ? `<div class="lt-hi-row">${HOME_ICONS.mode}<span>Режим · ${esc(ps.mode)}</span></div>` : ""}
       ${steamInfo?.running && !ps?.installed ? `<div class="lt-hi-row lt-hi-warn">${HOME_ICONS.warn}<span>Steam запущен — установка плагина его перезапустит</span></div>` : ""}
+      <button class="lt-hi-row lt-hi-warn lt-hi-link" id="lt-home-outdated" data-page="manage" hidden></button>
+      ${ltIsLoggedIn() ? "" : `<div class="lt-hi-row">${HOME_ICONS.user}<span class="lt-muted">Вход в lua.tools не выполнен — без него недоступен основной источник</span><button class="lt-btn lt-btn-sm lt-hi-action" id="lt-login-btn">Войти</button></div>`}
     </div>
     <div class="lt-drop-zone lt-hd" id="lt-drop-home">
       <span class="lt-hd-icon">${HOME_ICONS.drop}</span>
@@ -552,6 +568,15 @@ async function renderHome(el) {
   updateAuthUI();
   renderRecentCards();
   loadFeaturedStrip();
+  let games = 0, depots = 0;
+  forEachOutdated(installedList.map(i => i.app_id), (id, list) => {
+    if (!list.length) return;
+    games++; depots += list.length;
+    const row = el.querySelector("#lt-home-outdated");
+    if (!row) return;
+    row.innerHTML = `${HOME_ICONS.warn}<span>Устаревшие манифесты: ${games} ${games === 1 ? "игра" : games < 5 ? "игры" : "игр"} (${depots} депо закреплены на старой версии) — открыть «Управление»</span>`;
+    row.hidden = false;
+  });
 }
 
 function renderRecentCards() {
@@ -560,7 +585,7 @@ function renderRecentCards() {
   if (!installedList.length) { grid.innerHTML = '<div class="lt-empty">Пока ничего не установлено</div>'; return; }
   grid.innerHTML = installedList.slice(0, 8).map(i => `
     <button class="lt-card" data-appid="${i.app_id}">
-      <img data-lt-img="${i.app_id}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${i.app_id}/header.jpg" alt="" loading="lazy">
+      <img data-lt-img="${i.app_id}" src="${esc(steamHeader(i.app_id))}" alt="" loading="lazy">
       <div class="lt-card-info"><span class="lt-card-name">${esc(gameName(i.app_id))}</span><span class="lt-card-date">${i.app_id} · ${fmtDate(i.modified)}</span></div>
     </button>`).join("");
 }
@@ -569,7 +594,7 @@ async function loadFeaturedStrip() {
   const grid = $("#lt-featured-grid");
   if (!grid) return;
   try {
-    const { topSellers } = await ltFeatured();
+    const topSellers = dropHardware((await ltFeatured()).topSellers);
     if (!topSellers.length) { grid.innerHTML = '<div class="lt-empty">—</div>'; return; }
     grid.innerHTML = topSellers.slice(0, 8).map(i => `
       <button class="lt-card lt-card-featured" data-appid="${i.appId}">
@@ -605,10 +630,17 @@ const UI_ICONS = {
   chevR: '<svg viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></svg>',
 };
 
-const steamHeader = id => `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`;
+const steamHeader = id => headerUrls[id] || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/header.jpg`;
+
+// Steam lists its own hardware (Controller, Deck, Frame…) and software among games.
+const isHardware = i => hardwareAppIds.has(i.appId) || hardwareAppIds.has(String(i.appId))
+  || /^(Steam (Controller|Deck|Frame|Machine|Link|Index)|Valve Index)\b/i.test(i.name || "");
+const dropHardware = items => ltConfig.filter_hardware !== false ? items.filter(i => !isHardware(i)) : items;
 
 // «Результатов на странице» + номера страниц (1 2 … N), как в LuaTools.
-function pagerHtml(page, pages, perPage, sizes = [12, 24, 48]) {
+// total ≤ наименьшего размера страницы — всё и так на одной странице, пейджер не нужен.
+function pagerHtml(page, pages, perPage, sizes = [12, 24, 48], total = Infinity) {
+  if (total <= sizes[0]) return "";
   let nums = "";
   if (pages > 1) {
     const set = new Set([0, pages - 1, page - 1, page, page + 1].filter(p => p >= 0 && p < pages));
@@ -629,6 +661,59 @@ function pagerHtml(page, pages, perPage, sizes = [12, 24, 48]) {
 function bindPager(root, onPage, onSize) {
   root.querySelectorAll("[data-pg]").forEach(b => b.addEventListener("click", () => onPage(parseInt(b.dataset.pg, 10))));
   root.querySelector("[data-pg-size]")?.addEventListener("change", e => onSize(parseInt(e.target.value, 10)));
+}
+
+// Горизонтальная лента: стрелки по краям, пока есть куда листать.
+function bindStripArrows(strip) {
+  const wrap = strip.parentElement;
+  if (!wrap?.classList.contains("lt-strip-wrap")) return;
+  wrap.querySelectorAll(".lt-strip-nav").forEach(b => b.remove());
+  const mk = (dir, icon) => {
+    const b = document.createElement("button");
+    b.className = `lt-strip-nav lt-strip-nav-${dir < 0 ? "l" : "r"}`;
+    b.setAttribute("aria-label", dir < 0 ? "Назад" : "Вперёд");
+    b.innerHTML = icon;
+    b.addEventListener("click", () => strip.scrollBy({ left: dir * strip.clientWidth * 0.8, behavior: "smooth" }));
+    wrap.appendChild(b);
+    return b;
+  };
+  const l = mk(-1, UI_ICONS.chevL), r = mk(1, UI_ICONS.chevR);
+  const sync = () => {
+    l.hidden = strip.scrollLeft <= 2;
+    r.hidden = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 2;
+  };
+  strip.addEventListener("scroll", sync, { passive: true });
+  requestAnimationFrame(sync);
+}
+
+// ── Устаревшие манифесты ───────────────────────────────────────────
+// Считаем только закреплённые депо: незакреплённые плагин обновляет сам.
+const outdatedCache = new Map(); // appId → Promise<{ id, have, latest }[]>
+function outdatedDepots(appId) {
+  if (!outdatedCache.has(appId)) outdatedCache.set(appId, (async () => {
+    const [text, info] = await Promise.all([invoke("lt_read_lua", { appId }).catch(() => ""), ltDepotInfo(appId)]);
+    if (!text || !info) return [];
+    const lua = parseLua(text, appId);
+    return lua.entries.filter(e => e.manifestId && info.depots[e.id]?.gid && info.depots[e.id].gid !== e.manifestId)
+      .map(e => ({ id: e.id, have: e.manifestId, latest: info.depots[e.id].gid }));
+  })().catch(() => []));
+  return outdatedCache.get(appId);
+}
+// Ограничиваем параллельность: steamcmd.net не любит пачку запросов сразу.
+async function forEachOutdated(appIds, fn, limit = 4) {
+  const queue = [...appIds];
+  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length) { const id = queue.shift(); fn(id, await outdatedDepots(id)); }
+  }));
+}
+function markOutdatedCards(root) {
+  const cards = [...root.querySelectorAll(".lt-gc[data-appid]")];
+  forEachOutdated(cards.map(c => parseInt(c.dataset.appid, 10)), (id, list) => {
+    if (!list.length) return;
+    const card = root.querySelector(`.lt-gc[data-appid="${id}"]`);
+    if (!card || card.querySelector(".lt-gc-badge")) return;
+    card.insertAdjacentHTML("beforeend", `<span class="lt-gc-badge" title="Закреплённые депо отстают от Steam">Устарело: ${list.length}</span>`);
+  });
 }
 
 function gameCardHtml({ appId, name, img, sub, sub2 }) {
@@ -669,26 +754,31 @@ function renderAdd(el) {
     <label class="lt-search">${UI_ICONS.search}<input type="text" id="lt-search" placeholder="Введите App ID или найдите игры…" autocomplete="off"></label>
     <div id="lt-results" class="lt-add-results" hidden></div>
     <div id="lt-add-strips">
-      <h3 class="lt-strip-title">Бестселлеры</h3><div class="lt-strip" id="lt-strip-top"><div class="lt-loading">Загружаю…</div></div>
-      <h3 class="lt-strip-title">Новинки</h3><div class="lt-strip" id="lt-strip-new"></div>
+      <h3 class="lt-strip-title" id="lt-strip-top-title">Бестселлеры</h3><div class="lt-strip-wrap"><div class="lt-strip" id="lt-strip-top"><div class="lt-loading">Загружаю…</div></div></div>
+      <h3 class="lt-strip-title">Новинки</h3><div class="lt-strip-wrap"><div class="lt-strip" id="lt-strip-new"></div></div>
     </div>
     <h3 class="lt-strip-title">Уже есть файлы?</h3>
     ${dropZoneHtml()}
   </div>`;
   bindBrowse(el);
 
-  // Steam lists its own hardware (Controller, Deck, Frame…) among games.
-  const isHardware = i => hardwareAppIds.has(i.appId) || hardwareAppIds.has(String(i.appId))
-    || /^(Steam (Controller|Deck|Frame|Machine|Link|Index)|Valve Index)/i.test(i.name || "");
   const strip = (items, id) => {
     const box = el.querySelector(id);
     if (!box) return;
-    if (ltConfig.filter_hardware !== false) items = items.filter(i => !isHardware(i));
+    items = dropHardware(items);
     box.innerHTML = items.length
       ? items.map(i => gameCardHtml({ appId: i.appId, name: i.name, img: i.image })).join("")
       : '<div class="lt-empty">—</div>';
+    bindStripArrows(box);
   };
-  ltFeatured().then(({ topSellers, newReleases }) => { strip(topSellers, "#lt-strip-top"); strip(newReleases, "#lt-strip-new"); });
+  // «Бестселлеры» дублировали «Популярное» с главной: здесь — со скидкой, затем остальное.
+  ltFeatured().then(({ topSellers, newReleases }) => {
+    const deals = topSellers.filter(i => i.discount);
+    strip(deals.length >= 4 ? deals : topSellers, "#lt-strip-top");
+    const title = el.querySelector("#lt-strip-top-title");
+    if (title && deals.length >= 4) title.textContent = "Скидки";
+    strip(newReleases, "#lt-strip-new");
+  });
 
   const input = el.querySelector("#lt-search");
   const results = el.querySelector("#lt-results");
@@ -707,7 +797,7 @@ function renderAdd(el) {
         ? [await ltGameDetails(q)].filter(Boolean).map(d => ({ appId: parseInt(q, 10), name: d.name, icon: d.header_image }))
         : await ltSearchSteam(q);
       if (my !== seq) return;
-      if (ltConfig.filter_hardware !== false && hardwareAppIds.size) items = items.filter(i => !hardwareAppIds.has(i.appId));
+      items = dropHardware(items);
       results.innerHTML = items.length
         ? `<div class="lt-gc-grid">${items.map(i => gameCardHtml({ appId: i.appId, name: i.name, img: steamHeader(i.appId), sub: `App ID: ${i.appId}` })).join("")}</div>`
         : '<div class="lt-empty">Ничего не нашлось</div>';
@@ -759,13 +849,14 @@ async function renderManage(el) {
       })).join("")}</div>`
       : `<div class="lt-empty">${installedList.length ? "Ничего не нашлось" : "Нет установленных lua-файлов. Добавьте игру через «Добавить»."}</div>`;
     const pg = el.querySelector("#lt-manage-pager");
-    pg.innerHTML = pagerHtml(manageState.page, pages, manageState.perPage);
+    pg.innerHTML = pagerHtml(manageState.page, pages, manageState.perPage, undefined, list.length);
     bindPager(pg, p => { manageState.page = p; draw(); }, n => { manageState.perPage = n; manageState.page = 0; draw(); });
+    markOutdatedCards(el.querySelector("#lt-manage-grid"));
   };
   draw();
   el.querySelector("#lt-manage-search").addEventListener("input", e => { manageState.q = e.target.value.trim(); manageState.page = 0; draw(); });
   el.querySelector("#lt-manage-sort").addEventListener("change", e => { manageState.sort = e.target.value; draw(); });
-  el.querySelector("#lt-manage-refresh").addEventListener("click", e => withBusy(e.currentTarget, () => renderManage(el)));
+  el.querySelector("#lt-manage-refresh").addEventListener("click", e => withBusy(e.currentTarget, () => { outdatedCache.clear(); return renderManage(el); }));
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -807,6 +898,7 @@ async function renderTools(el) {
       drawList(); drawRight();
     }));
     const pg = el.querySelector("#lt-tl-pager");
+    if (list.length <= 10) { pg.innerHTML = ""; return; }
     pg.innerHTML = `<div class="lt-tl-pg">
         <button class="lt-pg-arrow" data-pg="${toolsState.page - 1}" ${toolsState.page === 0 ? "disabled" : ""}>${UI_ICONS.chevL}</button>
         <span>Страница ${toolsState.page + 1} из ${pages}</span>
@@ -899,7 +991,7 @@ async function renderTools(el) {
           q = (q || "").toLowerCase();
           const rows = list.filter(a => !q || a.name.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q));
           body.querySelector("#lt-ach-list").innerHTML = rows.length ? rows.map(a => `<div class="lt-ach ${a.got ? "is-got" : ""}">
-              <img src="${esc(iconUrl(a.icon))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+              <img class="lt-ach-icon" src="${esc(iconUrl(a.icon))}" alt="" loading="lazy">
               <div class="lt-ach-main">
                 <div class="lt-ach-name">${esc(a.name)}</div>
                 ${a.desc ? `<div class="lt-ach-desc">${esc(a.desc)}</div>` : ""}
@@ -1062,8 +1154,11 @@ async function renderTools(el) {
           <div class="lt-dp-main">
             <div class="lt-dp-title">${esc(e.comment || `Depot ${e.id}`)} <span class="lt-chip lt-chip-${typeOf(e) === "DLC" ? "dlc" : typeOf(e) === "ИГРА" ? "game" : "depot"}">${typeOf(e)}</span></div>
             <div class="lt-dp-sub">${e.id}${e.sizeOnDisk ? ` · ${fmtSize(e.sizeOnDisk)}` : ""}</div>
-            ${mf ? `<div class="lt-dp-mf">манифест ${esc(mf)}${e.latestGid && mf !== e.latestGid ? ` <span class="lt-warn">· в Steam новее: ${esc(e.latestGid)}</span>` : ""}</div>` : ""}
+            ${mf ? `<div class="lt-dp-mf">манифест ${esc(mf)}${e.latestGid && mf !== e.latestGid
+              ? (e.manifestId ? ` <span class="lt-warn">· в Steam новее: ${esc(e.latestGid)}</span>` : ` <span class="lt-muted">· в Steam новее — обновится автоматически</span>`)
+              : ""}</div>` : ""}
           </div>
+          ${e.manifestId && e.latestGid && e.manifestId !== e.latestGid && !e.disabled ? `<button class="lt-btn lt-btn-sm" data-dp-update="${e.id}" title="Закрепить на актуальном манифесте и скачать его">${UI_ICONS.refresh} Обновить</button>` : ""}
           ${mf && !e.disabled ? `<label class="lt-dp-lock"><input type="checkbox" data-dp-lock="${e.id}" ${e.manifestId ? "checked" : ""}> Закрепить</label>` : ""}
         </div>`;
       }).join("");
@@ -1076,6 +1171,18 @@ async function renderTools(el) {
           drawRight();
         } catch (err) { toast(errMsg(err), "error"); }
       }));
+      body.querySelectorAll("[data-dp-update]").forEach(b => b.addEventListener("click", () => withBusy(b, async () => {
+        const id = parseInt(b.dataset.dpUpdate, 10);
+        const entry = all.find(x => x.id === id);
+        try {
+          const t = await invoke("lt_read_lua", { appId });
+          await invoke("lt_write_lua", { appId, content: setDepotManifest(t, id, entry.latestGid) });
+          outdatedCache.delete(appId);
+          await ensureManifests(appId);
+          toast(`Депо ${id}: манифест обновлён`, "ok");
+          drawRight();
+        } catch (err) { toast(errMsg(err), "error"); }
+      })));
       body.querySelectorAll("[data-dp-lock]").forEach(c => c.addEventListener("change", async () => {
         const id = parseInt(c.dataset.dpLock, 10);
         try {
@@ -1100,7 +1207,7 @@ async function renderTools(el) {
 
 const MODES = [
   { key: "bst", mode: "BetterSteamTools", title: "BetterSteamTools", badges: ["rec", "cloud"],
-    desc: "Форк OpenSteamTools с открытым исходным кодом, который активно поддерживается: исправления и новые функции!" },
+    desc: "Форк OpenSteamTool с открытым исходным кодом, который активно поддерживается: исправления и новые функции!" },
   { key: "ost", mode: "stplug-in", title: "OpenSteamTool (Nightly)", badges: ["exp"],
     desc: "Nightly-сборки upstream OpenSteamTool. Свежие изменения раньше всех, но может быть нестабильным." },
   { key: "ltsp", mode: "LTSP", title: "LTSP", badges: [],
@@ -1250,7 +1357,7 @@ async function renderFixes(el, force = false) {
       : '<div class="lt-empty">Нет фиксов</div>';
     box.querySelectorAll("[data-fixappid]").forEach(b => b.addEventListener("click", () => openFixDetail(parseInt(b.dataset.fixappid, 10))));
     const pg = el.querySelector("#lt-fix-pager");
-    pg.innerHTML = pagerHtml(fixState.page, pages, fixState.perPage);
+    pg.innerHTML = pagerHtml(fixState.page, pages, fixState.perPage, undefined, list.length);
     bindPager(pg, p => { fixState.page = p; draw(); el.closest(".lt-main")?.scrollTo?.(0, 0); }, n => { fixState.perPage = n; fixState.page = 0; draw(); });
   };
   drawTags();
@@ -1278,8 +1385,10 @@ async function renderPlugin(el) {
       ${row(loaderOk, "Загрузчик", loaderOk ? `<code>${esc(ps.dll_path)}</code>` : "Не установлено")}
       ${row(!!steamInfo?.path, "Steam", steamInfo?.path ? esc(steamInfo.path) : "Не найден")}
       <div class="lt-st-actions">
-        <button class="lt-btn lt-hs-btn" data-page="mode">${ps?.installed ? "Переустановить" : "Установить"}</button>
-        <button class="lt-btn lt-btn-ghost" data-page="mode">Проверить обновления</button>
+        ${ps?.installed
+          ? `<button class="lt-btn lt-hs-btn" data-page="mode">Проверить обновления</button>
+             <button class="lt-btn lt-btn-ghost" data-page="mode" title="Переустановка перезапускает Steam">Переустановить</button>`
+          : '<button class="lt-btn lt-hs-btn" data-page="mode">Установить</button>'}
       </div>
     </div>
     <div class="lt-feat-title">Ключевые возможности</div>
@@ -1553,7 +1662,7 @@ async function openFixDetail(appId) {
     el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад к фиксам</button>
       <div class="lt-detail" style="margin-top:12px">
         <div class="lt-detail-header">
-          <img data-lt-img="${appId}" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg" class="lt-detail-img" alt="">
+          <img data-lt-img="${appId}" src="${esc(steamHeader(appId))}" class="lt-detail-img" alt="">
           <div class="lt-detail-meta">
             <h3>${esc(name)}</h3><span class="lt-card-id">AppID: ${appId}</span>
             <div style="margin-top:8px">${gameInfo.installed ? `<span class="lt-ok">Установлена: ${esc(gameInfo.path)}</span>` : '<span class="lt-warn">Игра не установлена на диск</span>'}</div>
@@ -1710,9 +1819,11 @@ async function renderSettings(el) {
     <div class="lt-section"><h3>opensteamtool.toml</h3>
     <p class="lt-muted">Конфигурация OpenSteamTool / BetterSteamTools. Секции: [manifest], [stats], [inject], [lua], [donate], [remote], [log].</p>
     <textarea id="lt-ost-editor" class="lt-input" style="width:100%;min-height:200px;font-family:monospace;font-size:.8rem;resize:vertical" placeholder="Загружаю…"></textarea>
+    <div class="lt-ost-status" id="lt-ost-status"></div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="lt-btn lt-btn-sm" id="lt-ost-reload">Перечитать</button>
       <button class="lt-btn lt-btn-sm lt-btn-primary" id="lt-ost-save">Сохранить</button>
+      <button class="lt-btn lt-btn-sm" id="lt-ost-undo" hidden>Откатить к прошлой версии</button>
     </div>
     </div>`;
   updateAuthUI();
@@ -1767,14 +1878,80 @@ async function renderSettings(el) {
   });
 
   const ostEditor = el.querySelector("#lt-ost-editor");
+  const ostStatus = el.querySelector("#lt-ost-status");
+  const ostUndo = el.querySelector("#lt-ost-undo");
+  const BACKUP_KEY = "lt_ost_backup";
+  const backup = () => { try { return localStorage.getItem(BACKUP_KEY); } catch { return null; } };
+  ostUndo.hidden = backup() == null;
+  const check = () => {
+    const errs = tomlProblems(ostEditor.value);
+    ostStatus.className = `lt-ost-status ${errs.length ? "is-bad" : "is-ok"}`;
+    ostStatus.textContent = errs.length ? errs.slice(0, 3).join(" · ") : (ostEditor.value.trim() ? "Синтаксис в порядке" : "");
+    return errs;
+  };
   const loadOstConfig = async () => {
     try { ostEditor.value = await invoke("lt_ost_config_read"); } catch (e) { ostEditor.value = ""; ostEditor.placeholder = String(e); }
+    check();
   };
   loadOstConfig();
+  ostEditor.addEventListener("input", check);
   el.querySelector("#lt-ost-reload")?.addEventListener("click", async () => { await loadOstConfig(); toast("Перечитано", "ok"); });
-  el.querySelector("#lt-ost-save")?.addEventListener("click", async () => {
-    try { await invoke("lt_ost_config_write", { content: ostEditor.value }); toast("opensteamtool.toml сохранён", "ok"); } catch (e) { toast(String(e), "error"); }
+  el.querySelector("#lt-ost-save")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    if (check().length) { toast("В конфиге ошибки — плагин не сможет его прочитать. Исправьте перед сохранением.", "error"); return; }
+    try {
+      const prev = await invoke("lt_ost_config_read").catch(() => null);
+      await invoke("lt_ost_config_write", { content: ostEditor.value });
+      if (prev != null && prev !== ostEditor.value) { try { localStorage.setItem(BACKUP_KEY, prev); } catch { /* noop */ } ostUndo.hidden = false; }
+      toast("opensteamtool.toml сохранён", "ok");
+    } catch (err) { toast(errMsg(err), "error"); }
+  }));
+  ostUndo.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    const prev = backup();
+    if (prev == null || !await confirmAction("Вернуть opensteamtool.toml к версии до последнего сохранения?")) return;
+    try { await invoke("lt_ost_config_write", { content: prev }); ostEditor.value = prev; check(); toast("Конфиг откатан", "ok"); }
+    catch (err) { toast(errMsg(err), "error"); }
+  }));
+}
+
+// Лёгкая проверка TOML без библиотеки: ловит то, на чём плагин падает чаще всего —
+// битые секции, строки без «=», незакрытые кавычки/скобки, повтор ключа или секции.
+function tomlProblems(src) {
+  const errs = [];
+  const seenSections = new Set();
+  let keys = new Set(), section = "", multi = null, depth = 0;
+  src.split(/\r?\n/).forEach((raw, i) => {
+    const n = i + 1;
+    if (multi) { if (raw.includes(multi)) multi = null; return; }
+    if (depth > 0) { depth += (raw.match(/\[/g) || []).length - (raw.match(/\]/g) || []).length; return; }
+    const line = raw.replace(/^\s+|\s+$/g, "");
+    if (!line || line.startsWith("#")) return;
+    const sec = line.match(/^\[\[?\s*([A-Za-z0-9_.\-"' ]+?)\s*\]\]?\s*(#.*)?$/);
+    if (sec) {
+      const arr = line.startsWith("[[");
+      if (!arr && seenSections.has(sec[1])) errs.push(`строка ${n}: секция [${sec[1]}] повторяется`);
+      seenSections.add(sec[1]); section = sec[1]; keys = new Set();
+      return;
+    }
+    if (line.startsWith("[")) { errs.push(`строка ${n}: неверный заголовок секции`); return; }
+    const kv = line.match(/^([A-Za-z0-9_\-."']+)\s*=\s*(.*)$/);
+    if (!kv) { errs.push(`строка ${n}: ожидается «ключ = значение»`); return; }
+    const full = `${section}.${kv[1]}`;
+    if (keys.has(full)) errs.push(`строка ${n}: ключ ${kv[1]} повторяется`);
+    keys.add(full);
+    const v = kv[2].replace(/\s+#[^"']*$/, "");
+    if (!v) { errs.push(`строка ${n}: пустое значение`); return; }
+    for (const q of ['"""', "'''"]) if (v.startsWith(q) && v.indexOf(q, 3) < 0) { multi = q; return; }
+    const stripped = v.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, "");
+    if (/["']/.test(stripped)) { errs.push(`строка ${n}: незакрытая кавычка`); return; }
+    const bal = (stripped.match(/[[{]/g) || []).length - (stripped.match(/[\]}]/g) || []).length;
+    if (bal > 0 && stripped.trim().startsWith("[")) depth = bal;
+    else if (bal !== 0) errs.push(`строка ${n}: несбалансированные скобки`);
+    else if (!/^(".*"|'.*'|\[.*\]|\{.*\}|true|false|[+-]?(\d[\d_]*(\.\d+)?([eE][+-]?\d+)?|0x[0-9a-fA-F]+|inf|nan)|\d{4}-\d\d-\d\d.*)$/.test(stripped.trim() ? v.trim() : v))
+      errs.push(`строка ${n}: непонятное значение «${v.trim().slice(0, 24)}»`);
   });
+  if (multi) errs.push("незакрытая многострочная строка");
+  if (depth > 0) errs.push("незакрытый массив");
+  return errs;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1797,7 +1974,7 @@ async function openDetail(appId) {
     try { luaText = await invoke("lt_read_lua", { appId }); luaInfo = parseLua(luaText, appId); } catch {}
 
     const name = details?.name || `App ${appId}`;
-    const img = details?.header_image || `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`;
+    const img = details?.header_image || steamHeader(appId);
     const sourceList = Object.entries(sources).filter(([, v]) => v === "available").map(([k]) => k);
 
     // Variants

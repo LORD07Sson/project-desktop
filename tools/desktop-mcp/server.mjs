@@ -52,13 +52,40 @@ async function connect(targetIndex = 0) {
       });
     } else if (msg.method === "Runtime.exceptionThrown") {
       consoleLog.push(`[exception] ${msg.params.exceptionDetails?.exception?.description || msg.params.exceptionDetails?.text}`);
+    } else if (msg.method === "Log.entryAdded") {
+      const e = msg.params.entry;
+      consoleLog.push(`[${e.level}] ${e.text}${e.url ? " " + e.url : ""}`);
+      if (consoleLog.length > CONSOLE_MAX) consoleLog.shift();
+    } else if (msg.method?.startsWith("Network.")) {
+      onNetwork(msg.method, msg.params);
     }
   };
   ws.onclose = () => { ws = null; };
   await cdp("Runtime.enable");
   await cdp("Page.enable");
+  await cdp("Log.enable").catch(() => {});
+  await cdp("Network.enable", { maxPostDataSize: 2000 }).catch(() => {});
   // Новое подключение — новый CDP-сеанс: перехват прошлого сеанса браузер уже снял.
   if (sandbox.on) await applySandbox();
+}
+
+// ---------- журнал сети ----------
+// Копится с момента подключения: метод, путь, статус, время, размер, ошибка. Тело ответа — по запросу.
+const netLog = new Map();
+const NET_MAX = 400;
+function onNetwork(method, p) {
+  if (method === "Network.requestWillBeSent") {
+    if (/^(data|blob|devtools):/.test(p.request.url)) return;
+    netLog.set(p.requestId, { id: p.requestId, t0: p.timestamp, at: new Date().toISOString().slice(11, 19),
+      method: p.request.method, url: p.request.url, type: p.type, post: p.request.postData?.slice(0, 500) });
+    if (netLog.size > NET_MAX) netLog.delete(netLog.keys().next().value);
+    return;
+  }
+  const r = netLog.get(p.requestId);
+  if (!r) return;
+  if (method === "Network.responseReceived") { r.status = p.response.status; r.mime = p.response.mimeType; }
+  else if (method === "Network.loadingFinished") { r.ms = Math.round((p.timestamp - r.t0) * 1000); r.bytes = p.encodedDataLength; }
+  else if (method === "Network.loadingFailed") { r.ms = Math.round((p.timestamp - r.t0) * 1000); r.error = p.canceled ? "canceled" : p.errorText; }
 }
 
 function cdp(method, params = {}) {
@@ -78,22 +105,62 @@ async function evaluate(expression) {
 }
 
 // ---------- действия ----------
-const SNAPSHOT_JS = `(() => {
+const SNAPSHOT_FN = `function (root, maxText) {
   const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
     return r.width > 2 && r.height > 2 && s.visibility !== "hidden" && s.display !== "none" && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; };
   document.querySelectorAll("[data-mcp-ref]").forEach(e => e.removeAttribute("data-mcp-ref"));
   const sel = 'button, a[href], input, select, textarea, [role=button], [role=tab], [role=switch], [role=checkbox], [data-open], [data-tab], [onclick], summary, label';
+  const scope = root ? document.querySelector(root) : document;
+  if (!scope) throw new Error("root не найден: " + root);
   const items = []; let n = 0;
-  for (const el of document.querySelectorAll(sel)) {
+  for (const el of scope.querySelectorAll(sel)) {
     if (!vis(el)) continue;
     const r = el.getBoundingClientRect();
     const text = (el.innerText || el.value || el.placeholder || el.getAttribute("aria-label") || el.title || "").trim().replace(/\\s+/g, " ").slice(0, 80);
     el.setAttribute("data-mcp-ref", ++n);
     items.push({ ref: n, tag: el.tagName.toLowerCase(), type: el.type || undefined, text, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), disabled: el.disabled || undefined, checked: el.checked ?? undefined });
   }
-  const body = (document.querySelector("main, #app, body").innerText || "").replace(/\\n{3,}/g, "\\n\\n").slice(0, 6000);
+  const textEl = root ? scope : document.querySelector("main, #app, body");
+  const body = maxText === 0 ? undefined : (textEl.innerText || "").replace(/\\n{3,}/g, "\\n\\n").slice(0, maxText ?? 6000);
   return { title: document.title, url: location.href, viewport: [innerWidth, innerHeight], scrollY: Math.round(scrollY), elements: items, text: body };
-})()`;
+}`;
+
+// Ждать, пока в странице появится/исчезнет селектор или текст (вместо слепых пауз).
+const WAIT_FN = `async function (selector, text, gone, timeout) {
+  const seen = () => {
+    if (selector) { const el = document.querySelector(selector); return !!(el && el.getClientRects().length); }
+    return (document.body.innerText || "").includes(text);
+  };
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) {
+    if (seen() !== !!gone) return Date.now() - t0;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return -1;
+}`;
+
+// Коробка и вычисленные стили элемента — чтобы мерить отступы/цвета, не гадая по CSS.
+const INSPECT_FN = `function (selector, props, all) {
+  const els = all ? [...document.querySelectorAll(selector)].slice(0, 20) : [document.querySelector(selector)].filter(Boolean);
+  if (!els.length) throw new Error("Не найдено: " + selector);
+  const def = ["display","position","width","height","margin","padding","gap","color","background-color","font-size","font-weight","line-height","border-radius","opacity","z-index","overflow","transform"];
+  return els.map(el => {
+    const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+    const styles = {}; for (const p of (props && props.length ? props : def)) styles[p] = s.getPropertyValue(p);
+    return { tag: el.tagName.toLowerCase(), id: el.id || undefined, cls: el.className?.baseVal ?? (el.className || undefined),
+      box: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+      text: (el.innerText || "").trim().slice(0, 120) || undefined, styles,
+      overflowing: el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1 || undefined };
+  });
+}`;
+
+const RECT_FN = `function (selector, pad) {
+  const el = document.querySelector(selector);
+  if (!el || !el.getClientRects().length) return null;
+  el.scrollIntoView({ block: "nearest" });
+  const r = el.getBoundingClientRect();
+  return { x: Math.max(0, r.x - pad), y: Math.max(0, r.y - pad), width: r.width + pad * 2, height: r.height + pad * 2, scale: 1 };
+}`;
 
 // Значения ref/selector/text передаются в страницу КАК ДАННЫЕ (аргументы callFunctionOn), а не вставляются в текст кода.
 async function callInPage(fnSource, ...args) {
@@ -299,18 +366,93 @@ const TOOLS = {
     run: async () => JSON.stringify((await listTargets()).map((t, i) => ({ index: i, title: t.title, url: t.url })), null, 1),
   },
   desktop_screenshot: {
-    description: "Скриншот окна программы (PNG). Это реальная картинка, а не догадка по коду.",
-    schema: { type: "object", properties: { window: { type: "number", description: "Номер окна из desktop_status, по умолчанию 0" } } },
+    description: "Скриншот окна программы. Это реальная картинка, а не догадка по коду. selector — снять только этот элемент " +
+      "(pad — поля вокруг, px); scale 0.1–1 — уменьшить картинку (экономит токены); jpeg: true — JPEG вместо PNG.",
+    schema: { type: "object", properties: { window: { type: "number", description: "Номер окна из desktop_status, по умолчанию 0" },
+      selector: { type: "string" }, pad: { type: "number" }, scale: { type: "number" }, jpeg: { type: "boolean" } } },
     run: async args => {
       await connect(args.window || 0);
-      const r = await cdp("Page.captureScreenshot", { format: "png" });
-      return { image: r.data };
+      const p = { format: args.jpeg ? "jpeg" : "png" };
+      if (args.jpeg) p.quality = 80;
+      if (args.selector) {
+        const clip = await callInPage(RECT_FN, args.selector, args.pad ?? 8);
+        if (!clip) throw new Error("Элемент не найден или скрыт: " + args.selector);
+        p.clip = clip;
+      }
+      const s = Math.min(1, Math.max(0.1, args.scale || 1));
+      if (s < 1) {
+        if (!p.clip) { const [w, h] = await evaluate("[innerWidth, innerHeight]"); p.clip = { x: 0, y: 0, width: w, height: h, scale: 1 }; }
+        p.clip.scale = s;
+      }
+      const r = await cdp("Page.captureScreenshot", p);
+      return { image: r.data, mime: args.jpeg ? "image/jpeg" : "image/png" };
     },
   },
   desktop_snapshot: {
-    description: "Видимые интерактивные элементы с номерами ref, их координаты и текст страницы. По ref работают desktop_click и desktop_type.",
-    schema: { type: "object", properties: { window: { type: "number" } } },
-    run: async args => { await connect(args.window || 0); return JSON.stringify(await evaluate(SNAPSHOT_JS)); },
+    description: "Видимые интерактивные элементы с номерами ref, их координаты и текст страницы. По ref работают desktop_click и desktop_type. " +
+      "root — CSS-селектор области (только её элементы и текст); max_text — лимит текста (0 — без текста, по умолчанию 6000).",
+    schema: { type: "object", properties: { window: { type: "number" }, root: { type: "string" }, max_text: { type: "number" } } },
+    run: async args => { await connect(args.window || 0); return JSON.stringify(await callInPage(SNAPSHOT_FN, args.root ?? null, args.max_text ?? null)); },
+  },
+  desktop_wait: {
+    description: "Ждать, пока появится элемент (selector) или текст (text) на странице; gone: true — ждать, пока исчезнет. " +
+      "timeout в мс (по умолчанию 8000). Используй вместо пауз после кликов и загрузок.",
+    schema: { type: "object", properties: { selector: { type: "string" }, text: { type: "string" }, gone: { type: "boolean" }, timeout: { type: "number" } } },
+    run: async args => {
+      await connect(args.window || 0);
+      if (!args.selector && !args.text) throw new Error("Нужен selector или text");
+      const ms = await callInPage(WAIT_FN, args.selector ?? null, args.text ?? "", !!args.gone, args.timeout || 8000);
+      if (ms < 0) throw new Error(`Не дождался за ${args.timeout || 8000} мс`);
+      return `Готово за ${ms} мс`;
+    },
+  },
+  desktop_hover: {
+    description: "Навести мышь на элемент (ref/selector/text) — показать тултипы, hover-стили, выпадающие меню.",
+    schema: { type: "object", properties: { ref: { type: "number" }, selector: { type: "string" }, text: { type: "string" } } },
+    run: async args => {
+      await connect(args.window || 0);
+      const pos = await centerOf(args);
+      await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x: pos.x, y: pos.y });
+      return `Курсор (${Math.round(pos.x)}, ${Math.round(pos.y)})`;
+    },
+  },
+  desktop_inspect: {
+    description: "Коробка (x,y,w,h), вычисленные стили и переполнение элемента по CSS-селектору. props — свои CSS-свойства " +
+      "вместо стандартного набора; all: true — все совпадения (до 20). Для замеров отступов/цветов/обрезки текста.",
+    schema: { type: "object", properties: { selector: { type: "string" }, props: { type: "array", items: { type: "string" } }, all: { type: "boolean" } }, required: ["selector"] },
+    run: async args => { await connect(args.window || 0); return JSON.stringify(await callInPage(INSPECT_FN, args.selector, args.props ?? null, !!args.all), null, 1); },
+  },
+  desktop_network: {
+    description: "Журнал сетевых запросов с момента подключения: время, метод, URL, статус, длительность, размер, ошибка. " +
+      "filter — подстрока/регулярка по URL; errors: true — только ошибки и статусы ≥400; limit (по умолчанию 40); " +
+      "body: id запроса — вернуть тело ответа (до 20 КБ); clear: true — очистить журнал.",
+    schema: { type: "object", properties: { filter: { type: "string" }, errors: { type: "boolean" }, limit: { type: "number" },
+      body: { type: "string" }, clear: { type: "boolean" } } },
+    run: async args => {
+      await connect(args.window || 0);
+      if (args.body) {
+        const r = await cdp("Network.getResponseBody", { requestId: args.body });
+        const text = r.base64Encoded ? `(бинарные данные, ${Math.round(r.body.length * 0.75)} байт)` : r.body;
+        return text.length > 20000 ? text.slice(0, 20000) + "\n…(обрезано)" : text;
+      }
+      let re = null;
+      if (args.filter) { try { re = new RegExp(args.filter, "i"); } catch (_) { re = null; } }
+      let rows = [...netLog.values()].filter(r => !args.filter || (re ? re.test(r.url) : r.url.includes(args.filter)));
+      if (args.errors) rows = rows.filter(r => r.error || r.status >= 400);
+      rows = rows.slice(-(args.limit || 40)).map(({ t0, ...r }) => r);
+      if (args.clear) netLog.clear();
+      return rows.length ? JSON.stringify(rows, null, 1) : "(пусто)";
+    },
+  },
+  desktop_reload: {
+    description: "Перезагрузить страницу программы (hard: true — без кэша) и дождаться загрузки.",
+    schema: { type: "object", properties: { hard: { type: "boolean" } } },
+    run: async args => {
+      await connect(args.window || 0);
+      await cdp("Page.reload", { ignoreCache: !!args.hard });
+      await new Promise(r => setTimeout(r, 1500));
+      return "Перезагружено";
+    },
   },
   desktop_click: {
     description: "Клик мышью по элементу: ref из desktop_snapshot, CSS-селектор или точный текст. double: true — двойной клик; right: true — правый.",
@@ -354,10 +496,21 @@ const TOOLS = {
     run: async args => { await connect(args.window || 0); return JSON.stringify(await evaluate(args.expression)); },
   },
   desktop_console: {
-    description: "Последние сообщения консоли и необработанные ошибки программы (копятся с момента первого подключения).",
-    schema: { type: "object", properties: { clear: { type: "boolean" } } },
-    run: async args => { await connect(args.window || 0); const out = consoleLog.join("\n") || "(пусто)"; if (args.clear) consoleLog.length = 0; return out; },
-  },  desktop_sandbox: {
+    description: "Последние сообщения консоли, предупреждения браузера (CSP, сеть) и необработанные ошибки программы (копятся с момента первого подключения). " +
+      "errors: true — только error/exception/warning; filter — подстрока; limit — последние N.",
+    schema: { type: "object", properties: { clear: { type: "boolean" }, errors: { type: "boolean" }, filter: { type: "string" }, limit: { type: "number" } } },
+    run: async args => {
+      await connect(args.window || 0);
+      let rows = consoleLog;
+      if (args.errors) rows = rows.filter(l => /^\[(error|exception|warning|warn|assert)\]/.test(l));
+      if (args.filter) rows = rows.filter(l => l.toLowerCase().includes(args.filter.toLowerCase()));
+      if (args.limit) rows = rows.slice(-args.limit);
+      const out = rows.join("\n") || "(пусто)";
+      if (args.clear) consoleLog.length = 0;
+      return out;
+    },
+  },
+  desktop_sandbox: {
     description: "Песочница: подмена данных без похода на сервер. on: true — все изменяющие запросы (POST/PUT/PATCH/DELETE) " +
       "перестают уходить на сервер и получают {ok:true}, внизу окна плашка «Песочница ИИ». role: as-is | owner | admin | member — " +
       "смотреть программу глазами роли. reload (по умолчанию true при смене on/role) перезагружает страницу. " +
@@ -457,7 +610,7 @@ async function handle(msg) {
     if (!tool) return send({ jsonrpc: "2.0", id, error: { code: -32602, message: `Нет инструмента ${params?.name}` } });
     try {
       const out = await tool.run(params.arguments || {});
-      const content = out && out.image ? [{ type: "image", data: out.image, mimeType: "image/png" }] : [{ type: "text", text: String(out) }];
+      const content = out && out.image ? [{ type: "image", data: out.image, mimeType: out.mime || "image/png" }] : [{ type: "text", text: String(out) }];
       return send({ jsonrpc: "2.0", id, result: { content } });
     } catch (e) {
       return send({ jsonrpc: "2.0", id, result: { isError: true, content: [{ type: "text", text: e.message }] } });

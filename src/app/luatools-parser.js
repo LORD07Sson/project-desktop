@@ -152,6 +152,20 @@ export function setDepotEnabled(lua, depotId, enabled) {
   return rewriteLines(lua, re, enabled);
 }
 
+// Заменить GID в активной строке setManifestid(depot, "gid"[, size]) — размер старой версии убираем, он уже неверен.
+export function setDepotManifest(lua, depotId, gid) {
+  if (!/^\d+$/.test(String(gid))) throw new Error("Некорректный ID манифеста");
+  const re = new RegExp(`^(\\s*)(setManifestid\\s*\\(\\s*${depotId}\\s*,\\s*)(["'])\\d+\\3(\\s*,\\s*\\d+)?`, "i");
+  let hit = false;
+  const out = lua.split("\n").map(line => {
+    if (hit || !re.test(line)) return line;
+    hit = true;
+    return line.replace(re, (_, ind, head, q) => `${ind}${head}${q}${gid}${q}`);
+  }).join("\n");
+  if (!hit) throw new Error(`Строка setManifestid для депо ${depotId} не найдена`);
+  return out;
+}
+
 function rewriteLines(lua, re, active) {
   return lua.split("\n").map(line => {
     const m = re.exec(line);

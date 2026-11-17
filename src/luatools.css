@@ -862,3 +862,45 @@
 .lt-cat-item[open] > summary .lt-cat-chev { transform: rotate(90deg); }
 .lt-cat-item > summary:hover { background: rgba(255, 255, 255, .04); border-radius: inherit; }
 .lt-cat-body { padding: 4px 16px 16px; }
+
+/* ── Доработки LuaProject ─────────────────────────────────────── */
+/* Фокус с клавиатуры внутри пункта: внешний outline обрезался overflow и выглядел как полосы сверху/снизу. */
+.lt-nav:focus-visible { outline: none; box-shadow: inset 3px 0 0 var(--accent, #c4b5f7); background: rgba(255,255,255,.06); }
+.lt-nav.active { box-shadow: inset 3px 0 0 #c4b5f7; }
+
+.lt-hi-row[hidden], .lt-strip-nav[hidden] { display: none; }
+.lt-hi-link { width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-top: 1px solid rgba(255, 255, 255, .08); }
+.lt-hi-link:hover span { text-decoration: underline; }
+
+.lt-head > .lt-btn, .lt-head-actions .lt-btn { white-space: nowrap; flex: none; }
+
+.lt-gc { position: relative; }
+.lt-gc-badge {
+  position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 99px;
+  font-size: .68rem; font-weight: 700; color: #1a1200; background: #f5c26b; box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+
+.lt-strip-wrap { position: relative; }
+.lt-strip-nav {
+  position: absolute; top: calc(50% - 22px); width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; z-index: 2; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(20, 16, 34, .88); color: inherit;
+  box-shadow: 0 4px 14px rgba(0,0,0,.45);
+}
+.lt-strip-nav:hover { background: rgba(40, 32, 64, .95); }
+.lt-strip-nav svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+.lt-strip-nav-l { left: -14px; }
+.lt-strip-nav-r { right: -14px; }
+
+.lt-dp [data-dp-update] { flex: none; white-space: nowrap; }
+.lt-dp [data-dp-update] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+/* Главная на широком окне: не прижимаем к левым 900px. */
+@media (min-width: 1500px) {
+  .lt-page-content[data-page="home"] { max-width: 1240px; }
+}
+
+.lt-ost-status { margin-top: 6px; font-size: .78rem; }
+.lt-ost-status.is-bad { color: #f87171; }
+.lt-ost-status.is-ok { color: #6ee7a8; }
+.lt-btn[hidden] { display: none; }
