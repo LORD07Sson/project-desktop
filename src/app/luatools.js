@@ -1868,10 +1868,10 @@ async function renderSettings(el) {
   el.innerHTML = `<h2 class="lt-page-title">Настройки</h2>
     <div class="lt-section"><h3>Steam</h3>
     <div class="lt-settings-list">
-      <div class="lt-info-row"><strong>Путь:</strong> ${steamInfo?.path ? esc(steamInfo.path) : '<span class="lt-error">Не найден</span>'}</div>
+      <div class="lt-info-row"><strong>Путь:</strong> ${steamInfo?.path ? `<code>${esc(steamInfo.path)}</code>` : '<span class="lt-error">Не найден</span>'}</div>
       <div class="lt-info-row"><strong>stplug-in:</strong> ${steamInfo?.stplugin_dir ? `<code>${esc(steamInfo.stplugin_dir)}</code>` : '—'}</div>
       <div class="lt-info-row"><strong>depotcache:</strong> ${steamInfo?.depotcache_dir ? `<code>${esc(steamInfo.depotcache_dir)}</code>` : '—'}</div>
-      <div class="lt-info-row"><strong>Steam запущен:</strong> ${steamInfo?.running ? '<span class="lt-warn">Да</span>' : '<span class="lt-ok">Нет</span>'}</div>
+      <div class="lt-info-row"><strong>Steam запущен:</strong> ${steamInfo?.running ? '<span class="lt-ok">Да</span>' : '<span class="lt-muted">Нет</span>'}</div>
     </div></div>
 
     <div class="lt-section"><h3>Аккаунт lua.tools</h3>
@@ -1896,7 +1896,7 @@ async function renderSettings(el) {
     <div class="lt-section"><h3>Магазин Steam</h3>
     <div class="lt-settings-list">
       <label class="lt-info-row"><input type="checkbox" id="lt-cfg-store" ${cfg.store_button ? 'checked' : ''}> Кнопка «Добавить в LuaProject» на страницах игр в магазине Steam</label>
-      <div class="lt-muted" id="lt-store-state" style="font-size:.75rem">Steam перезапустится с отладкой CEF (порт 8080, только localhost).</div>
+      <div class="lt-muted lt-note lt-note-indent" id="lt-store-state">Steam перезапустится с отладкой CEF (порт 8080, только localhost).</div>
     </div></div>
 
     <div class="lt-section"><h3>Сеть</h3>
