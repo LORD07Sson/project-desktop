@@ -125,7 +125,6 @@ const SNAPSHOT_FN = `function (root, maxText) {
   return { title: document.title, url: location.href, viewport: [innerWidth, innerHeight], scrollY: Math.round(scrollY), elements: items, text: body };
 }`;
 
-// Ждать, пока в странице появится/исчезнет селектор или текст (вместо слепых пауз).
 const WAIT_FN = `async function (selector, text, gone, timeout) {
   const seen = () => {
     if (selector) { const el = document.querySelector(selector); return !!(el && el.getClientRects().length); }
@@ -139,7 +138,6 @@ const WAIT_FN = `async function (selector, text, gone, timeout) {
   return -1;
 }`;
 
-// Коробка и вычисленные стили элемента — чтобы мерить отступы/цвета, не гадая по CSS.
 const INSPECT_FN = `function (selector, props, all) {
   const els = all ? [...document.querySelectorAll(selector)].slice(0, 20) : [document.querySelector(selector)].filter(Boolean);
   if (!els.length) throw new Error("Не найдено: " + selector);

@@ -863,8 +863,7 @@
 .lt-cat-item > summary:hover { background: rgba(255, 255, 255, .04); border-radius: inherit; }
 .lt-cat-body { padding: 4px 16px 16px; }
 
-/* ── Доработки LuaProject ─────────────────────────────────────── */
-/* Фокус с клавиатуры внутри пункта: внешний outline обрезался overflow и выглядел как полосы сверху/снизу. */
+/* Внешний outline обрезается overflow сайдбара. */
 .lt-nav:focus-visible { outline: none; box-shadow: inset 3px 0 0 var(--accent, #c4b5f7); background: rgba(255,255,255,.06); }
 .lt-nav.active { box-shadow: inset 3px 0 0 #c4b5f7; }
 
@@ -895,7 +894,6 @@
 .lt-dp [data-dp-update] { flex: none; white-space: nowrap; }
 .lt-dp [data-dp-update] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
 
-/* Главная на широком окне: не прижимаем к левым 900px. */
 @media (min-width: 1500px) {
   .lt-page-content[data-page="home"] { max-width: 1240px; }
 }
@@ -904,14 +902,10 @@
 .lt-ost-status.is-bad { color: #f87171; }
 .lt-ost-status.is-ok { color: #6ee7a8; }
 .lt-btn[hidden] { display: none; }
-/* Блок названия тянем на всю ширину карточки, иначе ellipsis не срабатывает и длинное имя вылезает. */
 .lt-card-featured .lt-card-info { align-self: stretch; text-align: center; }
-/* После фильтра железа карточек меньше колонок — растягиваем, а не оставляем дыру справа. */
 .lt-grid-featured { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-/* Панель вкладки даёт вертикальные отступы, а оболочка LuaTools — 100% высоты: панель прокручивалась на 50px
-   и заголовок страницы уезжал под верхнюю панель. Прокручивается только .lt-main. */
+/* Иначе панель прокручивается на свои отступы (50px) под заголовок. */
 #luatools-panel { padding-top: 0; padding-bottom: 0; overflow: hidden; }
-/* Плавающая кнопка чата (правый нижний угол) перекрывала «Удалить этот lua». */
 .lt-drawer-body { padding-bottom: 84px; }
 .lt-drawer-pair .lt-btn { font-size: .8rem; padding-left: 8px; padding-right: 8px; }
 

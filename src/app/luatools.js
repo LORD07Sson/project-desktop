@@ -634,13 +634,11 @@ const UI_ICONS = {
 
 const steamHeader = id => headerUrls[id] || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/header.jpg`;
 
-// Steam lists its own hardware (Controller, Deck, Frame…) and software among games.
 const isHardware = i => hardwareAppIds.has(i.appId) || hardwareAppIds.has(String(i.appId))
   || /^(Steam (Controller|Deck|Frame|Machine|Link|Index)|Valve Index)\b/i.test(i.name || "");
 const dropHardware = items => ltConfig.filter_hardware !== false ? items.filter(i => !isHardware(i)) : items;
 
 // «Результатов на странице» + номера страниц (1 2 … N), как в LuaTools.
-// total ≤ наименьшего размера страницы — всё и так на одной странице, пейджер не нужен.
 function pagerHtml(page, pages, perPage, sizes = [12, 24, 48], total = Infinity) {
   if (total <= sizes[0]) return "";
   let nums = "";
@@ -665,7 +663,6 @@ function bindPager(root, onPage, onSize) {
   root.querySelector("[data-pg-size]")?.addEventListener("change", e => onSize(parseInt(e.target.value, 10)));
 }
 
-// Горизонтальная лента: стрелки по краям, пока есть куда листать.
 function bindStripArrows(strip) {
   const wrap = strip.parentElement;
   if (!wrap?.classList.contains("lt-strip-wrap")) return;
@@ -688,7 +685,6 @@ function bindStripArrows(strip) {
   requestAnimationFrame(sync);
 }
 
-// ── Устаревшие манифесты ───────────────────────────────────────────
 // Считаем только закреплённые депо: незакреплённые плагин обновляет сам.
 const outdatedCache = new Map(); // appId → Promise<{ id, have, latest }[]>
 function outdatedDepots(appId) {
@@ -773,7 +769,6 @@ function renderAdd(el) {
       : '<div class="lt-empty">—</div>';
     bindStripArrows(box);
   };
-  // «Бестселлеры» дублировали «Популярное» с главной: здесь — со скидкой, затем остальное.
   ltFeatured().then(({ topSellers, newReleases }) => {
     const deals = topSellers.filter(i => i.discount);
     strip(deals.length >= 4 ? deals : topSellers, "#lt-strip-top");
@@ -816,7 +811,6 @@ function renderAdd(el) {
 
 const manageState = { q: "", page: 0, perPage: 24, sort: "added", onlyOutdated: false, selecting: false, sel: new Set() };
 
-// Перевести все отстающие закреплённые депо игры на актуальный GID и докачать манифесты.
 async function updateOutdatedPins(appId) {
   const list = await outdatedDepots(appId);
   if (!list.length) return 0;
@@ -893,7 +887,6 @@ async function renderManage(el) {
     syncBulk();
   };
   draw();
-  // Сколько игр отстаёт — для кнопки «Обновить все устаревшие» и фильтра.
   forEachOutdated(installedList.map(i => i.app_id), (id, list) => {
     if (!list.length) return;
     outdatedIds.add(id);
@@ -1809,7 +1802,6 @@ async function openFixDetail(appId) {
 // DOWNLOADS
 // ══════════════════════════════════════════════════════════════════
 
-// Сырые ответы источников («HTTP 404 Not Found») → понятный текст.
 function humanDlError(e) {
   const t = String(e || "");
   if (/отмен/i.test(t)) return "Отменено";
@@ -1821,7 +1813,6 @@ function humanDlError(e) {
 
 async function renderDownloads(el) {
   const ST = { pending: "В очереди", downloading: "Скачиваю", installing: "Устанавливаю" };
-  // Подряд идущие одинаковые записи (повторные попытки) схлопываем в одну с «×N».
   const hist = [];
   for (const i of dlQueue.history.slice(0, 20)) {
     const last = hist[hist.length - 1];
@@ -2102,7 +2093,6 @@ function tomlProblems(src) {
 // DETAIL (game/depot page)
 // ══════════════════════════════════════════════════════════════════
 
-// «Почему игры нет в Steam?» — по шагам, с кнопкой исправления там, где это можно сделать отсюда.
 async function runDiagnostics(box, appId, lua) {
   if (!box) return;
   const ps = await invoke("lt_plugin_status").catch(() => pluginStatus);
@@ -2267,7 +2257,6 @@ async function openDetail(appId) {
       catch (err) { toast(errMsg(err), "error"); }
     })));
     // Значки наличия у источников: «· есть» зелёным, «· нет» красным; не удалось проверить — значок пропадает.
-    // Наличие у альтернативных источников; результат нужен и главной кнопке «Добавить».
     const srcState = {};
     for (const src of sourceList) srcState[`lt:${src}`] = Promise.resolve(true);
     const badge = (id, key, check) => {
@@ -2285,7 +2274,6 @@ async function openDetail(appId) {
       // Hubcap: {status: "available", manifest_file_exists: true} — есть; "not_found" и прочее — нет.
       .then(st => !!st && (st.status === "available" || st.manifest_file_exists === true)));
     badge("#lt-kernelua-badge", "kernelua", () => invoke("lt_kernelua_status", { appId, token: ltConfig.kernelua_token }));
-    // Главная кнопка: первый источник, где игра точно есть: lua.tools → кэш студии → Hubcap → KerneLua.
     el.querySelector("#lt-gd-add")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
       for (const [key, p] of Object.entries(srcState)) {
         if (await p !== true) continue;
@@ -2294,7 +2282,6 @@ async function openDetail(appId) {
       }
       toast(ltIsLoggedIn() ? "Ни в одном источнике этой игры нет" : "Ни в одном источнике нет — войдите в lua.tools, там выбор больше", "warn");
     }));
-    // Фиксы для этой игры (список общий с разделом «Фиксы», грузится один раз).
     (async () => {
       if (!fixesCache) {
         const data = await ltDenuvoListings().catch(() => null);
@@ -2715,9 +2702,7 @@ async function doCodeLogin() {
 }
 
 let loginPending = false;
-// Текущая попытка входа. Сервер lua.tools иногда отвечает 504 на шаге Discord → тогда в приложение
-// ничего не приходит, а локальный приёмник ждёт до 5 минут. Повторный клик открывает новую попытку
-// в браузере; приёмник тот же, а код обменивается с verifier последней попытки.
+// Повторный «Войти» открывает новую попытку: приёмник тот же, код обменивается с verifier последней.
 let loginPkce = null;
 async function doLogin() {
   if (loginPending) {
