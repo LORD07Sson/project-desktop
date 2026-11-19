@@ -342,6 +342,11 @@ export function mediaUrl(path, params) {
   return `${API_BASE}${path}?${qs}`;
 }
 
+export const AVATAR_REFRESH_MS = 120_000;
+export function avatarUrl(telegramId) {
+  return mediaUrl(`/avatar/${encodeURIComponent(telegramId)}`, { v: Math.floor(Date.now() / AVATAR_REFRESH_MS) });
+}
+
 const MEDIA_TOKEN_REFRESH_SLACK_MS = 60_000;
 let mediaTokenPromise = null;
 

@@ -1,5 +1,5 @@
 
-import { apiGet, mediaUrl } from "./api.js";
+import { apiGet, avatarUrl } from "./api.js";
 import { esc } from "./utils.js";
 import { state } from "./state.js";
 import { openReportDetail } from "./report-detail.js";
@@ -42,7 +42,7 @@ async function collect() {
     state.isOwner ? apiGet("/analytics/errors", { days: 1 }).catch(() => null) : Promise.resolve(null),
     apiGet("/team").catch(() => null),
   ]);
-  for (const p of (pulse.team && pulse.team.people) || []) p.avatar = p.tg ? mediaUrl(`/avatar/${encodeURIComponent(p.tg)}`) : null;
+  for (const p of (pulse.team && pulse.team.people) || []) p.avatar = p.tg ? avatarUrl(p.tg) : null;
   return {
     ...pulse,
     analytics: project ? {

@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiUpload, mediaUrl, toast } from "./api.js";
+import { apiGet, apiPost, apiUpload, toast, avatarUrl } from "./api.js";
 import { esc } from "./utils.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -67,7 +67,7 @@ async function loadTeam() {
   return team;
 }
 
-const avatar = p => { const u = mediaUrl(`/avatar/${encodeURIComponent(p.telegram_id)}`); return u ? `<img src="${esc(u)}" alt="" loading="lazy">` : esc((p.name || "?")[0].toUpperCase()); };
+const avatar = p => { const u = avatarUrl(p.telegram_id); return u ? `<img src="${esc(u)}" alt="" loading="lazy">` : esc((p.name || "?")[0].toUpperCase()); };
 
 export function closeShare() { if (pop) { pop.remove(); pop = null; } }
 

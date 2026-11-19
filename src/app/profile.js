@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { fillRemindersCard } from "./reminders.js";
 import { fetchPerson, fmtDay, wireWorkSection, fillPauseCard } from "./people.js";
 import { loadPeopleNames, personName } from "./people-names.js";
-import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken, tabSkeleton, askConfirm } from "./api.js";
+import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken, tabSkeleton, askConfirm, avatarUrl } from "./api.js";
 import { $, esc, isOverdue, relTime, formatWhen, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
 import { setQuickFilter, loadReports } from "./reports.js";
 import { switchTab } from "./tabs.js";
@@ -30,7 +30,7 @@ export function loadAvatars(root) {
   (root || document).querySelectorAll("[data-avatar-for]").forEach(el => {
     const tid = el.getAttribute("data-avatar-for");
     if (!tid || el.getAttribute("data-avatar-loaded")) return;
-    const src = mediaUrl(`/avatar/${encodeURIComponent(tid)}`);
+    const src = avatarUrl(tid);
     if (!src) return;
     el.setAttribute("data-avatar-loaded", "1");
     const img = new Image();
