@@ -3361,7 +3361,7 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-pieces { position: absolute; inset: 0; z-index: 1; pointer-events: none; perspective: 700px; }
 .kd-pieces span { position: absolute; inset: 0; transform: translate(calc(var(--ex) * var(--k, 1)), calc(var(--ey) * var(--k, 1))) rotate(var(--er)) scale(var(--ez));
   animation: kd-explode 1.3s cubic-bezier(.12, .9, .25, 1) backwards;
-  filter: drop-shadow(0 0 .7px rgba(255, 255, 255, .9)) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
+  filter: drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
 .kd-pieces.settled span { animation: none; }
 /* На доске осколки парят только под мышью (тройная тень × 128 штук опускала её до 25 кадров); в обзоре — всегда, но только у активного слайда. */
 .kd-pieces em { position: absolute; inset: 0; }
@@ -3453,7 +3453,7 @@ td.row-actions { opacity: 1; transition: none; }
 .kc-doom .kd-crack { border-radius: inherit; overflow: hidden; }
 .kc-doom .kd-crack-dark { stroke-width: calc(var(--w) * 2.6px); }
 .kc-doom .kd-crack-lit { stroke-width: calc(var(--w) * 1.1px); transform: translate(.5px, -.4px); }
-.kc-doom .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1) drop-shadow(0 0 .5px rgba(255, 255, 255, .9)) drop-shadow(0 0 2px rgba(var(--fire-rgb), .5)) drop-shadow(0 4px 4px rgba(0, 0, 0, .7)); }
+.kc-doom .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1) drop-shadow(0 0 2px rgba(var(--fire-rgb), .5)) drop-shadow(0 4px 4px rgba(0, 0, 0, .7)); }
 .kc-chip { position: absolute; inset: 0; pointer-events: none; animation: kc-chip 6s linear infinite; filter: drop-shadow(0 0 .6px #fff) drop-shadow(0 3px 3px rgba(0, 0, 0, .6)); }
 .kc-chip i { position: absolute; inset: 0; background: center / cover no-repeat; border-radius: 9px; filter: brightness(1.2); }
 @keyframes kc-chip {
@@ -4522,5 +4522,5 @@ select.fsel-native { display: none !important; }
 /* Обзор: у активного слайда осколки парят всегда. Тени — одним фильтром на обложку,
    а не на каждый из 16 осколков: иначе p50 кадра вырастал с 4 до 8 мс. */
 .kd-slide .kd-pieces.settled span { filter: none; }
-.kd-slide .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1) drop-shadow(0 0 .7px rgba(255, 255, 255, .9)) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
+.kd-slide .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
 .kd-slide.on .kd-pieces em { will-change: transform; }
