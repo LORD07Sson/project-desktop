@@ -429,6 +429,35 @@ export function askConfirm(text, { yes = "Да", no = "Отмена", danger = /
   });
 }
 
+// In-app replacement for window.prompt(): resolves to the trimmed text, or null when cancelled
+// or left unchanged.
+export function askText(title, value = "", { yes = "Сохранить", no = "Отмена", placeholder = "", maxLength = 200 } = {}) {
+  const e = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  return new Promise(resolve => {
+    const overlay = openSheet(`
+      <div class="ask-text">${e(title)}</div>
+      <input class="ask-input" type="text" maxlength="${maxLength}" value="${e(value)}" placeholder="${e(placeholder)}" autocomplete="off" spellcheck="false">
+      <div class="sheet-actions">
+        <button type="button" class="btn ghost" data-ask="no">${no}</button>
+        <button type="button" class="btn primary" data-ask="yes">${yes}</button>
+      </div>`);
+    overlay.querySelector(".sheet").classList.add("ask-sheet", "ask-input-sheet");
+    const input = overlay.querySelector(".ask-input");
+    const ok = overlay.querySelector('[data-ask="yes"]');
+    const sync = () => { const v = input.value.trim(); ok.disabled = !v || v === String(value).trim(); };
+    let done = false;
+    const finish = v => { if (done) return; done = true; overlay.remove(); resolve(v); };
+    input.addEventListener("input", sync);
+    ok.addEventListener("click", () => { if (!ok.disabled) finish(input.value.trim()); });
+    overlay.querySelector('[data-ask="no"]').addEventListener("click", () => finish(null));
+    overlay.addEventListener("sheet-dismissed", () => finish(null));
+    input.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); ok.click(); } });
+    sync();
+    input.focus();
+    input.select();
+  });
+}
+
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   const overlays = document.querySelectorAll(".overlay");

@@ -1,5 +1,5 @@
 
-import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm } from "./api.js";
+import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm, askText } from "./api.js";
 import { pickFile } from "./attachments.js";
 import { pauseSuffix } from "./people.js";
 import { esc } from "./utils.js";
@@ -95,10 +95,10 @@ export async function openSeasonsAdminSheet(onClose) {
     sheet.querySelectorAll("[data-rename-season]").forEach(btn => {
       btn.addEventListener("click", async (ev) => {
         ev.stopPropagation();
-        const name = prompt("Новое название сезона:", btn.dataset.seasonName);
-        if (!name || !name.trim()) return;
+        const name = await askText("Новое название сезона", btn.dataset.seasonName, { placeholder: "Например, «Лето 2026»" });
+        if (!name) return;
         try {
-          await apiPost(`/seasons/${btn.dataset.renameSeason}/rename`, { name: name.trim() });
+          await apiPost(`/seasons/${btn.dataset.renameSeason}/rename`, { name });
           toast("Переименовано.");
           await render();
         } catch (e) { toast(`Не удалось переименовать: ${e.message}`, "error"); }
@@ -454,10 +454,10 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
       } catch (e) { toast(`Не удалось убрать: ${e.message}`, "error"); }
     });
     sheet.querySelector("#btn-rename-title").addEventListener("click", async () => {
-      const name = prompt("Новое название тайтла:", d.name);
-      if (!name || !name.trim()) return;
+      const name = await askText("Новое название тайтла", d.name);
+      if (!name) return;
       try {
-        await apiPost(`/titles/${titleId}/rename`, { name: name.trim() });
+        await apiPost(`/titles/${titleId}/rename`, { name });
         toast("Переименовано.");
         await render();
       } catch (e) { toast(`Не удалось переименовать: ${e.message}`, "error"); }
