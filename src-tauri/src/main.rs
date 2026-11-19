@@ -1770,7 +1770,7 @@ fn main() {
         webview_args.push_str(&format!(" --remote-debugging-port={port} --remote-allow-origins=http://127.0.0.1:{port}"));
     }
     // Единственный поток на этом этапе — других потоков, читающих окружение, ещё нет.
-    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", webview_args);
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", &webview_args);
 
     // Отдельный процесс антивируса с правами администратора: проверка закрытых папок без окна (см. antivirus::headless).
     let cli_args: Vec<String> = std::env::args().collect();
@@ -2125,7 +2125,19 @@ fn main() {
 
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build({
+            // Окно из tauri.conf.json: wry всегда передаёт WebView2 свои аргументы, и они перебивают переменную
+            // окружения выше — без этого ни порт для ИИ, ни дискретная видеокарта не включались.
+            // Дефолты wry/Tauri повторяем, раз заменяем их целиком.
+            let mut ctx = tauri::generate_context!();
+            let args = format!(
+                "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required {webview_args}"
+            );
+            for w in ctx.config_mut().app.windows.iter_mut() {
+                w.additional_browser_args = Some(args.clone());
+            }
+            ctx
+        })
         .expect("error while running tauri application")
         .run(|_, event| {
             // Выход «окон не осталось» (code: None) во время передачи установщику держим; явный app.exit(0) проходит.
