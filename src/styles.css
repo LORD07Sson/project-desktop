@@ -4555,7 +4555,8 @@ body.watch-open #app-screen { pointer-events: none; }
 
 /* Рядовой участник студии: только «Тайтлы», «Сообщения», «Команда», «Я».
    Админские кнопки и разделы — прочь (сервер их всё равно не пустит). */
-/* data-perm-show / data-perm-reports ставит perm-visibility.js: роль без звания админа, которой владелец выдал право. */
+/* data-perm-show / data-perm-reports ставит perm-visibility.js: роль без звания админа, которой владелец выдал право.
+   Раздел настроек «Команда» settings.js рисует сам — только с плитками, на которые у роли есть право. */
 :root[data-role="member"]:not([data-nyaa="1"]) .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-perm-show="1"]),
 :root[data-role="member"][data-nyaa="1"] .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-tab="nyaa"]):not([data-perm-show="1"]),
 :root[data-role="member"]:not([data-perm-reports="1"]) #sidebar-board-sub,
@@ -4563,8 +4564,6 @@ body.watch-open #app-screen { pointer-events: none; }
 :root[data-role="member"] #titles-admin-btn:not([data-perm-show="1"]),
 :root[data-role="member"] #team-roles-btn:not([data-perm-show="1"]),
 :root[data-role="member"] #tn-edit:not([data-perm-show="1"]),
-:root[data-role="member"] #st-studio,
-:root[data-role="member"] [data-st-go="st-studio"],
 :root[data-role="member"] #idle-slot { display: none !important; }
 
 /* Удаление сообщений */
@@ -5149,7 +5148,7 @@ body.watch-open #app-screen { pointer-events: none; }
 .st-lesson-ic { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--surface-3); font-size: 17px; }
 .st-lesson-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .st-lesson-t b { font-size: 13px; font-weight: 700; }
-.st-lesson-t span { font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-lesson-t span { font-size: 11px; line-height: 1.35; color: var(--ink-dim); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .st-lesson em { flex: none; font-style: normal; font-size: 11px; font-weight: 700; color: var(--ink-dim); }
 .st-lesson.done em { color: var(--s-done); }
 .st-learn-foot { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line-soft); font-size: 11.5px; color: var(--ink-dim); }
@@ -5906,7 +5905,7 @@ body.watch-open #app-screen { pointer-events: none; }
 }
 
 /* Настройки → Цветовая тема: образцы палитр. */
-.st-palettes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 14px 16px; }
+.st-palettes { display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 10px; padding: 14px 16px; }
 .st-palette { display: flex; flex-direction: column; gap: 7px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; cursor: pointer; text-align: left; transition: border-color .15s, transform .15s; }
 .st-palette:hover { transform: translateY(-1px); border-color: var(--surface-4); }
 .st-palette.on { border-color: var(--fire); box-shadow: 0 0 0 1px var(--fire), 0 10px 24px -14px var(--fire); }
@@ -5917,6 +5916,7 @@ body.watch-open #app-screen { pointer-events: none; }
 .st-pal-prev i:nth-child(2) { left: calc(20% + 12px); right: 6px; top: 6px; height: 16px; background: var(--p1); }
 .st-pal-prev i:nth-child(3) { left: calc(20% + 12px); top: 28px; width: 34%; height: 12px; background: linear-gradient(90deg, var(--p2), var(--p3)); }
 .st-pal-prev i:nth-child(4) { right: 6px; bottom: 6px; width: 18px; height: 18px; border-radius: 50%; background: var(--p2); box-shadow: 0 0 10px var(--p2); }
+/* --n — число тем (settings.js): все в один ряд; на узком окне — по три, ряды ровные. */
 @media (max-width: 900px) { .st-palettes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 /* ================================================================

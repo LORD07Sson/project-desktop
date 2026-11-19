@@ -33,7 +33,7 @@ export async function mountAssembleSettings(root) {
         <div class="ar-grid">
           <div>
             <span class="ar-label">Контейнер (расширение)</span>
-            <div class="ar-seg" id="as-container">${data.options.containers.map(c => `<button type="button" data-v="${c}" class="${p.container === c ? "on" : ""}">.${c}<small>${c === "mp4" ? "играет в Telegram" : c === "mkv" ? "любой звук, файлом" : "Apple, файлом"}</small></button>`).join("")}</div>
+            <div class="ar-seg" id="as-container" style="grid-template-columns: repeat(${data.options.containers.length}, 1fr)">${data.options.containers.map(c => `<button type="button" data-v="${c}" class="${p.container === c ? "on" : ""}">.${c}<small>${c === "mp4" ? "играет в Telegram" : c === "mkv" ? "любой звук, файлом" : "Apple, файлом"}</small></button>`).join("")}</div>
             <span class="ar-label">Кодек видео</span>
             <div class="ar-seg" id="as-vcodec">${Object.keys(data.options.vcodecs).map(c => `<button type="button" data-v="${c}" class="${p.vcodec === c ? "on" : ""}">${c === "h264" ? "H.264" : "H.265"}<small>${c === "h264" ? "совместимо везде" : "меньше размер"}</small></button>`).join("")}</div>
           </div>

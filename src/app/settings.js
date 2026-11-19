@@ -93,6 +93,18 @@ async function openSettings() {
     learn: '<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11M21.5 9v5"/>',
     hint: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4M12 17h.01"/>',
   };
+  // Иконка у каждого вида уведомлений — по смыслу, а не одна точка на всех.
+  const KIND_ICONS = {
+    assign: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5 1.5 0 2.9.4 4 1.2M16 14v6M13 17h6"/>',
+    work: '<path d="M4 6h16M4 12h10M4 18h7M17 15l2 2 3-4"/>',
+    at: '<circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1"/>',
+    chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+    chatmsg: '<path d="M3 5h13v9H7l-4 3zM8 17v1h9l4 3V9h-2"/>',
+    due: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>',
+    price: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+    gupdate: '<rect x="2.5" y="7" width="19" height="11" rx="4"/><path d="M7 11v3M5.5 12.5h3M15.5 12h.01M18 14h.01"/>',
+    team: '<path d="M4 21h16M5 21v-7h14v7M12 14V9M9 5c0 1.7 1.3 3 3 3s3-1.3 3-3c0-1.2-3-3-3-3S9 3.8 9 5Z"/>',
+  };
   const TILES = [
     ["s-open-admin", "Админ-панель", "Доступ, заявки, система", '<circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5"/>'],
     ["s-tile-notice", "Объявление", "Строка для всей команды", '<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3zM12 14v6"/>'],
@@ -112,7 +124,7 @@ async function openSettings() {
     "s-tile-bdays": can("birthdays.manage"),
     "s-tile-post": can("posts.manage"),
     "s-tile-mentions": can("posts.manage"),
-    "s-tile-lockdown": state.isDeveloper || state.isAdmin,
+    "s-tile-lockdown": state.isDeveloper || can("lockdown"),
   }[id] ?? true));
   const theme = document.documentElement.dataset.theme || "dark";
   const look = document.documentElement.dataset.look || "glow";
@@ -130,7 +142,7 @@ async function openSettings() {
   const NAV = [
     ["Личное", [["st-acc", "Аккаунт", ICONS.acc, "Профиль и выход"], ["st-look", "Внешний вид", ICONS.look, "Тема, акцент, масштаб"], ["st-notif", "Уведомления", ICONS.bell, "Что и когда присылать"], ["st-behave", "Поведение", ICONS.behave, "Автозапуск, старт, фокус"], ["st-keys", "Горячие клавиши", ICONS.keys, "Все сочетания"]]],
     ["Приложение", [["st-update", "Обновления", ICONS.update, "Версия и канал"], ["st-learn", "Обучение", ICONS.learn, "Уроки и подсказки"], ["st-diag", "Диагностика", ICONS.diag, "Связь, кэш, логи"], ["st-av", "Антивирус", ICONS.shield, "Проверка ПК, карантин, базы"], ...(state.isDeveloper ? [["st-mcp", "Доступ для ИИ", ICONS.dev, "MCP: скриншоты и клики для агента"]] : [])]],
-    ...((state.isAdmin && TILES.length) || state.isDeveloper || can("reports.assemble") ? [["Команда", [...(((state.isAdmin && TILES.length) || state.isDeveloper) ? [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"]] : []), ...(can("reports.assemble") ? [["st-assemble", "Сборка финала", ICONS.film, "Кодирование: формат, битрейт, кодек"]] : []), ...(state.isDeveloper ? [["st-auto", "Автоматизация", ICONS.bot, "Архивы, чаты бота, скорость, логи"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
+    ...(TILES.length || state.isDeveloper || can("reports.assemble") ? [["Команда", [...(TILES.length ? [["st-studio", "Команда", ICONS.studio, "Админ-инструменты студии"]] : []), ...(can("reports.assemble") ? [["st-assemble", "Сборка финала", ICONS.film, "Кодирование: формат, битрейт, кодек"]] : []), ...(state.isDeveloper ? [["st-auto", "Автоматизация", ICONS.bot, "Архивы, чаты бота, скорость, логи"], ["st-perms", "Права ролей", ICONS.perms, "Что разрешено каждой роли"]] : [])]]] : []),
   ];
 
   const overlay = openSheet(`
@@ -174,7 +186,7 @@ async function openSettings() {
           <h3>Внешний вид</h3><p class="st-lead">Изменения видны сразу, без перезапуска.</p>
           <div class="st-group" data-st-find="цветовая тема цвет акцент палитра оригинал янтарь сакура фиалка небо мята">
             <div class="st-group-h">Цветовая тема</div>
-            <div class="st-palettes">
+            <div class="st-palettes" style="--n:${Object.keys(ACCENTS).length}">
               ${Object.entries(ACCENTS).map(([k, a]) => `<button type="button" class="st-palette${k === accent ? " on" : ""}" data-st-accent="${k}">
                 <span class="st-pal-prev" style="--p0:${a.sw[0]};--p1:${a.sw[1]};--p2:${a.sw[2]};--p3:${a.sw[3]}"><i></i><i></i><i></i><i></i></span>
                 <b>${a.label}</b></button>`).join("")}
@@ -215,7 +227,7 @@ async function openSettings() {
           </div>
           <div class="st-group" id="st-kinds">
             <div class="st-group-h">Что показывать</div>
-            ${Object.entries(NOTIFY_KINDS).map(([k, [t, sub]]) => row(ICONS.dot, t, sub, sw(`s-kind-${k}`, kinds[k], `data-st-kind="${k}"`), "уведомления")).join("")}
+            ${Object.entries(NOTIFY_KINDS).map(([k, [t, sub]]) => row(KIND_ICONS[k] || ICONS.bell, t, sub, sw(`s-kind-${k}`, kinds[k], `data-st-kind="${k}"`), "уведомления")).join("")}
           </div>
           <div class="st-group">
             ${row(ICONS.moon, "Тихие часы", "В это время всплывашки не показываются", `<div class="st-quiet"><input type="time" id="s-quiet-from" value="${esc(quiet.from)}"><span>—</span><input type="time" id="s-quiet-to" value="${esc(quiet.to)}">${sw("s-quiet-on", quiet.on)}</div>`, "ночь не беспокоить")}
@@ -253,8 +265,8 @@ async function openSettings() {
             ${row(ICONS.update, "Источник обновлений", `<span id="s-upd-source-hint">${esc(UPDATE_SOURCE_HINT[updateSource] || UPDATE_SOURCE_HINT.auto)}</span>`,
               `<select id="s-upd-source" aria-label="Источник обновлений">${Object.entries(UPDATE_SOURCES).map(([k, v]) => `<option value="${k}"${k === updateSource ? " selected" : ""}>${v}</option>`).join("")}</select>`,
               "github сервер источник россия vpn зеркало")}
-            ${row(ICONS.update, "Копии программы", "Старые копии рядом (портативная папка, распакованный архив, прежняя установка) мешают обновлениям — найдите и уберите их", `<button class="btn ghost" id="s-installs">Найти копии</button>`, "копии старые папка портативная удалить переустановить")}
-            ${row(ICONS.update, "Переустановить начисто", "Программа не обновляется или папку переносили вручную — скачать установщик и поставить в обычное место. Настройки и вход сохранятся", `<button class="btn ghost" id="s-reinstall">Переустановить</button>`, "переустановить починить зависло установка")}
+            ${row(ICONS.update, "Копии программы", "Старые копии рядом (портативная папка, распакованный архив, прежняя установка) мешают обновлениям — найдите и уберите их", `<button class="btn" id="s-installs">Найти копии</button>`, "копии старые папка портативная удалить переустановить")}
+            ${row(ICONS.update, "Переустановить начисто", "Программа не обновляется или папку переносили вручную — скачать установщик и поставить в обычное место. Настройки и вход сохранятся", `<button class="btn" id="s-reinstall">Переустановить</button>`, "переустановить починить зависло установка")}
             <div id="s-alpha-block" hidden>
               <div class="alpha-warn">Альфа-сборки собираются на каждый коммит в main и не являются стабильными релизами — автоматического отката нет.</div>
               <div class="st-commits">
@@ -314,12 +326,12 @@ async function openSettings() {
           <div id="st-assemble-root"></div>
         </section>` : ""}
 
-        <section class="st-sec" id="st-studio">
-          <h3>Команда</h3><p class="st-lead">Инструменты администратора.</p>
+        ${TILES.length ? `<section class="st-sec" id="st-studio">
+          <h3>Команда</h3><p class="st-lead">${state.isAdmin ? "Инструменты администратора." : "Инструменты, которые владелец открыл вашей роли."}</p>
           <div class="st-tiles">
             ${TILES.map(([id, title, sub, path]) => `<button type="button" class="st-tile" id="${id}" data-st-find="${esc(`${title} ${sub}`.toLowerCase())}">${ic(path)}<b>${title}</b><span>${sub}</span></button>`).join("")}
           </div>
-        </section>
+        </section>` : ""}
 
         ${state.isDeveloper ? `
         <section class="st-sec" id="st-auto">
@@ -528,7 +540,7 @@ async function openSettings() {
     overlay.querySelector("#st-learn-grid").innerHTML = tours.map(t => `
       <button type="button" class="st-lesson${t.done ? " done" : ""}" data-learn="${t.id}">
         <span class="st-lesson-ic">${t.icon}</span>
-        <span class="st-lesson-t"><b>${esc(t.name)}</b><span>${esc(t.about)}</span></span>
+        <span class="st-lesson-t"><b>${esc(t.name)}</b><span title="${esc(t.about)}">${esc(t.about)}</span></span>
         <em>${t.done ? "✓ пройден" : `${t.steps} шаг.`}</em>
       </button>`).join("");
     overlay.querySelectorAll("[data-learn]").forEach(b => b.addEventListener("click", () => {

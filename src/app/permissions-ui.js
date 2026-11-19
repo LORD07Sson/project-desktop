@@ -35,6 +35,11 @@ const PREVIEW = [
     ["Личные переписки и общий чат", ALWAYS], ["Создавать каналы", "chat.channels"],
     ["Закреплять в общих беседах", "chat.pin"], ["Удалять чужие сообщения", "chat.moderate"],
   ]],
+  ["Настройки", [
+    ["Личное и приложение", ALWAYS],
+    ["Раздел «Команда»", ["access.requests", "notice.manage", "tickets.manage", "roles.manage", "birthdays.manage", "posts.manage", "lockdown"]],
+    ["Сборка финала", "reports.assemble"],
+  ]],
   ["Безопасность", [["Аварийный режим", "lockdown"]]],
   ["Инструменты", [["Загрузчик видео", "parser.use"]]],
 ];
