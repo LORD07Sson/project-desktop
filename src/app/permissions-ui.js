@@ -7,30 +7,51 @@ import { esc } from "./utils.js";
 
 // Что человек с ролью увидит в программе — та же логика, что у perm-visibility.js/tabs.js и проверок сервера.
 const ALWAYS = "always";
+// Группы совпадают с группами каталога прав на сервере; право, которого здесь нет, превью добавит само (previewGroups).
+const ANY_REPORT = ["reports.feed", "reports.board", "reports.overview", "reports.list", "reports.calendar", "reports.analytics", "reports.manage"];
 const PREVIEW = [
   ["Вкладки", [
     ["Очередь", ALWAYS], ["Чат", ALWAYS], ["Команда", ALWAYS], ["Профиль", ALWAYS],
     ["Лента", "reports.feed"], ["Доска", "reports.board"], ["Обзор", "reports.overview"], ["Список", "reports.list"],
     ["Календарь", "reports.calendar"], ["Аналитика", "reports.analytics"], ["Тайтлы", "titles.view"], ["Релизы (Nyaa)", "nyaa.view"],
   ]],
-  ["В отчётах", [
-    ["Открывать любые отчёты", ["reports.feed", "reports.board", "reports.overview", "reports.list", "reports.calendar", "reports.analytics", "reports.manage"]],
-    ["Свои задачи и файлы к ним", ALWAYS],
+  ["Отчёты", [
+    ["Открывать любые отчёты", ANY_REPORT], ["Свои задачи и файлы к ним", ALWAYS],
     ["Создавать отчёты", "reports.create"], ["Менять статус, сроки, исполнителей", "reports.manage"],
-    ["Загружать и удалять файлы", "reports.files"], ["Собирать финал", "reports.assemble"],
-    ["Удалять отчёты", "reports.delete"], ["Пост в канал", "posts.manage"],
+    ["Загружать и удалять файлы", "reports.files"], ["Собирать финал", "reports.assemble"], ["Удалять отчёты", "reports.delete"],
   ]],
-  ["Тайтлы и команда", [
-    ["Создавать тайтлы", "titles.create"], ["Править тайтлы", "titles.edit"], ["Менять состав", "titles.crew"],
-    ["Брать в работу", "titles.work"], ["Удалять тайтлы", "titles.delete"], ["Заявки на доступ", "access.requests"],
-    ["Роли людей", "roles.manage"], ["Профили людей", "people.view"], ["Тикеты", "tickets.manage"],
-    ["Объявление", "notice.manage"], ["Дни рождения", "birthdays.manage"], ["Аварийный режим", "lockdown"],
+  ["Релизы", [["Искать раздачи и отправлять файлы", "nyaa.view"]]],
+  ["Тайтлы", [
+    ["Видеть тайтлы", "titles.view"], ["Создавать тайтлы", "titles.create"], ["Править тайтлы", "titles.edit"],
+    ["Менять состав", "titles.crew"], ["Брать в работу", "titles.work"], ["Удалять тайтлы и сезоны", "titles.delete"],
   ]],
-  ["В сообщениях", [
+  ["Публикации", [["Пост в канал и упоминания", "posts.manage"], ["Объявление для команды", "notice.manage"]]],
+  ["Anime 365", [["Страница Anime 365", "a365.view"], ["Заливать на 365", "a365.upload"]]],
+  ["Команда", [
+    ["Профили людей", "people.view"], ["Роли людей", "roles.manage"], ["Заявки на доступ", "access.requests"],
+    ["Тикеты", "tickets.manage"], ["Дни рождения", "birthdays.manage"],
+  ]],
+  ["Сообщения", [
     ["Личные переписки и общий чат", ALWAYS], ["Создавать каналы", "chat.channels"],
     ["Закреплять в общих беседах", "chat.pin"], ["Удалять чужие сообщения", "chat.moderate"],
   ]],
+  ["Безопасность", [["Аварийный режим", "lockdown"]]],
+  ["Инструменты", [["Загрузчик видео", "parser.use"]]],
 ];
+
+// Превью + всё, что есть в каталоге сервера, но не описано выше, — в группу с тем же именем (или новую в конце).
+export function previewGroups(permissions) {
+  const groups = PREVIEW.map(([title, rows]) => [title, rows.slice()]);
+  const covered = new Set(groups.flatMap(([, rows]) => rows.flatMap(([, need]) => [].concat(need))));
+  for (const p of permissions || []) {
+    if (covered.has(p.key)) continue;
+    let g = groups.find(([title]) => title === p.group);
+    if (!g) groups.push(g = [p.group, []]);
+    g[1].push([p.label, p.key]);
+    covered.add(p.key);
+  }
+  return groups;
+}
 const allows = (need, have) => need === ALWAYS || (Array.isArray(need) ? need.some(k => have.has(k)) : have.has(need));
 
 // Права группы «Тайтлы» без «Видеть тайтлы» бессмысленны: сервер не отдаст список, и править будет нечего.
@@ -70,7 +91,7 @@ export async function mountPermissions(root) {
   function previewHtml(have) {
     return `<section class="pm-preview" aria-label="Что увидит человек с этой ролью">
       <header><b>Что увидит человек с этой ролью</b><span>обновляется сразу, у людей — в течение минуты</span></header>
-      ${PREVIEW.map(([title, rows]) => `
+      ${previewGroups(data.permissions).map(([title, rows]) => `
         <div class="pm-pv-group"><small>${esc(title)}</small><div class="pm-pv-chips">
           ${rows.map(([label, need]) => {
             const on = allows(need, have);
