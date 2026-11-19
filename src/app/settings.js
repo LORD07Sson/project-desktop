@@ -345,6 +345,21 @@ async function openSettings() {
       </div>
     </div>
   `, "wide");
+  // Шапка раздела: иконка как в навигации, группа над заголовком, описание под ним; прилипает при прокрутке.
+  for (const [group, items] of NAV) {
+    for (const [id, , icon] of items) {
+      const h = overlay.querySelector(`#${id} > h3`);
+      if (!h) continue;
+      const head = document.createElement("header");
+      head.className = "st-sec-head";
+      head.innerHTML = `${ic(icon)}<div class="st-sec-title"><small>${esc(group)}</small></div>`;
+      h.before(head);
+      const title = head.lastElementChild;
+      const lead = h.nextElementSibling;
+      title.append(h);
+      if (lead && lead.classList.contains("st-lead")) title.append(lead);
+    }
+  }
   overlay.querySelector(".sheet").classList.add("st-sheet");
   // Крестик — первым: если какой-то обработчик ниже упадёт, окно всё равно можно закрыть.
   overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
