@@ -3927,8 +3927,6 @@ select.fsel-native { display: none !important; }
 .pf-folio .pff-hero.is-dev .pff-hero-row, .pf-folio .pff-hero.is-dev .pff-actions { position: relative; z-index: 2; }
 .pf-folio .pff-hero.is-dev .pff-hi b { background: linear-gradient(100deg, #fff 0%, var(--dev-1) 30%, var(--dev-2) 50%, var(--dev-1) 70%, #fff 100%); background-size: 220% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px rgba(167, 139, 250, .35)); animation: pff-dev-shine 5s linear infinite; }
-.pff-dev-cmd { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; letter-spacing: .02em; text-transform: none; font-size: 12px; color: var(--dev-2); }
-.pff-caret { display: inline-block; width: 7px; height: 13px; margin-left: -4px; background: var(--dev-2); animation: pff-dev-blink 1.05s steps(1) infinite; }
 .pff-dev-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px 3px 7px; font-size: 11px; letter-spacing: .08em; color: #e9e3ff;
   background: linear-gradient(135deg, rgba(167, 139, 250, .35), rgba(34, 211, 238, .25)); box-shadow: 0 0 0 1px rgba(167, 139, 250, .55), 0 0 16px rgba(167, 139, 250, .45); }
 .pff-dev-pill svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -3940,11 +3938,10 @@ select.fsel-native { display: none !important; }
 @keyframes pff-dev-spin { to { --pff-dev-a: 360deg; } }
 @keyframes pff-dev-shine { to { background-position: -220% 0; } }
 @keyframes pff-dev-scan { 0% { top: -30%; } 60%, 100% { top: 110%; } }
-@keyframes pff-dev-blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .pf-folio .pff-hero.is-dev::before, .pf-folio .pff-hero.is-dev .pff-av::before, .pf-folio .pff-hero.is-dev .pff-hi b, .pff-dev-fx::after, .pff-caret { animation: none; }
+  .pf-folio .pff-hero.is-dev::before, .pf-folio .pff-hero.is-dev .pff-av::before, .pf-folio .pff-hero.is-dev .pff-hi b, .pff-dev-fx::after { animation: none; }
   .pff-dev-fx::after { display: none; }
 }
 :root[data-motion="off"] .pf-folio .pff-hero.is-dev::before, :root[data-motion="off"] .pf-folio .pff-hero.is-dev .pff-av::before,
-:root[data-motion="off"] .pf-folio .pff-hero.is-dev .pff-hi b, :root[data-motion="off"] .pff-caret { animation: none; }
+:root[data-motion="off"] .pf-folio .pff-hero.is-dev .pff-hi b { animation: none; }
 :root[data-motion="off"] .pff-dev-fx::after { display: none; }

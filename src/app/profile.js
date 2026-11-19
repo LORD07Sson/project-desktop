@@ -470,9 +470,7 @@ function folioHeroHtml(d, isSelf = true) {
   const devPill = `<span class="dev-pill pff-dev-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>DEV</span>`;
   const eyebrow = isSelf
     ? `<div class="pff-eyebrow"><span>${WEEKDAYS_RU[now.getDay()]}, ${now.getDate()} ${MONTHS_RU[now.getMonth() + 1]}</span><i class="dot"></i><span class="pff-clock" data-pff-clock></span></div>`
-    : dev
-      ? `<div class="pff-eyebrow pff-dev-cmd"><span>root@project:~$ whoami</span><i class="pff-caret" aria-hidden="true"></i>${d.is_online ? `<i class="dot"></i><span>в сети</span>` : ""}</div>`
-      : `<div class="pff-eyebrow"><span>${d.is_online ? "в сети" : "профиль коллеги"}</span></div>`;
+    : `<div class="pff-eyebrow"><span>${d.is_online ? "в сети" : "профиль коллеги"}</span></div>`;
   return `
     <div class="pf-hero pff-hero${dev ? " is-dev" : ""}">
       ${dev ? `<div class="pff-dev-fx" aria-hidden="true"></div>` : ""}
