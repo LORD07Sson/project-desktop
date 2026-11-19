@@ -617,6 +617,28 @@ function runSpot() {
     ? data.catalog.filter(t => `${t.name} ${t.name_en || ""} ${(t.genres || []).join(" ")} ${t.studio || ""}`.toLowerCase().includes(q))
     : byScore(data.catalog).slice(0, 12);
   spotSel = 0;
+  paintSpot(spot, q);
+  // The catalog only covers the current season — look up the rest server-side.
+  window.clearTimeout(spotTimer);
+  const seq = ++spotSeq;
+  if (q.length < 2) return;
+  spotTimer = window.setTimeout(async () => {
+    let items = [];
+    try { items = (await apiGet(`/watch/search?q=${encodeURIComponent(q)}`)).items || []; } catch { return; }
+    if (seq !== spotSeq) return;
+    const have = new Set(spotFound.map(t => t.id));
+    const extra = items.filter(t => !have.has(t.id)).map(t => {
+      if (!byId.has(t.id)) byId.set(t.id, t);
+      return byId.get(t.id);
+    });
+    if (!extra.length) return;
+    spotFound = [...spotFound, ...extra];
+    paintSpot(spot, q);
+  }, 300);
+}
+let spotTimer = 0;
+let spotSeq = 0;
+function paintSpot(spot, q) {
   const res = spot.querySelector("[data-wm-res]");
   res.innerHTML = spotFound.slice(0, 24).map(t => tileHtml(t, { hl: q ? highlight(t.name, q) : null })).join("") || `<div class="wm-empty">Ничего не нашлось.</div>`;
   res.querySelectorAll(".wm-tile").forEach((el, i) => {
