@@ -16,6 +16,7 @@ import { openRolesSheet } from "./roles.js";
 import { openExternal, sendNotification } from "./tauri.js";
 import { markMyReportsSeen } from "./notifications.js";
 import { wireGraffiti } from "./graffiti.js";
+import { imgProxy } from "./title-page.js";
 import mascotUrl from "../assets/ayaya-club-ayaya.gif";
 
 export function avatarHtml(telegramId, name, size) {
@@ -284,6 +285,10 @@ function wireProfileCommon(root, telegramId, onReload) {
   });
   const teaser = root.querySelector("#team-teaser");
   if (teaser) teaser.addEventListener("click", openTeamSheet);
+  root.querySelectorAll("[data-pf-title]").forEach(btn => btn.addEventListener("click", async () => {
+    const { openTitleDetail } = await import("./titles.js");
+    openTitleDetail(Number(btn.dataset.pfTitle));
+  }));
 }
 
 export async function loadProfile() {
@@ -350,6 +355,7 @@ export async function loadProfile() {
       <section class="pff-sec pff-rv" id="pff-work">
         <h2 class="pff-h">Работа</h2>
         ${prepHtml(me)}
+        ${voicedRolesHtml(me)}
         ${myWorkHtml(me)}
         <div class="pff-two">
           ${goalCardHtml}
@@ -782,6 +788,25 @@ function prepHtml(me) {
     </section>`;
 }
 
+// Characters this person voiced, grouped by title (voiced_roles from /me and /user/{id}).
+function voicedRolesHtml(d) {
+  const groups = (d.voiced_roles || []).filter(g => g.characters?.length);
+  if (!groups.length) return "";
+  const total = groups.reduce((s, g) => s + g.characters.length, 0);
+  return `
+    <section class="pf-card pf-voiced">
+      <div class="pf-card-head"><h3>🎙️ Озвученные персонажи</h3><span class="pf-voiced-m">${total} в ${groups.length} ${pluralRu(groups.length, "тайтле", "тайтлах", "тайтлах")}</span></div>
+      ${groups.map(g => `
+        <div class="pf-voiced-group">
+          <button type="button" class="pf-voiced-title" data-pf-title="${g.title_id}">${esc(g.title_name || "Без названия")}</button>
+          <div class="pf-voiced-chars">${g.characters.map(c => {
+            const img = imgProxy(c.image_url);
+            return `<div class="pf-voiced-char">${img ? `<img src="${img}" alt="" loading="lazy">` : `<span class="ph"></span>`}<span>${esc(c.name)}</span></div>`;
+          }).join("")}</div>
+        </div>`).join("")}
+    </section>`;
+}
+
 function myBadgesHtml(d) {
   const all = (d.badges || []).slice().sort((a, b) => (b.unlocked ? 1 : 0) - (a.unlocked ? 1 : 0) || (BADGE_RARITY_ORDER[a.rarity] ?? 9) - (BADGE_RARITY_ORDER[b.rarity] ?? 9));
   if (!all.length) return "";
@@ -1085,6 +1110,7 @@ export async function openUserProfile(telegramId) {
       <section class="pff-sec pff-rv" id="pff-work">
         <h2 class="pff-h">Работа</h2>
         ${prepHtml(d)}
+        ${voicedRolesHtml(d)}
         ${myWorkHtml(d, true)}
         <div class="pff-two">
           <section class="pf-card pf-tenure"><h3>Стаж в команде</h3>${tenureProgressHtml(d.member_since_days) || `<div class="pf-quiet">стаж появится позже</div>`}</section>
