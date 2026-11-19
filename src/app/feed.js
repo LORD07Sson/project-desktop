@@ -1,11 +1,3 @@
-// Вкладка «Лента» (история изменений по отчётам + админ-лог).
-// Тот же /api/feed, что у мини-аппа — объединяет report_activity и
-// (только для владельцев студии) admin_log, листается "Показать ещё".
-//
-// Вид — компактная лента активности: события сгруппированы по дням,
-// одна строка на событие (кто · что · по какому отчёту · результат),
-// подряд идущие смены статуса одного отчёта одним человеком свёрнуты в
-// цепочку «Озвучка → Перезапись/дозапись → В работе».
 
 import { state } from "./state.js";
 import { loadPeopleNames, humanizeEvents } from "./people-names.js";
@@ -16,11 +8,7 @@ import { markFeedSeen, getFeedLastSeen } from "./feed-badge.js";
 import { loadAvatars } from "./profile.js";
 
 const FEED_PAGE_SIZE = 60;
-// Смены статуса одного отчёта одним человеком в пределах этого окна
-// сворачиваются в одну строку-цепочку.
 const CHAIN_WINDOW_MS = 30 * 60 * 1000;
-// Подряд идущие файлы/заметки/правки одного человека в одном отчёте
-// сворачиваются в группу «N изменений» (Лента 2.0).
 const GROUP_WINDOW_MS = 60 * 60 * 1000;
 const GROUP_TYPES = new Set(["note", "file", "edit", "deadline", "pipeline"]);
 
@@ -39,9 +27,6 @@ const ICONS = {
   dot: '<circle cx="12" cy="12" r="3"/>',
 };
 
-// action приходит с сервера строкой вида «Статус изменён (mini-app)» —
-// источник в скобках выносим в отдельную метку, по остальному
-// определяем тип события.
 function parseAction(ev) {
   const raw = String(ev.action || "").replace(/^(?:[\p{Extended_Pictographic}️‍]\s*)+/u, "").trim();
   const m = raw.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
@@ -76,8 +61,6 @@ function statusPill(label) {
   return `<span class="fd-pill" style="--c: var(${v})"><i></i>${esc(s.label)}</span>`;
 }
 
-// «U-000001» — так сервер пишет исполнителя без имени (внутренний id).
-// Подменяем на имя из /assignable-users, если человек там есть.
 let usersById = null;
 async function ensureUsers() {
   if (usersById) return;
@@ -85,7 +68,7 @@ async function ensureUsers() {
   try {
     const d = await apiGet("/assignable-users");
     for (const u of d.users || []) usersById.set(Number(u.id), u);
-  } catch (_) { /* без имён — покажем как есть */ }
+  } catch (_) { }
 }
 function personChip(detail) {
   const m = String(detail || "").match(/^U-0*(\d+)$/);
@@ -117,7 +100,6 @@ function dayLabel(d) {
   return { main: long.charAt(0).toUpperCase() + long.slice(1), sub: d.getFullYear() !== today.getFullYear() ? String(d.getFullYear()) : "" };
 }
 
-// Свернуть подряд идущие смены статуса одного отчёта одним человеком.
 function collapse(events) {
   const out = [];
   for (const ev of events) {
@@ -125,7 +107,7 @@ function collapse(events) {
     const prev = out[out.length - 1];
     if (prev && a.type === "status" && prev.a.type === "status" && prev.ev.public_id === ev.public_id
       && prev.ev.actor === ev.actor && Math.abs(parseTs(prev.ev.created_at) - parseTs(ev.created_at)) <= CHAIN_WINDOW_MS) {
-      prev.chain.unshift(ev.detail); // лента идёт от новых к старым — старые статусы в начало цепочки
+      prev.chain.unshift(ev.detail);
       continue;
     }
     if (prev && GROUP_TYPES.has(a.type) && (prev.group || GROUP_TYPES.has(prev.a.type)) && prev.ev.public_id === ev.public_id
@@ -209,7 +191,6 @@ function groupsHtml(items, lastSeen, lastDayKey) {
   return { html, lastDayKey: current };
 }
 
-// ---------- фильтры ----------
 
 const FILTERS = [
   ["all", "Все"],
@@ -246,7 +227,6 @@ function applyFilters(root) {
   if (empty) empty.hidden = !!root.querySelector(".fd-row:not([hidden])");
 }
 
-// ---------- сводка ----------
 
 function summaryHtml(events) {
   const today = dayKey(new Date());
@@ -332,8 +312,6 @@ export async function loadFeed() {
     return false;
   }
   const events = d.events || [];
-  // Точку «прочитано до» берём ДО отметки просмотра — иначе новых не
-  // было бы никогда.
   const lastSeen = getFeedLastSeen();
   markFeedSeen(events[0]?.created_at);
 
@@ -391,8 +369,6 @@ export async function loadFeed() {
       humanizeEvents(res?.events);
       const fresh = res.events || [];
       all = all.concat(fresh);
-      // Новая порция может продолжать последний день — тогда строки
-      // дописываются в его группу, а не открывают дубль заголовка.
       const next = groupsHtml(collapse(fresh), lastSeen, lastDay);
       const lastGroup = list.querySelector(".fd-day:last-child");
       const cut = next.html.indexOf('<div class="fd-day"');

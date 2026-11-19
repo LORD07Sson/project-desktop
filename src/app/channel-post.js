@@ -1,12 +1,3 @@
-// Пост в канал — то же, что «📢 Пост в канал» в админ-панели бота
-// (admin/posts.py): заголовок, блоки («Роли дублировали», «Звукорежиссёр»…)
-// с людьми из базы, фото/видео, кнопки-ссылки. Черновики общие с ботом —
-// начатый там открывается здесь и наоборот. Справа — предпросмотр так,
-// как пост увидят в канале. Публиковать и выбирать канал может только владелец.
-//
-// /api/posts, /api/posts/people, /api/posts/{id} (GET/POST {data}),
-// /api/posts/{id}/media (multipart), /api/posts/{id}/media/{i},
-// /api/posts/{id}/delete, /api/posts/{id}/publish, /api/posts/channel.
 
 import { API_BASE, apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, mediaUrl, ensureMediaToken, askConfirm, clientHeaders } from "./api.js";
 import { esc } from "./utils.js";
@@ -22,12 +13,6 @@ const I = {
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12l18-8-8 18-2-8-8-2Z"/></svg>',
 };
 
-// Разметка приходит с сервера (render_post), но в неё могут попасть
-// теги, которые админ сам вписал в заголовок или реплику. Для
-// предпросмотра оставляем только то, что понимает Telegram, а ссылки —
-// только http(s) и tg.
-// Сколько знаков названия кнопки Telegram показывает на телефоне (Android, ~360 dp) и на компьютере — длиннее обрезается без многоточия.
-// Эмодзи считаем за два знака. Цифры подобраны по реальным постам: 2 в ряд — «✈️ Смотреть в Telegra», 3 — «✈️ Смотреть», 4 — «✈️ Смотр».
 const weigh = t => Array.from(t).reduce((n, c) => n + (/\p{Extended_Pictographic}/u.test(c) ? 2 : 1), 0);
 function labelCap(view, perRow) {
   const total = view === "phone" ? 340 : 400, per = (total - 4 * (perRow - 1)) / perRow;
@@ -39,7 +24,6 @@ function clipLabel(text, cap) {
   return out;
 }
 
-// Раскладка кнопок: «с новой строки» у кнопки задаёт ряды вручную, иначе — по «кнопок в ряд».
 function linkRows(d, links) {
   const manual = links.some(l => l.newrow), n = d.per_row || 2, rows = [];
   links.forEach((l, i) => {
@@ -77,10 +61,10 @@ export async function openChannelPostSheet(openId = null) {
   const sheet = overlay.querySelector(".sheet");
   sheet.classList.add("cp-sheet");
 
-  let meta;      // /posts: список, канал, пресеты, лимиты
+  let meta;
   let people = [];
-  let post = null; // /posts/{id}
-  let view = (() => { try { return localStorage.getItem("cp-view") === "pc" ? "pc" : "phone"; } catch (_) { return "phone"; } })();   // как показывать предпросмотр: телефон или компьютер
+  let post = null;
+  let view = (() => { try { return localStorage.getItem("cp-view") === "pc" ? "pc" : "phone"; } catch (_) { return "phone"; } })();
   let saveTimer = null;
   let saving = Promise.resolve();
 
@@ -94,7 +78,6 @@ export async function openChannelPostSheet(openId = null) {
 
   const data = () => post.data;
 
-  // ---------- сохранение ----------
   function scheduleSave() {
     setSaveState("Сохраняю…");
     window.clearTimeout(saveTimer);
@@ -109,8 +92,6 @@ export async function openChannelPostSheet(openId = null) {
       try {
         const r = await apiPost(`/posts/${id}`, body);
         if (post && post.id === id) {
-          // Сервер мог почистить ссылки — берём его версию, но редактор
-          // не перерисовываем, чтобы не сбить курсор.
           post = { ...r, data: mergeClean(post.data, r.data) };
           renderPreview();
         }
@@ -122,11 +103,7 @@ export async function openChannelPostSheet(openId = null) {
     });
     return saving;
   }
-  // Пока человек печатает, сервер отдаёт нормализованную копию; ссылки
-  // в полях оставляем как ввели, а медиа — как на сервере.
   function mergeClean(local, server) {
-    // Тот же объект, а не копия: обработчики полей редактора держат ссылку на data() и пишут в неё; копия после первого
-    // автосохранения «отрывалась» от них, и дальнейшие правки заголовка и блоков на сервер не уходили (превью оставалось пустым).
     local.media = server.media;
     return local;
   }
@@ -135,7 +112,6 @@ export async function openChannelPostSheet(openId = null) {
     if (el) el.textContent = t;
   }
 
-  // ---------- разметка ----------
   function draftOptions() {
     return meta.posts.map(p => `<option value="${p.id}"${post && post.id === p.id ? " selected" : ""}>${esc((p.preview || "без заголовка").split("\n")[0].slice(0, 48))}${p.published_at ? " · опубликован" : ""}</option>`).join("");
   }
@@ -177,7 +153,7 @@ export async function openChannelPostSheet(openId = null) {
     });
     sheet.querySelectorAll("[data-cp-view]").forEach(b => b.addEventListener("click", () => {
       view = b.dataset.cpView;
-      try { localStorage.setItem("cp-view", view); } catch (_) { /* не запомнится */ }
+      try { localStorage.setItem("cp-view", view); } catch (_) { }
       renderPreview();
     }));
     renderChannel();
@@ -261,7 +237,6 @@ export async function openChannelPostSheet(openId = null) {
         <div class="cp-label">Фото и видео <span>${d.media.length} / ${meta.limits.media}</span></div>
         <div class="cp-media">
           ${d.media.map((m, i) => {
-            // Фото — сама картинка, видео — кадр из него (сервер вырезает его ffmpeg-ом); нет кадра — плашка с названием.
             const src = mediaUrl(`/posts/${post.id}/media/${i}`);
             const video = m.kind === "video";
             return `<div class="cp-thumb">${src ? `<img src="${src}" alt="" ${video ? `data-cp-poster="1"` : ""}>` : ""}${video ? `<span class="cp-thumb-video${src ? " over" : ""}">${I.play}<span>${esc(m.name || "видео")}</span></span>` : ""}
@@ -419,7 +394,6 @@ export async function openChannelPostSheet(openId = null) {
     renderPreview();
   }
 
-  // Выбор обложки видео: сервер вырезает кадры по всей длине ролика, человек кликает нужный; он уйдёт в cover при публикации.
   async function openCoverPicker(index) {
     await flush();
     const pid = post.id;

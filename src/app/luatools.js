@@ -1,5 +1,3 @@
-// LuaTools — полная интеграция.
-// Главная, Добавить, Управление, Инструменты, Режим, Фиксы, Плагин, Загрузки, Настройки.
 
 import { invoke, listen, openExternal, pickInputFiles, pickInputFile, pickOutputFile } from "./tauri.js";
 import { $ } from "./utils.js";
@@ -12,10 +10,8 @@ import {
 import { setLuatoolsDropHandler } from "./file-drop.js";
 import { parseLua, setDepotLocked, setDepotEnabled, setDepotManifest } from "./luatools-parser.js";
 
-// Ошибки из invoke() приходят строкой, из fetch — Error: показываем оба вида.
 const errMsg = e => (e && typeof e === "object" && e.message) ? e.message : String(e ?? "Ошибка");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-// Minimal markdown → HTML (as Markdig does for fix descriptions): headings, bold, italic, code, links, lists.
 function md(src) {
   if (!src) return "";
   let html = esc(src)
@@ -44,14 +40,13 @@ let currentPage = "home";
 let onboardingDone = false;
 let hardwareAppIds = new Set();
 let ltConfig = {};
-let gameNames = {}; // AppID → Name cache from Steam applist
+let gameNames = {};
 
-// ── Download queue (in-memory) ─────────────────────────────────────
 const DL_HISTORY_KEY = "lt_dl_history";
 const dlQueue = { items: [], history: loadDlHistory() };
 let dlIdCounter = 0;
-const retryFns = new Map(); // id → () => Promise (только в этой сессии)
-const inflight = new Set();  // "appId:source" — защита от двойного клика
+const retryFns = new Map();
+const inflight = new Set();
 
 function loadDlHistory() {
   try { return JSON.parse(localStorage.getItem(DL_HISTORY_KEY) || "[]").slice(0, 20); } catch { return []; }
@@ -60,7 +55,7 @@ function saveDlHistory() {
   try {
     const slim = dlQueue.history.slice(0, 20).map(({ id, label, appId, status, error, startTime }) => ({ id, label, appId, status, error, startTime }));
     localStorage.setItem(DL_HISTORY_KEY, JSON.stringify(slim));
-  } catch { /* noop */ }
+  } catch { }
 }
 
 function queueAdd(label, appId) {
@@ -79,7 +74,6 @@ function queueDone(item, ok, err) {
   if (currentPage === "downloads") renderPage("downloads");
   queuePump();
 }
-// Downloads run one at a time in queue order; pending ones can be reordered or cancelled.
 function queuePump() {
   if (dlQueue.items.some(i => i.status === "downloading" || i.status === "installing")) return;
   const next = dlQueue.items.find(i => i.status === "pending" && i._go);
@@ -117,14 +111,12 @@ function queueStatus(item, status, progress) {
   if (currentPage === "downloads") renderPage("downloads");
 }
 
-// Блокирует кнопку на время операции (двойной клик = двойной invoke).
 async function withBusy(btn, fn) {
   if (!btn || btn.disabled) return;
   btn.disabled = true;
   try { return await fn(); } finally { if (btn.isConnected) btn.disabled = false; }
 }
 
-// ── Game name cache ────────────────────────────────────────────────
 
 let _namesLoading = null;
 function gameName(appId) { return gameNames[appId] || String(appId); }
@@ -138,14 +130,12 @@ async function loadGameNames() {
       const data = JSON.parse(raw);
       const apps = Array.isArray(data) ? data : (data?.applist?.apps || data?.apps || []);
       for (const a of apps) if (a.appid && a.name) gameNames[a.appid] = a.name;
-    } catch { /* cache miss */ }
-    // SteamTools-Team/GameList — ежедневно обновляемый список (перезаписывает поверх applist)
+    } catch { }
     try {
       invoke("lt_gamelist_sync").catch(() => {});
       const kinds = ["games", "dlc", "hardware", "software", "videos"];
       const lists = await Promise.all(kinds.map(kind => invoke("lt_gamelist_read_kind", { kind }).then(JSON.parse).catch(() => [])));
       lists.forEach((list, i) => {
-        // Железо, софт и видео — в фильтр «Скрывать железо/софт» вместе со списком jsnli.
         const nonGame = i >= 2;
         for (const a of list) {
           if (!a.appid) continue;
@@ -153,14 +143,13 @@ async function loadGameNames() {
           if (nonGame) hardwareAppIds.add(a.appid);
         }
       });
-    } catch { /* GameList unavailable — applist names are enough */ }
+    } catch { }
     if (Object.keys(gameNames).length && ["home", "builds", "manage"].includes(currentPage)) renderPage(currentPage);
     _namesLoading = null;
   })();
   return _namesLoading;
 }
 
-// ── Entry ──────────────────────────────────────────────────────────
 
 export function openDetailFromDeepLink(appId, kind) {
   if (kind === "game" || kind === "install") openDetail(appId);
@@ -224,14 +213,11 @@ function attachDropZone(body) {
       if (m) { openDetail(parseInt(m[1], 10)); return; }
     }
 
-    // Файлы сюда не доходят: WebView2 отдаёт drop нативному обработчику Tauri
-    // (file-drop.js → installDroppedPaths), у File в вебвью нет пути на диске.
   });
 
   setLuatoolsDropHandler(paths => installPaths(paths, body));
 }
 
-// Установка файлов, пришедших перетаскиванием или из «Обзор файлов…».
 async function installPaths(paths, body) {
   const validExt = /\.(lua|manifest|zip)$/i;
   {
@@ -250,19 +236,16 @@ async function installPaths(paths, body) {
   }
 }
 
-// Картинки: у новых игр header.jpg лежит по другому пути CDN (store_item_assets/…/<hash>/),
-// старый адрес отдаёт 404. При ошибке берём header_image из appdetails, иначе — заглушка.
-// Найденный адрес запоминаем: иначе каждая отрисовка снова бьёт в 404 (WebView режет его как ERR_BLOCKED_BY_ORB).
 const HEADER_KEY = "lt_header_urls";
 let headerUrls = {};
 try { headerUrls = JSON.parse(localStorage.getItem(HEADER_KEY) || "{}") || {}; } catch { headerUrls = {}; }
-const imgCache = new Map(); // appId → Promise<string|null>
+const imgCache = new Map();
 function headerImageFor(appId) {
   if (!imgCache.has(appId)) imgCache.set(appId, ltGameDetails(String(appId)).then(d => {
     const url = d?.header_image || null;
     if (url) {
       headerUrls[appId] = url;
-      try { localStorage.setItem(HEADER_KEY, JSON.stringify(headerUrls)); } catch { /* noop */ }
+      try { localStorage.setItem(HEADER_KEY, JSON.stringify(headerUrls)); } catch { }
     }
     return url;
   }).catch(() => null));
@@ -272,7 +255,6 @@ function attachImageFallback(body) {
   body.addEventListener("error", async e => {
     const img = e.target;
     if (img?.tagName !== "IMG") return;
-    // Иконки достижений: инлайн-onerror запрещён CSP, прячем здесь.
     if (img.classList.contains("lt-ach-icon")) { img.style.visibility = "hidden"; return; }
     if (!img.dataset?.ltImg) return;
     const stage = img.dataset.ltStage || "";
@@ -297,11 +279,9 @@ function attachGlobal(body) {
     if (active) { active.progress = percent; if (currentPage === "downloads") renderPage("downloads"); }
   });
   body.addEventListener("click", e => {
-    // <a target="_blank"> в webview ничего не открывает — отдаём системному браузеру.
     const link = e.target.closest('a[target="_blank"][href^="http"]');
     if (link) { e.preventDefault(); openExternal(link.href).catch(err => toast(errMsg(err), "error")); return; }
 
-    // #lt-page-content carries data-page too (for page-specific CSS) — it is not a nav link.
     const nav = e.target.closest("[data-page]:not(#lt-page-content)");
     if (nav) { switchPage(nav.dataset.page); return; }
     if (e.target.closest("#lt-restart-steam")) { doRestartSteam(); return; }
@@ -344,7 +324,6 @@ function attachGlobal(body) {
     const card = e.target.closest("[data-appid]:not([data-dl-source]):not([data-remove-appid])");
     if (card) {
       const id = parseInt(card.dataset.appid, 10);
-      // Manage → a side panel with info + actions (like LuaTools); elsewhere the full page.
       if (currentPage === "manage" && card.classList.contains("lt-gc")) openGameDrawer(id);
       else openDetail(id);
     }
@@ -366,7 +345,7 @@ async function renderPage(page) {
   if (!el) return;
   const renderers = { home: renderHome, builds: renderBuilds, add: renderAdd, manage: renderManage, tools: renderTools, mode: renderMode, fixes: renderFixes, plugin: renderPlugin, downloads: renderDownloads, settings: renderSettings };
   const fn = renderers[page];
-  el.dataset.page = page; // ширина страницы задаётся в luatools.css по data-page
+  el.dataset.page = page;
   if (fn) await fn(el);
 }
 
@@ -415,9 +394,6 @@ function updateAuthUI() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// ONBOARDING
-// ══════════════════════════════════════════════════════════════════
 
 function renderOnboarding(el) {
   el.innerHTML = `<div class="lt-onboarding">
@@ -456,9 +432,6 @@ function renderOnboarding(el) {
   });
 }
 
-// ══════════════════════════════════════════════════════════════════
-// BUILDS
-// ══════════════════════════════════════════════════════════════════
 
 const BUILDS_PER_PAGE = 24;
 
@@ -513,9 +486,6 @@ async function renderBuilds(el) {
   render();
 }
 
-// ══════════════════════════════════════════════════════════════════
-// HOME
-// ══════════════════════════════════════════════════════════════════
 
 const HOME_ICONS = {
   steam: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r=".6"/><circle cx="17.5" cy="13" r=".6"/></svg>',
@@ -606,9 +576,6 @@ async function loadFeaturedStrip() {
   } catch { grid.innerHTML = ''; }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// UI helpers for the redesigned pages
-// ══════════════════════════════════════════════════════════════════
 
 const UI_ICONS = {
   search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>',
@@ -638,7 +605,6 @@ const isHardware = i => hardwareAppIds.has(i.appId) || hardwareAppIds.has(String
   || /^(Steam (Controller|Deck|Frame|Machine|Link|Index)|Valve Index)\b/i.test(i.name || "");
 const dropHardware = items => ltConfig.filter_hardware !== false ? items.filter(i => !isHardware(i)) : items;
 
-// «Результатов на странице» + номера страниц (1 2 … N), как в LuaTools.
 function pagerHtml(page, pages, perPage, sizes = [12, 24, 48], total = Infinity) {
   if (total <= sizes[0]) return "";
   let nums = "";
@@ -685,8 +651,7 @@ function bindStripArrows(strip) {
   requestAnimationFrame(sync);
 }
 
-// Считаем только закреплённые депо: незакреплённые плагин обновляет сам.
-const outdatedCache = new Map(); // appId → Promise<{ id, have, latest }[]>
+const outdatedCache = new Map();
 function outdatedDepots(appId) {
   if (!outdatedCache.has(appId)) outdatedCache.set(appId, (async () => {
     const [text, info] = await Promise.all([invoke("lt_read_lua", { appId }).catch(() => ""), ltDepotInfo(appId)]);
@@ -697,7 +662,6 @@ function outdatedDepots(appId) {
   })().catch(() => []));
   return outdatedCache.get(appId);
 }
-// Ограничиваем параллельность: steamcmd.net не любит пачку запросов сразу.
 async function forEachOutdated(appIds, fn, limit = 4) {
   const queue = [...appIds];
   await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => {
@@ -741,9 +705,6 @@ function bindBrowse(el) {
   })));
 }
 
-// ══════════════════════════════════════════════════════════════════
-// ADD
-// ══════════════════════════════════════════════════════════════════
 
 function renderAdd(el) {
   el.innerHTML = `<div class="lt-narrow">
@@ -805,9 +766,6 @@ function renderAdd(el) {
   input.focus();
 }
 
-// ══════════════════════════════════════════════════════════════════
-// MANAGE
-// ══════════════════════════════════════════════════════════════════
 
 const manageState = { q: "", page: 0, perPage: 24, sort: "added", onlyOutdated: false, selecting: false, sel: new Set() };
 
@@ -895,7 +853,6 @@ async function renderManage(el) {
     if (ms.onlyOutdated) draw();
   });
 
-  // В режиме выбора клик по карточке отмечает её, а не открывает панель (перехватываем до общего обработчика).
   el.querySelector("#lt-manage-grid").addEventListener("click", e => {
     if (!ms.selecting) return;
     const card = e.target.closest(".lt-gc[data-appid]");
@@ -935,9 +892,6 @@ async function renderManage(el) {
   el.querySelector("#lt-manage-refresh").addEventListener("click", e => withBusy(e.currentTarget, () => { outdatedCache.clear(); return renderManage(el); }));
 }
 
-// ══════════════════════════════════════════════════════════════════
-// TOOLS — game list + depot editor with presets
-// ══════════════════════════════════════════════════════════════════
 
 const toolsState = { appId: null, q: "", page: 0, perPage: 10, tab: "depots", depotQ: "", preset: "" };
 
@@ -989,8 +943,8 @@ async function renderTools(el) {
     const appId = toolsState.appId;
     right.innerHTML = '<div class="lt-loading">Загружаю…</div>';
     let text = "", lua = null, variants = [];
-    try { text = await invoke("lt_read_lua", { appId }); lua = parseLua(text, appId); } catch { /* нет файла */ }
-    try { variants = await invoke("lt_list_variants", { appId }); } catch { /* нет */ }
+    try { text = await invoke("lt_read_lua", { appId }); lua = parseLua(text, appId); } catch { }
+    try { variants = await invoke("lt_list_variants", { appId }); } catch { }
     if (appId !== toolsState.appId) return;
     const curHash = text ? shortHash(text) : null;
     const activeVariant = variants.find(v => v.hash === curHash);
@@ -1081,7 +1035,6 @@ async function renderTools(el) {
         return;
       }
 
-      // Stats tab: everything that isn't an achievements bitfield.
       const f32 = i => { const dv = new DataView(new ArrayBuffer(4)); dv.setInt32(0, i | 0, true); return dv.getFloat32(0, true); };
       const rows = Object.entries(stats).filter(([, st]) => !st.bits && !isAchType(st.type)).map(([id, st]) => {
         const type = String(st.type).toUpperCase();
@@ -1130,7 +1083,6 @@ async function renderTools(el) {
       const game = await invoke("lt_game_install_path", { appId }).catch(() => ({ installed: false }));
       const current = await invoke("lt_get_launch_options", { appId }).catch(() => null);
       const saved = (ltConfig.launch_saved || {})[appId];
-      // Steam resets launch options on some updates/reinstalls: offer to put ours back.
       const drift = saved != null && (current ?? "") !== saved;
       body.innerHTML = `<div class="lt-panel">
         <div class="lt-panel-title">Параметры запуска</div>
@@ -1277,9 +1229,6 @@ async function renderTools(el) {
   el.querySelector("#lt-tl-search").addEventListener("input", e => { toolsState.q = e.target.value.trim(); toolsState.page = 0; drawList(); });
 }
 
-// ══════════════════════════════════════════════════════════════════
-// MODE
-// ══════════════════════════════════════════════════════════════════
 
 const MODES = [
   { key: "bst", mode: "BetterSteamTools", title: "BetterSteamTools", badges: ["rec", "cloud"],
@@ -1377,12 +1326,9 @@ async function renderMode(el) {
         renderMode(el);
       } catch (err) { toast(errMsg(err), "error"); }
     }));
-  } catch { /* нет Steam */ }
+  } catch { }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// FIXES
-// ══════════════════════════════════════════════════════════════════
 
 let fixesCache = null;
 const fixState = { q: "", tag: null, mine: false, page: 0, perPage: 24 };
@@ -1441,12 +1387,9 @@ async function renderFixes(el, force = false) {
   el.querySelector("#lt-fix-search").addEventListener("input", e => { fixState.q = e.target.value.trim(); fixState.page = 0; draw(); });
 }
 
-// ══════════════════════════════════════════════════════════════════
-// PLUGIN
-// ══════════════════════════════════════════════════════════════════
 
 async function renderPlugin(el) {
-  try { pluginStatus = await invoke("lt_plugin_status"); } catch { /* keep */ }
+  try { pluginStatus = await invoke("lt_plugin_status"); } catch { }
   const ps = pluginStatus;
   const ver = ps?.version ? `v${String(ps.version).replace(/^v/i, "")}` : "—";
   const loaderOk = !!ps?.dll_path;
@@ -1476,13 +1419,7 @@ async function renderPlugin(el) {
 }
 
 
-// ══════════════════════════════════════════════════════════════════
-// UTILITIES (в «Настройках»): DLC, лимиты, DDM, Hubcap, DoH, Steamless
-// ══════════════════════════════════════════════════════════════════
 
-// Turns the utility cards into a compact catalog: one collapsed row per tool
-// (icon + name + one-line description); click a row to open just that tool.
-// Children are moved, not re-created, so their event listeners survive.
 function catalogizeUtilities(el) {
   const grid = el.querySelector(".lt-tools-grid");
   if (!grid) return;
@@ -1613,7 +1550,6 @@ async function renderUtilities(el) {
     else { u.innerHTML = '<span class="lt-muted">Нет данных</span>'; }
   } else { el.querySelector("#lt-usage-info").innerHTML = '<span class="lt-warn">Войдите</span>'; }
 
-  // DepotDownloaderMod
   invoke("lt_depot_downloader_info").then(info => {
     const e = el.querySelector("#lt-ddm-info"); if (!e) return;
     e.innerHTML = info.installed ? `<span class="lt-ok">Установлен</span> · <span class="lt-muted">${esc(info.exe_path || '')}</span>` : '<span class="lt-warn">Не установлен</span>';
@@ -1635,7 +1571,6 @@ async function renderUtilities(el) {
     });
   });
 
-  // Hubcap
   invoke("lt_config_get").then(cfg => {
     const existing = cfg?.hubcap_key; if (existing) el.querySelector("#lt-hubcap-key").value = existing;
   }).catch(() => {});
@@ -1646,7 +1581,6 @@ async function renderUtilities(el) {
       const res = await invoke("lt_hubcap_validate", { apiKey: key });
       await invoke("lt_config_set", { key: "hubcap_key", value: key });
       ltConfig.hubcap_key = key;
-      // Формат /user/stats не документирован — показываем то, что узнаём.
       const used = res?.daily_usage ?? res?.usage ?? res?.used;
       const limit = res?.daily_limit ?? res?.limit;
       const expRaw = res?.api_key_expires_at ?? res?.expires_at ?? res?.expiry;
@@ -1659,7 +1593,6 @@ async function renderUtilities(el) {
     } catch (err) { s.innerHTML = `<span class="lt-error">${esc(errMsg(err))}</span>`; }
   }));
 
-  // KerneLua
   if (ltConfig.kernelua_token) {
     const inp = el.querySelector("#lt-kernelua-token");
     if (inp) inp.value = ltConfig.kernelua_token;
@@ -1681,7 +1614,6 @@ async function renderUtilities(el) {
     } catch (err) { s.innerHTML = `<span class="lt-error">${esc(errMsg(err))}</span>`; }
   }));
 
-  // DoH
   el.querySelector("#lt-doh-resolve")?.addEventListener("click", async () => {
     const host = el.querySelector("#lt-doh-host").value.trim(); if (!host) return;
     const r = el.querySelector("#lt-doh-result"); r.innerHTML = '<div class="lt-loading">…</div>';
@@ -1689,7 +1621,6 @@ async function renderUtilities(el) {
     catch (e) { r.innerHTML = `<span class="lt-error">${esc(errMsg(e))}</span>`; }
   });
 
-  // Steamless
   invoke("lt_tool_info", { tool: "steamautocrack" }).then(i => {
     const s = el.querySelector("#lt-sac-status");
     if (s) s.textContent = i.installed ? `Установлено · ${i.version || "?"}` : "Не установлено — скачается при запуске (~37 МБ)";
@@ -1798,9 +1729,6 @@ async function openFixDetail(appId) {
   } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(errMsg(e))}</div>`; el.querySelector("#lt-back-fix")?.addEventListener("click", () => { switchPage("fixes"); }); }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// DOWNLOADS
-// ══════════════════════════════════════════════════════════════════
 
 function humanDlError(e) {
   const t = String(e || "");
@@ -1858,9 +1786,6 @@ async function renderDownloads(el) {
   } catch (e) { const m = el.querySelector("#lt-manifests"); if (m) m.innerHTML = `<div class="lt-error">${esc(errMsg(e))}</div>`; }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// SETTINGS
-// ══════════════════════════════════════════════════════════════════
 
 async function renderSettings(el) {
   let cfg = {};
@@ -1987,7 +1912,6 @@ async function renderSettings(el) {
       const path = await pickInputFile([{ name: "Zip", extensions: ["zip"] }]);
       if (!path) return;
       if (!await confirmAction("Установить все lua и манифесты из бэкапа? Совпадающие lua будут заменены (старые версии останутся в истории).")) return;
-      // Закреплённые версии не трогаем: бэкап должен вернуть ровно то, что было.
       const r = await invoke("lt_install_file", { path, appId: 0, autoUpdate: false });
       outdatedCache.clear();
       toast(`Восстановлено${r.manifest_count ? `: ${r.manifest_count} манифестов` : ""}${r.failed?.length ? ` · ошибок: ${r.failed.length}` : ""}. Перезапустите Steam.`, r.failed?.length ? "warn" : "ok");
@@ -2003,7 +1927,6 @@ async function renderSettings(el) {
       out.textContent = arr.length ? arr.map(t => `${t.title || t.url || "?"}`).join("\n") : "Нет открытых вкладок";
     } catch (e) { out.textContent = String(e); }
   });
-  // «Сбросить загруженные» — команда локального MFG-плагина (127.0.0.1:6767), без него не работает.
   invoke("lt_mfg_ping").then(ok => {
     const b = el.querySelector("#lt-cef-dismiss");
     if (b && !ok) { b.disabled = true; b.title = "Нужен запущенный MFG-плагин (127.0.0.1:6767)"; }
@@ -2036,7 +1959,7 @@ async function renderSettings(el) {
     try {
       const prev = await invoke("lt_ost_config_read").catch(() => null);
       await invoke("lt_ost_config_write", { content: ostEditor.value });
-      if (prev != null && prev !== ostEditor.value) { try { localStorage.setItem(BACKUP_KEY, prev); } catch { /* noop */ } ostUndo.hidden = false; }
+      if (prev != null && prev !== ostEditor.value) { try { localStorage.setItem(BACKUP_KEY, prev); } catch { } ostUndo.hidden = false; }
       toast("opensteamtool.toml сохранён", "ok");
     } catch (err) { toast(errMsg(err), "error"); }
   }));
@@ -2048,8 +1971,6 @@ async function renderSettings(el) {
   }));
 }
 
-// Лёгкая проверка TOML без библиотеки: ловит то, на чём плагин падает чаще всего —
-// битые секции, строки без «=», незакрытые кавычки/скобки, повтор ключа или секции.
 function tomlProblems(src) {
   const errs = [];
   const seenSections = new Set();
@@ -2089,9 +2010,6 @@ function tomlProblems(src) {
   return errs;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// DETAIL (game/depot page)
-// ══════════════════════════════════════════════════════════════════
 
 async function runDiagnostics(box, appId, lua) {
   if (!box) return;
@@ -2150,12 +2068,10 @@ async function openDetail(appId) {
     const img = details?.header_image || steamHeader(appId);
     const sourceList = Object.entries(sources).filter(([, v]) => v === "available").map(([k]) => k);
 
-    // Variants
     let variants = [];
     try { variants = await invoke("lt_list_variants", { appId }); } catch {}
     const currentHash = luaText ? shortHash(luaText) : null;
 
-    // Vault history
     let vaultHistory = [];
     try { vaultHistory = await invoke("lt_vault_history", { appId }); } catch {}
 
@@ -2256,7 +2172,6 @@ async function openDetail(appId) {
       try { await invoke("lt_vault_restore", { appId, hash }); toast("Версия восстановлена", "ok"); openDetail(appId); }
       catch (err) { toast(errMsg(err), "error"); }
     })));
-    // Значки наличия у источников: «· есть» зелёным, «· нет» красным; не удалось проверить — значок пропадает.
     const srcState = {};
     for (const src of sourceList) srcState[`lt:${src}`] = Promise.resolve(true);
     const badge = (id, key, check) => {
@@ -2271,7 +2186,6 @@ async function openDetail(appId) {
     };
     badge("#lt-server-badge", "server", () => apiGet("/lua-cache/has", { appid: appId }).then(r => !!r?.available));
     badge("#lt-hubcap-badge", "hubcap", () => invoke("lt_hubcap_status", { appId, apiKey: ltConfig.hubcap_key })
-      // Hubcap: {status: "available", manifest_file_exists: true} — есть; "not_found" и прочее — нет.
       .then(st => !!st && (st.status === "available" || st.manifest_file_exists === true)));
     badge("#lt-kernelua-badge", "kernelua", () => invoke("lt_kernelua_status", { appId, token: ltConfig.kernelua_token }));
     el.querySelector("#lt-gd-add")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
@@ -2357,7 +2271,6 @@ function renderLuaEntries(lua, appId) {
   return html + "</div>";
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
 
 function shortHash(text) {
   let h = 0;
@@ -2377,7 +2290,7 @@ async function confirmAction(msg) {
     const done = v => {
       document.removeEventListener("keydown", onKey, true);
       overlay.remove();
-      try { prevFocus?.focus?.(); } catch { /* noop */ }
+      try { prevFocus?.focus?.(); } catch { }
       resolve(v);
     };
     const onKey = e => {
@@ -2392,16 +2305,13 @@ async function confirmAction(msg) {
   });
 }
 
-// Загрузка через кэш студии в Telegram (Автоматизация → «Lua и другие»): свежая копия с сервера, иначе lua.tools —
-// и скачанное уходит в кэш для следующего (тот же файл повторно не заливается, сервер только продлевает дату).
-// Любая ошибка кэша — просто промах, загрузка идёт как раньше.
 const cacheKeyPart = v => String(v || "x").replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 40);
 async function cachedDownload(key, url, label) {
   const destDir = await getTmpDir();
   try {
     const hit = await invoke("lt_cache_get", { key, headers: clientHeaders(), destDir });
     if (hit) { toast("Взято из кэша студии", "info"); return hit; }
-  } catch { /* кэш недоступен */ }
+  } catch { }
   if (!ltIsLoggedIn()) throw new Error("Нет в кэше студии — войдите в lua.tools");
   const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir });
   invoke("lt_cache_put", { key, label: label || "", path: filePath, headers: clientHeaders() }).catch(() => {});
@@ -2441,17 +2351,14 @@ async function doDownload(appId, source, gameName) {
   } finally { inflight.delete(key); }
 }
 
-// The lua pins manifest GIDs; Steam can't download a depot without its
-// <depot>_<gid>.manifest, so pull any that the archive didn't include.
 async function ensureManifests(appId) {
   try {
     const r = await invoke("lt_fetch_missing_manifests", { appId, token: ltSession()?.access_token || "" });
     if (r.fetched) toast(`Догружено манифестов: ${r.fetched}`, "ok");
     if (r.failed.length) toast(`Манифесты не найдены: ${r.failed.join(", ")}`, "warn");
-  } catch { /* lua without pins or Steam missing: nothing to fetch */ }
+  } catch { }
 }
 
-// Click on "Add to LuaProject" in the Steam store (via the CEF injector).
 async function handleStoreAdd(appId) {
   if (!appId) return;
   const status = text => invoke("lt_store_status", { appId, text }).catch(() => {});
@@ -2482,10 +2389,9 @@ async function doAltDownload(appId, alt, gameName) {
   try { await queueTurn(item); } catch { inflight.delete(key); return; }
   queueStatus(item, "downloading", 0);
   try {
-    // Сначала кэш студии: свежая копия этой игры из любого источника. Иначе — сам источник, и файл уходит в кэш.
     let zipPath = null;
     try { zipPath = await invoke("lt_cache_get", { key: `man:${appId}:*`, headers: clientHeaders(), destDir: await getTmpDir() }); }
-    catch { /* кэш недоступен */ }
+    catch { }
     if (zipPath) toast("Взято из кэша студии", "info");
     else if (alt === "server") throw new Error("На сервере этой игры нет");
     else {
@@ -2505,7 +2411,6 @@ async function doAltDownload(appId, alt, gameName) {
   finally { inflight.delete(key); }
 }
 
-// ── Manage: game side panel ────────────────────────────────────────
 
 const DRAWER_ICONS = {
   copy: '<svg class="lt-icon" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
@@ -2681,7 +2586,7 @@ async function launchTool(tool, label) {
   try {
     const info = await invoke("lt_tool_info", { tool });
     let latest = null;
-    try { latest = await invoke("lt_tool_latest", { tool }); } catch { /* offline: use what we have */ }
+    try { latest = await invoke("lt_tool_latest", { tool }); } catch { }
     if (!info.installed || (latest && info.version && latest !== info.version)) {
       toast(`${info.installed ? "Обновляю" : "Скачиваю"} ${label}${latest ? ` ${latest}` : ""}…`, "info");
       await invoke("lt_tool_install", { tool });
@@ -2702,7 +2607,6 @@ async function doCodeLogin() {
 }
 
 let loginPending = false;
-// Повторный «Войти» открывает новую попытку: приёмник тот же, код обменивается с verifier последней.
 let loginPkce = null;
 async function doLogin() {
   if (loginPending) {
@@ -2718,10 +2622,9 @@ async function doLogin() {
   try {
     loginPkce = await ltPkceStart();
     let tokens = await invoke("lt_oauth_login", { loginUrl: loginPkce.url });
-    // Server answered with a PKCE code (normal) or, on older setups, implicit tokens.
     if (tokens.code) tokens = await ltPkceExchange(tokens.code, loginPkce.verifier);
     let user = tokens.user || null;
-    if (!user) { try { user = await ltFetchUser(tokens.access_token); } catch { /* имя не критично */ } }
+    if (!user) { try { user = await ltFetchUser(tokens.access_token); } catch { } }
     ltSaveSession({ ...tokens, user });
     updateAuthUI();
     toast("Вошли в lua.tools", "ok");
@@ -2730,7 +2633,6 @@ async function doLogin() {
   } finally { loginPending = false; }
 }
 
-// Сессия на диске — только зашифрованная DPAPI (ключ привязан к учётке Windows).
 async function persistEncryptedSession(data) {
   if (!data?.access_token) {
     await invoke("lt_config_set", { key: "session_enc", value: null });
@@ -2740,7 +2642,6 @@ async function persistEncryptedSession(data) {
   await invoke("lt_config_set", { key: "session_enc", value: enc });
 }
 
-// Любая смена сессии (вход, refresh токена, выход) — пересохраняем.
 ltOnSessionChange(s => { persistEncryptedSession(s).catch(() => {}); });
 
 let sessionRestored = false;
@@ -2752,8 +2653,7 @@ async function restoreEncryptedSession() {
     try {
       const data = JSON.parse(await invoke("lt_dpapi_decrypt", { ciphertextB64: ltConfig.session_enc }));
       if (data?.access_token) { ltSaveSession(data); return; }
-    } catch { /* другая учётка Windows / повреждено */ }
+    } catch { }
   }
-  // Перенос открытой сессии из старых версий → сразу перешифровывается слушателем выше.
   if (legacy?.access_token) ltSaveSession(legacy);
 }

@@ -1,4 +1,3 @@
-// Мелкие чистые хелперы без состояния — используются почти всеми модулями.
 
 export function $(sel) { return document.querySelector(sel); }
 export function $all(sel) { return Array.from(document.querySelectorAll(sel)); }
@@ -32,8 +31,6 @@ export function pluralColleagues(n) {
   return "коллег";
 }
 
-// Относительное время ("5 мин назад") — используется в ленте и (в будущем)
-// где угодно ещё, где приходит серверная дата вида "YYYY-MM-DD HH:MM:SS".
 export function relTime(iso) {
   if (!iso) return "";
   const d = new Date(iso.replace(" ", "T") + (iso.indexOf("Z") === -1 && iso.indexOf("+") === -1 ? "Z" : ""));
@@ -47,8 +44,6 @@ export function relTime(iso) {
   return `${diffD} дн назад`;
 }
 
-// Серверная дата «YYYY-MM-DD HH:MM[:SS]» (UTC) → местное время для людей: «сегодня, 17:59»,
-// «вчера, 17:59», «3 нояб., 17:59» (с годом, если он не текущий). Нераспознанное вернём как есть.
 export function formatWhen(iso, now = new Date()) {
   if (!iso) return "";
   const s = String(iso);
@@ -69,10 +64,6 @@ export function formatTime(sec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-// Заметка с тайм-кодом — «[4:12] шум на вдохе». Отдельного поля под время
-// в API заметок нет (см. docs/API.md), поэтому оно живёт префиксом в самом
-// тексте: боту и мини-аппу это просто первые символы строки, ничего не
-// ломается, а десктоп вытаскивает время регуляркой и показывает меткой.
 const NOTE_TIME_RE = /^\[(\d{1,3}):([0-5]\d)(?::([0-5]\d))?\]\s*/;
 
 export function parseNoteTime(text) {
@@ -83,13 +74,10 @@ export function parseNoteTime(text) {
   return { seconds, label: c ? `${a}:${b}:${c}` : `${a}:${b}`, rest: String(text).slice(m[0].length) };
 }
 
-// То же самое в обратную сторону — для кнопки «находки QC в заметки».
 export function noteTimePrefix(seconds) {
   return `[${formatTime(seconds)}] `;
 }
 
-// Строка из поля ввода: «4:12», «04:12», «1:02:03». Пусто — время не
-// указано (обычная заметка), мусор — null, и вызывающий ругается.
 export function secondsFromTimeInput(value) {
   const v = String(value || "").trim();
   if (!v) return 0;
@@ -121,11 +109,6 @@ export const STATUS_COLOR_VAR = {
 
 export const BADGE_RARITY_ORDER = { legendary: 0, epic: 1, rare: 2, common: 3, custom: 0 };
 
-// Нативное контекстное меню по правому клику — не привязано к одной
-// вкладке, чтобы можно было переиспользовать где угодно (сейчас —
-// строки «Команда» в profile.js). Одно меню в DOM на всё приложение,
-// закрывается по клику вовне/Escape/скроллу — обычное поведение любого
-// контекстного меню в десктопном приложении.
 let menuEl = null;
 function closeContextMenu() {
   if (menuEl) { menuEl.remove(); menuEl = null; }
@@ -136,11 +119,8 @@ function closeContextMenu() {
   document.removeEventListener("keydown", onMenuKeydown);
 }
 function onMenuKeydown(e) { if (e.key === "Escape") closeContextMenu(); }
-// Правый клик по другому месту, пока меню открыто, должен закрыть его,
-// а не оставить старое висящим поверх нового контента.
 function closeOnNextContextMenu() { closeContextMenu(); }
 
-// items: [{ label, danger?, action() }]
 export function showContextMenu(x, y, items) {
   closeContextMenu();
   menuEl = document.createElement("div");
@@ -172,7 +152,6 @@ export function showContextMenu(x, y, items) {
   }, 0);
 }
 
-// Готовность по пайплайну. При параллельной сдаче pipeline_stage стоит на месте, поэтому считаем и по числу сдавших.
 export function pipelinePct(r) {
   const roles = r.pipeline_roles || [];
   if (!roles.length || (r.pipeline_stage == null && r.pipeline_done == null)) return null;

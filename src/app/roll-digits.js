@@ -1,9 +1,3 @@
-// Прокрутка цифр, как у часов из референса (разобрано покадрово, 60 к/с):
-//   • старая цифра уезжает вверх с ускорением и обрезается краем окошка — ~115 мс;
-//   • через ~50 мс снизу въезжает новая (окошко чуть ниже строки — сначала видна её верхушка),
-//     за ~150 мс встаёт на место, проскакивает на 2–3 % выше и до ~0,5 с мягко оседает;
-//   • меняются только изменившиеся знаки; при 59→00 десятки и минуты прокручиваются тем же движением.
-// Использование: rollText(el, "14:32:07") — первый вызов просто рисует, следующие анимируют разницу.
 
 const reduce = () => typeof window.Element?.prototype.animate !== "function" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -24,10 +18,8 @@ function rollCell(c, ch) {
   next.textContent = ch;
   c.append(next);
   if (reduce()) { old?.remove(); return; }
-  // уход вверх: ease-in, 7 кадров
   old?.animate([{ transform: "translateY(0)" }, { transform: "translateY(-115%)" }], { duration: 115, easing: "cubic-bezier(.55,0,.9,.4)", fill: "forwards" })
     .finished.then(() => old.remove(), () => old.remove());
-  // вход снизу с пружиной: на месте к ~200 мс, перелёт ~3 %, оседает к ~520 мс
   next.animate([
     { transform: "translateY(115%)", offset: 0 },
     { transform: "translateY(-3%)", offset: .38 },

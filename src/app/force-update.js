@@ -1,8 +1,3 @@
-// Принудительное обновление: владелец задал минимальную версию, а эта старее. Сервер говорит об этом флагом
-// update_required в /whoami или отказом 426 на остальные запросы (api.js шлёт событие project:update-required).
-// Окно не закрывается — работать на старой версии сервер всё равно не даст; кнопка ставит обновление сразу.
-// До настроек отсюда не добраться, поэтому всё, что может понадобиться, — прямо в окне: откуда качать (GitHub
-// у части людей не открывается — тогда «Сервер»), «Переустановить начисто» и установщик в браузере.
 
 import { esc } from "./utils.js";
 import { API_BASE } from "./api.js";
@@ -14,7 +9,7 @@ const SOURCES = [["auto", "Авто: GitHub, если не открываетс�
 
 async function setupUrl() {
   let channel = "stable";
-  try { channel = await invoke("get_update_channel"); } catch (_) { /* старая сборка — стабильный канал */ }
+  try { channel = await invoke("get_update_channel"); } catch (_) { }
   const origin = API_BASE.replace(/\/api$/, "");
   return channel === "alpha" ? `${origin}/updates/alpha/ProjectDesktop-alpha-Setup.exe` : `${origin}/updates/stable/ProjectDesktop-win-Setup.exe`;
 }
@@ -23,7 +18,7 @@ async function showForceUpdate(message) {
   if (shown) return;
   shown = true;
   let source = "auto";
-  try { source = await invoke("get_update_source"); } catch (_) { /* команды нет — источник не выбрать */ }
+  try { source = await invoke("get_update_source"); } catch (_) { }
   const box = document.createElement("div");
   box.className = "force-update";
   box.setAttribute("role", "alertdialog");
@@ -44,7 +39,6 @@ async function showForceUpdate(message) {
   document.body.appendChild(box);
   const btn = box.querySelector("[data-force-update]");
   const status = box.querySelector("[data-force-status]");
-  // Окна прогресса и подтверждения — обычные модалки (z-index 50): опускаемся под них, пока они открыты.
   const lower = () => { box.style.zIndex = "45"; };
   box.querySelector("[data-force-source]").addEventListener("change", async e => {
     try {

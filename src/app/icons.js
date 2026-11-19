@@ -1,13 +1,4 @@
 /* global NodeFilter */
-// Линейные иконки вместо цветных эмодзи.
-//
-// Эмодзи рисуются системным шрифтом, и на разных машинах выглядят по-разному («как в Телеграме»), а рядом с
-// остальным интерфейсом — со штриховыми значками 24×24 — смотрятся чужими. Поэтому служебные эмодзи в тексте
-// интерфейса заменяются на SVG в том же стиле (штрих 1.7, скруглённые концы, цвет текста).
-//
-// Замена делается один раз для всего окна (startEmojiIcons в main.js): так она закрывает и разметку, собранную
-// в десятках модулей, и подписи, которые присылает сервер («🎙 Равка для озвучки»). Содержание, написанное
-// людьми (сообщения, заметки, био, реакции), не трогается — см. EXCLUDE.
 
 const c = (cx, cy, r) => `<circle cx="${cx}" cy="${cy}" r="${r}"/>`;
 const r = (x, y, w, h, rx) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/>`;
@@ -87,14 +78,12 @@ export const ICONS = {
   play: p("M8 5v14l11-7z"),
 };
 
-/** SVG-разметка иконки: <span class="ei"> наследует цвет и размер текста. */
 export function iconHtml(name, extra = "") {
   const body = ICONS[name];
   if (!body) return "";
   return `<span class="ei${extra ? " " + extra : ""}" aria-hidden="true"><svg viewBox="0 0 24 24">${body}</svg></span>`;
 }
 
-// Эмодзи → иконка. Ключи без селектора вида (U+FE0F). Чего здесь нет, остаётся эмодзи как есть.
 export const EMOJI_ICON = {
   "🖼": "image", "🎬": "film", "🎞": "film", "🎵": "music", "🎙": "mic", "📄": "doc", "📜": "doc", "🧾": "doc", "📎": "clip",
   "🗑": "trash", "⬇": "download", "⬆": "upload", "📥": "inbox", "📂": "folder", "📁": "folder", "🗂": "board", "🗄": "database", "💾": "database",
@@ -111,7 +100,6 @@ export const EMOJI_ICON = {
 
 const DOT_COLOR = { "🟢": "#4fbf8b", "🟡": "#e3b23c", "🔴": "#e5534b", "⚪": "#807169" };
 
-// Содержание, написанное людьми, и поля ввода — эмодзи там остаются как есть.
 const EXCLUDE = [
   "input", "textarea", "select", "[contenteditable]", "script", "style", "[data-keep-emoji]",
   ".ms-bubble", ".ms-quote", ".ms-react", ".ms-reacts", ".ms-react-pop", ".ms-replybar", ".ms-pin-item", ".ms-file-item",
@@ -142,7 +130,7 @@ function replaceText(node) {
     last = m.index + m[0].length;
     changed = true;
   }
-  if (!changed) return; // ничего не заменили — DOM не трогаем (иначе наблюдатель зациклится)
+  if (!changed) return;
   if (last < text.length) frag.append(text.slice(last));
   node.replaceWith(frag);
 }
@@ -157,9 +145,7 @@ function iconize(root) {
   texts.forEach(replaceText);
 }
 
-/** Заменяет эмодзи на иконки во всём окне и следит за новыми узлами (экраны перерисовываются постоянно). */
 export function startEmojiIcons(root = document.body) {
-  // Проверка сборки (verify-modules.mjs) выполняет бандл в Node с урезанным document — без DOM-API делать нечего.
   if (!root || typeof NodeFilter === "undefined" || typeof MutationObserver === "undefined" || typeof requestAnimationFrame === "undefined") return;
   const queue = new Set();
   let frame = 0;

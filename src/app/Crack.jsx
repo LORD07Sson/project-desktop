@@ -1,13 +1,10 @@
-// Трещины на обложке в герое «Обзора»: чем ближе срок, тем сильнее треснуло стекло. За 3 дня — первые
-// волоски от точки удара, в последний день трещины ползут прямо на глазах (до полуночи), просрочено — разбито.
-// Рисунок у каждой серии свой (зерно — public_id) и не прыгает между перерисовками: растёт только длина линий.
 
 import { For, Show, createSignal, onCleanup } from "solid-js";
 import { apiPost, toast } from "./api.js";
 import { initials } from "./utils.js";
 import { loadAvatars } from "./profile.js";
 
-const W = 100, H = 140;   // viewBox под пропорции обложки 3 : 4.2
+const W = 100, H = 140;
 
 function rng(seedText) {
   let h = 1779033703;
@@ -21,7 +18,6 @@ function rng(seedText) {
 
 const inside = (x, y) => x > -2 && x < W + 2 && y > -2 && y < H + 2;
 
-// Ломаная от (x, y) в направлении angle до края или пока не кончится maxLen.
 function walk(rand, x, y, angle, maxLen, wobble) {
   const pts = [[x, y]];
   let len = 0;
@@ -38,7 +34,6 @@ function walk(rand, x, y, angle, maxLen, wobble) {
 
 const d = pts => pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join("");
 
-// Линии с порогом: start — с какой силы трещина появляется, span — за сколько дорастает до конца.
 function geometry(seed) {
   const rand = rng(seed);
   const cx = 28 + rand() * 44, cy = 40 + rand() * 50;
@@ -50,7 +45,6 @@ function geometry(seed) {
     const pts = walk(rand, cx, cy, a, 200, 0.55);
     const start = 0.02 + (order[i] / n) * 0.5;
     lines.push({ d: d(pts), pts, start, span: 0.32, w: 1 });
-    // Ответвления — появляются позже своей ветки.
     for (let k = 2; k < pts.length - 1; k += 2 + Math.floor(rand() * 3)) {
       if (rand() < 0.45) continue;
       const side = rand() < 0.5 ? -1 : 1;
@@ -58,7 +52,6 @@ function geometry(seed) {
       lines.push({ d: d(fork), pts: fork, start: Math.min(0.9, start + 0.18 + (k / pts.length) * 0.3), span: 0.2, w: 0.7 });
     }
   }
-  // Кольца вокруг удара — паутина, когда уже совсем горит.
   for (const [r, start] of [[7 + rand() * 3, 0.55], [15 + rand() * 6, 0.72], [27 + rand() * 8, 0.86]]) {
     const parts = [];
     for (let i = 0; i <= n; i++) {
@@ -68,7 +61,6 @@ function geometry(seed) {
     }
     lines.push({ d: d(parts), pts: parts, start, span: 0.14, w: 0.6 });
   }
-  // Выбитый осколок у точки удара — только у просроченных.
   const shard = Array.from({ length: 5 }, (_, i) => {
     const a = (i / 5) * Math.PI * 2 + rand() * 0.6;
     const rr = 3 + rand() * 4;
@@ -83,9 +75,6 @@ function geometryFor(seed) {
   return cache.get(seed);
 }
 
-// Сила 0…1 по оставшемуся времени. left — целые дни до срока (null — без срока).
-// Мрак последних часов: 0 — до срока больше 10 часов, 1 — полночь (и всё просроченное). Темнеет картинка,
-// глаз становится больше и они подбираются ближе, в последний час мигает свет.
 export const GLOOM_HOURS = 10;
 export function gloomLevel(left, now) {
   if (left === null || left === undefined || left > 0) return 0;
@@ -100,7 +89,6 @@ export function crackLevel(left, now) {
   if (left === null || left === undefined || left > 3) return 0;
   if (left < 0) return 1;
   if (left > 0) return [0, 0.4, 0.26, 0.13][left];
-  // Сегодня: от 0.5 утром до 0.97 к полуночи — трещины растут, пока идёт обратный отсчёт.
   const dayPart = (now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 86400;
   return 0.5 + 0.47 * dayPart;
 }
@@ -131,8 +119,6 @@ export function Crack(props) {
   );
 }
 
-// Осколки: кусочки самой обложки откалываются по видимым трещинам и улетают, падая. Чем ближе срок — тем чаще
-// и крупнее; у просроченной сыплется очередями. Только на активном слайде и если анимации не выключены.
 const SHARD_EVERY = level => (level >= 1 ? 700 : level >= 0.5 ? 3600 - (level - 0.5) * 6000 : level >= 0.35 ? 5500 : level > 0 ? 9000 : 0);
 const motionOff = () => document.documentElement.dataset.motion === "off" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 let shardSeq = 0;
@@ -151,7 +137,6 @@ function makeShard(g, level) {
     const r = size * (0.45 + Math.random() * 0.6);
     return [Math.max(0, Math.min(W, px + Math.cos(a) * r)), Math.max(0, Math.min(H, py + Math.sin(a) * r))];
   });
-  // Летит от точки удара, потом падает вниз.
   const ang = Math.atan2(py - g.cy, px - g.cx) + (Math.random() - 0.5) * 0.8;
   const push = 40 + Math.random() * 90;
   return {
@@ -188,9 +173,9 @@ export function Shards(props) {
     <div class="kd-shards" aria-hidden="true">
       <For each={list()}>
         {s => (<>
-          {/* <b> — тёмная выемка на месте откола, пока осколок летит */}
+          { }
           <b style={{ "clip-path": s.clip, "animation-duration": s.dur }} />
-          {/* Обрезка — на <i>, а полёт и кромка (drop-shadow) — на обёртке: фильтр на самом обрезанном элементе срезается вместе с ним */}
+          { }
           <span style={{ "transform-origin": s.origin, "--dx": s.dx, "--dy": s.dy, "--rot": s.rot, "--tilt": s.tilt, "animation-duration": s.dur }}
             onAnimationEnd={() => drop(s.id)}>
             <i style={{ "background-image": `url("${props.src}")`, "clip-path": s.clip }} />
@@ -201,9 +186,6 @@ export function Shards(props) {
   );
 }
 
-// «Трещина в плите», как часы Чужого в Dishonored 2: за курсором ходит стеклянный осколок, и в нём видно «прошлое» —
-// та же обложка целой, яркой и чуть ближе. Щелчок — прыжок во времени: вспышка, искажение, и открывается серия.
-// Цели живут только в «прошлом»: они внутри обрезки осколка, так что видно их, лишь когда смотришь сквозь стекло.
 export function TimeLens(props) {
   let clip;
   return (
@@ -226,7 +208,6 @@ export function TimeLens(props) {
   );
 }
 
-// Где «враги» стоят на обложке — у каждой серии свои места, не слишком близко друг к другу.
 export function placeTargets(seed, list) {
   const rand = rng(`${seed}:targets`);
   const spots = [];
@@ -242,13 +223,11 @@ export function placeTargets(seed, list) {
   });
 }
 
-// В кого целится курсор (в px обложки): ближе 30px к цели.
 export function aimedTarget(e, targets) {
   const el = e.currentTarget;
   return (targets || []).find(t => Math.hypot(e.offsetX - t.x / 100 * el.clientWidth, e.offsetY - t.y / 100 * el.clientHeight) < 30) || null;
 }
 
-// Удар: красная вспышка и рассечение из точки щелчка, напоминание в Telegram именно этому человеку.
 export async function strike(e, publicId, target, setTargets) {
   const art = e.currentTarget;
   if (target.cooldown_min) {
@@ -275,8 +254,6 @@ export async function strike(e, publicId, target, setTargets) {
   }
 }
 
-// Глаза в темноте вокруг обложки: чем ближе срок, тем больше пар; моргают, следят за курсором, у просроченной — красные.
-// Плюс «сердцебиение» — тёмно-красная виньетка, пульс чаще к полуночи.
 const EYE_PAIRS = (level, gloom) => (level <= 0 ? 0 : level < 0.3 ? 1 : level < 0.5 ? 2 : level < 1 ? 3 + Math.round((level - 0.5) * 6) : 8)
   + Math.round(gloom * 6);
 let eyeSeq = 0;
@@ -291,7 +268,6 @@ export function Eyes(props) {
     if (alive.length >= EYE_PAIRS(props.level(), gloom)) return;
     const hb = box.getBoundingClientRect();
     const art = box.parentElement.querySelector(".kd-slide-art")?.getBoundingClientRect();
-    // С мраком глаза выходят и слева, из-за текста: окружают.
     const from = 0.56 - gloom * 0.5;
     for (let k = 0; k < 20; k++) {
       const x = hb.width * (from + Math.random() * (0.98 - from)), y = hb.height * (0.08 + Math.random() * 0.84);
@@ -299,7 +275,6 @@ export function Eyes(props) {
       if (inArt || alive.some(p => Math.hypot(p.x - x, p.y - y) < 70)) continue;
       const pair = { id: ++eyeSeq, x, y, size: 0.6 + Math.random() * 0.8, blink: 2.5 + Math.random() * 4, delay: Math.random() * 3, tilt: (Math.random() - 0.5) * 16 };
       setPairs(l => [...l, pair]);
-      // Угасание — классом прямо на узле: новый объект в списке пересоздал бы элемент, и переход бы не сыграл.
       setTimeout(() => { pair.gone = true; box?.querySelector(`[data-eye="${pair.id}"]`)?.classList.add("gone"); }, 5000 + Math.random() * 8000);
       setTimeout(() => setPairs(l => l.filter(p => p.id !== pair.id)), 15000);
       return;
@@ -339,7 +314,6 @@ export function Eyes(props) {
   );
 }
 
-// offsetX/Y — в собственных координатах обложки (она повёрнута на 2°): все слои внутри неё размером с неё саму.
 export function aimLens(e) {
   const el = e.currentTarget;
   el.style.setProperty("--lx", `${e.offsetX}px`);
@@ -359,9 +333,6 @@ export function timeJump(e, open) {
   setTimeout(() => hero.classList.remove("jump"), 800);
 }
 
-// Полночь: обложка разлетается на куски, и они остаются парить в воздухе, медленно покачиваясь, — как обломки в
-// Бездне. Куски — ячейки Вороного (гуще у точки удара), каждая — та же обложка, обрезанная по своему многоугольнику.
-// Взрыв играет один раз за сеанс на серию; дальше куски сразу висят на своих местах.
 function clipHalf(poly, a, b) {
   const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, nx = b[0] - a[0], ny = b[1] - a[1];
   const side = p => (p[0] - mx) * nx + (p[1] - my) * ny;
@@ -379,8 +350,6 @@ function clipHalf(poly, a, b) {
 }
 
 const piecesCache = new Map();
-// extra — сколько случайных осколков добавить к семи у точки удара. Слайду «Обзора» нужны все 16,
-// на обложке карточки 46×64 их не разглядеть, а каждый — это слой во всю обложку.
 function piecesFor(seed, extra = 9) {
   const key = `${seed}:${extra}`;
   if (piecesCache.has(key)) return piecesCache.get(key);
@@ -398,7 +367,7 @@ function piecesFor(seed, extra = 9) {
     if (poly.length < 3) return null;
     const px = poly.reduce((n, p) => n + p[0], 0) / poly.length, py = poly.reduce((n, p) => n + p[1], 0) / poly.length;
     const dx = px - g.cx, dy = py - g.cy, dist = Math.hypot(dx, dy) || 1;
-    const push = 6 + rand() * 10 + (40 - Math.min(40, dist)) * 0.35;   // ближние к удару отлетают дальше
+    const push = 6 + rand() * 10 + (40 - Math.min(40, dist)) * 0.35;
     return {
       clip: `polygon(${poly.map(([x, y]) => `${(x / W * 100).toFixed(2)}% ${(y / H * 100).toFixed(2)}%`).join(",")})`,
       origin: `${(px / W * 100).toFixed(1)}% ${(py / H * 100).toFixed(1)}%`,
@@ -436,8 +405,6 @@ export function Pieces(props) {
   );
 }
 
-// ── То же для маленьких обложек на карточках «Доски» (обычный HTML-строкой: доска рисуется шаблонами) ──
-// Трещины, сыплющиеся сколы (чистый CSS, без таймеров — карточек десятки), мрак и глаза, в полночь — парящие куски.
 const DAY_MS = 86400000;
 function localDay(d) {
   const pad = n => String(n).padStart(2, "0");
@@ -459,7 +426,6 @@ function crackSvgHtml(seed, level) {
   return `<svg class="kd-crack" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" style="--crack-glow:${(level * 0.55).toFixed(2)}">${lines}</svg>`;
 }
 
-// Сколы по видимым трещинам: висят на месте, потом откалываются и падают — цикл повторяется сам.
 function chipsHtml(seed, level, src) {
   if (level < 0.25) return "";
   const g = geometryFor(seed);
@@ -492,7 +458,6 @@ function piecesHtml(seed, src) {
     + `<i style="background-image:url(&quot;${attr(src)}&quot;);clip-path:${p.clip}"></i></em></span>`).join("")}</span>`;
 }
 
-// Состояние карточки по сроку: null — срок далеко (или его нет), обычная обложка.
 export function doomState(deadline, now = new Date()) {
   const left = daysUntil(deadline, now);
   const level = crackLevel(left, now);
@@ -501,7 +466,6 @@ export function doomState(deadline, now = new Date()) {
   return { level, gloom, key: `${level >= 1 ? "x" : (level * 40).toFixed(0)}:${(gloom * 20).toFixed(0)}` };
 }
 
-// Внутренность обёртки обложки на карточке.
 export function doomPosterHtml(seed, src, st) {
   const eyes = st.gloom > 0.25 || st.level >= 1
     ? `<span class="kc-eyes${st.level >= 1 ? " red" : ""}" style="left:${(20 + (rng(seed)() * 50)).toFixed(0)}%"><i></i><i></i></span>` : "";
@@ -513,8 +477,6 @@ export function doomCardStyle(st) {
   return `--gloom:${st.gloom.toFixed(3)};--doom:${st.level.toFixed(3)};--beat:${(1.9 - st.level * 0.9).toFixed(2)}s`;
 }
 
-// Просроченная карточка: поверх неё — подтёки сверху и вторая пара глаз во тьме справа (прожилки — только по запросу:
-// на карточке и слайде они читались как молнии).
 export function deadFxHtml(seed, { veins: nVeins = 0, drips: nDrips = 4 } = {}) {
   const r = rng(`${seed}:dead`);
   const veins = [];
@@ -535,11 +497,10 @@ export function deadFxHtml(seed, { veins: nVeins = 0, drips: nDrips = 4 } = {}) 
     + `<span class="kc-eyes red kc-lurk" style="left:${(80 + r() * 10).toFixed(0)}%;--ld:${(-r() * 9).toFixed(1)}s"><i></i><i></i></span></i>`;
 }
 
-// Треснувшая кнопка на просроченном слайде: точка удара, рваные лучи от неё, обрывки кольца и отколотый уголок.
 export function btnCrackHtml(seed) {
   const r = rng(`${seed}:btn`);
   const W = 160, H = 40;
-  const cx = W * (0.82 + r() * 0.1), cy = H * (0.3 + r() * 0.4); // у правого края, не по надписи
+  const cx = W * (0.82 + r() * 0.1), cy = H * (0.3 + r() * 0.4);
   const rays = [];
   const n = 5 + Math.floor(r() * 3);
   for (let k = 0; k < n; k++) {

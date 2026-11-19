@@ -1,10 +1,3 @@
-//! «Собрать финал у себя»: рендер серии на ПК владельца (видеокарта NVIDIA, NVENC) вместо слабого сервера.
-//!
-//! Сервер присылает ПЛАН (`POST /api/report/{id}/local-render/plan`): какие файлы скачать, какие тексты записать и какие
-//! шаги ffmpeg выполнить (подстановка озвучки, рендер). Здесь мы только исполняем план: качаем файлы потоком в рабочую
-//! папку, запускаем ffmpeg В ЭТОЙ папке (поэтому в аргументах короткие имена файлов, а не пути с двоеточиями),
-//! выбираем кодировщик — NVENC, если видеокарта его тянет, иначе программный (если он есть в нашем ffmpeg) — и отдаём
-//! фронтенду путь к готовому файлу. Загрузку результата в отчёт делает уже существующая `upload_report_file`.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -18,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use crate::audio_qc::{binary_runs, downloaded_tools_dir, hidden_command, resolve_ffmpeg};
 use crate::media_tools::{run_ffmpeg_in, Progress, Stage};
 
-/// Отмена скачивания: ffmpeg отменяется своим механизмом (media_tools::cancel_current_job), загрузка — этим флагом.
 static CANCEL_DOWNLOAD: AtomicBool = AtomicBool::new(false);
 
 #[derive(Deserialize)]
@@ -30,7 +22,6 @@ pub struct Download {
     pub image: Option<String>,
     pub prepared: Option<String>,
     pub label: Option<String>,
-    /// Видео лежит на этом компьютере («Скачать у себя»): вместо загрузки с сервера берём файл, который выбрал пользователь.
     #[serde(default)]
     pub local: Option<bool>,
 }
@@ -83,9 +74,7 @@ pub struct EncoderStatus {
     pub nvenc_h265_error: Option<String>,
 }
 
-/// Закреплённая сборка ffmpeg (LGPL, с NVENC) в нашем же релизе на GitHub — тот же файл и та же сумма, что в CI.
 const FFMPEG_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/tools-ffmpeg-N-127271/ffmpeg-N-127271-gba987fe24d-win64-lgpl.zip";
-/// Официальная сборка (ссылка на неё — на ffmpeg.org/download.html): GPL-версия с libx264/libx265 и NVENC.
 const OFFICIAL_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
 const OFFICIAL_SHA_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256";
 const FFMPEG_SHA256: &str = "32b374c9831ae5640e33977baa4cf04a59704f616a0c3743654697fb3c7f26de";
@@ -94,7 +83,6 @@ const FFMPEG_SHA256: &str = "32b374c9831ae5640e33977baa4cf04a59704f616a0c3743654
 pub struct ToolsStatus {
     pub ffmpeg_ok: bool,
     pub ffprobe_ok: bool,
-    /// bundled | downloaded | path | none
     pub source: String,
     pub path: String,
     pub downloaded_now: bool,
@@ -135,10 +123,7 @@ fn gpu_names() -> String {
         .unwrap_or_default()
 }
 
-/// Скачивает ffmpeg в папку приложения (если рядом с .exe его нет и в PATH тоже), проверяет сумму и распаковывает.
 async fn download_ffmpeg(app: &tauri::AppHandle, client: &reqwest::Client) -> Result<(), String> {
-    // Источники по порядку: наш закреплённый релиз на GitHub (сумма зашита в приложение), затем официальная сборка
-    // gyan.dev (ссылка на ffmpeg.org/download; её сумма берётся из файла .sha256 рядом). Первая удавшаяся — используется.
     let mut errors: Vec<String> = Vec::new();
     match download_from(app, client, FFMPEG_URL, Some(FFMPEG_SHA256), None).await {
         Ok(()) => return Ok(()),
@@ -210,7 +195,6 @@ async fn download_from(
     let expected_for_check = expected_sha.clone();
     let tools_for_extract = tools.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        // сумма — через PowerShell (отдельный крейт под одно действие не тянем)
         let out = hidden_command("powershell")
             .args(["-NoProfile", "-Command", &format!("(Get-FileHash -Algorithm SHA256 -LiteralPath '{}').Hash", zip_for_check.display())])
             .output()
@@ -235,7 +219,6 @@ async fn download_from(
         if !ex.status.success() {
             return Err(format!("Не удалось распаковать ffmpeg: {}", String::from_utf8_lossy(&ex.stderr).trim()));
         }
-        // в архиве бинарники лежат в bin/ — достаём ffmpeg.exe и ffprobe.exe в корень папки инструментов
         let mut found = 0;
         for entry in walk(&tools_for_extract.join("x")) {
             let name = entry.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
@@ -271,8 +254,6 @@ fn walk(dir: &std::path::Path) -> Vec<PathBuf> {
     out
 }
 
-/// Автоматическая проверка инструментов: находит ffmpeg (рядом с .exe → докачанный → PATH); если нет — докачивает из
-/// нашего релиза на GitHub; затем определяет видеокарту и рабочие кодировщики. Всегда возвращает понятный статус.
 pub async fn prepare(app: &tauri::AppHandle, client: &reqwest::Client) -> ToolsStatus {
     let mut error: Option<String> = None;
     let mut downloaded_now = false;
@@ -330,7 +311,6 @@ pub fn request_cancel() {
     CANCEL_DOWNLOAD.store(true, Ordering::SeqCst);
 }
 
-/// Рабочая папка отчёта: только латиница/цифры/дефис из номера отчёта, чтобы имя не вывело за пределы временной папки.
 pub fn work_dir(public_id: &str) -> Result<PathBuf, String> {
     let safe: String = public_id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
     if safe.is_empty() {
@@ -347,7 +327,6 @@ pub fn cleanup(public_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Имя файла плана — только простое имя (без путей): план приходит с сервера, но ему всё равно не доверяем.
 fn safe_name(name: &str) -> Result<&str, String> {
     if name.is_empty() || name.contains(['/', '\\', ':']) || name == "." || name == ".." || name.contains("..") {
         return Err(format!("Недопустимое имя файла в плане: «{name}»."));
@@ -375,7 +354,6 @@ fn encoders_text() -> Result<String, String> {
     Ok(encoders)
 }
 
-/// Кодировщик есть в сборке и реально работает (на машине без видеокарты NVENC в списке есть, но не запускается).
 fn encoder_works(list: &str, name: &str) -> Result<(), String> {
     if !list.contains(name) {
         return Err(format!("в этой сборке FFmpeg нет кодировщика {name}"));
@@ -421,8 +399,6 @@ fn encoder_works(list: &str, name: &str) -> Result<(), String> {
     Err(detail)
 }
 
-/// Проверка кодировщиков — это несколько запусков ffmpeg (и инициализация драйвера NVENC, секунды), поэтому
-/// удачный результат запоминаем до закрытия приложения: перед каждым рендером заново её гонять незачем.
 pub fn encoder_status() -> EncoderStatus {
     static CACHE: std::sync::OnceLock<EncoderStatus> = std::sync::OnceLock::new();
     if let Some(cached) = CACHE.get() {
@@ -488,17 +464,14 @@ pub async fn run(
             serde_json::json!({ "stage": stage, "fraction": fraction.clamp(0.0, 1.0), "label": label }),
         );
     };
-    // Журнал для консоли в карточке рендера: что сделано и что делается (строки ffmpeg шлёт run_step).
     let journal = |kind: &str, text: &str| log_line(app, kind, text);
     journal("step", &format!("Сборка {} у себя: файлов {}, шагов ffmpeg {}", plan.public_id, plan.downloads.len(), plan.steps.len()));
 
-    // 1) тексты (надпись) — маленькие файлы рядом с видео
     for (name, content) in &plan.texts {
         let name = safe_name(name)?;
         std::fs::write(dir.join(name), content).map_err(|e| format!("Не удалось записать {name}: {e}"))?;
     }
 
-    // 2) скачивание файлов потоком (доля прогресса 0–20%)
     let total_files = plan.downloads.len().max(1);
     for (index, item) in plan.downloads.iter().enumerate() {
         let name = safe_name(&item.name)?;
@@ -508,7 +481,6 @@ pub async fn run(
             emit("download", index as f64 / total_files as f64 * 0.2, &format!("Беру видео с компьютера: {label}"));
             journal("step", &format!("Видео с компьютера: {label}"));
             let dest = dir.join(name);
-            // Жёсткая ссылка не копирует гигабайты (если файл на том же диске, что и Temp); иначе обычное копирование.
             if std::fs::hard_link(src, &dest).is_err() {
                 std::fs::copy(src, &dest).map_err(|e| format!("Не удалось взять видео «{label}»: {e}"))?;
             }
@@ -566,12 +538,10 @@ pub async fn run(
     }
     emit("download", 0.2, "Файлы скачаны");
 
-    // 3) кодировщики: проверяем один раз (это запуск ffmpeg)
     let encs = tauri::async_runtime::spawn_blocking(encoder_status)
         .await
         .map_err(|e| format!("Проверка кодировщиков не завершилась: {e}"))?;
 
-    // 4) шаги ffmpeg (доля 20–100% делится по длительности материала и «тяжести»: озвучка — копирование, рендер — основное)
     let weights: Vec<f64> = plan
         .steps
         .iter()
@@ -598,7 +568,6 @@ pub async fn run(
         let mut attempt = run_step(app, &dir, &out_path, args, &label, base, span, step.duration).await;
         if let (Err(first), Some(fb)) = (&attempt, &step.fallback) {
             if !first.contains("отменена") {
-                // Склейка без перекодирования не вышла — общая перекодировка с фильтром concat.
                 let (fb_args, fb_label) = pick_args(&fb.args, fb.args_nvenc.as_ref(), step.vcodec.as_deref(), &encs)?;
                 let label = format!("{} (запасной путь) — {}", step.label, fb_label);
                 journal("warn", &format!("Не вышло, пробую запасной путь: {label}"));
@@ -631,15 +600,12 @@ pub async fn run(
     })
 }
 
-/// Строка журнала «Сборки у себя» в окно (событие localrender-log): kind — step/ok/warn/err/cmd/stat/out.
-/// Длинные строки ffmpeg обрезаются — консоли хватает начала, полный текст всё равно уходит в лог приложения при ошибке.
 fn log_line(app: &tauri::AppHandle, kind: &str, text: &str) {
     use tauri::Emitter;
     let text: String = text.chars().take(600).collect();
     let _ = app.emit("localrender-log", serde_json::json!({ "kind": kind, "text": text }));
 }
 
-/// Выбор аргументов шага: NVENC, если видеокарта его тянет; иначе программный кодек (если он есть); шаги без перекодирования — как есть.
 fn pick_args(
     soft: &[String],
     hw: Option<&Vec<String>>,
@@ -660,7 +626,6 @@ fn pick_args(
     }
 }
 
-/// Один шаг ffmpeg в рабочей папке (в отдельном потоке — процесс блокирующий).
 #[allow(clippy::too_many_arguments)]
 async fn run_step(
     app: &tauri::AppHandle,
@@ -696,7 +661,6 @@ async fn run_step(
     .map_err(|e| format!("Рендер не завершился: {e}"))?
 }
 
-/// Причина отказа сервера: текст из `detail`, а если ответ не от бота (например, от nginx) — по коду статуса.
 async fn response_detail(resp: reqwest::Response) -> String {
     let status = resp.status();
     let detail = resp
@@ -723,7 +687,6 @@ fn urlencode(text: &str) -> String {
         .collect()
 }
 
-/// Загрузка готового файла на сервер: дальше им занимается бот (обложка, Telegram, отчёт, пост).
 pub async fn upload_final(
     client: &reqwest::Client,
     api_base: &str,
@@ -782,7 +745,6 @@ pub struct LocalVideoInfo {
     pub size: u64,
 }
 
-/// Параметры видео на этом компьютере для плана сборки: сервер файла не видит, поэтому ffprobe выполняем здесь.
 pub fn probe_local_video(path: &std::path::Path) -> Result<LocalVideoInfo, String> {
     let ffprobe = crate::media_tools::resolve_ffprobe();
     let output = hidden_command(ffprobe)

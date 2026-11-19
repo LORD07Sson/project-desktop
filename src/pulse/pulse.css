@@ -34,8 +34,6 @@ button { font: inherit; color: inherit; }
 #cNet.hot { cursor: pointer; }
 .stage.focusing #cNet { filter: blur(10px); opacity: 0; pointer-events: none; }
 #cFx { pointer-events: none; }
-
-/* ---------- HUD сети ---------- */
 .hud > * { transition: opacity .7s var(--ease), transform .7s var(--ease), filter .7s; }
 .stage.intro .hud > * { opacity: 0; pointer-events: none; }
 .stage.intro .dock { transform: translate(-50%, 40px); }
@@ -102,8 +100,6 @@ button { font: inherit; color: inherit; }
 .al-t { display: flex; justify-content: space-between; gap: 10px; font: 400 14px var(--disp); }
 .al-t span { font-size: 12px; color: var(--ink-soft); }
 .al-d { font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.35; }
-
-/* ---------- фокус ---------- */
 .focus-dom { position: absolute; inset: 0; pointer-events: none; transition: opacity .4s; }
 .focus-dom > * { pointer-events: auto; }
 .f-title { position: absolute; left: 0; top: 0; width: 420px; margin-left: -210px; text-align: center; white-space: nowrap; transform-origin: 50% 100%; pointer-events: none; }
@@ -224,8 +220,6 @@ button { font: inherit; color: inherit; }
 .legend div { white-space: normal; }
 @media (max-width: 600px) { .wrap { padding-inline: 16px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
-
-/* ---- встраивание в приложение ---- */
 html, body { margin: 0; min-height: 100%; }
 .wrap { max-width: none; padding-block: 12px 16px; }
 .head h1 { font-size: 18px; }
@@ -234,8 +228,6 @@ html, body { margin: 0; min-height: 100%; }
 .algo { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-2); }
 .algo .attn-h b { color: var(--violet); }
 .algo-i { padding: 4px 6px; font-size: 11.5px; line-height: 1.35; color: var(--ink-soft); }
-
-/* ---- правая колонка с вкладками (вся аналитика в одном экране) ---- */
 .rcol { width: 300px; max-height: 640px; }
 .rtabs { display: flex; gap: 2px; padding: 3px; border-radius: 12px; background: color-mix(in srgb, var(--surface) 78%, transparent); border: 1px solid var(--line-2); }
 .rtabs button { flex: 1; height: 27px; border: 0; border-radius: 9px; background: none; color: var(--ink-soft); font-size: 11.5px; font-weight: 700; cursor: pointer; }
@@ -267,13 +259,9 @@ button.rrow { cursor: pointer; }
 .head { margin-bottom: 8px; }
 
 html, body { overflow-x: hidden; }
-
-/* на всё окно: без шапки и внутренней прокрутки */
 html, body { height: 100%; overflow: hidden; }
 .stage-wrap { aspect-ratio: auto; height: 100vh; border-radius: 0; border: 0; }
 .stage-wrap .calm { white-space: nowrap; }
-
-/* интерфейс на весь экран, сцена по центру */
 .scene { position: absolute; width: 1280px; height: 760px; }
 .stage { width: 100%; height: 100%; }
 .stage .focus-dom { inset: auto; left: 0; top: 0; width: 1280px; height: 760px; }
@@ -281,8 +269,6 @@ html, body { height: 100%; overflow: hidden; }
 .rrow, .attn { min-width: 0; }
 .rrow, .attn, .rtabs { box-sizing: border-box; max-width: 100%; }
 .rpane { padding-right: 2px; }
-
-/* сведения о человеке: панель справа поверх колонки */
 .pdet { position: absolute; right: 16px; top: 58px; bottom: 18px; width: 380px; z-index: 9; display: flex; flex-direction: column; padding: 14px; border-radius: 16px;
   border: 1px solid rgba(var(--gold-rgb), .35); background: linear-gradient(var(--surface), var(--surface)), var(--bg-2); box-shadow: 0 24px 60px -24px #000;
   opacity: 0; transform: translateX(16px); transition: opacity .22s var(--ease), transform .22s var(--ease); }
@@ -314,8 +300,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .pd-body, .rpane { overscroll-behavior: contain; contain: layout paint; will-change: scroll-position; }
 .pd-body .rrow, .rpane .rrow { content-visibility: auto; contain-intrinsic-size: auto 58px; }
 .pdet { will-change: transform, opacity; }
-
-/* ---------- «Команда»: Пульс без серий в работе (team.js) ---------- */
 .stage-wrap.team-mode { aspect-ratio: auto; height: 100vh; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
 .tm { position: relative; padding: 30px 32px 40px; }
 .tm h2 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; font: 700 15px var(--disp); }
@@ -330,8 +314,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 @media (max-width: 1100px) { .tm-main { grid-template-columns: minmax(0, 1fr); } }
 .tm-left { display: grid; gap: 34px; min-width: 0; }
 .tm-right { position: sticky; top: 0; min-width: 0; padding: 18px; border-radius: 18px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 50%, transparent); }
-
-/* аватар: фото из Telegram поверх буквы; кольцо — в сети / за / против */
 .tm-av { position: relative; flex: none; width: 42px; height: 42px; border-radius: 50%; display: inline-grid; place-items: center; overflow: hidden;
   font: 800 16px var(--disp); color: #fff; background: hsl(var(--h) 45% 32%); box-shadow: 0 0 0 2px var(--bg-2); }
 .tm-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -366,8 +348,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-never > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .tm-chip { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 3px; border-radius: 99px; border: 1px solid var(--line-2); background: none; color: var(--ink-soft); font-size: 12px; cursor: pointer; }
 .tm-chip:hover { border-color: rgba(var(--gold-rgb), .45); color: var(--ink); }
-
-/* лента: сессии на вертикальной линии */
 .tm-feed { position: relative; display: grid; }
 .tm-feed::before { content: ""; position: absolute; left: 14px; top: 8px; bottom: 8px; width: 1px; background: var(--line-2); }
 .tm-s { position: relative; display: flex; gap: 14px; padding: 10px 0; }
@@ -383,8 +363,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-path i { font-style: normal; font-size: 11px; color: var(--ink-dim); }
 .tm-path em { font-style: normal; font-size: 11.5px; color: var(--ink-dim); }
 .tm-s-x { margin-top: 4px; font-size: 12px; color: var(--ink-soft); }
-
-/* голосование */
 .tm-nv { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .tm-nv small { display: block; margin-bottom: 8px; font-size: 11.5px; color: var(--gold); }
 .tm-stack { display: flex; flex-wrap: wrap; }
@@ -405,8 +383,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-vrow small { flex: none; font-size: 11.5px; color: var(--ink-dim); }
 .tm-vrow b.up { color: var(--s-done); }
 .tm-vrow b.dn { color: #ff7a7a; }
-
-/* боковая панель человека */
 .tm-scrim { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .45); opacity: 0; transition: opacity .22s; }
 .tm-scrim.on { opacity: 1; }
 .tm-drawer { position: fixed; top: 12px; right: 12px; bottom: 12px; z-index: 21; width: min(420px, calc(100% - 24px)); display: flex; flex-direction: column; padding: 20px;
@@ -425,8 +401,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-d-spark .tm-spark { max-width: none; height: 44px; }
 .tm-drawer .tm-s > .tm-av, .tm-drawer .tm-link { display: none; }
 .tm-drawer .tm-feed::before { display: none; }
-
-/* бенто-шапка: активность, кто в сети, голосование, разделы */
 .tm-head { margin-bottom: 18px; }
 .tm-bento { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr); gap: 12px; margin-bottom: 34px; }
 @media (max-width: 1200px) { .tm-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -487,8 +461,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-d-rad { display: grid; place-items: center; padding: 6px 0; }
 .tm-d-rad .tm-radar { max-width: 260px; margin: 0; }
 .tm-drawer h4 .tm-rad-v { margin-left: 6px; color: var(--gold); letter-spacing: .04em; text-transform: none; }
-
-/* переключатель-фильтр людей */
 .tm-sec-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 14px; }
 .tm-sec-h h2 { margin: 0; }
 .tm-seg { position: relative; display: inline-flex; padding: 4px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 70%, transparent); }
@@ -498,13 +470,9 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-seg button[aria-selected="true"] { color: var(--ink); }
 .tm-seg button em { font: 700 10.5px var(--mono); font-style: normal; color: var(--ink-dim); }
 .tm-tile[hidden], .tm-chip[hidden], .tm-never[hidden], .tm-none[hidden] { display: none; }
-
-/* появление: карточки поднимаются по очереди */
 .tm-rise { animation: tm-rise .55s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
 @keyframes tm-rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
 @media (prefers-reduced-motion: reduce) { .tm-rise, .tm-bars i, .tm-radar .shape, .tm-ring .fg, .tm-pulse { animation: none; } }
-
-/* Ошибки у команды (team.js: errHtml) — группа раскрывается, внутри случаи: кто, когда и шаги до ошибки. */
 .tm h2 small { margin-left: auto; font: 500 12px var(--disp); color: var(--ink-dim); }
 .tm-elist { display: grid; gap: 8px; }
 .tm-err { border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface) 55%, transparent); }
@@ -525,8 +493,6 @@ button.rrow.log:hover, button.rrow.team:hover { border-color: rgba(var(--gold-rg
 .tm-trail { margin: 6px 0 0; padding: 0 0 0 18px; display: grid; gap: 2px; color: var(--ink-soft); font: 12px var(--mono); }
 .tm-trail li::marker { color: var(--ink-dim); }
 .tm-trail li.bad { color: var(--s-stop); }
-
-/* Версии программы: полоса во всю ширину под плитками; старая версия — красным. */
 .tm-ver { display: inline-block; padding: 1px 7px; border-radius: 999px; font: 600 11px var(--mono); color: var(--s-done);
   background: color-mix(in srgb, var(--s-done) 13%, transparent); }
 .tm-ver.old { color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 14%, transparent); }

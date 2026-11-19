@@ -1,11 +1,3 @@
-// Nyaa внутри программы: публичная RSS-лента, страница раздачи, картинки из
-// описания и проверка зеркал. Окно приложения чужие сайты не открывает
-// (CSP), поэтому запросы идут отсюда — но только по https и только на
-// публичные адреса: localhost, адреса своей сети и перенаправления туда
-// отклоняются. Адреса запросов собираются здесь из проверенных частей, а не
-// принимаются готовой строкой от интерфейса (кроме картинок описания и
-// проверки зеркал, где проверяется сам адрес). Сами раздачи программа не
-// качает: сохраняется только маленький .torrent и только по кнопке.
 
 use std::net::IpAddr;
 use std::sync::OnceLock;
@@ -32,7 +24,6 @@ fn host_is_public(host: &str) -> bool {
     h.contains('.')
 }
 
-/// Любой публичный https-адрес.
 pub fn check_public_https(url: &str) -> Result<Url, String> {
     let u = Url::parse(url).map_err(|_| "Некорректный адрес.".to_string())?;
     if u.scheme() != "https" {
@@ -44,7 +35,6 @@ pub fn check_public_https(url: &str) -> Result<Url, String> {
     Ok(u)
 }
 
-/// Основа зеркала: только схема и хост (с портом), без пути.
 pub fn base_origin(base: &str) -> Result<String, String> {
     let u = check_public_https(base.trim())?;
     let host = u.host_str().ok_or("Нет адреса сайта.")?;
@@ -139,7 +129,6 @@ pub async fn nyaa_rss(base: String, query: String, category: String, filter: Str
     Ok(String::from_utf8_lossy(&b).into_owned())
 }
 
-/// Страница раздачи /view/{id} (HTML; разбирается в интерфейсе).
 #[tauri::command(async)]
 pub async fn nyaa_view(base: String, id: u64) -> Result<String, String> {
     let u = Url::parse(&format!("{}/view/{id}", base_origin(&base)?)).map_err(|e| e.to_string())?;
@@ -152,7 +141,6 @@ pub async fn nyaa_save_torrent(app: tauri::AppHandle, base: String, id: u64, pat
     let target = app.state::<crate::file_scope::FileScope>().check_write(&path)?;
     let u = Url::parse(&format!("{}/download/{id}.torrent", base_origin(&base)?)).map_err(|e| e.to_string())?;
     let (b, _) = get_bytes(u, MAX_BYTES, None).await?;
-    // .torrent — это bencode-словарь, он начинается с «d»
     if b.first() != Some(&b'd') {
         return Err("Сайт вернул не .torrent.".into());
     }
@@ -172,20 +160,17 @@ pub fn base64(bytes: &[u8]) -> String {
     out
 }
 
-/// Картинка из описания раздачи → data-URL (окно чужие картинки не грузит).
 #[tauri::command(async)]
 pub async fn fetch_image(url: String) -> Result<String, String> {
     let u = check_public_https(&url)?;
     let (b, ctype) = get_bytes(u, MAX_IMAGE, Some("image/*")).await?;
     let mime = ctype.split(';').next().unwrap_or("").trim().to_string();
-    // SVG не пускаем: внутри него бывает скрипт
     if !mime.starts_with("image/") || mime.contains("svg") {
         return Err("Это не картинка.".into());
     }
     Ok(format!("data:{mime};base64,{}", base64(&b)))
 }
 
-/// Сайты, с которых разрешено подтягивать сведения о раздаче по info hash.
 const META_HOSTS: [&str; 5] = ["feed.animetosho.org", "feed.animetosho.xyz", "releases.moe", "nekobt.to", "api.tsukihime.org"];
 
 pub fn meta_url_allowed(url: &str) -> Result<Url, String> {
@@ -198,7 +183,6 @@ pub fn meta_url_allowed(url: &str) -> Result<Url, String> {
     }
 }
 
-/// JSON/текст с одного из внешних источников (SeaDex, AnimeTosho, nekoBT, Tsukihime).
 #[tauri::command(async)]
 pub async fn meta_get(url: String) -> Result<String, String> {
     let u = meta_url_allowed(&url)?;
@@ -206,7 +190,6 @@ pub async fn meta_get(url: String) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&b).into_owned())
 }
 
-/// Запрос к AniList GraphQL: адрес зафиксирован, снаружи приходит только запрос и переменные.
 #[tauri::command(async)]
 pub async fn anilist_query(query: String, variables: serde_json::Value) -> Result<String, String> {
     if query.len() > 4000 {
@@ -238,14 +221,11 @@ pub struct NetCheck {
     pub url: String,
     pub ok: bool,
     pub status: u16,
-    /// Полное время ответа: DNS, соединение, шифрование и ответ самого сайта.
     pub ms: u64,
-    /// Настоящий пинг — время установки TCP-соединения (один проход туда-обратно); None — не соединилось.
     pub ping: Option<u64>,
     pub error: String,
 }
 
-/// Пинг: адрес сайта находим заранее, засекаем только само соединение с ним.
 async fn tcp_ping(u: &Url) -> Option<u64> {
     let host = u.host_str()?;
     let port = u.port().unwrap_or(443);
@@ -283,7 +263,6 @@ async fn check_one(url: String) -> NetCheck {
     }
 }
 
-/// Проверка связи сразу с несколькими адресами (параллельно).
 #[tauri::command(async)]
 pub async fn net_check(urls: Vec<String>) -> Vec<NetCheck> {
     let handles: Vec<_> = urls.into_iter().take(24).map(|u| tauri::async_runtime::spawn(check_one(u))).collect();
@@ -296,9 +275,6 @@ pub async fn net_check(urls: Vec<String>) -> Vec<NetCheck> {
     out
 }
 
-/// Строгая проверка magnet-ссылки: только `magnet:?xt=urn:btih:<40 hex | 32 base32>` с обычными
-/// символами и разумной длиной. Всё остальное отвергается, чтобы через эту команду нельзя было
-/// открыть произвольный адрес или программу.
 pub fn valid_magnet(m: &str) -> bool {
     const HEAD: &str = "magnet:?xt=urn:btih:";
     if m.len() > 2000 || !m.starts_with(HEAD) {
@@ -315,7 +291,6 @@ pub fn valid_magnet(m: &str) -> bool {
     }
 }
 
-/// Открыть magnet-ссылку в торрент-клиенте, назначенном в системе по умолчанию.
 #[tauri::command(async)]
 pub fn open_magnet(app: tauri::AppHandle, magnet: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;

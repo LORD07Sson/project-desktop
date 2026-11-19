@@ -1,12 +1,3 @@
-// Проверка заметок с тайм-кодом на СОБРАННОМ бандле:
-//
-//   npm run build && npm run test:notes
-//
-// Время заметки хранится префиксом «[4:12] » в самом тексте — отдельного
-// поля под него в API нет (см. docs/API.md). Значит разбор и сборка этой
-// строки и есть вся фича: ошибка в регулярке не уронит ничего, просто
-// тайм-код перестанет отделяться от текста, и заметка тихо превратится в
-// обычную. Поэтому проверяются конкретные строки в обе стороны.
 
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
@@ -21,7 +12,6 @@ const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-onl
 const w = dom.window;
 const setGlobal = (n, v) => Object.defineProperty(globalThis, n, { value: v, writable: true, configurable: true });
 for (const n of ["window", "document", "localStorage", "navigator", "Image", "MutationObserver", "CustomEvent", "Event", "getComputedStyle"]) setGlobal(n, w[n]);
-// Соглашение о неразглашении (nda.js) для тестового пользователя уже принято.
 w.localStorage.setItem("project-nda-v1-1", "test");
 setGlobal("requestAnimationFrame", w.requestAnimationFrame || (cb => setTimeout(cb, 0)));
 document.elementFromPoint = () => null;
@@ -67,8 +57,6 @@ const QC_REPORT = {
 w.__TAURI_INTERNALS__ = {
   invoke: async (cmd) => {
     if (cmd === "token_load") return "dsk_test";
-    // Диалог выбора файла теперь открывает Rust (file_scope.rs), а не
-    // JS-плагин — стабим свою команду, а не plugin:dialog|open.
     if (cmd === "pick_input_files") return ["/tmp/ep12.wav"];
     if (cmd === "qc_analyze") return QC_REPORT;
     return null;

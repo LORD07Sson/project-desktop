@@ -1,20 +1,3 @@
-// Вкладка «Сообщения» — переписка внутри студии (доска Messages из
-// дизайна Project):
-//  • общий чат студии;
-//  • каналы с темами, как форум: канал «Фрирен 2» → темы «Кастинг»,
-//    «Серия 7 — правки»… (канал создаёт админ, тему — любой участник,
-//    удаляет канал/тему только владелец);
-//  • личные переписки один на один.
-// Доступна всем участникам, не только админам. Свои сообщения справа,
-// чужие слева; таймкоды («12:34») и @упоминания подсвечиваются, у @ —
-// подсказка по именам. Своё сообщение можно удалить (владелец — и чужое
-// в общем чате и темах).
-//
-// API: /chats (общий, личные, channels), /chats/{id}/messages,
-// POST /chats/{id}/messages {text}, POST /chats/{id}/attach (файл + text),
-// …/messages/{mid}/file (вложение), …/messages/{mid}/delete,
-// POST /chats/{id}/read, POST /chats/{id}/clear {both}, POST /chats/dm, /channels*, /topics/{id}/delete.
-// Ключ беседы: "general", "dm:<a>:<b>", "t:<topic_id>". Обновление — опрос.
 
 import { state } from "./state.js";
 import { nyaaCardsHtml } from "./nyaa-card.js";
@@ -33,22 +16,21 @@ const PLUS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14
 const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 const OPEN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 
-let chats = [];      // общий + личные
-let channels = [];   // [{id, name, poster_url, topics:[...] , unread}]
+let chats = [];
+let channels = [];
 let people = [];
-let canModerate = false;      // право «Удалять чужие сообщения» в общем чате и темах
-let canDeleteThreads = false; // владелец: удаляет темы, каналы и переписку у обоих
-let canCreateChannel = false; // право «Создавать каналы»
-const expanded = new Set();   // раскрытые каналы в списке
+let canModerate = false;
+let canDeleteThreads = false;
+let canCreateChannel = false;
+const expanded = new Set();
 let activeId = null;
 let messages = [];
 let filter = "all";
 let query = "";
-let pendingFile = null;       // вложение, которое уйдёт со следующим сообщением
+let pendingFile = null;
 let pollTimer = null;
-// Сообщения 2.0: ответ с цитатой, реакции, закреплённые и файлы беседы.
-let replyTo = null;           // {id, author, text} — на что отвечаем следующим сообщением
-let info = null;              // /chats/{id}/info: {pinned, files, files_total, can_pin, reactions}
+let replyTo = null;
+let info = null;
 const REACTIONS = ["👍", "❤️", "😂", "🔥", "🙏", "👀", "✅"];
 const REPLY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8 5 12l5 4M5 12h9a5 5 0 0 1 5 5v1"/></svg>';
 const SMILE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg>';
@@ -56,12 +38,10 @@ const PIN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1
 const INFO_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg>';
 const INFO_KEY = "project_ms_info";
 function infoOpen() { try { return localStorage.getItem(INFO_KEY) !== "0"; } catch (_) { return true; } }
-function setInfoOpen(on) { try { localStorage.setItem(INFO_KEY, on ? "1" : "0"); } catch (_) { /* не критично */ } }
-// Номера отчётов в тексте (R-000068) — карточкой под сообщением (только админам: /report открыт им).
+function setInfoOpen(on) { try { localStorage.setItem(INFO_KEY, on ? "1" : "0"); } catch (_) { } }
 const REPORT_RE = /\bR-\d{6}\b/g;
 const reportCache = new Map();
 
-// ---------- помощники ----------
 
 function initial(name) { return esc(String(name || "?").replace(/^@/, "").charAt(0).toUpperCase() || "?"); }
 function parseTs(iso) { return new Date(String(iso).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? "" : "Z")); }
@@ -75,7 +55,6 @@ function dayLabel(d) {
 }
 function posterSrc(url) { return url ? mediaUrl("/img_proxy", { url }) : ""; }
 
-// Беседа по ключу: общий/личная — из chats, тема — из каналов (с именем канала).
 function findChat(id) {
   const c = chats.find(x => x.id === id);
   if (c) return c;
@@ -90,7 +69,6 @@ function recountChannel(ch) {
   ch.mentions = (ch.topics || []).reduce((s, t) => s + (t.mentions || 0), 0);
 }
 
-// Текст сообщения: экранируем, затем подсвечиваем таймкоды и @упоминания.
 function richText(text) {
   let html = esc(text);
   const nyaaIds = [];
@@ -104,7 +82,6 @@ function richText(text) {
   return html.replace(/\n/g, "<br>").replace(/(<br>)+$/, "") + (nyaaIds.length ? nyaaCardsHtml(nyaaIds) : "");
 }
 
-// ---------- список слева ----------
 
 function chatAvatarHtml(c, lg) {
   const cls = lg ? " lg" : "";
@@ -117,8 +94,6 @@ function chatAvatarHtml(c, lg) {
   return `<span class="ms-chat-av${cls}">${HASH_ICON}</span>`;
 }
 
-// Сервер подписывает «ID 5418693033» того, кого уже нет в команде (имени он не знает). Номер ничего не говорит людям —
-// пишем «не из команды», а номер оставляем в подсказке.
 function authorHtml(author) {
   const id = /^ID (\d+)$/.exec(String(author || ""));
   return id ? `<b class="ms-gone" title="Telegram ID ${id[1]}">не из команды</b>` : `<b>${esc(author)}</b>`;
@@ -202,7 +177,6 @@ function renderList() {
   el.innerHTML = listHtml();
   loadAvatars(el);
   el.querySelectorAll("[data-chat]").forEach(b => b.addEventListener("click", () => openChat(b.dataset.chat)));
-  // правый клик — заглушить беседу или весь канал (только всплывашки на рабочий стол; @упоминания приходят всё равно)
   const muteMenu = (e, id, what) => {
     e.preventDefault();
     const on = isChatMuted(id);
@@ -235,7 +209,6 @@ function renderList() {
   el.querySelector("[data-new-channel]")?.addEventListener("click", openNewChannelDialog);
 }
 
-// ---------- лента ----------
 
 function messagesHtml(c) {
   const visibleMessages = messages.filter(m => m.kind !== "deleted" && m.deleted !== true && m.is_deleted !== true);
@@ -251,7 +224,6 @@ function messagesHtml(c) {
       lastDay = dayKey(d);
       prev = null;
     }
-    // Подряд от одного человека в пределах 5 минут — без повторной шапки.
     const grouped = prev && prev.author_telegram_id === m.author_telegram_id && d - parseTs(prev.created_at) < 5 * 60000;
     const canDelete = m.mine || moderated;
     const reps = state.isAdmin && m.text ? [...new Set(m.text.match(REPORT_RE) || [])].slice(0, 3) : [];
@@ -336,7 +308,6 @@ function renderThread({ keepScroll } = {}) {
   wireThread(el, c);
 }
 
-// ---------- поведение ----------
 
 function autoGrow(t) { t.style.height = "auto"; t.style.height = `${Math.min(160, t.scrollHeight)}px`; }
 
@@ -398,9 +369,6 @@ function wireThread(el, c) {
   el.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => gotoMessage(b.dataset.goto)));
   el.querySelectorAll("[data-rep]").forEach(b => b.addEventListener("click", () => openReportDetail(b.dataset.rep)));
   el.querySelector("[data-open-profile]")?.addEventListener("click", e => openUserProfile(Number(e.currentTarget.dataset.openProfile)));
-  // Личная переписка: «Очистить» — только у себя (у собеседника всё
-  // остаётся, новое сообщение снова покажет беседу); «У обоих» — владелец
-  // удаляет её целиком с обеих сторон.
   const clearDm = async both => {
     const who = c.peer ? c.peer.name : "собеседником";
     const q = both
@@ -445,8 +413,6 @@ function wireThread(el, c) {
       renderThread({ keepScroll: true });
     } catch (e) { toast(e.message, "error"); b.disabled = false; }
   }));
-  // Вложение: скрепка, вставка скриншота (Ctrl+V) — уйдёт со
-  // следующим «Отправить» вместе с текстом (текст необязателен).
   const pendingBox = el.querySelector("#ms-pending");
   const setPending = file => {
     if (file && tooBig(file, { anyFile: true, maxMb: FILE_MAX_MB })) return;
@@ -502,7 +468,6 @@ function wireThread(el, c) {
   });
 }
 
-// Подсказка @упоминаний: в личке — собеседник, иначе все участники.
 function updateSuggest(input, box, c) {
   const before = input.value.slice(0, input.selectionStart);
   const m = before.match(/(^|\s)@([\p{L}\d_]*)$/u);
@@ -526,7 +491,6 @@ function pickMention(input, box, name) {
   input.focus();
 }
 
-// ---------- личные: «Новый диалог» ----------
 
 function renderPicker() {
   const q = ($("#ms-picker-q")?.value || "").trim().toLowerCase();
@@ -541,16 +505,12 @@ function renderPicker() {
   list.querySelectorAll("[data-dm]").forEach(b => b.addEventListener("click", () => startDm(Number(b.dataset.dm))));
 }
 
-// «Написать» с других экранов (Команда): вкладка может быть ещё не
-// загружена — тогда переписку откроет loadMessages после списков.
 let pendingDm = null;
 export function openDmWith(telegramId) {
   if ($("#ms-list") && chats.length) startDm(telegramId);
   else pendingDm = telegramId;
 }
 
-// Открыть конкретную беседу по ключу (general, dm:…, t:…) — из центра
-// уведомлений. Тот же приём: вкладка может быть ещё не загружена.
 let pendingKey = null;
 export function openChatKey(key) {
   if ($("#ms-list") && chats.length && findChat(key)) openChat(key);
@@ -567,14 +527,13 @@ async function startDm(telegramId) {
   } catch (e) { toast(e.message, "error"); }
 }
 
-// ---------- каналы: «Новый канал» ----------
 
 async function openNewChannelDialog() {
   const overlay = openSheet(`<h2>Новый канал</h2>${dialogSkeletonHtml(4)}`);
   const sheet = overlay.querySelector(".sheet");
   sheet.classList.add("ms-channel-sheet");
   let titles = [];
-  try { titles = (await apiGet("/channels/titles")).titles || []; } catch (_) { /* без тайтлов — только своё название */ }
+  try { titles = (await apiGet("/channels/titles")).titles || []; } catch (_) { }
   const taken = new Set(channels.map(c => c.title_id).filter(Boolean));
   sheet.innerHTML = `
     <h2>Новый канал</h2>
@@ -612,13 +571,12 @@ async function openNewChannelDialog() {
   sheet.querySelectorAll("[data-title]").forEach(b => b.addEventListener("click", () => create({ title_id: Number(b.dataset.title) })));
 }
 
-// ---------- загрузка и опрос ----------
 
 async function loadInfo(id) {
   try {
     const d = await apiGet(`/chats/${encodeURIComponent(id)}/info`);
     if (activeId === id) info = d;
-  } catch (_) { info = null; } // старый сервер без /info — панель просто без закреплённых
+  } catch (_) { info = null; }
 }
 
 async function openChat(id) {
@@ -663,15 +621,12 @@ function updateNavBadge() {
 
 async function refreshLists() {
   const d = await apiGet("/chats");
-  // Только что открытая личка без сообщений на сервере ещё не значится —
-  // не теряем её из списка между опросами.
   const pending = chats.filter(c => c.kind === "dm" && !c.last && !(d.chats || []).some(x => x.id === c.id));
   chats = (d.chats || []).concat(pending);
   channels = d.channels || [];
   people = d.people || people;
   canModerate = !!d.can_moderate;
   canCreateChannel = !!d.can_create_channel;
-  // Старый сервер не знал отдельного флага — тогда как раньше: владелец = модератор.
   canDeleteThreads = d.can_delete_threads === undefined ? canModerate : !!d.can_delete_threads;
   renderList();
   updateNavBadge();
@@ -679,7 +634,6 @@ async function refreshLists() {
 
 async function poll() {
   if (!document.querySelector("#ms-list")?.isConnected || document.hidden) return;
-  // Пока человек печатает новую тему — список не перерисовываем.
   if (document.activeElement && document.activeElement.closest?.("[data-new-topic]")) return;
   try {
     await refreshLists();
@@ -690,10 +644,9 @@ async function poll() {
       const changed = sig(fresh) !== sig(messages);
       if (changed) { messages = fresh; renderThread({ keepScroll: true }); }
     }
-  } catch (_) { /* тихо: следующий опрос попробует снова */ }
+  } catch (_) { }
 }
 
-// ---------- Сообщения 2.0: карточки отчётов, переход к цитате, панель «о беседе» ----------
 
 async function fillReportCards(root) {
   for (const b of root.querySelectorAll("[data-rep]:not([data-filled])")) {
@@ -804,5 +757,4 @@ export async function loadMessages() {
   pollTimer = window.setInterval(poll, POLL_MS);
 }
 
-// заглушили/включили беседу (здесь или из другого места) — значок 🔕 в списке обновляется сразу
 document.addEventListener("chat-mute-changed", () => renderList());

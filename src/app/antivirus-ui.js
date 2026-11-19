@@ -1,6 +1,3 @@
-// «Антивирус» — проверка ПК, карантин, исключения, обновление баз. Движок — Rust (src-tauri/src/antivirus.rs).
-// Базы сигнатур приходят с нашего сервера (свежие хеши вредоносных файлов обновляются раз в час, клиент берёт раз в сутки).
-// Защитник Windows остаётся основной защитой системы — здесь его можно обновить и запустить, а наши проверки идут поверх.
 
 import { invoke, listen, sendNotification, pickOutputDir } from "./tauri.js";
 import { toast, askConfirm } from "./api.js";
@@ -12,7 +9,7 @@ const LS_LAST_UPDATE = "av-last-update";
 const DAY = 24 * 3600 * 1000;
 
 const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (_) { return d; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* не критично */ } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { } };
 
 const SEV = { high: ["Опасно", "var(--s-stop)"], medium: ["Подозрительно", "var(--s-fix)"], low: ["Проверьте", "var(--ink-dim)"] };
 const KIND_LABEL = { file: "Файл", process: "Запущенный процесс", autorun: "Автозапуск", connection: "Сеть", "defender-exclusion": "Исключение Защитника" };
@@ -21,10 +18,8 @@ const fmtDate = secs => secs ? new Date(secs * 1000).toLocaleString("ru-RU", { d
 const fmtSize = n => n > 1048576 ? `${(n / 1048576).toFixed(1)} МБ` : `${Math.max(1, Math.round(n / 1024))} КБ`;
 const fmtDur = s => s >= 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s} с`;
 
-// ---------- фоновые задачи при запуске приложения ----------
 export function startAntivirusAuto() {
   if (typeof window === "undefined" || !window.__TAURI_INTERNALS__) return;
-  // Поведенческий монитор (Rust) шлёт bh-alert, пока приложение работает: серьёзное — уведомлением и тостом.
   listen("bh-alert", ev => {
     const a = ev.payload || {};
     if (a.severity === "critical" || a.severity === "high") {
@@ -50,11 +45,10 @@ export function startAntivirusAuto() {
           }
         }
       }
-    } catch (_) { /* тихо: без сети или вне Tauri проверка просто не запустится */ }
+    } catch (_) { }
   }, 60_000);
 }
 
-// ---------- экран ----------
 export async function mountAntivirus(root) {
   let lastScanInfo = null;
   if (!root) return;
@@ -403,7 +397,7 @@ ${a.path}`)) return; await call("av_quarantine", { path: a.path, pid: a.pid || n
       const t = root.querySelector("#av-prog-text");
       if (t) t.textContent = `${p.stage || ""} · проверено ${Number(p.scanned || 0).toLocaleString("ru-RU")} · найдено ${p.found || 0}${p.current ? ` · ${p.current}` : ""}`;
     });
-  } catch (_) { /* вне Tauri событий нет */ }
+  } catch (_) { }
   new MutationObserver((_m, obs) => { if (!root.isConnected) { if (unlisten) unlisten(); obs.disconnect(); } }).observe(document.body, { childList: true, subtree: true });
 
   paintBody();

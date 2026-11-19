@@ -156,7 +156,6 @@ assert.deepEqual(second.seen, [5, 4, 3, 2, 1]);
 assert.equal(diffMonitor(Array.from({ length: 500 }, (_, i) => ({ id: i })), { seen: [] }).seen.length, 400);
 assert.equal(CLIENT_PORTS.deluge, 8112);
 
-// ---- внешние источники ----
 const H = "28881b6c87fc9e2801c634d4a35d91afc7f25e2e";
 assert.ok(isHash40(H));
 assert.ok(!isHash40("abc") && !isHash40(H + "0") && !isHash40("z".repeat(40)));
@@ -238,7 +237,6 @@ assert.ok(SIMILAR_QUERY.includes("recommendations"));
 }
 console.log("nyaa-test: ok");
 
-// ---------- Релизы 2.0 ----------
 {
   const core = await import("../src/app/nyaa-core.js");
   const { parseRelease, groupReleases, bestPerEpisode, makeRule, freshForRule, makeMonitor: mk, episodeKey } = core;
@@ -275,10 +273,8 @@ console.log("nyaa-test: ok");
   assert.equal(parseCover("не json"), "");
   assert.equal(coverKey("[Sokudo] Re ZERO - S04E19 [1080p AV1]"), coverKey("[Breeze] Re ZERO - S04E19 [1080p AV1]"));
   assert.ok(coverKey("[A] Show X - 03 [1080p]").startsWith("show x"));
-  // название «иероглифы / английское / ромадзи»: ищем по латинскому варианту
   assert.equal(coverKey("[LoliHouse] 与暗黑召唤师秘密恋爱中(无修版) / Dark Summoner to Dekiteiru (UNCENSORED) - 03 [WebRip 1080p HEVC-10bit AAC][无字幕]"), "dark summoner to dekiteiru");
   assert.equal(coverKey("[ANi] Ao Ashi S02 / 青之蘆葦 第二季 - 03 [1080P][Baha][WEB-DL]"), "ao ashi");
-  // строки, оставшиеся без обложки в живой ленте: дефис после группы, четырёхзначная серия, пачка, «20th Remaster»
   assert.equal(coverKey("[Doomdos] - Meitantei Conan - S01E1278 [Chinese Dub] [1080p BILIBILI COM WEB-DL] [Case Closed]"), "meitantei conan");
   assert.equal(coverKey("[Doomdos] - Jueshi Zhan Hun - S02E37 [1080p IQIYI WEB-DL] [Super Heroic Spirit]"), "jueshi zhan hun");
   assert.equal(coverKey("[NanakoRaws] Bleach Sennen Kessen-hen 41-50 (TVA TV 1080p HEVC AAC)"), "bleach sennen kessen-hen");
@@ -300,7 +296,6 @@ console.log("nyaa-test: ok");
   assert.ok(v.description.includes("сайт (https://example.com/a)"));
 }
 
-// ---------- SeaDex по списку, AnimeTosho, вкладки ----------
 {
   const { seadexListUrl, parseSeadexList, parseToshoTorrent, parseSubtitle, titleLinks, normalizeTabs, bestPerEpisode } = await import("../src/app/nyaa-core.js");
   const h1 = "a".repeat(40), h2 = "b".repeat(40);
@@ -342,7 +337,6 @@ console.log("nyaa-test: ok");
   assert.equal(defaultShotTrack([]), 0);
 }
 
-// ---------- разбор названий 2 ----------
 {
   const { parseRelease } = await import("../src/app/nyaa-core.js");
   const p = parseRelease;
@@ -386,7 +380,7 @@ console.log("nyaa-test: ok");
 
 {
   const { dayLabel } = await import("../src/app/nyaa-core.js");
-  const now = new Date(2026, 9, 9, 15, 0).getTime();   // 9 октября 2026
+  const now = new Date(2026, 9, 9, 15, 0).getTime();
   assert.equal(dayLabel(new Date(2026, 9, 9, 1, 0).getTime(), now), "Сегодня");
   assert.equal(dayLabel(new Date(2026, 9, 8, 23, 59).getTime(), now), "Вчера");
   assert.equal(dayLabel(new Date(2026, 9, 5, 12, 0).getTime(), now), "5 октября");

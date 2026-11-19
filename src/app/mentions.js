@@ -1,8 +1,3 @@
-// Список на упоминание — то же, что «Доступ → Упоминания» в боте
-// (admin/mentions.py): кого поднимать в рабочем чате, пока ему не выдали
-// доступ. Бот сам напоминает раз в N дней (тумблер), «Упомянуть сейчас»
-// шлёт упоминание в рабочий чат сразу. Кому выдали доступ — выпадает
-// из списка сам. /api/mentions, /toggle, /auto, /send.
 
 import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { esc, relTime } from "./utils.js";

@@ -1,8 +1,3 @@
-// Окно соглашения о неразглашении при входе. Показывается один раз на
-// пользователя (и снова — при смене версии текста в nda-core.js).
-// Закрыть его иначе, чем «Согласен» или выйти из аккаунта, нельзя:
-// Escape и клик по фону возвращают окно обратно. Принятие хранится на
-// этом компьютере; на сервер оно пока не отправляется.
 
 import { state } from "./state.js";
 import { openSheet } from "./api.js";
@@ -33,7 +28,6 @@ export function maybeAskNda() {
     close();
     $("#logout-btn")?.click();
   });
-  // Закрытие «снаружи» (Escape, клик по фону) — не отказ и не согласие.
   overlay.addEventListener("sheet-dismissed", () => {
     open = false;
     setTimeout(maybeAskNda, 0);

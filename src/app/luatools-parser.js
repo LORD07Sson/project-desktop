@@ -1,6 +1,3 @@
-// Парсер и редактор lua-файлов stplug-in (порт LuaFileParser.cs + LuaEditor.cs).
-// Поддерживает все функции OST: addappid, addtoken, setManifestid,
-// setAppTicket, setETicket, setStat, setlegacycdkey, fetch_manifest_code[_ex].
 
 const ADD_APPID_RE = /addappid\s*\(\s*(\d+)\s*(?:,\s*\d+\s*(?:,\s*"([^"]*)")?)?\s*\)[ \t]*(?:--[ \t]*(.*?)[ \t]*)?$/i;
 const SET_MANIFEST_RE = /setManifestid\s*\(\s*(\d+)\s*,\s*"(\d+)"\s*(?:,\s*(\d+))?/i;
@@ -43,7 +40,7 @@ export function parseLua(text, appIdFromName) {
   const commentedManifests = new Map();
   const disabledOrder = [];
   const disabledKeyById = new Map();
-  const extras = []; // addtoken, setAppTicket, setETicket, setStat, setlegacycdkey
+  const extras = [];
 
   for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
@@ -140,7 +137,6 @@ export function diffLua(oldLua, newLua) {
   };
 }
 
-// ── Editor ──────────────────────────────────────────────────────────
 
 export function setDepotLocked(lua, depotId, locked) {
   const re = new RegExp(`^(\\s*)(--\\s*)?(setManifestid\\s*\\(\\s*${depotId}\\s*[,)])`, "im");
@@ -152,7 +148,6 @@ export function setDepotEnabled(lua, depotId, enabled) {
   return rewriteLines(lua, re, enabled);
 }
 
-// Заменить GID в активной строке setManifestid(depot, "gid"[, size]) — размер старой версии убираем, он уже неверен.
 export function setDepotManifest(lua, depotId, gid) {
   if (!/^\d+$/.test(String(gid))) throw new Error("Некорректный ID манифеста");
   const re = new RegExp(`^(\\s*)(setManifestid\\s*\\(\\s*${depotId}\\s*,\\s*)(["'])\\d+\\3(\\s*,\\s*\\d+)?`, "i");

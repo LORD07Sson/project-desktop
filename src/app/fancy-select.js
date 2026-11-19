@@ -1,7 +1,3 @@
-// Native <select> popups in WebView2 ignore our theme (white OS list with a
-// grey highlight). This keeps the <select> as the source of truth — value,
-// disabled and "change" listeners stay as they are — and only swaps the
-// visible part for a themed button + popup list.
 
 const OPEN = new WeakMap();
 

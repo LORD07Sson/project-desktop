@@ -1,6 +1,3 @@
-// «Завод» — вкладка Автоматизации в виде производственных линий (как схема в Satisfactory): машины, конвейеры, индикаторы.
-// По конвейерам бегут «ящики», пока машина работает и есть что везти; на каждой машине — кнопки Пуск/Стоп и переход в её настройки.
-// Данные: GET /api/automation/overview (с блоком flow), включение — POST /api/archive | /reports-archive | /docs-archive {enabled}.
 
 import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
@@ -8,7 +5,6 @@ import { esc } from "./utils.js";
 const fmtLimit = v => (v ? `${v} Мбит/с` : "без лимита");
 const fmtGb = n => `${(n / 1024 ** 3).toFixed(1)} ГБ`;
 
-// Состояние машины: off — выключена, run — работает, idle — включена, но очередь пуста, pause — пауза, err — ошибки
 function led(on, paused, queue, failed) {
   if (failed) return "err";
   if (!on) return "off";
@@ -17,7 +13,6 @@ function led(on, paused, queue, failed) {
 }
 const LED_LABEL = { off: "Выключена", run: "Работает", idle: "Ждёт работу", pause: "Пауза", err: "Есть ошибки" };
 
-// Этап линии: только цифра и смысл. Клик по этапу открывает его настройки.
 function machine(m) {
   const k = m.led || "idle";
   return `
@@ -28,7 +23,6 @@ function machine(m) {
   </button>`;
 }
 
-// Общее состояние линии — по самому «тревожному» этапу: ошибки > пауза > работает > ждёт > выключена.
 const LINE_ORDER = ["err", "pause", "run", "idle", "off"];
 const lineLed = machines => LINE_ORDER.find(k => machines.some(m => (m.led || "idle") === k)) || "idle";
 

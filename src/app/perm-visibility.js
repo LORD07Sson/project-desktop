@@ -1,6 +1,3 @@
-// Скрывает кнопки и вкладки, на которые у роли нет права (матрица «Права ролей»).
-// Правила — по селекторам: элементы рисуются и динамически, поэтому проход повторяется при изменениях DOM.
-// Сервер всё равно проверяет каждый запрос; здесь только убираем лишнее с глаз.
 
 import { state, can } from "./state.js";
 
@@ -11,7 +8,6 @@ const RULES = [
   ['.tab-btn[data-tab="list"]', "reports.list"],
   ['.tab-btn[data-tab="calendar"]', "reports.calendar"],
   ['.tab-btn[data-tab="analytics"]', "reports.analytics"],
-  // «Заливка аниме и другие» — только разработчику и не в «Смотреть как…» (сервер режет так же).
   ['.tab-btn[data-tab="a365"]', () => !!state.isDeveloper && !state.previewRole],
   ["#titles-admin-btn", "titles.create"],
   ["#team-roles-btn", "roles.manage"],
@@ -21,10 +17,9 @@ const RULES = [
 export function applyPermVisibility() {
   if (!state.perms) return;
   for (const [selector, perm] of RULES) {
-    const allowed = typeof perm === "function" ? perm() : [].concat(perm).some(can); // несколько прав — хватит любого
+    const allowed = typeof perm === "function" ? perm() : [].concat(perm).some(can);
     document.querySelectorAll(selector).forEach(el => {
       if (allowed) el.removeAttribute("data-perm-hidden"); else el.setAttribute("data-perm-hidden", "1");
-      // Роль без звания админа: CSS прячет админские кнопки у «участника» — для выданного права снимаем это.
       if (allowed && !state.isAdmin) el.setAttribute("data-perm-show", "1"); else el.removeAttribute("data-perm-show");
     });
   }

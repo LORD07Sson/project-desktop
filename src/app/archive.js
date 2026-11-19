@@ -1,8 +1,3 @@
-// «Архив серий» — перенос видео из канала в архивную группу с темами (только владелец).
-// Сервер: GET /api/archive (настройки, темы и чаты, где состоит бот), POST /api/archive {source?, target?, enabled?, name_pref?},
-// POST /api/archive/topic {title_tag, topic_id}, POST /api/archive/topic/delete {title_tag}.
-// Сам перенос делает бот (archive_sync.py): берёт тайтл, сезон, качество и серию из хештегов поста, заливает видео
-// под новым именем и подписью, создаёт тему на каждый тайтл и закрепляет в ней превью.
 
 import { apiGet, apiPost, toast, askConfirm } from "./api.js";
 import { esc } from "./utils.js";
@@ -169,7 +164,7 @@ export async function mountArchive(root) {
           ${topics.length ? `<div class="ar-topics">${topics.map(t => {
             const bound = (t.tags || []).length > 0;
             const raw = bound ? t.tags[0] : (t.suggest || "");
-            const tag = raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";  // бот хранит хештег строчными — показываем с заглавной
+            const tag = raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";
             return `
             <div class="ar-topic${bound ? " bound" : ""}" data-topic-row="${t.topic_id}">
               <div class="ar-topic-head">
@@ -239,7 +234,6 @@ export async function mountArchive(root) {
         if (okText) toast(okText, "success");
       } catch (e) { toast(e.message, "error"); await load(); }
     };
-    // Настройки сохраняются сразу при изменении — отдельной кнопки «Сохранить» нет.
     root.querySelector("#ar-enabled").addEventListener("change", e => apply("/archive", { enabled: e.target.checked }, e.target.checked ? "Автоперенос включён." : "Автоперенос выключен."));
     root.querySelector("#ar-source").addEventListener("change", e => apply("/archive", { source: e.target.value }, "Канал сохранён."));
     root.querySelector("#ar-target").addEventListener("change", e => apply("/archive", { target: e.target.value }, "Группа сохранена."));

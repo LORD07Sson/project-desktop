@@ -1,22 +1,11 @@
-// Всплывающая карточка при наведении на обложку тайтла в «Тайтлах» —
-// крупнее превью + прогресс серий, без открытия полного sheet
-// (openTitleDetail в titles.js — тяжелее, целая карточка). Тот же
-// приём, что и у аватаров (avatar-hover.js): делегированный
-// обработчик на document, задержка перед показом, кэш ответов на
-// сессию. Элементы-триггеры уже несут data-open-title-detail (тот же
-// атрибут, что используется для клика — voteCardHtml в titles.js
-// и строки таблицы), новый атрибут заводить не нужно.
 
 import { apiGet, mediaUrl } from "./api.js";
 import { esc } from "./utils.js";
 
 const HOVER_DELAY_MS = 320;
 const HIDE_DELAY_MS = 120;
-// Детали тайтла (в т.ч. счётчик вышедших серий) держим 10 минут: повторное
-// наведение не бьёт лишним запросом, но и новая серия не прячется до
-// перезапуска приложения, как было при кэше «на всю сессию».
 const CACHE_TTL_MS = 10 * 60_000;
-const cache = new Map(); // id -> { at, data }
+const cache = new Map();
 
 let popoverEl = null;
 let showTimer = null;
@@ -47,9 +36,6 @@ function scheduleHide() {
 }
 
 function renderPopover(anchor, d) {
-  // /public/titles/{id} возвращает details объектом, либо пустым
-  // массивом, если их ещё не заполнили — тот же нормализующий
-  // прищур, что в titles.js:openTitleDetail.
   const det = d.details && !Array.isArray(d.details) ? d.details : null;
   const poster = imgProxy(d.poster_url);
   const epLine = det && det.episodes_total
@@ -70,8 +56,6 @@ function renderPopover(anchor, d) {
   pop.classList.remove("shown");
   const rect = anchorBox(anchor);
   const popRect = pop.getBoundingClientRect();
-  // Справа от постера, если не помещается — слева; по вертикали по
-  // центру постера, но в пределах окна.
   let left = rect.right + 12;
   let side = "right";
   if (left + popRect.width > window.innerWidth - 8) { left = rect.left - popRect.width - 12; side = "left"; }
@@ -84,13 +68,7 @@ function renderPopover(anchor, d) {
   requestAnimationFrame(() => pop.classList.add("shown"));
 }
 
-// Обёртка карточки (.vote-card-tap) — display:contents, собственного
-// прямоугольника у неё нет, getBoundingClientRect() отдаёт нули, и окно
-// улетало в левый верхний угол поверх боковой панели. Меряем то, что
-// реально нарисовано: постер внутри, иначе первого потомка с размером.
 function anchorBox(anchor) {
-  // В таблице — вся ячейка с постером и названием (иначе окно закрывало
-  // само название), на «Топе сезона» — постер.
   const candidates = [anchor.querySelector(".tt-title, .vote-hero-poster"), anchor, ...anchor.children];
   for (const el of candidates) {
     if (!el) continue;
@@ -108,11 +86,11 @@ async function loadAndShow(anchor, titleId) {
       data = await apiGet(`/public/titles/${titleId}`);
       cache.set(titleId, { at: Date.now(), data });
     } catch (_) {
-      return; // необязательная подсказка — молча не показываем при ошибке сети
+      return;
     }
   }
-  if (currentId !== titleId) return; // за время запроса курсор уже увели на другой тайтл
-  if (!anchor.isConnected) return; // сетку успели перерисовать (смена сезона и т.п.)
+  if (currentId !== titleId) return;
+  if (!anchor.isConnected) return;
   renderPopover(anchor, data);
 }
 
@@ -123,10 +101,6 @@ export function clearTitleHoverCache() {
 document.addEventListener("mouseover", e => {
   const el = e.target.closest("[data-open-title-detail]");
   if (!el) return;
-  // Карточка сезона и так показывает крупный постер, название и
-  // подробности — всплывающее окно там только дублировало её и
-  // перекрывало соседей. Оставлено для таблицы и «Топа сезона», где
-  // постер маленький.
   if (el.closest(".vote-card")) return;
   const titleId = el.dataset.openTitleDetail;
   if (!titleId) return;

@@ -1,8 +1,3 @@
-// «Отчёты» (Настройки → Автоматизация): завершённые отчёты бот сам переносит в архивную группу — карточка отчёта с заметками
-// и списком файлов, по теме на тайтл. Сами файлы копирует вкладка «Документы». Устроено как «Архив серий»: вкладки
-// «Настройки / Очередь / Журнал» и сводка счётчиков.
-// Сервер: GET/POST /api/reports-archive {enabled?, target?, days?, statuses?, skip_titles?, hold_notes?, load_guard?,
-// window? {from,to}, batch?, skip? (id), unskip? (id), now? (id | "all"), retry?}.
 
 import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
@@ -24,8 +19,8 @@ const hourOptions = cur => `<option value=""${cur === null || cur === undefined 
 
 export async function mountReportsArchive(root) {
   let tab = "settings";
-  let draft = null;        // правки маршрутов, ещё не сохранённые
-  let checkResult = {};    // id маршрута → результат «Проверить на отчёте»
+  let draft = null;
+  let checkResult = {};
 
   const load = async () => {
     let d;
@@ -227,7 +222,6 @@ export async function mountReportsArchive(root) {
     q("#ra-all")?.addEventListener("click", () => save({ now: "all" }, "Всё в очереди — бот перенесёт по одному."));
     q("#ra-retry")?.addEventListener("click", () => save({ retry: true }, "Вернул в очередь."));
     q("#ra-refresh")?.addEventListener("click", load);
-    // ---- маршруты ----
     const repaint = () => load();
     root.querySelectorAll("[data-rt-f]").forEach(el => el.addEventListener("change", () => {
       const [i, key] = el.dataset.rtF.split(":");

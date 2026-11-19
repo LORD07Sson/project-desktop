@@ -1,21 +1,3 @@
-// Режим «Смотреть» — витрина поверх приложения. Кнопка «Смотреть» в
-// шапке раскрывает его кругом из себя, «← Студия» / Esc сворачивают.
-//
-// Что на экране (2.0):
-//  - баннер во всю ширину: кадры серий (или баннер AniList) с наездом
-//    камеры; слева метка «в нашей озвучке», название, оценка/год/жанры,
-//    «Продолжить · N серия» из памяти плеера и живой отсчёт до серии;
-//    справа очередь следующих слайдов с полоской до смены;
-//  - вся витрина подкрашивается цветом обложки текущего слайда (--amb),
-//    а палитра (фон, акцент) — из цветовой темы приложения;
-//  - «Продолжить просмотр», «Топ-10 сезона», расписание по дням (живой отсчёт), плитки
-//    настроений, «В тренде», онгоинги, анонсы;
-//  - карточка при наведении, поиск-прожектор («/»), «Мне повезёт»,
-//    «Подробнее» с похожими, «Мой список».
-//
-// Данные — /api/watch/home (каталог Shikimori + AniList, тайтлы студии),
-// подробности — /api/watch/anime/{shiki_id}. Картинки — через свой сервер
-// (/api/img_proxy): CSP приложения пускает только его.
 
 import { state } from "./state.js";
 import { apiGet, toast, forceMediaToken } from "./api.js";
@@ -56,7 +38,6 @@ let tickTimer = null;
 let popTimer = null;
 let byId = new Map();
 
-// ---------- «Мой список» ----------
 function listKey() { return `project_watch_list_${state.telegramId || "anon"}`; }
 function myList() {
   try { return JSON.parse(localStorage.getItem(listKey()) || "[]"); } catch (_) { return []; }
@@ -66,11 +47,10 @@ function toggleList(key) {
   const list = myList();
   const i = list.indexOf(key);
   if (i >= 0) list.splice(i, 1); else list.unshift(key);
-  try { localStorage.setItem(listKey(), JSON.stringify(list)); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(listKey(), JSON.stringify(list)); } catch (_) { }
   return i < 0;
 }
 
-// ---------- данные ----------
 const byScore = arr => arr.slice().sort((a, b) => (b.score || 0) - (a.score || 0));
 function studioByShiki() {
   const m = new Map();
@@ -92,7 +72,6 @@ async function load() {
   }
   return loading;
 }
-// «Продолжить просмотр» — из памяти плеера (player-anime.js), свежие сверху.
 function continueItems() {
   const prefix = `project_player_${state.telegramId || "anon"}_`;
   const out = [];
@@ -105,7 +84,7 @@ function continueItems() {
       if (!last || !last.duration || !last.time || last.duration - last.time < 60) continue;
       out.push({ shikiId: Number(k.slice(prefix.length)), title: m.title, ...last });
     }
-  } catch (_) { /* не критично */ }
+  } catch (_) { }
   return out.sort((a, b) => b.at - a.at).slice(0, 12);
 }
 const continueFor = id => continueItems().find(c => c.shikiId === id);
@@ -117,7 +96,6 @@ function untilText(sec) {
   return `через ${m}:${String(s).padStart(2, "0")}`;
 }
 
-// ---------- плитки ----------
 function tileHtml(t, opt = {}) {
   const dub = studioByShiki().get(t.id);
   const badge = opt.badge ?? (dub ? "Озвучка Project" : t.group === "anons" ? "Анонс" : t.group === "ongoing" ? "Онгоинг" : "");
@@ -225,11 +203,8 @@ function weekHtml() {
 function weekSectionHtml(title) {
   return `<section class="wm-row wm-reveal" data-wm-sec="week"><div class="wm-row-h"><h2>${esc(title)}</h2><small>время ваше, отсчёт живой</small></div><div class="wm-weekwrap">${weekHtml()}</div></section>`;
 }
-// Плитки настроений: жанр + постер самого популярного тайтла этого жанра.
 function moodsHtml() {
   const pop = data.catalog.slice().sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-  // Разные постеры: самый популярный тайтл жанра, который ещё не занят
-  // другой плиткой (иначе «Ван-Пис» был бы почти на всех).
   const used = new Set();
   const tiles = MOODS.map(([g, label, c]) => {
     const t = pop.find(x => !used.has(x.id) && (x.genres || []).includes(g)) || pop.find(x => (x.genres || []).includes(g));
@@ -250,8 +225,6 @@ function moodRowsHtml() {
       ${rowHtml("Скоро выйдет", f(cat.filter(t => t.group === "anons")).map(t => tileHtml(t, { meta: t.aired_on ? `с ${new Date(t.aired_on).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}` : "дата уточняется" })).join(""), { note: "анонсы" })}
     </div>`;
 }
-// Топ-10 строками: у каждой фоном баннер тайтла, слева место и обложка,
-// справа оценка. Две колонки по пять, нумерация идёт вниз по колонке.
 function top10Html(top10) {
   if (!top10.length) return "";
   const dubs = studioByShiki();
@@ -286,7 +259,6 @@ function homeHtml() {
     </div>`;
 }
 
-// ---------- живой баннер ----------
 function heroHtml() {
   const list = heroes();
   if (!list.length) return "";
@@ -345,8 +317,6 @@ function showHero(i, r) {
     s.classList.toggle("on", on);
     if (on) s.querySelectorAll(".wm-frame").forEach((f, k) => f.classList.toggle("on", k === 0));
   });
-  // Срез справа — следующий слайд: его кадр по диагонали, название и
-  // полоска времени до смены (перезапускается с каждым слайдом).
   const peek = r.querySelector("[data-wm-peek]");
   if (peek) {
     const nx = list[(heroIdx + 1) % list.length];
@@ -395,7 +365,6 @@ function wireHero(r) {
   });
 }
 
-// ---------- отрисовка ----------
 function bodyHtml() {
   const studioTiles = data.studio.map(studioTileHtml);
   if (tab === "list") {
@@ -431,8 +400,6 @@ function renderBody(r) {
   }));
   observeReveal(r);
 }
-// Плитка настроения: выбрать — ряды ниже подбираются под жанр, ещё раз
-// (или «сбросить») — снова «В тренде».
 function wireMoods(scope, r) {
   scope.querySelectorAll("[data-wm-mood]").forEach(b => b.addEventListener("click", () => {
     const body = r.querySelector("#wm-body");
@@ -460,7 +427,6 @@ function observeReveal(r) {
   r.querySelectorAll(".wm-reveal:not(.in)").forEach(el => (reduceMotion() ? el.classList.add("in") : io.observe(el)));
 }
 
-// ---------- действия ----------
 function root() { return $("#watch-mode"); }
 async function play(shikiId, name) {
   hidePop();
@@ -498,7 +464,6 @@ function wireActions(scope) {
   });
 }
 
-// ---------- карточка при наведении ----------
 function showPop(el) {
   const t = byId.get(Number(el.dataset.wmPop));
   const r = root();
@@ -550,7 +515,6 @@ async function fillDescription(t, el) {
   }
 }
 
-// ---------- подробнее ----------
 async function openItem(key) {
   hidePop();
   if (key.startsWith("t:")) {
@@ -604,7 +568,6 @@ async function openItem(key) {
   }
 }
 
-// ---------- поиск-прожектор ----------
 let spotSel = 0;
 let spotFound = [];
 function highlight(name, q) {
@@ -664,7 +627,6 @@ function runSpot() {
 }
 function closeSpot() { root()?.querySelector(".wm-spot")?.classList.remove("on"); }
 
-// ---------- мне повезёт ----------
 function lucky() {
   const r = root();
   if (!r || !data) return;
@@ -696,7 +658,6 @@ function lucky() {
   spin();
 }
 
-// ---------- вкладки ----------
 function shellHtml() {
   return `
     <div class="wm-scroll" id="wm-scroll">
@@ -716,8 +677,6 @@ function shellHtml() {
     </div>`;
 }
 function wireShell(r) {
-  // Поиск, «Мне повезёт» и выход — в меню за одной кнопкой; пункт меню
-  // сначала закрывает само меню.
   const menu = r.querySelector("#wm-menu");
   const menuBtn = r.querySelector("#wm-menu-btn");
   const setMenu = open => { menu.hidden = !open; menuBtn.setAttribute("aria-expanded", String(open)); menuBtn.classList.toggle("on", open); };
@@ -738,7 +697,6 @@ function wireShell(r) {
   scroll.addEventListener("scroll", () => { hidePop(); nav.classList.toggle("solid", scroll.scrollTop > 30); }, { passive: true });
 }
 
-// живые отсчёты до серий
 function tick() {
   const r = root();
   if (!r || r.hidden || !data) return;
@@ -752,7 +710,6 @@ function tick() {
   if (live && t && t.next_at) live.textContent = nextText(t);
 }
 
-// ---------- открыть / закрыть ----------
 function circleAround(el, r) {
   const a = el.getBoundingClientRect();
   const box = r.getBoundingClientRect();
@@ -782,8 +739,6 @@ export async function openWatchMode(fromEl) {
   window.clearInterval(tickTimer);
   tickTimer = window.setInterval(tick, 1000);
   try {
-    // Свежий токен картинок до отрисовки: фоны — CSS, а не <img>, и сами
-    // повторить запрос после 401 не умеют.
     await Promise.all([load(), forceMediaToken()]);
   } catch (e) {
     r.querySelector("#wm-body").innerHTML = `<div class="wm-pad"></div><div class="wm-empty">Не удалось загрузить каталог: ${esc(e.message)}</div>`;
@@ -796,8 +751,6 @@ export async function openWatchMode(fromEl) {
   }
 }
 
-// Вкладки верхнего меню видны и поверх «Смотреть»: клик по ним подсвечивал вкладку,
-// а сам режим оставался открытым и закрывал её собой (и крутил слайд-шоу впустую).
 document.addEventListener("project:tab", () => closeWatchMode());
 
 export function closeWatchMode() {
@@ -817,8 +770,6 @@ export function closeWatchMode() {
   r.animate([{ clipPath: `circle(${radius}px at ${cx}px ${cy}px)` }, { clipPath: `circle(0px at ${cx}px ${cy}px)` }], { duration: 750, easing: ease }).onfinish = done;
 }
 
-// Esc закрывает верхнее: меню → прожектор → барабан → «Подробнее» → окна → сам режим.
-// «/» открывает поиск. Плеер (.ap-root) обрабатывает свои клавиши сам.
 document.addEventListener("keydown", e => {
   const r = root();
   if (!r || r.hidden || document.querySelector(".ap-root")) return;

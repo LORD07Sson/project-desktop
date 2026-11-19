@@ -1,16 +1,10 @@
-// Аварийный режим («Саботаж») и корзина удалённого — десктопная часть
-// серверных /api/lockdown и /api/trash (на сервере: lockdown.py и
-// таблица trash). Пока режим включён, удаление, смена доступов и
-// публикации заблокированы для всех, кроме владельца; сервер отвечает
-// на них 423 с объяснением, а здесь — красная полоса над вкладками,
-// чтобы было понятно, почему кнопки не работают.
 
 import { state } from "./state.js";
 import { apiGet, apiPost, openSheet, toast, askConfirm } from "./api.js";
 import { $, esc } from "./utils.js";
 
 const POLL_INTERVAL_MS = 60_000;
-let current = null; // ответ /api/lockdown
+let current = null;
 
 function render() {
   const el = $("#lockdown-banner");
@@ -32,7 +26,7 @@ export async function refreshLockdown() {
   try {
     current = await apiGet("/lockdown");
     render();
-  } catch (_) { /* старый сервер без эндпоинта или нет сети — полосы просто нет */ }
+  } catch (_) { }
 }
 
 export function clearLockdown() {
@@ -49,7 +43,6 @@ async function disableLockdown() {
   } catch (e) { toast(`Не удалось снять: ${e.message}`, "error"); }
 }
 
-// «Таблица предупреждения» из плана: что именно произойдёт — до кнопки.
 const CONSEQUENCES = [
   ["⛔", "Удаление отчётов, тайтлов, сезонов, каналов и сообщений", "заблокировано"],
   ["⛔", "Выдача и отзыв доступа, одобрение заявок", "заблокировано"],
@@ -103,7 +96,6 @@ export async function openLockdownSheet() {
   });
 }
 
-// ---------- Корзина (только владелец) ----------
 
 const KIND_ICON = { report: "📋", title: "🎬", season: "📅" };
 
@@ -114,7 +106,6 @@ const itemHtml = x => `
     <button class="btn" data-restore="${x.id}">Вернуть</button>
   </div>`;
 
-// Одна операция «удалить» бывает десятком записей с одной секундой и автором — показываем их группой с «Вернуть все».
 function groupTrash(items) {
   const groups = [];
   for (const x of items) {

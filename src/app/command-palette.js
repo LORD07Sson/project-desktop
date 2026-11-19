@@ -1,9 +1,3 @@
-// Командная палитра (Ctrl+K / Cmd+K) — быстрый переход по вкладкам,
-// действиям и отчётам без мыши, тот же приём, что в VS Code/Linear.
-// Overlay — тот же openSheet(), что и у остальных модалок: закрытие по
-// Escape и клику по фону уже работает бесплатно (см. reports.js —
-// глобальный keydown на Escape закрывает верхний ".overlay", ничего
-// специального тут переопределять не нужно).
 
 import { state } from "./state.js";
 import { openSheet, apiGet } from "./api.js";
@@ -26,7 +20,6 @@ const ACTIONS = [
   { label: "Команда", icon: "👥", run: () => switchTab("team") },
   { label: "Я", icon: "👤", run: () => switchTab("profile") },
   { label: "Коллекция наград", icon: "🏅", sub: "карточки достижений", run: () => import("./award-cards.js").then(m => m.openAwardCollection()) },
-  // Инструменты из меню шапки — те же кнопки, просто с клавиатуры.
   { label: "Смотреть", icon: "▶", run: () => $("#open-watch").click() },
   { label: "Lofi-радио: играть / пауза", icon: "📻", run: () => import("./lofi.js").then(m => m.toggleLofi()) },
   { label: "Горячие клавиши", icon: "⌨", sub: "?", run: () => $("#open-shortcuts").click() },
@@ -47,7 +40,7 @@ export function openPalette() {
   overlay.classList.add("cmdk-overlay");
   const input = overlay.querySelector("#cmdk-input");
   const list = overlay.querySelector("#cmdk-list");
-  let items = []; // {label, icon, sub, run}
+  let items = [];
   let selected = 0;
 
   function renderList() {
@@ -84,10 +77,6 @@ export function openPalette() {
     renderList();
   }
 
-  // Недавно открытые отчёты — только при пустом запросе, сверху над
-  // действиями (тот же порядок, что в reportItems ниже: то, что скорее
-  // всего искали, — первым). Как только начали печатать, это уже не
-  // "куда я недавно заходил", а обычный поиск — MRU прячется.
   function recentItems() {
     return recentReports().map(r => ({
       label: r.title ? `${r.publicId} · ${r.title}` : r.publicId,
@@ -118,11 +107,9 @@ export function openPalette() {
           sub: r.status_label,
           run: () => openReportDetail(r.public_id),
         }));
-        // Отчёты — сверху (обычно то, что искали, набирая номер/название),
-        // подходящие действия — под ними, если input ещё не изменился.
         if (input.value.trim() === q) setItems([...reportItems, ...staticMatches.map(a => ({ label: a.label, icon: a.icon, run: a.run }))]);
-      } catch (_) { /* тихо — командная палитра не должна ронять остальной UI сетевой ошибкой */ }
-    }, 200); // DevSkim: ignore DS172411 — функция, не строка, данные не внешние
+      } catch (_) { }
+    }, 200); // DevSkim: ignore DS172411
   }
 
   input.addEventListener("input", onInput);
@@ -141,21 +128,15 @@ export function openPalette() {
 
   setItems([...recentItems(), ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, sub: a.sub, run: a.run }))]);
   input.focus();
-  // удалённые отчёты пропадают из «недавнего» сразу, как сервер подтвердит, что их нет
   pruneRecentReports().then(changed => { if (changed && overlay.isConnected && !input.value.trim()) onInput(); }).catch(() => {});
 }
 
 document.addEventListener("keydown", e => {
-  // e.code, а не e.key: e.key зависит от раскладки клавиатуры (с русской
-  // ЙЦУКЕН физическая "K" даёт e.key === "л", а не "k" — Ctrl+K тогда
-  // молча никогда не срабатывал бы). e.code — код физической клавиши,
-  // от раскладки не зависит.
   if ((e.ctrlKey || e.metaKey) && e.code === "KeyK") {
     e.preventDefault();
-    if ($(".cmdk-overlay")) return; // уже открыта — второй Ctrl+K не плодит вторую
+    if ($(".cmdk-overlay")) return;
     openPalette();
   }
 });
 
-// Кнопка поиска в шапке — то же, что Ctrl+K.
 $("#open-cmdk")?.addEventListener("click", () => { if (!$(".cmdk-overlay")) openPalette(); });

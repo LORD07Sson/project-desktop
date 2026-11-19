@@ -1,7 +1,3 @@
-// Вкладка «Команда» — сводка, фильтры и люди, сгруппированные по
-// ролям. Тот же /api/team, что питает openTeamSheet (модалку из «Я»).
-// Необязательные поля сервера (current, completed_month, paused_until)
-// показываются, когда он их отдаёт; без них карточка просто короче.
 
 import { apiGet, tabSkeleton } from "./api.js";
 import { can } from "./state.js";
@@ -11,8 +7,6 @@ import { openRolesSheet } from "./roles.js";
 import { switchTab } from "./tabs.js";
 import { openDmWith } from "./messages.js";
 
-// «user» — служебное значение по умолчанию, а специализаций у человека
-// может быть несколько.
 const rolesOf = u => {
   const roles = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : []);
   return roles.filter(role => role && role.toLowerCase() !== "user");
@@ -30,7 +24,7 @@ const FILTERS = [
 let teamData = null;
 let filter = "all";
 let query = "";
-let roleFilter = ""; // "" — все роли, "—" — без роли
+let roleFilter = "";
 
 function roleChipsHtml(users) {
   const counts = new Map();
@@ -87,8 +81,6 @@ function personHtml(u, maxLoad) {
     </div>`;
 }
 
-// Одна плотная сетка: сначала те, кто в сети, потом занятые, дальше по
-// роли — чтобы люди с ролью шли рядом, а «без роли» собирались в конце.
 function rank(u) {
   return [u.online ? 0 : 1, u.assigned ? 0 : 1, roleOf(u) ? 0 : 1, roleOf(u), u.name];
 }

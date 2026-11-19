@@ -1,10 +1,3 @@
-// Project Desktop — Tauri-бэкенд.
-//
-// Фронтенд (dist/) — обычный HTML/CSS/JS, ходит напрямую в тот же REST API,
-// что и мини-апп (`miniapp/server.py`), через fetch(). Rust-часть отвечает
-// только за то, что веб-странице недоступно: нативное хранилище токена,
-// локальный QC звука через ffmpeg, трей, глобальные горячие клавиши,
-// автозапуск и системные уведомления.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -36,17 +29,11 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-// Velopack HttpSource читает <база>/releases.<канал>.json и качает пакет
-// из той же папки — в каждом релизе лежат и фид, и полный пакет этой
-// версии.
 const UPDATE_STABLE_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/latest/download";
 const UPDATE_ALPHA_URL: &str = "https://github.com/LORD07Sson/project-desktop/releases/download/alpha-latest";
-// Зеркало тех же файлов на нашем сервере (voice_report_bot/desktop_updates.py): у части людей GitHub не открывается.
 const SERVER_STABLE_URL: &str = concat!(env!("SERVER_ORIGIN"), "/updates/stable");
 const SERVER_ALPHA_URL: &str = concat!(env!("SERVER_ORIGIN"), "/updates/alpha");
 
-/// Откуда брать обновления. «Авто» — GitHub, а если он не отвечает — сервер (и в следующий раз сначала тот,
-/// что сработал). Выбор человека хранится в %APPDATA%\com.project.desktop\update_source.txt.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum UpdateSource {
     Github,
@@ -98,7 +85,6 @@ fn last_good_source() -> &'static Mutex<Option<UpdateSource>> {
     LAST.get_or_init(|| Mutex::new(None))
 }
 
-/// Источники по порядку попыток.
 fn update_sources() -> Vec<UpdateSource> {
     match update_source_pref().as_str() {
         "github" => vec![UpdateSource::Github],
@@ -125,14 +111,11 @@ fn set_update_source(source: String) -> Result<(), String> {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     std::fs::write(&path, &source).map_err(|e| e.to_string())?;
-    *update_check_cache().lock().unwrap() = None; // прежний ответ был от другого источника
+    *update_check_cache().lock().unwrap() = None;
     *last_good_source().lock().unwrap() = None;
     Ok(())
 }
 
-// Канал задаётся типом сборки в workflow, а не пользовательской настройкой.
-// Это не даёт стабильному клиенту начать получать alpha-релизы из-за старого
-// значения update_channel в общем локальном settings.json.
 const ALPHA_CHANNEL: &str = "alpha";
 fn build_update_channel() -> &'static str {
     option_env!("PROJECT_UPDATE_CHANNEL").unwrap_or("stable")
@@ -157,12 +140,7 @@ fn velopack_update_manager(app: &tauri::AppHandle) -> Result<velopack::UpdateMan
 
 fn velopack_update_manager_for(app: &tauri::AppHandle, from: UpdateSource) -> Result<velopack::UpdateManager, String> {
     let is_alpha = build_update_channel() == ALPHA_CHANNEL;
-    // Альфа публикуется отдельным pre-release с постоянным тегом
-    // alpha-latest (build-alpha.yml), стабильная — обычными релизами; на нашем сервере — та же раскладка.
     let source = velopack::sources::HttpSource::new(from.base());
-    // Стабильная prerelease-сборка может принять stable-версию ниже по номеру.
-    // Alpha при этом всё равно остаётся закреплена за alpha-фидом: выбор
-    // stable здесь не меняет ни источник, ни канал обновлений.
     let on_prerelease = !app.package_info().version.pre.is_empty();
     let options = velopack::UpdateOptions {
         AllowVersionDowngrade: !is_alpha && on_prerelease,
@@ -176,14 +154,9 @@ fn velopack_update_manager_for(app: &tauri::AppHandle, from: UpdateSource) -> Re
 struct UpdateInfoOut {
     version: String,
     notes: String,
-    /// Откуда пришло: "github" или "server".
     source: String,
 }
 
-// 403/429 от GitHub возможны и на прямых ссылках (временные ограничения
-// с одного IP). Клиент сам даёт несколько запросов за сессию:
-// автопроверка на старте + Настройки на альфа-канале + ручная кнопка —
-// check_for_update_cached ниже схлопывает их в один на короткое окно.
 fn friendly_update_error(e: impl std::fmt::Display) -> String {
     let text = e.to_string();
     if text.contains("403") {
@@ -196,11 +169,6 @@ fn friendly_update_error(e: impl std::fmt::Display) -> String {
     }
 }
 
-// TTL короче, чем троттлинг автопроверки на JS-стороне (maybeAutoCheckUpdates,
-// 4 часа) — этот кэш не заменяет его, а закрывает случаи ВНУТРИ одной
-// короткой сессии (открыли Настройки, посмотрели на коммит, закрыли,
-// нажали «Проверить» — три вызова за секунды одного и того же вопроса
-// "есть ли обновление").
 const UPDATE_CHECK_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
 struct CachedUpdateCheck {
@@ -209,8 +177,6 @@ struct CachedUpdateCheck {
     result: Result<Option<UpdateInfoOut>, String>,
 }
 
-// Альфа-релиз alpha-latest на каждую сборку удаляется и публикуется заново — на минуту фид и пакет дают 404, а клиент,
-// успевший увидеть старый фид, получает 404 на скачивании. Это временный сбой: ждём и пробуем снова с новым фидом.
 fn is_transient_update_error(text: &str) -> bool {
     let text = text.to_ascii_lowercase();
     [
@@ -262,8 +228,6 @@ fn describe_update_error(text: &str, from: UpdateSource) -> String {
     }
 }
 
-/// Сколько повторов давать источнику: если за ним есть запасной — один (не держим человека две минуты на мёртвом
-/// GitHub), последнему — все.
 fn retries_for(index: usize, total: usize) -> u32 {
     if index + 1 < total { 1 } else { UPDATE_RETRIES }
 }
@@ -279,14 +243,11 @@ fn update_check_cache() -> &'static Mutex<Option<CachedUpdateCheck>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
-// Канал входит в ключ кэша, чтобы результаты разных типов сборки не смешивались при локальном тестировании. force
-// — ручная кнопка «Проверить обновления»: всегда свежий запрос к GitHub.
 fn check_for_update_cached(app: &tauri::AppHandle, force: bool) -> Result<Option<UpdateInfoOut>, String> {
     let channel = build_update_channel().to_string();
     let cache = update_check_cache();
     if !force {
         if let Some(cached) = cache.lock().unwrap().as_ref() {
-            // «Нового нет» держим минуту, а не весь TTL: иначе только что вышедшая сборка ещё пять минут не видна
             let ttl = if matches!(cached.result, Ok(None)) { std::time::Duration::from_secs(60) } else { UPDATE_CHECK_CACHE_TTL };
             if cached.channel == channel && cached.at.elapsed() < ttl {
                 return cached.result.clone();
@@ -332,8 +293,6 @@ fn check_for_update_cached(app: &tauri::AppHandle, force: bool) -> Result<Option
                 result = Ok(Some(found));
                 break;
             }
-            // «Нового нет» — спрашиваем и следующий источник: GitHub отдаёт фид через кэш и несколько минут после
-            // сборки отвечает по-старому, а зеркало на сервере уже могло подтянуть новую версию (и наоборот)
             Ok(None) => {
                 if result.is_err() {
                     result = Ok(None);
@@ -348,17 +307,12 @@ fn check_for_update_cached(app: &tauri::AppHandle, force: bool) -> Result<Option
     if result.is_err() {
         result = Err(errors.join("; "));
     }
-    // Ошибку не запоминаем: иначе следующая проверка в течение пяти минут снова покажет тот же сбой.
     if result.is_ok() {
         *cache.lock().unwrap() = Some(CachedUpdateCheck { at: std::time::Instant::now(), channel, result: result.clone() });
     }
     result
 }
 
-// (async) у синхронной функции — это НЕ косметика: команда без async
-// выполняется прямо в главном потоке приложения и подвешивает окно на
-// всё время работы. Тут внутри сетевой запрос к GitHub, так что без
-// этого атрибута «Проверить обновления» морозило интерфейс.
 #[tauri::command(async)]
 fn check_for_update(app: tauri::AppHandle, force: Option<bool>) -> Result<Option<UpdateInfoOut>, String> {
     log_result("check_for_update", check_for_update_cached(&app, force.unwrap_or(false)))
@@ -366,7 +320,6 @@ fn check_for_update(app: tauri::AppHandle, force: Option<bool>) -> Result<Option
 
 static UPDATE_DOWNLOADING: AtomicBool = AtomicBool::new(false);
 
-/// Флаг «обновление уже качается», снимается при любом выходе из команды.
 struct UpdateDownloadGuard;
 
 impl UpdateDownloadGuard {
@@ -384,11 +337,8 @@ impl Drop for UpdateDownloadGuard {
     }
 }
 
-// ---------- Доступ для ИИ-агента (MCP, отладочный порт WebView2) ----------
-
 const DEFAULT_DEBUG_PORT: u16 = 9222;
 
-/// Файл-флаг лежит в %APPDATA%\com.project.desktop — там же, где app_data_dir, но доступен до создания приложения.
 fn debug_flag_path() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("com.project.desktop").join("debug_port.txt"))
 }
@@ -401,9 +351,7 @@ fn debug_port_flag() -> Option<u16> {
 
 #[derive(serde::Serialize)]
 struct DebugPortStatus {
-    /// Включено ли в настройках (вступит в силу после перезапуска).
     enabled: bool,
-    /// Порт, который открыт прямо сейчас в этом запуске.
     active: Option<u16>,
     port: u16,
 }
@@ -434,8 +382,6 @@ fn debug_port_set(enabled: bool) -> Result<(), String> {
     }
 }
 
-/// Перезапуск: новый экземпляр стартует через пару секунд, когда этот уже вышел (иначе single-instance
-/// принял бы новый запуск за второй экземпляр и закрыл его).
 #[tauri::command]
 fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
@@ -443,15 +389,13 @@ fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
     let script = format!("Start-Sleep -Seconds 2; Start-Process -FilePath '{}'", antivirus::ps_quote(&exe.to_string_lossy()));
     std::process::Command::new("powershell")
         .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .creation_flags(0x0800_0000)
         .spawn()
         .map_err(|e| e.to_string())?;
     app.exit(0);
     Ok(())
 }
 
-/// После запуска: если перед выходом мы ставили обновление, а версия не сменилась — установка не удалась
-/// (Update.exe не смог заменить файлы). Возвращает текст для пользователя один раз и стирает отметку.
 #[tauri::command]
 fn update_failure(app: tauri::AppHandle) -> Option<String> {
     let path = app.path().app_data_dir().ok()?.join("update_pending.txt");
@@ -466,26 +410,10 @@ fn update_failure(app: tauri::AppHandle) -> Option<String> {
     Some(format!("Обновление до {target} не установилось: Windows не дала заменить файлы программы. Закройте программу полностью (трей → Выход) и обновитесь ещё раз. Не помогает — «Настройки → Обновления → Переустановить начисто»."))
 }
 
-/// Качает и сразу ставит обновление, перезапуская приложение —
-/// `apply_updates_and_restart` завершает текущий процесс сам, эта
-/// команда наружу успевает вернуться только в случае ошибки.
-/// Прогресс скачивания (0..100) шлётся в JS событием "update-progress",
-/// чтобы прогресс-бар в диалоге обновления не стоял на месте на большом
-/// файле (сейчас ffmpeg внутри — установщик тяжёлый).
-///
-/// (async) обязателен: без него скачивание идёт в главном потоке, и
-/// события "update-progress" из фонового потока не могут быть
-/// доставлены в webview до конца команды — прогресс-бар стоял бы на
-/// нуле и прыгал сразу в 100%, ровно то, что этот код и должен чинить.
 #[tauri::command(async)]
 fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
     log_result("download_and_apply_update", (|| {
-        // Одна закачка за раз. Две одновременные (автообновление при старте
-        // + кнопка «Обновить», или двойной клик) пишут в один и тот же
-        // `.partial` пакет, и вторая падает с «файл занят другим процессом»
-        // (os error 32), а первая тем временем спокойно докачивается.
         let _guard = UpdateDownloadGuard::acquire()?;
-        // Источники по очереди: GitHub не отдал фид или оборвал пакет — тот же пакет берём с сервера.
         let sources = update_sources();
         let mut errors = Vec::new();
         let mut picked = None;
@@ -503,7 +431,6 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
             loop {
                 let info = match um.check_for_updates().map_err(friendly_update_error) {
                     Ok(velopack::UpdateCheck::UpdateAvailable(info)) => *info,
-                    // В этом источнике новой версии ещё нет (кэш GitHub, зеркало не успело) — пробуем следующий
                     Ok(_) => {
                         errors.push(format!("{}: новой версии там пока нет", from.label()));
                         continue 'sources;
@@ -550,14 +477,6 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
         let Some((um, info)) = picked else {
             return Err(errors.join("\n"));
         };
-        // apply_updates_and_restart сама завершает процесс — строка ниже в норме никогда не выполняется до конца,
-        // но если она вообще вернула управление, это уже само по себе ошибка на стороне ОС. Дочерние процессы
-        // WebView2 после этого висели ещё секунды и держали папку `current`, а Update.exe не мог её переименовать
-        // («файл занят», 10 повторов и отказ): версия оставалась старой. Update.exe запускается и ждёт, а мы
-        // выходим штатно, закрывая webview. Сначала закрываем окна и ждём, пока завершатся процессы WebView2
-        // программы: их рабочая папка — `current`, и пока они живы, Windows не даёт Update.exe её переименовать
-        // («Access is denied», 10 повторов и отказ — версия остаётся старой). Update.exe к тому же не всегда может
-        // дождаться нашего процесса сам.
         release_program_files(&app);
         um.wait_exit_then_apply_updates(&info.TargetFullRelease, false, true, Vec::<String>::new())
             .map_err(|e| e.to_string())?;
@@ -571,9 +490,6 @@ fn download_and_apply_update(app: tauri::AppHandle) -> Result<(), String> {
     })())
 }
 
-/// «Переустановить начисто»: зависшая установка, перенесённая руками папка, портативная копия — скачиваем установщик
-/// (источники — как у обновлений) и ставим программу в обычное место. Setup.exe запускается, когда мы уже вышли:
-/// иначе он не заменит файлы запущенной программы. Старые копии потом видны в «Копии программы» — их можно убрать.
 #[tauri::command]
 async fn reinstall_app(app: tauri::AppHandle) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
@@ -583,7 +499,7 @@ async fn reinstall_app(app: tauri::AppHandle) -> Result<(), String> {
     let script = format!("Start-Sleep -Seconds 3; Start-Process -FilePath '{}'", antivirus::ps_quote(&setup.to_string_lossy()));
     std::process::Command::new("powershell")
         .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .creation_flags(0x0800_0000)
         .spawn()
         .map_err(|e| e.to_string())?;
     log::info!("reinstall_app: установщик {} запустится после выхода", setup.display());
@@ -592,10 +508,6 @@ async fn reinstall_app(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Перед установкой: закрыть окна и дождаться (до 10 с), пока завершатся все дочерние процессы программы —
-/// WebView2 и запущенные ffmpeg/ffprobe держат папку программы (рабочая папка, сами exe), и установщик не может её заменить.
-// Пока идёт передача установщику, закрытие последнего окна не должно завершать программу: Tauri по умолчанию
-// выходит, когда окон не осталось, и процесс умирал раньше, чем успевал запустить Update.exe — окно пропадало, обновления не было.
 static HANDING_OFF_UPDATE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn release_program_files(app: &tauri::AppHandle) {
@@ -605,7 +517,6 @@ fn release_program_files(app: &tauri::AppHandle) {
     }
     let me = sysinfo::Pid::from_u32(std::process::id());
     let started = std::time::Instant::now();
-    // sysinfo 0.40: без System не ждём потомков — Update.exe всё равно запустится.
     let mut sys = match sysinfo::System::new() {
         Ok(s) => s,
         Err(e) => {
@@ -615,7 +526,6 @@ fn release_program_files(app: &tauri::AppHandle) {
     };
     loop {
         sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-        // Потомки нашего процесса на любую глубину (браузерный процесс WebView2 → его рендеры и GPU)
         let mut family = vec![me];
         let mut i = 0;
         while i < family.len() {
@@ -642,13 +552,6 @@ fn release_program_files(app: &tauri::AppHandle) {
     }
 }
 
-// Логирует Err любой команды с её именем перед тем, как отдать наружу —
-// единая точка диагностики по всем tauri::command в этом файле, вместо
-// разметки логов внутри каждого модуля (audio_qc/media_tools/mpv_embed)
-// отдельно: тот же приём, что toast() на JS-стороне (см. api.js) для
-// error-тостов. Успешный путь намеренно не логируется здесь — иначе
-// файл раздувался бы шумом на каждый клик, а не только там, где
-// реально что-то пошло не так.
 fn log_result<T>(command: &str, result: Result<T, String>) -> Result<T, String> {
     if let Err(e) = &result {
         log::error!("[{command}] {e}");
@@ -656,14 +559,6 @@ fn log_result<T>(command: &str, result: Result<T, String>) -> Result<T, String> 
     result
 }
 
-// ffmpeg на большом файле работает секундами — в главном потоке это
-// замороженное окно на всё время анализа.
-//
-// Путь больше не берётся на веру: file_scope.rs проверяет, что этот
-// файл пользователь действительно выбрал сам (нативный диалог или
-// перетаскивание в окно). Без проверки любой XSS в webview мог бы
-// прочитать/перезаписать произвольный файл на диске — см. шапку
-// file_scope.rs.
 #[tauri::command(async)]
 fn qc_analyze(app: tauri::AppHandle, path: String) -> Result<audio_qc::QcReport, String> {
     log_result("qc_analyze", (|| {
@@ -672,8 +567,6 @@ fn qc_analyze(app: tauri::AppHandle, path: String) -> Result<audio_qc::QcReport,
     })())
 }
 
-// Тоже через ffmpeg (полное декодирование в PCM) — на большом файле
-// секунды, поэтому (async) по той же причине, что и у qc_analyze выше.
 #[tauri::command(async)]
 fn generate_waveform(app: tauri::AppHandle, path: String, buckets: u32) -> Result<audio_qc::WaveformData, String> {
     log_result("generate_waveform", (|| {
@@ -682,7 +575,6 @@ fn generate_waveform(app: tauri::AppHandle, path: String, buckets: u32) -> Resul
     })())
 }
 
-// Запускает ffmpeg-субпроцесс и пишет файл на диск — блокирующее.
 #[tauri::command(async)]
 fn export_audio_clip(
     app: tauri::AppHandle,
@@ -700,9 +592,6 @@ fn export_audio_clip(
     })())
 }
 
-/// Прогресс длинных операций ffmpeg уезжает в вебвью событием
-/// `mediatool-progress` — сам media_tools.rs про окно приложения ничего
-/// не знает (см. media_tools::Progress), поэтому мост живёт здесь.
 fn progress_to_webview(app: &tauri::AppHandle) -> impl Fn(f64, &str) + Sync + '_ {
     move |fraction, label| {
         let _ = app.emit(
@@ -712,12 +601,6 @@ fn progress_to_webview(app: &tauri::AppHandle) -> impl Fn(f64, &str) + Sync + '_
     }
 }
 
-/// Раскладка доски: сортировка по срочности, метрики колонок, поиск.
-/// Считается в Rust не ради скорости (на сотне карточек её и не
-/// заметить), а ради того, что это чистая функция без DOM — её целиком
-/// покрывают тесты в board.rs, чего про обработчики рендера сказать
-/// нельзя. Сегодняшнюю дату присылает фронтенд: часовой пояс студии
-/// знает он, а не процесс.
 #[tauri::command]
 fn board_layout(
     columns: Vec<board::BoardColumnIn>,
@@ -725,10 +608,6 @@ fn board_layout(
 ) -> board::BoardLayout {
     board::layout(columns, &view)
 }
-
-// ---------- нативные диалоги выбора файлов (file_scope.rs) ----------
-// Диалог открывает Rust: путь становится известен ему раньше, чем JS,
-// и сразу попадает в скоуп.
 
 #[tauri::command(async)]
 fn pick_input_files(
@@ -748,10 +627,6 @@ fn pick_output_file(
     file_scope::pick_output_file(&app, default_name, filters)
 }
 
-// Запись небольшого текстового файла (проект Reaper и т.п.) — только по
-// пути, который пользователь сам выбрал в диалоге сохранения.
-// Запись небольшого бинарного файла (.torrent, пришедший через сервер) — по тому же
-// правилу: только в путь, выбранный в диалоге сохранения, и не больше 2 МБ.
 #[tauri::command(async)]
 fn write_bytes_file(app: tauri::AppHandle, path: String, bytes: Vec<u8>) -> Result<(), String> {
     if bytes.len() > 2 * 1024 * 1024 {
@@ -775,8 +650,6 @@ fn pick_output_dir(app: tauri::AppHandle) -> Option<String> {
     file_scope::pick_output_dir(&app)
 }
 
-// ---------- «Инструменты ffmpeg» (media_tools.rs) ----------
-
 #[tauri::command(async)]
 fn mt_tool_status() -> media_tools::ToolStatus {
     media_tools::tool_status()
@@ -790,12 +663,6 @@ fn mt_probe_media(app: tauri::AppHandle, path: String) -> Result<media_tools::Me
     })())
 }
 
-// Не (async): сам вызов — просто регистрация пути в скоупе asset-протокола
-// (запись в память), никакого ffmpeg-субпроцесса здесь нет.
-//
-// Проверка скоупа тут самая важная во всём файле: allow_file() открывает
-// вебвью чтение файла ПО HTTP-подобному asset://-адресу, то есть без
-// неё одна строка из XSS давала бы чтение любого файла на диске.
 #[tauri::command]
 fn mt_register_media_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
     log_result("mt_register_media_file", (|| {
@@ -869,10 +736,6 @@ fn mt_mux_media(app: tauri::AppHandle, tracks: Vec<media_tools::MuxTrack>, out_p
         media_tools::mux_media(&checked, &out_path.to_string_lossy())
     })())
 }
-
-// ---------- новые операции: дубляж, скорость, кадры, GIF, субтитры ----------
-// Все по одному образцу: скоуп проверяет входы и выход, отказ писать
-// поверх исходника, прогресс уезжает в вебвью тем же событием.
 
 #[tauri::command(async)]
 fn mt_dub_audio(
@@ -1021,11 +884,6 @@ fn mt_extract_subtitles(
     })())
 }
 
-// ---------- «Собрать финал у себя» (local_render.rs): рендер на видеокарте ПК по плану сервера ----------
-
-// ---------- Апскейл картинок (upscale.rs) ----------
-
-/// Увеличивает картинку ×4 нейросетью (при первом вызове докачивает движок и модель). PNG уходит сырым ответом — без JSON.
 #[tauri::command]
 async fn upscale_image(
     app: tauri::AppHandle,
@@ -1038,13 +896,11 @@ async fn upscale_image(
     upscale::upscale(&app, http(), bytes, &model, size).await.map(tauri::ipc::Response::new)
 }
 
-/// Своя картинка для апскейла — файл из диалога выбора; байты уходят сырым ответом.
 #[tauri::command(async)]
 fn upscale_read(app: tauri::AppHandle, path: String) -> Result<tauri::ipc::Response, String> {
     upscale::read_input(&app, &path).map(tauri::ipc::Response::new)
 }
 
-/// Свои модели апскейла (ncnn): список, добавление из выбранных файлов, удаление.
 #[tauri::command(async)]
 fn upscale_models() -> Vec<String> {
     upscale::list_custom()
@@ -1060,7 +916,6 @@ fn upscale_model_remove(name: String) -> Result<Vec<String>, String> {
     upscale::remove_custom(&name)
 }
 
-/// Сколько места занимает апскейл и очистка (движок и скачанные модели; свои модели остаются).
 #[tauri::command(async)]
 fn upscale_storage() -> upscale::Storage {
     upscale::storage()
@@ -1071,35 +926,27 @@ fn upscale_clear() -> Result<upscale::Storage, String> {
     upscale::clear()
 }
 
-/// Сохраняет последний результат апскейла — только в путь из диалога сохранения.
 #[tauri::command(async)]
 fn upscale_save(app: tauri::AppHandle, path: String) -> Result<(), String> {
     upscale::save(&app, &path)
 }
 
-/// Автопроверка инструментов: ffmpeg (докачивает из релиза на GitHub, если нет), видеокарта и кодировщики.
 #[tauri::command]
 async fn local_render_prepare(app: tauri::AppHandle) -> local_render::ToolsStatus {
     local_render::prepare(&app, http()).await
 }
 
-/// Какие кодировщики реально работают на этом компьютере (NVENC — видеокарта NVIDIA).
 #[tauri::command(async)]
 fn local_render_encoders() -> local_render::EncoderStatus {
     local_render::encoder_status()
 }
 
-/// Выполняет план сборки: скачивает файлы, рендерит, возвращает путь к готовому файлу. Путь сразу попадает в скоуп
-/// чтения, чтобы существующая `upload_report_file` могла его загрузить в отчёт.
-/// Проверка DNS для «Карты работы»: разрешается ли адрес нашего сервера, какие DNS настроены и чьи. Только наш сервер.
 #[tauri::command(async)]
 fn net_diagnose() -> net_diag::NetDiag {
     let host = API_BASE.trim_start_matches("https://").split(['/', ':']).next().unwrap_or("");
     net_diag::diagnose(host)
 }
 
-/// Запрос к нашему API в обход системного DNS (см. net_fallback.rs) — интерфейс зовёт его, когда fetch не смог
-/// соединиться. Только наш сервер: адрес берётся из API_BASE, из интерфейса приходит лишь путь.
 #[tauri::command]
 async fn api_fallback(
     method: String,
@@ -1123,9 +970,6 @@ struct FastResponse {
     body: String,
 }
 
-/// Быстрый GET каталога загрузчика. WebView перед каждым новым адресом шлёт CORS-предзапрос (лишний круг до
-/// сервера, ~100 мс), а общий клиент `http()` держит соединение открытым и предзапросов не делает. Только наш
-/// сервер (API_BASE) и только пути /parser/access/; из заголовков — авторизация, версия и предпросмотр роли.
 #[tauri::command]
 async fn api_get_fast(path: String, headers: std::collections::HashMap<String, String>) -> Result<FastResponse, String> {
     if !path.starts_with("/parser/access/") || path.contains("..") || path.contains('#') || path.contains('\\') {
@@ -1143,7 +987,6 @@ async fn api_get_fast(path: String, headers: std::collections::HashMap<String, S
     Ok(FastResponse { status, body })
 }
 
-/// Параметры видео, лежащего на этом компьютере, для плана сборки (читается только выбранный пользователем файл).
 #[tauri::command(async)]
 fn local_render_probe(app: tauri::AppHandle, path: String) -> Result<local_render::LocalVideoInfo, String> {
     let result = (|| {
@@ -1171,7 +1014,6 @@ async fn local_render_run(
     log_result("local_render_run", result)
 }
 
-/// Загрузка готового файла на сервер (дальше им занимается бот). Путь должен быть тем, что вернул local_render_run.
 #[tauri::command]
 async fn local_render_upload(app: tauri::AppHandle, public_id: String, path: String, init_data: String) -> Result<(), String> {
     let result = async {
@@ -1185,13 +1027,10 @@ async fn local_render_upload(app: tauri::AppHandle, public_id: String, path: Str
 #[tauri::command(async)]
 fn local_render_cancel() -> Result<(), String> {
     local_render::request_cancel();
-    // Если идёт ffmpeg — останавливаем и его; «нечего отменять» здесь не ошибка (мог идти этап скачивания).
     let _ = media_tools::cancel_current_job();
     Ok(())
 }
 
-/// Копия готового рендера в папку, которую пользователь выбрал в диалоге (pick_output_dir). Исходник читается только
-/// по пути, который вернул local_render_run; имя берём без каталогов, существующий файл не затираем — добавляем (2), (3)…
 #[tauri::command(async)]
 fn local_render_save_copy(app: tauri::AppHandle, path: String, dir: String, name: String) -> Result<String, String> {
     let result = (|| {
@@ -1220,24 +1059,11 @@ fn local_render_cleanup(public_id: String) -> Result<(), String> {
     log_result("local_render_cleanup", local_render::cleanup(&public_id))
 }
 
-/// Прервать текущую операцию ffmpeg («Отмена» в панели инструментов).
-/// До неё единственным способом остановить сорокаминутный транскод было
-/// закрыть приложение — и даже это оставляло процесс ffmpeg дожёвывать
-/// файл в фоне.
 #[tauri::command(async)]
 fn mt_cancel() -> Result<(), String> {
     media_tools::cancel_current_job()
 }
 
-// Открыть папку с файловыми логами (tauri-plugin-log, см. run()) —
-// кнопка в настройках, чтобы при жалобе пользователь мог просто
-// прислать файл, а не пересказывать своими словами, что было на экране.
-// app_log_dir() — тот же путь, что резолвит сам плагин под капотом
-// (TargetKind::LogDir), так что открывается ровно та папка, куда
-// реально пишутся логи, без риска разъехаться с ним. reveal_item_in_dir
-// (а не shell::open, который у tauri 2 к тому же deprecated в пользу
-// этого же opener) открывает родителя и подсвечивает саму папку logs —
-// этого достаточно, чтобы её найти и зайти внутрь.
 #[tauri::command(async)]
 fn open_log_folder(app: tauri::AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
@@ -1246,8 +1072,6 @@ fn open_log_folder(app: tauri::AppHandle) -> Result<(), String> {
     app.opener().reveal_item_in_dir(&dir).map_err(|e| e.to_string())
 }
 
-/// «Показать в папке»: открывает проводник и выделяет сам файл (через opener, а не shell:open, у которого скоуп
-/// на пути в папки не рассчитан). Работает только для существующего файла.
 #[tauri::command(async)]
 fn reveal_in_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
@@ -1258,13 +1082,8 @@ fn reveal_in_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
     app.opener().reveal_item_in_dir(&p).map_err(|e| e.to_string())
 }
 
-// Обращение к хранилищу учётных данных ОС тоже блокирующее (на Linux —
-// синхронный вызов Secret Service по D-Bus).
 #[tauri::command(async)]
 fn token_save(token: String) -> Result<(), String> {
-    // log_result безопасен и здесь: он логирует только текст Err (общая
-    // ошибка хранилища ОС), сам токен никогда не попадает в лог ни на
-    // успешном, ни на неудачном пути.
     log_result("token_save", token_store::save(&token))
 }
 
@@ -1278,16 +1097,6 @@ fn token_clear() -> Result<(), String> {
     log_result("token_clear", token_store::clear())
 }
 
-// Прогресс пакетного QC (runQcBatch в qc.js) — на иконке в панели
-// задач, а не только полоской внутри окна: у студии окно приложения
-// часто свёрнуто в трей во время долгого прогона по папке с
-// десятком дорожек, а таскбар виден всегда. progress=None гасит
-// индикатор — вызывается и по завершении прогона, и если шторку
-// закрыли посреди работы (иначе полоска осталась бы висеть на
-// иконке до следующего вызова, вводя в заблуждение).
-// Не (async): сам вызов — дешёвая нативная операция (Windows: одно
-// COM-обращение к ITaskbarList3), в отличие от ffmpeg-субпроцессов
-// или сетевых запросов выше блокировать интерфейс ей нечем.
 #[tauri::command]
 fn set_window_progress(app: tauri::AppHandle, progress: Option<u64>) -> Result<(), String> {
     let win = app
@@ -1319,33 +1128,19 @@ async fn is_autostart(app: tauri::AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
-// Адрес сервера — из server.json в корне репозитория (build.rs передаёт его как SERVER_ORIGIN), тот же файл читает
-// интерфейс (src/app/api.js). Сменить: npm run set-server -- https://новый.домен.
 const API_BASE: &str = concat!(env!("SERVER_ORIGIN"), "/api");
 
-// Один клиент на всё приложение — у reqwest::Client внутри пул
-// соединений и TLS-сессии, создавать его на каждый запрос значит
-// каждый раз заново поднимать TLS-хендшейк.
 fn http() -> &'static reqwest::Client {
     static HTTP: OnceLock<reqwest::Client> = OnceLock::new();
     HTTP.get_or_init(reqwest::Client::new)
 }
 
-/// Пути файлов, которые пользователь СВОИМИ РУКАМИ перетащил в окно.
-/// `upload_report_file` ниже читает файл с диска по пути, пришедшему из
-/// JS, — без этого списка любой XSS в webview превращался бы в примитив
-/// «прочитать произвольный файл пользователя и отправить его на сервер»
-/// (ровно то, от чего обычно защищает capability-скоуп tauri-plugin-fs).
-/// Rust слушает то же самое нативное событие drag&drop, что и JS-сторона
-/// (см. src/app/file-drop.js), поэтому список наполняется сам.
 #[derive(Default)]
 struct DroppedFiles(Mutex<HashSet<PathBuf>>);
 
 impl DroppedFiles {
     fn remember(&self, paths: &[PathBuf]) {
         if let Ok(mut set) = self.0.lock() {
-            // Держим только последний дроп — старые пути незачем
-            // оставлять доступными на всю жизнь процесса.
             set.clear();
             for p in paths {
                 set.insert(p.canonicalize().unwrap_or_else(|_| p.clone()));
@@ -1362,31 +1157,16 @@ impl DroppedFiles {
     }
 }
 
-// Тот же список, что ALLOWED_EXT в src/app/file-drop.js — держать в
-// синхроне руками. Проверка дублируется намеренно: JS-сторону можно
-// обойти, Rust-сторону — нет.
 const ALLOWED_UPLOAD_EXT: &[&str] = &[
-    // звук (AUDIO_EXTENSIONS в src/app/media-formats.js)
     "wav", "wave", "w64", "mp3", "mp2", "flac", "m4a", "m4b", "aac", "ogg", "oga", "opus", "wma", "aiff",
     "aif", "aifc", "ac3", "eac3", "dts", "mka", "ape", "wv", "amr", "caf", "au", "tta", "weba",
-    // видео (VIDEO_EXTENSIONS)
     "mp4", "mkv", "mov", "avi", "webm", "m4v", "ts", "m2ts", "mts", "mpg", "mpeg", "wmv", "flv", "3gp", "ogv",
-    // картинки и документы
     "png", "jpg", "jpeg", "webp", "pdf", "doc", "docx", "ppt", "pptx", "zip",
 ];
 
-// Гигабайтный файл, целиком загруженный в память, уронил бы приложение
-// раньше, чем сервер успел бы его отклонить.
-// Потолок локального Bot API на сервере — 2000 МБ (сервер и nginx пропускают
-// файл потоком, см. _spooled в miniapp/server.py).
 const MAX_UPLOAD_BYTES: u64 = 2000 * 1024 * 1024;
-// Скачивание готового файла загрузчика: сервер разрешает торренты до 20 ГБ (+ запас на zip).
 const MAX_PARSER_BYTES: u64 = 25 * 1024 * 1024 * 1024;
 
-// Файл разрешён к загрузке, если пользователь сам его указал ЛЮБЫМ из
-// двух способов — перетащил в окно (DroppedFiles) или выбрал в
-// нативном диалоге (FileScope.readable, тот же скоуп, что уже даёт
-// mt_register_media_file и остальным ffmpeg-командам).
 fn checked_upload_path(
     dropped: &DroppedFiles,
     scope: &file_scope::FileScope,
@@ -1416,13 +1196,6 @@ fn checked_upload_path(
     Ok(path)
 }
 
-/// Файл, перетащенный из проводника (см. src/app/file-drop.js,
-/// onDragDropEvent отдаёт только путь на диске, не байты) — читаем его
-/// здесь, в Rust, и сами шлём multipart-запросом на
-/// /api/report/{id}/files/upload, а не через JS/fetch: так не нужен
-/// tauri-plugin-fs со capability-скоупом на произвольный путь на диске.
-/// Скоуп при этом никуда не девается — он просто свой (см. DroppedFiles
-/// выше): читаем только то, что пользователь сам перетащил в окно.
 #[tauri::command]
 async fn upload_report_file(
     app: tauri::AppHandle,
@@ -1441,8 +1214,6 @@ async fn upload_report_file(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "file".to_string());
 
-        // std::fs::read (блокирующий), не tokio::fs — не тащим отдельно
-        // зависимость на tokio ради одного чтения файла.
         let bytes = std::fs::read(&path).map_err(|e| format!("Не удалось прочитать файл: {e}"))?;
 
         let part = reqwest::multipart::Part::bytes(bytes).file_name(file_name);
@@ -1468,13 +1239,6 @@ async fn upload_report_file(
     log_result("upload_report_file", result)
 }
 
-/// Скачивание вложения отчёта. Раньше это была обычная ссылка
-/// `<a href="...?init_data=ТОКЕН" target="_blank">` в карточке отчёта:
-/// во-первых, target="_blank" внутри webview никакого окна не открывает
-/// (кнопка просто не работала), во-вторых, токен `dsk_...` уезжал в
-/// строку URL — то есть в логи сервера и в историю внешнего браузера.
-/// Теперь запрос идёт отсюда, токен — заголовком, а путь сохранения
-/// пользователь выбирает нативным диалогом (plugin-dialog на JS-стороне).
 #[tauri::command]
 async fn download_report_file(
     app: tauri::AppHandle,
@@ -1485,12 +1249,7 @@ async fn download_report_file(
     job: Option<String>,
 ) -> Result<(), String> {
     let result = async {
-        // Путь сохранения приходит из вебвью. Без этой проверки XSS мог
-        // бы положить файл с содержимым от сервера куда угодно — в папку
-        // автозагрузки, поверх чужого документа и т.п.
         let save_path = app.state::<file_scope::FileScope>().check_write(&save_path)?;
-        // Файла может не быть в кэше сервера (ушёл в архив Telegram): сервер достаёт его оттуда, и пока это идёт,
-        // отвечает 502–504 или рвёт соединение. Это временно — повторяем, а не сдаёмся с первой попытки.
         let mut attempt = 0u32;
         let resp = loop {
             let sent = http()
@@ -1515,10 +1274,6 @@ async fn download_report_file(
     log_result("download_report_file", result)
 }
 
-/// Какие адреса API можно скачать через download_api_file: только ручки
-/// вложений (сообщения, заметки, тикеты, равки серии). Путь приходит из
-/// вебвью — без этой проверки им можно было бы вытянуть любой ответ API
-/// с токеном пользователя в заголовке.
 fn allowed_attachment_path(api_path: &str) -> bool {
     let ok_chars = api_path
         .chars()
@@ -1541,9 +1296,6 @@ fn allowed_attachment_path(api_path: &str) -> bool {
     ok_chars && !api_path.contains("..") && shape
 }
 
-/// Скачивание вложения (сообщения, заметки, тикеты, равки) в выбранный
-/// пользователем файл — тот же приём, что download_report_file: токен
-/// заголовком, путь сохранения проверяет FileScope.
 #[tauri::command]
 async fn download_api_file(
     app: tauri::AppHandle,
@@ -1557,7 +1309,6 @@ async fn download_api_file(
             return Err("Этот адрес скачивать нельзя.".to_string());
         }
         let save_path = app.state::<file_scope::FileScope>().check_write(&save_path)?;
-        // Сервер может доставать файл из архива Telegram — пока это идёт, он отвечает 502–504: повторяем.
         let mut attempt = 0u32;
         let resp = loop {
             let sent = http()
@@ -1575,7 +1326,6 @@ async fn download_api_file(
             attempt += 1;
             tokio::time::sleep(std::time::Duration::from_secs(5 * attempt as u64)).await;
         };
-        // Готовые файлы загрузчика (торренты, папки) сервер держит до 20 ГБ — у вложений потолок 2 ГБ.
         let max = if api_path.trim_start_matches('/').starts_with("parser/") { MAX_PARSER_BYTES } else { MAX_UPLOAD_BYTES };
         save_response_to_file(resp, &save_path, job.map(|j| (app.clone(), j)), max).await
     }
@@ -1583,10 +1333,6 @@ async fn download_api_file(
     log_result("download_api_file", result)
 }
 
-/// Ответ сервера — в файл кусками, а не целиком в память: файлы бывают
-/// до 2 ГБ. Предел MAX_UPLOAD_BYTES проверяется и по заявленному размеру,
-/// и по фактически прочитанному (Content-Length может врать или его нет —
-/// иначе бесконечный поток забил бы диск). Недокачанный файл удаляется.
 async fn save_response_to_file(
     mut resp: reqwest::Response,
     save_path: &std::path::Path,
@@ -1635,8 +1381,6 @@ async fn save_response_to_file(
     result
 }
 
-/// Текст ошибки из тела ответа сервера ({"detail": "..."}), если он там
-/// есть — иначе переданная заглушка.
 async fn error_detail(resp: reqwest::Response, fallback: &str) -> String {
     resp.json::<serde_json::Value>()
         .await
@@ -1645,16 +1389,6 @@ async fn error_detail(resp: reqwest::Response, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.to_string())
 }
 
-/// Скругление углов и цвет рамки окна — Windows 11 (build 22000+).
-/// Системный заголовок у окна выключен (tauri.conf.json:
-/// decorations:false, полосу рисует сам фронтенд, см. window-chrome.js),
-/// поэтому единственное, что осталось от системного оформления, — тонкая
-/// рамка, которую рисует DWM. По умолчанию она серая и к палитре
-/// приложения отношения не имеет.
-///
-/// На Windows 10 обоих атрибутов не существует, вызов вернёт E_INVALIDARG
-/// — намеренно игнорируем: окно просто останется с прямыми углами и
-/// рамкой по умолчанию, как было.
 #[cfg(windows)]
 fn apply_windows_11_chrome(win: &tauri::WebviewWindow) {
     use windows::Win32::Graphics::Dwm::{
@@ -1672,8 +1406,6 @@ fn apply_windows_11_chrome(win: &tauri::WebviewWindow) {
             std::ptr::addr_of!(corner).cast(),
             std::mem::size_of_val(&corner) as u32,
         );
-        // COLORREF — 0x00BBGGRR, не привычный #RRGGBB: это --line из
-        // styles.css (#38262e) с переставленными байтами.
         let border: u32 = 0x002e_2638;
         let _ = DwmSetWindowAttribute(
             hwnd,
@@ -1684,15 +1416,6 @@ fn apply_windows_11_chrome(win: &tauri::WebviewWindow) {
     }
 }
 
-/// WebView2 по умолчанию сам перехватывает часть «браузерных» горячих
-/// клавиш (Ctrl+F/Ctrl+P/Ctrl+K и т.п. — то же, что в обычном Edge) ДО
-/// того, как они доходят до keydown-слушателя страницы. У нас Ctrl+K —
-/// это command-palette.js (document.addEventListener("keydown", ...)),
-/// и в реальном приложении на Windows он никогда не срабатывал, хотя в
-/// headless Playwright-тестах на Linux (не настоящий WebView2 — синтетика
-/// диспетчерит события прямо в DOM, минуя браузерный слой) всё было
-/// зелёным. AreBrowserAcceleratorKeysEnabled=false отдаёт эти комбинации
-/// странице как обычные keydown.
 fn disable_browser_accelerator_keys(win: &tauri::WebviewWindow) {
     use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
     use windows::core::Interface;
@@ -1713,14 +1436,6 @@ fn disable_browser_accelerator_keys(win: &tauri::WebviewWindow) {
     }
 }
 
-/// Удаляет из `packages/` полный пакет (.nupkg, ~170 МБ) уже
-/// установленной версии. Velopack после обновления сам чистит пакеты
-/// старых версий, но пакет текущей оставляет — он нужен только чтобы
-/// собирать дельта-обновления, а мы их не публикуем (в релизах только
-/// full). Без этого рядом с `current/` всегда лежит его сжатая копия.
-/// Скачанное, но ещё не применённое обновление (версия выше текущей)
-/// не трогаем. Не установлено через Velopack (запуск из target/) —
-/// ничего не делаем.
 fn drop_installed_package() {
     use velopack::locator::{auto_locate_app_manifest, find_local_full_packages, LocationContext};
     let Ok(locator) = auto_locate_app_manifest(LocationContext::FromCurrentExe) else { return };
@@ -1751,37 +1466,22 @@ fn toggle_main_window(app: &tauri::AppHandle) {
 }
 
 fn main() {
-    // Должен быть самой первой инструкцией в main() — Velopack иногда
-    // перезапускает/завершает процесс сам для служебных операций
-    // (первичная установка, применение обновления и т.п.), до того как
-    // остальной код приложения вообще успеет пойти.
     velopack::VelopackApp::build().run();
 
-    // Рабочая папка по умолчанию — `current` рядом с exe (так нас запускает Velopack), и каждый дочерний процесс
-    // (WebView2, ffmpeg) наследует её и «прижимает» папку: Update.exe потом не может её переименовать и обновление
-    // не ставится. Переносим рабочую папку во временную — ffmpeg рядом с exe находится и так (папка exe ищется первой).
     let _ = std::env::set_current_dir(std::env::temp_dir());
 
-    // Доступ для ИИ-агента (MCP): включается в Настройки → «Доступ для ИИ» и действует со следующего запуска.
-    // Порт слушает только 127.0.0.1; без флага-файла переменная не выставляется и порт закрыт.
-    // На ноутбуках с двумя видеокартами просим дискретную: иначе Windows часто оставляет окно на встроенной.
     let mut webview_args = String::from("--force_high_performance_gpu");
     if let Some(port) = debug_port_flag() {
         webview_args.push_str(&format!(" --remote-debugging-port={port} --remote-allow-origins=http://127.0.0.1:{port}"));
     }
-    // Единственный поток на этом этапе — других потоков, читающих окружение, ещё нет.
     std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", &webview_args);
 
-    // Отдельный процесс антивируса с правами администратора: проверка закрытых папок без окна (см. antivirus::headless).
     let cli_args: Vec<String> = std::env::args().collect();
     if cli_args.iter().any(|a| a == "--av-scan") {
         std::process::exit(antivirus::headless(&cli_args));
     }
 
     tauri::Builder::default()
-        // Второй запуск (ярлык, автозапуск + ручной старт и т.п.) не должен
-        // плодить второй процесс — вместо этого просто разворачиваем уже
-        // работающее окно. Должен регистрироваться самым первым плагином.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.show();
@@ -1789,19 +1489,6 @@ fn main() {
                 let _ = win.set_focus();
             }
         }))
-        // Файловые логи с ротацией — единая точка диагностики вместо
-        // разрозненных toast/eprintln!, после которых при жалобе из
-        // реальной студии оставалось только гадать (см. историю с mpv-
-        // плеером: ни toast, ни процесса, а eprintln! в --release без
-        // консоли уходил в никуда — оба факта стали видны только после
-        // добавления этого плагина). Webview-таргет зеркалит и то, что
-        // шлёт console.* из JS (media-tools.js и т.д.), в тот же файл —
-        // не только в devtools-консоль, которую пользователь не откроет
-        // сам. Error по умолчанию; Info включён только для модулей FFmpeg,
-        // чтобы видеть этап и последний подтверждённый прогресс без шума
-        // сторонних библиотек. Максимум 5 МБ на файл, храним
-        // 3 последних ротации, остального обычно достаточно, чтобы
-        // покрыть один сеанс работы студии.
         .plugin(
             tauri_plugin_log::Builder::new()
                 .target(tauri_plugin_log::Target::new(
@@ -2024,34 +1711,21 @@ fn main() {
             luatools::lt_gamelist_read_kind,
         ])
         .setup(|app| {
-            // Первая строка в файловом логе за сеанс — якорь, от которого
-            // считать всё остальное при разборе присланного лога (версия
-            // сборки — иначе непонятно, к какому коммиту относится баг-
-            // репорт присланного файла).
             log::info!("Project Desktop {} запускается", app.package_info().version);
 
-            // Поведенческая защита (если включена): фоновый монитор процессов и файловой активности.
             behavior::start_if_enabled(app.handle().clone());
 
-            // Пакет уже установленной версии в packages/ больше не нужен.
             std::thread::spawn(drop_installed_package);
-            // Ярлыки, оставшиеся от удалённой копии, — на текущий exe (иначе на панели задач пустой лист).
             std::thread::spawn(installs::repair_dead_shortcuts);
 
-            // Тосты от имени «Project Desktop», а не «Windows PowerShell».
             #[cfg(windows)]
             desktop_notify::register();
 
-            // Глобальная горячая клавиша — свернуть/показать окно из любого
-            // места (Ctrl+Shift+P). Не через `?`: если комбинацию уже занял
-            // кто-то другой в системе, ошибка отсюда уронила бы весь запуск
-            // приложения — из-за необязательной горячей клавиши.
             let toggle = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP);
             if let Err(e) = app.global_shortcut().register(toggle) {
                 log::warn!("Не удалось зарегистрировать Ctrl+Shift+P (занята другим приложением?): {e}");
             }
 
-            // Иконка в трее с меню — открыть/скрыть окно и выйти по-настоящему.
             let show_i = MenuItem::with_id(app, "show", "Открыть", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
@@ -2082,9 +1756,6 @@ fn main() {
                         toggle_main_window(tray.app_handle());
                     }
                 });
-            // Без unwrap(): иконки может не оказаться (собрали без
-            // bundle.icon) — трей тогда просто будет с иконкой по
-            // умолчанию, а не паника на старте.
             if let Some(icon) = app.default_window_icon().cloned() {
                 tray = tray.icon(icon);
             }
@@ -2100,21 +1771,12 @@ fn main() {
             let win_clone = win.clone();
             let handle = app.handle().clone();
             win.on_window_event(move |event| match event {
-                // Крестик у окна — сворачиваем в трей вместо закрытия (опрос
-                // уведомлений на JS-стороне продолжает идти, пока процесс жив).
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = win_clone.hide();
                 }
-                // Тот же дроп, который обрабатывает JS (file-drop.js), —
-                // запоминаем пути, чтобы upload_report_file знал, какие
-                // файлы пользователь реально разрешил трогать.
                 tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
                     handle.state::<DroppedFiles>().remember(paths);
-                    // Перетащенный файл — такой же явный выбор пользователя,
-                    // как выбранный в диалоге: QC звука умеет запускаться
-                    // прямо по дропу (file-drop.js), а qc_analyze теперь
-                    // сверяется со скоупом (file_scope.rs).
                     let scope = handle.state::<file_scope::FileScope>();
                     for p in paths {
                         scope.allow_read(p);
@@ -2126,9 +1788,6 @@ fn main() {
             Ok(())
         })
         .build({
-            // Окно из tauri.conf.json: wry всегда передаёт WebView2 свои аргументы, и они перебивают переменную
-            // окружения выше — без этого ни порт для ИИ, ни дискретная видеокарта не включались.
-            // Дефолты wry/Tauri повторяем, раз заменяем их целиком.
             let mut ctx = tauri::generate_context!();
             let args = format!(
                 "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required {webview_args}"
@@ -2140,7 +1799,6 @@ fn main() {
         })
         .expect("error while running tauri application")
         .run(|_, event| {
-            // Выход «окон не осталось» (code: None) во время передачи установщику держим; явный app.exit(0) проходит.
             if let tauri::RunEvent::ExitRequested { code: None, api, .. } = event {
                 if HANDING_OFF_UPDATE.load(std::sync::atomic::Ordering::SeqCst) {
                     api.prevent_exit();
@@ -2173,7 +1831,6 @@ mod tests {
         assert!(allowed_attachment_path("report/R-000012/notes/4/file"));
         assert!(allowed_attachment_path("tickets/5/posts/6/file"));
         assert!(allowed_attachment_path("report/R-000012/raws/voice/file"));
-        // чужие ручки API, обход пути, мусор в id
         assert!(!allowed_attachment_path("admin/access"));
         assert!(!allowed_attachment_path("report/R-1/raws/other/file"));
         assert!(!allowed_attachment_path("chats/general/messages/x/file"));

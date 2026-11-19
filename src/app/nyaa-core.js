@@ -1,5 +1,3 @@
-// Nyaa: разбор RSS-ленты поиска, magnet-ссылки, сортировка и сводка.
-// Чистые функции без DOM и Tauri — проверяются node-тестом.
 
 export const CATEGORIES = [
   ["0_0", "Все категории"],
@@ -41,7 +39,6 @@ function tag(block, name) {
 }
 
 const UNITS = { b: 1, kib: 1024, mib: 1024 ** 2, gib: 1024 ** 3, tib: 1024 ** 4 };
-/** «73.6 MiB» → байты (0, если не разобрать). */
 export function sizeToBytes(text) {
   const m = /^([\d.,]+)\s*([KMGT]?i?B)$/i.exec(String(text || "").trim());
   if (!m) return 0;
@@ -50,7 +47,6 @@ export function sizeToBytes(text) {
 
 const num = v => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : 0; };
 
-/** RSS Nyaa → [{ id, title, hash, size, sizeBytes, date, seeders, leechers, downloads, category, comments, trusted, remake, pageUrl }]. */
 export function parseNyaaRss(xml) {
   const blocks = [...String(xml || "").matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(m => m[1]);
   return blocks.map(b => {
@@ -92,7 +88,6 @@ export function sortItems(items, key, dir = "desc") {
   return items.slice().sort((a, b) => sign * (a[field] - b[field]) || b.date - a.date);
 }
 
-/** Дата для таблицы: «2026-10-08 17:39» по местному времени. */
 export function fmtDate(ts) {
   if (!ts) return "—";
   const d = new Date(ts);
@@ -100,7 +95,6 @@ export function fmtDate(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** «5 мин назад», «3 ч назад», «вчера», «4 дн. назад», иначе дата. */
 export function relTime(ts, now = Date.now()) {
   if (!ts) return "—";
   const s = Math.max(0, Math.floor((now - ts) / 1000));
@@ -117,7 +111,6 @@ export function relTime(ts, now = Date.now()) {
 
 const TAG_WORDS = /^(FLAC|MP3|AAC|OPUS|WAV|ALAC|HEVC|AVC|AV1|x26[45]|H\.?26[45]|BD(?:Rip)?|Blu-?ray|WEB(?:-?DL|Rip)?|HDTV|DVD|10-?bit|8-?bit|Hi10P|\d{3,4}p|\d+\s?kHz(?:\/\d+\s?bit)?|\d+\s?bit|\d+\s?kbps|Dual[- ]Audio|Multi[- ]?Subs?|Batch|Remux|RAW)$/i;
 
-/** Название → { group, tags } : «[JMAX] … [FLAC 48kHz]» → группа JMAX, метки FLAC и 48kHz. */
 export function splitTitle(title) {
   const t = String(title || "");
   const group = (/^\s*\[([^\]]{1,40})\]/.exec(t) || [])[1] || "";
@@ -132,13 +125,11 @@ export function splitTitle(title) {
   return { group, tags: tags.slice(0, 5) };
 }
 
-/** Вид категории для значка: anime / audio / video / other. */
 export function categoryKind(categoryId) {
   const head = String(categoryId || "").split("_")[0];
   return { 1: "anime", 2: "audio", 4: "video" }[head] || "other";
 }
 
-/** Сводка по списку для шапки страницы. */
 export function summarize(items) {
   const bytes = items.reduce((s, i) => s + i.sizeBytes, 0);
   const top = items.reduce((b, i) => (!b || i.seeders > b.seeders ? i : b), null);
@@ -153,17 +144,16 @@ export function fmtBytes(b) {
   return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
 }
 
-// ---------- фильтры списка ----------
 
 export const DEFAULT_FILTERS = {
-  hideDead: false,       // 0 раздающих
+  hideDead: false,
   minSeeders: 0,
-  block: [],             // скрыть, если в названии есть любое из слов
-  require: [],           // показать только с одним из слов
-  sizeMinMiB: 0, sizeMaxMiB: 0,   // 0 — не ограничено
-  completedOp: "any",    // any | gt | lt | eq
+  block: [],
+  require: [],
+  sizeMinMiB: 0, sizeMaxMiB: 0,
+  completedOp: "any",
   completedVal: 0,
-  age: "all",            // all | 24h | 7d | 30d | 90d | 365d
+  age: "all",
   hideSeen: false,
 };
 
@@ -186,14 +176,12 @@ export function normalizeFilters(f = {}) {
   };
 }
 
-/** Сколько условий фильтра сейчас включено (для значка на кнопке). */
 export function activeFilterCount(f) {
   const n = normalizeFilters(f);
   return [n.hideDead, n.minSeeders > 0, n.block.length > 0, n.require.length > 0, n.sizeMinMiB > 0 || n.sizeMaxMiB > 0,
     n.completedOp !== "any", n.age !== "all", n.hideSeen].filter(Boolean).length;
 }
 
-/** Применяет фильтры к списку. seen — множество id, которые уже открывали/сохраняли. */
 export function applyFilters(items, filters, { now = Date.now(), seen = new Set() } = {}) {
   const f = normalizeFilters(filters);
   const block = f.block.map(w => w.toLowerCase());
@@ -216,13 +204,11 @@ export function applyFilters(items, filters, { now = Date.now(), seen = new Set(
   });
 }
 
-/** Склейка страниц: новые записи добавляются, повторы по id отбрасываются. */
 export function mergePages(current, next) {
   const have = new Set(current.map(i => i.id));
   return current.concat(next.filter(i => !have.has(i.id)));
 }
 
-/** Диапазон выбора при Shift+щелчке: id между якорем и целью в текущем порядке списка. */
 export function rangeIds(ids, anchorId, targetId) {
   const a = ids.indexOf(anchorId), b = ids.indexOf(targetId);
   if (a === -1 || b === -1) return [targetId];
@@ -230,7 +216,6 @@ export function rangeIds(ids, anchorId, targetId) {
   return ids.slice(from, to + 1);
 }
 
-// ---------- страница раздачи ----------
 
 const BLOCK = new Set(["P", "DIV", "LI", "H1", "H2", "H3", "H4", "H5", "H6", "TR", "PRE", "BLOCKQUOTE", "UL", "OL", "TABLE"]);
 
@@ -249,12 +234,6 @@ function cleanText(s) {
   return s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
 }
 
-/**
- * HTML страницы /view/{id} → { title, fields, date, magnet, description, images, files }.
- * Текст описания берётся как простой текст (разметка с чужого сайта в программу
- * не вставляется), картинки — только https. parser — конструктор DOMParser
- * (в браузере по умолчанию свой, в тестах передаётся из jsdom).
- */
 export function parseView(html, Parser = globalThis.DOMParser) {
   const doc = new Parser().parseFromString(String(html || ""), "text/html");
   const fields = {};
@@ -276,7 +255,6 @@ export function parseView(html, Parser = globalThis.DOMParser) {
       if (/^https:\/\//i.test(src) && !images.includes(src)) images.push(src);
     });
   }
-  // Описание на Nyaa — сырой markdown, который сайт рисует скриптом: ![alt](https://…) и [текст](https://…).
   let description = cleanText(parts.join(""));
   description = description.replace(/!\[[^\]]*\]\((https:\/\/[^\s)]+)(?:\s+"[^"]*")?\)/g, (_, u) => { if (!images.includes(u)) images.push(u); return ""; });
   description = cleanText(description.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t, u) => (t.trim() === u ? u : `${t} (${u})`)));
@@ -298,20 +276,17 @@ export function parseView(html, Parser = globalThis.DOMParser) {
   };
 }
 
-// ---------- зеркала и проверка связи ----------
 
 export const NYAA_MIRRORS = ["https://nyaa.si", "https://nya.iss.one", "https://nyaa.ink", "https://nyaa.land", "https://nyaa.digital", "https://ny.iss.one"];
 
-/** Службы для проверки; apply — переключается ли зеркало в самой странице. */
 export function buildServices(nyaaCustom = [], serverOrigin = "", extra = {}) {
   const services = [
     { id: "nyaa", name: "Nyaa", note: "список раздач и страницы", apply: true, mirrors: [...new Set([...NYAA_MIRRORS, ...nyaaCustom])] },
-    { id: "shikimori", name: "Shikimori", note: "каталог и постеры в режиме «Смотреть» идут через сервер студии", apply: false, mirrors: ["https://shikimori.io"] },  // .one и .me больше не отвечают: Shikimori переехал на .io
+    { id: "shikimori", name: "Shikimori", note: "каталог и постеры в режиме «Смотреть» идут через сервер студии", apply: false, mirrors: ["https://shikimori.io"] },
     { id: "anilist", name: "AniList", note: "описания, баннеры, расписание эфира", apply: false, mirrors: ["https://graphql.anilist.co", "https://anilist.co"] },
     { id: "jikan", name: "MyAnimeList (Jikan)", note: "оценки и опенинги", apply: false, mirrors: ["https://api.jikan.moe"] },
     { id: "sources", name: "Источники раздачи", note: "SeaDex, AnimeTosho, nekoBT, Tsukihime на вкладке «Источники»", apply: false, mirrors: ["https://releases.moe", "https://feed.animetosho.org", "https://nekobt.to", "https://api.tsukihime.org"] },
   ];
-  // Зеркала, которые сервер добавил без релиза программы (переезд сайта): только https://хост.
   for (const sv of services) {
     const more = Array.isArray(extra && extra[sv.id]) ? extra[sv.id].filter(u => typeof u === "string" && /^https:\/\/[a-z0-9.-]+$/i.test(u)).slice(0, 12) : [];
     sv.mirrors = [...new Set([...sv.mirrors, ...more])];
@@ -320,8 +295,6 @@ export function buildServices(nyaaCustom = [], serverOrigin = "", extra = {}) {
   return services;
 }
 
-/** Результат проверки → { level: ok|slow|warn|bad, text }. */
-// У адресов API без пути (graphql.…, api.…) ответ 404 на простой GET — норма: ручки открываются запросом POST или с путём.
 const isApiHost = url => { try { return /^(graphql|api)\./.test(new URL(url).hostname); } catch (_) { return false; } };
 
 export function classifyCheck(r) {
@@ -334,7 +307,6 @@ export function classifyCheck(r) {
   return { level: "ok", text: `доступен · ${r.ms} мс` };
 }
 
-/** Самое быстрое рабочее зеркало из списка (по результатам проверки), или null. */
 export function fastestMirror(mirrors, checks) {
   let best = null;
   for (const m of mirrors) {
@@ -345,7 +317,6 @@ export function fastestMirror(mirrors, checks) {
   return best;
 }
 
-/** Привести введённое пользователем к виду https://host (или null). */
 export function normalizeMirror(value) {
   let v = String(value || "").trim();
   if (!v) return null;
@@ -359,7 +330,6 @@ export function normalizeMirror(value) {
 
 export const hostOf = base => { try { return new URL(base).host; } catch (_) { return String(base); } };
 
-// ---------- внешние источники по info hash ----------
 
 export const isHash40 = h => /^[a-f0-9]{40}$/i.test(String(h || ""));
 
@@ -377,7 +347,6 @@ export const sourceUrls = hash => {
 
 const safeJson = text => { try { return JSON.parse(text); } catch (_) { return null; } };
 
-/** SeaDex: лучший / запасной релиз и ссылка на запись. */
 export function parseSeadex(torrentText, entryText) {
   const t = safeJson(torrentText), e = safeJson(entryText);
   const tr = t && Array.isArray(t.items) ? t.items[0] : null;
@@ -391,7 +360,6 @@ export function parseSeadex(torrentText, entryText) {
   return { found, best, link: entry && entry.alID ? `https://releases.moe/${entry.alID}` : "" };
 }
 
-/** AnimeTosho (старый JSON): ссылка на страницу и число файлов. */
 export function parseAnimetosho(text) {
   const j = safeJson(text);
   if (!j || j.error) return { found: false };
@@ -442,7 +410,6 @@ export function parseTsukihime(text) {
     title: String(j.name || ""), anime,
     group: j.group ? String(j.group.name || "") : "",
     episode: j.episode_no != null && j.episode_no !== "" ? String(j.episode_no) : "",
-    // у свежей раздачи Tsukihime ещё не посчитал размер и файлы: нули не показываем
     size: Number(j.totalsize) > 0 ? fmtBytesEn(Number(j.totalsize)) : "",
     files: Number(j.filecount) > 0 ? String(j.filecount) : "",
     audio: langList(j.audiolangs), subs: langList(j.sublangs),
@@ -456,32 +423,25 @@ function fmtBytesEn(b) {
   return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
 }
 
-// ---------- «Похожее» через AniList ----------
 
-/** Название раздачи → строка для поиска тайтла (без группы, качества, номера серии и скобок). */
 export function cleanTitleForSearch(title) {
   let t = String(title || "");
-  t = t.replace(/^\s*\[[^\]]*\]\s*/, "");                 // [Группа]
-  t = t.replace(/^[\s\-–—]+/, "");                          // «[Doomdos] - Meitantei Conan»: дефис после группы
-  t = t.replace(/[[(][^\])]*[\])]/g, " ");                 // любые скобки: [FLAC], (1080p), [ABCD1234]
+  t = t.replace(/^\s*\[[^\]]*\]\s*/, "");
+  t = t.replace(/^[\s\-–—]+/, "");
+  t = t.replace(/[[(][^\])]*[\])]/g, " ");
   t = t.replace(/\.(mkv|mp4|avi|flac|mp3|zip|rar|7z)$/i, " ");
   t = t.replace(/\b(\d{3,4}p|HEVC|x26[45]|AVC|AV1|FLAC|BD(?:Rip)?|WEB(?:-?DL|Rip)?|Batch|Remux|Dual[- ]Audio|Multi[- ]?Subs?)\b/gi, " ");
-  t = t.replace(/\s-\s*\d{1,3}(v\d)?\b.*$/i, " ");        // « - 09»
-  t = t.replace(/\bS\d{1,2}E\d{1,4}\b.*$/i, " ");          // S02E05, у долгих сериалов S01E1278
-  t = t.replace(/\s\d{1,4}\s*[-~]\s*\d{1,4}\s*$/, " ");    // пачка серий: «Bleach Sennen Kessen-hen 41-50»
-  // хвост-разделитель, оставшийся от отрезанной серии: «Meitantei Conan -»
+  t = t.replace(/\s-\s*\d{1,3}(v\d)?\b.*$/i, " ");
+  t = t.replace(/\bS\d{1,2}E\d{1,4}\b.*$/i, " ");
+  t = t.replace(/\s\d{1,4}\s*[-~]\s*\d{1,4}\s*$/, " ");
   return t.replace(/[_.]+/g, " ").replace(/\s+/g, " ").trim().replace(/[\s\-–—:,]+$/, "").slice(0, 120);
 }
 
-/** Запасные названия для поиска обложки: в скобках раздачи часто стоит ромадзи — «Little Mouses Red Vest (Nezumi-kun no Chokki (TV))». */
 export function coverAltKeys(title) {
   const out = [];
-  const t = String(title || "").replace(/^\s*\[[^\]]*\]/, " ");   // ведущие [скобки] — группа, не название
-  // Английское название бывает и в круглых, и в квадратных скобках: «Mushen Ji - S01E107 [1080p …] [Tales of Herding Gods]»
+  const t = String(title || "").replace(/^\s*\[[^\]]*\]/, " ");
   const groups = [...t.matchAll(/\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g), ...t.matchAll(/\[([^[\]]*)\]/g)];
   for (const m of groups) {
-    // Части через «,» и «;» по отдельности: «Romelia Senki: …, Japanese Sub» — техтег отбрасываем,
-    // «パンの赤ちゃん; Pan no Akachan» — берём латинскую часть. Одиночные слова названием не считаем.
     const tech = /\b(\d{3,4}p|\d+k|sub|subs|dub|hevc|avc|aac|web|batch|bilibili|amzn|x26[45]|flac|dual|multi|uncensored|raw)\b/i;
     for (const part of m[1].replace(/\([^()]*\)/g, " ").split(/[;,]/)) {
       const alt = part.replace(/\s+/g, " ").trim();
@@ -492,7 +452,6 @@ export function coverAltKeys(title) {
   return out;
 }
 
-/** Строки для поиска обложки в запасных каталогах: название, запасные, однословные из скобок («(Baxian!)»), начало длинного названия. */
 export function coverSearchTerms(key, title) {
   const singles = [...String(title || "").replace(/^\s*\[[^\]]*\]/, " ").matchAll(/\(([^()\s]{4,})\)/g)].map(m => m[1])
     .filter(w => /[A-Za-z]{3,}/.test(w) && !/^\d|^(hevc|bluray|batch|uncensored)$/i.test(w));
@@ -502,7 +461,6 @@ export function coverSearchTerms(key, title) {
 
 const titleWords = t => String(t || "").toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").filter(Boolean);
 
-/** Каталоги отвечают и на похожие слова, поэтому берём кандидата, только если его название целиком есть в запросе или наоборот. */
 export function coverMatches(query, candidateTitle) {
   const a = titleWords(query), b = titleWords(candidateTitle);
   if (!a.length || !b.length) return false;
@@ -525,10 +483,8 @@ recommendations(perPage:8,sort:RATING_DESC){nodes{mediaRecommendation{id siteUrl
 
 export const COVER_QUERY = `query($s:String){Media(search:$s,type:ANIME){id bannerImage coverImage{extraLarge large}}}`;
 
-// AniList пускает около 30 запросов в минуту, поэтому ищем пачками. Page, а не Media: ненайденный Media обнуляет весь ответ.
 export const COVER_BATCH = 20;
 
-// Фон строки широкий — лучше всего баннер AniList (~1900×400), без него — постер в наибольшем размере.
 const bestPic = m => (m && (m.bannerImage || m.coverImage?.extraLarge || m.coverImage?.large)) || "";
 
 export function coverBatchRequest(terms) {
@@ -537,7 +493,6 @@ export function coverBatchRequest(terms) {
   return { query: `query(${vars}){${body}}`, variables: Object.fromEntries(terms.map((t, i) => [`s${i}`, t])) };
 }
 
-/** Адреса обложек в порядке запроса; пустая строка — не нашлось. Сбой ответа — null, чтобы не запомнить промах. */
 export function parseCoverBatch(text, count) {
   try {
     const data = JSON.parse(text).data;
@@ -549,7 +504,6 @@ export function parseCoverBatch(text, count) {
   } catch (_) { return null; }
 }
 
-/** Обложка из ответа AniList: https-адрес или пустая строка, если тайтл не нашёлся. */
 export function parseCover(text) {
   try {
     const u = bestPic(JSON.parse(text).data.Media);
@@ -557,17 +511,15 @@ export function parseCover(text) {
   } catch (_) { return ""; }
 }
 
-/** Ключ обложки: название тайтла без группы, серии и тегов. */
 export const coverKey = title => {
   const r = parseRelease(title);
   const base = r.episode != null && r.show ? r.show : cleanTitleForSearch(title);
-  // «Китайское / английское / ромадзи» название: ищем по латинскому варианту — AniList не находит ряд из иероглифов и слэшей
-  let text = String(base || "").replace(/：/g, ":").replace(/^[\s\-–—]+/, "");   // «[Doomdos] - Jueshi Zhan Hun»
+  let text = String(base || "").replace(/：/g, ":").replace(/^[\s\-–—]+/, "");
   if (/\s[/|]\s/.test(text)) {
     const latin = text.split(/\s[/|]\s/).map(x => x.trim()).find(x => /[A-Za-z]{3,}/.test(x) && !/[぀-ヿ㐀-鿿]/.test(x));
     if (latin) text = latin.replace(/\s+s\d+$/i, "");
   }
-  text = text.replace(/\b\d+(st|nd|rd|th)\s+remaster(ed)?\b|\bremaster(ed)?\b/gi, " ");   // «Yu-Gi-Oh! … GX 20th Remaster» — на AniList без пометки
+  text = text.replace(/\b\d+(st|nd|rd|th)\s+remaster(ed)?\b|\bremaster(ed)?\b/gi, " ");
   return text.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 80);
 };
 
@@ -590,11 +542,9 @@ export function parseSimilar(text) {
   return { found: true, self: media(m), year: m.seasonYear || "", genres: (m.genres || []).slice(0, 6), related, recs };
 }
 
-// ---------- слежение ----------
 
 export const MONITOR_SEEN_MAX = 400;
 
-/** Новое слежение: type — query (запрос) или user (загрузчик). */
 export function makeMonitor({ type, q, cat = "0_0", rule = null }, now = Date.now()) {
   const text = String(q || "").trim();
   if (!text) return null;
@@ -605,10 +555,6 @@ export function makeMonitor({ type, q, cat = "0_0", rule = null }, now = Date.no
 
 export const monitorTitle = m => (m.type === "user" ? `Загрузчик ${m.q}` : m.q);
 
-/**
- * Сравнивает свежий список с уже виденным. Первая проверка (m.seen нет) только
- * запоминает: уведомлять о «новом» там, где всё новое, было бы шумом.
- */
 export function diffMonitor(items, m) {
   const ids = items.map(i => i.id);
   if (!Array.isArray(m.seen)) return { fresh: [], seen: ids.slice(0, MONITOR_SEEN_MAX) };
@@ -618,33 +564,24 @@ export function diffMonitor(items, m) {
   return { fresh, seen };
 }
 
-/** Название клиента для подписей. */
 export const CLIENT_NAMES = { qbittorrent: "qBittorrent", transmission: "Transmission", deluge: "Deluge" };
 export const CLIENT_PORTS = { qbittorrent: 8080, transmission: 9091, deluge: 8112 };
 
-/** Безопасное имя файла .torrent из названия раздачи. */
 export function torrentFileName(item) {
   const base = String(item.title || `nyaa-${item.id}`).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 120);
   return `${base || `nyaa-${item.id}`}.torrent`;
 }
 
-// ---------- Релизы 2.0: группировка по аниме и правила слежения ----------
 
 const normShow = s => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
-/**
- * Разбор названия раздачи: аниме, сезон, серия, группа, качество, кодек.
- * episode = null, если это не серия (пачка, OST, неразобранное название).
- */
 export function parseRelease(title, folder = "") {
   let t = String(title || "");
   const group = (/^\s*\[([^\]]{1,40})\]/.exec(t) || [])[1] || "";
-  // Несколько скобок в начале («[Группа] [Перевод] Название»): убираем все ведущие.
   let body = t.replace(/^(?:\s*\[[^\]]*\])+\s*/, "");
   const res = (/(?:^|[^\d])(2160|1440|1080|720|576|480)\s*p\b/i.exec(t) || [])[1];
   const codec = /\b(hevc|x265|h\.?265)\b/i.test(t) ? "hevc" : /\b(avc|x264|h\.?264)\b/i.test(t) ? "avc" : /\bav1\b/i.test(t) ? "av1" : "";
   const hasSE = /\bS\d{1,2}\s*E\d{1,3}\b/i.test(body);
-  // «01-12» — диапазон серий, если первое число меньше второго и перед ним не стоит слово «сезон/часть».
   const range = [...body.matchAll(/(?<!\w)(?:(S(?:eason)?|Part|Cour)\s*)?(\d{1,3})\s*[-~]\s*(\d{1,3})\s*(?=\[|\(|$)/gi)].some(r => !r[1] && +r[2] < +r[3]);
   const batch = !hasSE && (range || /\b(batch|complete|bd\s*box|season\s*\d+\s*\()/i.test(body));
   let season = 1, episode = null, version = 1, show = body;
@@ -655,11 +592,9 @@ export function parseRelease(title, folder = "") {
   else if ((m = /^(.*?)\s+-\s+(\d{1,3})(?:v(\d))?(?=\s|\[|\(|$)/.exec(body))) { show = m[1]; episode = +m[2]; ver(m[3]); }
   else if ((m = /^(.*?)\s*第\s*(\d{1,3})\s*話/.exec(body))) { show = m[1]; episode = +m[2]; }
   else if ((m = /^(.*?)\s+(?:E|EP|Ep|Episode|#)\s*(\d{1,3})(?:v(\d))?\b/.exec(body))) { show = m[1]; episode = +m[2]; ver(m[3]); }
-  // Старый стиль без дефиса: «Название 03 [1080p]» — номер сразу перед тегами.
   else if ((m = /^(.*?[^\d\s])\s+(\d{1,2})(?:v(\d))?\s*(?=[[(])/.exec(body)) && !/\b(S(?:eason)?|Part|Cour|Vol(?:ume)?)\s*$/i.test(m[1]) && +m[2] > 0) { show = m[1]; episode = +m[2]; ver(m[3]); }
   const sm = /^(.*?)[\s._-]+(?:S(?:eason)?\s*(\d{1,2})|(\d{1,2})(?:st|nd|rd|th)\s+Season|Season\s*(\d{1,2})|(?:Part|Cour)\s*(\d{1,2}))\s*$/i.exec(show);
   if (sm) { show = sm[1]; season = +(sm[2] || sm[3] || sm[4] || sm[5]); }
-  // Сезон из названия папки, если в названии файла его нет.
   if (season === 1 && folder) {
     const fm = /(?:\bS(?:eason)?\s*(\d{1,2})\b|(\d{1,2})(?:st|nd|rd|th)\s+Season)/i.exec(String(folder));
     if (fm) season = +(fm[1] || fm[2]);
@@ -672,7 +607,6 @@ export function parseRelease(title, folder = "") {
 
 const RES_RANK = { "2160p": 5, "1440p": 4, "1080p": 3, "720p": 2, "576p": 1, "480p": 0 };
 
-/** Оценка раздачи по правилу {groups[], res, noHevc}: чем больше, тем лучше; null — не подходит. */
 export function ruleScore(item, rule = {}) {
   const r = item._rel || parseRelease(item.title);
   const groups = (rule.groups || []).map(g => g.toLowerCase());
@@ -691,7 +625,6 @@ export function ruleScore(item, rule = {}) {
   return score + Math.min(item.seeders || 0, 99) / 100;
 }
 
-/** Лучшая раздача на каждую серию (по правилу, иначе по качеству и раздающим). */
 export function bestPerEpisode(items, rule = {}) {
   const best = new Map();
   for (const it of items) {
@@ -705,10 +638,6 @@ export function bestPerEpisode(items, rule = {}) {
   return [...best.entries()].sort((a, b) => b[0] - a[0]).map(([ep, v]) => ({ episode: ep, item: v.it }));
 }
 
-/**
- * Группировка списка: серии одного аниме и сезона собираются в одну карточку.
- * Раздачи без номера серии остаются отдельными строками. Порядок — по первому появлению.
- */
 export function groupReleases(list, rule = {}) {
   const out = [];
   const byKey = new Map();
@@ -727,10 +656,8 @@ export function groupReleases(list, rule = {}) {
   });
 }
 
-/** Ключ серии для памяти «уже отправлено/скачано». */
 export const episodeKey = it => { const r = it._rel || parseRelease(it.title); return r.episode == null ? "" : `${r.key}|${r.episode}`; };
 
-/** Разбор правила из полей формы: группы через запятую, качество, без HEVC, действие. */
 export function makeRule({ groups = "", res = "", noHevc = false, auto = false } = {}) {
   const gl = [...new Set(String(groups).split(/[,;]+/).map(s => s.trim()).filter(Boolean))].slice(0, 6);
   const r = ["2160p", "1080p", "720p", "480p"].includes(res) ? res : "";
@@ -742,19 +669,13 @@ export const ruleText = rule => !rule ? "" : [
   rule.groups.length ? rule.groups.join(" → ") : "любая группа", rule.res || "", rule.noHevc ? "не HEVC" : "", rule.auto ? "в клиент автоматически" : "",
 ].filter(Boolean).join(" · ");
 
-/**
- * Свежие раздачи для слежения с правилом: подходящие по правилу, по одной лучшей
- * на серию, без серий, уже полученных раньше (m.got — ключи серий).
- */
 export function freshForRule(fresh, m) {
   if (!m.rule) return fresh;
   const got = new Set(m.got || []);
   return bestPerEpisode(fresh, m.rule).map(x => x.item).filter(it => { const k = episodeKey(it); return !k || !got.has(k); });
 }
 
-// ---------- SeaDex по списку, AnimeTosho (субтитры, кадры), ссылки на тайтл, вкладки ----------
 
-/** Один запрос SeaDex на весь список: адрес по info hash'ам (до 75). */
 export function seadexListUrl(hashes) {
   const hs = [...new Set(hashes.map(h => String(h || "").toLowerCase()).filter(isHash40))].slice(0, 75);
   if (!hs.length) return "";
@@ -762,7 +683,6 @@ export function seadexListUrl(hashes) {
   return `https://releases.moe/api/collections/torrents/records?filter=${encodeURIComponent(filter)}&perPage=75&skipTotal=true`;
 }
 
-/** Ответ SeaDex по списку → Map hash → "best" | "alt". */
 export function parseSeadexList(text) {
   const out = new Map();
   const j = safeJson(text);
@@ -774,10 +694,6 @@ export function parseSeadexList(text) {
   return out;
 }
 
-/**
- * AnimeTosho (show=torrent): файлы раздачи с дорожками субтитров, числом шрифтов и
- * отметками времени кадров. Ответ без файлов — found: false.
- */
 export function parseToshoTorrent(text) {
   const j = safeJson(text);
   if (!j || !Array.isArray(j.files) || !j.files.length) return { found: false, files: [] };
@@ -802,9 +718,6 @@ const pad2 = n => String(n).padStart(2, "0");
 const clock = ms => `${Math.floor(ms / 3600000)}:${pad2(Math.floor(ms / 60000) % 60)}:${pad2(Math.floor(ms / 1000) % 60)}`;
 const assTime = s => { const m = /(\d+):(\d{2}):(\d{2})[.,](\d{1,3})/.exec(s); return m ? (+m[1] * 3600 + +m[2] * 60 + +m[3]) * 1000 + +m[4].padEnd(3, "0") : 0; };
 
-/** Реплики субтитров (ASS/SSA/SRT) для просмотра: [{ at, text }], теги и стили убраны. */
-// Убирает разметку вида <i>…</i> из реплики посимвольно (без регулярных выражений для HTML):
-// текст всё равно выводится только через экранирование.
 function dropMarkup(str) {
   let out = "", depth = 0;
   for (const ch of String(str)) {
@@ -846,7 +759,6 @@ export function parseSubtitle(text, codec = "") {
   return out.sort((a, b) => a.at - b.at).map(x => ({ ...x, clock: clock(x.at) }));
 }
 
-/** Ссылки на тайтл из названия раздачи: поиск на AniList, MyAnimeList, AniDB, NekoBT. */
 export function titleLinks(title) {
   const q = cleanTitleForSearch(title);
   if (!q) return [];
@@ -861,7 +773,6 @@ export function titleLinks(title) {
 
 export const DETAIL_TABS = [["desc", "Описание"], ["files", "Файлы"], ["src", "Источники"], ["tosho", "Субтитры и кадры"], ["sim", "Похожее"]];
 
-/** Порядок и видимость вкладок страницы раздачи по сохранённым настройкам. */
 export function normalizeTabs(saved) {
   const ids = DETAIL_TABS.map(t => t[0]);
   const order = [...new Set((saved && Array.isArray(saved.order) ? saved.order : []).filter(i => ids.includes(i)))];
@@ -870,7 +781,6 @@ export function normalizeTabs(saved) {
   return { order, hidden };
 }
 
-/** Tsukihime по btih: номера торрента и файлов, точные ссылки на тайтл (AniList, MAL, AniDB). */
 export function parseTsukiFull(text) {
   const j = safeJson(text);
   if (!j || !j.id) return { found: false, files: [], ids: {} };
@@ -882,7 +792,6 @@ export function parseTsukiFull(text) {
   };
 }
 
-/** Точные ссылки по номерам из Tsukihime; пустой список, если номеров нет. */
 export function exactLinks(ids) {
   const out = [];
   if (ids && ids.anilist) out.push({ label: "AniList", url: `https://anilist.co/anime/${ids.anilist}` });
@@ -891,7 +800,6 @@ export function exactLinks(ids) {
   return out;
 }
 
-/** MediaInfo из ответа Tsukihime по файлу. */
 export function parseMediainfo(text) {
   const j = safeJson(text);
   const m = j && (j.mediainfo || (j.info && j.info.mediainfo));
@@ -901,10 +809,6 @@ export function parseMediainfo(text) {
 const escH = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const HL_CAP = 100000;
 
-/**
- * Подсветка исходного текста субтитров (ASS/SRT): HTML, уже экранированный.
- * Длинные файлы выше порога остаются без подсветки.
- */
 export function highlightSubtitle(raw) {
   const text = String(raw || "");
   if (text.length > HL_CAP) return escH(text.slice(0, 400000));
@@ -919,13 +823,11 @@ export function highlightSubtitle(raw) {
   }).join("\n");
 }
 
-/** Дорожка субтитров по умолчанию для кадров: первая не форсированная, ASS/SSA с номером дорожки. */
 export function defaultShotTrack(subs) {
   const s = (subs || []).find(x => x.num && !x.forced && /ASS|SSA/i.test(x.codec));
   return s ? s.num : 0;
 }
 
-/** Ключи серий из имён файлов медиатеки ({ name, folder }): по ним раздачам ставится «уже есть». */
 export function libraryKeys(files) {
   const keys = new Set();
   for (const f of Array.isArray(files) ? files : []) {
@@ -937,7 +839,6 @@ export function libraryKeys(files) {
 
 const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
-/** Подпись дня для группировки списка: «Сегодня», «Вчера», «9 октября», «9 октября 2025». */
 export function dayLabel(ts, now = Date.now()) {
   if (!ts) return "Дата неизвестна";
   const d = new Date(ts), n = new Date(now);

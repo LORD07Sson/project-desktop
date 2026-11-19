@@ -1,10 +1,3 @@
-// Избранные отчёты — чисто локальная фишка десктопа, серверу о ней
-// ничего не известно (нет такого поля в API, см. docs/API.md). Звёздочка
-// в списке отмечает отчёты, за которыми хочется следить отдельно от
-// фильтров/статусов — например, свои текущие серии вперемешку с чужими,
-// за которыми присматриваешь. Хранится в localStorage на пользователя
-// (компьютер в команде общий, см. тот же приём в feed-badge.js), переживает
-// перезапуск приложения, но не путешествует между устройствами.
 
 import { state } from "./state.js";
 
@@ -22,7 +15,7 @@ function readSet() {
 }
 
 function writeSet(set) {
-  try { localStorage.setItem(storageKey(), JSON.stringify([...set])); } catch (_) { /* приватный режим — просто не запомнится */ }
+  try { localStorage.setItem(storageKey(), JSON.stringify([...set])); } catch (_) { }
 }
 
 export function isFavorite(publicId) {

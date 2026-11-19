@@ -1,6 +1,3 @@
-// Смена адреса сервера: npm run set-server -- https://новый.домен[:порт]
-// Пишет его в server.json (оттуда берут адрес интерфейс и Rust при сборке) и заменяет старый адрес в CSP
-// src-tauri/tauri.conf.json — CSP статичная, сборка Tauri берёт её из файла как есть.
 import fs from "node:fs";
 
 const next = String(process.argv[2] || "").trim().replace(/\/+$/, "");

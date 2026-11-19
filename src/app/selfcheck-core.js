@@ -1,9 +1,6 @@
-// Самодиагностика: превращает сырые данные проверок в понятный список
-// «что в порядке, что нет и что делать». Чистые функции — без DOM и Tauri.
 
 export const OK = "ok", WARN = "warn", BAD = "bad";
 
-/** Строка версии ffmpeg → «ffmpeg 6.1» или исходная строка, если формат незнаком. */
 export function shortVersion(line) {
   const m = /(?:ffmpeg|ffprobe) version\s+([^\s]+)/i.exec(String(line || ""));
   return m ? m[1] : String(line || "").slice(0, 40);

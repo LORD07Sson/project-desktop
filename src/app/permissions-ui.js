@@ -1,11 +1,7 @@
-// «Права ролей» — выбираем роль слева, справа включаем нужные права переключателями (только владелец).
-// Сервер: GET/POST /api/permissions ({role, permissions: [...]} — весь набор прав роли).
-// Каждое изменение сохраняется сразу; права проверяет сервер на каждом запросе, клиент лишь скрывает недоступное.
 
 import { apiGet, apiPost, toast, askConfirm } from "./api.js";
 import { esc } from "./utils.js";
 
-// Что человек с ролью увидит в программе — та же логика, что у perm-visibility.js/tabs.js и проверок сервера.
 const ALWAYS = "always";
 const ANY_REPORT = ["reports.feed", "reports.board", "reports.overview", "reports.list", "reports.calendar", "reports.analytics", "reports.manage"];
 const PREVIEW = [
@@ -57,7 +53,6 @@ export function previewGroups(permissions) {
 }
 const allows = (need, have) => need === ALWAYS || (Array.isArray(need) ? need.some(k => have.has(k)) : have.has(need));
 
-// Права группы «Тайтлы» без «Видеть тайтлы» бессмысленны: сервер не отдаст список, и править будет нечего.
 const TITLE_VIEW = "titles.view";
 function withDependencies(next, changedKey, turnedOn) {
   const titleOps = ["titles.create", "titles.edit", "titles.crew", "titles.work", "titles.delete"];
@@ -69,10 +64,10 @@ function withDependencies(next, changedKey, turnedOn) {
 export async function mountPermissions(root) {
   if (!root) return;
   let data = null;
-  let current = null;   // ключ выбранной роли
+  let current = null;
   let query = "";
-  let creating = false; // открыта форма «Новая роль»
-  let before = null;     // набор прав до последней правки — подсветить, что изменилось в превью
+  let creating = false;
+  let before = null;
   let savedAt = 0;
 
   const granted = key => new Set(data.grants[key] || []);
@@ -82,7 +77,6 @@ export async function mountPermissions(root) {
     try {
       data = await apiPost("/permissions", { role, permissions: [...perms] });
       savedAt = Date.now();
-      // Одиночная галочка — тихая отметка «сохранено» в шапке; всплывашка только для массовых действий.
       if (okText) toast(okText, "success");
     } catch (e) {
       toast(e.message, "error");

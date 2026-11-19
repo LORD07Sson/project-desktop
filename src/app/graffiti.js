@@ -1,5 +1,3 @@
-// Граффити на профиле: прозрачный PNG поверх всей страницы профиля (/api/graffiti/{id}).
-// Видят все, рисуют только разработчики — прямо по странице, инструменты: карандаш, фломастер, маркер, баллончик, ластик.
 
 import { state } from "./state.js";
 import { apiPost, mediaUrl, toast, askConfirm } from "./api.js";
@@ -13,8 +11,6 @@ const TOOLS = [
   ["eraser", "Ластик", 24],
 ];
 
-// Показывает сохранённое граффити поверх шапки. Возвращает слой (img) или null.
-// Ближайший прокручиваемый предок профиля; по бокам его подрезаем, чтобы широкий рисунок не давал горизонтальной прокрутки.
 function scrollerOf(el) {
   let sc = el.parentElement;
   while (sc && sc !== document.body && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
@@ -33,7 +29,6 @@ export function loadGraffiti(hero, telegramId) {
   img.className = "pf-graffiti";
   img.alt = "";
   img.draggable = false;
-  // Рисунок в своих пикселях и по центру профиля: колонка профиля центрирована, так штрихи остаются на месте при любой ширине окна.
   img.onload = () => {
     if (img.naturalWidth <= 1) return;
     img.style.width = `${img.naturalWidth}px`; img.style.height = `${img.naturalHeight}px`;
@@ -44,10 +39,6 @@ export function loadGraffiti(hero, telegramId) {
   img.src = src;
 }
 
-// ===== Появление и «щелчок Таноса» =====
-// При открытии профиля рисунок проявляется (будто его наносят), держится и рассыпается пылью слоями слева
-// направо — до следующего открытия профиля. Пыль — DUST_LAYERS холстов: каждый непрозрачный пиксель случайно (со сдвигом
-// по X) отдаётся одному слою, и слои по очереди улетают вверх-вправо, тая и размываясь.
 const HOLD_MS = 7000, DUST_LAYERS = 18, DUST_MAX_PX = 1_200_000;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const alive = (hero, img) => img.isConnected && !hero.classList.contains("gf-editing") && hero.querySelector(".pf-graffiti") === img;
@@ -60,12 +51,10 @@ async function snapCycle(hero, img) {
   await sleep(HOLD_MS);
   if (!alive(hero, img)) return;
   let dust;
-  try { dust = await dustLayers(img); } catch (_) { return; } // не вышло разобрать — просто остаётся на месте
+  try { dust = await dustLayers(img); } catch (_) { return; }
   if (alive(hero, img)) await snap(hero, img, dust);
 }
 
-// Готовит слои пыли один раз: рисунок берём файлом (иначе холст «чужой» и пиксели не прочитать),
-// режем по рамке нарисованного и при необходимости уменьшаем, чтобы не держать в памяти десятки мегапикселей.
 async function dustLayers(img) {
   const bmp = await fetch(img.src).then(r => r.blob()).then(b => window.createImageBitmap(b));
   const k = Math.min(1, Math.sqrt(DUST_MAX_PX / (bmp.width * bmp.height)));
@@ -94,7 +83,6 @@ async function dustLayers(img) {
 async function snap(hero, img, dust) {
   const wrap = document.createElement("div");
   wrap.className = "gf-dust";
-  // Рисунок сдвинут transform-ом к центру (offsetLeft этого не видит), поэтому место берём из реальных рамок.
   const ir = img.getBoundingClientRect(), hr = hero.getBoundingClientRect();
   Object.assign(wrap.style, { left: `${ir.left - hr.left - hero.clientLeft}px`, top: `${ir.top - hr.top - hero.clientTop}px`, width: `${ir.width}px`, height: `${ir.height}px` });
   const s = 1 / dust.k;
@@ -127,23 +115,19 @@ export function wireGraffiti(root, telegramId) {
 
 function openEditor(hero, telegramId) {
   if (!hero || hero.querySelector(".gf-canvas")) return;
-  // Холст на всю длину профиля — в 1×, иначе на длинной странице выходят десятки мегапикселей.
   const dpr = 1;
-  // Ширина — всё окно прокрутки (поля слева и справа тоже), высота — весь профиль.
   const sc = scrollerOf(hero);
   const W = Math.round(sc ? sc.clientWidth : window.innerWidth), H = Math.round(hero.scrollHeight);
   const canvas = document.createElement("canvas");
   canvas.className = "gf-canvas";
   canvas.width = W; canvas.height = H;
-  const stroke = document.createElement("canvas"); // текущий штрих — отдельно, чтобы полупрозрачный маркер не темнел на самопересечениях
+  const stroke = document.createElement("canvas");
   stroke.className = "gf-canvas gf-stroke";
   stroke.width = W; stroke.height = H;
   for (const c of [canvas, stroke]) { c.style.width = `${W}px`; c.style.height = `${H}px`; }
   const ctx = canvas.getContext("2d");
   const sctx = stroke.getContext("2d");
 
-  // Сохранённый рисунок берём файлом (fetch → ImageBitmap), а не через <img> с сервера: картинка с чужого адреса
-  // «пачкает» холст, и дальше getImageData (Очистить, Отменить, Сохранить) падает с SecurityError.
   const old = hero.querySelector(".pf-graffiti");
   if (old && old.naturalWidth > 1) {
     fetch(old.src).then(r => (r.ok ? r.blob() : Promise.reject(new Error(r.status)))).then(b => window.createImageBitmap(b))
@@ -192,7 +176,6 @@ function openEditor(hero, telegramId) {
   });
   bar.querySelector(".gf-pick").addEventListener("input", e => setColor(e.target.value));
 
-  // «Картинка»: свой файл кладём поверх профиля — двигаешь мышью, размер колесом, «Вставить» впечатывает её в рисунок.
   let placing = null;
   bar.querySelector(".gf-file").addEventListener("change", e => {
     const file = e.target.files && e.target.files[0];
@@ -266,7 +249,6 @@ function openEditor(hero, telegramId) {
     sctx.lineCap = tool === "marker" ? "square" : "round";
     sctx.lineJoin = "round";
     if (tool === "pencil") {
-      // карандаш: тонкая линия с лёгкой «зернистостью» — пара смещённых полупрозрачных проходов
       sctx.globalAlpha = 0.55;
       for (let k = 0; k < 2; k++) {
         const j = () => (Math.random() - 0.5) * dpr;
@@ -285,7 +267,7 @@ function openEditor(hero, telegramId) {
     last = pos(e);
     stroke.style.opacity = tool === "marker" ? "0.45" : tool === "eraser" ? "0.35" : "1";
     seg(last, { x: last.x + 0.01, y: last.y });
-    if (tool === "spray") sprayTimer = setInterval(() => last && spray(last), 30); // DevSkim: ignore DS172411 — функция, не строка
+    if (tool === "spray") sprayTimer = setInterval(() => last && spray(last), 30); // DevSkim: ignore DS172411
   });
   stroke.addEventListener("pointermove", e => {
     if (!drawing) return;

@@ -1,5 +1,3 @@
-// «Своя тема»: два ползунка поверх готовой темы — размытие стекла и
-// скругления. Чистая часть: ограничение значений и расчёт CSS-переменных.
 
 export const TUNE_DEFAULT = { blur: 26, round: 100 };
 export const TUNE_LIMITS = { blur: [0, 48], round: [40, 180] };
@@ -18,7 +16,6 @@ export function normalizeTune(t = {}) {
   };
 }
 
-/** {имя переменной: значение} для подстановки в :root. */
 export function tuneVars(t) {
   const { blur, round } = normalizeTune(t);
   const vars = { "--glass-blur": `${blur}px` };

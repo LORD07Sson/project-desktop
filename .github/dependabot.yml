@@ -1,6 +1,5 @@
 version: 2
 updates:
-  # Rust-зависимости десктоп-клиента (src-tauri/Cargo.toml)
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
     schedule:
@@ -8,8 +7,6 @@ updates:
     open-pull-requests-limit: 5
     labels: ["dependencies", "rust"]
 
-  # Python-зависимости старого клиента (архив, но ffmpeg/keyring/requests
-  # там ещё установлены реальными людьми — уязвимости в них тоже стоит знать)
   - package-ecosystem: "pip"
     directory: "/legacy_python_client"
     schedule:
@@ -17,7 +14,6 @@ updates:
     open-pull-requests-limit: 5
     labels: ["dependencies", "python", "legacy"]
 
-  # Фронтенд десктоп-клиента (package.json — Vite, SolidJS, @tauri-apps/*)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -25,7 +21,6 @@ updates:
     open-pull-requests-limit: 5
     labels: ["dependencies", "javascript"]
 
-  # Сам workflow (actions/checkout, actions/setup-node и т.д.)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

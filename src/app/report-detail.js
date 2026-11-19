@@ -1,6 +1,3 @@
-// Развёрнутая карточка отчёта (шторка): чек-лист, заметки, файлы,
-// серверная AI-проверка звука. Открывается из Списка/Доски/Ленты/
-// профиля коллеги.
 
 import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { track } from "./telemetry.js";
@@ -24,11 +21,8 @@ import { createPlayer, isAudioFile } from "./player.js";
 import { linkifyProject } from "./deeplink-core.js";
 import { titleArt } from "./title-page.js";
 
-// Ключи "kind" — ровно те, что отдаёт серверный audio_qc.py (miniapp/audio_qc.py):
-// "clip"/"noise"/"silence"/"silence_long"/"no_speech".
 const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silence_long: "Долгая тишина", no_speech: "Речь не найдена" };
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
-// Иконки ряда файла — линейные, в одном стиле (эмодзи 📤/⬇️/🗑 выбивались цветом и размером).
 const svg = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 const FILE_ACT_ICONS = {
   play: svg('<path d="M8 5.5v13l10.5-6.5z"/>'),
@@ -37,14 +31,10 @@ const FILE_ACT_ICONS = {
   download: svg('<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/>'),
   trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
 };
-// «195.0 МБ» → «195 МБ», «17.2 МБ» → «17,2 МБ».
 const prettySize = label => String(label || "").replace(/\.0(?=\s)/, "").replace(/(\d)\.(\d)/, "$1,$2");
 
-// Экран хода сборки финала. Сборку ведёт бот и пишет состояние на сервер (/assemble-progress) — здесь оно опрашивается
-// раз в 3 секунды: шаг, полоса, кадры, сколько прошло и осталось. Карточка встаёт под кнопкой «Собрать финал»
-// и переживает перерисовку шторки (при каждом опросе, если её не стало, возвращается на место).
 const assemblyWatchers = new Set();
-const postWanted = new Set(); // отчёты, для которых по готовности финала надо открыть редактор поста
+const postWanted = new Set();
 
 function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openPostWhenDone = false) {
   if (openPostWhenDone) postWanted.add(publicId);
@@ -73,7 +63,7 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
       if (slot) slot.appendChild(card); else btn.insertAdjacentElement("afterend", card);
     }
     if (!st) {
-      if (card.dataset.state === "waiting") return;  // не перерисовываем, чтобы не мигала кнопка
+      if (card.dataset.state === "waiting") return;
       card.dataset.state = "waiting";
       card.innerHTML = `<b>🎬 Сборка финала</b><span class="rd-asm-step">Жду подтверждения в боте — откройте карточку и нажмите «Собрать».</span>
         ${botName ? `<button type="button" class="btn primary rd-asm-cancel" data-asm-open>📲 Открыть бота в Telegram</button>` : ""}`;
@@ -116,7 +106,7 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
   const tick = async () => {
     if (!overlay.isConnected) { stop(); return; }
     let st = null;
-    try { st = await apiGet(`/report/${publicId}/assemble-progress`); } catch (_) { /* повторим на следующем тике */ }
+    try { st = await apiGet(`/report/${publicId}/assemble-progress`); } catch (_) { }
     if (st && st.stage && (st.active || st.stage === "done" || st.stage === "error" || st.stage === "cancelled")) {
       seenActive = true;
       paint(st);
@@ -134,7 +124,6 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
       if (st.stage === "error") { timer = setTimeout(stop, 20000); return; }
       if (st.stage === "cancelled") { toast("Сборка отменена.", "info"); timer = setTimeout(stop, 5000); return; }
     } else if (!seenActive) {
-      // Сборка ещё не началась: после нажатия кнопки ждём подтверждения в боте, при простом открытии карточки — молчим.
       if (!waitForStart || Date.now() - startedAt > 10 * 60 * 1000) { stop(); return; }
       paint(null);
     } else {
@@ -146,8 +135,6 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
   tick();
 }
 
-// «Кому прислать?»: файл отчёта (видео, дорожка, субтитры) бот пересылает выбранным людям в личку — по тому же file_id,
-// без повторной заливки; видео с диска сервера уходит с диска.
 async function openSendFileSheet(publicId, fileId, fileName, ref = "") {
   const overlay = openSheet(`<h2>Кому прислать?</h2><p class="bc-hint">${esc(fileName || "файл")} есть в отчёте — бот перешлёт его выбранным людям.</p>${dialogSkeletonHtml(3)}`);
   let people = [];
@@ -190,7 +177,6 @@ async function openSendFileSheet(publicId, fileId, fileName, ref = "") {
   });
 }
 
-// «Опасная зона»: тяжёлое действие (сервер качает видео целиком) — сначала предупреждение, дальше только осознанно.
 function dangerZoneWarning(onConfirm) {
   const overlay = openSheet(`
     <h2 class="dz-title">⚠ Опасная зона</h2>
@@ -214,34 +200,17 @@ export async function openReportDetail(publicId) {
     <h2 class="skeleton-row" style="width:60%; height:22px;"></h2>
     ${dialogSkeletonHtml(5)}
   `, "wide");
-  // Класс-маркер, а не просто ".sheet-wide" (её же используют admin.js,
-  // profile.js, titles-admin.js): по нему стили и хоткеи отличают именно карточку отчёта
-  // от остальных широких модалок.
   overlay.classList.add("report-detail-overlay");
 
-  // Пока эта карточка открыта — сюда падает файл, перетащенный из
-  // проводника (см. file-drop.js). Снимаем цель при закрытии ЛЮБЫМ
-  // способом (кнопка, фон, ✕) — наблюдаем за удалением overlay из DOM,
-  // а не вешаем на каждую отдельную кнопку закрытия (тот же приём, что
-  // и в titles-admin.js).
   setDropTarget(publicId);
   const onFileUploaded = e => { if (e.detail.publicId === publicId) render(); };
   document.addEventListener("report-file-uploaded", onFileUploaded);
   const onAppRefresh = () => { if (overlay.isConnected) render(); };
   document.addEventListener("app:refresh", onAppRefresh);
-  // Находки QC, уехавшие в заметки, должны появиться в открытой карточке
-  // сразу, а не после ручного обновления.
   document.addEventListener("report-notes-added", onFileUploaded);
-  // Порядок заметок — состояние самой шторки, а не сервера: render()
-  // вызывается на каждое действие, и сбрасывать выбор на каждом было бы
-  // неприятно.
   let notesByTime = false;
-  // Плеер дорожки переживает перерисовки карточки (см. player.js).
   let player = null;
 
-  // Переход к соседнему отчёту выборки «Списка», не закрывая карточку
-  // (как стрелки в шторке мини-аппа). Соседи считаются заново на каждый
-  // переход — список могли пересортировать или отфильтровать.
   const goTo = targetId => {
     if (!targetId) return;
     overlay.remove();
@@ -257,7 +226,7 @@ export async function openReportDetail(publicId) {
     goTo(e.key === "ArrowLeft" ? nb.prev : nb.next);
   };
   document.addEventListener("keydown", onNavKey, true);
-  let recentRecorded = false; // пишем в MRU один раз за открытие, не на каждый render()
+  let recentRecorded = false;
   new MutationObserver((_muts, obs) => {
     if (!overlay.isConnected) {
       obs.disconnect();
@@ -270,11 +239,10 @@ export async function openReportDetail(publicId) {
     }
   }).observe(document.body, { childList: true });
 
-  // Вложение к следующей заметке — переживает перерисовку карточки.
   let pendingNoteFile = null;
-  let replyTo = null;      // {id, author} — заметка, на которую сейчас отвечают
-  let editingNote = null;  // id заметки в режиме правки
-  let pipeEdit = null;   // { draft: [{role, telegram_id, name}], parallel }
+  let replyTo = null;
+  let editingNote = null;
+  let pipeEdit = null;
 
   async function render() {
     let detail, notes, checklist, files, roles, assignable, raws, roster;
@@ -287,9 +255,7 @@ export async function openReportDetail(publicId) {
         apiGet(`/report/${publicId}/files`),
         canEdit ? loadRoles().catch(() => []) : Promise.resolve([]),
         canEdit ? loadAssignable().catch(() => []) : Promise.resolve([]),
-        // Старый сервер без /raws — карточка открывается и без раздела.
         apiGet(`/report/${publicId}/raws`).catch(() => ({ raws: [] })),
-        // Привязки имён из росписи к людям; старый сервер без них — только автоузнавание.
         apiGet("/roster/aliases").catch(() => ({ aliases: {} })),
       ]);
     } catch (e) {
@@ -303,11 +269,6 @@ export async function openReportDetail(publicId) {
       recordRecentReport(publicId, (() => { const p = seriesParts(detail); return [p.name, p.ep].filter(Boolean).join(" · "); })());
     }
 
-    // Черновик цепочки пайплайна — правится локально до нажатия
-    // «Сохранить», как и в мини-аппе (pipelineDraft): полный список
-    // шагов уходит на /pipeline разом, PATCH одного шага сервер не
-    // умеет. Пока редактор открыт, черновик берётся из pipeEdit —
-    // перерисовка карточки (догрузился файл, новая заметка) его не сбрасывает.
     const pipelineParallel = pipeEdit ? pipeEdit.parallel : !!detail.pipeline_parallel;
     const pipelineDraft = pipeEdit ? pipeEdit.draft : (detail.pipeline || []).map(s => ({ role: s.role, telegram_id: s.telegram_id || null, name: s.user_name || null }));
 
@@ -315,8 +276,6 @@ export async function openReportDetail(publicId) {
     const overdue = isOverdue(detail);
     const nav = listNeighbors(publicId);
 
-    // Заметки с тайм-кодом — это список правок по дорожке, и читать его
-    // удобнее по времени, а не по времени написания.
     const timedCount = notes.notes.filter(n => parseNoteTime(n.text)).length;
     const orderedNotes = notesByTime
       ? notes.notes.slice().sort((a, b) => {
@@ -342,7 +301,6 @@ export async function openReportDetail(publicId) {
 
     const t = seriesParts(detail);
     const poster = posterSrc(detail.poster_url);
-    // Баннер тайтла (AniList) — шапкой карточки; нет баннера — размытая обложка.
     const banner = titleArt(detail.title_id, "banner", 1080);
     const authorName = (detail.author && (detail.author.first_name || detail.author.username)) || "?";
     const hasPipe = detail.pipeline && detail.pipeline.length;
@@ -361,7 +319,6 @@ export async function openReportDetail(publicId) {
     }).join("");
     const side = detail.status === "revision" || detail.status === "cancelled" ? detail.status : "";
 
-    // Черновик заметки (текст, время, курсор) переживает перерисовку.
     const oldNote = overlay.querySelector("#note-new");
     const noteDraft = oldNote ? {
       text: oldNote.value,
@@ -370,7 +327,6 @@ export async function openReportDetail(publicId) {
       caret: oldNote.selectionStart,
     } : null;
 
-    // Пайплайн живёт внутри «Производства финала» (один блок про путь к финалу); без прав на производство — отдельной секцией.
     const pipeInner = `
               <h3>Пайплайн ${hasPipe ? `<span class="n">${[detail.pipeline_parallel ? "без очереди" : "", detail.pipeline.every(s => s.done) ? "пройден" : ""].filter(Boolean).join(" · ")}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? (pipeEdit ? "отмена" : "изменить") : ""}</button>` : ""}</h3>
@@ -392,15 +348,12 @@ export async function openReportDetail(publicId) {
               </div>` : ""}
     `;
     const prodHtml = productionHtml(detail, files.files, pipeInner);
-    // Полоса показателей: прогресс, срок, озвучка, материалы (расчёт — report-overview-core.js).
     const assigneeNames = new Map((detail.assignees || []).map(a => [String(a.telegram_id), a.first_name || a.username || ""]));
-    // Кто уже отметил сдачу в пайплайне — его файлы помечаются «✓ сдача · роль».
     const submittedRole = new Map((detail.pipeline || []).filter(s => s.telegram_id && (s.submitted_at || s.done)).map(s => [String(s.telegram_id), s.role]));
     const kpisHtml = `<div class="rd-kpis">${overviewKpis({
       files: files.files, pipeline: detail.pipeline, status: detail.status, deadline: detail.deadline, overdue,
       nameOf: s => (s.telegram_id && assigneeNames.get(String(s.telegram_id))) || s.user_name || "",
     }).map(k => {
-      // Срок правится прямо с плашки — отдельная строка «Срок» в боковой колонке дублировала её.
       const edit = k.key === "deadline" && canEdit;
       const tag = edit ? `button type="button" id="chip-deadline" title="Изменить срок"` : "div";
       return `<${tag} class="rd-kpi${k.tone ? ` ${k.tone}` : ""}${edit ? " edit" : ""}"><h4>${esc(k.title)}</h4><b>${esc(k.value)}</b><small>${esc(edit && !detail.deadline ? "поставить срок" : k.sub)}</small>${k.bar != null ? `<div class="rd-kpi-bar"><i style="width:${k.bar}%"></i></div>` : ""}</${edit ? "button" : "div"}>`;
@@ -544,12 +497,10 @@ export async function openReportDetail(publicId) {
       if (tab === "dev") fillReportDevPanel(sheet.querySelector('[data-rd-panel="dev"]'), publicId);
       else if (tab !== "main") fillLogPanel(sheet.querySelector(`[data-rd-panel="${tab}"]`), publicId, tab);
     }));
-    // Сколько уведомлений не дошло — видно сразу на вкладке, не открывая её.
     apiGet(`/report/${publicId}/notifications`, { offset: 0, page_size: 1 }).then(r => {
       const badge = sheet.querySelector(".rd-tab-bad");
       if (badge && r && r.failed) { badge.textContent = r.failed; badge.hidden = false; badge.title = `Не доставлено: ${r.failed}`; }
-    }).catch(() => { /* вкладка просто без значка */ });
-    // Последние события отчёта — в боковой колонке; не загрузились — блок просто не показываем.
+    }).catch(() => { });
     if (!detail.dub_only) Promise.all([apiGet(`/report/${publicId}/activity`, { offset: 0, page_size: 4 }), loadPeopleNames()]).then(([r]) => {
       const box = sheet.querySelector("#rd-recent .rd-recent-list");
       if (!box) return;
@@ -572,7 +523,7 @@ export async function openReportDetail(publicId) {
     if (canEdit) sheet.querySelector("#pipe-add-open")?.addEventListener("click", e => { e.currentTarget.remove(); setPipeEditing(true); });
     if (pipeToggle && hasPipe && canEdit) pipeToggle.addEventListener("click", async () => {
       if (!pipeEdit) { setPipeEditing(true); return; }
-      pipeEdit = null;          // «отмена» — черновик выбрасываем, шкала снова из сохранённого
+      pipeEdit = null;
       await render();
     });
     else pipeToggle?.remove();
@@ -704,7 +655,6 @@ export async function openReportDetail(publicId) {
         await render();
       } catch (e) { toast(`Не удалось снять пайплайн: ${e.message}`, "error"); }
     });
-    // Отметка о сдаче / отметить за человека / снять отметку. Сдали все — сервер сам откроет следующий этап.
     sheet.querySelectorAll("[data-pipe-submit], [data-pipe-undo]").forEach(b => b.addEventListener("click", async () => {
       const undo = b.hasAttribute("data-pipe-undo");
       const index = Number(undo ? b.dataset.pipeUndo : b.dataset.pipeSubmit);
@@ -824,7 +774,6 @@ export async function openReportDetail(publicId) {
       : import("./watermark-editor.js").then(m => m.openStudioWatermark())));
     if (sheet.querySelector("#report-assemble")) startAssemblyWatch(publicId, overlay, false);
     const startNyaa = async () => {
-      // Запрос для Nyaa: латинское название тайтла (как у релизеров) и номер серии; не вышло — просто название отчёта.
       let query = String(detail.title || "").split(/\s[—–-]\s/)[0].trim();
       const episode = (String(detail.title || "").match(/(?:Серия|серия|Episode|EP)\s*(\d+)/) || [])[1];
       try {
@@ -832,7 +781,7 @@ export async function openReportDetail(publicId) {
           const plan = await apiGet(`/titles/${detail.title_id}/work-plan`);
           if (plan && plan.nyaa_query_default) query = plan.nyaa_query_default;
         }
-      } catch (_) { /* нет права на план — ищем по названию */ }
+      } catch (_) { }
       if (episode) query = `${query} ${String(episode).padStart(2, "0")}`.trim();
       const { openNyaaForReport } = await import("./nyaa.js");
       overlay.remove();
@@ -843,13 +792,11 @@ export async function openReportDetail(publicId) {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        // Окно выбора (видео, субтитры, дорожки, качество) — прямо в приложении; сборку ведёт бот, ход виден ниже, отменить можно там же.
         const { openAssembleDialog } = await import("./assemble-dialog.js");
         const started = await openAssembleDialog(publicId);
         if (!started) return;
         track("action", started.local ? "assemble.start_local" : "assemble.start_server", publicId);
         if (started.local) {
-          // Сборка у себя: файлы качаются сюда, рендер идёт на видеокарте, результат уходит в отчёт — без бота.
           const { runLocalRender } = await import("./local-render.js");
           runLocalRender(publicId, started.selection, overlay, () => startAssemblyWatch(publicId, overlay, true, "", !!started.post));
           return;
@@ -933,15 +880,12 @@ export async function openReportDetail(publicId) {
         timeInput.focus();
         return;
       }
-      // Время уходит префиксом в сам текст: отдельного поля под него в
-      // API заметок нет, а так его увидят и бот, и мини-апп.
       const payload = timeInput.value.trim() ? noteTimePrefix(seconds) + text : text;
       try {
         if (file) await apiUpload(`/report/${publicId}/notes/attach`, file, { text: payload });
         else await apiPost(`/report/${publicId}/notes`, replyTo ? { text: payload, parent_id: replyTo.id } : { text: payload });
         pendingNoteFile = null;
         replyTo = null;
-        // Отправлено — черновик больше не нужен, иначе перерисовка вернула бы его в поле.
         ta.value = "";
         timeInput.value = "";
         await render();
@@ -955,7 +899,6 @@ export async function openReportDetail(publicId) {
       requestAnimationFrame(grow);
     }
     sheet.querySelector("#note-reply-cancel")?.addEventListener("click", () => { replyTo = null; render(); });
-    // Таймкод в заметке — перемотка плеера на этот момент (плеер открывается на первой дорожке, если ещё закрыт).
     sheet.querySelector("#notes-list")?.addEventListener("click", async e => {
       const tc = e.target.closest("[data-seek]");
       if (tc) {
@@ -1005,10 +948,6 @@ export async function openReportDetail(publicId) {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); ta.closest(".note-item").querySelector('[data-note-act="save"]').click(); }
       else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); ta.closest(".note-item").querySelector('[data-note-act="cancel"]').click(); }
     }));
-    // Ctrl/Cmd+Enter из самого поля — привычка из Slack/GitHub/Linear:
-    // руки уже на клавиатуре после текста заметки, тянуться к кнопке
-    // мышью незачем. Обычный Enter не годится — заметки часто
-    // многострочные (тайм-коды правок один за другим).
     sheet.querySelector("#note-new")?.addEventListener("keydown", e => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
@@ -1034,7 +973,6 @@ export async function openReportDetail(publicId) {
         btn.disabled = true;
         try {
           const ok = await downloadWithCard({ command: "download_report_file", args: { reportId: publicId, fileId }, savePath, name: btn.dataset.fileName || "файл" });
-          // Файл мог уйти в архив Telegram и пропасть из кэша сервера — бот достанет его оттуда и пришлёт сам.
           if (!ok && await askConfirm(`Не удалось скачать «${btn.dataset.fileName || "файл"}» на компьютер.
 
 Прислать его через бота в Telegram? Бот возьмёт файл из архива.`)) {
@@ -1065,8 +1003,6 @@ export async function openReportDetail(publicId) {
         }
       });
     });
-    // Плеер: создаётся по первому «▶ Слушать» и дальше просто
-    // переставляется в новую разметку после каждой перерисовки.
     const audioFiles = files.files.filter(isAudioFile);
     const playerHost = sheet.querySelector("#rd-player-host");
     if (player && playerHost) {
@@ -1103,8 +1039,6 @@ export async function openReportDetail(publicId) {
         try {
           const res = await apiPost(`/report/${publicId}/files/${fileId}/qc`, {});
           const resultEl = sheet.querySelector(`#qc-result-${fileId}`);
-          // Сервер отдаёт {file_label, result: {issues, duration, error}}
-          // (см. miniapp/server.py::api_qc_file) — не {findings}.
           const result = res.result || {};
           const issues = result.issues || [];
           resultEl.innerHTML = issues.length
@@ -1134,8 +1068,6 @@ function checklistItemHtml(item, editable = true) {
   </div>`;
 }
 
-// Таймкоды (19:18, 1:02:03) и упоминания (@ник) в любом месте заметки — плашками, а не обычным текстом.
-// Работает по уже экранированному тексту; ссылки (<a …>) не трогаем.
 const NOTE_INLINE_TC = /(^|[^\w:/.])(\d{1,2}:[0-5]\d(?::[0-5]\d)?)(?![\w:])/g;
 const NOTE_INLINE_AT = /(^|[^\w@])@([A-Za-z][A-Za-z0-9_]{3,31})\b/g;
 function decorateNote(escapedHtml) {
@@ -1145,7 +1077,6 @@ function decorateNote(escapedHtml) {
 }
 
 const TALLY_RE = /([^\s—–\-:\d,;][^—–\n]*?)\s*[—–-]\s*(\d+)(?=[\s,;]|$)/g;
-// Кто есть кто для росписи: сначала исполнители отчёта, потом вся команда. Имена — какими их видят в карточке.
 function rosterPeople(assignees = [], users = []) {
   const seen = new Map();
   for (const u of [...(assignees || []), ...(users || [])]) {
@@ -1156,9 +1087,6 @@ function rosterPeople(assignees = [], users = []) {
   return [...seen.values()];
 }
 const rosterKey = name => String(name || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase().split("ё").join("е").slice(0, 60);
-// «Совесть» = Совесть, «Богдан» → «богданчик <3», «LissaDor» → Lissa, «Ewaii» → ник Ewaii_Ren, «Jull» → Juliana.
-// Сначала ручная привязка, затем точное совпадение, начало имени или часть ника, затем общее начало от 3 букв —
-// только если такой человек один, иначе честно «не узнан».
 function rosterMatch(name, roster) {
   if (!roster) return null;
   const key = rosterKey(name);
@@ -1173,8 +1101,6 @@ function rosterMatch(name, roster) {
     || pick(k => prefix(k, key) >= 3);
 }
 
-// «LissaDor — 140 Oni — 93 …» — раскладка реплик по людям. Если вся заметка состоит из пар «имя — число»
-// (в строку или по строкам), рисуем её карточками людей: аватар сверху, реплики снизу. Иначе null.
 function tallyHtml(text, roster = null) {
   const rows = [...String(text).matchAll(TALLY_RE)].map(m => ({ name: m[1].trim(), n: Number(m[2]) }));
   if (rows.length < 2) return null;
@@ -1195,9 +1121,6 @@ function tallyHtml(text, roster = null) {
   return `<div class="note-tally tiles">${rows.map(tile).join("")}<div class="nt-sum">всего ${sum}</div></div>`;
 }
 
-// Привязка имени из росписи к человеку: список команды, исполнители отчёта — сверху.
-// В окне привязки — только нынешняя команда (allowed_users через /assignable-users). Исполнитель серии,
-// которого уже убрали из команды, остаётся в detail.assignees, но привязывать к нему новые реплики незачем.
 function bindChoices(people) {
   const team = new Set((state.users || []).map(u => String(u.telegram_id)));
   return team.size ? people.filter(p => team.has(p.id)) : people;
@@ -1229,8 +1152,6 @@ function rosterBindDialog(name, people, onDone) {
 
 function noteHtml(n, ctx = {}) {
   const t = parseNoteTime(n.text);
-  // Подпись «📎 имя» сервер ставит сам, когда заметка — только файл
-  // (её видно в боте); здесь вместо неё показывается само вложение.
   const autoCaption = n.attach && n.text === `📎 ${n.attach.name}`;
   const body = autoCaption ? "" : (t ? t.rest : n.text);
   const who = (state.users || []).find(u => String(u.telegram_id) === String(n.author_telegram_id));
@@ -1262,9 +1183,6 @@ function noteHtml(n, ctx = {}) {
   </div>`;
 }
 
-// Текущая цепочка пайплайна (только чтение) + «передать дальше», если
-// есть следующий этап — отдельно от черновика-билдера ниже (тот
-// пересобирает цепочку целиком, этот просто двигает текущий указатель).
 function pipelineAdvanceHtml(pipeline, assignable, canEdit = true, canAdvance = false) {
   if (!pipeline || !pipeline.length) return "";
   if (!canEdit && !canAdvance) return "";
@@ -1273,8 +1191,6 @@ function pipelineAdvanceHtml(pipeline, assignable, canEdit = true, canAdvance = 
   const lastCur = curIdxs[curIdxs.length - 1];
   if (lastCur >= pipeline.length - 1) return "";
   const who = curIdxs.map(i => `<b>${esc(pipeline[i].role)}</b>${pipeline[i].user_name ? ` (${esc(pipeline[i].user_name)})` : ""}`).join(", ");
-  // Исполнитель этапа (даббер) передаёт сам, без выбора человека: следующего
-  // сервер находит по цепочке и составу тайтла. Выбор — только у админа.
   const picker = canEdit
     ? `<select id="pipeline-next-user" class="field-input">${userOptionsHtml(assignable, null)}</select>`
     : "";
@@ -1285,14 +1201,8 @@ function pipelineAdvanceHtml(pipeline, assignable, canEdit = true, canAdvance = 
     </div>`;
 }
 
-// Основной путь статусов («ветки» отчёта) для шапки карточки;
-// «перезапись/дозапись» и «отменено» — боковые, рисуются отдельно.
 const STATUS_PATH = [["draft", "Черновик"], ["review", "Озвучка"], ["working", "В работе"], ["completed", "Готово"]];
 
-// Пайплайн шкалой этапов: кто на каком этапе, пройденное закрашено,
-// линия доходит до текущего этапа.
-// Одинаковые роли подряд (Даббер → Даббер → Даббер) и весь пайплайн «без очереди» — один общий этап: работают одновременно.
-// Группировка та же, что на сервере (database.pipeline_stage_bounds).
 function pipelineGroups(pipeline, parallel) {
   const key = role => { const k = String(role || "").trim().toLowerCase().split("ё").join("е"); return k.startsWith("даббер") ? "даббер" : k; };
   const groups = [];
@@ -1304,7 +1214,6 @@ function pipelineGroups(pipeline, parallel) {
   return groups;
 }
 
-// После отметки о сдаче показываем местное время, а для прошлых дат — ещё и дату.
 function submittedWhen(at) {
   const d = new Date(String(at).replace(" ", "T") + "Z");
   if (Number.isNaN(d.getTime())) return "";
@@ -1312,7 +1221,6 @@ function submittedWhen(at) {
   return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} ${time}`;
 }
 
-// Звено текущего этапа: участник отмечает сдачу, админ может отметить за человека или снять отметку.
 function pipelineEntryActs(s, i, canManage) {
   const inStage = s.current || s.submitted_at;
   if (!inStage) return "";
@@ -1324,7 +1232,6 @@ function pipelineEntryActs(s, i, canManage) {
   return canManage ? `<button type="button" class="pf-link rd-tl-mark" data-pipe-submit="${i}">отметить сдачу</button>` : "";
 }
 
-// Имя участника этапа — как в «Исполнителях» справа (Ren, а не Ewaii_Ren); ник остаётся в подсказке.
 function pipelineTimelineHtml(pipeline, parallel = false, canManage = false, assignees = []) {
   const shown = new Map((assignees || []).map(a => [String(a.telegram_id), a.first_name || a.username || ""]));
   const who = s => {
@@ -1351,18 +1258,14 @@ function pipelineTimelineHtml(pipeline, parallel = false, canManage = false, ass
   }).join("")}</div>`;
 }
 
-// Сервер подписывает источник то «(desktop)», то «(десктоп)» — в ленте одним словом.
 const actionLabel = action => String(action || "").replace(/\(desktop\)/gi, "(десктоп)");
 
-// История и активность — прямо во вкладке карточки: первые 20 событий,
-// дальше — прежняя отдельная шторка с «Показать ещё».
 async function fillLogPanel(panel, publicId, kind) {
   if (panel.dataset.loaded) return;
   panel.dataset.loaded = "1";
   panel.innerHTML = dialogSkeletonHtml(4);
   let res;
   try {
-    // Уведомления — сразу пачкой побольше: недоставленные показываются первыми, и они не должны прятаться за «показать ещё».
     res = await apiGet(`/report/${publicId}/${kind}`, { offset: 0, page_size: kind === "notifications" ? 100 : 20 });
   } catch (e) {
     panel.innerHTML = `<div class="no-assignee">Не удалось загрузить: ${esc(e.message)}</div>`;
@@ -1380,10 +1283,8 @@ async function fillLogPanel(panel, publicId, kind) {
   panel.querySelector("[data-log-more]")?.addEventListener("click", () => openReportLogSheet(publicId, kind));
 }
 
-// «Уведомления»: кому уходили сообщения по отчёту и дошли ли (журнал delivery_log на сервере).
 function renderNotifications(panel, publicId, res) {
   const evs = res.events || [];
-  // Недоставленные — наверх: ради них вкладку и открывают (красная цифра на ней).
   const sorted = [...evs.filter(ev => !ev.ok), ...evs.filter(ev => ev.ok)];
   panel.innerHTML = `${res.total ? `<div class="rd-nt-sum"><span class="ok">✓ доставлено ${res.total - res.failed}</span>${res.failed ? `<span class="bad">✗ не доставлено ${res.failed}</span>` : ""}</div>` : ""}
     <div class="rd-nt">${sorted.map(ev => `
@@ -1402,19 +1303,11 @@ function renderNotifications(panel, publicId, res) {
   });
 }
 
-// Скачивание — кнопка, а не <a href>. Ссылка с target="_blank" внутри
-// webview вообще ничего не открывает (окно создавать некому), а токен
-// в ней уезжал в query-строку — то есть в логи сервера. Файл тянет
-// Rust-команда download_report_file (токен заголовком), путь выбирает
-// нативный диалог сохранения.
 
-// «Производство финала»: четыре шага со статусом и одной кнопкой на шаг. Кнопки сохраняют прежние id —
-// их обработчики (Nyaa, сборка, добавление файла) остались как были.
 function productionHtml(detail, fileList, pipeInner = "") {
   if (!can("reports.assemble") && !can("reports.files")) return "";
   const list = fileList || [];
   const { hasFinal, hasVideo, hasSubs, hasAudio } = classifyFiles(list);
-  // Звук готов, когда пройден пайплайн, а не когда лёг первый файл: иначе галочка стоит, пока звукарь ещё работает.
   const pipe = detail.pipeline || [];
   const pipeLeft = pipe.length && !pipe.every(s => s.done) ? `сдали ${pipe.filter(s => s.done || s.submitted_at).length} из ${pipe.length}` : "";
   const step = (n, title, state, label, body) => `
@@ -1427,11 +1320,8 @@ function productionHtml(detail, fileList, pipeInner = "") {
   const sendFile = [...list].reverse().find(isFinalFile) || [...list].reverse().find(isVideoFile);
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
   const nyaa = can("reports.files") && !detail.dub_only ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l2">Видео с Nyaa</span><span class="dz-l1">⚠ тяжёлая загрузка</span></button>` : "";
-  // Яркая — только когда собирать уже есть из чего; пока ждём видео, кнопка спокойная (окно сборки само скажет, чего не хватает).
   const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal && !pipeLeft && (detail.pipeline_roles || []).length ? " primary" : hasVideo ? "" : " idle"}" id="report-assemble"${hasVideo ? "" : ` title="Сначала нужно видео — окно сборки подскажет, чего не хватает"`}>🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
-  // Что мешает сейчас — одной строкой и с кнопкой, а не угадыванием по четырём карточкам этапов.
-  // Даббер видео не добавляет: подсказка «нет видео» с кнопкой ему ни к чему.
   const now = detail.dub_only && !hasVideo ? null : productionNow({ hasVideo, hasFinal, pipeLeft, hasPipeline: !!(detail.pipeline_roles && detail.pipeline_roles.length), canAssemble: can("reports.assemble"), canPost: can("posts.manage") });
   const nowAttr = now ? (now.act.jump ? `data-rd-jump="${now.act.jump}"` : `data-rd-click="${now.act.click}"`) : "";
   const nowHtml = now ? `
@@ -1451,7 +1341,6 @@ function productionHtml(detail, fileList, pipeInner = "") {
   </div>`;
 }
 
-// Категории файлов одной сеткой: с файлами — списком, пустые — компактной кнопкой «+ название».
 function rawKindsHtml(kinds, { canAdd, addAttr, dlAttr }) {
   const filled = kinds.filter(k => k.entries.length);
   const empty = kinds.filter(k => !k.entries.length);
@@ -1488,7 +1377,6 @@ function fileHtml(f, canEdit = true, sub = null, shownName = "") {
   const isAudio = audioRe.test(f.file_type || "") || audioRe.test(f.file_name || "");
   const canDelete = f.can_delete === undefined ? canEdit : !!f.can_delete;
   const name = esc(f.file_name || f.file_type || "");
-  // sub — этап пайплайна, который этот человек уже сдал: видно, что файл и есть его сдача.
   return `<div class="file-item fi-compact">
     <div class="fi-main"><div class="fi-name">${esc(FILE_ICONS[f.file_type] || "📎")} <span>${esc(f.file_name || f.file_type)}</span> <span class="meta">${esc(prettySize(f.file_size_label))}</span></div>${f.uploaded_by ? `
       <span class="file-by"><span class="avatar-bubble" data-avatar-for="${esc(f.uploaded_by.telegram_id || "")}">${esc(initials(f.uploaded_by.name || "?"))}</span><b${shownName && shownName !== f.uploaded_by.name ? ` title="${esc(f.uploaded_by.name || "")}"` : ""}>${esc(shownName || f.uploaded_by.name || "")}</b>${f.created_at ? `<em>${esc(submittedWhen(f.created_at))}</em>` : ""}${sub ? `<span class="fi-sub" title="Этот человек отметил сдачу в пайплайне">✓ сдача · ${esc(sub)}</span>` : ""}</span>` : ""}</div>
@@ -1503,9 +1391,6 @@ function fileHtml(f, canEdit = true, sub = null, shownName = "") {
   </div>`;
 }
 
-// История статуса и лента активности отчёта — тот же /history и
-// /activity, что и в мини-аппе, листаются кнопкой «Показать ещё»
-// (page_size=20, как там же), а не бесконечной прокруткой.
 async function openReportLogSheet(publicId, kind) {
   const title = kind === "history" ? "🕓 История" : "📜 Активность";
   const overlay = openSheet(`<h2>${title}</h2>${dialogSkeletonHtml(5)}`);

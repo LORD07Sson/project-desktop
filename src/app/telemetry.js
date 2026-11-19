@@ -1,23 +1,19 @@
-// Статистика использования для «Карты работы» (см. voice_report_bot/work_map.py): какие экраны открывают, какие кнопки жмут,
-// что и сколько смотрят. Только названия (экран, id кнопки, название тайтла) и длительность — никакого введённого текста,
-// содержимого сообщений или файлов. Человек может выключить сбор в Настройки → Поведение и стереть уже собранное.
 
 import { invoke, getVersion } from "./tauri.js";
 import { apiGet, apiPost, openSheet, dismissSheet, toast, API_BASE } from "./api.js";
-// «じ――» — пристальный взгляд: заставка окна согласия (Vite отдаёт готовый URL ассета).
 import stareUrl from "../assets/stare-ji.gif";
 import { state } from "./state.js";
 
-const KEY = "project-telemetry";          // "1" — разрешил; "0" или пусто — не собираем (пока человек явно не согласится)
+const KEY = "project-telemetry";
 const FLUSH_MS = 30_000;
 const MAX_QUEUE = 300;
 
 let queue = [];
 let screen = "";
-let screenMs = 0;       // накопленное ВИДИМОЕ время на текущем экране
+let screenMs = 0;
 let visibleSince = 0;
 let lastClick = { name: "", at: 0 };
-const trail = [];       // последние шаги человека — прикладываются к ошибке, чтобы было видно, что к ней привело
+const trail = [];
 
 function step(text) {
   trail.push(text);
@@ -34,7 +30,6 @@ function push(ev) {
   if (queue.length > MAX_QUEUE) queue = queue.slice(-MAX_QUEUE);
 }
 
-/** Действие или просмотр. kind: "action" | "watch" | "screen". */
 export function track(kind, name, target, durationMs) {
   push({ kind, name: String(name).slice(0, 60), target: target ? String(target).slice(0, 80) : undefined, duration_ms: Math.round(durationMs || 0) });
 }
@@ -46,7 +41,6 @@ function closeScreen() {
   screenMs = 0;
 }
 
-/** Открыт другой экран (вкладка). */
 export function trackScreen(name) {
   if (name === screen) return;
   closeScreen();
@@ -63,25 +57,23 @@ export async function flushTelemetry() {
   try {
     await apiPost("/telemetry", { events: batch });
   } catch (_) {
-    queue = batch.concat(queue).slice(-MAX_QUEUE); // сеть подвела — отправим в следующий раз
+    queue = batch.concat(queue).slice(-MAX_QUEUE);
   }
 }
 
-/** Включить/выключить сбор. Сервер тоже узнаёт о выборе (и при желании стирает уже собранное). */
 export async function setTracking(on, forget = false) {
-  try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) { }
   if (!on) { queue = []; savePendingNet([]); }
   if (state.token) await apiPost("/telemetry/consent", { enabled: !!on, forget: !!forget });
   if (on) document.dispatchEvent(new CustomEvent("project:telemetry-on"));
 }
 
-// Нажатия: имя берётся только из id / data-атрибутов кнопки — текст кнопок и полей не читается.
 document.addEventListener("click", ev => {
   if (!trackingOn()) return;
   const el = ev.target && ev.target.closest ? ev.target.closest("button, a, [role=button], [data-a], [data-act]") : null;
   if (!el) return;
   const raw = el.dataset.a || el.dataset.act || el.dataset.tab || el.id || "";
-  if (!raw || /\d{4,}/.test(raw) || /^win-/.test(raw)) return;   // пустое, «динамическое» (с номерами) и кнопки окна не берём
+  if (!raw || /\d{4,}/.test(raw) || /^win-/.test(raw)) return;
   const name = `${screen || "app"}.${raw}`.slice(0, 60);
   const now = Date.now();
   if (name === lastClick.name && now - lastClick.at < 400) return;
@@ -101,18 +93,14 @@ document.addEventListener("visibilitychange", () => {
 });
 setInterval(flushTelemetry, FLUSH_MS);
 
-// ---- Ошибки для Аналитики (только у согласившихся на статистику) ----
-// Ловим то, что человек увидел (красное сообщение), молчаливые сбои сервера (нет связи, 5xx) и падения самой программы —
-// с экраном, последними шагами и версией. Повтор той же ошибки в течение 5 с не дублируется, «нет связи» — 10 мин: без
-// интернета чат и колокольчик опрашивают сервер раз в несколько секунд, и одна пропажа сети давала два десятка записей.
 const ERR_FLUSH_MS = 3000;
 const OFFLINE_REPEAT_MS = 10 * 60_000;
 let errQueue = [];
 let errTimer = null;
 let lastErr = { key: "", at: 0 };
-let lastApi = null;     // последний неудачный запрос — к красному сообщению, вызванному им
+let lastApi = null;
 let appVersion = "";
-getVersion().then(v => { appVersion = v; }).catch(() => { /* не в приложении */ });
+getVersion().then(v => { appVersion = v; }).catch(() => { });
 
 let lastOffline = 0;
 
@@ -126,7 +114,7 @@ function reportError(kind, message, detail, offline = false) {
   errQueue.push({ kind, message: String(message).slice(0, 300), detail: detail ? String(detail).slice(0, 600) : undefined, screen, trail: trail.slice(), version: appVersion });
   if (errQueue.length > 40) errQueue = errQueue.slice(-40);
   clearTimeout(errTimer);
-  errTimer = setTimeout(flushErrors, ERR_FLUSH_MS); // DevSkim: ignore DS172411 — функция, не строка
+  errTimer = setTimeout(flushErrors, ERR_FLUSH_MS); // DevSkim: ignore DS172411
 }
 
 async function flushErrors() {
@@ -135,7 +123,7 @@ async function flushErrors() {
   try {
     await apiPost("/telemetry/errors", { errors: batch });
   } catch (_) {
-    errQueue = batch.concat(errQueue).slice(-40); // нет связи — уйдут со следующей ошибкой или при сворачивании
+    errQueue = batch.concat(errQueue).slice(-40);
   }
 }
 
@@ -145,11 +133,9 @@ document.addEventListener("project:api-fail", ev => {
   if (String(d.path).startsWith("/telemetry")) return;
   if (lastApi) clearTimeout(lastApi.timer);
   lastApi = { ...d, at: Date.now(), timer: null };
-  // Нет связи или сервер упал — это ошибка, даже если экран ничего не показал. Если следом появится красное сообщение,
-  // запишется оно (с этим запросом), а не два раза одно и то же. Отказ 4xx экран обрабатывает сам — его ловит сообщение.
   if (!d.status || d.status >= 500) {
     const a = lastApi;
-    a.timer = setTimeout(() => reportError("api", a.message, apiLine(a), !a.status), 2500); // DevSkim: ignore DS172411 — функция, не строка
+    a.timer = setTimeout(() => reportError("api", a.message, apiLine(a), !a.status), 2500); // DevSkim: ignore DS172411
   }
 });
 document.addEventListener("project:error-shown", ev => {
@@ -166,9 +152,6 @@ window.addEventListener("unhandledrejection", ev => {
   reportError("crash", (r && r.message) || String(r), r && r.stack ? String(r.stack).split(/\r?\n/).slice(0, 3).join(" | ") : "");
 });
 
-// ---- Проверка связи: удаётся ли соединиться с нашим сервером и определить его адрес через DNS ----
-// Приложение само меряет доступность сервера и DNS (имя, провайдер DNS), а IP (наполовину скрытый) и страну сервер определяет по
-// соединению. Неудачные проверки, когда сервер недоступен, ждут в очереди и уходят при первой же возможности.
 const NET_EVERY_MS = 20 * 60 * 1000;
 const NET_PENDING_KEY = "project-net-pending";
 let lastNet = 0;
@@ -177,15 +160,13 @@ function pendingNet() {
   try { return JSON.parse(localStorage.getItem(NET_PENDING_KEY) || "[]"); } catch (_) { return []; }
 }
 function savePendingNet(list) {
-  try { localStorage.setItem(NET_PENDING_KEY, JSON.stringify(list.slice(-20))); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(NET_PENDING_KEY, JSON.stringify(list.slice(-20))); } catch (_) { }
 }
 
 let netBusy = false;
 let lastNetOk = true;
 export async function runNetCheck() {
   if (!trackingOn() || !state.token) return;
-  // При включении компьютера сетевые адаптеры поднимаются по очереди и «online» приходит пачкой — по проверке
-  // на каждое событие выходило ~10 провалов в одну секунду. Одна проверка за раз и не чаще раза в 30 секунд.
   if (netBusy || Date.now() - lastNet < 30_000) return;
   netBusy = true;
   try { await netCheckOnce(); } finally { netBusy = false; }
@@ -193,15 +174,13 @@ export async function runNetCheck() {
 
 async function netCheckOnce() {
   lastNet = Date.now();
-  // at — когда проверка сделана: неудачные уходят на сервер позже, пачкой, и без него время сбоя терялось.
   const result = { at: Date.now(), server_ok: false, server_ms: null, server_error: "", dns_ok: null, dns_ms: null, dns_provider: "", dns_servers: [] };
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
   const t0 = window.performance.now();
   try {
-    // Без cache: "no-store" — иначе каждый замер включал бы лишний предзапрос CORS (OPTIONS) и показывал двойную задержку.
     await fetch(`${API_BASE}/whoami`, { headers: { "X-Init-Data": state.token || "" }, signal: ctl.signal });
-    result.server_ok = true;                       // ответ получен (какой — неважно): сервер достижим
+    result.server_ok = true;
     result.server_ms = Math.round(window.performance.now() - t0);
   } catch (e) {
     result.server_error = e && e.name === "AbortError" ? "таймаут 8 с" : String((e && e.message) || e).slice(0, 100);
@@ -210,9 +189,9 @@ async function netCheckOnce() {
   try {
     const d = await invoke("net_diagnose");
     result.dns_ok = !!d.dns_ok; result.dns_ms = d.dns_ms; result.dns_provider = d.dns_provider; result.dns_servers = d.dns_servers;
-  } catch (_) { /* не в приложении или команда недоступна */ }
+  } catch (_) { }
   const queue = pendingNet();
-  if (!result.server_ok) {   // сервер недоступен — отправим позже; один провал в минуту, без дублей одного и того же сбоя
+  if (!result.server_ok) {
     const last = queue[queue.length - 1];
     if (!last || result.at - (last.at || 0) >= 60_000) { queue.push(result); savePendingNet(queue); }
     return;
@@ -229,12 +208,10 @@ function scheduleNetChecks() {
   if (netScheduled) return;
   netScheduled = true;
   runNetCheck();
-  // после провала (например, программа запустилась раньше, чем появилась сеть) — повтор раз в минуту, а не через 20
   setInterval(() => { if (Date.now() - lastNet >= (lastNetOk ? NET_EVERY_MS : 60_000)) runNetCheck(); }, 60_000);
   window.addEventListener("online", () => runNetCheck());
 }
 
-// Окно согласия: пока человек не выбрал, ничего не собирается.
 const CONSENT_HTML = `
   <div class="tm-head">
     <img class="tm-stare-img" src="${stareUrl}" alt="じ―― Пристально смотрю…" draggable="false">
@@ -275,10 +252,9 @@ function askConsent() {
   };
   overlay.querySelector('[data-tm="yes"]').addEventListener("click", () => choose(true));
   overlay.querySelector('[data-tm="no"]').addEventListener("click", () => choose(false));
-  overlay.addEventListener("sheet-dismissed", () => { asking = false; });   // закрыл крестиком/Escape — спросим при следующем запуске
+  overlay.addEventListener("sheet-dismissed", () => { asking = false; });
 }
 
-// После входа: подхватываем выбор, сделанный на другом устройстве; если человек ещё не выбирал — спрашиваем.
 document.addEventListener("project:tab", ev => { trackScreen(ev.detail); });
 let started = false;
 document.addEventListener("media-token-ready", async () => {
@@ -287,10 +263,9 @@ document.addEventListener("media-token-ready", async () => {
   trackScreen(state.activeTab || "");
   try {
     const { enabled, decided } = await apiGet("/telemetry/consent");
-    try { localStorage.setItem(KEY, enabled ? "1" : "0"); } catch (_) { /* не критично */ }
-    if (decided === false) askConsent();   // только если сервер прямо сказал «ещё не выбирал»; непонятный ответ окно не открывает
-  } catch (_) { /* не критично */ }
+    try { localStorage.setItem(KEY, enabled ? "1" : "0"); } catch (_) { }
+    if (decided === false) askConsent();
+  } catch (_) { }
   if (trackingOn()) scheduleNetChecks();
 });
-// Согласился позже — проверки связи стартуют сразу
 document.addEventListener("project:telemetry-on", () => { if (trackingOn()) scheduleNetChecks(); });

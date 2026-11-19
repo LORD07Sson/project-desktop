@@ -1,7 +1,3 @@
-// Напоминания и мои сроки — то же, что «🔔 Уведомления» в боте
-// (user/reminders.py): отчёты со сроком (просрочено / скоро) и личные
-// напоминания «дата + текст» — бот пришлёт их в Telegram в этот день.
-// /api/me/reminders (GET / POST {date, text}), /api/me/reminders/{id}/delete.
 
 import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
 import { esc } from "./utils.js";
@@ -10,7 +6,6 @@ import { openReportDetail } from "./report-detail.js";
 
 const TRASH_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
 
-// null — если сервер старый (без /me/reminders) или ответ неполный.
 export async function fetchReminders() {
   try {
     const d = await apiGet("/me/reminders");
@@ -95,7 +90,6 @@ export async function openRemindersSheet(onChange) {
   render(d);
 }
 
-// Карточка во вкладке «Я».
 export async function fillRemindersCard(root) {
   const slot = root.querySelector("#reminders-card");
   if (!slot) return;

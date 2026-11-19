@@ -1,13 +1,3 @@
-// Плеер дорожки в карточке отчёта: волна приложенного звука, метки
-// заметок с тайм-кодами прямо на ней, находки QC, переключение версий
-// с сохранением позиции и «правка в текущий момент».
-//
-// Волну считает сервер (/files/{id}/peaks — 1600 пиков через ffmpeg,
-// с кэшем), сам звук качается целиком в blob: так <audio> честно
-// перематывается куда угодно, а токен уходит заголовком.
-// Плеер живёт дольше одной перерисовки карточки: render() в
-// report-detail.js пересобирает разметку, а этот элемент просто
-// переставляется в новое место — звук при этом не прерывается.
 
 import { apiGet, apiPost, apiBlob, toast } from "./api.js";
 import { AUDIO_RE, MIME } from "./media-formats.js";
@@ -213,7 +203,6 @@ export function createPlayer({ publicId, onAddNote, onClose, readOnly = false })
     }
   });
 
-  // Клавиши — пока плеер на экране и фокус не в поле ввода.
   function onKey(e) {
     if (!el.isConnected) return;
     const tag = (e.target && e.target.tagName) || "";
@@ -227,7 +216,6 @@ export function createPlayer({ publicId, onAddNote, onClose, readOnly = false })
     else if (e.key === "n" || e.key === "N" || e.key === "т" || e.key === "Т") { e.preventDefault(); input.focus(); }
   }
   document.addEventListener("keydown", onKey);
-  // Команды с MIDI-контроллера (midi-control.js): пауза, перемотка, громкость.
   function onTransport(e) {
     if (!el.isConnected) return;
     const c = e.detail || {};
@@ -314,7 +302,6 @@ export function createPlayer({ publicId, onAddNote, onClose, readOnly = false })
     open,
     destroy,
     setFiles(list) { files = list.filter(isAudioFile); drawFiles(); },
-    // Перемотка по таймкоду из заметки: если дорожка ещё грузится — дождаться длительности.
     seekTo(t) { if (dur()) seek(t); else audio.addEventListener("loadedmetadata", () => seek(t), { once: true }); },
     setNotes(list) {
       notes = list.map(n => { const t = parseNoteTime(n.text); return t ? { seconds: t.seconds, label: t.label, text: t.rest.trim() } : null; })

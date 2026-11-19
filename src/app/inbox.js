@@ -1,8 +1,3 @@
-// Центр уведомлений: колокольчик в шапке и список всего, что касается
-// человека, — действия других по его отчётам, @упоминания, новые
-// личные, сроки и дни рождения (/api/me/inbox). Прочитано/нет хранится
-// тут же, в localStorage: у каждого события стабильный id, а сервер
-// общего «прочитано» для этого списка не ведёт.
 
 import { state } from "./state.js";
 import { apiGet, apiPost, toast } from "./api.js";
@@ -21,14 +16,14 @@ const COLOR = { assign: "var(--fire)", work: "var(--fire)", due: "var(--s-stop)"
 let items = [];
 let filter = "all";
 let lastUnread = 0;
-let notified = null; // Set id, о которых уже была всплывашка; null — первого опроса ещё не было
+let notified = null;
 
 function key() { return `project_inbox_${state.telegramId || "anon"}`; }
 function readState() {
   try { return JSON.parse(localStorage.getItem(key()) || "{}") || {}; } catch (_) { return {}; }
 }
 function saveState(st) {
-  try { localStorage.setItem(key(), JSON.stringify(st)); } catch (_) { /* приватный режим — просто без памяти */ }
+  try { localStorage.setItem(key(), JSON.stringify(st)); } catch (_) { }
 }
 function isRead(it, st) {
   return (st.ids || []).includes(it.id) || (st.all && it.when <= st.all);
@@ -68,7 +63,6 @@ function textOf(it) {
   return "";
 }
 
-// То же, что textOf, но простым текстом — для системной всплывашки.
 function plainOf(it) {
   const rep = it.report ? `${it.report} «${it.title || ""}»` : "";
   if (it.kind === "assign") return `${rep}${it.actor ? ` — назначил(а) ${it.actor}` : ""}`;
@@ -81,11 +75,6 @@ function plainOf(it) {
   return "";
 }
 
-// Всплывашка на рабочий стол — только о том, что появилось после
-// запуска: первый опрос лишь запоминает текущий список, иначе при каждом
-// входе вываливалась бы вся накопленная лента. Сообщения из чатов (личные
-// и @упоминания в чатах) сообщает chat-notify.js — с текстом и с учётом
-// заглушённых бесед; здесь их не дублируем, но в колокольчике они есть.
 function notifyFresh() {
   const st = readState();
   const fresh = items.filter(it => !isRead(it, st) && !(notified && notified.has(it.id))
@@ -93,7 +82,6 @@ function notifyFresh() {
   const first = notified === null;
   notified = new Set([...(notified || []), ...items.map(it => it.id)]);
   if (first || !fresh.length) return;
-  // Только включённые в Настройках типы (см. NOTIFY_KINDS).
   const kinds = notifyKinds();
   const shown = fresh.filter(it => kinds[it.kind] !== false);
   if (!shown.length) return;
@@ -125,7 +113,6 @@ function paint() {
     const day = dayLabel(it.when);
     if (day !== last) { html += `<div class="ib-day">${esc(day)}</div>`; last = day; }
     if (it.kind === "nyaa") {
-      // у уведомления о раздаче есть свои кнопки, поэтому это не кнопка целиком
       html += `<div class="ib-it ib-nyaa${isRead(it, st) ? "" : " unread"}" data-ib-n="${esc(it.id)}" style="--c:${COLOR.nyaa}">
         <span class="ib-ic">${ICON.nyaa}</span>
         <span class="ib-t">${textOf(it)}<span class="ib-m">${esc(relTime(it.when))}</span>
@@ -169,8 +156,6 @@ function open(it) {
     openChatKey(it.chat);
     switchTab("messages");
   } else if (it.report) {
-    // Карточку отчёта сервер открывает автору, исполнителям и ролям с правом смотреть отчёты —
-    // участнику тоже открываем её, а не профиль; нет доступа — сервер ответит, и это будет видно.
     openReportDetail(it.report);
   }
 }
@@ -189,7 +174,7 @@ export async function refreshInbox() {
     items = d.items || [];
     paint();
     notifyFresh();
-  } catch (_) { /* старый сервер или нет связи — колокольчик просто молчит */ }
+  } catch (_) { }
 }
 
 export function resetInbox() {
@@ -221,7 +206,7 @@ function init() {
   });
   document.addEventListener("click", e => { if (!panel.hidden && !panel.contains(e.target) && e.target !== bell) close(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !panel.hidden) close(); });
-  setInterval(() => { if (!$("#titlebar-apps").hidden) refreshInbox(); }, POLL_MS); // DevSkim: ignore DS172411 — функция, не строка
+  setInterval(() => { if (!$("#titlebar-apps").hidden) refreshInbox(); }, POLL_MS); // DevSkim: ignore DS172411
   window.addEventListener("focus", () => { if (!$("#titlebar-apps").hidden) refreshInbox(); });
   lastUnread = -1;
 }

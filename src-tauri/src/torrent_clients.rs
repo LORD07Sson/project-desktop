@@ -1,9 +1,3 @@
-// Отправка magnet-ссылок в торрент-клиент пользователя: qBittorrent,
-// Transmission или Deluge (через их веб-интерфейс). Клиент — личный, часто
-// на этом же компьютере (127.0.0.1) или в домашней сети, поэтому здесь, в
-// отличие от загрузки чужих сайтов, локальные адреса разрешены; зато
-// принимаются только http/https, а в сам клиент уходит только проверенный
-// magnet. Пароль хранится в хранилище учётных данных ОС, а не в файлах.
 
 use std::time::Duration;
 
@@ -16,7 +10,7 @@ const MAX_MAGNETS: usize = 100;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct TcConfig {
-    pub kind: String,     // qbittorrent | transmission | deluge
+    pub kind: String,
     pub url: String,
     pub user: String,
     #[serde(default)]
@@ -55,7 +49,6 @@ fn client() -> &'static reqwest::Client {
     })
 }
 
-/// «http://127.0.0.1:8080/» → «http://127.0.0.1:8080»; всё, кроме http/https, — ошибка.
 pub fn normalize_base(url: &str) -> Result<String, String> {
     let u = reqwest::Url::parse(url.trim()).map_err(|_| "Некорректный адрес клиента.".to_string())?;
     if !matches!(u.scheme(), "http" | "https") {
@@ -77,7 +70,6 @@ pub fn valid_magnet(m: &str) -> bool {
     m.len() < 4000 && m.starts_with("magnet:?xt=urn:btih:") && !m.contains(['\n', '\r'])
 }
 
-/// Значение cookie `name` из заголовков Set-Cookie.
 pub fn extract_cookie(set_cookies: &[String], name: &str) -> Option<String> {
     let prefix = format!("{name}=");
     set_cookies.iter().find_map(|c| {
@@ -105,7 +97,6 @@ pub fn tc_save(mut cfg: TcConfig) -> Result<(), String> {
     if !matches!(cfg.kind.as_str(), "qbittorrent" | "transmission" | "deluge") {
         return Err("Неизвестный клиент.".into());
     }
-    // пустое поле пароля при сохранении = оставить прежний
     if cfg.pass.is_empty() {
         if let Ok(old) = load_cfg() {
             if old.kind == cfg.kind && old.user == cfg.user {
@@ -131,8 +122,6 @@ pub fn tc_clear() -> Result<(), String> {
     }
 }
 
-// ---------- qBittorrent ----------
-
 async fn qb_login(base: &str, c: &TcConfig) -> Result<String, String> {
     let resp = client()
         .post(format!("{base}/api/v2/auth/login"))
@@ -150,7 +139,6 @@ async fn qb_login(base: &str, c: &TcConfig) -> Result<String, String> {
     if !status.is_success() {
         return Err(format!("qBittorrent ответил {}", status.as_u16()));
     }
-    // при отключённой авторизации для localhost cookie может не быть — это нормально
     Ok(extract_cookie(&cookies, "SID").map(|s| format!("SID={s}")).unwrap_or_default())
 }
 
@@ -171,7 +159,6 @@ async fn qb_add(base: &str, cookie: &str, c: &TcConfig, magnets: &[String]) -> R
         form.push(("tags", c.tags.trim().to_string()));
     }
     if c.paused {
-        // v4 понимает paused, v5 — stopped
         form.push(("paused", "true".into()));
         form.push(("stopped", "true".into()));
     }
@@ -183,8 +170,6 @@ async fn qb_add(base: &str, cookie: &str, c: &TcConfig, magnets: &[String]) -> R
     }
     Ok(())
 }
-
-// ---------- Transmission ----------
 
 fn tr_url(base: &str) -> String {
     if base.ends_with("/rpc") { base.to_string() } else { format!("{base}/transmission/rpc") }
@@ -215,8 +200,6 @@ async fn tr_call(base: &str, c: &TcConfig, session: &mut String, body: &Value) -
     Err("Transmission не выдал сессию.".into())
 }
 
-// ---------- Deluge ----------
-
 async fn dl_call(base: &str, cookie: &str, id: u32, method: &str, params: Value) -> Result<(Value, Vec<String>), String> {
     let mut rb = client().post(format!("{base}/json")).json(&json!({ "method": method, "params": params, "id": id }));
     if !cookie.is_empty() {
@@ -240,7 +223,6 @@ async fn dl_session(base: &str, c: &TcConfig) -> Result<String, String> {
         return Err("Deluge не принял пароль.".into());
     }
     let cookie = extract_cookie(&cookies, "_session_id").map(|s| format!("_session_id={s}")).unwrap_or_default();
-    // веб-интерфейс должен быть подключён к демону
     let (connected, _) = dl_call(base, &cookie, 2, "web.connected", json!([])).await?;
     if connected != json!(true) {
         let (hosts, _) = dl_call(base, &cookie, 3, "web.get_hosts", json!([])).await?;
@@ -249,8 +231,6 @@ async fn dl_session(base: &str, c: &TcConfig) -> Result<String, String> {
     }
     Ok(cookie)
 }
-
-// ---------- общие команды ----------
 
 fn merge_test_cfg(mut cfg: TcConfig) -> Result<TcConfig, String> {
     cfg.url = normalize_base(&cfg.url)?;
@@ -320,19 +300,14 @@ pub async fn tc_add(magnets: Vec<String>) -> Result<usize, String> {
     Ok(magnets.len())
 }
 
-// ---------- ход скачивания («Скачать у себя» для отчёта) ----------
-
 #[derive(Serialize)]
 pub struct TcProgress {
-    /// not_found | downloading | done
     pub state: String,
     pub progress: f64,
     pub speed: u64,
-    /// Только при done: самый крупный видеофайл раздачи.
     pub path: Option<String>,
 }
 
-/// Хэш раздачи из magnet: 40 hex или 32 символа base32 (приводим к hex в нижнем регистре).
 fn magnet_hash(m: &str) -> Option<String> {
     let rest = m.strip_prefix("magnet:?xt=urn:btih:")?;
     let h: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
@@ -363,8 +338,6 @@ fn magnet_hash(m: &str) -> Option<String> {
 
 const VIDEO_EXT: [&str; 7] = ["mkv", "mp4", "avi", "mov", "webm", "m4v", "ts"];
 
-/// Ход скачивания раздачи в qBittorrent (другие клиенты не отслеживаем — там файл указывают вручную).
-/// Когда скачано, возвращает путь к видеофайлу и разрешает его чтение для сборки.
 #[tauri::command(async)]
 pub async fn tc_progress(app: tauri::AppHandle, magnet: String) -> Result<TcProgress, String> {
     use tauri::Manager;

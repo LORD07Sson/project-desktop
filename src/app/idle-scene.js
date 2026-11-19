@@ -1,10 +1,3 @@
-// Экран ожидания: если программой не пользуются N минут (по умолчанию 5), поверх всего встаёт живая сцена —
-// холм с травой под небом, днём облака и солнце, ночью луна и светлячки. Сезон — из настроек оформления:
-// зимой снег, весной сакура и лепестки, осенью листопад, на Хэллоуин — багровое дерево и оранжевые огоньки. Трава качается от ветра и
-// расступается под курсором, примятая полоса медленно выпрямляется. Любая клавиша или «Вернуться» — назад.
-// Всё рисуется WebGL2 без библиотек: небо — полноэкранный треугольник, трава — инстансы лезвий (позиции и
-// изгиб считает вершинный шейдер), след курсора — маленькая текстура «примятости», которую обновляет JS.
-// Сцена не стартует, пока окно свёрнуто, не в фокусе или играет видео/звук, а без фокуса замирает.
 
 const PREF_KEY = "project-idle-scene";
 export const IDLE_CHOICES = [["off", "Выключен"], ["5", "5 мин"], ["10", "10 мин"], ["15", "15 мин"]];
@@ -13,10 +6,9 @@ export function idleSceneMinutes() {
   try { return localStorage.getItem(PREF_KEY) || "5"; } catch (_) { return "5"; }
 }
 export function setIdleSceneMinutes(value) {
-  try { localStorage.setItem(PREF_KEY, value); } catch (_) { /* приватный режим — останется по умолчанию */ }
+  try { localStorage.setItem(PREF_KEY, value); } catch (_) { }
 }
 
-// ---------- геометрия сцены (одна и та же формула холма в JS и в шейдерах) ----------
 
 const HILL_GLSL = `
 float hill(vec2 p) {
@@ -37,7 +29,6 @@ const TARGET = [0, 4.2, -16];
 const FOV = Math.PI / 4;
 const TREE = [1.8, -16.5];
 const BLADES = 150000;
-// Встроенная видеокарта или рисование на процессоре: начинаем с простой травы, не дожидаясь тормозов.
 function isWeakGpu(gl) {
   const info = gl.getExtension("WEBGL_debug_renderer_info");
   const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
@@ -47,11 +38,8 @@ function isWeakGpu(gl) {
 
 const MIN_QUALITY = 0.4;
 const QUALITY_KEY = "project-idle-quality";
-const SEGMENTS = 7;   // звеньев в травинке — изгиб плавный, без изломов
+const SEGMENTS = 7;
 
-// Сезон — тот же, что в Настройках → Внешний вид (season.js, :root[data-season]); «Выкл.» — лето.
-// Цвета травы, земли и кроны, снег, высота травы, доля цветов, оттенок неба и что летает:
-// fall 0 — светлячки и пыльца, 1 — снег, 2 — лепестки или листья (кружатся и падают).
 const SEASON_LOOKS = {
   summer: {
     root: [0.07, 0.18, 0.04], tip: [0.42, 0.7, 0.2], tip2: [0.6, 0.78, 0.28], ground: [0.09, 0.2, 0.05],
@@ -84,18 +72,16 @@ const SEASON_LOOKS = {
     crown: 0.5, fallen: 1, mist: 1, scare: 1, layers: [[0, 140, "field"], [4, 7, "field"], [5, 10, "bats"]],
   },
 };
-// Где роятся частицы слоя: всё поле, у дерева (сыплется с кроны), тыквы у камеры, мыши у дерева
 const AREAS_INIT = { field: [0, -6, 1, 1], tree: [1.8, -16.5, 0.12, 0.2], bats: [1.8, -16.5, 1, 1] };
 
 function moonPhase(date = new Date()) {
   const days = (date.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
-  return ((days / 29.530588) % 1 + 1) % 1;   // 0 — новолуние, 0.5 — полнолуние
+  return ((days / 29.530588) % 1 + 1) % 1;
 }
 function seasonLook() {
   return SEASON_LOOKS[document.documentElement.dataset.season] || SEASON_LOOKS.summer;
 }
 const FLIES = 400;
-// Текстура примятости покрывает луг: x ∈ [-22, 22], z ∈ [-20, 4]
 const TR_W = 192, TR_H = 96, TR_RECT = [-22, -20, 44, 24];
 
 const NOISE_GLSL = `
@@ -111,7 +97,6 @@ float fbm(vec2 p) {
   return v;
 }`;
 
-// Общий хвост фрагментных шейдеров: ночной тон и дымка к горизонту.
 const SHADE_GLSL = `
 uniform float uNight, uSnow, uFlowers, uFallen, uMist;
 uniform vec3 uGround, uRoot, uTip, uTip2, uLeaf, uLeafHi;
@@ -142,17 +127,15 @@ void main() {
   vec3 night = mix(vec3(0.10, 0.17, 0.36), vec3(0.02, 0.05, 0.15), pow(h, 0.8)) * mix(vec3(1.0), uSkyTint, 0.6);
   vec3 c = mix(day, night, uNight);
   vec2 sp = vec2(uv.x * uAspect, uv.y);
-  // Звёзды
   vec2 cell = floor(sp * 90.0);
   vec2 inCell = fract(sp * 90.0) - 0.5 - (vec2(hash(cell + 1.7), hash(cell + 5.3)) - 0.5) * 0.6;
   float star = step(0.993, hash(cell)) * smoothstep(0.16, 0.0, length(inCell)) * (0.6 + 0.4 * sin(uTime * 2.0 + hash(cell + 3.0) * 30.0));
   c += vec3(0.8, 0.85, 1.0) * star * uNight * smoothstep(0.05, 0.3, h);
-  // Луна: настоящая фаза по дате, моря и кратеры, пепельный свет на тёмной стороне, ореол; медленно плывёт
   vec2 moon = vec2((0.66 + 0.012 * sin(uTime * 0.013)) * uAspect, uHorizon + 0.2 + 0.006 * sin(uTime * 0.011));
   float R = 0.026;
   vec2 q = (sp - moon) / R;
   float r2 = dot(q, q);
-  float lit = 0.5 + 0.5 * cos((uPhase - 0.5) * 6.2832);   // доля освещённого диска
+  float lit = 0.5 + 0.5 * cos((uPhase - 0.5) * 6.2832);
   if (r2 < 1.0) {
     vec3 n = vec3(q, sqrt(1.0 - r2));
     float a = uPhase * 6.2832;
@@ -166,18 +149,15 @@ void main() {
   }
   float md = length(sp - moon);
   c += uNight * vec3(0.35, 0.45, 0.75) * (0.03 / (md * 5.0 + 0.04)) * (0.3 + 0.7 * lit) * (0.92 + 0.08 * sin(uTime * 0.7));
-  // Солнце днём: мягкое сияние и медленно вращающиеся лучи
   vec2 sun = vec2(0.18 * uAspect, 1.05);
   vec2 sv = sp - sun;
   float sd = length(sv);
   float ang = atan(sv.y, sv.x);
   float rays = pow(0.5 + 0.5 * sin(ang * 14.0 + uTime * 0.05), 6.0) * 0.5 + pow(0.5 + 0.5 * sin(ang * 9.0 - uTime * 0.04 + 1.0), 8.0) * 0.4;
   c += (1.0 - uNight) * vec3(1.0, 0.95, 0.85) * (0.15 / (sd * 3.0 + 0.4) + rays * 0.12 * smoothstep(0.9, 0.0, sd));
-  // Облака
   vec2 cp = vec2(sp.x * 1.6 + uTime * 0.008, sp.y * 3.2);
   float cl = fbm(cp * 1.4) * 0.6 + fbm(cp * 3.3 + 7.0) * 0.28 + fbm(cp * 9.0 + 3.0) * 0.12;
   float cover = smoothstep(0.5, 0.78, cl) * smoothstep(0.02, 0.25, h);
-  // Объём: сдвинутая к свету выборка — где облако тоньше со стороны света, край светится; низ темнее
   float toLight = fbm((cp + vec2(-0.04, 0.05)) * 1.4) * 0.6 + fbm((cp + vec2(-0.04, 0.05)) * 3.3 + 7.0) * 0.28;
   float lightEdge = clamp((cl - toLight) * 4.0, 0.0, 1.0);
   vec3 cloudLit = mix(vec3(1.0, 0.99, 0.97), vec3(0.3, 0.37, 0.58), uNight);
@@ -186,7 +166,6 @@ void main() {
   float rim = uNight * (0.25 + 0.75 * lit) * smoothstep(0.35, 0.0, length(sp - moon)) * smoothstep(0.85, 0.5, cover) * cover;
   c = mix(c, cloud * (0.9 + 0.1 * cl), cover * mix(0.92, 0.6, uNight));
   c += vec3(0.55, 0.62, 0.8) * rim * 0.9;
-  // Дальние холмы в дымке у горизонта
   float far = uHorizon + 0.025 + 0.02 * fbm(vec2(sp.x * 2.5, 1.0)) + 0.012 * sin(sp.x * 3.0);
   vec3 farc = mix(mix(vec3(0.50, 0.66, 0.52), vec3(0.86, 0.9, 0.95), uSnow) * mix(vec3(1.0), uSkyTint, 2.0), vec3(0.06, 0.12, 0.2), uNight);
   c = mix(c, farc, smoothstep(far + 0.006, far - 0.01, uv.y) * 0.6);
@@ -216,7 +195,6 @@ ${NOISE_GLSL}
 ${SHADE_GLSL}
 void main() {
   vec3 c = uGround * (0.7 + 0.4 * noise(vXZ * 0.8) + 0.15 * noise(vXZ * 6.0) + 0.08 * noise(vXZ * 25.0));
-  // Снег: сугробы (мягкие тени) и искорки, которые вспыхивают на солнце и под луной
   float drift = fbm(vXZ * 0.35);
   vec3 snow = vec3(0.9, 0.94, 1.0) * (0.82 + 0.25 * drift) + vec3(0.0, 0.02, 0.06) * (1.0 - drift);
   vec2 g = floor(vXZ * 45.0);
@@ -229,16 +207,16 @@ void main() {
 }`;
 
 const GRASS_VS = `#version 300 es
-in vec2 aVert;        // x — доля высоты лезвия (0..1), y — сторона (-1..1, у кончика 0)
-in vec4 aInst;        // x, z, случайное число, поворот
+in vec2 aVert;
+in vec4 aInst;
 uniform mat4 uVP;
 uniform vec3 uEye;
 uniform float uTime;
 uniform sampler2D uTrample;
 uniform vec4 uTrRect;
-uniform vec4 uCursor; // x, z, сила, радиус
+uniform vec4 uCursor;
 uniform float uHeight;
-uniform vec3 uClear[8];   // x, z, радиус: где трава примята (тыквы)
+uniform vec3 uClear[8];
 out float vT;
 out float vSeed;
 out float vPress;
@@ -253,7 +231,6 @@ void main() {
   float seed = aInst.z;
   float h = (0.3 + 0.32 * fract(seed * 7.13)) * (1.0 + d * 0.02) * uHeight;
   for (int i = 0; i < 8; i++) if (uClear[i].z > 0.0) h *= mix(0.18, 1.0, smoothstep(uClear[i].z * 0.45, uClear[i].z, distance(base.xz, uClear[i].xy)));
-  // Ширина: у основания чуть уже, в середине шире, к кончику сходится — как у настоящего листа
   float w = (0.03 + d * 0.0035) * (1.0 - t * 0.85) * (0.85 + 0.5 * sin(t * 3.1416) * (1.0 - t));
   vec2 side = vec2(cos(aInst.w), sin(aInst.w));
 
@@ -273,7 +250,6 @@ void main() {
   if (ll > 1.25) lean *= 1.25 / ll;
 
   float bend = min(length(lean), 1.0);
-  // Собственный изгиб травинки (даже в штиль) — каждая гнётся в свою сторону
   lean += side.yx * vec2(-1.0, 1.0) * (0.15 + 0.25 * fract(seed * 5.7));
   vec2 horiz = lean * t * t * h;
   float up = h * t * (1.0 - 0.4 * bend * t);
@@ -283,7 +259,6 @@ void main() {
   vSeed = seed;
   vPress = max(press, push);
   vD = distance(p, uEye);
-  // Нормаль плоскости травинки, наклонённая вместе с изгибом
   vec3 n = normalize(vec3(-side.y, 0.0, side.x));
   vN = normalize(n + vec3(lean.x, 0.0, lean.y) * 0.4 * t);
   vW = p;
@@ -310,11 +285,9 @@ void main() {
     c = k < 0.4 ? vec3(0.92, 0.55, 0.75) : k < 0.75 ? vec3(0.7, 0.55, 0.95) : vec3(0.98, 0.88, 0.4);
   }
   c *= 0.92 + 0.16 * fract(vSeed * 3.1);
-  // Пятна по полю: где-то трава гуще и темнее, где-то выгорела и светлее
   float field = noise(vW.xz * 0.18) * 0.65 + noise(vW.xz * 0.7) * 0.35;
   c *= 0.82 + 0.36 * field;
   c = mix(c, c * vec3(1.08, 1.04, 0.85), smoothstep(0.55, 0.85, field) * 0.5);
-  // Свет: днём солнце сзади слева, ночью луна справа. Рассеянный свет, просвет насквозь против света, блик на кончиках
   vec3 L = normalize(mix(vec3(-0.45, 0.75, -0.5), vec3(0.55, 0.6, -0.6), uNight));
   vec3 V = normalize(uEye - vW);
   vec3 N = faceforward(vN, -V, vN);
@@ -322,14 +295,11 @@ void main() {
   float trans = pow(max(dot(-V, L), 0.0), 3.0) * vT * 0.55;
   float spec = pow(max(dot(reflect(-L, N), V), 0.0), 24.0) * vT * vT * 0.35;
   c = c * diff + c * vec3(1.1, 1.2, 0.7) * trans + vec3(1.0, 0.98, 0.9) * spec * (1.0 - uSnow * 0.5);
-  // Тень у корней: внизу травинки темнее (свет не доходит сквозь густую траву)
   c *= mix(0.45, 1.0, smoothstep(0.0, 0.45, vT));
-  // Осень: у корней опавшие листья; зима: иней по кончикам; Хэллоуин: туман стелется по земле
   c = mix(c, mix(uLeaf, uLeafHi, fract(vSeed * 29.0)), uFallen * step(0.72, fract(vSeed * 7.7)) * (1.0 - smoothstep(0.12, 0.35, vT)));
   c = mix(c, vec3(0.95, 0.97, 1.0), uSnow * smoothstep(0.7, 1.0, vT) * step(0.4, fract(vSeed * 5.3)) * 0.6);
   c = nightTint(c);
   c = mix(c, mix(vec3(0.62, 0.58, 0.7), vec3(0.16, 0.13, 0.24), uNight), uMist * (1.0 - smoothstep(0.0, 0.75, vT)) * 0.65);
-  // Примятая трава подсвечивается: днём чуть светлее, ночью — мерцающим светом
   c += vPress * vT * mix(vec3(0.08, 0.1, 0.04), vec3(0.35, 0.7, 0.4), uNight);
   o = vec4(fog(c, vD), 1.0);
 }`;
@@ -344,7 +314,6 @@ out vec2 vUv;
 out float vD;
 void main() {
   vUv = aCorner;
-  // Всё дерево чуть гнётся по ветру: верх сильнее, порывы волнами
   float gust = 0.5 + 0.5 * sin(uTime * 0.6 + 1.3) * sin(uTime * 0.23);
   float bendX = (sin(uTime * 0.9) * 0.05 + gust * 0.09) * aCorner.y * aCorner.y;
   vec3 p = uTree + vec3(aCorner.x * 1.9 + bendX, aCorner.y * 4.2 - 0.2, 0.0);
@@ -366,7 +335,6 @@ float seg(vec2 p, vec2 a, vec2 b, float ra, float rb) {
 }
 float box(vec2 p, vec2 b) { vec2 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
 float h1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
-// Слой рисунка: кладёт фигуру с расстоянием d поверх уже нарисованного; края сглажены по пикселю, по кромке — тонкий контур
 void lay(inout vec4 acc, float d, vec3 c) {
   float fw = max(fwidth(d), 1e-4);
   float k = smoothstep(fw, -fw, d);
@@ -376,8 +344,6 @@ void lay(inout vec4 acc, float d, vec3 c) {
   acc.a = max(acc.a, k);
 }
 
-// Пугало (Хэллоуин): шест с перекладиной, рубаха в клетку с заплаткой и рваным низом, солома из рукавов и из-под
-// рубахи, голова-мешок с вышитым лицом (ночью глаза и рот светятся), шляпа ведьмы набекрень. Всё в метрах, от земли.
 vec4 scarecrow(vec2 m, float t, out float glow) {
   vec4 acc = vec4(0.0);
   float sway = sin(t * 0.9) * 0.035 + sin(t * 2.3) * 0.012;
@@ -386,7 +352,6 @@ vec4 scarecrow(vec2 m, float t, out float glow) {
   vec3 straw = vec3(0.93, 0.78, 0.36);
   lay(acc, seg(m, vec2(0.0, -0.3), vec2(0.0, 2.0), 0.055, 0.045), wood);
   lay(acc, seg(m, vec2(-0.8, 1.58), vec2(0.8, 1.58), 0.04, 0.04), wood * 0.9);
-  // Солома: веером из рукавов, пучком из-под рубахи и у шеи; кончики треплет ветер
   float wind = sin(t * 3.0) * 0.04;
   float st = 1e3;
   for (int i = 0; i < 2; i++) {
@@ -399,7 +364,6 @@ vec4 scarecrow(vec2 m, float t, out float glow) {
   vec2 bp = m - vec2(0.0, 1.02);
   st = min(st, max(length(bp * vec2(1.0, 1.8)) - 0.26 - 0.05 * sin(atan(bp.y, bp.x) * 31.0 + t), bp.y));
   lay(acc, st, straw * (0.85 + 0.2 * sin(m.x * 90.0 + m.y * 40.0)));
-  // Рубаха: корпус и рукава вдоль перекладины, рукава провисают и колышутся; низ рваный
   float fl = sin(t * 3.1 + m.x * 6.0) * 0.025 * abs(m.x);
   float sleeve = box(vec2(m.x, m.y - 1.56 + 0.05 * abs(m.x) - fl), vec2(0.66, 0.1 + 0.035 * abs(m.x)));
   float body = box(m - vec2(0.0, 1.3), vec2(0.27 + 0.04 * (1.5 - m.y), 0.31));
@@ -408,11 +372,10 @@ vec4 scarecrow(vec2 m, float t, out float glow) {
   float checks = step(0.5, fract(m.x * 7.0)) + step(0.5, fract(m.y * 7.0));
   vec3 shirt = vec3(0.62, 0.15, 0.11) * (checks == 1.0 ? 0.72 : 1.0);
   shirt = mix(shirt, vec3(0.95, 0.75, 0.3), (1.0 - smoothstep(0.0, 0.03, abs(fract(m.x * 7.0 + 0.25) - 0.5))) * 0.25);
-  shirt *= mix(0.8, 1.05, smoothstep(-0.02, 0.02, m.x + 0.05));   // свет слева, тень справа
+  shirt *= mix(0.8, 1.05, smoothstep(-0.02, 0.02, m.x + 0.05));
   lay(acc, cloth, shirt);
-  lay(acc, box(m - vec2(0.13, 1.22), vec2(0.075, 0.07)), vec3(0.32, 0.42, 0.62));   // заплатка
-  lay(acc, box(m - vec2(0.0, 1.69), vec2(0.075, 0.02)), vec3(0.62, 0.5, 0.3));       // верёвка на шее
-  // Голова-мешок: мешковина в мелкую клетку, вышитые глаза-треугольники и рот стежками
+  lay(acc, box(m - vec2(0.13, 1.22), vec2(0.075, 0.07)), vec3(0.32, 0.42, 0.62));
+  lay(acc, box(m - vec2(0.0, 1.69), vec2(0.075, 0.02)), vec3(0.62, 0.5, 0.3));
   vec2 hp = (m - vec2(0.0, 1.88)) * vec2(1.0, 0.92);
   vec3 burlap = vec3(0.8, 0.67, 0.45) * (0.9 + 0.08 * sin(m.x * 160.0) * sin(m.y * 160.0));
   burlap *= mix(0.82, 1.05, smoothstep(-0.05, 0.05, m.x + 0.06));
@@ -427,7 +390,6 @@ vec4 scarecrow(vec2 m, float t, out float glow) {
   vec3 dark = vec3(0.12, 0.07, 0.05);
   lay(acc, face, mix(dark, vec3(1.0, 0.62, 0.15), uNight));
   glow = uNight * smoothstep(0.02, -0.01, face);
-  // Шляпа ведьмы набекрень: поля, конус с загнутой макушкой, оранжевая лента с пряжкой
   float th = 0.16 + sin(t * 1.1) * 0.03;
   vec2 h = mat2(cos(th), sin(th), -sin(th), cos(th)) * (m - vec2(0.03, 2.04));
   float brim = length(h * vec2(1.0, 6.0)) - 0.36;
@@ -449,8 +411,7 @@ void main() {
     o = vec4(fog(nightTint(sc.rgb) + vec3(1.0, 0.55, 0.12) * glow * 0.9, vD), sc.a);
     return;
   }
-  vec2 asp = vec2(1.0, 2.2);   // квадрат 3.8 × 4.2 м — круг в мировых единицах
-  // Ветки качаются: чем выше и дальше от ствола, тем сильнее; у каждой свой ритм
+  vec2 asp = vec2(1.0, 2.2);
   vec2 sw = vec2(sin(uTime * 1.3 + p.y * 3.0) * 0.012, 0.0) * p.y;
   vec2 q = p - sw;
   float wood = seg(q * asp, vec2(0.0, 0.0), vec2(0.03, 0.62) * asp, 0.09, 0.04);
@@ -462,8 +423,6 @@ void main() {
   wood = min(wood, seg(q * asp, vec2(0.26, 0.64) * asp, vec2(0.6, 0.63) * asp, 0.018, 0.007));
   wood = min(wood, seg(q * asp, vec2(-0.3, 0.66) * asp, vec2(-0.36, 0.86) * asp, 0.012, 0.005));
   wood = min(wood, seg(q * asp, vec2(0.3, 0.7) * asp, vec2(0.4, 0.88) * asp, 0.012, 0.005));
-  // Крона: ~30 гроздей листвы внутри общего силуэта (эллипс над стволом); каждая качается со своим запаздыванием.
-  // Внутренние и нижние грозди в тени, верхние и наружные на свету — получается объём, а не набор шаров
   float crown = 1e3, shade = 0.0, depth = 0.0;
   for (int i = 0; i < 30; i++) {
     float fi = float(i);
@@ -477,34 +436,32 @@ void main() {
   }
   float rustle = fbm(p * 11.0 + vec2(uTime * 0.35, uTime * 0.12));
   crown += (rustle - 0.5) * 0.05 + (1.0 - uCrown) * 0.06;
-  // Осенью крона редкая — сквозь неё видны ветки
   crown += step(uCrown, fbm(p * 3.5 + 5.0) * 1.2) * 0.2 * (1.0 - uCrown);
   if (uCrown < 0.01) crown = 1e3;
   float dd = min(wood, crown);
   float fw = max(fwidth(dd), 1e-4);
   float a = smoothstep(fw, -fw, dd);
   if (a < 0.02) discard;
-  float outline = 1.0 - smoothstep(-2.6 * fw, -1.2 * fw, dd);   // 1 внутри, 0 на кромке шириной ~1.5 пикселя
+  float outline = 1.0 - smoothstep(-2.6 * fw, -1.2 * fw, dd);
   float lightK = shade + (rustle - 0.5) * 0.3 - depth * 0.35;
   float tone = smoothstep(-0.18, -0.12, lightK) * 0.55 + smoothstep(0.38, 0.44, lightK) * 0.45;
   vec3 leaf = mix(uLeaf * 0.8, uLeafHi, tone);
   leaf *= 0.82 + 0.25 * smoothstep(0.55, 0.95, p.y);
   vec3 bark = vec3(0.22, 0.15, 0.1) * (0.75 + 0.35 * noise(p * vec2(30.0, 6.0)) + 0.2 * noise(p * vec2(120.0, 14.0)));
-  bark *= 1.0 - 0.35 * smoothstep(0.55, 0.75, noise(p * vec2(90.0, 5.0)));   // трещины вдоль ствола
+  bark *= 1.0 - 0.35 * smoothstep(0.55, 0.75, noise(p * vec2(90.0, 5.0)));
   vec3 c = crown < wood ? leaf : bark;
-  // Снег лежит на верхней стороне веток и кроны
   c = mix(c, vec3(0.94, 0.96, 1.0), uSnow * (crown < wood ? smoothstep(0.55, 0.9, p.y + fbm(p * 11.0) * 0.25) : step(0.5, noise(p * 40.0)) * 0.9));
   c = mix(c * 0.35, c, mix(0.3, 1.0, outline));
   o = vec4(fog(nightTint(c), vD), a);
 }`;
 
 const FLY_VS = `#version 300 es
-in vec4 aFly;   // x ∈ [-12, 12], z ∈ [-15, 3], высота над травой, случайное число
+in vec4 aFly;
 uniform mat4 uVP;
 uniform vec3 uEye;
 uniform float uTime, uNight, uPx, uFall;
 uniform vec2 uFlySize;
-uniform vec4 uArea;   // центр x, z и масштаб по x, z — куда сжать облако частиц (у дерева, у камеры)
+uniform vec4 uArea;
 out float vGlow;
 out float vSeed;
 out float vFlap;
@@ -514,13 +471,11 @@ void main() {
   vec3 p = vec3(uArea.x + aFly.x / 12.0 * uArea.z * 12.0, 0.0, uArea.y + (aFly.y + 6.0) / 9.0 * uArea.w * 9.0);
   float size = mix(uFlySize.x, uFlySize.y, uNight);
   if (uFall < 0.5) {
-    // Светлячки ночью, пыльца днём: плавают над травой
     p += vec3(sin(uTime * 0.3 + s * 10.0) * 0.7, 0.0, cos(uTime * 0.27 + s * 5.0) * 0.7);
     p.y = hill(p.xz) + aFly.z + sin(uTime * 0.5 + s * 7.0) * 0.25;
     float blink = pow(0.5 + 0.5 * sin(uTime * (0.8 + s) + s * 20.0), 3.0);
     vGlow = mix(0.3, blink, uNight);
   } else if (uFall < 2.5) {
-    // Падают и кружатся: снег медленнее и прямее, листья и лепестки качает сильнее
     float sway = uFall > 1.5 ? 0.6 : 0.25;
     p.x += sin(uTime * (1.1 + s) + s * 9.0) * sway;
     p.z += cos(uTime * (0.7 + s) + s * 4.0) * sway * 0.5;
@@ -528,7 +483,6 @@ void main() {
     size *= 0.6 + 0.8 * fract(s * 17.0);
     vGlow = mix(0.95, 0.7, uNight);
   } else if (uFall > 4.5) {
-    // Летучие мыши: кружат над деревом рваными петлями, иногда пролетают на фоне луны
     float w = 0.55 + 0.35 * s;
     float a = uTime * w + s * 6.2832;
     float R = 1.8 + 2.5 * fract(s * 7.0);
@@ -539,14 +493,13 @@ void main() {
     size = 0.42;
     vGlow = 1.0;
   } else {
-    // Тыквы: стоят в траве, ночью внутри горит свеча
     p.y = hill(p.xz) + 0.34;
     size = 0.75;
     vGlow = 1.0;
   }
   float d = distance(p, uEye);
   vSeed = s;
-  vFlap = sin(uTime * 16.0 + s * 40.0);   // взмах крыльев летучей мыши
+  vFlap = sin(uTime * 16.0 + s * 40.0);
   gl_PointSize = clamp(size * uPx / d, 1.0, 90.0);
   gl_Position = uVP * vec4(p, 1.0);
 }`;
@@ -564,7 +517,6 @@ void main() {
   vec3 c = mix(uFlyDay, uFlyNight, uNight);
   float a;
   if (uFall > 4.5) {
-    // Летучая мышь: тело, уши, крылья с зубчатым краем, машут вверх-вниз
     vec2 b = q * 2.0;
     float flap = vFlap;
     float ax = abs(b.x);
@@ -575,7 +527,6 @@ void main() {
     a = min(1.0, wing + body + ears);
     c = mix(vec3(0.06, 0.04, 0.08), vec3(0.03, 0.02, 0.05), uNight);
   } else if (uFall > 3.5) {
-    // Тыква: рёбра, хвостик, ночью — светящиеся глаза и улыбка
     vec2 b = q * vec2(2.0, 2.5) + vec2(0.0, 0.12);
     float body = smoothstep(1.0, 0.92, length(b * vec2(0.8, 1.0)));
     float ribs = 0.75 + 0.25 * abs(sin(b.x * 6.0));
@@ -591,19 +542,17 @@ void main() {
     c += vec3(1.0, 0.5, 0.1) * uNight * 0.25 * smoothstep(1.0, 0.0, r);
     a = max(a, uNight * 0.3 * smoothstep(1.0, 0.3, r));
   } else if (uFall > 1.5) {
-    // Лепесток или лист: плотная капля, у каждого свой оттенок
     vec2 l = q * vec2(2.0, 3.2);
     a = smoothstep(1.0, 0.8, length(l)) * vGlow;
     c *= 0.75 + 0.5 * fract(vSeed * 13.0);
   } else if (uFall > 0.5) {
-    a = smoothstep(1.0, 0.35, r) * vGlow;   // снежинка — мягкая
+    a = smoothstep(1.0, 0.35, r) * vGlow;
   } else {
-    a = pow(max(1.0 - r, 0.0), 2.2) * vGlow;   // светлячок — свечение
+    a = pow(max(1.0 - r, 0.0), 2.2) * vGlow;
   }
   o = vec4(c, a);
 }`;
 
-// ---------- матрицы ----------
 
 function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
 function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
@@ -628,7 +577,6 @@ function camera(aspect) {
   return { vp: mul(proj, view), x, y, z };
 }
 
-// ---------- WebGL ----------
 
 function program(gl, vs, fs) {
   const make = (type, src) => {
@@ -704,7 +652,6 @@ function buildScene(canvas) {
   gl.bindVertexArray(flyVao);
   const fl = new Float32Array(FLIES * 4);
   for (let i = 0; i < FLIES; i++) fl.set([(Math.random() * 2 - 1) * 12, 3 - Math.random() * 18, 0.15 + Math.random() * 1.4, Math.random()], i * 4);
-  // Тыквы стоят на заранее выбранных местах переднего плана (в кадре, не друг за другом); трава вокруг примята
   const PUMPKINS = [[-1.7, 1.9], [1.5, 2.3], [-0.3, 0.7], [2.7, 0.1], [-2.9, -0.5], [0.9, -1.3], [-1.3, -2.7]];
   const clear = new Float32Array(24);
   {
@@ -723,7 +670,6 @@ function buildScene(canvas) {
   buffer(gl, flies, "aFly", fl, 4);
   gl.bindVertexArray(null);
 
-  // Примятость: r,g — направление наклона, b — сила. Пишется из JS каждый кадр.
   const trTex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, trTex);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, TR_W, TR_H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -769,10 +715,8 @@ function buildScene(canvas) {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TR_W, TR_H, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
   }
 
-  // Качество: 1 — родное разрешение экрана; если видеокарта не успевает, плавно опускается (до 0.5)
   let quality = 1;
   function setQuality(q) { quality = Math.max(MIN_QUALITY, Math.min(1, q)); resize(); }
-  // На слабой видеокарте тормозит не столько разрешение, сколько число травинок. Они раскиданы случайно, поэтому часть из них — та же трава, только реже.
   const bladeCount = () => Math.round(BLADES * (0.35 + 0.65 * (quality - MIN_QUALITY) / (1 - MIN_QUALITY)));
   let cam = camera(1), aspect = 1, horizon = 0.42;
   function resize() {
@@ -788,7 +732,6 @@ function buildScene(canvas) {
     horizon = (cy / cw) * 0.5 + 0.5;
   }
 
-  // Луч из камеры через точку экрана (0..1) — до пересечения с холмом
   function pick(sx, sy) {
     const t = Math.tan(FOV / 2);
     const nx = (sx * 2 - 1) * t * aspect, ny = (1 - sy * 2) * t;
@@ -800,7 +743,6 @@ function buildScene(canvas) {
     return null;
   }
 
-  // Юниформы сезона: каждой программе — те, что у неё есть
   const look = seasonLook();
   const phase = moonPhase();
   const AREAS = AREAS_INIT;
@@ -887,7 +829,6 @@ function buildScene(canvas) {
     gl.bindVertexArray(flyVao);
     let first = 0;
     for (const [mode, count, area] of look.layers) {
-      // Светлячки и снег светятся (сложение), листья, мыши и тыквы — обычная прозрачность
       if (mode === 0 || mode === 1) gl.blendFunc(gl.SRC_ALPHA, gl.ONE); else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.uniform1f(flies.u.uFall, mode);
       gl.uniform4fv(flies.u.uArea, AREAS[area]);
@@ -904,7 +845,6 @@ function buildScene(canvas) {
   return { resize, pick, stamp, draw, dispose, setQuality, quality: () => quality, weakGpu: () => isWeakGpu(gl) };
 }
 
-// ---------- экран ----------
 
 let lastActive = Date.now();
 let current = null;
@@ -947,17 +887,14 @@ export function showIdleScene() {
   tickText();
   const textTimer = setInterval(tickText, 15000);
 
-  // Качество помним: на слабом ноутбуке экран сразу открывается плавным, а не тормозит первые секунды.
-  try { const saved = Number(localStorage.getItem(QUALITY_KEY)); if (saved) scene.setQuality(saved); else if (scene.weakGpu()) scene.setQuality(0.55); } catch (_) { /* начнём с полного */ }
-  const saveQuality = () => { try { localStorage.setItem(QUALITY_KEY, String(scene.quality())); } catch (_) { /* не запомнится */ } };
+  try { const saved = Number(localStorage.getItem(QUALITY_KEY)); if (saved) scene.setQuality(saved); else if (scene.weakGpu()) scene.setQuality(0.55); } catch (_) { }
+  const saveQuality = () => { try { localStorage.setItem(QUALITY_KEY, String(scene.quality())); } catch (_) { } };
   let frameAvg = 1 / 60, qualityAt = window.performance.now(), droppedAt = -Infinity;
   const frame = now => {
     const dt = Math.min(0.1, (now - prev) / 1000);
     prev = now;
     night += (nightGoal - night) * Math.min(1, dt * 1.6);
-    // Автоподстройка: средний кадр дольше 25 мс — снижаем разрешение, быстрее 14 мс — поднимаем обратно
     frameAvg += (dt - frameAvg) * 0.05;
-    // Вниз быстро; вверх редко и только если давно не тормозило, иначе качество качается туда-сюда и каждый раз даёт рывок.
     if (now - qualityAt > 1200 && frameAvg > 0.022 && scene.quality() > MIN_QUALITY) {
       scene.setQuality(scene.quality() - 0.15); qualityAt = droppedAt = now; frameAvg = 1 / 60; saveQuality();
     } else if (now - qualityAt > 5000 && now - droppedAt > 60000 && frameAvg < 0.012 && scene.quality() < 1) {

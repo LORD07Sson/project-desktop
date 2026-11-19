@@ -1,6 +1,3 @@
-// Окно «Собрать финал» в десктопе: выбор видео, субтитров, дорожек даббера (несколько), режима звука и профиля качества —
-// и запуск сборки прямо отсюда, без кнопок в Telegram. Сервер: GET /api/report/{id}/assemble-options, POST …/assemble/start.
-// Саму сборку ведёт бот (задание забирается за пару секунд), ход виден в карточке отчёта (startAssemblyWatch), отмена — там же.
 
 import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
@@ -8,20 +5,18 @@ import { can } from "./state.js";
 import { getLocalVideo } from "./local-video.js";
 import { localRenderSupport, prepareLocalRender, describeTools } from "./local-render.js";
 
-// Профиль качества по умолчанию. Теперь: тот, что выбирали в прошлый раз (если он ещё есть), иначе «Свой
-// профиль», иначе первый.
 const LAST_PROFILE_KEY = "project-assemble-profile";
-const LAST_WHERE_KEY = "project-assemble-where";   // «server» / «local» — где собирали в прошлый раз
+const LAST_WHERE_KEY = "project-assemble-where";
 function defaultProfile(profiles) {
   let last = null;
-  try { last = JSON.parse(localStorage.getItem(LAST_PROFILE_KEY) || "null"); } catch (_) { /* нет памяти — не беда */ }
+  try { last = JSON.parse(localStorage.getItem(LAST_PROFILE_KEY) || "null"); } catch (_) { }
   const byName = last && profiles.find(p => p.name === last.name);
   if (byName) return byName.index;
   const own = profiles.find(p => /^свой профиль/i.test(String(p.name || "")));
   return (own || profiles[0] || {}).index;
 }
 function rememberProfile(p) {
-  try { if (p) localStorage.setItem(LAST_PROFILE_KEY, JSON.stringify({ name: p.name })); } catch (_) { /* не запомнится */ }
+  try { if (p) localStorage.setItem(LAST_PROFILE_KEY, JSON.stringify({ name: p.name })); } catch (_) { }
 }
 
 export async function openAssembleDialog(publicId) {
@@ -36,7 +31,6 @@ export async function openAssembleDialog(publicId) {
     return false;
   }
 
-  // Видео, которое качается/лежит на этом компьютере: на сервер оно не загружается, собрать можно только «у себя».
   const localVideo = getLocalVideo(publicId);
   const hasLocalVideo = !!localVideo && localVideo.state !== "lost";
   if (hasLocalVideo && opts.missing) opts.missing = opts.missing.filter(m => !/видео/i.test(m));
@@ -44,8 +38,8 @@ export async function openAssembleDialog(publicId) {
   return new Promise(resolve => {
     let mode = "replace";
     
-    let coverImage = null;  // {file_id, name, url} после загрузки своей картинки
-    const finish = started => { resolve(started); dismissSheet(overlay); };  // сначала ответ: закрытие шлёт «sheet-dismissed» → false
+    let coverImage = null;
+    const finish = started => { resolve(started); dismissSheet(overlay); };
     overlay.addEventListener("sheet-dismissed", () => resolve(false));
 
     if (opts.missing && opts.missing.length) {
@@ -126,7 +120,6 @@ export async function openAssembleDialog(publicId) {
         </div>
         <label class="ar-row ad-pick" id="ad-up-raw-row" hidden><input type="checkbox" id="ad-up-raw"><b>Загрузить и равку в отчёт после сборки</b>
           <span class="ar-meta">видео с компьютера уйдёт на сервер отдельным файлом — это долго, зато исходник будет в отчёте</span></label>
-        <!-- Список людей длинный (вся команда) — свёрнут в одну строку, чтобы не отодвигать «Где собирать» и «Качество». -->
         <details class="ad-to">
           <summary><span class="ar-label" style="display:inline;">Кому ещё прислать</span> <span class="ad-to-sum" id="ad-to-sum">только мне</span></summary>
           <p class="ar-hint" style="margin:6px 0;">Готовое видео всегда ложится в отчёт и приходит вам; отметьте, кому ещё прислать в личку.</p>
@@ -142,7 +135,6 @@ export async function openAssembleDialog(publicId) {
         <button class="btn primary" id="ad-start">🎬 Собрать финал</button>
       </div>`;
 
-    // Предпросмотр имени: название как введено + расширение профиля.
     const nameInput = sheet.querySelector("#ad-file-name");
     const nameHint = sheet.querySelector("#ad-file-name-hint");
     const cleanStem = raw => String(raw || "").replace(/[\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/^[ .]+|[ .]+$/g, "").slice(0, 80);
@@ -160,13 +152,10 @@ export async function openAssembleDialog(publicId) {
     profileSel.addEventListener("change", () => { refreshDesc(); paintEstimate(); });
     refreshDesc();
 
-    // Примерный размер готового файла: сервер читает выбранное видео отчёта (длительность, битрейт) и считает по профилям.
     const estBox = sheet.querySelector("#ad-est");
     const fmtSize = n => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : `${Math.round(n / 1048576)} МБ`);
     const fmtDur = sec => { sec = Math.round(sec || 0); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
     let estimate = null;
-    // Время рендера: на сервере — оценка сервера (2 ядра); у себя на NVENC видеокарта кодирует примерно в 7–14 раз быстрее реального
-    // времени (замер на RTX 3070: ~13×, с запасом на субтитры и логотип); без NVENC — оценка по процессору, как на сервере.
     function renderRange(e) {
       const local = typeof where === "string" && where === "local";
       if (local && localInfo.nvenc && estimate && estimate.duration > 0) {
@@ -191,7 +180,6 @@ export async function openAssembleDialog(publicId) {
         <span>${renderTxt}</span>
         <span>${e.over_limit ? "Может не поместиться в Telegram (лимит 2 ГБ) — выберите профиль полегче." : "Помещается в Telegram (лимит 2 ГБ)."}</span>
         <small>${esc(srcInfo)}. Интро и склейка добавят своё; точность ±30% для режима CRF, ±8% для заданного битрейта.</small>`;
-      // подписи профилей в списке — тоже с размером
       [...profileSel.options].forEach(o => {
         const x = estimate.estimates.find(y => String(y.index) === o.value);
         const base = (opts.profiles.find(p => String(p.index) === o.value) || {}).name || o.textContent;
@@ -201,8 +189,6 @@ export async function openAssembleDialog(publicId) {
       });
     }
     const selVideo = () => { const c = sheet.querySelector('input[name="ad-video"]:checked'); return c ? c.value : ""; };
-    // Сервер читает видео (ffprobe) и может не успеть или временно не отвечать — поэтому несколько попыток подряд с паузой,
-    // а не одна. Устаревший ответ (выбрали другое видео, пока шёл прежний запрос) отбрасывается.
     const EST_TRIES = 5;
     let estRun = 0;
     async function loadEstimate() {
@@ -235,7 +221,6 @@ export async function openAssembleDialog(publicId) {
         estBox.querySelector("[data-est-retry]").addEventListener("click", loadEstimate);
       }
     }
-    // Вернулась сеть — пробуем сами, не заставляя нажимать кнопку.
     const onOnline = () => { if (!estimate && overlay.isConnected) loadEstimate(); };
     window.addEventListener("online", onOnline);
     overlay.addEventListener("sheet-dismissed", () => window.removeEventListener("online", onOnline));
@@ -264,7 +249,6 @@ export async function openAssembleDialog(publicId) {
           coverImage = { file_id: up.file_id, name: up.name };
           label.textContent = up.name || file.name;
           const img = sheet.querySelector("#ad-cover-thumb");
-          // Превью только для разрешённых типов картинок и только по blob-ссылке.
           const blobUrl = /^image\/(png|jpeg|webp)$/.test(file.type) ? URL.createObjectURL(file) : "";
           if (blobUrl.startsWith("blob:")) { img.src = blobUrl; img.hidden = false; } else img.hidden = true;
           sheet.querySelector("#ad-cover-clear").hidden = false;
@@ -288,7 +272,6 @@ export async function openAssembleDialog(publicId) {
       if (typeof syncWhere === "function") syncWhere();
     });
     sheet.querySelector("[data-close]").addEventListener("click", () => finish(false));
-    // Свёрнутый список «Кому ещё прислать»: в заголовке — кого отметили.
     const toSum = sheet.querySelector("#ad-to-sum");
     const paintTo = () => {
       const names = [...sheet.querySelectorAll("[data-ad-to]:checked")].map(c => c.dataset.adName);
@@ -296,7 +279,6 @@ export async function openAssembleDialog(publicId) {
     };
     sheet.querySelectorAll("[data-ad-to]").forEach(c => c.addEventListener("change", paintTo));
 
-    // «изменить свой профиль» — раздел «Сборка финала» в настройках; когда настройки закроют, список профилей обновится.
     sheet.querySelector("#ad-prof-edit").addEventListener("click", () => {
       document.getElementById("open-settings")?.click();
       setTimeout(() => {
@@ -319,19 +301,17 @@ export async function openAssembleDialog(publicId) {
         profileSel.innerHTML = opts.profiles.map(p => `<option value="${p.index}">${esc(p.name)}</option>`).join("");
         profileSel.value = opts.profiles.some(p => String(p.index) === keep) ? keep : String(defaultProfile(opts.profiles));
         refreshDesc(); paintName(); paintEstimate();
-      } catch (_) { /* старый список остаётся — им тоже можно собрать */ }
+      } catch (_) { }
     }
 
-    // «У себя»: только в приложении, где нашёлся кодировщик; интро, склейка и архивы с дорожками пока только на сервере.
-    // Выбор запоминается; если его ещё не было, а видеокарта NVIDIA готова — сразу «У себя» (сервер — 2 ядра процессора).
     let where = "server";
-    let wherePicked = false;   // человек сам нажал «На сервере» / «У себя» — больше не переключаем за него
+    let wherePicked = false;
     const savedWhere = (() => { try { return localStorage.getItem(LAST_WHERE_KEY); } catch (_) { return null; } })();
     let localInfo = { ok: false, nvenc: false, pending: true };
     const whereHint = sheet.querySelector("#ad-where-hint");
     const localBtn = sheet.querySelector("#ad-where-local");
     const syncWhere = () => {
-      const mustLocal = selVideo() === "local";   // видео только на этом компьютере — на сервере собрать нельзя
+      const mustLocal = selVideo() === "local";
       const serverBtn = sheet.querySelector('#ad-where [data-where="server"]');
       sheet.querySelector("#ad-up-raw-row").hidden = !mustLocal;
       localBtn.disabled = !localInfo.ok;
@@ -378,7 +358,7 @@ export async function openAssembleDialog(publicId) {
     const start = async (withPost) => {
       startBtns().forEach(b => { b.disabled = true; });
       rememberProfile(opts.profiles.find(p => String(p.index) === profileSel.value));
-      if (selVideo() !== "local") { try { localStorage.setItem(LAST_WHERE_KEY, where); } catch (_) { /* не запомнится */ } }
+      if (selVideo() !== "local") { try { localStorage.setItem(LAST_WHERE_KEY, where); } catch (_) { } }
       try {
         const body = {
           post: withPost,
@@ -397,7 +377,7 @@ export async function openAssembleDialog(publicId) {
           send_to: [...sheet.querySelectorAll("[data-ad-to]:checked")].map(c => Number(c.dataset.adTo)),
         };
         if (where === "local") {
-          if (selVideo() === "local" && sheet.querySelector("#ad-up-raw").checked) body.upload_raw = true;   // только для приложения: сервер ключ не читает
+          if (selVideo() === "local" && sheet.querySelector("#ad-up-raw").checked) body.upload_raw = true;
           finish({ local: true, selection: body, post: withPost });
           return;
         }

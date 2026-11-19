@@ -21,11 +21,10 @@ function fmtDur(s) {
 }
 
 async function errorText(res) {
-  try { const j = await res.json(); if (j.detail) return j.detail; } catch (_) { /* не json */ }
+  try { const j = await res.json(); if (j.detail) return j.detail; } catch (_) { }
   return `HTTP ${res.status}`;
 }
 
-// Фильтр диалога сохранения под реальное расширение: архив сохраняется не как mp4.
 function saveFilter(ext) {
   const e = String(ext || "mp4").toLowerCase().replace(/^\./, "");
   return [{ name: ["zip", "rar", "7z"].includes(e) ? `Архив ${e.toUpperCase()}` : `Файл ${e.toUpperCase()}`, extensions: [e] }];
@@ -40,7 +39,6 @@ function engineOf(c) {
 const ENGINE_KEY = "project_parser_engine";
 const ENGINE_NAMES = { nm3u8: "N_m3u8DL-RE", ytdlp: "yt-dlp", megatools: "megatools", direct: "напрямую", torrent: "торрент" };
 
-// Строка прогресса торрента в очереди: сиды/пиры, скорость, остаток времени.
 function torrentStats(j) {
   const peers = `сиды ${j.seeds || 0} · пиры ${j.peers || 0}`;
   if (j.phase === "metadata") return `ищу участников раздачи · ${peers}`;
@@ -113,7 +111,6 @@ export async function loadParser() {
     return true;
   }
   body.innerHTML = layout();
-  // Очередь загрузок: объявлено до первого loadHistory() — иначе let в «мёртвой зоне» и ReferenceError.
   const JOB_STATUS = { queued: "в очереди", analyzing: "ищу поток", running: "загружается", done: "готово", error: "ошибка", cancelled: "отменено" };
   const JOB_OPEN = new Set(["queued", "analyzing", "running"]);
   let historyTimer = null;
@@ -127,7 +124,6 @@ export async function loadParser() {
 
   form.addEventListener("submit", e => { e.preventDefault(); analyze(false); });
 
-  // Каталог: кнопка видна всем, без входа она спрашивает логин и пароль. Подписи вкладок приходят только после входа.
   const catalogBtn = $("#pr-catalog");
   let access = { unlocked: false, settings: false, labels: {} };
   const settingsBtn = $("#pr-settings-btn");
@@ -138,7 +134,7 @@ export async function loadParser() {
     try {
       const r = await fetch(`${API_BASE}/parser/access/status`, { headers: clientHeaders() });
       if (r.ok) access = { ...access, ...(await r.json()) };
-    } catch (_) { /* без каталога */ }
+    } catch (_) { }
     $("#pr-set-session").hidden = !access.unlocked;
     if (access.settings && !closeOwner) { ownerBox.hidden = false; closeOwner = mountOwnerAccounts(ownerBox); }
     if (!access.settings && closeOwner) { closeOwner(); closeOwner = null; ownerBox.hidden = true; ownerBox.innerHTML = ""; }
@@ -146,11 +142,11 @@ export async function loadParser() {
   refreshAccess();
   settingsBtn.addEventListener("click", () => {
     const open = settingsBox.hidden;
-    if (open) refreshAccess();  // доступ мог смениться (предпросмотр роли, выход)
+    if (open) refreshAccess();
     settingsBox.hidden = !open;
     settingsBtn.setAttribute("aria-expanded", String(open));
     settingsBtn.classList.toggle("on", open);
-    if (!open) closeOwner?.();  // закрыли панель — пароль владельца спросим снова
+    if (!open) closeOwner?.();
   });
   $("#pr-catalog-logout").addEventListener("click", async () => {
     await catalogLogout();
@@ -158,10 +154,9 @@ export async function loadParser() {
     await refreshAccess();
     toast("Вы вышли из каталога", "info");
   });
-  // В каталоге панель поиска по ссылке не нужна: прячем её и возвращаем при выходе или выборе поста.
   const hero = $("#pr-hero");
   catalogBtn.addEventListener("click", async () => {
-    await refreshAccess();  // статус мог устареть: «Смотреть как…» закрывает каталог
+    await refreshAccess();
     if (!access.unlocked && state.previewRole) { toast("В режиме предпросмотра каталог недоступен", "info"); return; }
     if (!access.unlocked) {
       if (!await askCatalogLogin()) return;
@@ -204,7 +199,7 @@ export async function loadParser() {
     const btn = ev.target.closest("[data-engine]");
     if (!btn) return;
     engine = btn.dataset.engine;
-    try { localStorage.setItem(ENGINE_KEY, engine); } catch (_) { /* не критично */ }
+    try { localStorage.setItem(ENGINE_KEY, engine); } catch (_) { }
     syncEngine();
   });
   syncEngine();
@@ -303,7 +298,6 @@ export async function loadParser() {
       </div>`;
 
     const rowsHtml = (r.candidates || []).map((c, i) => {
-      // Файл с именем (вложение поста): в узкой колонке тип, имя — строкой в описании.
       const q = c.name ? esc((c.ext || "файл").toUpperCase()) : typeof c.quality === "number" ? `${c.quality}p` : esc(c.quality || "?");
       const protoExt = [c.protocol, c.ext].filter(Boolean).join(" · ");
       const size = c.filesize ? `${c.filesize_estimated ? "≈ " : ""}${fmtSize(c.filesize)}` : "";
@@ -427,7 +421,6 @@ export async function loadParser() {
       }
     };
 
-    // Единственный пригодный поток выбирать не из чего — сразу запускаем его загрузку.
     const only = r.candidates || [];
     if (only.length === 1 && !only[0].audio_only && !only[0].drm && only[0].alive !== false) {
       results.querySelector('[data-dl="0"]')?.click();
@@ -559,7 +552,6 @@ export async function loadParser() {
     });
   }
 
-  // После удачного сохранения файл на сервере больше не нужен — удаляем сразу, а не через 30 минут.
   async function saveJob(jobId, savePath) {
     const ok = await downloadWithCard({
       command: "download_api_file",
@@ -587,7 +579,7 @@ export async function loadParser() {
     if (!jobs.length) { box.innerHTML = ""; return; }
     const wasOpen = open || box.querySelector("details")?.open;
     const done = jobs.filter(j => j.status === "done");
-    document.dispatchEvent(new CustomEvent("parser:jobs", { detail: jobs }));  // каталог возвращает «Скачать» отменённым
+    document.dispatchEvent(new CustomEvent("parser:jobs", { detail: jobs }));
     box.innerHTML = `<details class="pr-reqs"${wasOpen ? " open" : ""}><summary>Очередь и загрузки (${jobs.length}) — файлы хранятся 30 минут</summary>
       ${done.length > 1 ? `<button type="button" class="btn sm" id="pr-save-all">Сохранить все готовые (${done.length}) в папку</button>` : ""}
       <div class="pr-req-list">${jobs.map(j => `

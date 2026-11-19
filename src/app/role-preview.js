@@ -1,7 +1,3 @@
-// «Смотреть как…» — владелец примеряет роль (даббер, звукарь, админ, участник), чтобы проверить, что ей видно и
-// что разрешено. Каждый запрос уходит с заголовком X-Preview-Role, и сервер отвечает так, будто это человек
-// с этой ролью: те же вкладки, кнопки и те же 403. Примерка живёт до закрытия программы (sessionStorage);
-// при смене — перезагрузка окна, чтобы ничего не осталось от прежних прав.
 
 import { state } from "./state.js";
 import { esc } from "./utils.js";
@@ -11,7 +7,7 @@ const KEY = "preview-role";
 export function setPreviewRole(role) {
   try {
     if (role) sessionStorage.setItem(KEY, role); else sessionStorage.removeItem(KEY);
-  } catch (_) { /* без хранилища примерка просто не переживёт перезагрузку */ }
+  } catch (_) { }
   location.reload();
 }
 
@@ -22,13 +18,11 @@ export function addPreviewHeader(headers) {
 
 const label = role => role.charAt(0).toUpperCase() + role.slice(1);
 
-// Список вариантов для выпадашки — пусто, если человек не владелец.
 export function previewOptionsHtml() {
   const choices = state.previewChoices || [];
   return `<option value="">Как есть (владелец)</option>` + choices.map(r => `<option value="${esc(r)}"${r === state.previewRole ? " selected" : ""}>${esc(label(r))}</option>`).join("");
 }
 
-// Ответ /me/permissions: что можно примерить и что сервер принял. Роль удалили или сервер старый — снимаем примерку.
 export function syncPreview(preview) {
   state.previewChoices = preview && Array.isArray(preview.choices) ? preview.choices : null;
   if (state.previewRole && !(preview && preview.active)) {

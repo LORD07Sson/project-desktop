@@ -1,6 +1,3 @@
-// Редактор водяного знака: логотип png, положение на макете кадра 16:9, прозрачность и размер.
-// Один и тот же редактор — у тайтла (/titles/{id}/watermark) и общий знак студии (titleId = 0, /titles/0/watermark):
-// общий накладывается при сборке на серии без тайтла и на тайтлы без своего знака.
 
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm } from "./api.js";
 import { pickFile } from "./attachments.js";
@@ -63,14 +60,13 @@ export function watermarkSectionHtml(titleId, wm) {
 
 export function wireWatermarkSection(sheet, titleId, wm, rerender) {
   sheet.querySelector("#wm-open-studio")?.addEventListener("click", () => openStudioWatermark());
-  // ---- водяной знак
   const CORNER_POS = { tl: [0, 0], tr: [1, 0], bl: [0, 1], br: [1, 1], c: [.5, .5] };
   const startPos = wm.x != null && wm.y != null ? [wm.x, wm.y] : (CORNER_POS[wm.corner] || [1, 1]);
   let wmX = startPos[0], wmY = startPos[1];
-  let wmSnap = false; // прилипание к краям и центру — по желанию, по умолчанию знак двигается свободно
+  let wmSnap = false;
   const stage = sheet.querySelector("#wm-stage");
   const logo = sheet.querySelector("#wm-logo");
-  const MARGIN = 0.02; // как в сборке: поле 2% ширины со всех сторон
+  const MARGIN = 0.02;
   const layoutLogo = () => {
     if (!stage || !logo) return;
     const sw = stage.clientWidth;
@@ -97,7 +93,6 @@ export function wireWatermarkSection(sheet, titleId, wm, rerender) {
     let zoom = 1;
     const ZOOM_MIN = 1, ZOOM_MAX = 8;
     const applyZoom = (z, anchorX = 0.5, anchorY = 0.5) => {
-      // anchor — точка внутри видимой области (0..1), которая остаётся на месте при изменении масштаба.
       const oldW = stage.clientWidth, oldH = stage.clientHeight;
       const ax = (view.scrollLeft + view.clientWidth * anchorX) / oldW;
       const ay = (view.scrollTop + view.clientHeight * anchorY) / oldH;
@@ -119,7 +114,6 @@ export function wireWatermarkSection(sheet, titleId, wm, rerender) {
     sheet.querySelector("#wm-zoom-fit").addEventListener("click", () => applyZoom(1));
     sheet.querySelector("#wm-zoom-logo").addEventListener("click", () => {
       applyZoom(5);
-      // Знак — в центр видимой области.
       const cx = logo.offsetLeft + logo.offsetWidth / 2, cy = logo.offsetTop + logo.offsetHeight / 2;
       view.scrollLeft = cx - view.clientWidth / 2;
       view.scrollTop = cy - view.clientHeight / 2;
@@ -132,7 +126,6 @@ export function wireWatermarkSection(sheet, titleId, wm, rerender) {
       stage.dataset.bg = BGS[bgIndex][0];
       e.currentTarget.textContent = `Фон: ${BGS[bgIndex][1]}`;
     });
-    // Перемещение приблизенного кадра средней кнопкой мыши.
     let pan = null;
     view.addEventListener("pointerdown", e => {
       if (e.button !== 1) return;
@@ -156,7 +149,6 @@ export function wireWatermarkSection(sheet, titleId, wm, rerender) {
     stage.addEventListener("pointerdown", e => {
       if (e.button !== 0) return;
       const lr = logo.getBoundingClientRect();
-      // Клик мимо знака ставит его центром в эту точку, потом его можно подвигать дальше.
       drag = e.target === logo ? { gx: e.clientX - lr.left, gy: e.clientY - lr.top } : { gx: lr.width / 2, gy: lr.height / 2 };
       stage.setPointerCapture(e.pointerId);
       const [x, y] = toFraction(e.clientX, e.clientY, drag.gx, drag.gy);
@@ -230,7 +222,6 @@ export function wireWatermarkSection(sheet, titleId, wm, rerender) {
   });
 }
 
-// Отдельное окно с общим знаком студии — из карточки серии без тайтла и из раздела знака у тайтла.
 export async function openStudioWatermark() {
   const overlay = openSheet(dialogSkeletonHtml(4), "wide");
   const sheet = overlay.querySelector(".sheet");

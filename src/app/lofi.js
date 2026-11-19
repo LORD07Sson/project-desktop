@@ -1,7 +1,3 @@
-// Lofi-радио в шапке: бесплатные интернет-станции, обычные и японские (обычный <audio> по https — CSP media-src это разрешает),
-// пластинка и эквалайзер, пока играет, и свои слои атмосферы — дождь и треск винила, синтезированные Web Audio
-// (файлов нет, ничего не качается). Станция, громкость и слои запоминаются; само радио при запуске не включается.
-// Другое видео или звук в программе (плеер серий, дорожки) ставит радио на паузу.
 
 import { $, esc } from "./utils.js";
 
@@ -21,18 +17,16 @@ function load() {
   try { return JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (_) { return {}; }
 }
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ station: cur.id, volume, rain, crackle })); } catch (_) { /* приватный режим — не страшно */ }
+  try { localStorage.setItem(STORE, JSON.stringify({ station: cur.id, volume, rain, crackle })); } catch (_) { }
 }
 
 const saved = load();
 let cur = STATIONS.find(s => s.id === saved.station) || STATIONS[0];
 let volume = typeof saved.volume === "number" ? saved.volume : 0.6;
-let rain = saved.rain ?? 0;        // 0…1
-let crackle = saved.crackle ?? 0;  // 0…1
-let status = "idle";               // idle | loading | playing | error
+let rain = saved.rain ?? 0;
+let crackle = saved.crackle ?? 0;
+let status = "idle";
 
-// <audio> заводим при первом запуске, а не при загрузке модуля: проверка сборки (scripts/verify-modules.mjs) импортирует
-// модули в Node, где Audio нет.
 let audio = null;
 function player() {
   if (audio) return audio;
@@ -45,7 +39,6 @@ function player() {
   return audio;
 }
 
-// ── Атмосфера: дождь (коричневый шум через полосовой фильтр + редкие капли) и треск винила (щелчки и шипение). ──
 let ctx = null, rainGain = null, crackleGain = null;
 function noiseBuffer(c, seconds, brown) {
   const buf = c.createBuffer(1, c.sampleRate * seconds, c.sampleRate);
@@ -62,7 +55,6 @@ function ensureAmbience() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
-  // Дождь: шелест + отдельный слой капель повыше.
   rainGain = ctx.createGain();
   rainGain.connect(ctx.destination);
   const hush = ctx.createBufferSource();
@@ -81,7 +73,6 @@ function ensureAmbience() {
   dropsGain.gain.value = 0.05;
   drops.connect(hp).connect(dropsGain).connect(rainGain);
   drops.start();
-  // Винил: тихое шипение + случайные щелчки.
   crackleGain = ctx.createGain();
   crackleGain.connect(ctx.destination);
   const buf = ctx.createBuffer(1, ctx.sampleRate * 5, ctx.sampleRate);
@@ -110,7 +101,6 @@ function applyAmbience() {
   crackleGain.gain.setTargetAtTime(on ? crackle * volume * 1.6 : 0, t, 0.3);
 }
 
-// ── Воспроизведение ──
 function setStatus(s) {
   status = s;
   render();
@@ -132,7 +122,6 @@ async function play() {
 function stop() {
   if (!audio) return setStatus("idle");
   audio.pause();
-  // Поток не держим: после паузы радио должно играть «сейчас», а не догонять старый буфер.
   audio.removeAttribute("src");
   audio.load();
   setStatus("idle");
@@ -140,7 +129,6 @@ function stop() {
 function toggle() { (status === "playing" || status === "loading") ? stop() : play(); }
 
 
-// Другой звук в программе — радио уступает.
 document.addEventListener("play", e => {
   if (e.target !== audio && e.target instanceof window.HTMLMediaElement && !e.target.muted && status !== "idle") stop();
 }, true);
@@ -161,7 +149,6 @@ function pick(id) {
   play();
 }
 
-// ── Панель ──
 const STATUS_TEXT = { idle: "Пауза", loading: "Подключаюсь…", playing: "В эфире", error: "Станция не отвечает — попробуйте другую" };
 
 function render() {

@@ -1,11 +1,3 @@
-// Вкладка «Сервисы» — статус того, что держит студию на ногах: бот,
-// локальный Bot API, сама эта мини-апп-API, nginx, база, диск.
-// Реальный опрос systemctl/файловой системы плюс настоящий latency
-// (TCP-connect до локального порта сервиса) на каждый запрос, и
-// настоящая 30-дневная история из service_status_snapshots — фоновый
-// семплер на сервере пишет по снэпшоту раз в 5 минут (см. server.py:
-// _service_status_sampler). График честно неполный первые дни после
-// включения — "нет данных", а не зелёная заливка наугад.
 
 import { apiGet, tabSkeleton } from "./api.js";
 import { $, esc, relTime } from "./utils.js";
@@ -64,8 +56,6 @@ function historyStripHtml(history) {
   `;
 }
 
-// SQLite CURRENT_TIMESTAMP отдаёт "YYYY-MM-DD HH:MM:SS" (пробел, без
-// зоны) — тот же формат, что уже разбирает relTime() в utils.js.
 function parseSqliteTimestamp(ts) {
   return Date.parse(`${ts.replace(" ", "T")}Z`);
 }
@@ -163,9 +153,6 @@ export async function loadServices() {
   fillBotStatus(root);
 }
 
-// «Бот изнутри» — то же, что /status в боте: версия, аптайм бота и
-// мини-аппа, отклик Telegram, база, лог, счётчики, последние ошибки
-// из лога. Отдельным запросом — внешний статус выше не ждёт его.
 function fmtBytes(n) {
   if (n == null) return "—";
   const u = ["Б", "КБ", "МБ", "ГБ"];

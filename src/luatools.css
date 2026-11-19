@@ -1,12 +1,8 @@
-/* LuaTools — полная интеграция с боковым меню */
-
 .lt-shell {
   display: flex;
   height: 100%;
   min-height: 0;
 }
-
-/* ── Sidebar ───────────────────────────────────────────────────── */
 
 .lt-sidebar {
   width: 180px;
@@ -54,8 +50,6 @@
   stroke-linejoin: round;
 }
 
-/* ── Main content ──────────────────────────────────────────────── */
-
 .lt-main {
   flex: 1;
   min-width: 0;
@@ -64,8 +58,6 @@
 }
 .lt-page-content { max-width: 900px; }
 .lt-page-title { font-size: 1.4rem; font-weight: 700; margin: 0 0 20px; }
-
-/* ── Home ──────────────────────────────────────────────────────── */
 
 .lt-home-stats {
   display: flex;
@@ -89,8 +81,6 @@
 .lt-info-row { font-size: .9rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lt-info-row code { font-size: .8rem; opacity: .7; word-break: break-all; }
 
-/* ── Drop zone ─────────────────────────────────────────────────── */
-
 .lt-drop-zone {
   border: 2px dashed var(--border, rgba(255,255,255,.15));
   border-radius: 12px;
@@ -104,8 +94,6 @@
 .lt-drop-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .lt-drop-icon { font-size: 2rem; }
 
-/* ── Search / results ──────────────────────────────────────────── */
-
 .lt-search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
 .lt-input {
   flex: 1; padding: 8px 14px; border-radius: 8px;
@@ -117,8 +105,6 @@
 .lt-input:focus { border-color: var(--accent, #6dd5fa); }
 
 .lt-results { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-
-/* ── Buttons ───────────────────────────────────────────────────── */
 
 .lt-btn {
   padding: 7px 16px; border-radius: 8px;
@@ -134,8 +120,6 @@
 .lt-btn-danger { color: #ff5c5c; }
 .lt-btn-danger:hover { background: rgba(255,92,92,.15); }
 .lt-btn-sm { padding: 4px 10px; font-size: .8rem; }
-
-/* ── Status ────────────────────────────────────────────────────── */
 
 .lt-ok { color: #4ef08f; }
 .lt-warn { color: #ffb23e; }
@@ -161,8 +145,6 @@
 
 .lt-section { margin-top: 28px; }
 .lt-section h3 { font-size: 1.1rem; font-weight: 600; margin: 0 0 12px; }
-
-/* ── Cards / Grid ──────────────────────────────────────────────── */
 
 .lt-grid {
   display: grid;
@@ -194,8 +176,6 @@
 .lt-card-date { opacity: .4; font-size: .75rem; }
 .lt-discount { color: #4ef08f; font-weight: 700; font-size: .85rem; }
 
-/* ── Manage list ───────────────────────────────────────────────── */
-
 .lt-manage-list { display: flex; flex-direction: column; gap: 6px; }
 .lt-manage-item {
   display: flex; align-items: center; gap: 12px;
@@ -208,8 +188,6 @@
 .lt-manage-item img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; }
 .lt-manage-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .lt-manage-actions { display: flex; gap: 6px; }
-
-/* ── Detail ────────────────────────────────────────────────────── */
 
 .lt-detail {
   background: var(--card-bg, rgba(255,255,255,.06));
@@ -224,8 +202,6 @@
 .lt-detail-sources h4 { margin: 0 0 8px; font-size: .95rem; font-weight: 600; }
 .lt-detail-sources .lt-btn { margin-right: 6px; margin-bottom: 6px; }
 
-/* ── Lua entries table ─────────────────────────────────────────── */
-
 .lt-entries { margin-top: 16px; }
 .lt-entries h4 { margin: 0 0 8px; font-size: .95rem; font-weight: 600; }
 .lt-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
@@ -235,8 +211,6 @@
 .lt-row-disabled { opacity: .4; }
 .lt-extra-val { font-size: .8rem; word-break: break-all; }
 .lt-td-actions { display: flex; gap: 4px; }
-
-/* ── Tools ─────────────────────────────────────────────────────── */
 
 .lt-tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .lt-tool-card {
@@ -249,8 +223,6 @@
 
 .lt-usage-bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); margin-bottom: 8px; overflow: hidden; }
 .lt-usage-fill { height: 100%; background: var(--accent, #6dd5fa); border-radius: 4px; transition: width .3s; }
-
-/* ── Mode ──────────────────────────────────────────────────────── */
 
 .lt-mode-current { font-size: 1rem; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
 .lt-mode-list { display: flex; flex-direction: column; gap: 10px; }
@@ -267,8 +239,6 @@
 .lt-badge { font-size: .75rem; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
 .lt-badge-ok { background: rgba(78,240,143,.15); color: #4ef08f; }
 .lt-badge-warn { background: rgba(255,178,62,.15); color: #ffb23e; }
-
-/* ── Fixes ─────────────────────────────────────────────────────── */
 
 .lt-fix-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 .lt-tag {
@@ -296,8 +266,6 @@
 
 .lt-pagination { display: flex; gap: 4px; margin-top: 16px; flex-wrap: wrap; }
 
-/* ── Downloads ─────────────────────────────────────────────────── */
-
 .lt-dl-sections { display: flex; flex-direction: column; gap: 12px; }
 .lt-dl-item {
   display: flex; align-items: center; gap: 12px;
@@ -308,8 +276,6 @@
 }
 .lt-dl-item .lt-usage-bar { flex: 1; margin-bottom: 0; }
 
-/* ── Variants ──────────────────────────────────────────────────── */
-
 .lt-var-list { display: flex; flex-direction: column; gap: 6px; }
 .lt-var-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -319,8 +285,6 @@
   font-size: .85rem; flex-wrap: wrap;
 }
 .lt-var-active { border-color: var(--accent, #6dd5fa); background: rgba(109,213,250,.06); }
-
-/* ── Confirm overlay ───────────────────────────────────────────── */
 
 .lt-confirm-overlay {
   position: fixed; inset: 0; z-index: 9999;
@@ -335,8 +299,6 @@
 .lt-confirm-box p { margin: 0 0 16px; font-size: .95rem; line-height: 1.5; }
 .lt-confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-/* ── Onboarding ────────────────────────────────────────────────── */
-
 .lt-onboarding {
   max-width: 480px; margin: 60px auto; text-align: center;
 }
@@ -344,17 +306,11 @@
 .lt-onboard-steps { display: flex; flex-direction: column; gap: 8px; margin: 20px 0; text-align: left; }
 .lt-onboard-step { padding: 10px 16px; border-radius: 8px; background: var(--card-bg, rgba(255,255,255,.06)); font-size: .9rem; }
 
-/* ── Plugin info ───────────────────────────────────────────────── */
-
 .lt-plugin-info { display: flex; flex-direction: column; gap: 10px; }
 .lt-settings-list { display: flex; flex-direction: column; gap: 10px; }
 
-/* ── User ──────────────────────────────────────────────────────── */
-
 .lt-user { opacity: .7; font-size: .85rem; }
 .lt-auth-area { display: flex; align-items: center; gap: 8px; }
-
-/* Markdown rendering */
 .lt-md { font-size: .88rem; line-height: 1.5; }
 .lt-md h3 { font-size: 1rem; margin: 10px 0 6px; }
 .lt-md h4 { font-size: .95rem; margin: 8px 0 4px; }
@@ -363,8 +319,6 @@
 .lt-md code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 4px; font-size: .85em; }
 .lt-md a { color: var(--accent, #6dd5fa); text-decoration: none; }
 .lt-md a:hover { text-decoration: underline; }
-
-/* ── Builds grid ──────────────────────────────────────────────── */
 
 .lt-builds-header { margin-bottom: 12px; }
 .lt-builds-bar { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
@@ -421,11 +375,7 @@
   padding-bottom: 12px;
 }
 
-/* ── Manage sub-line ──────────────────────────────────────────── */
-
 .lt-card-sub { font-size: .75rem; opacity: .5; }
-
-/* ── Vault history ────────────────────────────────────────────── */
 
 .lt-vault-list { display: flex; flex-direction: column; gap: 4px; }
 .lt-vault-row {
@@ -440,8 +390,6 @@
 .lt-vault-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .lt-vault-meta code { font-size: .8rem; }
 .lt-vault-meta .lt-muted { font-size: .75rem; }
-
-/* Картинка игры не нашлась ни по одному адресу — нейтральная заглушка вместо «битой» иконки. */
 .lt-img-missing {
   visibility: hidden;
 }
@@ -450,8 +398,6 @@
 .lt-manage-item:has(.lt-img-missing) {
   background-image: linear-gradient(135deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
 }
-
-/* ── Home (LuaProject) ─────────────────────────────────────────── */
 
 .lt-hs {
   display: grid;
@@ -531,10 +477,6 @@
   .lt-hs { grid-template-columns: 1fr; }
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   Redesigned pages (Add / Manage / Tools / Mode / Fixes / Plugin)
-   ══════════════════════════════════════════════════════════════════ */
-
 .lt-page-content[data-page="add"],
 .lt-page-content[data-page="manage"],
 .lt-page-content[data-page="tools"],
@@ -546,8 +488,6 @@
 .lt-narrow-wide { max-width: 760px; }
 .lt-title-tight { margin-bottom: 2px; }
 .lt-page-sub { margin: 0 0 16px; font-size: .8rem; opacity: .6; }
-
-/* buttons */
 .lt-btn-ghost {
   display: inline-flex; align-items: center; gap: 7px;
   background: rgba(255, 255, 255, .06);
@@ -564,13 +504,9 @@
 }
 .lt-btn-dangertext { color: #f87171; }
 .lt-btn-accent { background: #c4b5f7; color: #1b1530; border-color: transparent; font-weight: 500; }
-
-/* header row with actions on the right */
 .lt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .lt-head .lt-page-title { margin-bottom: 0; }
 .lt-head-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-
-/* search field with icon */
 .lt-search {
   display: flex; align-items: center; gap: 10px;
   background: rgba(255, 255, 255, .06);
@@ -594,8 +530,6 @@
   padding: 5px 8px; font: inherit; font-size: .82rem;
 }
 .lt-select option { background: #1d1b26; }
-
-/* game cards */
 .lt-gc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .lt-gc {
   display: flex; flex-direction: column; text-align: left;
@@ -612,8 +546,6 @@
 .lt-gc-name { font-size: .85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lt-gc-sub { font-size: .74rem; opacity: .5; margin-top: auto; }
 .lt-gc-sub2 { font-size: .7rem; opacity: .35; }
-
-/* horizontal strips on the Add page */
 .lt-strip-title { font-size: .85rem; font-weight: 600; margin: 18px 0 8px; }
 .lt-strip {
   display: grid; grid-auto-flow: column; grid-auto-columns: 188px; gap: 10px;
@@ -625,8 +557,6 @@
 .lt-strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .25); border-radius: 3px; }
 .lt-add-results { margin-bottom: 8px; }
 .lt-add-results .lt-gc-grid { grid-template-columns: repeat(auto-fill, minmax(188px, 1fr)); }
-
-/* pager */
 .lt-pg { display: flex; align-items: center; justify-content: center; position: relative; margin-top: 18px; min-height: 34px; }
 .lt-pg-nums { display: flex; align-items: center; gap: 6px; }
 .lt-pg-num, .lt-pg-arrow {
@@ -639,8 +569,6 @@
 .lt-pg-arrow:disabled { opacity: .35; cursor: default; }
 .lt-pg-gap { opacity: .5; font-size: .8rem; }
 .lt-pg-size { position: absolute; right: 0; display: flex; align-items: center; gap: 8px; font-size: .74rem; opacity: .8; }
-
-/* Tools: two panes */
 .lt-tools { display: grid; grid-template-columns: 250px 1fr; gap: 14px; align-items: start; }
 .lt-tl {
   background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .07);
@@ -714,8 +642,6 @@
 .lt-switch.is-on { background: #8b7fe0; }
 .lt-switch.is-on::after { transform: translateX(18px); background: #111; }
 .lt-switch:disabled { opacity: .45; cursor: default; }
-
-/* Mode */
 .lt-mcard {
   display: flex; align-items: center; gap: 16px;
   background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08);
@@ -738,8 +664,6 @@
 .lt-badge2.is-violet { background: rgba(167, 139, 250, .16); color: #c4b5fd; }
 .lt-badge2.is-warn { background: rgba(245, 194, 107, .14); color: #f5c26b; }
 .lt-sep { height: 1px; background: rgba(255, 255, 255, .1); margin: 22px 0 14px; }
-
-/* Fixes */
 .lt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .lt-chip2 {
   background: rgba(139, 127, 224, .16); color: #b8acf6;
@@ -748,8 +672,6 @@
 }
 .lt-chip2:hover { background: rgba(139, 127, 224, .26); }
 .lt-chip2.is-active { background: #c4b5f7; color: #1b1530; border-color: transparent; }
-
-/* Plugin */
 .lt-st-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .lt-st-head svg { color: #67c6f0; width: 17px; height: 17px; }
 .lt-st-row { display: grid; grid-template-columns: 18px 170px 1fr; align-items: center; gap: 6px; font-size: .8rem; padding: 3px 0; }
@@ -771,8 +693,6 @@
   border-radius: 6px; background: rgba(139, 127, 224, .16); color: #b4a2f5;
 }
 .lt-footnote { font-size: .7rem; opacity: .45; margin-top: 14px; }
-
-/* Utilities block inside Settings */
 .lt-utils-title { margin-top: 8px; }
 
 @media (max-width: 900px) {
@@ -782,8 +702,6 @@
   .lt-pg { flex-direction: column; gap: 10px; }
   .lt-pg-size { position: static; }
 }
-
-/* Tools → Achievements / Stats / Playtime */
 .lt-ach-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .lt-ach-sum { font-size: .85rem; min-width: 220px; }
 .lt-ach-sum .lt-usage-bar { margin-top: 6px; }
@@ -805,13 +723,8 @@
 .lt-pt-unit { align-self: center; font-size: .82rem; opacity: .7; }
 .lt-pt-note { font-size: .72rem; margin: 10px 0 0; }
 .lt-tabs { flex-wrap: wrap; }
-
-/* Sidebar: wide enough for "Перезапустить Steam", no stray horizontal
-   scrollbar, and pinned to the viewport height while the page scrolls. */
 .lt-sidebar { width: 200px; overflow-x: hidden; position: sticky; top: 0; align-self: flex-start; height: calc(100vh - 58px); }
 .lt-sidebar .lt-nav { overflow: hidden; text-overflow: ellipsis; }
-
-/* "Beta" badge next to the title — colors follow the app theme (--fire / --gold). */
 .lt-beta {
   display: inline-flex; align-items: center; vertical-align: middle;
   margin-left: 8px; padding: 2px 9px; border-radius: 999px;
@@ -824,8 +737,6 @@
 }
 @keyframes lt-beta-flow { to { background-position: 200% 0; } }
 @media (prefers-reduced-motion: reduce) { .lt-beta { animation: none; } }
-
-/* Manage → game side panel */
 .lt-drawer-wrap { position: fixed; inset: 0; z-index: 900; }
 .lt-drawer-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .45); }
 .lt-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw; display: flex; flex-direction: column;
@@ -850,8 +761,6 @@
 .lt-drawer-actions .lt-btn { justify-content: center; width: 100%; }
 .lt-drawer-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .lt-drawer-pair .lt-btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* Utilities catalog: collapsed rows, one tool open at a time on demand */
 .lt-tools-grid.lt-catalog { display: flex; flex-direction: column; gap: 6px; }
 .lt-cat-item { padding: 0 !important; }
 .lt-cat-item > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(180px, 240px) 1fr auto; align-items: center; gap: 12px; padding: 12px 16px; }
@@ -862,8 +771,6 @@
 .lt-cat-item[open] > summary .lt-cat-chev { transform: rotate(90deg); }
 .lt-cat-item > summary:hover { background: rgba(255, 255, 255, .04); border-radius: inherit; }
 .lt-cat-body { padding: 4px 16px 16px; }
-
-/* Внешний outline обрезается overflow сайдбара. */
 .lt-nav:focus-visible { outline: none; box-shadow: inset 3px 0 0 var(--accent, #c4b5f7); background: rgba(255,255,255,.06); }
 .lt-nav.active { box-shadow: inset 3px 0 0 #c4b5f7; }
 
@@ -904,15 +811,12 @@
 .lt-btn[hidden] { display: none; }
 .lt-card-featured .lt-card-info { align-self: stretch; text-align: center; }
 .lt-grid-featured { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-/* Иначе панель прокручивается на свои отступы (50px) под заголовок. */
 #luatools-panel { padding-top: 0; padding-bottom: 0; overflow: hidden; }
 #luatools-body { height: 100%; }
 label.lt-info-row { flex-wrap: nowrap; }
 label.lt-info-row > input { flex-shrink: 0; }
 .lt-drawer-body { padding-bottom: 84px; }
 .lt-drawer-pair .lt-btn { font-size: .8rem; padding-left: 8px; padding-right: 8px; }
-
-/* ── Загрузки ─────────────────────────────────────────────────── */
 .lt-page-content[data-page="downloads"] { max-width: 1000px; }
 .lt-dl-block { margin-bottom: 22px; }
 .lt-empty-sm { text-align: left; padding: 10px 0; font-size: .85rem; }
@@ -932,8 +836,6 @@ label.lt-info-row > input { flex-shrink: 0; }
 .lt-mf-table th, .lt-mf-table td { text-align: left; }
 .lt-mf-table th { opacity: .7; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
 .lt-mf-table .lt-num { text-align: right; white-space: nowrap; }
-
-/* ── Настройки: секции карточками, на широком окне в две колонки ── */
 .lt-page-content[data-page="settings"] { max-width: 1180px; }
 .lt-page-content[data-page="settings"] > .lt-section {
   background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07);
@@ -955,8 +857,6 @@ label.lt-info-row > input { flex-shrink: 0; }
 .lt-src-state.is-ok { color: #6ee7a8; }
 .lt-src-state.is-warn { color: #f5c26b; }
 .lt-note { display: block; font-size: .78rem; margin: 6px 0 0; }
-
-/* ── Карточка игры ────────────────────────────────────────────── */
 .lt-page-content[data-page="detail"] { max-width: 1180px; }
 .lt-gd { margin-top: 12px; display: flex; flex-direction: column; gap: 18px; }
 .lt-gd-hero {
@@ -1001,8 +901,6 @@ label.lt-info-row > input { flex-shrink: 0; }
 .lt-diag-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: .86rem; }
 .lt-diag-main .lt-muted { font-size: .76rem; }
 @media (max-width: 1000px) { .lt-gd-hero { grid-template-columns: 1fr; } }
-
-/* ── Управление: выбор нескольких игр ─────────────────────────── */
 .lt-toolbar { align-items: center; }
 .lt-btn.is-active { background: rgba(196,181,247,.18); border-color: rgba(196,181,247,.45); }
 .lt-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 14px;

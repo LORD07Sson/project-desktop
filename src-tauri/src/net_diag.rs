@@ -1,6 +1,3 @@
-//! Проверка связи для «Карты работы»: удаётся ли определить адрес нашего сервера через DNS компьютера, какие DNS-серверы
-//! настроены и чьи они. Из окна приложения (WebView) это не видно, поэтому делается здесь. Сам запрос к серверу — в JS.
-//! Проверяется только адрес нашего сервера, произвольные имена команда не принимает.
 
 use std::net::ToSocketAddrs;
 use std::time::Instant;
@@ -16,7 +13,6 @@ pub struct NetDiag {
     pub dns_provider: String,
 }
 
-/// Известные публичные DNS; локальные адреса — это обычно роутер или DNS провайдера, который он раздаёт.
 fn provider_of(ip: &str) -> Option<&'static str> {
     const KNOWN: &[(&str, &str)] = &[
         ("8.8.8.8", "Google"), ("8.8.4.4", "Google"), ("2001:4860:4860::8888", "Google"),
@@ -74,7 +70,6 @@ pub fn diagnose(host: &str) -> NetDiag {
     let mut servers = system_dns_servers();
     servers.dedup();
     servers.truncate(4);
-    // Провайдер = первый известный публичный DNS из списка; если все локальные — роутер/провайдер; иначе — неизвестный
     let provider = servers
         .iter()
         .find_map(|s| provider_of(s))

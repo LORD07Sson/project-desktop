@@ -1,17 +1,3 @@
-// Системные уведомления от имени «Project Desktop», а не «Windows PowerShell».
-//
-// tauri-plugin-notification на Windows подставляет AppUserModelID только
-// когда exe лежит НЕ в target/debug|release, и берёт для этого identifier
-// из tauri.conf.json — а Windows показывает тост, только если этот AUMID
-// знаком ей по ярлыку в меню «Пуск». В итоге сборка из target/release
-// шлёт тосты от имени PowerShell, а установленная — под ID, которого нет
-// ни у одного ярлыка, и Windows их молча складывает в историю.
-//
-// Поэтому тост показываем сами, под AUMID процесса:
-// - установлено через Velopack — он уже выставил процессу свой AUMID
-//   (velopack.<packId>) и прописал его в свой ярлык, берём его;
-// - запуск без установки — свой AUMID и свой ярлык в меню «Пуск» на
-//   текущий exe (без ярлыка Windows тост не покажет).
 
 #[cfg(windows)]
 use std::sync::OnceLock;
@@ -21,8 +7,6 @@ const FALLBACK_AUMID: &str = "com.project.desktop";
 #[cfg(windows)]
 static AUMID: OnceLock<String> = OnceLock::new();
 
-/// Вызывается один раз при запуске. Ошибки не роняют запуск — худшее,
-/// что будет, — тосты без нашего имени.
 #[cfg(windows)]
 pub fn register() {
     use windows::Win32::UI::Shell::{GetCurrentProcessExplicitAppUserModelID, SetCurrentProcessExplicitAppUserModelID};
@@ -37,14 +21,12 @@ pub fn register() {
         return;
     }
     let _ = AUMID.set(FALLBACK_AUMID.to_string());
-    // Окно на панели задач группируется с ярлыком по тому же AUMID.
     let _ = unsafe { SetCurrentProcessExplicitAppUserModelID(&windows::core::HSTRING::from(FALLBACK_AUMID)) };
     if let Err(e) = ensure_shortcut() {
         log::warn!("Не удалось создать ярлык для уведомлений: {e}");
     }
 }
 
-/// «Пуск»\Программы\Project Desktop.lnk → текущий exe, с нашим AUMID.
 #[cfg(windows)]
 fn ensure_shortcut() -> windows::core::Result<()> {
     use windows::core::{Interface, HSTRING};
@@ -64,7 +46,6 @@ fn ensure_shortcut() -> windows::core::Result<()> {
     let lnk = std::path::Path::new(&appdata).join(r"Microsoft\Windows\Start Menu\Programs\Project Desktop.lnk");
 
     unsafe {
-        // S_FALSE/RPC_E_CHANGED_MODE — COM уже поднят в этом потоке, нам подходит.
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
         link.SetPath(&HSTRING::from(exe.as_os_str()))?;
@@ -83,8 +64,6 @@ fn ensure_shortcut() -> windows::core::Result<()> {
     Ok(())
 }
 
-/// Показать уведомление. На Windows — тост под AUMID процесса (см. выше),
-/// на других ОС — обычным путём через плагин.
 #[tauri::command]
 pub fn notify_desktop(app: tauri::AppHandle, title: String, body: Option<String>) -> Result<(), String> {
     #[cfg(windows)]
@@ -93,7 +72,6 @@ pub fn notify_desktop(app: tauri::AppHandle, title: String, body: Option<String>
         use tauri_winrt_notification::Toast;
         let aumid = AUMID.get().cloned().unwrap_or_else(|| FALLBACK_AUMID.to_string());
         let body = body.unwrap_or_default();
-        // show() ходит в WinRT — не в потоке IPC-обработчика.
         tauri::async_runtime::spawn_blocking(move || {
             if let Err(e) = Toast::new(&aumid).title(&title).text1(&body).show() {
                 log::warn!("Уведомление не показано: {e}");

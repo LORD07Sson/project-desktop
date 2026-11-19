@@ -1,14 +1,3 @@
-// «Ещё → Anime 365» — наша озвучка на smotret-anime.org (сервер: anime365.py бота, API /api/a365…).
-// Три вкладки:
-//   «Финалы» — серии, собранные в отчётах: что на 365, что в очереди, итог проверок, «Проверить» / «Залить»;
-//   «Архив»  — весь архив серий сверяется с 365: чего там нет — залить отсюда же. Тайтлы архива, которых нет
-//              в студии, привязываются к аниме на 365 вручную («Привязать» — поиск по названию);
-//   «Вручную» — как форма «Добавить перевод» на сайте: аниме, серия, тип, авторы, свой файл (и субтитры). Файл грузит
-//              сам десктоп по tus прямо на сервер загрузки 365; сервер проверяет до загрузки и создаёт перевод после.
-// Проверки обязательные и на сервере: сезон (номер, сезон выхода, число серий) и дубль нашей озвучки на 365.
-// Страховка: после «Залить» серия ждёт минуту (grace с сервера) — «Отменить»; идущую заливку можно «Остановить»
-// (на 365 ничего не создаётся). Залито не то видео (пост исправили, финал пересобрали) — «Перезалить»: новый перевод
-// встаёт рядом с прежним, а прежний удаляется на сайте (API 365 удалять не умеет).
 
 import { apiGet, apiPost, askConfirm, openSheet, dismissSheet, toast } from "./api.js";
 import { $, esc, relTime } from "./utils.js";
@@ -19,15 +8,13 @@ import { kindOf, isOn365, summarize, checkFacts, sameTitle, groupItems } from ".
 let view = "finals";
 let finalsFilter = "todo";
 let archFilter = "missing";
-let openEp = null; // какая серия в карточке архива раскрыта
-let query = "";    // поиск по названию в «Финалах» и «Архиве»
+let openEp = null;
+let query = "";
 let pollTimer = null;
 let last = null;
 const manual = { series: null, episodes: null, check: null, busy: false };
-// Право «Anime 365: заливать»: без него страница только для просмотра и проверок (сервер всё равно проверит каждый запрос).
 const canUpload = () => can("a365.upload");
 
-// ---------- общее ----------
 
 const fmtSize = n => (n ? `${(n / 1048576).toFixed(0)} МБ` : "");
 const matches = (...texts) => !query || texts.some(t => String(t || "").toLowerCase().includes(query));
@@ -92,13 +79,11 @@ function actionsHtml(it) {
   if (it.stage === "failed" && canUpload() && !(it.check && it.check.dup)) {
     return `${check}<button type="button" class="btn primary sm" data-a3-upload="${key}" data-a3-label="${label}">Повторить</button>`;
   }
-  // «Залить» — только после пройденной проверки (сервер всё равно проверит ещё раз).
   return k === "ready" && canUpload() ? `${check}<button type="button" class="btn primary sm" data-a3-upload="${key}" data-a3-label="${label}">Залить</button>` : check;
 }
 
 function rowHtml(it, title, meta, poster) {
   const k = kindOf(it);
-  // У проверенной серии техническая строка заодно говорит, когда проверяли и как тайтл назван на 365 (если иначе, чем у нас).
   const c = k === "ready" ? it.check : null;
   const line = [meta, c && c.series && !sameTitle(c.series, it.title) ? `на 365: ${esc(c.series)}` : "", c ? `проверено ${esc(relTime(c.at))}` : ""].filter(Boolean).join(" · ");
   return `
@@ -116,7 +101,6 @@ function rowHtml(it, title, meta, poster) {
 const filtersHtml = (list, current, attr) =>
   `<div class="a3-filters">${list.map(([k, label, n]) => `<button type="button" class="a3-filter${current === k ? " on" : ""}" data-${attr}="${k}">${label}${n != null ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
 
-// ---------- «Финалы» ----------
 
 function searchHtml() {
   return `<label class="a3-search"><span aria-hidden="true">⌕</span><input type="search" id="a3-query" placeholder="Название или номер серии" value="${esc(query)}" autocomplete="off"></label>`;
@@ -158,7 +142,6 @@ function finalsHtml(d) {
       </section>`).join("") || `<div class="a3-empty">${empty}</div>`}</div>`;
 }
 
-// ---------- «Архив» ----------
 
 function archiveHtml(d) {
   const a = d.archive || { items: [] };
@@ -166,15 +149,12 @@ function archiveHtml(d) {
   const missing = it => !isOn365(it) && kindOf(it) !== "queue" && kindOf(it) !== "unbound";
   const pick = { missing, on: isOn365, queue: it => kindOf(it) === "queue", newer: it => kindOf(it) === "newer",
     unbound: it => kindOf(it) === "unbound", all: () => true }[archFilter] || missing;
-  // Карточка на тайтл (тег + сезон): постер, название, привязка и серии кнопками-номерами по цвету статуса.
-  // Фильтр выбирает тайтлы, где есть хоть одна подходящая серия; серии в карточке видны все — картина целиком.
   const groups = new Map();
   for (const it of items) {
     const g = `${(it.tag || "").toLowerCase()}|${it.season}`;
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g).push(it);
   }
-  // Сначала то, что требует внимания: идёт заливка, новая версия, проблемы, можно залить; затем остальное по названию.
   const weight = list => (list.some(it => kindOf(it) === "queue") ? 0 : list.some(it => kindOf(it) === "newer") ? 1
     : list.some(it => kindOf(it) === "bad") ? 2 : list.some(it => kindOf(it) === "ready") ? 3 : 4);
   const shown = [...groups.values()]
@@ -219,12 +199,10 @@ function cardHtml(list) {
   const where = first.studio ? "тайтл студии"
     : first.bound ? (first.auto ? "подобрано авто" : "привязан вручную")
       : "не привязан к 365";
-  // «Привязать» у непривязанного — главное действие карточки; «Сменить» у привязанного — ссылка рядом с привязкой.
   const bindAttrs = `data-a3-bind="${esc(first.tag || "")}" data-a3-season="${esc(String(first.season))}" data-a3-name="${esc(name)}"`;
   const bindBtn = first.studio || !canUpload() ? ""
     : first.bound ? `<button type="button" class="a3-tlink" ${bindAttrs}>сменить</button>`
       : `<button type="button" class="btn primary sm" ${bindAttrs}>Привязать</button>`;
-  // Число «можно залить» — сама кнопка: одна цифра вместо плашки и счётчика на кнопке.
   const upAll = !ready.length ? ""
     : canUpload() ? `<button type="button" class="a3-tag ready a3-upall" data-a3-upall="${esc(ready.map(it => it.key).join(","))}" data-a3-name="${esc(name)}" title="Залить все серии, которых нет на 365">↑ Залить ${ready.length}</button>`
       : `<span class="a3-tag ready">${ready.length} можно залить</span>`;
@@ -287,7 +265,6 @@ function emptyText(items) {
   }[archFilter];
 }
 
-// ---------- «Вручную» ----------
 
 function seriesCardHtml(s, extra = "") {
   return `<div class="a3-series">
@@ -333,8 +310,6 @@ function manualHtml() {
     </div>`;
 }
 
-// tus 1.0.0 прямо из десктопа на сервер загрузки 365: адреса по очереди, куски по 32 МБ (Cloudflare пускает до 100), при обрыве — докачка с места,
-// которое назовёт сервер (HEAD). Возвращает {serverId, uuid}.
 const TUS_CHUNK = 32 * 1024 * 1024;
 async function tusUpload(file, point, onProgress) {
   const meta = "filename " + btoa(String.fromCharCode(...new TextEncoder().encode(file.name)));
@@ -362,11 +337,11 @@ async function tusUpload(file, point, onProgress) {
       fails = 0;
     } catch (e) {
       if (++fails >= 6) throw new Error(`Загрузка на 365 обрывается (${e.message}) — попробуйте позже.`);
-      await new Promise(res => setTimeout(res, 3000 * fails)); // DevSkim: ignore DS172411 — функция, не строка
+      await new Promise(res => setTimeout(res, 3000 * fails)); // DevSkim: ignore DS172411
       try {
         const h = await fetch(location, { method: "HEAD", headers: { "Tus-Resumable": "1.0.0" } });
         offset = Number(h.headers.get("Upload-Offset") || offset);
-      } catch (_) { /* следующий круг попробует снова */ }
+      } catch (_) { }
     }
     onProgress(Math.min(offset, file.size), file.size);
   }
@@ -382,7 +357,6 @@ function manualForm(root) {
   };
 }
 
-// Поля формы переживают перерисовку (поиск, выбор серии) — сохраняем и возвращаем значения.
 function keepForm(root, fn) {
   const ids = ["#a3-mnum", "#a3-meptype", "#a3-mtype", "#a3-mauthors"];
   const saved = ids.map(id => root.querySelector(id)?.value);
@@ -448,7 +422,7 @@ function searchSeries(input, results, onPick) {
     clearTimeout(timer);
     const q = input.value.trim();
     if (q.length < 2) { results.innerHTML = ""; return; }
-    timer = setTimeout(async () => { // DevSkim: ignore DS172411 — функция, не строка
+    timer = setTimeout(async () => { // DevSkim: ignore DS172411
       const my = ++seq;
       results.innerHTML = `<div class="a3-note">Ищу на 365…</div>`;
       try {
@@ -488,12 +462,10 @@ function openBind(root, tag, season, name) {
   input.focus();
 }
 
-// ---------- страница ----------
 
 const segHtml = (list, current) =>
   `<div class="a3-seg" role="tablist">${list.map(([k, label, n]) => `<button type="button" role="tab" aria-selected="${current === k}" class="${current === k ? "on" : ""}" data-a3-view="${k}">${label}${n ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>`;
 
-// Сводка: сколько серий на сайте, полоса всех статусов и главное действие — залить всё, что уже проверено.
 function heroHtml(every) {
   const s = summarize(every);
   const readyKeys = every.filter(it => kindOf(it) === "ready").map(it => it.key);
@@ -510,7 +482,6 @@ function heroHtml(every) {
     </section>`;
 }
 
-// Что происходит прямо сейчас: идущая заливка или серия, ждущая старта. Остальная очередь — одной строкой.
 function liveHtml(every) {
   const queue = every.filter(it => kindOf(it) === "queue");
   const it = queue.find(x => x.stage === "uploading") || queue.find(x => x.start_in && !x.attempt);
@@ -535,16 +506,12 @@ function liveHtml(every) {
 function paint(root) {
   const d = last || {};
   const acc = d.account || {};
-  // Сводка — по уникальным сериям: финал, у которого есть копия в архиве, уже посчитан там.
   const every = [...(d.items || []).filter(it => !it.inArchive), ...((d.archive || {}).items || [])];
   const tabs = [["finals", "Финалы", (d.items || []).filter(it => !isOn365(it)).length],
     ["archive", "Архив", ((d.archive || {}).items || []).filter(it => !isOn365(it) && kindOf(it) !== "unbound").length], ...(canUpload() ? [["manual", "Вручную", null]] : [])];
   if (view === "manual" && !canUpload()) view = "finals";
-  // Поиск переживает перерисовку: фокус и курсор возвращаются в поле.
   const focused = document.activeElement && document.activeElement.id === "a3-query" ? document.activeElement.selectionStart : null;
   const speed = d.speed && d.speed.best ? `до ${Math.round(d.speed.best)} Мбит/с` : "замер при первой заливке";
-  // Страница перерисовывается целиком (щелчок по серии, фильтр, поиск): уже загруженные постеры переносим
-  // в новую разметку, иначе каждая картинка на миг пустеет и экран моргает.
   const posters = new Map();
   for (const img of root.querySelectorAll("img[src]")) {
     if (!img.complete || !img.naturalWidth) continue;
@@ -590,8 +557,6 @@ function paint(root) {
   }
 }
 
-// Серия из «Финалов» обычно лежит и в «Архиве» (это разные записи сервера с разными ключами).
-// twin — её копия в архиве: по ней финал узнаёт, что серию уже залили оттуда, а сводка не считает серию дважды.
 const twinKey = it => `${String(it.title || "").toLowerCase()}|${it.episode}`;
 function linkTwins(d) {
   const arch = new Map(((d.archive || {}).items || []).map(it => [twinKey(it), it]));
@@ -613,15 +578,13 @@ async function refresh(root) {
   last = d;
   if (view === "manual") keepForm(root, () => paint(root)); else paint(root);
   clearTimeout(pollTimer);
-  // Пока что-то в очереди, заливается или бот читает архив — обновляемся сами.
   const every = [...(d.items || []), ...((d.archive || {}).items || [])];
   if (every.some(it => it.stage === "queued" || it.stage === "uploading") || (d.archive && (d.archive.scanning || d.archive.checking))) {
-    pollTimer = setTimeout(() => { if (root.isConnected && view !== "manual") refresh(root); }, 3000); // DevSkim: ignore DS172411 — функция, не строка
+    pollTimer = setTimeout(() => { if (root.isConnected && view !== "manual") refresh(root); }, 3000); // DevSkim: ignore DS172411
   }
   return true;
 }
 
-// Подпись озвучки на 365 (настройка сервера a365_authors): переименовалась студия — меняем тут, код не трогаем.
 function editAuthors(root, current) {
   const sheet = openSheet(`<h3>Подпись на Anime 365</h3>
     <p class="kk-dim">Так бот подписывает новые серии и по ней ищет дубли нашей озвучки.</p>
@@ -735,14 +698,12 @@ function bind(root) {
     }
     refresh(root);
   });
-  // Поиск по названию — без запроса к серверу, по уже загруженному.
   let searchTimer = null;
   root.addEventListener("input", e => {
     if (e.target.id !== "a3-query") return;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => { query = e.target.value.trim().toLowerCase(); paint(root); }, 150); // DevSkim: ignore DS172411 — функция, не строка
+    searchTimer = setTimeout(() => { query = e.target.value.trim().toLowerCase(); paint(root); }, 150); // DevSkim: ignore DS172411
   });
-  // Смена серии, типа или подписи — прежняя проверка уже не про то, что будет загружено.
   root.addEventListener("input", e => {
     if (e.target.closest("#a3-mnum, #a3-mtype, #a3-mauthors") && manual.check) {
       manual.check = null;

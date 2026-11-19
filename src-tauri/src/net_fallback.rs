@@ -1,8 +1,3 @@
-//! Запасной путь к нашему серверу, когда у человека не работает системный DNS (сломанный/пустой DNS Windows
-//! вроде fec0:0:0:ffff::1, провайдер режет DNS). Адрес сервера узнаём через DNS-over-HTTPS по IP-адресам
-//! Cloudflare/Google (самим DoH DNS не нужен), и запрос к API делает Rust с этим адресом; TLS проверяется
-//! как обычно — по имени сервера, так что подменить сервер этим путём нельзя.
-//! Ходит только на наш API_BASE: путь приходит из интерфейса, адрес и заголовки собираются здесь.
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
@@ -35,7 +30,6 @@ struct DohReply {
 pub struct FallbackResponse {
     pub status: u16,
     pub body: String,
-    /// Каким путём узнали адрес: "doh" — через DNS-over-HTTPS.
     pub via: &'static str,
 }
 
@@ -56,7 +50,6 @@ fn host_port(base: &str) -> (String, u16) {
     }
 }
 
-/// Работает ли системный DNS для нашего сервера (быстро: обычно из кэша ОС).
 pub fn system_dns_ok(base: &str) -> bool {
     let (host, port) = host_port(base);
     (host.as_str(), port).to_socket_addrs().map(|mut a| a.next().is_some()).unwrap_or(false)
@@ -110,8 +103,6 @@ async fn client_for(base: &str, fresh: bool) -> Result<reqwest::Client, String> 
     Ok(client)
 }
 
-/// Запрос к нашему API в обход системного DNS. `write` — запись: её отправляем, только если системный DNS
-/// действительно не работает (иначе сбой был не из-за DNS, и сервер мог запись уже выполнить).
 pub async fn request(
     base: &str,
     method: &str,
@@ -149,7 +140,6 @@ pub async fn request(
                 let body = resp.text().await.map_err(|e| e.to_string())?;
                 return Ok(FallbackResponse { status, body, via: "doh" });
             }
-            // Адрес сервера мог смениться — второй заход с новым DoH-ответом; запись повторно не шлём.
             Err(e) => {
                 last = e.to_string();
                 if write {
@@ -161,7 +151,6 @@ pub async fn request(
     Err(last)
 }
 
-/// Для диагностики: какой адрес вернул DoH (None — ещё не спрашивали).
 pub fn cached_ip() -> Option<String> {
     CACHE.lock().unwrap().as_ref().map(|c| c.ip.to_string())
 }

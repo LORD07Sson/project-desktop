@@ -1,5 +1,3 @@
-// Хранилище кеша дорожек в IndexedDB (Blob). Любая ошибка хранилища —
-// просто «кеша нет»: плеер тогда качает файл как раньше.
 
 import { addEntry } from "./audio-cache-core.js";
 
@@ -28,7 +26,7 @@ function run(db, mode, fn) {
 }
 
 const readIndex = () => { try { return JSON.parse(localStorage.getItem(INDEX_KEY) || "[]"); } catch (_) { return []; } };
-const writeIndex = list => { try { localStorage.setItem(INDEX_KEY, JSON.stringify(list)); } catch (_) { /* не запомнится */ } };
+const writeIndex = list => { try { localStorage.setItem(INDEX_KEY, JSON.stringify(list)); } catch (_) { } };
 
 export async function getCached(key) {
   try {
@@ -50,7 +48,7 @@ export async function putCached(key, blob) {
     await run(db, "readwrite", s => { s.put(blob, key); evict.forEach(k => s.delete(k)); });
     db.close();
     writeIndex(index);
-  } catch (_) { /* не вышло — не страшно */ }
+  } catch (_) { }
 }
 
 export async function clearCache() {
@@ -59,7 +57,7 @@ export async function clearCache() {
     await run(db, "readwrite", s => s.clear());
     db.close();
     writeIndex([]);
-  } catch (_) { /* нечего чистить */ }
+  } catch (_) { }
 }
 
 export function cacheSummary() {

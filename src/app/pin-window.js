@@ -1,21 +1,9 @@
-// Окно «📌 Открепить в окне» — маленькое read-only окно с ключевым
-// состоянием одного отчёта (статус, срок, чек-лист, последние заметки),
-// чтобы держать его на виду поверх других программ, не переключаясь
-// обратно в студию. Отдельный вход (src/pin.html), не index.html — тому
-// нужен весь экран входа/вкладки/трей-обвязка (десятки побочных
-// эффектов верхнего уровня почти в каждом модуле main.js), этому — одна
-// карточка. См. app/tauri.js::pinReportWindow — как это окно создаётся.
 
 import { invoke, listen, getCurrentWindow, PIN_REPORT_EVENT } from "./tauri.js";
 import { state } from "./state.js";
 import { apiGet } from "./api.js";
 import { esc, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime } from "./utils.js";
 
-// Тема — то же localStorage-значение, что читает theme.js в основном
-// окне (общий origin у всех webview одного Tauri-приложения, см.
-// SECURITY.md/README про происхождение). Полный theme.js сюда не тянем
-// специально: он вешает обработчик клика на #theme-toggle, которого в
-// этом окне просто нет — импорт уронил бы модуль в рантайме.
 try { document.documentElement.dataset.theme = localStorage.getItem("project-theme") || "dark"; } catch (_) {}
 
 const root = document.getElementById("pin-root");
@@ -26,17 +14,13 @@ function currentPublicId() {
 }
 let publicId = currentPublicId();
 
-// Автообновление — то же read-only окно может часами висеть поверх
-// другой программы, пока кто-то в основном окне двигает статус/пишет
-// заметку. Интервал, не вебсокет — того же порядка, что и pingPresence
-// в основном окне, а у сервера и так нет push-канала для карточки.
 const REFRESH_MS = 15_000;
 let refreshTimer = null;
 let pinnedOnTop = true;
 
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(load, REFRESH_MS); // DevSkim: ignore DS172411 — функция, не строка
+  refreshTimer = setTimeout(load, REFRESH_MS); // DevSkim: ignore DS172411
 }
 
 function renderError(message) {
@@ -97,7 +81,7 @@ async function load() {
     `;
     root.querySelector("#pin-pinned-toggle").addEventListener("click", async () => {
       pinnedOnTop = !pinnedOnTop;
-      try { await appWindow.setAlwaysOnTop(pinnedOnTop); } catch (_) { /* платформа может не уметь — окно просто останется как есть */ }
+      try { await appWindow.setAlwaysOnTop(pinnedOnTop); } catch (_) { }
       const btn = root.querySelector("#pin-pinned-toggle");
       if (btn) { btn.textContent = pinnedOnTop ? "📌" : "📍"; btn.title = pinnedOnTop ? "Поверх остальных окон (нажмите, чтобы убрать)" : "Обычное окно (нажмите, чтобы закрепить поверх остальных)"; }
     });
@@ -108,10 +92,6 @@ async function load() {
   }
 }
 
-// Токен читаем напрямую из нативного хранилища (token_store.rs) — то
-// же, что делает tryRestoreSession() в основном окне при старте.
-// localStorage тут не при чём: авторизационный токен там никогда не
-// лежал (см. SECURITY.md), он всегда только в Rust-хранилище.
 async function boot() {
   try {
     state.token = await invoke("token_load");
@@ -123,9 +103,6 @@ async function boot() {
   await load();
 }
 
-// Кто-то нажал «📌 Открепить в окне» на другом отчёте, пока это окно уже
-// открыто — подменяем отчёт вместо того, чтобы плодить второе окно (см.
-// pinReportWindow в app/tauri.js: он же переиспользует это окно).
 listen(PIN_REPORT_EVENT, ev => {
   const nextId = ev.payload && ev.payload.publicId;
   if (!nextId) return;
@@ -135,8 +112,6 @@ listen(PIN_REPORT_EVENT, ev => {
   load();
 });
 
-// Окно часто будет просто висеть на экране без фокуса — обновить сразу,
-// как только на него посмотрели, а не ждать до следующего тика таймера.
 window.addEventListener("focus", load);
 
 boot();

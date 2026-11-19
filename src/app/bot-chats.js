@@ -1,7 +1,3 @@
-// «Чаты бота» — где состоит бот и что в каждом делает (только владелец).
-// Сервер: /api/bot-chats (список; заодно уточняет названия у Telegram),
-// POST /api/bot-chats/{id} {features?, mention?, mention_thread_id?},
-// POST /api/bot-chats/{id}/forget.
 
 import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
@@ -29,8 +25,6 @@ function chatHtml(c, features) {
     </div>`;
 }
 
-// Отдельный раздел Настроек («Чаты бота», только владелец) — список
-// рисуется прямо в нём, без окна поверх Настроек.
 export async function mountBotChats(root) {
   if (!root) return;
 

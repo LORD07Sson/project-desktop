@@ -1,14 +1,8 @@
-// Загрузчик: каталог авторов закрытого источника. Что за источник и его адреса знает только сервер —
-// здесь лишь сетка карточек, посты автора и выбор поста для загрузки.
 import { apiGet, apiPost, toast, clientHeaders } from "./api.js";
 import { invoke, openExternal } from "./tauri.js";
 
-// Кэш ответов каталога в памяти (5 минут, как на сервере): «назад», смена вкладки и повторное открытие — без сети.
-// Следующую страницу и пост под курсором подгружаем заранее, поэтому переход тоже мгновенный.
 const CACHE_MS = 5 * 60 * 1000;
 const memo = new Map();
-// Через Rust (api_get_fast): соединение держится открытым и нет CORS-предзапроса — новый адрес за один круг до
-// сервера вместо двух. Не 200 или старая сборка без команды — обычный путь, он же разбирает ошибки и выход из сессии.
 let fastBroken = false;
 async function fastGet(path, q) {
   const tauri = window.__TAURI_INTERNALS__;
@@ -33,7 +27,6 @@ function cget(path, q) {
   if (memo.size > 400) memo.delete(memo.keys().next().value);
   return p;
 }
-// Кнопка «В очереди» помнит свою задачу: отменили или упала — кнопка снова «Скачать» (очередь шлёт parser:jobs).
 function markQueued(btn, jobId, html) {
   if (!jobId) return;
   btn.dataset.idle ??= btn.innerHTML;
@@ -51,7 +44,7 @@ document.addEventListener("parser:jobs", ev => {
     });
   }
 });
-const prefetch = (path, q) => { cget(path, q).catch(() => { /* не страшно: загрузим по клику */ }); };
+const prefetch = (path, q) => { cget(path, q).catch(() => { }); };
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cssUrl = u => `url("${String(u || "").replace(/["\\\n\r]/g, encodeURIComponent)}")`;
@@ -69,7 +62,6 @@ function pager(page, pages, attr) {
   return `<div class="pc-pager">${btn(1, "«", false, page === 1)}${btn(page - 1, "‹", false, page === 1)}${nums.map(n => btn(n, n, n === page)).join("")}${btn(page + 1, "›", false, page === pages)}${btn(pages, "»", false, page === pages)}</div>`;
 }
 
-// Подписи вкладок присылает сервер (labels); здесь — нейтральные заглушки.
 let tabLabels = {};
 const TABS = [["authors", "Авторы", "Профили авторов с постами и файлами"], ["posts", "Посты", "Лента: новые, популярные, теги"], ["releases", "Раздачи", "Торренты: качает сервер — можно закрыть вкладку"]];
 const tabs = active => `<div class="pc-top">
@@ -78,7 +70,6 @@ const tabs = active => `<div class="pc-top">
   <div class="pc-tabs">${TABS.map(([id, n]) =>
     `<button type="button" class="pc-tab${id === active ? " on" : ""}" data-pc-tab="${id}">${srcChip(id)}${esc(tabLabels[id] || n)}</button>`).join("")}</div></div>`;
 
-// Авторы и посты есть у двух сайтов одного движка: имя сайта во вкладке кликабельно и переключает источник.
 let site = "a";
 let flipNext = false;
 const SRC_ICON = `<svg class="pc-src-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -90,20 +81,17 @@ function srcChip(tab) {
 }
 const SITE_KEY = "pc-last-site";
 
-// Заглушки-«скелеты», пока грузится список: вёрстка не прыгает.
 const skel = (cls, n) => `<div class="${cls}">${`<div class="pc-sk"></div>`.repeat(n)}</div>`;
 const DICE = `<svg class="pc-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg>`;
 const TAB_KEY = "pc-last-tab";
-const saveTab = t => { try { localStorage.setItem(TAB_KEY, t); } catch (_) { /* без памяти */ } };
+const saveTab = t => { try { localStorage.setItem(TAB_KEY, t); } catch (_) { } };
 
-/** Каталог в box. onPick(url) — выбран пост; onClose() — назад к обычному поиску; onQueued() — задача ушла в очередь. */
 export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   tabLabels = labels || {};
   const st = { q: "", service: "", sort: "favorited", page: 1, services: [] };
   const rs = { q: "", category: "", sort: "id", page: 1 };
   const fs = { mode: "search", q: "", tag: "", period: "week", page: 1 };
   let seq = 0;
-  // Курсор задержался на карточке — начинаем грузить пост или посты автора, к клику они уже в кэше.
   let hoverTimer = 0;
   box.onpointerover = ev => {
     const el = ev.target.closest("[data-pc-post],[data-pc-author]");
@@ -124,7 +112,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     if (sw) {
       const keys = Object.keys(tabLabels.sources || {});
       site = keys[(keys.indexOf(site) + 1) % keys.length] || "a";
-      try { localStorage.setItem(SITE_KEY, site); } catch (_) { /* без памяти */ }
+      try { localStorage.setItem(SITE_KEY, site); } catch (_) { }
       flipNext = true;
       Object.assign(st, { service: "", page: 1 });
       Object.assign(fs, { page: 1, tag: fs.mode === "tag" ? "" : fs.tag, mode: fs.mode === "tag" ? "tags" : fs.mode });
@@ -166,7 +154,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       ${nav}
       <div class="pc-rels">${(d.items || []).map((x, i) => `
         <div class="pc-rel${x.trusted ? " trusted" : ""}${x.remake ? " remake" : ""}">
-          ${"cover" in x  // сервер уже нашёл обложку — сразу картинка, без отдельного запроса
+          ${"cover" in x
             ? `<span class="pc-cover" data-pc-open="${i}" title="Подробнее">${x.cover ? `<img src="${esc(x.cover)}" alt="" referrerpolicy="no-referrer">` : ""}</span>`
             : `<span class="pc-cover" data-pc-cover="${esc(x.id)}" data-pc-open="${i}" title="Подробнее"></span>`}
           <span class="pc-rbody">
@@ -183,7 +171,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     search.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { rs.q = search.value.trim(); rs.page = 1; showReleases(); }, 450); });
     box.querySelector("[data-pc-rcat]").addEventListener("change", e => { rs.category = e.target.value; rs.page = 1; showReleases(); });
     box.querySelector("[data-pc-rsort]").addEventListener("change", e => { rs.sort = e.target.value; rs.page = 1; showReleases(); });
-    // Обложки — по мере появления карточек на экране: сервер достаёт картинку из описания раздачи.
     const io = new window.IntersectionObserver(entries => entries.forEach(en => {
       if (!en.isIntersecting) return;
       io.unobserve(en.target);
@@ -193,11 +180,11 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
           const img = document.createElement("img");
           img.alt = "";
           img.referrerPolicy = "no-referrer";
-          img.addEventListener("error", () => img.remove());  // inline onerror режет CSP — значок битой картинки оставался
+          img.addEventListener("error", () => img.remove());
           img.src = c.url;
           en.target.replaceChildren(img);
         })
-        .catch(() => { /* без обложки */ });
+        .catch(() => { });
     }), { rootMargin: "200px" });
     box.querySelectorAll("[data-pc-cover]").forEach(el => io.observe(el));
     box.querySelectorAll(".pc-cover > img").forEach(img => img.addEventListener("error", () => img.remove()));
@@ -209,7 +196,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (op) { showRelease(d.items[+op.dataset.pcOpen]); return; }
       const sv = ev.target.closest("[data-pc-server]");
       if (sv) {
-        // Раздачу качает сервер (до 20 ГБ), готовый файл сохраняется из очереди и удаляется с сервера.
         const x = d.items[+sv.dataset.pcServer];
         sv.disabled = true;
         try {
@@ -235,7 +221,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     };
   }
 
-  // Размер из списка файлов («1.3 GiB», «77 Bytes») → байты, чтобы считать выбранное.
   const UNIT = { bytes: 1, kib: 1024, mib: 1024 ** 2, gib: 1024 ** 3, tib: 1024 ** 4 };
   const toBytes = s => { const m = /([\d.]+)\s*(\w+)/.exec(s || ""); return m ? +m[1] * (UNIT[m[2].toLowerCase()] || 1) : 0; };
   const fmtBytes = n => n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} МБ` : `${Math.ceil(n / 1024)} КБ`;
@@ -254,7 +239,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     }
     if (my !== seq) return;
     const files = d.files || [];
-    // Общую корневую папку не повторяем в каждой строке — она в заголовке списка.
     const root = files.length > 1 && files.every(f => f.path.includes("/")) && new Set(files.map(f => f.path.split("/")[0])).size === 1
       ? files[0].path.split("/")[0] : "";
     const shown = p => (root ? p.slice(root.length + 1) : p);
@@ -344,7 +328,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   };
   const svg = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ICON.other}</svg>`;
 
-  // Страница поста прямо в каталоге: слева медиа, справа карточка с автором, файлами и действиями.
   async function showPost(url, back) {
     const my = ++seq;
     toTop();
@@ -362,7 +345,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     const a = d.author || {};
     const files = d.files || [];
     const links = d.links || [];
-    // Пост только с видео: обложкой служит превью ролика.
     const imgs = (d.images || []).length ? d.images : [...new Set(files.map(f => f.thumb).filter(Boolean))].map(thumb => ({ thumb }));
     const sizes = files.map(f => f.size || 0);
     const big = i => esc(imgs[i]?.full || imgs[i]?.thumb || "");
@@ -427,12 +409,11 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (el && sum && sizes.every(Boolean)) { el.textContent = `всего ${fmtBytes(sum)}`; el.hidden = false; }
     };
     showTotal();
-    // Размеры, которых нет в ответе (у одного из источников), — по одному в секунду, как просит сайт.
     (async () => {
       for (const [i, f] of files.entries()) {
         if (f.size || my !== seq) continue;
         let size = 0;
-        try { size = (await cget("/parser/access/file-size", { url: f.url }))?.size || 0; } catch (_) { /* без размера */ }
+        try { size = (await cget("/parser/access/file-size", { url: f.url }))?.size || 0; } catch (_) { }
         const el = box.querySelector(`[data-pp-size="${i}"]`);
         if (!el || my !== seq) return;
         el.textContent = size ? fmtBytes(size) : "размер неизвестен";
@@ -507,7 +488,6 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   }
 
   const MODES = [["search", "Новые и поиск"], ["popular", "Популярные"], ["tags", "Теги"]];
-  // Что умеет текущий сайт (присылает сервер); без списка — всё.
   const can = f => { const list = tabLabels.features?.[site]; return !list || list.includes(f); };
 
   async function showFeed() {
@@ -660,12 +640,11 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     };
   }
 
-  try { const v = localStorage.getItem(SITE_KEY); if (v && tabLabels.sources?.[v]) site = v; } catch (_) { /* по умолчанию первый */ }
+  try { const v = localStorage.getItem(SITE_KEY); if (v && tabLabels.sources?.[v]) site = v; } catch (_) { }
   let last = "authors";
-  try { last = localStorage.getItem(TAB_KEY) || "authors"; } catch (_) { /* по умолчанию авторы */ }
+  try { last = localStorage.getItem(TAB_KEY) || "authors"; } catch (_) { }
   toTop();
   if (last === "releases") showReleases(); else if (last === "posts") showFeed(); else showAuthors();
-  // Первые страницы соседних вкладок — заранее, чтобы переключение было мгновенным.
   setTimeout(() => {
     prefetch("/parser/access/catalog", { q: st.q, service: st.service, sort: st.sort, page: 1, site });
     prefetch("/parser/access/posts", { mode: fs.mode, q: fs.q, tag: fs.tag, period: fs.period, page: 1, site });

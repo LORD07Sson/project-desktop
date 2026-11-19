@@ -1,16 +1,12 @@
-// Загрузчик: вход в каталог по логину/паролю и раздел «Аккаунты каталога» в настройках.
-// Раздел видят только владельцы, и он открывается паролем владельца при каждом входе:
-// токен живёт только в памяти, пока открыта панель настроек.
 import { clientHeaders, API_BASE, toast, openSheet, dismissSheet } from "./api.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 async function errorText(res) {
-  try { const j = await res.json(); if (j.detail) return j.detail; } catch (_) { /* не json */ }
+  try { const j = await res.json(); if (j.detail) return j.detail; } catch (_) { }
   return `HTTP ${res.status}`;
 }
 
-/** Окно с полями; onSubmit(values) возвращает текст ошибки или "" при успехе. Resolve(true), если успех. */
 export function formSheet({ title, sub, fields, submit, onSubmit }) {
   return new Promise(resolve => {
     const overlay = openSheet(`
@@ -54,7 +50,6 @@ async function post(path, body, extra = {}) {
   return res.ok ? "" : errorText(res);
 }
 
-/** Вход в каталог: логин и пароль выдаёт владелец. */
 export function askCatalogLogin() {
   return formSheet({
     title: "Вход в каталог",
@@ -76,7 +71,6 @@ export async function catalogLogout() {
   await post("/parser/access/logout");
 }
 
-/** Раздел «Аккаунты каталога» в box. Возвращает функцию закрытия (сбрасывает токен). */
 export function mountOwnerAccounts(box) {
   let token = "";
   const hdr = () => ({ "X-Settings-Token": token });

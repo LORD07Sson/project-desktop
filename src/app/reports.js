@@ -1,10 +1,3 @@
-// Вкладка «Список»: таблица отчётов, фильтры, сортировка, массовые
-// операции, диалоги смены статуса/назначения/приоритета/срока.
-//
-// Циклическая зависимость с report-detail.js (openReportDetail открывается
-// по клику на строку, а из карточки отчёта вызываются диалоги отсюда) —
-// это нормально для ES-модулей, пока ничего не вызывается на этапе
-// инициализации модуля (только позже, из обработчиков событий).
 
 import { state } from "./state.js";
 import { pipelinePct } from "./utils.js";
@@ -15,25 +8,17 @@ import { openReportDetail } from "./report-detail.js";
 import { isFavorite, toggleFavorite, favoriteIds } from "./favorites.js";
 import { loadAvatars } from "./profile.js";
 
-// page_size=100 — больше сервер за раз не отдаёт, но /api/reports
-// понимает page (номер страницы, с нуля): остальное догружается кнопкой
-// «Показать ещё» под таблицей, как в мини-аппе.
 export const PAGE_SIZE = 100;
 let listPage = 0;
 
 export function currentFilters(page = 0) {
   const params = {
-    // Сортировку по колонкам делает sortLocally() ниже — на сервер уходит
-    // только то значение, которое он точно понимает ("new", как в
-    // командной палитре).
     q: $("#search-input").value.trim(),
     status: $("#status-filter").value,
     priority: $("#priority-filter").value,
     sort: "new",
     page_size: PAGE_SIZE,
   };
-  // «Мои» — тот же параметр assignee, поэтому быстрый фильтр главнее
-  // выбранного в списке исполнителя: оба сразу сервер всё равно не примет.
   const assignee = $("#assignee-filter").value;
   if (state.quickFilter === "mine") params.assignee = "me";
   else if (assignee) params.assignee = assignee;
@@ -47,9 +32,6 @@ export function currentFilters(page = 0) {
   return params;
 }
 
-// ---------- фильтры по исполнителю / сезону / тайтлу ----------
-// Те же фильтры, что в мини-аппе (f-assignee, f-season, f-title): сервер
-// их и так понимал, в десктопе просто не было полей.
 
 function fillAssigneeFilter() {
   const sel = $("#assignee-filter");
@@ -71,7 +53,7 @@ async function fillSeasonFilter() {
       (d.seasons || []).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
     sel.value = current;
     seasonsLoaded = true;
-  } catch (_) { /* без списка сезонов фильтр просто останется «Все сезоны» */ }
+  } catch (_) { }
 }
 
 async function fillTitleFilter(seasonId, selectedTitleId = "") {
@@ -84,19 +66,16 @@ async function fillTitleFilter(seasonId, selectedTitleId = "") {
     sel.innerHTML = `<option value="">Все тайтлы</option>` +
       (d.titles || []).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
     sel.value = selectedTitleId;
-  } catch (_) { /* тайтлы не подгрузились — фильтр по сезону всё равно работает */ }
+  } catch (_) { }
 }
 
-// ---------- сохранённые фильтры (пресеты) ----------
-// Именованный снимок всех фильтров списка — как «⭐ пресеты» в мини-аппе.
-// Личная настройка, поэтому localStorage на пользователя.
 
 function presetsKey() { return `project_list_presets_${state.telegramId || "anon"}`; }
 function loadPresets() {
   try { return JSON.parse(localStorage.getItem(presetsKey()) || "[]"); } catch (_) { return []; }
 }
 function savePresets(list) {
-  try { localStorage.setItem(presetsKey(), JSON.stringify(list)); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(presetsKey(), JSON.stringify(list)); } catch (_) { }
 }
 
 const LIST_VIEW_COLUMNS = [
@@ -122,7 +101,7 @@ function loadListView() {
 }
 function saveListView(view) {
   const normalized = normalizeListView(view);
-  try { localStorage.setItem(listViewKey(), JSON.stringify(normalized)); } catch (_) { /* необязательная настройка */ }
+  try { localStorage.setItem(listViewKey(), JSON.stringify(normalized)); } catch (_) { }
   return normalized;
 }
 function applyListView(view = loadListView()) {
@@ -270,8 +249,6 @@ function savePresetDialog() {
   input.addEventListener("keydown", e => { if (e.key === "Enter") save(); });
 }
 
-// Соседи отчёта в текущем порядке списка — для кнопок «‹ ›» в карточке
-// отчёта, как в мини-аппе: пролистать выборку, не закрывая карточку.
 export function listNeighbors(publicId) {
   if (state.activeTab !== "list") return null;
   const idx = state.reports.findIndex(r => r.public_id === publicId);
@@ -282,11 +259,6 @@ export function listNeighbors(publicId) {
   };
 }
 
-// «Фрирен 2, серия 7» → имя тайтла + «серия 7» отдельно. Если отчёт
-// привязан к тайтлу (title_name), имя берём оттуда, а свободный текст
-// отчёта остаётся подписью — у старых отчётов он бывает любым.
-// Серию в названии пишут по-разному: «Фрирен, серия 7», «Кредит - 05»,
-// «5 серия», «серия 5» — все дают номер (без ведущих нулей).
 const EP_FORMS = [
   /^(.*?)[,\s—–-]+(?:серия|эп\.?|ep\.?)\s*(\d+)\s*$/i,
   /^(.*?)\s[—–-]\s*(\d+)\s*$/,
@@ -306,8 +278,6 @@ export function seriesParts(r) {
   return { name: raw || r.public_id, ep: "", sub: "" };
 }
 
-// Постеры — через /img_proxy: к <img>/background заголовок с токеном
-// не приделать, а внешний сайт постеров из webview может не открыться.
 export function posterSrc(url) {
   return url ? mediaUrl("/img_proxy", { url }) : "";
 }
@@ -319,8 +289,6 @@ export function priorityFlagHtml(p) {
   return "";
 }
 
-// «Кадр»: этап словом и готовность шкалой. Есть цепочка этапов —
-// берём её; нет — положение статуса на пути «черновик → готово».
 const STATUS_PCT = { draft: 6, working: 45, revision: 60, review: 75, completed: 100, cancelled: 0 };
 const cleanStatus = s => String(s || "").replace(/^[^\p{L}\p{N}]+/u, "");
 function stageLabel(r) {
@@ -335,8 +303,6 @@ function progressPct(r) {
   return pct ?? STATUS_PCT[r.status] ?? 0;
 }
 
-// Срок пилюлей с отсчётом («завтра», «просрочено 2 дн.») и цветом —
-// то, что горит, видно без подсчёта дат в уме; сама дата мельче рядом.
 export function deadlineCellHtml(r, overdue) {
   if (!r.deadline) return `<span class="ls-dl-none">без срока</span>`;
   const deadline = String(r.deadline);
@@ -355,7 +321,6 @@ export function deadlineCellHtml(r, overdue) {
   const dueAt = time
     ? Date.parse(`${dateKey}T${time[1]}:00+03:00`)
     : Date.parse(`${dateKey}T23:59:59+03:00`);
-  // Срок без времени считаем календарными днями, как Доска, Обзор и Календарь; со временем — полными сутками.
   const lateDays = time ? Math.floor((Date.now() - dueAt) / 86400000) : -days;
   const [txt, cls] = overdue ? [lateDays > 0 ? `просрочено ${lateDays} дн.` : "просрочено", "late"]
     : days === 0 ? ["сегодня", "late"] : days === 1 ? ["завтра", "soon"] : days <= 3 ? [`через ${days} дн.`, "soon"] : [`через ${days} дн.`, "ok"];
@@ -366,9 +331,7 @@ export async function loadReports() {
   const statusbar = $("#statusbar");
   const skeleton = $("#skeleton");
   const table = $(".content table");
-  // Скелетон показываем только если загрузка реально затянулась (>100мс) —
-  // иначе на быстром ответе он просто мигнёт туда-обратно.
-  // DevSkim: ignore DS172411 — функция, не строка, данные не внешние
+  // DevSkim: ignore DS172411
   const skeletonTimer = setTimeout(() => {
     skeleton.hidden = false;
     requestAnimationFrame(() => skeleton.classList.add("visible"));
@@ -383,11 +346,6 @@ export async function loadReports() {
     const r = await apiGet("/reports", currentFilters());
     let reports = r.reports || [];
     let total = r.total || 0;
-    // «Избранное» — чисто локальный фильтр (см. favorites.js), сервер
-    // о нём не знает и параметра под него в API нет. Фильтруем то, что
-    // уже пришло на текущей странице, и подменяем total — иначе
-    // статусбар ниже написал бы «показаны 3 из 47», хотя реально
-    // отфильтровано ровно то, что загружено.
     if (state.quickFilter === "favorites") {
       const favs = favoriteIds();
       reports = reports.filter(x => favs.has(x.public_id));
@@ -404,7 +362,7 @@ export async function loadReports() {
   } finally {
     clearTimeout(skeletonTimer);
     skeleton.classList.remove("visible");
-    setTimeout(() => { skeleton.hidden = true; }, 180); // DevSkim: ignore DS172411 — функция, не строка
+    setTimeout(() => { skeleton.hidden = true; }, 180); // DevSkim: ignore DS172411
     table.classList.remove("loading");
   }
   return ok;
@@ -465,11 +423,6 @@ export function assigneesHtml(list) {
   return `<span class="avatar-stack">${bubbles}</span>${more}`;
 }
 
-// Диапазонное выделение Shift+клик — привычка из проводника/почты,
-// которой чекбоксы-по-одному не дают: отметить полсотни строк подряд
-// вручную, кликая по каждой, никто делать не станет. Индекс — вне
-// renderReports(), чтобы переживать перерисовку (сортировка, фильтр,
-// снятие звёздочки из фильтра «Избранное» и т.п.).
 let lastCheckedIndex = null;
 
 export function renderReports() {
@@ -478,9 +431,6 @@ export function renderReports() {
   const empty = $("#empty-state");
   empty.hidden = state.reports.length > 0;
   if (!empty.hidden) {
-    // Причина пустого списка обычно понятна сразу (активный фильтр),
-    // так что подсказка — не общая заглушка, а конкретный следующий
-    // шаг под конкретную причину, а не догадки пользователя.
     const textEl = empty.querySelector(".empty-state-text");
     const icEl = empty.querySelector(".empty-state-ic");
     if (state.quickFilter === "favorites") {
@@ -505,8 +455,6 @@ export function renderReports() {
     const tr = document.createElement("tr");
     tr.dataset.publicId = r.public_id;
     if (state.selected.has(r.public_id)) tr.classList.add("selected");
-    // Stagger: строки появляются с небольшой нарастающей задержкой, а не все разом.
-    // Ограничиваем задержку первыми ~18 строками, чтобы длинные списки не "доезжали" целую вечность.
     tr.classList.add("row-in");
     tr.style.animationDelay = `${Math.min(i, 18) * 22}ms`;
     const dotClass = STATUS_DOT_CLASS[r.status] || "draft";
@@ -537,8 +485,6 @@ export function renderReports() {
     tr.querySelector(".row-check").addEventListener("click", e => {
       e.stopPropagation();
       if (e.shiftKey && lastCheckedIndex !== null) {
-        // Отмечаем/снимаем весь диапазон между прошлым и текущим кликом
-        // тем же состоянием, в которое только что перешёл сам чекбокс.
         const from = Math.min(lastCheckedIndex, i);
         const to = Math.max(lastCheckedIndex, i);
         const on = e.target.checked;
@@ -560,17 +506,11 @@ export function renderReports() {
       e.target.textContent = on ? "★" : "☆";
       e.target.title = on ? "Убрать из избранного" : "В избранное";
       if (state.quickFilter === "favorites" && !on) {
-        // Сняли звёздочку, пока смотрим именно на фильтр «Избранное» —
-        // строка должна пропасть из списка сразу, а не только после
-        // следующего «Обновить».
         state.reports = state.reports.filter(x => x.public_id !== r.public_id);
         state.total = state.reports.length;
         renderReports();
       }
     });
-    // Быстрые действия по наведению на строку — открывают тот же диалог,
-    // что и чип на карточке отчёта, просто без похода внутрь карточки.
-    // stopPropagation — иначе клик по кнопке ещё и открыл бы саму карточку.
     tr.querySelector("[data-quick-assign]").addEventListener("click", e => {
       e.stopPropagation();
       assignDialog([r.public_id], () => loadReports());
@@ -580,12 +520,6 @@ export function renderReports() {
       changeStatusDialog([r.public_id], () => loadReports(), r.status);
     });
     tr.addEventListener("click", () => openReportDetail(r.public_id));
-    // Правый клик — тот же набор быстрых действий, что уже есть в
-    // строке «Команда» профиля (см. profile.js), только для отчёта:
-    // открыть без выделения текста мышью, сменить статус/исполнителя/
-    // приоритет/срок без похода внутрь карточки, скопировать номер.
-    // Десктопная привычка (проводник, почта) — у мини-аппа такого
-    // жеста просто нет физически.
     tr.addEventListener("contextmenu", e => {
       e.preventDefault();
       const favNow = isFavorite(r.public_id);
@@ -658,7 +592,7 @@ $("#bulk-clear").addEventListener("click", () => {
 let searchDebounce = null;
 $("#search-input").addEventListener("input", () => {
   clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(loadReports, 320); // DevSkim: ignore DS172411 — функция, не строка
+  searchDebounce = setTimeout(loadReports, 320); // DevSkim: ignore DS172411
 });
 $("#search-input").addEventListener("keydown", e => { if (e.key === "Enter") { clearTimeout(searchDebounce); loadReports(); } });
 $("#status-filter").addEventListener("change", loadReports);
@@ -674,9 +608,6 @@ $("#preset-save").addEventListener("click", savePresetDialog);
 $("#list-view-settings").addEventListener("click", listViewDialog);
 renderPresetChips();
 
-// Установка быстрого фильтра без загрузки — списку её зовёт обработчик
-// ниже, а профилю («на руках пусто → посмотреть свободные серии») важно
-// сначала переключить вкладку и только потом решать, нужен ли запрос.
 export function setQuickFilter(key) {
   state.quickFilter = key;
   $all(".qf-chip").forEach(c => c.classList.toggle("active", c.dataset.qf === key));
@@ -690,12 +621,7 @@ $all(".qf-chip[data-qf]").forEach(chip => {
   });
 });
 
-// Ctrl+F — фокус на поиск по списку. (Escape, закрывающий верхнюю
-// модалку, живёт теперь в api.js — рядом с openSheet, к вкладке
-// «Список» он отношения не имел.)
 document.addEventListener("keydown", e => {
-  // e.code — физическая клавиша, не зависит от раскладки (см. командную
-  // палитру в command-palette.js: та же причина, что и там).
   if (!(e.ctrlKey || e.metaKey) || e.code !== "KeyF") return;
   if (state.activeTab !== "list" || document.querySelector(".overlay")) return;
   e.preventDefault();
@@ -717,7 +643,6 @@ $all("thead th[data-sort]").forEach(th => {
   });
 });
 
-// ---------- смена статуса / назначение / приоритет / срок ----------
 
 function statusOptionsHtml(selected) {
   const placeholder = selected === undefined ? `<option value="" selected>— выберите статус —</option>` : "";
@@ -725,9 +650,6 @@ function statusOptionsHtml(selected) {
     `<option value="${v}" ${v === selected ? "selected" : ""}>${esc(label)}</option>`).join("");
 }
 
-// Галочки, а не <select>: назначить можно сразу нескольких. Сервер
-// назначение добавляет, а не заменяет («+ ещё исполнитель» в карточке),
-// поэтому каждый отмеченный — отдельный запрос.
 function usersChecksHtml() {
   if (!state.users.length) return `<div class="no-assignee">Нет доступных исполнителей</div>`;
   return state.users.map(u => `<label class="assign-pick"><input type="checkbox" value="${u.telegram_id}"><span>${esc(u.name)}${esc(pauseSuffix(u))}</span></label>`).join("");
@@ -805,7 +727,7 @@ export function assignDialog(publicIds, onDone) {
     } catch (e) {
       toast(`Не удалось назначить: ${e.message}`, "error");
       apply.disabled = false;
-      await loadReports(); // часть могла успеть назначиться
+      await loadReports();
     }
   });
 }

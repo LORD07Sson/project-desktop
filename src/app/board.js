@@ -1,22 +1,3 @@
-// Вкладка «Доска» (канбан по статусам, /api/board).
-// Список статусов и их порядок приходят прямо в ответе /api/board
-// (d.statuses) — не дублируем их отдельной константой на клиенте.
-//
-// Верхняя полоска колонки и левая полоска карточки — один и тот же
-// цвет статуса (STATUS_COLOR_VAR, те же переменные, что у
-// точки-индикатора и у доната на Обзоре/профиле) — глазами отличить
-// колонки друг от друга теперь можно без чтения подписи.
-//
-// Перетаскивание — на Pointer Events, а НЕ на нативном HTML5 Drag and
-// Drop (draggable/dragstart/dragover/drop): в реальном WebView2 эти
-// события по факту не доставляются надёжно (известный, давний баг —
-// https://github.com/MicrosoftEdge/WebView2Feedback/issues/5237,
-// dragover/drop просто не срабатывают в части сценариев хостинга) —
-// то же самое, что уже было со внешним import map в этом проекте:
-// «работает по стандарту» и «работает в конкретном WebView2» —
-// разные вещи. Pointer Events (pointerdown/move/up) — обычный,
-// надёжно доставляемый в любом Chromium-движке механизм, руками
-// реализующий тот же «взял — перенёс — отпустил».
 
 import { apiGet, apiPost, toast, dialogSkeletonHtml, openSheet, tabSkeleton } from "./api.js";
 import { pipelinePct } from "./utils.js";
@@ -31,36 +12,26 @@ import { loadAvatars } from "./profile.js";
 import { doomState, doomPosterHtml, doomCardStyle, deadFxHtml } from "./Crack.jsx";
 import { enhanceSelects } from "./fancy-select.js";
 
-// Свёрнутые колонки — узкая студия часто держит "Завершено"/"Отменено"
-// сложенными: сами по себе они редко нужны, но занимают на широкой
-// доске столько же места, сколько активные статусы. Чисто локальное
-// предпочтение раскладки (у API нет и не должно быть такого поля) —
-// живёт в localStorage на пользователя, тем же приёмом, что избранное
-// в списке (см. favorites.js).
 function collapsedKey() { return `project_board_collapsed_${state.telegramId || "anon"}`; }
 function readCollapsed() {
   try { return new Set(JSON.parse(localStorage.getItem(collapsedKey()) || "[]")); } catch (_) { return new Set(); }
 }
 function writeCollapsed(set) {
-  try { localStorage.setItem(collapsedKey(), JSON.stringify([...set])); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(collapsedKey(), JSON.stringify([...set])); } catch (_) { }
 }
-// Пустые колонки и «Отменено» свёрнуты сами — место достаётся тем, где есть работа. Развернул такую вручную —
-// запоминаем отдельно, чтобы она не схлопывалась обратно при следующей перерисовке.
 function expandedKey() { return `project_board_expanded_${state.telegramId || "anon"}`; }
 function readExpanded() {
   try { return new Set(JSON.parse(localStorage.getItem(expandedKey()) || "[]")); } catch (_) { return new Set(); }
 }
 function writeExpanded(set) {
-  try { localStorage.setItem(expandedKey(), JSON.stringify([...set])); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(expandedKey(), JSON.stringify([...set])); } catch (_) { }
 }
-// Свёрнутый список: колонка остаётся на месте с заголовком и счётчиком, карточки спрятаны (клик по заголовку).
-// В отличие от «свернуть в полоску» место по ширине не освобождается — просто не мешают длинные списки.
 function foldedKey() { return `project_board_folded_${state.telegramId || "anon"}`; }
 function readFolded() {
   try { return new Set(JSON.parse(localStorage.getItem(foldedKey()) || "[]")); } catch (_) { return new Set(); }
 }
 function writeFolded(set) {
-  try { localStorage.setItem(foldedKey(), JSON.stringify([...set])); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(foldedKey(), JSON.stringify([...set])); } catch (_) { }
 }
 const autoCollapsed = col => (col.status === "cancelled" || !col.total) && !boardView.query;
 function isCollapsed(col, collapsed, expanded) {
@@ -74,28 +45,11 @@ function plural(n, one, few, many) {
   return many;
 }
 
-// Позиция статуса в пайплайне студии, в процентах — НЕ метрика
-// «сколько реально сделано» (такого поля у отчёта нет и не будет,
-// категориальный статус не сводится к проценту без выдумывания
-// числа), а фиксированная, задокументированная шкала «как далеко по
-// пайплайну», тем же приёмом, что PRIORITY_RANK_SQL в board.rs уже
-// сводит priority к числу для сортировки. draft и cancelled сюда не
-// входят — у референса карточка «Pending» (наш «Черновик», работа ещё
-// не началась) вовсе без прогресс-бара, как и у отменённой серии.
 const STATUS_PROGRESS = { working: 40, review: 70, revision: 55, completed: 100 };
 const DRAG_THRESHOLD_PX = 6;
 
-// pointerup снимает .dragging до того, как браузер успевает выстрелить
-// следующим click по тому же элементу, поэтому проверять класс внутри
-// самого click-обработчика уже поздно — вместо этого запоминаем момент
-// окончания настоящего (превысившего порог) драга и в click просто
-// смотрим, не только ли что это было — тот же приём, что и у любого
-// самодельного drag&drop на pointer events.
 const lastDragEndAt = new WeakMap();
 
-// Настройки вида доски — сортировка и поиск. Как и свёрнутые колонки,
-// это личное предпочтение раскладки, у API такого поля нет и не должно
-// быть.
 const SORTS = [
   ["smart", "🔥 По срочности"],
   ["deadline", "📅 По сроку"],
@@ -103,34 +57,24 @@ const SORTS = [
   ["age", "🕸 По давности"],
   ["none", "↕ Как на сервере"],
 ];
-// Сколько карточек в статусе считаем перебором. Значения «на глаз» для
-// студии из нескольких человек: больше — верный признак, что работу
-// набрали в параллель и ничего не доводят.
 const WIP_LIMITS = { working: 8, review: 15, revision: 6 };
 const STALE_AFTER_DAYS = 7;
 
-// «Колонки» или «Таймлайн» (над колонками — сроки серий и загрузка).
 function boardMode() { try { return localStorage.getItem("project_board_mode") === "timeline" ? "timeline" : "cols"; } catch (_) { return "cols"; } }
-function setBoardMode(v) { try { localStorage.setItem("project_board_mode", v); } catch (_) { /* не критично */ } }
+function setBoardMode(v) { try { localStorage.setItem("project_board_mode", v); } catch (_) { } }
 
 function sortKey() { return `project_board_sort_${state.telegramId || "anon"}`; }
 function readSort() {
   try { return localStorage.getItem(sortKey()) || "smart"; } catch (_) { return "smart"; }
 }
 function writeSort(value) {
-  try { localStorage.setItem(sortKey(), value); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(sortKey(), value); } catch (_) { }
 }
 
 const boardView = { sort: readSort(), query: "", seasonId: 0, titleId: 0, month: "" };
-// Последний ответ сервера — чтобы пересортировать и отфильтровать доску
-// мгновенно, не ходя за теми же данными второй раз.
 let lastBoardData = null;
-// Раскладка последней отрисовки: переключателю «Колонки/Таймлайн» нужна только она, без пересборки доски.
 let lastLayout = null;
 
-// Кэшируется в памяти (сезоны редко меняются в рамках одной сессии),
-// не в localStorage: список студии актуальнее всего при живом
-// запросе.
 let seasonsList = null;
 const titlesBySeasonCache = new Map();
 
@@ -152,13 +96,11 @@ async function ensureTitlesLoaded(seasonId) {
   try {
     const d = await apiGet(`/public/seasons/${seasonId}/titles`);
     titles = d.titles || [];
-  } catch (_) { /* пусто — фильтр по тайтлу просто останется недоступен */ }
+  } catch (_) { }
   titlesBySeasonCache.set(seasonId, titles);
   return titles;
 }
 
-// Сегодняшняя дата глазами клиента: «просрочено» должно считаться по
-// местному календарю студии, а не по часовому поясу процесса.
 function todayLocal() {
   const d = new Date();
   const pad = n => String(n).padStart(2, "0");
@@ -178,8 +120,6 @@ function layoutRequest(columns) {
   });
 }
 
-// Срок словами, а не голой датой: «через 2 дня» читается с одного
-// взгляда, «2026-09-20» требует посчитать в уме.
 function deadlineLabel(c) {
   if (c.deadline == null) return "без срока";
   if (c.daysLeft == null) return `до ${prettyDate(c.deadline)}`;
@@ -191,7 +131,6 @@ function deadlineLabel(c) {
   return `до ${prettyDate(c.deadline)}`;
 }
 
-// «2026-11-04» → «4 нояб.»; другой год — с годом.
 function prettyDate(iso) {
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
@@ -202,7 +141,6 @@ function prettyDate(iso) {
 
 const doomCardClass = st => ` doom${st.level >= 0.5 ? " dread" : ""}${st.gloom > 0.9 ? " flicker" : ""}${st.level >= 1 ? " dead" : ""}`;
 
-// Раз в 20 секунд догоняем время: трещины растут, мрак сгущается, в 0:00 обложка разлетается — без перерисовки доски.
 function tickDoom() {
   if (document.hidden) return;
   for (const el of document.querySelectorAll(".kc-doom[data-doom]")) {
@@ -222,9 +160,6 @@ function tickDoom() {
 }
 setInterval(tickDoom, 20000);
 
-// Обложка, тайтл и этапы серии — из ответа /board (раскладка board.rs
-// их не прокидывает, она про порядок и сроки). Обновляется на каждой
-// перерисовке доски.
 let seriesById = new Map();
 function rememberSeries(statuses) {
   seriesById = new Map();
@@ -232,21 +167,15 @@ function rememberSeries(statuses) {
 }
 const cleanLabel = s => String(s || "").replace(/^[^\p{L}\p{N}]+/u, "");
 
-// Карточка «Кадра»: обложка, номер и эпизод, этап и срок, полоска
-// готовности и исполнители. Насыщенность полоски слева по-прежнему
-// показывает срочность (heat из board.rs).
 export function boardCardHtml(c, status) {
   const r = seriesById.get(c.publicId) || {};
   const parts = seriesParts({ ...r, title: c.title, public_id: c.publicId });
   const poster = posterSrc(r.poster_url);
   const roles = r.pipeline_roles || [];
   const stage = roles.length && r.pipeline_stage != null ? roles[Math.min(r.pipeline_stage, roles.length - 1)] : cleanLabel(r.status_label) || "";
-  // У закрытой серии срок уже не горит: «просрочено на 3 дн.» у «Завершено» только путает.
   const closed = status === "completed" || status === "cancelled";
-  // Завершённая — всегда полная полоска: этап конвейера мог так и остаться на «Звукаре».
   const pct = status === "completed" ? 100
     : pipelinePct(r) ?? STATUS_PROGRESS[status] ?? 6;
-  // Есть пайплайн — вместо полоски по звену на человека: сдавшие закрашены, и кого ждём.
   const pipeDone = status === "completed" ? roles.length : Math.min(r.pipeline_done ?? 0, roles.length);
   const waiting = (r.pipeline_waiting || []).join(", ");
   const pipe = roles.length && !closed
@@ -257,7 +186,6 @@ export function boardCardHtml(c, status) {
     : "";
   const overdue = c.overdue && !closed;
   const hotDue = !closed && (overdue || c.daysLeft === 0 || c.daysLeft === 1);
-  // Срок близко — обложка трескается, как в герое «Обзора» (Crack.jsx); живое обновление — tickDoom ниже.
   const doom = poster && !closed && c.deadline ? doomState(c.deadline) : null;
   const posterHtml = doom
     ? `<span class="kc-pc kc-doom" data-doom="${esc(c.deadline)}" data-doom-key="${doom.key}" data-doom-src="${esc(poster)}">${doomPosterHtml(c.publicId, poster, doom)}</span>`
@@ -280,50 +208,23 @@ export function boardCardHtml(c, status) {
 }
 
 
-// Ручной drag одной карточки — от pointerdown до pointerup.
-//
-// Мышь: как и было. Ниже DRAG_THRESHOLD_PX это просто клик (открываем
-// карточку отчёта), выше — тащим клон-«призрак» под курсором и
-// подсвечиваем колонку, над которой он сейчас висит
-// (document.elementFromPoint, не события самой колонки — с ручным
-// драгом других dragenter/dragover всё равно нет).
-//
-// Палец/перо: жест сначала считается прокруткой доски, как в телефоне —
-// повёл пальцем по любому месту, включая карточки, и доска едет влево/
-// вправо. Иначе прокрутить было почти невозможно: карточками занята вся
-// площадь колонок, а зажатие на них начинало перенос. Перенести карточку
-// пальцем можно после удержания на месте (LONG_PRESS_MS) — ровно та же
-// схема, что в мобильных канбан-досках.
-//
-// Почему не «горизонтально = прокрутка» и для мыши тоже: перенос
-// карточки в соседнюю колонку по своей природе горизонтальный, так что
-// на мыши это отобрало бы главный жест доски.
 const LONG_PRESS_MS = 350;
 
 function wireCardDrag(card) {
   card.addEventListener("pointerdown", downEvent => {
-    if (downEvent.button !== 0) return; // только левая кнопка мыши
+    if (downEvent.button !== 0) return;
     const startX = downEvent.clientX;
     const startY = downEvent.clientY;
     const boardEl = card.closest(".board");
     const byTouch = downEvent.pointerType !== "mouse";
-    // "pending" — ещё не решили, прокрутка это или перенос (только палец);
-    // "pan" — тянем доску; "card" — тащим карточку.
     let mode = byTouch ? "pending" : "card";
-    let dragging = false; // карточка реально поехала
-    let panned = false;   // доску реально сдвинули
+    let dragging = false;
+    let panned = false;
     let ghost = null;
     let overCol = null;
     let holdTimer = null;
     const startScroll = boardEl ? boardEl.scrollLeft : 0;
 
-    // Захват указателя на самой карточке — без него в реальном
-    // WebView2 pointermove/pointerup, навешанные на window, иногда не
-    // доставляются, если курсор хоть на миг ушёл не над тем элементом
-    // (тот же класс проблем, что раньше был у нативного HTML5 drag&drop,
-    // см. комментарий над файлом). setPointerCapture жёстко привязывает
-    // все последующие события этого pointerId к card, независимо от
-    // того, что реально под курсором.
     card.setPointerCapture(downEvent.pointerId);
 
     function moveGhost(x, y) {
@@ -351,14 +252,10 @@ function wireCardDrag(card) {
     }
 
     if (byTouch) {
-      holdTimer = setTimeout(() => { // DevSkim: ignore DS172411 — функция, не строка
+      holdTimer = setTimeout(() => { // DevSkim: ignore DS172411
         holdTimer = null;
         if (mode !== "pending") return;
         mode = "card";
-        // Палец всё это время стоял на месте, значит браузер жест ещё не
-        // классифицировал — можно забрать его себе целиком, вместе с
-        // вертикалью (иначе перенос карточки вверх/вниз уехал бы в
-        // прокрутку страницы, см. touch-action: pan-y в styles.css).
         card.style.touchAction = "none";
         beginCardDrag(startX, startY);
       }, LONG_PRESS_MS);
@@ -367,7 +264,7 @@ function wireCardDrag(card) {
     function endPanVisuals() {
       if (!boardEl) return;
       boardEl.classList.remove("panning");
-      boardEl.style.scrollBehavior = "smooth"; // вернуть плавность колесу мыши
+      boardEl.style.scrollBehavior = "smooth";
     }
 
     function onMove(e) {
@@ -377,13 +274,11 @@ function wireCardDrag(card) {
 
       if (mode === "pending") {
         if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-        // Повели раньше, чем сработало удержание — это прокрутка.
         clearTimeout(holdTimer);
         holdTimer = null;
         mode = "pan";
         if (boardEl) {
           boardEl.classList.add("panning");
-          // 1:1 за пальцем, без анимации — как и в wireBoardScroll.
           boardEl.style.scrollBehavior = "auto";
         }
       }
@@ -414,12 +309,10 @@ function wireCardDrag(card) {
 
       if (mode === "pan") {
         endPanVisuals();
-        // Пролистнули доску пальцем — это не тап по карточке, открывать
-        // отчёт не надо (тот же признак, что и у настоящего драга).
         if (panned) lastDragEndAt.set(card, Date.now());
         return;
       }
-      if (!dragging) return; // обычный клик/тап — карточку откроет собственный click-обработчик
+      if (!dragging) return;
       lastDragEndAt.set(card, Date.now());
       card.classList.remove("dragging");
       document.body.style.cursor = "";
@@ -427,8 +320,6 @@ function wireCardDrag(card) {
       if (overCol) overCol.classList.remove("drag-over");
 
       const targetStatus = overCol && overCol.dataset.status;
-      // Бросили обратно в ту же колонку — это не перенос, дёргать
-      // сервер (и перезагружать всю доску) незачем.
       if (!targetStatus || targetStatus === card.dataset.status) return;
       try {
         const res = await apiPost(`/report/${encodeURIComponent(card.dataset.id)}/status`, { status: targetStatus });
@@ -445,14 +336,6 @@ function wireCardDrag(card) {
   });
 }
 
-// Колонок обычно больше, чем видно в окне (board шире, чем экран,
-// overflow-x: auto) — но колесо мыши по умолчанию крутит только
-// вертикаль, а внутри .board вертикального переполнения нет, поэтому
-// без этого доска выглядела «нельзя прокрутить». Переводим вертикальный
-// скролл колеса в горизонтальный (как в Trello/Notion), плюс drag
-// пустого места доски левой кнопкой — тоже горизонтальный скролл, не
-// перенос карточки (обработчик карточек — отдельный, wireCardDrag).
-// Ближайший предок, который сам прокручивается по вертикали и ещё может сдвинуться в сторону dy.
 function canScrollVertically(from, dy) {
   for (let el = from; el && el !== document.documentElement; el = el.parentElement) {
     const oy = getComputedStyle(el).overflowY;
@@ -468,12 +351,8 @@ function wireBoardScroll(boardEl) {
   if (!boardEl) return;
   boardEl.addEventListener("wheel", e => {
     if (e.deltaY === 0) return;
-    // Трекпад с горизонтальным жестом шлёт deltaX сам — не мешаем ему.
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-    // Колонки влезли по ширине — крутить вбок нечего. А длинная колонка (Озвучка на 14 карточек) уходит ниже
-    // окна: колесо обязано остаться вертикальным, иначе вниз было не прокрутить ничем, кроме зажатого колеса.
     if (boardEl.scrollWidth <= boardEl.clientWidth + 1) return;
-    // Пока вниз/вверх ещё есть куда — тоже обычная прокрутка; вбок уводим только упёршись.
     if (canScrollVertically(e.target, e.deltaY)) return;
     e.preventDefault();
     boardEl.scrollLeft += e.deltaY;
@@ -484,23 +363,13 @@ function wireBoardScroll(boardEl) {
   let startX = 0;
   let startScroll = 0;
   boardEl.addEventListener("pointerdown", e => {
-    // Заголовок колонки и кнопки — не «тянуть доску»: захват указателя ниже уводит их click на саму доску,
-    // и клик по заголовку (свернуть список карточек) не срабатывал
     if (e.button !== 0 || e.target.closest(".board-card, .board-col-head, button")) return;
     panning = true;
     panPointerId = e.pointerId;
     startX = e.clientX;
     startScroll = boardEl.scrollLeft;
     boardEl.classList.add("panning");
-    // scroll-behavior:smooth (CSS) — только для колеса мыши; во время
-    // ручного драга доска должна 1:1 следовать за курсором без
-    // задержки на анимацию, иначе будет ощутимо отставать от руки.
     boardEl.style.scrollBehavior = "auto";
-    // Захват указателя на самой доске — без него в реальном WebView2
-    // pointermove/pointerup (были на window) иногда не доставлялись
-    // надёжно, если курсор хоть на миг ушёл не над тем элементом (тот
-    // же класс проблем, что раньше был у нативного HTML5 drag&drop,
-    // см. комментарий над файлом).
     boardEl.setPointerCapture(e.pointerId);
   });
   boardEl.addEventListener("pointermove", e => {
@@ -511,25 +380,17 @@ function wireBoardScroll(boardEl) {
     if (e.pointerId !== panPointerId) return;
     panning = false;
     boardEl.classList.remove("panning");
-    boardEl.style.scrollBehavior = "smooth"; // вернуть плавность для колеса мыши
+    boardEl.style.scrollBehavior = "smooth";
     if (boardEl.hasPointerCapture(panPointerId)) boardEl.releasePointerCapture(panPointerId);
   }
   boardEl.addEventListener("pointerup", endPan);
   boardEl.addEventListener("pointercancel", endPan);
 }
 
-// :not([data-wired]) — после «Показать ещё» сюда приходит контейнер
-// колонки целиком, вместе с уже привязанными карточками: без фильтра
-// каждая догрузка вешала им ВТОРОЙ обработчик клика и второй драг, и
-// клик по старой карточке открывал карточку отчёта дважды.
 function wireBoardCards(root) {
   root.querySelectorAll(".board-card[data-open]:not([data-wired])").forEach(el => {
     el.dataset.wired = "1";
     el.addEventListener("click", () => {
-      // .dragging навешивается в wireCardDrag только когда движение
-      // реально превысило порог — тот же признак «это был драг, не
-      // клик» (сам класс уже снят к моменту click, поэтому проверяем
-      // его на pointerup чуть раньше — см. lastDragEndAt ниже).
       if (Date.now() - lastDragEndAt.get(el) < 50) return;
       openReportDetail(el.dataset.open);
     });
@@ -563,8 +424,6 @@ function boardToolbarHtml() {
 
 function columnHtml(col, collapsed, expanded, folded) {
   const colorVar = STATUS_COLOR_VAR[col.status] || "--s-draft";
-  // Широкая колонка (много карточек) раскладывает их в два ряда. Закрытые серии место не отбирают:
-  // «Завершено» и «Отменено» всегда в один ряд, ширина — тем, что в работе.
   const wide = col.cards.length >= 4 && col.status !== "completed" && col.status !== "cancelled";
   const isFolded = folded.has(col.status);
   return `
@@ -583,15 +442,6 @@ function columnHtml(col, collapsed, expanded, folded) {
     </div>`;
 }
 
-// Ряд stat-карточек и «Производительность» над доской — перенос
-// референса пользователя (Dribbble: Xentra Digital Marketing
-// Dashboard) один в один по вёрстке, но на реальных данных: те же 4
-// группы, что уже использует /api/dashboard/project (draft→Черновики,
-// review+revision→Озвучка, working→В работе, completed→
-// Завершено), посчитанные здесь же из layout.columns — уже
-// загруженных для самой доски, без второго похода на сервер. Без
-// дельты «+N% от прошлого месяца»: сравнивать не с чем, выдумывать
-// процент — нет.
 const BOARD_STAT_GROUPS = [
   { key: "draft", label: "Черновики", statuses: ["draft"], icon: "📁" },
   { key: "review", label: "Озвучка", statuses: ["review", "revision"], icon: "🎙" },
@@ -630,14 +480,6 @@ function performanceHtml(stats) {
     </div>`;
 }
 
-// Гант-таймлайн над доской — перенос референса пользователя: там
-// «Project Timeline» показывает активные задачи вдоль оси дат. Строки —
-// только незавершённые карточки (draft/working/review/revision) с
-// обоими реальными полями (created_at И deadline) — без выдуманной
-// «даты начала работ». Ограничено 8 строками (самые срочные по heat,
-// то же поле, что уже красит полоску карточки) — иначе на большой
-// студии таймлайн растянулся бы на весь экран, а на карточке референса
-// их и так с десяток от силы.
 const TERMINAL_STATUSES = new Set(["completed", "cancelled"]);
 const TIMELINE_MAX_ROWS = 8;
 
@@ -671,10 +513,7 @@ function timelineSectionHtml(layout) {
     </div>`;
 }
 
-// Список: «Все сроки» и месяцы от −1 до +6 от текущего.
 function monthOptionsHtml(selected) {
-  // Значение приходит из самого <select> — но в разметку пускаем только
-  // строгий формат YYYY-MM.
   if (!/^\d{4}-\d{2}$/.test(selected || "")) selected = "";
   const now = new Date();
   const opts = [`<option value="">Все сроки</option>`];
@@ -692,17 +531,12 @@ function monthOptionsHtml(selected) {
   return opts.join("");
 }
 
-// Перерисовка доски из уже полученных данных — без похода на сервер.
-// Нужна поиску и переключателю сортировки: оба меняют только раскладку.
 async function renderBoard(root) {
   if (!lastBoardData) return;
   let layout;
   try {
     layout = await layoutRequest(lastBoardData.statuses);
   } catch (e) {
-    // Раскладку считает бэкенд (board_layout), и если он почему-то не
-    // ответил, честнее сказать об этом, чем оставить пустую доску,
-    // неотличимую от «у вас нет отчётов».
     root.innerHTML = `<div class="bento-empty">Не удалось разложить доску: ${esc(e.message || e)}</div>`;
     return;
   }
@@ -754,8 +588,6 @@ function topRowHtml(layout, stats) {
   return `<div class="board-top-row${timelineCell ? "" : " single"}">${timelineCell}${performanceHtml(stats)}</div>`;
 }
 
-// «Колонки/Таймлайн» меняет только блок над колонками. Полная перерисовка пересобирала все карточки
-// и заново запускала их входные анимации (появление, глаза, прогресс) — переключение шло рывками.
 function switchBoardMode(root, mode) {
   setBoardMode(mode);
   root.querySelectorAll("[data-board-mode]").forEach(b => b.classList.toggle("on", b.dataset.boardMode === mode));
@@ -765,8 +597,6 @@ function switchBoardMode(root, mode) {
   playTimelineIntro(root);
 }
 
-// Заливка прогресс-бара карточки едет из 0 до реального значения при
-// появлении доски — тот же приём, что у playTimelineIntro.
 function playBoardCardsIntro(root) {
   const bars = root.querySelectorAll(".board-card-progress-track i");
   bars.forEach(el => { el.style.background = "var(--accent-dot)"; });
@@ -784,10 +614,6 @@ function wireBoardToolbar(root) {
   const season = root.querySelector("#board-season");
   const title = root.querySelector("#board-title");
   const month = root.querySelector("#board-month");
-  // Тот же смысл, что у "April" в референсе — фильтр по месяцу СРОКА
-  // (deadline), реальный SQL-фильтр на сервере (month=YYYY-MM в
-  // _board_filter_conditions), не декорация. Тоже требует нового
-  // похода за данными, не client-side перекладки.
   if (month) month.addEventListener("change", async () => {
     boardView.month = /^\d{4}-\d{2}$/.test(month.value) ? month.value : "";
     await loadBoard();
@@ -797,10 +623,6 @@ function wireBoardToolbar(root) {
     writeSort(boardView.sort);
     renderBoard(root);
   });
-  // Сезон/тайтл сужают выборку на сервере (season_id/title_id в
-  // /api/board) — в отличие от поиска и сортировки это не
-  // client-side-перекладка уже полученных карточек, нужен новый
-  // поход за данными (loadBoard), не renderBoard.
   if (season) season.addEventListener("change", async () => {
     boardView.seasonId = parseInt(season.value, 10) || 0;
     boardView.titleId = 0;
@@ -812,15 +634,12 @@ function wireBoardToolbar(root) {
     await loadBoard();
   });
   if (search) {
-    // Дебаунс: перерисовка доски на каждое нажатие клавиши крала бы
-    // фокус и дёргала раскладку под пальцами.
     let timer = null;
     search.addEventListener("input", () => {
-      clearTimeout(timer); // DevSkim: ignore DS172411 — функция, не строка
-      timer = setTimeout(async () => { // DevSkim: ignore DS172411 — функция, не строка
+      clearTimeout(timer); // DevSkim: ignore DS172411
+      timer = setTimeout(async () => { // DevSkim: ignore DS172411
         boardView.query = search.value;
         await renderBoard(root);
-        // После перерисовки поле — новый узел, возвращаем в него курсор.
         const again = root.querySelector("#board-search");
         if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
       }, 180);
@@ -829,7 +648,6 @@ function wireBoardToolbar(root) {
 }
 
 function wireColumnButtons(root) {
-  // Клик по заголовку развёрнутой колонки прячет и показывает её карточки (у полоски заголовок не трогаем)
   root.querySelectorAll("[data-fold]").forEach(head => {
     const toggle = () => {
       const colEl = head.closest(".board-col");
@@ -870,9 +688,6 @@ function wireColumnButtons(root) {
           title_id: boardView.titleId || undefined,
           month: boardView.month || undefined,
         });
-        // Догруженное уходит в тот же кэш и проходит ту же раскладку —
-        // иначе новые карточки встали бы в конец колонки без сортировки
-        // и без отметок «просрочено», в отличие от уже показанных.
         if (column) {
           column.reports = column.reports.concat(res.reports);
           column.has_more = res.has_more;
@@ -888,14 +703,6 @@ function wireColumnButtons(root) {
   });
 }
 
-// Диалог создания проекта — «＋ Добавить проект»/«📥 Импорт» в шапке
-// доски. Реальный POST /api/reports (create_report — та же функция,
-// которой уже пользуется голосовой пайплайн бота), не кнопка-пустышка:
-// пользователь явно попросил не подделывать. filePicked (для «Импорт»)
-// — путь, уже выбранный через pickInputFile и потому разрешённый
-// FileScope на Rust-стороне; после успешного создания отчёта файл
-// прикрепляется тем же upload_report_file, что уже умеет drag-drop
-// (см. file-drop.js) — тут только другой источник пути.
 function reportCreateFormHtml(filePicked) {
   const seasons = seasonsList || [];
   const fileName = filePicked ? filePicked.split(/[\\/]/).pop() : "";

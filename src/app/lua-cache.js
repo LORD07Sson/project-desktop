@@ -1,6 +1,3 @@
-// «Lua и другие» (Настройки → Автоматизация): кэш загрузок LuaTools в Telegram. Скачанное с lua.tools (lua/zip,
-// DLC, Denuvo-фиксы и их манифесты) бот кладёт в архивную группу, в тему «lua и другие»; следующий участник берёт
-// свежую копию оттуда. Сервер: GET/POST /api/lua-cache {enabled?, target?, ttl_days?, delete? (key), expire? (key)}.
 
 import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";

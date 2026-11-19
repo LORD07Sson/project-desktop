@@ -1,16 +1,7 @@
-// Сборка проекта Reaper (.rpp) из набора звуковых файлов. Чистые функции
-// без DOM и Tauri — чтобы проверяться обычным node-тестом.
-//
-// Каждый файл — отдельная дорожка с одним элементом (item) в начале
-// проекта; метки (маркеры) — по таймкодам реплик или меток пользователя.
-// Формат .rpp — текст с вложенными <БЛОКАМИ>; кавычки в строках
-// заменяются, чтобы не ломать разбор.
 
 const q = s => `"${String(s).replace(/"/g, "'").replace(/[\r\n]+/g, " ")}"`;
 const num = n => (Number.isFinite(n) ? String(Math.round(n * 1e6) / 1e6) : "0");
 
-// Reaper принимает и прямые, и обратные слэши; в Windows-путях оставляем
-// как есть, лишь экранируем кавычки.
 function pathLine(path) { return `FILE ${q(path)}`; }
 
 export function reaperMarkers(markers = []) {
@@ -20,9 +11,6 @@ export function reaperMarkers(markers = []) {
     .map((m, i) => `  MARKER ${i + 1} ${num(m.at)} ${q(m.name || `M${i + 1}`)} 0 0 1 R {00000000-0000-0000-0000-${String(i + 1).padStart(12, "0")}} 0`);
 }
 
-/**
- * @param {{ name?: string, sampleRate?: number, tracks: {name: string, path: string, length: number}[], markers?: {at:number, name?:string}[] }} p
- */
 export function buildRpp({ name = "Project", sampleRate = 48000, tracks = [], markers = [] }) {
   if (!tracks.length) throw new Error("Нужен хотя бы один файл.");
   const out = [];

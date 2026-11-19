@@ -1,5 +1,3 @@
-// API-клиент для lua.tools: поиск игр, проверка источников, скачивание манифестов.
-// Supabase auth + lua.tools REST API — или свой бэкенд (переключается в настройках).
 
 const DEFAULTS = {
   supabase_url: "https://db.lua.tools",
@@ -11,9 +9,6 @@ const DEFAULTS = {
 
 import { invoke } from "./tauri.js";
 
-// fetch() из вебвью до этих API не доходит (CSP connect-src + у Steam store API
-// нет CORS) — запросы идут через Rust (lt_http, список разрешённых хостов там).
-// Возвращает объект с тем же интерфейсом, что нужен коду ниже: ok/status/json/text/headers.get.
 async function ltFetch(url, { method = "GET", headers = {}, body } = {}) {
   const r = await invoke("lt_http", { method, url, headers, body: body ?? null });
   return {
@@ -38,17 +33,11 @@ const OAUTH_PORT = 53789;
 
 const LT_STORAGE_KEY = "lt_session";
 
-// ── Session ─────────────────────────────────────────────────────────
 
-// Сессия (access/refresh токены) живёт только в памяти. На диск она попадает
-// исключительно зашифрованной DPAPI (luatools.js → session_enc в
-// luatools_config.json) — открытым текстом в localStorage её больше не пишем.
 let _session = null;
 
 export function ltSession() { return _session; }
 
-// Старые версии хранили сессию открытым текстом в localStorage: забираем её
-// один раз для переноса в зашифрованное хранилище и сразу удаляем.
 export function ltTakeLegacySession() {
   try {
     const raw = localStorage.getItem(LT_STORAGE_KEY);
@@ -59,7 +48,7 @@ export function ltTakeLegacySession() {
 
 export function ltSaveSession(s) {
   _session = s;
-  for (const fn of _sessionListeners) { try { fn(s); } catch { /* noop */ } }
+  for (const fn of _sessionListeners) { try { fn(s); } catch { } }
 }
 
 const _sessionListeners = new Set();
@@ -74,8 +63,8 @@ export async function ltFetchUser(accessToken) {
 
 export function ltClearSession() {
   _session = null;
-  try { localStorage.removeItem(LT_STORAGE_KEY); } catch { /* noop */ }
-  for (const fn of _sessionListeners) { try { fn(null); } catch { /* noop */ } }
+  try { localStorage.removeItem(LT_STORAGE_KEY); } catch { }
+  for (const fn of _sessionListeners) { try { fn(null); } catch { } }
 }
 
 export function ltIsLoggedIn() {
@@ -91,7 +80,6 @@ async function ltAuthHeaders() {
   return { Authorization: `Bearer ${s.access_token}` };
 }
 
-// ── Supabase auth (OAuth via browser) ───────────────────────────────
 
 export function ltLoginUrl() {
   return `${cfg("supabase_url")}/auth/v1/authorize?provider=discord&redirect_to=http://localhost:${OAUTH_PORT}/callback`;
@@ -99,7 +87,6 @@ export function ltLoginUrl() {
 
 const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
-/** PKCE login (what LuaTools uses): returns { url, verifier }. */
 export async function ltPkceStart() {
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
   const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
@@ -139,7 +126,6 @@ export async function ltRefreshToken() {
   return ltSession();
 }
 
-// ── Public endpoints (no auth) ──────────────────────────────────────
 
 export async function ltSearchSteam(query) {
   const res = await ltFetch(`${STEAM_SEARCH_URL}?term=${encodeURIComponent(query)}&l=english&cc=US`);
@@ -187,14 +173,13 @@ export async function ltGameDetails(appId) {
   } catch { return null; }
 }
 
-// ── Authenticated endpoints ─────────────────────────────────────────
 
 async function ltApi(method, path) {
   const headers = await ltAuthHeaders();
   const res = await ltFetch(`${cfg("api_base")}${path}`, { method, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { const j = await res.json(); if (j.error) msg = j.error; } catch { /* noop */ }
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch { }
     throw new Error(msg);
   }
   return res;
@@ -220,15 +205,12 @@ export async function ltUsage() {
   } catch { return null; }
 }
 
-// Returns the download URL for Tauri's lt_download command.
 export function ltManifestDownloadUrl(appId, source, gameName) {
   let url = `${cfg("api_base")}/api/manifest/download?appid=${appId}&source=${encodeURIComponent(source)}`;
   if (gameName) url += `&game_name=${encodeURIComponent(gameName)}`;
   return url;
 }
 
-// Скачивание фикса Denuvo: slot=manifest — lua/манифест, slot=fix — архив с файлами игры
-// (как в LuaTools: /api/denuvo/download?fix=<id>&slot=…; старые /fixes/<id>/… отдают 404).
 export function ltDenuvoDownloadUrl(fixId, slot) {
   return `${cfg("api_base")}/api/denuvo/download?fix=${encodeURIComponent(fixId)}&slot=${encodeURIComponent(slot)}`;
 }
@@ -244,13 +226,11 @@ export async function ltDlcInfo(appId, baseAppId) {
   return await res.json();
 }
 
-// ── Denuvo fixes ────────────────────────────────────────────────────
 
 export async function ltDenuvoListings() {
   try {
     const res = await ltFetch(`${cfg("api_base")}/api/denuvo/listings`);
     if (!res.ok) return null;
-    // API: { games: [...], tags: [...] } — наружу отдаём массив игр.
     const data = await res.json();
     return Array.isArray(data) ? data : (data?.games || []);
   } catch { return null; }
@@ -260,7 +240,6 @@ export async function ltDenuvoFixes(appId) {
   try {
     const res = await ltFetch(`${cfg("api_base")}/api/denuvo/fixes?appid=${encodeURIComponent(appId)}`);
     if (!res.ok) return null;
-    // API: { appid, name, header_image, fixes: [{ hasManifest, hasFix, createdAt, ... }] }
     const data = await res.json();
     const list = Array.isArray(data) ? data : (data?.fixes || []);
     return list.map(f => ({
@@ -275,7 +254,6 @@ export async function ltDenuvoFixes(appId) {
 }
 
 const _depotInfoCache = new Map();
-/** Depot names/sizes and branch build info from api.steamcmd.net (public PICS mirror). */
 export async function ltDepotInfo(appId) {
   if (_depotInfoCache.has(appId)) return _depotInfoCache.get(appId);
   const p = (async () => {
@@ -295,8 +273,6 @@ export async function ltDepotInfo(appId) {
   return p;
 }
 
-/** Sign in with a one-time code from the LuaTools Discord bot: the code is
- *  redeemed for a magic-link token hash, which Supabase verifies into a session. */
 export async function ltRedeemBotCode(code) {
   const r = await ltFetch(`${cfg("api_base")}/api/auth/code/redeem`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: code.trim() }),

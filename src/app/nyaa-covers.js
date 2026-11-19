@@ -1,35 +1,30 @@
-// Nyaa/игры, вынесено из nyaa.js: обложки вместо значков.
 import { invoke } from "./tauri.js";
 import { apiGet } from "./api.js";
 import { esc } from "./utils.js";
 import { relTime, fmtDate, splitTitle, categoryKind, parseView, hostOf, dayLabel, groupReleases, episodeKey, COVER_QUERY, parseCover, coverKey, coverAltKeys, coverSearchTerms, pickCoverCandidate, COVER_BATCH, coverBatchRequest, parseCoverBatch } from "./nyaa-core.js";
 import { ICONS, KIND_ICON, error, fetchPic, hasMore, haveIt, items, loading, moreBusy, nyaaView, openGroups, prefs, reportTarget, sdOf, seen, selected, sentEps, stale, view } from "./nyaa.js";
 
-// ---------- обложки вместо значков ----------
-// Обложка берётся с AniList по названию тайтла (одна на аниме, не на каждую раздачу) и держится
-// в памяти; в localStorage лежит только адрес картинки. Не нашлась — остаётся значок.
-const COVERS_KEY = "project-nyaa-covers-hd";   // адреса баннеров/больших постеров (прежние — 100×150)
-try { localStorage.removeItem("project-nyaa-covers"); } catch (_) { /* нет — и ладно */ }
+const COVERS_KEY = "project-nyaa-covers-hd";
+try { localStorage.removeItem("project-nyaa-covers"); } catch (_) { }
 export const coverUrls = (() => { try { return JSON.parse(localStorage.getItem(COVERS_KEY) || "{}"); } catch (_) { return {}; } })();
-export const coverData = new Map();   // ключ → data-URL
+export const coverData = new Map();
 const coverBusy = new Set();
 const saveCovers = () => {
   const keys = Object.keys(coverUrls);
   if (keys.length > 500) keys.slice(0, keys.length - 500).forEach(k => delete coverUrls[k]);
-  try { localStorage.setItem(COVERS_KEY, JSON.stringify(coverUrls)); } catch (_) { /* не запомнится */ }
+  try { localStorage.setItem(COVERS_KEY, JSON.stringify(coverUrls)); } catch (_) { }
 };
 
-// У раздач без аниме-обложки (музыка, OST) аватар — первая картинка из описания раздачи.
 const THUMBS_KEY = "project-nyaa-thumbs";
 export const thumbUrls = (() => { try { return JSON.parse(localStorage.getItem(THUMBS_KEY) || "{}"); } catch (_) { return {}; } })();
-export const thumbData = new Map();   // id → data-URL
+export const thumbData = new Map();
 const saveThumbs = () => {
   const keys = Object.keys(thumbUrls);
   if (keys.length > 800) keys.slice(0, keys.length - 800).forEach(k => delete thumbUrls[k]);
-  try { localStorage.setItem(THUMBS_KEY, JSON.stringify(thumbUrls)); } catch (_) { /* не запомнится */ }
+  try { localStorage.setItem(THUMBS_KEY, JSON.stringify(thumbUrls)); } catch (_) { }
 };
 
-const thumbFailAt = new Map();   // id → когда последний раз не получилось (повтор не чаще раза в минуту)
+const thumbFailAt = new Map();
 
 async function fetchThumb(it) {
   const id = it.id;
@@ -53,9 +48,7 @@ async function fetchThumb(it) {
   coverBusy.delete(`t${id}`);
 }
 
-// Фон шапки страницы раздачи — обложка/баннер самого тайтла, если уже загружена.
 export function headCover(it) { const key = coverKey(it.title); return (key && coverData.get(key)) || thumbData.get(it.id) || ""; }
-// Описание с nyaa — markdown: заголовки, жирный, курсив, ссылки, списки — в простую разметку (после esc).
 export function descHtml(md) {
   return esc(md).split(/\n/).map(l => {
     const h = l.match(/^\s*#{1,6}\s*(.*)$/);
@@ -81,13 +74,10 @@ function paintCover(key) {
   });
 }
 
-// Старое «» (до этой правки) считаем просроченным.
 const MISS_TTL = 3 * 24 * 3600_000;
-// «miss3:» — промахи с тех пор, как есть запасные каталоги и картинка из описания раздачи; старые перепроверяем
 const missedRecently = v => typeof v === "string" && v.startsWith("miss3:") && Date.now() - Number(v.slice(6)) < MISS_TTL;
 const hasUrl = v => typeof v === "string" && v.startsWith("https://");
 
-// Если AniList не знает тайтл: Kitsu, MyAnimeList и Shikimori через сервер, а в конце — первая картинка из описания раздачи.
 async function coverFallback(key, sample) {
   const terms = coverSearchTerms(key, sample && sample.title);
   for (const q of terms) {
@@ -101,9 +91,8 @@ async function coverFallback(key, sample) {
   return parseView(await nyaaView({ base: prefs.base, id: sample.id })).images[0] || "";
 }
 
-// Готовые обложки живут на диске уменьшенными: при запуске список сразу с картинками, без скачивания заново.
-const COVER_DB = "project-nyaa-cover-cache-hd2";   // баннеры до 1280px и большие постеры (раньше 100×150 — на всю строку выходили мылом)
-try { ["project-nyaa-cover-cache", "project-nyaa-cover-cache-hd"].forEach(n => indexedDB.deleteDatabase(n)); } catch (_) { /* старого кэша может не быть */ }
+const COVER_DB = "project-nyaa-cover-cache-hd2";
+try { ["project-nyaa-cover-cache", "project-nyaa-cover-cache-hd"].forEach(n => indexedDB.deleteDatabase(n)); } catch (_) { }
 const COVER_SIZE = 420;
 const COVER_DB_LIMIT = 400;
 let coverDb = null;
@@ -163,7 +152,7 @@ function shrinkCover(src) {
 async function storeCover(key, src) {
   const db = await openCoverDb();
   if (!db) return;
-  try { db.transaction("covers", "readwrite").objectStore("covers").put(src, key); } catch (_) { /* просто скачаем в следующий раз */ }
+  try { db.transaction("covers", "readwrite").objectStore("covers").put(src, key); } catch (_) { }
 }
 
 async function aniListBatch(terms) {
@@ -173,7 +162,6 @@ async function aniListBatch(terms) {
   return urls;
 }
 
-// Пачка: сначала по основным названиям, ненайденные — по запасным. Возвращает ненайденные ключи.
 async function resolveCoverChunk(chunk, altsOf) {
   const urls = await aniListBatch(chunk);
   chunk.forEach((k, i) => { if (urls[i]) coverUrls[k] = urls[i]; });
@@ -197,7 +185,6 @@ async function fetchCover(key, alts = [], sample = null) {
     let url = coverUrls[key];
     if (!hasUrl(url) && !missedRecently(url)) {
       url = "";
-      // по основному названию, потом по запасным из скобок («(Nezumi-kun no Chokki (TV))»)
       for (const s of sample && sample.batched ? [] : [key, ...alts]) {
         url = parseCover(await invoke("anilist_query", { query: COVER_QUERY, variables: { s } }));
         if (url) break;
@@ -211,7 +198,7 @@ async function fetchCover(key, alts = [], sample = null) {
       paintCover(key);
       storeCover(key, small);
     }
-  } catch (_) { /* нет связи: попробуем при следующей отрисовке */ }
+  } catch (_) { }
   coverBusy.delete(key);
 }
 
@@ -229,7 +216,6 @@ export async function loadListCovers() {
     for (const i of vis) if (!isAudio(i)) { const k = coverKey(i.title); if (k && !altsOf.has(k)) { altsOf.set(k, coverAltKeys(i.title)); sampleOf.set(k, i); } }
     const keys = [...altsOf.keys()].filter(k => !coverData.has(k) && !missedRecently(coverUrls[k]));
     const thumbs = vis.filter(i => isAudio(i) && !thumbData.has(i.id) && thumbUrls[i.id] !== "").slice(0, 30);
-    // Адрес уже известен — это просто скачать картинку, потоков больше. Поиск идёт пачками сверху списка, а по запасным каталогам — в конце и бережнее.
     const pool = (list, size) => {
       let next = 0;
       const worker = async () => { while (next < list.length) await list[next++](); };
@@ -245,7 +231,7 @@ export async function loadListCovers() {
           misses.push(...await resolveCoverChunk(chunk, altsOf));
           await Promise.all(pool(chunk.filter(k => hasUrl(coverUrls[k])).map(download), 8));
         }
-      } catch (_) { /* лимит или нет связи: продолжим при следующей отрисовке */ }
+      } catch (_) { }
       const jobs = [
         ...misses.map(k => () => fetchCover(k, [], { ...sampleOf.get(k), batched: true })),
         ...thumbs.map(i => () => fetchThumb(i)),
@@ -281,7 +267,6 @@ function rowHtml(it, maxSeed, now) {
     </div>`;
 }
 
-// Карточка аниме: серии одного сезона вместе, внутри — лучшая раздача на каждую серию.
 function groupHtml(g, maxSeed, now) {
   const open = openGroups.has(g.key);
   const fresh = g.episodes.filter(e => !sentEps.has(episodeKey(e.item))).length;
@@ -294,7 +279,6 @@ function groupHtml(g, maxSeed, now) {
   </div>`;
 }
 
-// Заголовки дней между строками: «Сегодня», «Вчера», «8 октября» — только при сортировке по дате.
 function rowsByDay(list, maxSeed, now) {
   if (prefs.sort !== "date") return list.map(i => rowHtml(i, maxSeed, now)).join("");
   let last = "";
@@ -326,8 +310,6 @@ export function listHtml() {
   const now = Date.now();
   const body = prefs.group ? groupReleases(list).map(g => g.kind === "item" ? rowHtml(g.item, maxSeed, now) : groupHtml(g, maxSeed, now)).join("") : rowsByDay(list, maxSeed, now);
   const sortBtn = (k, label, cls = "") => `<button type="button" class="ny-sorth${prefs.sort === k ? " on" : ""} ${cls}" data-sort="${k}" aria-label="Сортировать: ${label}">${label}${prefs.sort === k ? " ↓" : ""}</button>`;
-  // Каждая колонка — своя ячейка сетки, той же, что у .ny-row (размер, дата, ↑, ↓, ✓ — по отдельности),
-  // чтобы подпись стояла ровно над своими цифрами.
   return `<div class="ny-head"><span></span><span></span><span>Название</span>${sortBtn("size", "Размер", "r")}${sortBtn("date", "Дата", "r")}${sortBtn("seeders", "Раздают", "r")}<span class="ny-h2 r">Качают</span>${sortBtn("downloads", "Скачали", "r")}<span></span></div>`
     + (stale ? `<div class="ny-stale">Сайт не отвечает — показаны сохранённые данные (${esc(relTime(stale))}). <button type="button" class="ny-link" id="ny-retry">Обновить</button></div>` : "")
     + body

@@ -1,8 +1,3 @@
-// Вкладка «Я» + карточка коллеги + список команды.
-// Разметка и логика ниже — портированы «в точь-точь» из мини-аппа
-// (miniapp/static/index.html: profileHtml/teamTeaserHtml/statDonutHtml/
-// goalRingHtml/rankTagHtml/tenureTier/avatarHtml), под тот же /api/me
-// и /api/user/{id} (совместимая форма ответа — общая разметка на двоих).
 
 import { state } from "./state.js";
 import { fillRemindersCard } from "./reminders.js";
@@ -21,9 +16,6 @@ import { openRolesSheet } from "./roles.js";
 import { openExternal, sendNotification } from "./tauri.js";
 import { markMyReportsSeen } from "./notifications.js";
 import { wireGraffiti } from "./graffiti.js";
-// Тот же маскот, что на экране загрузки (index.html) — Vite отдаёт
-// готовый URL собранного ассета. Больше ему показаться негде, хотя он
-// уже лежит в каждой сборке.
 import mascotUrl from "../assets/ayaya-club-ayaya.gif";
 
 export function avatarHtml(telegramId, name, size) {
@@ -32,11 +24,6 @@ export function avatarHtml(telegramId, name, size) {
   return `<span class="avatar${cls}" data-avatar-for="${telegramId || ""}">${initial}</span>`;
 }
 
-// Реальные фото участников подгружаются лениво поверх инициалов — тот же приём, что в мини-аппе: отдельный <img>, а не background,
-// чтобы молча остаться на инициалах при 204/ошибке сети (см. /api/avatar). Пометка ставится, только когда запрос реально ушёл; при
-// ошибке — одна повторная попытка с новым токеном; когда токен пришёл — недогруженные подтягиваются сами. Адреса аватарок, которые
-// уже загрузились в этом сеансе: такие вставляем сразу, без onload — иначе при каждом показе вкладки на кадр мелькала
-// буква-заглушка.
 const AVATAR_OK = new Set();
 
 export function loadAvatars(root) {
@@ -44,17 +31,16 @@ export function loadAvatars(root) {
     const tid = el.getAttribute("data-avatar-for");
     if (!tid || el.getAttribute("data-avatar-loaded")) return;
     const src = mediaUrl(`/avatar/${encodeURIComponent(tid)}`);
-    if (!src) return; // токена ещё нет — повторим, когда он придёт (событие media-token-ready)
+    if (!src) return;
     el.setAttribute("data-avatar-loaded", "1");
     const img = new Image();
     if (AVATAR_OK.has(src)) { img.src = src; el.innerHTML = ""; el.appendChild(img); return; }
     img.onload = () => { AVATAR_OK.add(src); el.innerHTML = ""; el.appendChild(img); };
     img.onerror = () => {
-      // 204 (фото нет) тоже приходит сюда — повторяем один раз, а не бесконечно
       if (el.getAttribute("data-avatar-retried")) return;
       el.setAttribute("data-avatar-retried", "1");
       setTimeout(async () => {
-        try { await forceMediaToken(); } catch (_) { /* не критично */ }
+        try { await forceMediaToken(); } catch (_) { }
         el.removeAttribute("data-avatar-loaded");
         if (el.isConnected) loadAvatars(el.parentElement || document);
       }, 2500);
@@ -64,9 +50,6 @@ export function loadAvatars(root) {
 }
 document.addEventListener("media-token-ready", () => loadAvatars(document));
 
-// Своя картинка баннера профиля (/api/banner/{id}) — 204, если её нет
-// (пресет/пусто), тогда молча остаёмся на градиенте из CSS.
-// Положение по вертикали — banner_pos_y с сервера (0–100 %, то же, что в мини-аппе).
 function loadProfileBanner(el, telegramId) {
   if (!el || !telegramId) return;
   const img = new Image();
@@ -88,14 +71,12 @@ function bannerPos(el) {
   return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 50;
 }
 
-// Свой баннер можно подвинуть прямо в шапке: «Положение» → тянуть картинку вверх-вниз (или колесом) → «Сохранить».
 function wireBannerAdjust(el, img) {
   if (el.querySelector(".pf-ban-move")) return;
   const btn = document.createElement("button");
   btn.className = "btn sm pf-ban-move";
   btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/></svg>Положение`;
   el.append(btn);
-  // сколько пикселей картинки «не влезает» по высоте при cover — столько и можно прокрутить
   const spare = () => {
     const w = el.clientWidth, h = el.clientHeight;
     return Math.max(0, img.naturalHeight * Math.max(w / img.naturalWidth, h / img.naturalHeight) - h);
@@ -118,7 +99,6 @@ function wireBannerAdjust(el, img) {
       el.setPointerCapture(ev.pointerId);
       el.classList.add("grabbing");
     };
-    // тянем картинку: вниз — показываем её верх (процент уменьшается)
     const move = ev => { if (drag) set(drag.pos - (ev.clientY - drag.y) / spare() * 100); };
     const up = () => { drag = null; el.classList.remove("grabbing"); };
     const wheel = ev => { ev.preventDefault(); set(pos + Math.sign(ev.deltaY) * 4); };
@@ -153,8 +133,6 @@ function wireBannerAdjust(el, img) {
   });
 }
 
-// Кольцо аватара по стажу в команде — те же пороги, что в мини-аппе.
-// Пороги живут одним списком — из него и цвет кольца, и полоска прогресса.
 const TENURE_STEPS = [
   { at: 30, tier: "bronze", label: "Бронза", color: "#b0774a" },
   { at: 180, tier: "silver", label: "Серебро", color: "#b9c2cc" },
@@ -176,7 +154,6 @@ function pluralDays(n) {
   return "дней";
 }
 
-// Полоска «где я между порогами» + сколько до следующего кольца.
 function tenureProgressHtml(days) {
   if (days == null) return "";
   const nextIdx = TENURE_STEPS.findIndex(st => days < st.at);
@@ -233,8 +210,6 @@ function openProfileRoles(telegramId) {
 }
 
 function rankTagHtml(rank) {
-  // «#1 из 1» — не достижение, а следствие того, что серии закрывал
-  // только один человек. Пока в таблице меньше двоих, места нет.
   if (!rank || !rank.total || rank.total < 2) return "";
   const medals = { 1: "🥇", 2: "🥈", 3: "🥉" };
   const medal = medals[rank.place] || "🏅";
@@ -251,13 +226,6 @@ function goalRingHtml(pct, over) {
   </svg>`;
 }
 
-// Аватар-стек команды в общей шапке (titlebar) — виден на любой
-// вкладке, не только на «Я». Перенесено вживую с референса пользователя
-// (Dribbble: Xentra Digital Marketing Dashboard, dribbble.com/shots/27265906)
-// — там кластер "N People / Team Members" с перекрывающимися аватарами
-// висит в шапке постоянно. Данные и разметка — те же /team + avatarHtml,
-// что уже питают тизер на вкладке «Я» и полный список (openTeamSheet)
-// ниже, просто с другим местом вывода и лимитом превью.
 export async function loadTitlebarTeam() {
   const el = $("#titlebar-team");
   if (!el) return;
@@ -267,15 +235,12 @@ export async function loadTitlebarTeam() {
     if (!users.length) { el.hidden = true; return; }
     const preview = users.slice(0, 4);
     const overflow = users.length - preview.length;
-    // Стек аватаров заканчивается кружком "+N" на месте непоказанных
-    // участников — та же деталь, что у референса ("21+" в шапке), не
-    // просто текстовая подпись сбоку.
     const stack = preview.map(u => avatarHtml(u.telegram_id, u.name, "sm")).join("")
       + (overflow > 0 ? `<span class="avatar sm avatar-overflow">+${overflow}</span>` : "");
     el.innerHTML = `<span class="stack">${stack}</span><span class="tt">${users.length} ${pluralColleagues(users.length)}</span>`;
     el.hidden = false;
     loadAvatars(el);
-  } catch (_) { /* не критично — шапка просто останется без кластера */ }
+  } catch (_) { }
 }
 $("#titlebar-team")?.addEventListener("click", openTeamSheet);
 
@@ -331,7 +296,7 @@ export async function loadProfile() {
     root.innerHTML = `<div class="bento-empty">Не удалось загрузить профиль: ${esc(e.message)}</div>`;
     return false;
   }
-  state.isDeveloper = !!me.is_developer; // используется для показа переключателя dev-режима в Настройках
+  state.isDeveloper = !!me.is_developer;
   markMyReportsSeen((me.reports || []).map(r => r.public_id));
 
   const goalSet = me.monthly_goal != null && me.monthly_goal > 0;
@@ -355,8 +320,6 @@ export async function loadProfile() {
     </div>
   `;
 
-  // Число в плитке «докручивается» от нуля, когда плитка появляется на экране (data-count), а справа от него —
-  // небольшое дополнение: сравнение с прошлым месяцем, столбики по неделям, кольцо доли.
   const kpi = (label, val, sub, o = {}) => `
     <div class="pf-kpi${o.empty ? " empty" : ""}">
       <span class="l">${label}</span>
@@ -369,9 +332,6 @@ export async function loadProfile() {
     ? `<svg class="pff-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15"></circle><circle class="f" cx="18" cy="18" r="15" pathLength="100" style="--v:${Math.max(0, Math.min(100, me.on_time_pct))};"></circle></svg>`
     : "";
 
-  // Свой профиль — как портфолио (эталон: одноколоночный сайт-визитка): приветствие с меняющейся
-  // подписью, ниже секции одна под другой, сверху плавающая «таблетка» с переходом по секциям и
-  // прогрессом прокрутки. Все id/классы, на которые завязаны обработчики и тесты, прежние.
   root.innerHTML = `
     <div class="pf pf-folio">
       <nav class="pff-pill" aria-label="Разделы профиля">
@@ -428,9 +388,6 @@ export async function loadProfile() {
   wireFolio(root);
   wireGraffiti(root, me.telegram_id);
   wireProfileCommon(root, me.telegram_id, () => loadProfile());
-  // Обе догрузки — без await: профиль уже отрисован, и ждать ради
-  // подсказки в одном блоке незачем (иначе на них ждала бы и кнопка
-  // «Обновить», которая дожидается loadProfile).
   if (state.isAdmin) fillIdleSlot(root);
   fillPauseCard(root, me.telegram_id);
   fillRemindersCard(root);
@@ -449,11 +406,9 @@ export async function loadProfile() {
   notifyGoalReachedIfNeeded(me, goalSet, goalOver, goalDone);
 }
 
-// ---------- Портфолио (свой профиль) ----------
 
 function folioRoles(d) {
   const roles = (Array.isArray(d.roles) ? d.roles : (d.role ? [d.role] : [])).filter(r => r && r.toLowerCase() !== "user");
-  // Только назначенные роли: этапы из отчётов (role_breakdown, напр. «Даббер») ролью человека не являются.
   const list = [...roles];
   if (d.is_developer || d.is_owner) list.push("Разработчик Project");
   return list.length ? list : ["Участник Project"];
@@ -509,7 +464,6 @@ function folioHeroHtml(d, isSelf = true) {
     </div>`;
 }
 
-// «Lissa в команде 20 дней» — в верхней плашке профиля, рядом с аватаром.
 function pillDaysHtml(d, isSelf) {
   const days = d && d.member_since_days;
   if (days == null) return "";
@@ -523,8 +477,6 @@ function folioFooterHtml(d, isSelf = true) {
     </footer>`;
 }
 
-// Плавающая таблетка: переход по секциям, подсветка текущей и кольцо прокрутки вокруг аватара; подпись роли
-// меняется по кругу; часы — местное время с прокруткой цифр; секции проявляются, когда до них докрутили.
 function wireFolio(root) {
   const folio = root.querySelector(".pf-folio");
   if (!folio) return;
@@ -542,9 +494,6 @@ function wireFolio(root) {
   });
   const banner = folio.querySelector(".pff-banner");
   const secs = btns.map(b => [b, folio.querySelector(`#${b.dataset.pffGo}`)]).filter(x => x[1]);
-  // Прокрутка: одно обновление на кадр, сначала все чтения, потом записи (иначе каждая запись заставляла браузер
-  // заново считать раскладку), и запись только когда значение изменилось. Пока страница едет, декоративные
-  // анимации профиля стоят на паузе (класс pff-scrolling) — кадры уходят на саму прокрутку.
   let raf = 0, idle = 0, lastP = -1, lastY = -1, lastCur = null, lastLift = null;
   const update = () => {
     raf = 0;
@@ -556,7 +505,6 @@ function wireFolio(root) {
     for (const [b, sec] of secs) if (sec.getBoundingClientRect().top - top < 160) cur = b;
     const p = max > 0 ? Math.round(Math.min(1, st / max) * 100) : 100;
     if (p !== lastP) { lastP = p; pct.textContent = `${p}%`; pill.style.setProperty("--p", String(p)); }
-    // баннер медленно приближается, пока шапка на экране
     const y = reduce ? 0 : Math.round(Math.min(700, st) * 0.18);
     if (banner && y !== lastY) { lastY = y; banner.style.setProperty("--pff-y", String(y)); }
     if (cur !== lastCur) { lastCur = cur; btns.forEach(b => b.classList.toggle("on", b === cur)); }
@@ -572,7 +520,6 @@ function wireFolio(root) {
   scroller.addEventListener("scroll", onScroll, { passive: true });
   update();
 
-  // Проявление секций. Без IntersectionObserver (или при выключенных анимациях) — всё видно сразу.
   const rv = [...folio.querySelectorAll(".pff-rv")];
   if (reduce || typeof window.IntersectionObserver !== "function") {
     rv.forEach(el => el.classList.add("in"));
@@ -587,7 +534,6 @@ function wireFolio(root) {
       }
     }, { root: isDoc ? null : scroller, rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
     rv.forEach(el => io.observe(el));
-    // вращающиеся свечения (аватар, плашка в подвале) крутятся, только пока их видно
     const away = new window.IntersectionObserver(entries => {
       for (const en of entries) en.target.classList.toggle("pff-away", !en.isIntersecting);
     }, { root: isDoc ? null : scroller });
@@ -598,7 +544,7 @@ function wireFolio(root) {
   const greet = folio.querySelector("[data-pff-greet]");
   const role = folio.querySelector("[data-pff-roles]");
   let roles = [];
-  try { roles = JSON.parse(role?.dataset.pffRoles || "[]"); } catch (_) { /* подпись останется первой ролью */ }
+  try { roles = JSON.parse(role?.dataset.pffRoles || "[]"); } catch (_) { }
   let i = 0, n = 0;
   const tick = () => {
     const now = new Date();
@@ -615,7 +561,6 @@ function wireFolio(root) {
   tick();
 }
 
-// Числа в плитках «докручиваются» от нуля до значения (data-count), один раз.
 function countUp(root) {
   root.querySelectorAll("[data-count]").forEach(el => {
     const to = Number(el.dataset.count);
@@ -635,7 +580,6 @@ function countUp(root) {
   });
 }
 
-// ---------- «Пульс»: календарь активности за полгода ----------
 
 const MSK_MS = 3 * 3600e3, DAY_MS = 86400e3, PULSE_WEEKS = 26;
 
@@ -646,8 +590,6 @@ function pluralRu(n, one, few, many) {
   return many;
 }
 
-// Сервер отдаёт счётчики по московским датам; раскладываем их в 26 недель (пн–вс), последняя — текущая.
-// Даты считаем в UTC со сдвигом на Москву, чтобы сетка не зависела от пояса компьютера.
 export function pulseModel(d, nowMs = Date.now()) {
   const actions = (d && d.actions) || {}, closed = (d && d.closed) || {};
   const today = new Date(nowMs + MSK_MS);
@@ -668,7 +610,6 @@ export function pulseModel(d, nowMs = Date.now()) {
     }
     weeks.push({ ts: start + w * 7 * DAY_MS, days, closed: closedSum });
   }
-  // серия: дни подряд с действиями, считая от сегодня (или от вчера, если сегодня ещё пусто)
   let streak = 0;
   for (let k = past.length - 1; k >= 0; k--) {
     if (past[k].n > 0) streak++;
@@ -732,7 +673,6 @@ async function fillPulse(root, base = "/me") {
   let d;
   try { d = await apiGet(`${base}/pulse`); } catch (_) { d = null; }
   if (!card.isConnected) return;
-  // старый сервер без /me/pulse — просто без карточки
   if (!d || typeof d.actions !== "object" || d.actions === null) { card.remove(); return; }
   const m = pulseModel(d);
   const body = card.querySelector("#pulse-body");
@@ -744,11 +684,8 @@ async function fillPulse(root, base = "/me") {
   const delta = m.prev30 > 0 ? deltaPillHtml(Math.round(((m.last30 - m.prev30) / m.prev30) * 100)) : "";
   card.querySelector("#pulse-sum").innerHTML = `<b>${m.last30}</b> ${pluralRu(m.last30, "действие", "действия", "действий")} за 30 дней ${delta}`;
   requestAnimationFrame(() => requestAnimationFrame(() => body.classList.add("in")));
-  // После появления анимацию с клеток снимаем: законченная анимация оставляла каждую из ~200 клеток отдельным слоем,
-  // и прокрутка возле календаря подтормаживала (замер: дёрганые кадры 10 → 4).
-  setTimeout(() => body.classList.add("done"), 200 * 16 + 1200); // DevSkim: ignore DS172411 — функция, не строка
+  setTimeout(() => body.classList.add("done"), 200 * 16 + 1200); // DevSkim: ignore DS172411
 
-  // одна всплывающая подсказка на всю сетку
   const heat = body.querySelector(".pff-heat"), tip = body.querySelector(".pff-tip");
   heat.addEventListener("pointerover", e => {
     const el = e.target.closest("[data-tip]");
@@ -762,7 +699,6 @@ async function fillPulse(root, base = "/me") {
   });
   heat.addEventListener("pointerleave", () => { tip.hidden = true; });
 
-  // те же недели — столбиками в плитке «Закрыто» (последние 12)
   const spark = root.querySelector("[data-pff-spark]");
   const last = m.weeks.slice(-12);
   const top = last.reduce((a, w) => Math.max(a, w.closed), 0);
@@ -773,8 +709,6 @@ async function fillPulse(root, base = "/me") {
   }
 }
 
-// «Моя работа» — вместо огромного доната на одно значение: тонкая
-// полоска по статусам и сам список того, что на руках.
 function myWorkHtml(me, other = false) {
   const reports = me.reports || [];
   const heading = other ? "Сейчас в работе" : "Моя работа";
@@ -821,8 +755,6 @@ function myWorkHtml(me, other = false) {
     </section>`;
 }
 
-// «Вклад росписи»: их работа — сабы, равки, пайплайн и распределение людей, а не закрытые серии, поэтому обычные
-// цифры профиля у них нули. Показываем тем, у кого роль «Роспись» или уже есть такой вклад (prep с сервера).
 function prepHtml(me) {
   const p = me.prep;
   if (!p || (!p.is_role && !p.series)) return "";
@@ -850,8 +782,6 @@ function prepHtml(me) {
     </section>`;
 }
 
-// Достижения плитками: полученные цветные, остальные приглушены
-// с прогрессом — вся сетка видна сразу, без пустых строк «нет данных».
 function myBadgesHtml(d) {
   const all = (d.badges || []).slice().sort((a, b) => (b.unlocked ? 1 : 0) - (a.unlocked ? 1 : 0) || (BADGE_RARITY_ORDER[a.rarity] ?? 9) - (BADGE_RARITY_ORDER[b.rarity] ?? 9));
   if (!all.length) return "";
@@ -874,7 +804,6 @@ function myBadgesHtml(d) {
     </section>`;
 }
 
-// Вид действия — для цвета и значка точки на таймлайне.
 function actKind(action) {
   const a = String(action || "").toLowerCase();
   if (/удал|снят|отмен|отозв/.test(a)) return "del";
@@ -915,9 +844,6 @@ async function fillRecentActivity(root, base = "/me") {
   });
 }
 
-// Свободные серии для пустого профиля — тот же быстрый фильтр
-// «без исполнителя», что и на вкладке «Список». Отдельным запросом
-// после отрисовки: профиль не должен ждать его, чтобы показаться.
 async function fillIdleSlot(root) {
   const slot = root.querySelector("#idle-slot");
   if (!slot) return;
@@ -943,9 +869,6 @@ async function fillIdleSlot(root) {
   btn.className = "btn primary idle-go";
   btn.textContent = "Посмотреть";
   btn.addEventListener("click", () => {
-    // Если «Список» уже был загружен, switchTab его не перечитает
-    // (loadedTabs) — перечитываем сами, иначе фильтр применится только
-    // визуально, к чипу.
     const wasLoaded = state.loadedTabs.has("list");
     setQuickFilter("unassigned");
     switchTab("list");
@@ -954,10 +877,6 @@ async function fillIdleSlot(root) {
   slot.appendChild(btn);
 }
 
-// Сколько закрывают остальные — чтобы «поставьте себе план» не был
-// вопросом в пустоту. Берём уже существующий рейтинг месяца (тот же
-// эндпоинт дёргает «Обзор»), считаем средний темп по тем, кто вообще
-// закрывал. Не вышло — просто не показываем подсказку.
 async function suggestGoal(root) {
   const el = root.querySelector("#goal-pace");
   if (!el) return null;
@@ -975,12 +894,6 @@ async function suggestGoal(root) {
   }
 }
 
-// Системный тост при первом заходе после того, как цель месяца
-// выполнена — а не только цвет кольца, который увидишь лишь если сам
-// зашёл на вкладку «Я». Флаг «уже уведомляли в этом месяце» — в
-// localStorage (per-machine, не критично разделять между устройствами
-// одного человека), ключ включает telegram_id и месяц, чтобы новый
-// месяц с той же целью снова мог уведомить.
 function notifyGoalReachedIfNeeded(me, goalSet, goalOver, goalDone) {
   if (!goalSet || !goalOver) return;
   const monthKey = new Date().toISOString().slice(0, 7);
@@ -988,7 +901,7 @@ function notifyGoalReachedIfNeeded(me, goalSet, goalOver, goalDone) {
   try {
     if (localStorage.getItem(flagKey)) return;
     localStorage.setItem(flagKey, "1");
-  } catch (_) { return; } // приватный режим/запрет хранилища — не критично, просто без уведомления
+  } catch (_) { return; }
   sendNotification({
     title: "Project",
     body: `Цель месяца выполнена — ${goalDone} из ${me.monthly_goal} отчётов закрыто. 🎯`,
@@ -1072,7 +985,6 @@ function monthlyGoalDialog(current) {
   });
 }
 
-// ---------- Команда / чужой профиль ----------
 
 export async function openTeamSheet() {
   const overlay = openSheet(dialogSkeletonHtml(6), "wide");
@@ -1104,8 +1016,6 @@ export async function openTeamSheet() {
   sheet.querySelectorAll("[data-open-user]").forEach(row => {
     const telegramId = parseInt(row.dataset.openUser, 10);
     row.addEventListener("click", () => openUserProfile(telegramId));
-    // Правый клик — быстрые действия без открытия целого профиля:
-    // привычка из проводника/почты, а не только «клик = открыть».
     row.addEventListener("contextmenu", e => {
       e.preventDefault();
       const username = row.dataset.username;
@@ -1126,9 +1036,6 @@ export async function openTeamSheet() {
   });
 }
 
-// Открыть личный чат в Telegram — во внешнем приложении/браузере
-// (plugin:shell|open), а не внутри окна Project: это desktop-клиент
-// студии, не браузер, встраивать чужой веб-клиент Telegram сюда незачем.
 async function openTelegramProfile(username) {
   try {
     await openExternal(`https://t.me/${encodeURIComponent(username)}`);
@@ -1137,16 +1044,12 @@ async function openTelegramProfile(username) {
   }
 }
 
-// Экспортирована для вкладки «Команда» (team.js) — та же карточка
-// коллеги, что уже открывается кликом по строке в openTeamSheet.
 export async function openUserProfile(telegramId) {
   const overlay = openSheet(dialogSkeletonHtml(6), "wide");
   overlay.classList.add("pf-page-overlay");
   let d;
   let person = null;
   try {
-    // Карточка «Работа» (загрузка, пауза, передача дел) — отдельным
-    // запросом; на старом сервере без /people профиль просто без неё.
     [d, person] = await Promise.all([apiGet(`/user/${telegramId}`), fetchPerson(telegramId), loadPeopleNames()]);
   } catch (e) {
     overlay.querySelector(".sheet").innerHTML = `<div class="bento-empty">Не удалось загрузить профиль: ${esc(e.message)}</div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`;
@@ -1154,7 +1057,6 @@ export async function openUserProfile(telegramId) {
     return;
   }
   d.telegram_id = telegramId;
-  // Имя как на карточке команды, а не логин.
   d.display_name = personName(telegramId, d.display_name || d.name);
   if (person) d.reports = person.load;
   const st = (person && person.stats) || {};
@@ -1164,7 +1066,6 @@ export async function openUserProfile(telegramId) {
   const manage = person && (person.can_pause || (person.can_transfer && person.load.length));
 
   const sheet = overlay.querySelector(".sheet");
-  // Коллега — в той же «портфолио»-разметке, что и свой профиль (без приветствия, часов и кнопок своих настроек).
   sheet.innerHTML = `
     <div class="pf pf-folio pf-folio-other">
       <nav class="pff-pill" aria-label="Разделы профиля">

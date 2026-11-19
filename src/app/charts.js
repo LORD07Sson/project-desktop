@@ -1,5 +1,3 @@
-// Донат-чарт (SVG, с анимацией заливки) — переиспользуется в Обзоре,
-// профиле и карточке коллеги.
 
 import { esc } from "./utils.js";
 
@@ -33,9 +31,6 @@ export function donutHtml(segments, size, thickness) {
     </svg>`;
 }
 
-// Заставляет только что вставленные .donut-seg проиграть анимацию
-// заливки — без этого браузер применил бы target-значения мгновенно
-// (переход же должен идти от "пусто" к заполненному состоянию).
 export function playDonutIntro(root) {
   const segs = root.querySelectorAll(".donut-seg");
   requestAnimationFrame(() => {
@@ -59,25 +54,12 @@ export function donutLegendHtml(segments) {
   `).join("") || `<div class="no-assignee">Пока нет данных</div>`;
 }
 
-// Дельта-бейдж «+8%» / «-12%» рядом с заголовком KPI-плитки — тоже
-// перенесено вживую с референса (Xentra: у каждой из четырёх карточек
-// в шапке — число, цветная пилюля с процентом и подпись "From Last
-// Month"). У нас такой подписи по месяцам нет, считаем по тому же
-// 14-дневному тренду, что уже используется под «Всего активных»
-// (сравниваем вторую половину окна с первой) — тот же принцип, другое
-// окно, а не выдуманное число.
 export function deltaPillHtml(pct) {
   if (pct === null || pct === undefined) return "";
   const positive = pct >= 0;
   return `<span class="delta-pill ${positive ? "up" : "down"}">${positive ? "+" : ""}${pct}%</span>`;
 }
 
-// Гант-таймлайн «когда взяли — когда сдать» (Доска) — перенос
-// референса пользователя: горизонтальные полоски задач вдоль оси дат
-// с вертикальной отметкой «сегодня». Диапазоны — реальные
-// created_at/deadline, которые уже приходят с сервера (не выдуманные
-// «дата старта работ»); карточки без обеих дат сюда просто не
-// попадают — фильтрация на стороне board.js, здесь только отрисовка.
 export function timelineHtml(rows, rangeStart, rangeEnd, todayMs) {
   const span = Math.max(1, rangeEnd - rangeStart);
   const pct = ms => Math.max(0, Math.min(100, ((ms - rangeStart) / span) * 100));
@@ -85,10 +67,6 @@ export function timelineHtml(rows, rangeStart, rangeEnd, todayMs) {
     const d = new Date(ms);
     return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
   };
-  // Ширина стартует с 0 и доезжает до цели через playTimelineIntro —
-  // тот же приём, что у playDonutIntro выше: полоса
-  // должна вырасти из точки, а не появиться сразу в целевом размере.
-  //
   const tagHtml = (left, current, text) => left > 65
     ? `<div class="gantt-tag end${current ? " current" : ""}" style="right:${(100 - left).toFixed(2)}%;">${esc(text)}</div>`
     : `<div class="gantt-tag${current ? " current" : ""}" style="left:${left.toFixed(2)}%;">${esc(text)}</div>`;
@@ -114,8 +92,6 @@ export function timelineHtml(rows, rangeStart, rangeEnd, todayMs) {
     </div>`;
 }
 
-// Проигрывает заливку .gantt-bar — тот же двух-кадровый
-// requestAnimationFrame приём, что playDonutIntro выше.
 export function playTimelineIntro(root) {
   const bars = root.querySelectorAll(".gantt-bar");
   requestAnimationFrame(() => {

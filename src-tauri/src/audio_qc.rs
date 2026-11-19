@@ -1,31 +1,11 @@
-//! Локальный QC звука — переносит логику из старой Python-версии
-//! (`audio_qc.py` в прежнем PySide6-клиенте): клиппинг, слишком тихие/шумные
-//! куски, длинные паузы. Без Silero VAD (лишняя зависимость для десктопа) —
-//! паузы ищутся порогом громкости, как и в прежней реализации.
-//!
-//! Декодирование — через `ffmpeg`: сначала тот, что лежит рядом с
-//! приложением, если его нет — из системного PATH. Ставить ffmpeg
-//! отдельно пользователю не нужно.
-//! Рядом с .exe ffmpeg кладёт не bundle.resources (bundle в
-//! tauri.conf.json выключен — пакует Velopack, а не tauri-bundler), а
-//! шаг `vpk pack` в CI: он копирует и сам бинарник, и ffmpeg.exe в одну
-//! директорию pack_dir/ (см. build.yml).
 
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
 
-/// Приложение собрано как GUI (windows_subsystem = "windows"), но у
-/// запускаемого из него процесса своя консоль — и Windows показывает её
-/// отдельным чёрным окном, мигающим поверх интерфейса на каждый запуск
-/// ffmpeg. CREATE_NO_WINDOW это отключает.
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-// pub(crate), не только для этого модуля — media_tools.rs (ffprobe-команды)
-// и mpv_embed.rs (запуск mpv.exe) нужен тот же приём подавления
-// консольного окна, дублировать его смысла нет: это чисто платформенная
-// деталь запуска ЛЮБОГО дочернего процесса, не специфика QC.
 pub(crate) fn hidden_command(exe: impl AsRef<std::ffi::OsStr>) -> Command {
     #[allow(unused_mut)]
     let mut cmd = Command::new(exe);
@@ -37,18 +17,16 @@ pub(crate) fn hidden_command(exe: impl AsRef<std::ffi::OsStr>) -> Command {
     cmd
 }
 
-/// Имя по смыслу вызова — весь ffmpeg/ffprobe-код читается привычнее с
-/// ним, чем с обобщённым hidden_command.
 pub(crate) fn ffmpeg_command(exe: impl AsRef<std::ffi::OsStr>) -> Command {
     hidden_command(exe)
 }
 
 #[derive(Serialize, Clone)]
 pub struct QcFinding {
-    pub kind: String,      // "clipping" | "silence" | "quiet" | "loud"
-    pub start: f64,        // секунды
+    pub kind: String,
+    pub start: f64,
     pub end: f64,
-    pub severity: String,  // "warn" | "error"
+    pub severity: String,
     pub message: String,
 }
 
@@ -61,8 +39,8 @@ pub struct QcReport {
 }
 
 const SAMPLE_RATE: u32 = 16_000;
-const CLIP_THRESHOLD: i32 = 32_600; // почти предел i16 (32767) — считаем клиппингом
-const SILENCE_RMS_THRESHOLD: f64 = 0.006; // линейная амплитуда, ~-44 дБФС
+const CLIP_THRESHOLD: i32 = 32_600;
+const SILENCE_RMS_THRESHOLD: f64 = 0.006;
 const MIN_SILENCE_SECONDS: f64 = 1.2;
 const WINDOW_SECONDS: f64 = 0.05;
 
@@ -71,17 +49,9 @@ pub fn analyze(path: &str) -> Result<QcReport, String> {
     analyze_samples(&samples)
 }
 
-/// Огибающая амплитуды для отрисовки волны на фронтенде — min/max на
-/// каждый "бакет" (по паре float на бакет, диапазон -1..1), а не сырые
-/// сэмплы: 16кГц * несколько минут — это сотни тысяч точек, тянуть их
-/// все через invoke() в JS и рисовать один <canvas> шириной 800px
-/// незачем и вредно для памяти webview. Находки QC уже несут start/end
-/// в секундах (см. QcFinding) — фронтенд сам кладёт маркеры на ту же
-/// шкалу времени, что и duration здесь.
 #[derive(Serialize)]
 pub struct WaveformData {
     pub duration: f64,
-    /// Чередование [min0, max0, min1, max1, ...] — длина ровно buckets*2.
     pub peaks: Vec<f32>,
 }
 
@@ -101,9 +71,6 @@ pub fn generate_waveform(path: &str, buckets: u32) -> Result<WaveformData, Strin
     })
 }
 
-/// Чистая функция без ffmpeg — вынесена отдельно ровно затем же, зачем
-/// и analyze_samples: юнит-тесты гоняют её на синтетических сэмплах, без
-/// реального аудиофайла и процесса ffmpeg.
 fn downsample_peaks(samples: &[i16], buckets: u32) -> Vec<f32> {
     let buckets = buckets.max(1) as usize;
     let len = samples.len();
@@ -128,15 +95,6 @@ fn downsample_peaks(samples: &[i16], buckets: u32) -> Vec<f32> {
     out
 }
 
-/// Вырезает и сохраняет фрагмент дорожки — экспорт QC-находки как
-/// самостоятельный файл, чтобы отправить её коллеге/режиссёру без
-/// пересылки исходника целиком. Результат всегда WAV PCM: у входа может
-/// быть любой контейнер/кодек (в т.ч. видео), пересчитывать в тот же
-/// формат для короткого превью-фрагмента не имеет смысла, а WAV
-/// открывается чем угодно без вопросов про кодеки.
-/// -ss ДО -i — быстрый seek по контейнеру; для звука (в отличие от
-/// видео с его keyframe-интервалами) ffmpeg декодирует точно от начала
-/// запрошенной позиции, так что точность не страдает.
 pub fn export_clip(path: &str, start: f64, end: f64, out_path: &str) -> Result<(), String> {
     if !(start.is_finite() && end.is_finite() && start >= 0.0 && end > start) {
         return Err("Некорректный диапазон фрагмента.".into());
@@ -168,22 +126,12 @@ pub fn export_clip(path: &str, start: f64, end: f64, out_path: &str) -> Result<(
     Ok(())
 }
 
-/// Путь к бинарнику (ffmpeg/ffprobe) рядом с исполняемым файлом
-/// приложения, если он там есть (packaged-вариант) — иначе `None`, и
-/// вызывающий код откатится на системный PATH. `current_exe()` — тот же
-/// приём, что использует сам Tauri для поиска sidecar-бинарников.
-/// `unix_name`/`windows_name` — разные имена файла на разных ОС (у
-/// Windows-сборки — ".exe", у остальных — без расширения).
 pub(crate) fn bundled_binary_path(unix_name: &str, windows_name: &str) -> Option<PathBuf> {
     let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     let candidate = exe_dir.join(if cfg!(windows) { windows_name } else { unix_name });
     candidate.is_file().then_some(candidate)
 }
 
-/// Быстрая проверка, что найденный бинарник реально запускается на этой
-/// системе (не битый архитектурно/повреждённый файл) — лучше явно
-/// сказать об этом и откатиться на PATH, чем один раз молча упасть на
-/// декодировании реального файла с непонятной ошибкой.
 pub(crate) fn binary_runs(exe: &std::path::Path) -> bool {
     ffmpeg_command(exe)
         .arg("-version")
@@ -192,22 +140,15 @@ pub(crate) fn binary_runs(exe: &std::path::Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Резолвит, каким ffmpeg пользоваться: сначала bundled рядом с .exe
-/// (если он реально запускается), иначе — просто "ffmpeg" из PATH.
-/// Результат кэшируется на процесс: проверка `-version` — это ещё один
-/// запуск процесса, делать его перед КАЖДЫМ анализом файла незачем.
 pub(crate) fn resolve_ffmpeg() -> &'static str {
     static RESOLVED: std::sync::Mutex<Option<&'static str>> = std::sync::Mutex::new(None);
     cached_resolve(&RESOLVED, "ffmpeg", "ffmpeg.exe")
 }
 
-/// Папка, куда приложение само докачивает ffmpeg, если рядом с .exe его нет (см. local_render::prepare).
 pub(crate) fn downloaded_tools_dir() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA").map(|l| PathBuf::from(l).join("Project Desktop").join("tools").join("ffmpeg"))
 }
 
-/// Кэшируем только УДАЧНЫЙ резолв: если ffmpeg пока не запускается (его ещё не докачали), следующий вызов ищет заново —
-/// после докачки приложению не нужен перезапуск.
 pub(crate) fn cached_resolve(
     slot: &'static std::sync::Mutex<Option<&'static str>>,
     unix_name: &str,
@@ -226,22 +167,16 @@ pub(crate) fn cached_resolve(
     leaked
 }
 
-/// Тот же приём резолва, что у resolve_ffmpeg(), но для имени бинарника
-/// и заодно переиспускаемый media_tools.rs для ffprobe — единственное
-/// отличие между ними — искомое имя файла.
 pub(crate) fn resolve_binary_uncached(unix_name: &str, windows_name: &str) -> String {
     if let Some(bundled) = bundled_binary_path(unix_name, windows_name) {
         if binary_runs(&bundled) {
             log::info!("{windows_name}: используем bundled-версию {bundled:?}");
             return bundled.to_string_lossy().into_owned();
         }
-        // Лежит рядом, но не запускается (например, собран не под ту
-        // архитектуру) — не тихо молчим, а пробуем PATH дальше.
         log::warn!("bundled {windows_name:?} найден по пути {bundled:?}, но не запустился — ищем дальше");
     } else {
         log::warn!("{windows_name}: bundled-копия не найдена рядом с .exe — ищем докачанную или PATH ({unix_name})");
     }
-    // Докачанная приложением копия (если рядом с .exe ffmpeg нет)
     if let Some(dir) = downloaded_tools_dir() {
         let candidate = dir.join(if cfg!(windows) { windows_name } else { unix_name });
         if candidate.is_file() && binary_runs(&candidate) {
@@ -252,9 +187,6 @@ pub(crate) fn resolve_binary_uncached(unix_name: &str, windows_name: &str) -> St
     unix_name.to_string()
 }
 
-/// Собственно анализ — вынесена из `analyze` отдельно от decode_pcm, чтобы
-/// её можно было юнит-тестировать на синтетических сэмплах без реального
-/// аудиофайла и без запуска ffmpeg (см. тесты внизу файла).
 fn analyze_samples(samples: &[i16]) -> Result<QcReport, String> {
     if samples.is_empty() {
         return Err("Не удалось прочитать аудио — файл пуст или повреждён.".into());
@@ -277,7 +209,6 @@ fn analyze_samples(samples: &[i16]) -> Result<QcReport, String> {
     let peak_dbfs = amplitude_to_dbfs(peak as f64 / 32768.0);
     let rms_dbfs = amplitude_to_dbfs(rms / 32768.0);
 
-    // Клиппинг — ищем подряд идущие сэмплы на пределе шкалы.
     let mut clip_run_start: Option<usize> = None;
     for (i, &s) in samples.iter().enumerate() {
         let clipped = (s as i32).abs() >= CLIP_THRESHOLD;
@@ -309,7 +240,6 @@ fn analyze_samples(samples: &[i16]) -> Result<QcReport, String> {
         });
     }
 
-    // Долгие паузы — окна с RMS ниже порога подряд.
     let mut silence_start: Option<usize> = None;
     let mut i = 0usize;
     while i < samples.len() {
@@ -398,8 +328,6 @@ fn amplitude_to_dbfs(a: f64) -> f64 {
     20.0 * a.log10()
 }
 
-/// Декодирует любой аудио/видео-файл в PCM s16le моно 16кГц через ffmpeg,
-/// читая результат из stdout — временных файлов не создаём.
 fn decode_pcm(path: &str) -> Result<Vec<i16>, String> {
     let ffmpeg = resolve_ffmpeg();
     let output = ffmpeg_command(ffmpeg)
@@ -441,10 +369,6 @@ mod tests {
     }
 
     fn tone(seconds: f64, amplitude: i16) -> Vec<i16> {
-        // Не настоящий синус — чередование +amplitude/-amplitude тем же
-        // темпом, что и реальный клиппинг на полке: для порогов клиппинга
-        // и RMS этого достаточно, не тянуть же в тест-хелпер std::f64::sin
-        // ради треугольного приближения синуса.
         (0..(seconds * SAMPLE_RATE as f64) as usize)
             .map(|i| if i % 2 == 0 { amplitude } else { -amplitude })
             .collect()
@@ -457,8 +381,6 @@ mod tests {
 
     #[test]
     fn clean_quiet_free_audio_has_no_findings() {
-        // Умеренная громкость, без клиппинга и без длинных пауз —
-        // чистая дорожка не должна порождать ни одной находки.
         let samples = tone(3.0, 8000);
         let report = analyze_samples(&samples).unwrap();
         assert!(
@@ -471,8 +393,6 @@ mod tests {
 
     #[test]
     fn sustained_clipping_is_detected() {
-        // CLIP_THRESHOLD = 32_600 — сэмплы на самом пределе шкалы,
-        // достаточно долгий отрезок (порог — 3+ сэмпла подряд).
         let mut samples = tone(0.5, 8000);
         for s in samples.iter_mut().skip(1000).take(50) {
             *s = 32767;
@@ -486,7 +406,6 @@ mod tests {
 
     #[test]
     fn brief_clipping_under_threshold_is_ignored() {
-        // Меньше 3 сэмплов подряд на пределе — случайный пик, не клиппинг.
         let mut samples = tone(0.5, 8000);
         samples[1000] = 32767;
         samples[1001] = 32767;
@@ -496,8 +415,6 @@ mod tests {
 
     #[test]
     fn long_silence_is_detected() {
-        // MIN_SILENCE_SECONDS = 1.2 — тишина короче порога отчёта не
-        // получает, длиннее — должна попасть в findings как "silence".
         let mut samples = tone(0.5, 8000);
         samples.extend(silence(2.0));
         samples.extend(tone(0.5, 8000));
@@ -510,8 +427,6 @@ mod tests {
 
     #[test]
     fn short_silence_is_not_reported() {
-        // Короткая пауза (0.5с) — это естественная тишина между фразами,
-        // не проблема озвучки, findings быть не должно.
         let mut samples = tone(0.5, 8000);
         samples.extend(silence(0.5));
         samples.extend(tone(0.5, 8000));
@@ -521,8 +436,6 @@ mod tests {
 
     #[test]
     fn overall_silence_is_flagged_quiet() {
-        // Вся дорожка тихая (не путать с точечной паузой) — попадает под
-        // summary-находку "quiet" по итоговому RMS, а не под "silence".
         let samples = silence(2.0);
         let report = analyze_samples(&samples).unwrap();
         assert!(report.findings.iter().any(|f| f.kind == "quiet"));
@@ -531,8 +444,6 @@ mod tests {
 
     #[test]
     fn near_full_scale_audio_is_flagged_loud() {
-        // Громко, но не настолько долго на пределе, чтобы засчитаться
-        // клиппингом — предупреждение "loud" по пиковому уровню.
         let samples = tone(1.0, 32000);
         let report = analyze_samples(&samples).unwrap();
         assert!(report.findings.iter().any(|f| f.kind == "loud" || f.kind == "clipping"));
@@ -542,13 +453,11 @@ mod tests {
     fn waveform_peaks_length_matches_requested_buckets() {
         let samples = tone(2.0, 8000);
         let peaks = downsample_peaks(&samples, 100);
-        assert_eq!(peaks.len(), 200); // min+max на бакет
+        assert_eq!(peaks.len(), 200);
     }
 
     #[test]
     fn waveform_peaks_reflect_full_scale_tone() {
-        // tone() чередует +amplitude/-amplitude — на полной шкале min
-        // должен быть близко к -1, max — близко к +1.
         let samples = tone(1.0, 32000);
         let peaks = downsample_peaks(&samples, 10);
         for chunk in peaks.chunks(2) {
@@ -566,8 +475,7 @@ mod tests {
 
     #[test]
     fn waveform_handles_more_buckets_than_samples_without_panicking() {
-        // Совсем короткий файл — буферов запрошено больше, чем сэмплов.
-        let samples = tone(0.0005, 8000); // единицы сэмплов
+        let samples = tone(0.0005, 8000);
         let peaks = downsample_peaks(&samples, 500);
         assert_eq!(peaks.len(), 1000);
     }
@@ -579,14 +487,6 @@ mod tests {
         assert!(export_clip("whatever.wav", 1.0, 1.0, "/tmp/out.wav").is_err());
     }
 
-    /// Реальный прогон через системный ffmpeg (на этой машине он есть в
-    /// PATH — resolve_ffmpeg() откатится на него, т.к. бандловый
-    /// ffmpeg.exe тут не запускается, это Windows PE). Генерируем
-    /// синтетический тон через lavfi, режем середину, проверяем, что
-    /// результат — валидный WAV нужной длительности. Если на машине,
-    /// где гоняют тесты, ffmpeg не установлен вовсе — пропускаем, а не
-    /// падаем: это единственный тест здесь, которому нужен реальный
-    /// бинарник в PATH.
     #[test]
     fn export_clip_produces_wav_of_requested_duration() {
         if Command::new("ffmpeg").arg("-version").output().map(|o| !o.status.success()).unwrap_or(true) {
@@ -597,7 +497,6 @@ mod tests {
         let src = dir.join("project_test_source.wav");
         let out = dir.join("project_test_clip.wav");
 
-        // 5-секундный тон 440Гц как исходник.
         let gen = Command::new("ffmpeg")
             .args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=5"])
             .arg(&src)
@@ -609,8 +508,6 @@ mod tests {
         let out_str = out.to_string_lossy().into_owned();
         export_clip(&src_str, 1.0, 3.0, &out_str).expect("export_clip не должен падать на валидном входе");
 
-        // Проверяем длительность результата тем же decode_pcm, которым
-        // пользуется весь остальной модуль — не тянем ffprobe отдельно.
         let clipped_samples = decode_pcm(&out_str).expect("результат export_clip должен читаться decode_pcm");
         let got_duration = clipped_samples.len() as f64 / SAMPLE_RATE as f64;
         assert!(
@@ -624,9 +521,9 @@ mod tests {
 
     #[test]
     fn findings_are_sorted_by_start_time() {
-        let mut samples = silence(1.5); // long silence -> finding at start=0
+        let mut samples = silence(1.5);
         samples.extend(tone(0.5, 8000));
-        samples.extend(silence(1.5)); // another long silence later
+        samples.extend(silence(1.5));
         let report = analyze_samples(&samples).unwrap();
         let starts: Vec<f64> = report.findings.iter().map(|f| f.start).collect();
         let mut sorted = starts.clone();

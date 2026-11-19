@@ -1,7 +1,3 @@
-// Хранилище разработчика: логины, пароли и ключи внешних сервисов.
-// В приложении нет ни секретов, ни кодовой фразы: всё хранит и проверяет сервер
-// (/api/dev/vault/*, доступ только настоящему владельцу). Сессия хранилища живёт
-// только в памяти этого окна и закрывается через 15 минут или кнопкой.
 import { apiPost, askConfirm, openSheet, toast } from "./api.js";
 import { esc, relTime } from "./utils.js";
 import { personName, loadPeopleNames } from "./people-names.js";
@@ -11,7 +7,6 @@ let filterKind = "all";
 let query = "";
 const KINDS = { account: "Аккаунт", api: "API", token: "Токен", other: "Другое" };
 const KIND_ICON = { account: "👤", api: "🔌", token: "🔑", other: "📄", server: "⚙️" };
-// Фильтры: свои типы записей плюс «Сервер» — переменные из серверных .env (только чтение, правятся на сервере).
 const CHIPS = { ...KINDS, server: "Сервер" };
 let sessionUntil = 0;
 const CLIPBOARD_CLEAR_MS = 30_000;
@@ -169,7 +164,7 @@ async function renderList(box) {
         await navigator.clipboard.writeText(value);
         toast("Скопировано, буфер очистится через 30 с", "success");
         setTimeout(async () => {
-          try { if ((await navigator.clipboard.readText()) === value) await navigator.clipboard.writeText(""); } catch (_) { /* буфер занят другим — не трогаем */ }
+          try { if ((await navigator.clipboard.readText()) === value) await navigator.clipboard.writeText(""); } catch (_) { }
         }, CLIPBOARD_CLEAR_MS);
       } catch (err) { toast(err.message, "error"); }
     });

@@ -1,7 +1,3 @@
-// Раздел «Заливка аниме и другие» → Kodik (кабинет из KODIK_LOGIN).
-// Все запросы идут через наш сервер (/api/kodik/*): токен Kodik хранится только там.
-// Каталог и озвучки — живые данные API; остальное — справочник по кабинету для разработчиков
-// с генераторами ссылок и кодом, который можно сразу скопировать.
 import { $, esc } from "./utils.js";
 import { apiGet, apiPost, openSheet, dismissSheet, toast, mediaUrl } from "./api.js";
 import { openExternal, pickOutputFile } from "./tauri.js";
@@ -20,12 +16,11 @@ const VIEWS = [
 
 const store = {
   get: (k, d) => { try { return localStorage.getItem(k) || d; } catch (_) { return d; } },
-  set: (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* не запомним — не страшно */ } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (_) { } },
 };
 
 let view = store.get(VIEW_KEY, "catalog");
 const cat = { q: "", types: "anime-serial,anime", status: "", genre: "", year: "", country: "", quality: "", adult: false, items: [], next: "", loading: false };
-// Тайтлы 18+ (эротика, хентай) по умолчанию не показываем — только по галочке «18+».
 const ADULT_GENRES = /^(эротика|хентай|erotica|hentai)$/i;
 const isAdult = r => {
   const m = r.material_data || {};
@@ -34,7 +29,6 @@ const isAdult = r => {
 const facets = {};
 const PROGRESS_KEY = "project-kodik-progress";
 
-// Где остановился в плеере Kodik: ключ — ссылка плеера без параметров. Приходит из postMessage плеера.
 function progressAll() { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || "{}"); } catch (_) { return {}; } }
 function progressOf(link) { return progressAll()[(link || "").split("?")[0]] || null; }
 function saveProgress(link, patch) {
@@ -43,7 +37,7 @@ function saveProgress(link, patch) {
   all[key] = { ...(all[key] || {}), ...patch, at: Date.now() };
   const keys = Object.keys(all);
   if (keys.length > 300) keys.sort((a, b) => all[a].at - all[b].at).slice(0, keys.length - 300).forEach(k => delete all[k]);
-  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(all)); } catch (_) { /* без памяти — просто не продолжим */ }
+  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(all)); } catch (_) { }
 }
 const clock = sec => { sec = Math.max(0, Math.round(sec || 0)); const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, x = String(sec % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
 
@@ -53,7 +47,6 @@ async function loadFacets(types) {
   const q = types ? { types } : {};
   const [g, y, c, ql] = await Promise.all(["genres", "years", "countries", "qualities/v2"].map(r =>
     apiGet(`/kodik/api/${r}`, r === "years" ? q : r === "genres" ? { ...q, sort: "count", genres_type: "all" } : { ...q, sort: "count" }).then(d => d.results || []).catch(() => [])));
-  // genres_type=all: жанры КиноПоиска + Shikimori (эротика/хентай есть только у Shikimori); склеиваем дубли по названию.
   const byTitle = new Map();
   for (const x of g) {
     const k = String(x.title || "").trim().toLowerCase();
@@ -65,7 +58,6 @@ async function loadFacets(types) {
   return facets[key];
 }
 
-// ---------- переключатель Anime 365 / Kodik ----------
 
 export async function loadUploads() {
   const part = store.get(PART_KEY, "a365");
@@ -85,7 +77,6 @@ export async function loadUploads() {
   return part === "kodik" ? loadKodik() : loadA365();
 }
 
-// Кабинет и наша озвучка — из настроек сервера (KODIK_LOGIN, KODIK_TRANSLATION_ID): сменятся там — сменится и тут.
 let account = null;
 const isOurs = t => !!account && (Number(t?.id) === account.translation_id || (!!account.translation_title && t?.title === account.translation_title));
 const oursName = () => account?.translation_title || "нашей озвучки";
@@ -124,11 +115,8 @@ const codeBlock = (text, label = "") => `<div class="kk-code">${label ? `<div cl
 const table = (head, rows) => `<div class="kk-table"><table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td>${i === 0 ? `<code>${esc(c)}</code>` : esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 const playerUrl = link => (link || "").startsWith("//") ? `https:${link}` : link;
 
-// ---------- Каталог ----------
 
-// /list отдаёт по записи на пару «тайтл + озвучка», отсортировано по обновлению: на странице у тайтла оказывается
-// только озвучка, обновлённая последней. Полный набор озвучек догружаем поиском по Shikimori ID и держим здесь.
-const fullDubs = new Map(); // shikimori_id → все записи тайтла (по одной на озвучку) или null, пока грузится
+const fullDubs = new Map();
 
 function groupResults(list) {
   const map = new Map();
@@ -146,7 +134,6 @@ function groupResults(list) {
   return [...map.values()];
 }
 
-// Догрузить озвучки тайтлов на экране (по 4 запроса за раз; сервер кэширует ответы Kodik на 5 минут).
 async function loadFullDubs(groups, onDone) {
   const missing = [...new Set(groups.map(g => g.main.shikimori_id).filter(Boolean).map(String))].filter(sid => !fullDubs.has(sid));
   if (!missing.length) return;
@@ -177,7 +164,6 @@ const fmtNum = n => Math.round(Number(n) || 0).toLocaleString("ru-RU");
 const STATUS_TEXT = { ongoing: "онгоинг", released: "вышло", anons: "анонс" };
 const PLAY_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>`;
 
-// Озвучки тайтла: сначала наша, дальше — у кого больше вышедших серий.
 const sortedDubs = g => [...g.dubs].sort((a, b) => (isOurs(b.translation) - isOurs(a.translation)) || ((b.last_episode || 0) - (a.last_episode || 0)));
 const epsText = (r, m) => r.episodes_count ? `${r.last_episode || "?"} / ${m.episodes_total || r.episodes_count}` : (r.type || "").includes("serial") ? "" : "фильм";
 const posterImg = (r, cls = "") => {
@@ -248,7 +234,6 @@ function detailHtml(g) {
   </div>`;
 }
 
-// Битый адрес постера у Kodik — пробуем запасные, потом заглушка, а не значок сломанной картинки.
 function wirePosterFallback(root) {
   root.querySelectorAll(".kc-poster img, .kc-detail-poster img").forEach(img => img.addEventListener("error", () => {
     const rest = (img.dataset.fb || "").split(" ").filter(Boolean);
@@ -328,7 +313,6 @@ async function renderCatalog(box) {
   fillFacets();
   let groupsByKey = new Map();
   const paint = () => {
-    // Фильтра по качеству в API нет — отбираем по полю quality в ответе.
     const shown = cat.items.filter(r => (!cat.quality || r.quality === cat.quality) && (cat.adult || !isAdult(r)));
     const groups = groupResults(shown);
     groupsByKey = new Map(groups.map(g => [String(g.key), g]));
@@ -341,7 +325,6 @@ async function renderCatalog(box) {
       : `<div class="kc-empty"><b>Ничего не нашлось</b><span>Попробуйте другое название или сбросьте фильтры.</span></div>`;
     wirePosterFallback(list);
     list.querySelector("[data-kk-more]")?.addEventListener("click", async e => { e.target.disabled = true; e.target.textContent = "Загружаю…"; await fetchCatalog(true).catch(err => toast(err.message, "error")); paint(); });
-    // Полный список озвучек — после того как карточки уже на экране; перерисуем, когда догрузится.
     if (!cat.q) loadFullDubs(groups, () => { if (list.isConnected && !cat.q) { list.classList.add("kc-quiet"); paint(); } });
   };
   const reload = async () => {
@@ -360,7 +343,6 @@ async function renderCatalog(box) {
     const b = e.target.closest("button[data-v]"); if (!b || b.dataset.v === cat.status) return;
     cat.status = b.dataset.v; setSeg(e.currentTarget, cat.status); reload();
   });
-  // Только эти четыре поля: запись в cat[любое имя из DOM] позволила бы странице подменить, например, cat.total.
   const FACET_FIELDS = { genre: "genre", year: "year", country: "country", quality: "quality" };
   box.querySelectorAll("[data-kk-f]").forEach(el => el.addEventListener("change", () => {
     const field = FACET_FIELDS[el.dataset.kkF];
@@ -386,7 +368,6 @@ async function renderCatalog(box) {
 
 export function openKodikPlayer(link, title) {
   const base = playerUrl(link);
-  // Продолжить с того же места: серия, сезон и секунда из прошлого просмотра (API плеера).
   const prog = progressOf(base);
   let src = base;
   if (prog && !/[?&](season|episode|start_from)=/.test(base)) {
@@ -406,7 +387,6 @@ export function openKodikPlayer(link, title) {
       <button type="button" class="btn ghost" data-close>Закрыть</button></div>
     <div class="kk-player"><iframe src="${esc(src)}" allow="autoplay *; fullscreen *; picture-in-picture *" allowfullscreen referrerpolicy="origin"></iframe></div>`, "wide");
   overlay.querySelector(".sheet").classList.add("kk-player-sheet");
-  // Голая ссылка плеера вне сайта у Kodik не открывается — в браузер отдаём их «страницу с плеером».
   overlay.querySelector("[data-kk-page]").addEventListener("click", async () => {
     try {
       const d = await apiGet("/kodik/api/search", { player_link: base, with_page_links: "true", limit: 1 });
@@ -446,7 +426,6 @@ export function openKodikPlayer(link, title) {
   overlay.querySelector("[data-kk-copy]").addEventListener("click", e => navigator.clipboard.writeText(e.target.dataset.kkCopy).then(() => toast("Ссылка на плеер скопирована", "success")));
 }
 
-// ---------- Озвучки ----------
 
 async function renderTranslations(box) {
   box.innerHTML = `<div class="kk-stat-bar">
@@ -457,8 +436,6 @@ async function renderTranslations(box) {
   let rows = [], types = "anime-serial,anime";
   const paint = () => {
     const q = box.querySelector("[data-kk-tq]").value.trim().toLowerCase();
-    // «Не требуется» (ID 703) — не озвучка, а отметка Kodik: материалу перевод не нужен (русская оригинальная дорожка).
-    // В рейтинг команд её не ставим, показываем отдельно.
     const isService = r => r.id === 703 || /^не требуется$/i.test(r.title.trim());
     const service = rows.filter(isService);
     const teams = rows.filter(r => !isService(r));
@@ -502,7 +479,6 @@ async function renderTranslations(box) {
   load();
 }
 
-// ---------- Файлы базы ----------
 
 const DUMP_LABEL = {
   "films": "Все фильмы", "serials": "Все сериалы", "calendar": "Календарь (выгрузка Shikimori)",
@@ -536,7 +512,6 @@ async function renderDumps(box) {
   } catch (err) { out.textContent = err.message; }
 }
 
-// ---------- API ----------
 
 const RESOURCES = {
   search: "Поиск тайтла: по названию (нечётко) или по ID — shikimori_id, kinopoisk_id, imdb_id, mdl_id, worldart_*.",
@@ -596,7 +571,6 @@ limit=5</textarea>
   });
 }
 
-// ---------- API плеера ----------
 
 const PLAYER_EVENTS = [
   ["kodik_player_play", "Старт или продолжение воспроизведения"],
@@ -640,7 +614,6 @@ player.postMessage({ key: "kodik_player_api", value: { method: "seek", seconds: 
 player.postMessage({ key: "kodik_player_api", value: { method: "change_episode", season: 1, episode: 3, without_reload: true } }, "*");`, "Управление")}`;
 }
 
-// ---------- Параметры iframe (с конструктором) ----------
 
 const IFRAME_PARAMS = [
   ["geoblock", "RU,UA", "Скрыть плеер в странах (RU/UA — вместе с Крымом)"],
@@ -700,7 +673,6 @@ function renderIframe(box) {
   build();
 }
 
-// ---------- Скрипты ----------
 
 function renderScripts(box) {
   const domain = { from: "kodik.org", to: "kodikplayer.com", ready: true };
@@ -734,7 +706,6 @@ var kodikChangeDomains = {
   paint();
 }
 
-// ---------- Модули DLE ----------
 
 const DLE = [
   ["Kodik Replacer (Антиблок) 1.3.0", "официальный", "Плееры работают, даже если домен Kodik заблокировали. Лёгкий, базу не меняет — ставить стоит всем."],
@@ -754,9 +725,7 @@ function renderDle(box) {
     <div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/modules/dle">Инструкции по модулям ↗</button></div>`;
 }
 
-// ---------- Статистика ----------
 
-// Статистика показов: одна величина (показы) — одна ось. Прошлый период пунктиром на той же оси, чтобы было с чем сравнить.
 const statsState = { src: "all-sites", days: 30, table: false };
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const fmtN = n => Math.round(n).toLocaleString("ru-RU");
@@ -764,13 +733,11 @@ const parseDay = s => { const [d, m, y] = String(s).split("."); return new Date(
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 function niceMax(v) {
-  // Не меньше 4: деления по четвертям остаются целыми (иначе на оси «1, 1, 1, 0»).
   if (v <= 4) return 4;
   const p = 10 ** Math.floor(Math.log10(v));
   return [1, 2, 2.5, 5, 10].map(k => k * p).find(x => x >= v);
 }
 
-// Монотонная кубическая кривая (Fritsch–Carlson): плавная, но не уходит ниже нуля и не рисует пиков, которых нет в данных.
 function smoothPath(pts) {
   const n = pts.length;
   if (!n) return "";
@@ -793,7 +760,6 @@ function smoothPath(pts) {
   return d;
 }
 
-// Геометрия графика «Показы по дням» — одна на отрисовку и наведение.
 const LINE = { H: 280, L: 52, R: 16, T: 18, B: 30 };
 function lineGeom(cur, prev, W) {
   const { H, L, R, T, B } = LINE, n = cur.length;
@@ -899,7 +865,7 @@ async function renderStats(box) {
     out.innerHTML = `<div class="kk-skel"></div>`;
     const days = statsState.days;
     const end = new Date();
-    const start = new Date(end.getTime() - (2 * days - 1) * 86400000); // два периода сразу: текущий и прошлый для сравнения
+    const start = new Date(end.getTime() - (2 * days - 1) * 86400000);
     try {
       const d = await apiGet("/kodik/stats", { domain: statsState.src, start: isoDay(start), end: isoDay(end) });
       const all = d.rows.filter(r => !r.event || r.event === "impression").map(r => ({ date: r.date, count: Number(r.count) || 0 }));
@@ -937,14 +903,11 @@ async function renderStats(box) {
           <section class="kk-chart kk-srcs"><div class="kk-chart-h"><div><b>Откуда показы</b><span class="kk-dim">доля от всех показов · ${days} дн.</span></div></div><div class="kk-srclist kk-dim">Считаю…</div></section>
         </div>`;
       if (!statsState.table) wireLineHover(out.querySelector(".kk-linewrap"), cur, prev);
-      // Сравнение источников: тот же период по каждому (запросы кэшируются на сервере).
       const list = out.querySelector(".kk-srclist");
       await sourcesReady;
       const totals = await Promise.all(sources.map(s => apiGet("/kodik/stats", { domain: s.value, start: isoDay(new Date(end.getTime() - (days - 1) * 86400000)), end: isoDay(end) })
         .then(r => r.rows.filter(x => !x.event || x.event === "impression").reduce((a, x) => a + (Number(x.count) || 0), 0)).catch(() => null)));
       if (!list.isConnected) return;
-      // Источники кабинета не складываются: «Все сайты» — все показы аккаунта, остальные — их части
-      // (озвучка — плееры с нашим переводом на любых сайтах; страница с плеером — ссылки w.kdkonl.com).
       const allIdx = sources.findIndex(x => x.value === "all-sites");
       const base = allIdx >= 0 && totals[allIdx] ? totals[allIdx] : Math.max(1, ...totals.filter(v => v != null));
       const NOTE = { translation: "плееры с вашей озвучкой на любых сайтах", uid: "ваша страница с плеером — ссылки для соцсетей" };
@@ -970,7 +933,6 @@ async function renderStats(box) {
   load();
 }
 
-// ---------- FAQ ----------
 
 const FAQ = [
   ["Как материалы попадают в базу?", "Аниме — по World Art (затем Shikimori): каждый сезон — отдельный сериал («[ТВ-1]», «[ТВ-2]»). Спешлы — в 0 сезон, OVA и прочее — в -1, -2… Фильмы и сериалы — по КиноПоиску, все сезоны в одном сериале."],
@@ -984,14 +946,12 @@ const FAQ = [
 ];
 
 function renderFaq(box) {
-  // Две постоянные колонки: раскрытый вопрос сдвигает вниз только свою колонку и ничего не перескакивает.
   const item = ([q, a]) => `<details class="kk-faq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`;
   const half = Math.ceil(FAQ.length / 2);
   box.innerHTML = `<div class="kk-faqgrid"><div class="kk-faqcol">${FAQ.slice(0, half).map(item).join("")}</div><div class="kk-faqcol">${FAQ.slice(half).map(item).join("")}</div></div>` +
     `<div class="kk-row"><button type="button" class="btn ghost" data-kk-open="/faq">Полный FAQ ↗</button></div>`;
 }
 
-// ---------- Заливка в Kodik (через Kodik Converter) ----------
 
 let upTimer = 0;
 
@@ -1008,7 +968,6 @@ async function renderUpload(box) {
   const stageOf = it => it.running && !it.kodik?.stage ? "queued" : it.kodik?.stage;
   const count = p => items.filter(i => i.presence === p).length;
   const busyN = items.filter(i => ["queued", "file", "pulling"].includes(stageOf(i))).length;
-  // Серии одного тайтла — в одну карточку: постер, название и серии плашками.
   const groups = new Map();
   for (const it of items) {
     const k = it.title_id || it.title;
@@ -1093,7 +1052,6 @@ async function openUploadForm(it, onDone) {
   });
 }
 
-// ---------- Конвертер: файлы студии на converter.kodikres.com ----------
 
 const CONV_FILTERS = [["", "Все"], ["hidden", "Скрытые"], ["to-be-deleted", "На удалении"], ["error", "Ошибки"]];
 const conv = { filter: "", page: 1, query: "" };

@@ -1,12 +1,8 @@
 name: Cleanup Caches
 
-# build.yml/build-alpha.yml сами кэш не заводят (собирают с нуля
-# каждый раз), но codeql.yml — да: github/codeql-action сам кладёт
-# кэш overlay-базы на каждый пуш в main. Лимит места на кэши общий для
-# репозитория, и без чистки старые записи просто копятся.
 on:
   schedule:
-    - cron: "0 3 * * *" # каждый день
+    - cron: "0 3 * * *"
   workflow_dispatch: {}
 
 jobs:

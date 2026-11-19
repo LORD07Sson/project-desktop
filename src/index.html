@@ -13,23 +13,8 @@
 </head>
 <body>
 
-<!-- Фон «Кадр»: размытая обложка тайтла, с которым сейчас работают
-     (app/backdrop.js). Два слоя — новый проявляется поверх старого. -->
 <div class="app-backdrop" id="app-backdrop" aria-hidden="true"><i></i><i></i></div>
 
-<!-- ===================== Полоса заголовка окна =====================
-     Своя, а не системная: у окна выключены decorations (см.
-     tauri.conf.json), потому что системный заголовок был ВТОРОЙ
-     полосой над этой же шапкой приложения — 32 потерянных пикселя и
-     чужой серый прямоугольник поверх фирменного стекла. Теперь одна
-     полоса: слева опознание приложения, справа — сначала кнопки
-     приложения, затем кнопки окна в раскладке Windows 11 (свернуть /
-     развернуть / закрыть).
-
-     Лежит ВНЕ #app-screen и видна всегда, включая экран загрузки и
-     экран входа: иначе до входа окно было бы нечем ни подвинуть, ни
-     закрыть. data-tauri-drag-region — перетаскивание окна за пустое
-     место полосы (обрабатывает сам Tauri). -->
 <div class="titlebar" id="titlebar" data-tauri-drag-region>
   <div class="titlebar-left" data-tauri-drag-region>
     <div class="logo brand-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19"/><path class="bm-b" d="M19 5L5 19"/></svg></div>
@@ -37,10 +22,6 @@
   </div>
   <div class="titlebar-right" data-tauri-drag-region>
     <div class="titlebar-apps" id="titlebar-apps" data-tauri-drag-region hidden>
-      <!-- Разделы — веер из круглой кнопки в правом нижнем углу (titlebar-menus.js,
-           menubar.css): кнопка показывает значок и цвет текущего раздела, по клику
-           пункты разлетаются вверх по дуге. Пункты — прежние .tab-btn[data-tab]:
-           tabs.js, права, бейджи, обучение и Ctrl+1..9 работают с ними как раньше. -->
       <nav class="fan" id="tabstrip" aria-label="Разделы">
         <div class="fan-scrim" id="fan-scrim" hidden></div>
         <div class="fan-menu" id="fan-menu" role="menu" aria-label="Разделы" hidden>
@@ -68,7 +49,6 @@
       <div class="tb-actions" data-tauri-drag-region>
         <div class="team-teaser titlebar-team" id="titlebar-team" title="Команда" hidden></div>
         <button id="open-cmdk" class="tb-search" title="Поиск и команды (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span class="tb-search-lbl">Поиск: серии, тайтлы, люди, команды</span><kbd>Ctrl K</kbd></button>
-        <!-- Lofi-радио (lofi.js): кнопка с пластинкой, панель станций под ней. -->
         <div class="lr-wrap">
           <button id="lofi-btn" class="icon-btn lofi-btn" title="Lofi-радио" aria-label="Lofi-радио" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="12" rx="2.5"/><path d="M7 8 17 3.5"/><circle cx="15.5" cy="14" r="2.6"/><path d="M6.5 12.5h3M6.5 15.5h3"/></svg><span class="lofi-eq" aria-hidden="true"><i></i><i></i><i></i></span></button>
           <div class="lr-panel" id="lofi-panel" role="dialog" aria-label="Lofi-радио" hidden></div>
@@ -81,7 +61,6 @@
             <div class="ib-list" id="ib-list"></div>
           </div>
         </div>
-        <!-- Инструменты одним меню: раньше в шапке стояли девять кнопок в ряд. -->
         <div class="tb-menu-wrap" id="tools-wrap">
           <button id="tools-btn" class="btn" aria-haspopup="menu" aria-expanded="false" title="Инструменты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span class="btn-lbl">Инструменты</span><svg class="tb-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
           <div class="tb-menu" id="tools-menu" role="menu" hidden>
@@ -95,7 +74,6 @@
           </div>
         </div>
         <button id="open-watch" class="btn watch-cta" title="Режим «Смотреть»: онгоинги, анонсы и тайтлы команды"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></svg>Смотреть</button>
-        <!-- Профиль: аватар с меню «Мой профиль / Выйти». -->
         <div class="tb-menu-wrap" id="me-wrap">
           <button id="me-btn" class="tb-me" aria-haspopup="menu" aria-expanded="false" title="Профиль"><span class="avatar sm" id="me-avatar">?</span></button>
           <div class="tb-menu" id="me-menu" role="menu" hidden>
@@ -107,9 +85,6 @@
         </div>
       </div>
     </div>
-    <!-- Размеры и порядок — как у системных кнопок Windows 11
-         (46×32, закрытие последним и краснеет при наведении), чтобы
-         мышечная память пользователя не промахивалась. -->
     <div class="window-controls">
       <button class="win-btn" id="win-minimize" title="Свернуть" aria-label="Свернуть">
         <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" /></svg>
@@ -125,22 +100,11 @@
   </div>
 </div>
 
-<!-- Тонкая полоса под шапкой, пока к серверу идёт хоть один запрос.
-     До неё единственным признаком «данные грузятся» был скелетон
-     внутри конкретной вкладки — а фоновые обновления (лента, новые
-     назначения, присутствие) шли вообще беззвучно, и приложение
-     выглядело подвисшим ровно так же, как работающим. Состоянием
-     управляет api.js, см. класс .net-busy на <html>. -->
 <div class="net-bar" id="net-bar" aria-hidden="true"><i></i></div>
 
-<!-- ===================== Экран загрузки при старте (та же
-     анимация-маскот, что и в мини-аппе) ===================== -->
-<div class="app-splash" id="app-splash"><!-- содержимое и анимацию строит app/splash.js --></div>
+<div class="app-splash" id="app-splash"></div>
 
-<!-- ===================== Экран входа ===================== -->
 <div id="auth-screen">
-  <!-- Стена обложек сезона (auth.js → /api/login-wall): наклонённые
-       колонки едут навстречу друг другу. Нет каталога — остаётся фон. -->
   <div class="auth-wall" id="auth-wall" aria-hidden="true"></div>
   <div class="auth-wall-shade" aria-hidden="true"></div>
   <div class="auth-split">
@@ -187,28 +151,24 @@
   </div>
 </div>
 
-<!-- ===================== Основной экран ===================== -->
 <section id="watch-mode" hidden></section>
 <div id="app-screen" hidden>
   <div class="app-body">
   <div class="app-content">
   <div class="lockdown-banner" id="lockdown-banner" role="alert" hidden></div>
     <div class="team-notice" id="team-notice" role="status" hidden></div>
-  <!-- ===== Моя очередь ===== -->
   <div class="tab-panel" data-panel="queue">
     <div class="scroll-panel" id="queue-panel">
       <div id="queue-body"></div>
     </div>
   </div>
 
-  <!-- ===== Обзор ===== -->
   <div class="tab-panel active" data-panel="overview">
     <div class="scroll-panel" id="overview-panel">
       <div id="overview-body"></div>
     </div>
   </div>
 
-  <!-- ===== Список ===== -->
   <div class="tab-panel" data-panel="list">
     <div class="page-header list-page-header">
       <div>
@@ -297,34 +257,28 @@
     <div class="statusbar" id="statusbar">Отчётов: 0</div>
   </div>
 
-  <!-- ===== Доска ===== -->
   <div class="tab-panel" data-panel="board">
     <div class="scroll-panel" id="board-panel">
       <div id="board-body"></div>
     </div>
   </div>
 
-  <!-- ===== Тайтлы ===== -->
   <div class="tab-panel" data-panel="titles">
     <div class="scroll-panel" id="titles-panel">
       <div id="titles-body"></div>
     </div>
   </div>
 
-  <!-- ===== Календарь ===== -->
   <div class="tab-panel" data-panel="calendar">
     <div class="scroll-panel" id="calendar-panel">
       <div id="calendar-body"></div>
     </div>
   </div>
 
-  <!-- ===== Сообщения ===== -->
   <div class="tab-panel" data-panel="messages">
     <div id="messages-body" class="ms-root"></div>
   </div>
 
-  <!-- ===== Лента ===== -->
-  <!-- ===== Релизы (Nyaa) ===== -->
   <div class="tab-panel" data-panel="nyaa">
     <div class="scroll-panel" id="nyaa-panel">
       <div id="nyaa-body"></div>
@@ -337,14 +291,12 @@
     </div>
   </div>
 
-  <!-- ===== Аналитика ===== -->
   <div class="tab-panel" data-panel="analytics">
     <div class="scroll-panel" id="analytics-panel">
       <div id="analytics-body"></div>
     </div>
   </div>
 
-  <!-- ===== Сервисы ===== -->
   <div class="tab-panel" data-panel="services">
     <div class="scroll-panel" id="services-panel">
       <div id="services-body"></div>
@@ -373,15 +325,12 @@
     </div>
   </div>
 
-
-  <!-- ===== Команда ===== -->
   <div class="tab-panel" data-panel="team">
     <div class="scroll-panel" id="team-panel">
       <div id="team-body"></div>
     </div>
   </div>
 
-  <!-- ===== Я ===== -->
   <div class="tab-panel" data-panel="profile">
     <div class="scroll-panel" id="profile-panel">
       <div id="profile-body"></div>
@@ -393,7 +342,6 @@
 
 <div id="toast-root"></div>
 
-<!-- ===================== Шаблоны модалок (наполняются JS) ===================== -->
 <template id="tpl-overlay">
   <div class="overlay">
     <div class="sheet"></div>
@@ -405,12 +353,6 @@
   </div>
 </template>
 
-<!-- Раньше тут был <script type="importmap" src="importmap.json"> для
-     резолва бэйр-спецификаторов ("@tauri-apps/api/core") — на реальном
-     WebView2 пользователя внешний import map не подхватился (сплэш-экран
-     висел вечно, см. app/tauri.js), убрали: dist/app/*.js и вендоренные
-     файлы теперь импортируют друг друга обычными относительными путями,
-     никакого import map не требуется вовсе. -->
 <script type="module" src="app/main.js"></script>
 </body>
 </html>

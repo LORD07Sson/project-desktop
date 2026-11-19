@@ -1,5 +1,3 @@
-// Карточка скачивания файла: полоса прогресса, итог и «Показать в папке». Rust шлёт события download-progress
-// {job, done, total}; по завершении проводник открывается сразу, а в карточке остаётся кнопка на случай, если окно закрыли.
 
 import { invoke, listen } from "./tauri.js";
 import { state } from "./state.js";
@@ -24,7 +22,6 @@ function fmt(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
 }
 
-/** command — имя tauri-команды скачивания, args — её аргументы без job; savePath — куда сохраняем. Возвращает true при успехе. */
 export async function downloadWithCard({ command, args, savePath, name }) {
   const job = `dl-${Date.now()}-${++seq}`;
   const card = document.createElement("div");
@@ -50,7 +47,6 @@ export async function downloadWithCard({ command, args, savePath, name }) {
     }
   });
   card.classList.add("busy");
-  // Пока сервер достаёт файл из архива Telegram, байтов ещё нет — полоса бегает, чтобы было видно, что идёт работа.
   bar.classList.add("indet");
   note.textContent = "Скачиваю… (если файла нет в кэше, сервер достаёт его из архива Telegram — это может занять минуту)";
   try {
@@ -63,7 +59,7 @@ export async function downloadWithCard({ command, args, savePath, name }) {
     note.title = savePath;
     act.innerHTML = `<button type="button" class="btn dl-reveal">📂 Показать в папке</button>`;
     act.querySelector(".dl-reveal").addEventListener("click", () => revealInFolder(savePath));
-    revealInFolder(savePath).catch(() => { /* кнопка остаётся */ });
+    revealInFolder(savePath).catch(() => { });
     setTimeout(() => card.remove(), 60000);
     return true;
   } catch (e) {

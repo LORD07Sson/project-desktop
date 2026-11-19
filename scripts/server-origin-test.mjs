@@ -1,5 +1,3 @@
-// Адрес сервера живёт только в server.json: проверяем, что CSP его пропускает (картинки и запросы к API) и что
-// в коде не осталось другого адреса сервера, вписанного руками (например, старого после переезда).
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -17,7 +15,6 @@ for (const key of ["csp", "devCsp"]) {
   }
 }
 
-// Старый адрес или любой другой сервер с «/api», вписанный в код вместо server.json.
 const files = [];
 const walk = dir => {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

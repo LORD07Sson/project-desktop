@@ -1,6 +1,3 @@
-// «Аналитика» = «Пульс студии»: один экран с живой картой студии (pulse.html в iframe — тяжёлая canvas-анимация не делит CSS
-// и скрипты с приложением). Сюда сводятся все данные аналитики: метрики и динамика, нагрузка, исполнители, а для владельца
-// ещё и выводы алгоритма (сроки, узкие места, кто чем занят, связь). Страница получает их одним сообщением.
 
 import { apiGet, mediaUrl } from "./api.js";
 import { esc } from "./utils.js";
@@ -9,7 +6,7 @@ import { openReportDetail } from "./report-detail.js";
 
 let frame = null;
 let listening = false;
-let pending = null;   // промис с данными, пока страница не сказала «готова»
+let pending = null;
 
 function onMessage(ev) {
   if (!frame || ev.source !== frame.contentWindow || ev.origin !== window.location.origin) return;
@@ -19,7 +16,6 @@ function onMessage(ev) {
   else if (msg.type === "open-report" && /^[\w-]{1,40}$/.test(String(msg.public_id || ""))) openReportDetail(String(msg.public_id));
 }
 
-// Цвета активной темы приложения (акцент: янтарь, сакура, фиалка, небо, мята…) — страница «Пульса» применяет их у себя.
 const THEME_VARS = ["--bg", "--bg-2", "--bg-glow-1", "--bg-glow-2", "--surface", "--surface-2", "--surface-3", "--line", "--ink", "--ink-soft", "--ink-dim",
   "--fire", "--ember", "--gold", "--on-accent", "--fire-rgb", "--gold-rgb", "--glow-rgb"];
 function currentTheme() {
@@ -46,7 +42,6 @@ async function collect() {
     state.isOwner ? apiGet("/analytics/errors", { days: 1 }).catch(() => null) : Promise.resolve(null),
     apiGet("/team").catch(() => null),
   ]);
-  // Фото участников для экрана «Команда»: страница в iframe сама токен для картинок не знает.
   for (const p of (pulse.team && pulse.team.people) || []) p.avatar = p.tg ? mediaUrl(`/avatar/${encodeURIComponent(p.tg)}`) : null;
   return {
     ...pulse,
@@ -65,9 +60,8 @@ async function collect() {
 export function mountPulse(root) {
   if (!root) return;
   if (!listening) { window.addEventListener("message", onMessage); listening = true; }
-  // Каждый заход — свежая страница и свежие данные (вступление играется не чаще раза в день).
   root.innerHTML = `<iframe class="pulse-frame" title="${esc("Аналитика — пульс студии")}" src="pulse.html"></iframe>`;
   frame = root.querySelector("iframe");
   pending = collect();
-  pending.catch(() => { /* ошибку покажет сама страница */ });
+  pending.catch(() => { });
 }

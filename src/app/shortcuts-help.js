@@ -1,12 +1,3 @@
-// Горячие клавиши десктопа — то, чего у Telegram-мини-аппа физически
-// нет (там всё через тач/клик), поэтому список специально десктопный:
-// переключение вкладок цифрами, командная палитра, поиск, своя
-// подсказка по "?" (привычка из Linear/Notion/Superhuman — там это
-// тоже "?").
-//
-// Cmd/Ctrl+1..6 переключают вкладки по позиции в сайдбаре — тот же
-// порядок, что и в HTML (#tabstrip .tab-btn), а не хардкод имён: если
-// вкладки поменяют местами в разметке, цифры сами поедут вместе с ними.
 
 import { $, $all } from "./utils.js";
 import { openSheet } from "./api.js";
@@ -71,9 +62,6 @@ function openShortcutsHelp() {
 }
 
 document.addEventListener("keydown", e => {
-  // "?" — физически Shift+/ на большинстве раскладок; не перехватываем,
-  // если фокус в поле ввода (иначе "?" в тексте заметки/поиска открывал
-  // бы это окно вместо того, чтобы напечататься) или уже открыта модалка.
   if (e.key !== "?") return;
   const tag = document.activeElement && document.activeElement.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || document.querySelector(".overlay")) return;
@@ -81,8 +69,6 @@ document.addEventListener("keydown", e => {
   openShortcutsHelp();
 });
 
-// Ctrl/Cmd+1..6 — вкладки по позиции в сайдбаре, тем же способом, что
-// командная палитра переключает их по имени.
 document.addEventListener("keydown", e => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   const n = Number(e.key);
@@ -94,7 +80,6 @@ document.addEventListener("keydown", e => {
   switchTab(btn.dataset.tab);
 });
 
-// F5 / Ctrl+R — обновить данные (то же, что кнопка «Обновить»), не перезапуская приложение: открытые окна обновятся тоже.
 document.addEventListener("keydown", e => {
   const isReload = e.key === "F5" || ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "r");
   if (!isReload) return;
@@ -102,7 +87,5 @@ document.addEventListener("keydown", e => {
   refreshAll().catch(() => {});
 });
 
-// Значок "?" в шапке — не у всех есть привычка искать шорткаты
-// клавишей вслепую, видимая кнопка рядом с остальными в titlebar-right.
 const btn = $("#open-shortcuts");
 if (btn) btn.addEventListener("click", openShortcutsHelp);

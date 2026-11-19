@@ -1,7 +1,3 @@
-// «Пульс студии»: живая карта студии — тайтлы, серии, исполнители, сроки и события. Рисуется на canvas внутри отдельной
-// страницы (pulse.html, её открывает вкладка «Пульс» в iframe): так тяжёлая анимация не делит CSS и скрипты с остальным
-// приложением. Данные приходят от приложения (postMessage, /api/pulse); нажатие «Открыть серию» уходит обратно туда же.
-// Исходный дизайн и анимации — из макета «Пульс студии»; данные в нём заменены настоящими.
 
 export function startPulse(DATA) {
   const W = 1280, H = 760, CX = 640, CY = 330;
@@ -20,11 +16,9 @@ export function startPulse(DATA) {
   const sleep = ms => new Promise(r => setTimeout(r, reduce ? Math.min(ms, 20) : ms));
   const now = () => performance.now();
 
-  // ---------- данные (приходят из приложения: /api/pulse) ----------
   const PEOPLE = DATA.people.map(n => ({ n }));
   const byName = n => PEOPLE.find(p => p.n === n);
   const STAGES = DATA.stages;
-  // окно шкалы: от первой серии (минус две недели) до сегодня, не короче 60 дней — иначе при малом числе серий всё сжато у края
   const minDay = Math.min(DATA.days - 1, ...DATA.titles.flatMap(t => t.eps.map(e => e.day)));
   const SHIFT = Math.max(0, Math.min(minDay - 14, DATA.days - 60));
   const TITLES = DATA.titles.map(t => ({ id: t.id, name: t.name, roles: t.roles || [], air: t.air, nextEp: t.nextEp,
@@ -32,16 +26,15 @@ export function startPulse(DATA) {
   const START = new Date(new Date(`${DATA.start}T00:00:00`).getTime() + SHIFT * 86400000);
   const MONTHS_RU = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
   const MONTHS_GEN = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-  const AN = DATA.analytics || null;      // метрики и графики «Аналитики»: завершено, сроки, нагрузка, исполнители, динамика по дням
-  const WM = DATA.workmap || null;        // таблицы алгоритма (только владелец): связь, события, сроки
-  const ALGO = DATA.algo || null;   // выводы алгоритма «Карты работы» (только для владельца)
+  const AN = DATA.analytics || null;
+  const WM = DATA.workmap || null;
+  const ALGO = DATA.algo || null;
   const fmtH = h => (h == null ? "—" : h < 1 ? `${Math.max(1, Math.round(h * 60))} мин` : h < 48 ? `${Math.round(h)} ч` : `${(h / 24).toFixed(1).replace(".", ",")} дн.`);
   const fmtDur = s => (s >= 3600 ? `${(s / 3600).toFixed(1).replace(".", ",")} ч` : s >= 60 ? `${Math.round(s / 60)} мин` : `${s} с`);
   const fmtWhen = ts => new Date(ts * 1000).toLocaleString("ru-RU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const personInfo = name => (ALGO && ALGO.persons && ALGO.persons[name]) || null;
-  const send = msg => { try { parent.postMessage({ source: "pulse", ...msg }, window.location.origin); } catch (_) { /* вне приложения */ } };
+  const send = msg => { try { parent.postMessage({ source: "pulse", ...msg }, window.location.origin); } catch (_) { } };
 
-  // ---------- спрайты света ----------
   function sprite(size, draw) { const c = document.createElement("canvas"); c.width = c.height = size; draw(c.getContext("2d"), size); return c; }
   const glow = col => sprite(256, (g, s) => { const r = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2); r.addColorStop(0, col); r.addColorStop(.25, col.replace(/[\d.]+\)$/, ".35)")); r.addColorStop(1, col.replace(/[\d.]+\)$/, "0)")); g.fillStyle = r; g.fillRect(0, 0, s, s); });
   const sphere = (stops, ring) => sprite(320, (g, s) => {
@@ -74,38 +67,28 @@ export function startPulse(DATA) {
     const r = g.createRadialGradient(c, c, 0, c, c, s * .18); r.addColorStop(0, "rgba(255,250,235,1)"); r.addColorStop(1, "rgba(255,200,120,0)"); g.fillStyle = r; g.fillRect(0, 0, s, s);
   });
 
-  // ---------- холсты ----------
   const stage = $("#stage"), wrapEl = $("#wrap");
   const cNet = $("#cNet"), cFx = $("#cFx"), gN = cNet.getContext("2d"), gF = cFx.getContext("2d");
-  let TLIM = 175, LLIM = 0, RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.3, VISIBLE = true;   // QUAL: адаптивное качество (падает, если кадры тяжёлые); VISIBLE: сцена видна на экране
-  // сцена 1280×760 вписывается в доступное окно целиком (по ширине и по высоте) и стоит по центру — без внутренней прокрутки
-  // Интерфейс (панели, шкала, KPI) растягивается на всё окно; сама сцена 1280×760 стоит по центру и масштабируется по меньшей стороне.
+  let TLIM = 175, LLIM = 0, RLIM = 1280, RES = 1, QUAL = 1, SS = Number(new URLSearchParams(location.search).get("ss")) || 1.3, VISIBLE = true;
   const scene = $("#scene");
   const stageScale = () => Math.min(wrapEl.clientWidth / W, wrapEl.clientHeight / H) || 1;
   function resize() {
     const cw = wrapEl.clientWidth, ch = wrapEl.clientHeight, sc = stageScale();
     stage.style.width = `${cw / sc}px`; stage.style.height = `${ch / sc}px`; stage.style.transform = `scale(${sc})`;
-    // сцена живёт между шкалой слева и колонкой справа, а не под ними
     const L = cw > 1100 ? 170 : 0, R = cw > 1100 ? 400 : 0, aw = cw - L - R;
-    // сцена крупная: заполняет окно по высоте (чуть обрезаясь сверху и снизу), по центру свободной области; справа может уходить под колонку
     const s2 = Math.max(.35, Math.min(cw / W, Math.max(aw / W, ch / H) * 1.04));
     scene.style.transformOrigin = "0 0";
     scene.style.transform = `scale(${s2 / sc})`;
-    TLIM = (155 - (ch - H * s2) / 2) / s2;     // ниже верхней панели (≈130 px от верха окна), в координатах сцены
+    TLIM = (155 - (ch - H * s2) / 2) / s2;
     LLIM = (L - (L + (aw - W * s2) / 2)) / s2;
-    RLIM = (cw - R - (L + (aw - W * s2) / 2)) / s2;     // правый край свободной области в координатах сцены (дальше — колонка справа)
+    RLIM = (cw - R - (L + (aw - W * s2) / 2)) / s2;
     scene.style.left = `${(L + (aw - W * s2) / 2) / sc}px`; scene.style.top = `${(ch - H * s2) / 2 / sc}px`;
-    RES = clamp((devicePixelRatio || 1) * s2 * QUAL * SS, 1, 2.2);   // SS: запас по разрешению — браузер уменьшает его при показе, края и текст получаются чёткими
+    RES = clamp((devicePixelRatio || 1) * s2 * QUAL * SS, 1, 2.2);
     for (const c of [cNet, cFx]) { c.width = VISIBLE ? Math.round(W * RES) : 1; c.height = VISIBLE ? Math.round(H * RES) : 1; }
   }
   new ResizeObserver(resize).observe(wrapEl); resize();
 
-  // ---------- сеть: карусель в объёме ----------
-  // Тайтлы стоят на невидимом цилиндре вокруг студии и медленно вращаются:
-  // ближние крупнее и ярче, дальние меньше и тусклее. Серии и дорожки — на
-  // чуть большем радиусе рядом со своим тайтлом, люди — на внутреннем круге.
   const RX = 375, TILT = 26, DAYS = DATA.days - SHIFT;
-  // начала месяцев внутри окна (в днях от его начала); подписи — настоящие названия месяцев
   const MONTH_START = [0], MONTH_IDX = [START.getMonth()];
   for (let d = 1; d < DAYS; d++) { const m = new Date(START.getTime() + d * 86400000); if (m.getDate() === 1) { MONTH_START.push(d); MONTH_IDX.push(m.getMonth()); } }
   const MONTHS = MONTH_IDX.map(i => MONTHS_RU[i]);
@@ -122,7 +105,6 @@ export function startPulse(DATA) {
       const eps = t.eps;
       const tn = { kind: "title", t, i, th: i / n * Math.PI * 2, yh: (((i * .618034) % 1) - .5) * 290, eps, pct: Math.round(eps.reduce((s, e) => s + e.pct, 0) / Math.max(1, eps.length)),
         act: .25 + .75 * Math.min(1, t.eps.filter(e => e.stage < 4).length / 3), boost: 0, born: 0, alpha: 1 };
-      // выход следующей серии в эфир — главный дедлайн дубляжа (если расписание известно)
       tn.air = t.air;
       tn.nextEp = t.nextEp;
       titleNodes.push(tn); allNodes.push(tn);
@@ -163,7 +145,6 @@ export function startPulse(DATA) {
   const monthOf = d => { let m = 0; for (let i = 0; i < MONTH_START.length; i++) if (d >= MONTH_START[i]) m = i; return m; };
   const late = en => !!en && en.kind === "ep" && en.e.days < 0 && vis(en);
 
-  // режиссура вступления: у каждого элемента время рождения
   let T0 = 0;
   function scheduleIntro(t0) {
     T0 = t0;
@@ -178,7 +159,6 @@ export function startPulse(DATA) {
   let rays = [], dust = [];
   function finishIntro() { T0 = now() - 60000; }
 
-  // туманность и пыль за сетью — два слоя с разным параллаксом
   const NEB = sprite(1, () => {});
   (function paintNebula() {
     NEB.width = 1340; NEB.height = 810;
@@ -191,11 +171,9 @@ export function startPulse(DATA) {
   })();
   const DUST2 = Array.from({ length: 90 }, () => ({ x: R() * W, y: R() * H, z: .3 + R() * .7, vx: (R() - .5) * .006, vy: -.004 - R() * .01, s: .6 + R() * 1.6 }));
 
-  // ---------- камера ----------
   const cam = { x: CX, y: CY, s: 1 };
-  // камера по умолчанию смотрит чуть правее студии — справа стоит блок «Внимание»
   const HOMEX = CX + 60;
-  let HOMES = 1;    // домашний масштаб камеры: при малом числе тайтлов сцена крупнее, чтобы не тонуть в пустоте
+  let HOMES = 1;
   let camTok = 0;
   function tweenCam(to, dur, ease = easeIO) {
     const tok = ++camTok, from = { ...cam }, t0 = now();
@@ -208,12 +186,8 @@ export function startPulse(DATA) {
   const toScreen = (x, y) => ({ x: W / 2 + (x - cam.x) * cam.s, y: H / 2 - 10 + (y - cam.y) * cam.s });
   const toWorld = (sx, sy) => ({ x: (sx - W / 2) / cam.s + cam.x, y: (sy - H / 2 + 10) / cam.s + cam.y });
 
-  // ---------- спокойный режим и фильтры ----------
-  // По умолчанию сцена спокойная: без вращения, искр, дорожек и номеров —
-  // остаются лучи, кольца готовности, красная просрочка и редкие события.
-  // «Ярко» включает всё обратно.
   let CALM = true;
-  try { CALM = localStorage.getItem("pulse-bright") !== "1"; } catch (_) { /* без памяти */ }
+  try { CALM = localStorage.getItem("pulse-bright") !== "1"; } catch (_) { }
   const ME = DATA.me;
   const FILTER = { who: "all", stage: -1 };
   const airText = d => d <= 0 ? "сегодня" : d === 1 ? "завтра" : `через ${d} дн`;
@@ -230,15 +204,12 @@ export function startPulse(DATA) {
     if (n.kind === "person") return FILTER.who === "mine" ? n.p.n === ME : links.some(l => l.a === n && vis(l.b) && epPass(l.b));
     return true;
   }
-  // Просрочка серии — на тех, кто свою часть ещё не сдал (owe с сервера); сдавший не «просрочил», ждут не его.
   const owes = (en, name) => !en.e.owe || en.e.owe.includes(name);
   const personLoad = pn => { const eps = epNodes.filter(en => en.e.who.includes(pn.p) && vis(en) && en.e.stage < 4); return { n: eps.length, late: eps.filter(en => late(en) && owes(en, pn.p.n)).length, titles: [...new Set(eps.map(e => e.tn.t.name))] }; };
 
-  // ---------- окружение и живые события ----------
   let twinkles = [], pulses = [], inflow = [], waves = [], comets = [], toasts = [];
   let lastTw = 0, lastPulse = 0, nextEvent = 0, playing = false, playSpeed = 1;
   const EV_COL = { up: "255,205,120", qc: "255,95,110", done: "90,235,150" };
-  // Только настоящие события из истории отчётов: по кругу, самые свежие первыми.
   let REAL_EVENTS = [];
   const prepareEvents = () => {
     REAL_EVENTS = (DATA.events || []).map(ev => {
@@ -271,13 +242,11 @@ export function startPulse(DATA) {
     tn.boost = 1;
     if (!c.quiet && CALM) feedAdd(c);
     else if (!c.quiet) {
-      // подписей над узлами не больше трёх, и не друг на друге
       const crowded = toasts.length >= 3 || toasts.some(o => Math.hypot(o.n.px - en.px, o.n.py - en.py) < 40);
       if (!crowded) toasts.push({ n: en, text: c.at && evAge(c.at) !== "сейчас" ? `${c.text} · ${evAge(c.at)}` : c.text, col: c.col, born: t });
       feedAdd(c);
     }
   }
-  // Подпись времени — настоящая: события из истории не выдаём за происходящие прямо сейчас.
   const evAge = at => { const d = new Date(String(at).replace(" ", "T") + "Z"), m = Math.round((Date.now() - d.getTime()) / 60000); return Number.isNaN(m) ? "" : m < 2 ? "сейчас" : m < 60 ? `${m} мин назад` : m < 1440 ? `${Math.round(m / 60)} ч назад` : m < 10080 ? `${Math.round(m / 1440)} дн назад` : d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }); };
   function feedAdd(c) {
     const f = $("#feed"); if (!f) return;
@@ -292,7 +261,6 @@ export function startPulse(DATA) {
     rotSpeed = lerp(rotSpeed, rotTarget, .03);
     if (!CALM) phi += dt * .000052 * rotSpeed * (playing ? 2.2 : 1);
     for (const tn of titleNodes) tn.boost = Math.max(0, tn.boost - dt / 2600);
-    // перемотка сезона: день бежит, серии рождаются по своим датам
     if (playing) {
       const prev = day;
       day = Math.min(DAYS - 1, day + dt * DAYS / 9000 * playSpeed);
@@ -321,7 +289,6 @@ export function startPulse(DATA) {
     for (const d of DUST2) { d.x += d.vx * dt; d.y += d.vy * dt; if (d.y < -10) { d.y = H + 10; d.x = R() * W; } }
   }
 
-  // ---------- рисуем сеть ----------
   let hoverTitle = -1;
   let netFadeUntil = 0;
   const netFadeLeft = () => now() < netFadeUntil;
@@ -330,7 +297,6 @@ export function startPulse(DATA) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, cNet.width, cNet.height);
     if (stage.classList.contains("focusing") && !netFadeLeft()) return;
-    // фон: туманность и пыль, слои с параллаксом
     g.setTransform(RES, 0, 0, RES, 0, 0);
     g.globalAlpha = c01(it / 900);
     g.drawImage(NEB, -30 - mouse.x * 18, -25 - mouse.y * 12);
@@ -339,8 +305,6 @@ export function startPulse(DATA) {
     g.globalCompositeOperation = "source-over";
 
     g.setTransform(RES * cam.s, 0, 0, RES * cam.s, RES * (W / 2 - cam.x * cam.s), RES * (H / 2 - 10 - cam.y * cam.s));
-    // границы свободной области в координатах мира: узлы рисуются с зумом камеры (×1.55 при 1–2 тайтлах),
-    // а LLIM/RLIM/TLIM — в координатах сцены; без пересчёта подписи уезжали под правую колонку
     const wL = (LLIM - W / 2) / cam.s + cam.x, wR = (RLIM - W / 2) / cam.s + cam.x, wT = (TLIM - H / 2 + 10) / cam.s + cam.y;
     const bornK = n => c01((it - n.born) / 420);
     for (const n of allNodes) {
@@ -351,7 +315,6 @@ export function startPulse(DATA) {
     }
     const pop = n => { const b = bornK(n); const p = n.popAt ? c01((t - n.popAt) / 450) : 1; return Math.min(easeBack(b), easeBack(p)); };
 
-    // пыль и лучи вступления
     g.globalCompositeOperation = "lighter";
     for (const d of dust) {
       const k = it - d.born; if (k < 0 || k > d.life) continue;
@@ -368,7 +331,6 @@ export function startPulse(DATA) {
       g.globalAlpha = .9 * fade; g.drawImage(GL[r.col === "cyan" ? "cyan" : "rose"], hx - 18, hy - 18, 36, 36); g.drawImage(GL.white, hx - 5, hy - 5, 10, 10);
     }
 
-    // тонкие связи
     g.globalCompositeOperation = "source-over";
     for (const l of lines) {
       if (CALM && l.kind === "track") continue;
@@ -387,7 +349,6 @@ export function startPulse(DATA) {
     for (const s of spokes) { g.beginPath(); g.moveTo(CX + Math.cos(s.a) * 38, CY + Math.sin(s.a) * 38); g.lineTo(CX + Math.cos(s.a) * (38 + s.l), CY + Math.sin(s.a) * (38 + s.l)); g.stroke(); }
     g.setLineDash([]);
 
-    // лучи-звук: мягкий столб света + бегущая по нему звуковая волна
     const drawBeam = tn => {
       const l = tn.beam, p = c01((it - l.born) / l.dur); if (p <= 0) return;
       const e = easeOut(p), ex = lerp(CX, tn.px, e), ey = lerp(CY, tn.py, e);
@@ -414,7 +375,6 @@ export function startPulse(DATA) {
       g.stroke();
       if (p < 1) { g.globalAlpha = 1; g.drawImage(GL.gold, ex - 22, ey - 22, 44, 44); g.drawImage(GL.white, ex - 7, ey - 7, 14, 14); }
     };
-    // частицы, стекающиеся в центр
     for (const p of inflow) {
       const a = c01((150 - p.r) / 90) * .8 * c01((it - 900) / 800); if (a <= 0) continue;
       const dx = Math.cos(p.a), dy = Math.sin(p.a);
@@ -422,15 +382,10 @@ export function startPulse(DATA) {
       g.beginPath(); g.moveTo(CX + dx * (p.r + 9), CY + dy * (p.r + 9)); g.lineTo(CX + dx * p.r, CY + dy * p.r); g.stroke();
     }
 
-    // подписи
     const label = (txt, x, y, font, col, al, align = "left") => { g.globalAlpha = al; g.font = font; g.textAlign = align; g.lineWidth = 3; g.strokeStyle = "rgba(8,5,4,.8)"; g.strokeText(txt, x, y); g.fillStyle = col; g.fillText(txt, x, y); };
     const badge = (txt, x, y, col, al) => { g.globalAlpha = al; g.font = "700 8.5px ui-monospace, Consolas, monospace"; g.textAlign = "left"; const w = g.measureText(txt).width + 7; g.fillStyle = "rgba(14,9,7,.9)"; g.beginPath(); g.roundRect(x, y - 8, w, 11, 3); g.fill(); g.fillStyle = col; g.fillText(txt, x + 3.5, y + .5); };
 
-    // прямоугольники подписей тайтлов — чтобы бейджи серий, имена людей и всплывашки не налезали на текст
-    // сторона подписи считается здесь один раз — по ней же и рисуем, и обходим текст бейджами/всплывашками
     const titleFont = n => `600 ${Math.round(11 + 3 * n.pd)}px Segoe UI, system-ui, sans-serif`;
-    // Длинное название («Я очнулся будучи пилотом…») — не шире MAX_LABEL: целиком оно перечёркивало полкарты и уходило
-    // под правую колонку. Полное — во всплывашке при наведении.
     const MAX_LABEL = 260;
     const fit = (txt, maxW) => {
       if (g.measureText(txt).width <= maxW) return txt;
@@ -441,8 +396,6 @@ export function startPulse(DATA) {
     const rectOf = (n, right, w, rr) => ({ x: right ? n.px + rr - 8 : n.px - rr - w, y: n.py - 18, w: w + 8, h: hasAir(n) ? 52 : 40 });
     const hits = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
     const placed = [];
-    // Подписи раскладываются по очереди: сначала горящие и самые готовые. Наехала на уже стоящую — пробуем другую сторону,
-    // не вышло — прячем подпись (узел остаётся; при наведении подпись видна всегда).
     const burning = n => n.eps.some(e => late(epNodes.find(x => x.tn === n && x.e === e)));
     const labelOrder = titleNodes.filter(n => bornK(n) > 0).sort((a, b) => (burning(b) ? 1 : 0) - (burning(a) ? 1 : 0) || b.pct - a.pct);
     for (const n of labelOrder) {
@@ -450,8 +403,8 @@ export function startPulse(DATA) {
       n.lName = fit(n.t.name, MAX_LABEL * n.pd);
       const w = Math.max(g.measureText(n.lName).width, 150 * n.pd) + 4, rr = (10 + 7) * n.pd + 8;
       let right = n.px >= CX - 10;
-      if (right && n.px + rr + w > wR && n.px - rr - w >= wL) right = false;     // не под правую колонку
-      else if (!right && n.px - rr - w < wL && n.px + rr + w <= wR) right = true;   // и не за левый край
+      if (right && n.px + rr + w > wR && n.px - rr - w >= wL) right = false;
+      else if (!right && n.px - rr - w < wL && n.px + rr + w <= wR) right = true;
       let rect = rectOf(n, right, w, rr);
       if (placed.some(p => hits(rect, p))) {
         const other = rectOf(n, !right, w, rr);
@@ -464,10 +417,7 @@ export function startPulse(DATA) {
     }
     const tRects = placed;
     const inTitle = (x, y, w = 40, h = 12) => tRects.some(r => x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y);
-    // шар центра и подпись «Project · N тайтлов» — имена людей поверх них не пишем
     const inHub = (x, y, w, h) => x < CX + 200 && x + w > CX - 40 && y < CY + 40 && y + h > CY - 40;
-    // Подписи рисуются отдельным проходом ПОСЛЕ всех узлов: иначе свечение спутников-серий и центра,
-    // нарисованных позже, ложилось поверх текста («просрочка», «эфир через…», имена за «Project»).
     const deferred = [];
     const drawNode = n => {
       const b = bornK(n); if (b <= 0) return;
@@ -482,7 +432,6 @@ export function startPulse(DATA) {
         const fl = c01(1 - (it - n.born) / 600); if (fl > 0 && it > n.born) { g.globalAlpha = fl; g.drawImage(GL.white, n.px - r * 2.5, n.py - r * 2.5, r * 5, r * 5); }
         g.globalCompositeOperation = "source-over"; g.globalAlpha = a;
         g.drawImage(SP.rose, n.px - r * 1.47, n.py - r * 1.47, r * 2.94, r * 2.94);
-        // кольцо готовности
         const rr = r + 7 * n.pd;
         g.lineWidth = 2.2 * n.pd; g.strokeStyle = "rgba(255,255,255,.12)"; g.beginPath(); g.arc(n.px, n.py, rr, 0, 7); g.stroke();
         g.strokeStyle = "#ffc46a"; g.lineCap = "round"; g.beginPath(); g.arc(n.px, n.py, rr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * n.pct / 100 * pop(n)); g.stroke();
@@ -514,7 +463,6 @@ export function startPulse(DATA) {
         if (n.kind === "ep") { if (!CALM && !inTitle(n.px + 8 * n.pd, n.py - 16 * n.pd)) badge(String(n.e.ep), n.px + 8 * n.pd, n.py - 8 * n.pd, late(n) ? "#ff9a9a" : "#cdb8ff", n.alpha * b * dA); }
         else if (n.kind === "track") badge(String(n.n), n.px + 4, n.py - 5, "#ffd49a", n.alpha * b * dA);
         else {
-          // справа от узла; если там название тайтла или подпись центра — слева; если занято и там — не пишем
           const txt = `${n.p.n} · ${ld.n}`, font = `600 ${Math.round(9 + 2.5 * n.pd)}px Segoe UI, system-ui, sans-serif`, off = (cfg[3] * .7 + 6) * n.pd;
           g.font = font; const w = g.measureText(txt).width;
           const busy = x => inTitle(x, n.py - 10, w, 16) || inHub(x, n.py - 10, w, 16);
@@ -545,7 +493,6 @@ export function startPulse(DATA) {
       });
     };
 
-    // порядок по глубине: дальнее → центр → ближнее
     const order = allNodes.slice().sort((a, b) => a.pz - b.pz);
     for (const tn of titleNodes) if (tn.pz < 0) drawBeam(tn);
     for (const n of order) if (n.pz < 0) drawNode(n);
@@ -555,7 +502,6 @@ export function startPulse(DATA) {
     g.globalCompositeOperation = "source-over";
     for (const f of deferred) f();
 
-    // события: кометы, волны, вспышки, звёзды, подписи
     g.globalCompositeOperation = "lighter";
     for (const c of comets) {
       const k = c01((t - c.born) / c.dur), e = easeIO(k);
@@ -584,10 +530,10 @@ export function startPulse(DATA) {
       const k = (t - ts.born) / 2600, a = Math.min(c01(k / .08), c01((1 - k) / .25));
       g.font = "600 11px Segoe UI, system-ui, sans-serif";
       const tw = g.measureText(ts.text).width + 26;
-      let x = ts.n.px + 14; if (x + tw > wR) x = ts.n.px - 14 - tw;        // не под правую колонку
-      x = Math.max(wL + 8, Math.min(x, wR - tw - 8));     // и не за левый край
-      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y - 13 < wT) y = Math.max(wT + 13, ts.n.py + 44);   // не под верхнюю панель
-      if (inTitle(x, y - 13, tw, 20)) {     // не поверх названия тайтла: выше него, а если там панель — ниже
+      let x = ts.n.px + 14; if (x + tw > wR) x = ts.n.px - 14 - tw;
+      x = Math.max(wL + 8, Math.min(x, wR - tw - 8));
+      let y = ts.n.py - 24 - easeOut(c01(k * 3)) * 10; if (y - 13 < wT) y = Math.max(wT + 13, ts.n.py + 44);
+      if (inTitle(x, y - 13, tw, 20)) {
         const up = y - 54;
         y = up - 13 >= wT ? up : ts.n.py + 70;
       }
@@ -602,15 +548,10 @@ export function startPulse(DATA) {
     g.globalAlpha = 1;
   }
 
-  // ---------- шкала сезона и перемотка ----------
-  // Полоски слева — настоящая активность по дням (сколько серий рождалось
-  // рядом с этой датой). ▶ проигрывает сезон: день бежит, серии появляются
-  // в сети по своим датам, к каждой прилетает комета от исполнителя.
   const TL_TOP = 46, TL_H = 440;
   const dayY = d => TL_TOP + d / (DAYS - 1) * TL_H;
   const dateLabel = d => { const m = monthOf(d); return `${Math.floor(d - MONTH_START[m]) + 1} ${MON_GEN[m]}`; };
   let dayAct = [];
-  // завершённые по дням (из «Аналитики») тоже рисуются на шкале слева
   const trendByDay = {};
   for (const t of (AN && AN.trend && AN.trend.days) || []) {
     const i = Math.round((new Date(`${t.date}T00:00:00`) - START) / 86400000);
@@ -660,12 +601,10 @@ export function startPulse(DATA) {
     if (kpi && $("#attn")) renderAttn();
     if (kpi) { updateKpis(500); kpiDay = day; }
   }
-  // лента справа: сначала то, что алгоритм уже видел (кто что делал), дальше сюда падают события сцены
   function seedFeed() {
     const f = $("#feed"); if (!f || !ALGO) return;
     for (const r of (ALGO.feed || []).slice(0, 3).reverse()) feedAdd({ col: "255,205,120", text: `${r.who} · ${r.text}`, at: r.at });
   }
-  // в списке этапов — типичное время на этапе, которое посчитал алгоритм
   function labelStages() {
     if (!ALGO || !ALGO.stages) return;
     const keys = ["draft", "review", "revision", "working", "completed"];
@@ -720,7 +659,6 @@ export function startPulse(DATA) {
     $("#kpis").style.setProperty("--kx", `${(monthOf(day) % 4) * 138}px`);
   }
 
-  // ---------- сводка и поиск ----------
   function showAlerts(qv = "") {
     const word = qv.trim().toLowerCase().split(/[\s—-]+/)[0] || "";
     const hits = word.length > 1 ? epNodes.filter(en => en.tn.t.name.toLowerCase().includes(word)).slice(-2).reverse() : [];
@@ -744,8 +682,6 @@ export function startPulse(DATA) {
     if (tn) focusOpen(tn, (tn.eps.find(e2 => nums.includes(e2.ep)) || tn.eps[tn.eps.length - 1]).ep);
   });
 
-  // ---------- взаимодействие с сетью ----------
-  // Тащить — крутить карусель; движение мыши слегка наклоняет сцену.
   function pick(e) {
     const r = cNet.getBoundingClientRect(), sc = r.width / W;
     const w = toWorld((e.clientX - r.left) / sc, (e.clientY - r.top) / sc);
@@ -790,7 +726,6 @@ export function startPulse(DATA) {
   });
   cNet.addEventListener("pointerleave", () => { hoverTitle = -1; mouse.tx = 0; mouse.ty = 0; if (!tipPinned) hideTip(); });
 
-  // что алгоритм знает о человеке: инструменты, просмотр, связь с сервером и DNS
   function personTip(name) {
     const pi = personInfo(name);
     if (!pi) return "";
@@ -801,7 +736,6 @@ export function startPulse(DATA) {
     return `${tools ? `<div>Пользуется<em>${tools}</em></div>` : ""}${pi.watch_s ? `<div>Смотрел<em>${fmtDur(pi.watch_s)}</em></div>` : ""}${netLine}`;
   }
 
-  // подсказка при наведении: главное о кружке без въезда в фокус
   let tipPinned = false, tipTimer = 0;
   function showTip(n, pin = false) {
     const tip = $("#tip");
@@ -831,7 +765,6 @@ export function startPulse(DATA) {
   }
   function hideTip(force) { if (force) tipPinned = false; if (!tipPinned) $("#tip").hidden = true; }
 
-  // ---------- «Внимание»: что горит прямо сейчас ----------
   function attentionItems() {
     const out = [];
     for (const en of epNodes) {
@@ -843,8 +776,8 @@ export function startPulse(DATA) {
     for (const tn of titleNodes) {
       if (!hasAir(tn) || tn.air > 1) continue;
       const lastEp = epNodes.filter(x => x.tn === tn).slice(-1)[0];
-      if (!lastEp || lastEp.e.stage >= 3) continue;   // серия уже на сведении/проверке — успеваем
-      if (out.some(o => o.n === lastEp)) continue;   // уже в списке как просроченная
+      if (!lastEp || lastEp.e.stage >= 3) continue;
+      if (out.some(o => o.n === lastEp)) continue;
       out.push({ w: 2, c: "#ffc46a", t: `Эфир ${airText(tn.air)}`, nm: `${tn.t.name} · ${tn.nextEp} серия`, d: `а наша ${lastEp.e.ep} серия ещё на этапе «${STAGES[lastEp.e.stage]}»`, n: lastEp });
     }
     return out.sort((a, b) => a.w - b.w).slice(0, 5);
@@ -862,7 +795,6 @@ export function startPulse(DATA) {
       flyTo(a.n);
     }));
   }
-  // выводы алгоритма: узкое место и наблюдения («дольше всего на этапе…», «у X часто не удаётся соединиться…»)
   function algoBlock() {
     if (!ALGO) return "";
     const lines = [];
@@ -871,7 +803,6 @@ export function startPulse(DATA) {
     if (!lines.length) return "";
     return `<div class="algo"><div class="attn-h"><span><b>◆</b> АЛГОРИТМ</span><span>${Math.min(3, lines.length)}</span></div>${lines.slice(0, 3).map(t => `<div class="algo-i">${esc(t)}</div>`).join("")}</div>`;
   }
-  // ---------- правая колонка: всё, что раньше было отдельными блоками «Аналитики» ----------
   const stageName = en => STAGES[en.e.stage];
   function renderEtaPane() {
     const rows = epNodes.filter(en => en.e.stage < 4).sort((x, y) => ((x.e.eta ? x.e.eta.h : 9e9) - (y.e.eta ? y.e.eta.h : 9e9)));
@@ -900,7 +831,6 @@ export function startPulse(DATA) {
     const d = new Date(String(at).replace(" ", "T") + "Z"), m = Math.round((Date.now() - d.getTime()) / 60000);
     return Number.isNaN(m) ? "" : m < 1 ? "только что" : m < 60 ? `${m} мин назад` : m < 1440 ? `${Math.round(m / 60)} ч назад` : d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
   };
-  // «нажал в разделе «Обзор»: win-maximize» → по-человечески; служебные нажатия окна не показываем
   const ACTIONS = { "nav-more": "открыл меню разделов", "btn-refresh": "обновил данные", "btn-search": "открыл поиск", "search": "открыл поиск", "notif": "открыл уведомления" };
   const humanText = text => {
     const m = /^нажал в разделе «([^»]+)»: (.+)$/.exec(text);
@@ -908,7 +838,6 @@ export function startPulse(DATA) {
     if (/^win-/.test(m[2])) return null;
     return ACTIONS[m[2]] ? `${ACTIONS[m[2]]} · ${m[1]}` : `действие в разделе «${m[1]}»`;
   };
-  // одинаковые действия подряд («действие в разделе «Обзор»» ×12) сворачиваем в одну строку
   const collapseRows = rows => {
     const out = [];
     for (const r of rows) {
@@ -923,7 +852,6 @@ export function startPulse(DATA) {
     const rows = humanRows((WM && WM.recent) || (ALGO && ALGO.feed) || []).slice(0, 25);
     $("#logList").innerHTML = `<div class="attn-h"><span><b>●</b> КТО ЧТО ДЕЛАЕТ</span><span>${rows.length}</span></div>` + (rows.length ? rows.map(r => `<button type="button" class="rrow log" data-p="${esc(r.who)}" title="Открыть сведения о человеке">${rowHtml(r)}</button>`).join("") : `<div class="attn-empty">Пока ничего не замечено.</div>`);
   }
-  // ---------- сведения о человеке: кто, что делал, чем пользуется, какие серии на руках ----------
   function openPerson(name) {
     const el = $("#pdet"); if (!el || !name) return;
     hideTip(true);
@@ -959,13 +887,13 @@ export function startPulse(DATA) {
   function setRightTab(name) {
     document.querySelectorAll("[data-rt]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rt === name)));
     for (const k of ["attn", "eta", "team", "log"]) { const el = $(`#rp-${k}`); if (el) el.hidden = k !== name; }
-    try { localStorage.setItem("pulse-rtab", name); } catch (_) { /* без памяти */ }
+    try { localStorage.setItem("pulse-rtab", name); } catch (_) { }
   }
   function initRightColumn() {
     renderEtaPane(); renderTeamPane(); renderLogPane();
     document.querySelectorAll("[data-rt]").forEach(b => b.addEventListener("click", () => { stopAuto(); setRightTab(b.dataset.rt); }));
     let saved = "attn";
-    try { saved = localStorage.getItem("pulse-rtab") || "attn"; } catch (_) { /* без памяти */ }
+    try { saved = localStorage.getItem("pulse-rtab") || "attn"; } catch (_) { }
     setRightTab(["attn", "eta", "team", "log"].includes(saved) ? saved : "attn");
   }
   async function flyTo(n) {
@@ -974,7 +902,6 @@ export function startPulse(DATA) {
     showTip(n, true);
   }
 
-  // ---------- фокус на серии ----------
   let F = null, fTok = 0;
   const ICON = {
     tracks: '<svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>',
@@ -987,7 +914,6 @@ export function startPulse(DATA) {
     const { tn, info } = F, t = tn.t;
     const who = info.who.map(p => p.n);
     if (key === "roles") {
-      // настоящие данные: кто озвучивает персонажа и кто в оригинале; назначений не выдумываем
       if (!t.roles.length) return who.map(n => ({ n, m: "исполнитель серии", chip: ["", ""] }));
       return t.roles.map(r => { r = typeof r === "string" ? { n: r } : r; return { n: r.n, m: r.by ? r.by : r.va ? `в оригинале: ${r.va}` : "не назначен", chip: r.by ? ["ok", "ГОЛОС"] : ["", "СВОБОДЕН"] }; });
     }
@@ -1003,7 +929,6 @@ export function startPulse(DATA) {
     { k: "qc", n: F.info.qc_list.length, l: "Пункты чек-листа" },
     { k: "log", n: F.info.log.length, l: "Последние события" },
   ];
-  // фазы: 0 — шар в центре, 1 — шар + карточки, 2 — всё влево под веер
   const PH = [{ ox: 640, oy: 400, os: 1, cx: 760 }, { ox: 440, oy: 400, os: .86, cx: 650 }, { ox: 170, oy: 400, os: .62, cx: 320 }];
   const cardY = i => 400 + (i - 2) * 84;
   function geomAt(p) {
@@ -1039,14 +964,12 @@ export function startPulse(DATA) {
     g.setTransform(RES, 0, 0, RES, 0, 0);
     const G = geomAt(F.p), ox = G.ox, oy = G.oy, s = F.os * G.os, fa = F.alpha;
     if (s <= 0 || fa <= 0) return;
-    // огромная тусклая дуга и тёмный диск вокруг шара
     g.globalAlpha = fa * c01(F.p - .6) * .9;
     g.strokeStyle = "rgba(255,190,110,.10)"; g.lineWidth = 1.5; g.beginPath(); g.arc(ox, oy, 560, -1.2, 1.2); g.stroke();
     g.strokeStyle = "rgba(255,190,110,.05)"; g.lineWidth = 60; g.beginPath(); g.arc(ox, oy, 590, -1.1, 1.1); g.stroke();
     const vg = g.createRadialGradient(ox, oy, 0, ox, oy, 190 * s + 40); vg.addColorStop(0, "rgba(0,0,0,.55)"); vg.addColorStop(.75, "rgba(0,0,0,.35)"); vg.addColorStop(1, "rgba(0,0,0,0)");
     g.globalAlpha = fa; g.fillStyle = vg; g.beginPath(); g.arc(ox, oy, 190 * s + 40, 0, 7); g.fill();
 
-    // провода к карточкам
     const cards = F.cards || [];
     cards.forEach((c, i) => {
       if (c.wire == null) return;
@@ -1056,7 +979,6 @@ export function startPulse(DATA) {
       strokeBez(g, x1, y1, x2, y2, easeOut(k));
       if (k < 1) drawComet(g, x1, y1, x2, y2, easeOut(k), COMET[i % COMET.length], fa);
     });
-    // веер
     if (F.fan) {
       const ci = cards.findIndex(c => c.k === F.sel), x1 = G.cx + 186, y1 = cardY(ci);
       F.fan.forEach((f, i) => {
@@ -1065,12 +987,10 @@ export function startPulse(DATA) {
         strokeBez(g, x1, y1, f.x - 4, f.y, easeOut(k));
         if (k < 1) drawComet(g, x1, y1, f.x - 4, f.y, easeOut(k), COMET[f.c], fa);
         else if (!f.shown) { f.shown = true; const el = $("#fList").children[i]; if (el) { el.style.opacity = f.fade; el.style.transform = `translate(${f.x}px, ${f.y - 15}px)`; } }
-        // медленные искры по готовым линиям
         if (k >= 1 && !reduce) { const sp = ((t / 2600 + hash(F.sel, i)) % 1.6); if (sp < 1) { const p = bez(x1, y1, f.x - 4, f.y, sp); g.globalCompositeOperation = "lighter"; g.globalAlpha = fa * Math.sin(sp * Math.PI) * .9 * f.fade; g.drawImage(GL.gold, p.x - 7, p.y - 7, 14, 14); g.globalCompositeOperation = "source-over"; } }
       });
     }
 
-    // шар серии и два «звуковых» кольца
     g.globalCompositeOperation = "lighter";
     g.globalAlpha = fa * .55; g.drawImage(GL.violet, ox - 120 * s, oy - 120 * s, 240 * s, 240 * s);
     g.globalCompositeOperation = "source-over";
@@ -1144,7 +1064,6 @@ export function startPulse(DATA) {
     renderFan(now() + 100);
   }
 
-  // Точечный график — настоящая активность по серии за 40 дней (сколько действий в день); без данных точки остаются тусклыми.
   function dotsDraw(cv, hist, prog) {
     const g = cv.getContext("2d"), w = cv.width, h = cv.height, cols = 40, rows = 9;
     g.clearRect(0, 0, w, h);
@@ -1201,7 +1120,6 @@ export function startPulse(DATA) {
     const e = tn.eps.find(x => x.ep === ep) || tn.eps[tn.eps.length - 1];
     const en = epNodes.find(x => x.tn === tn && x.e === e);
 
-    // 1) камера ныряет в узел серии, сеть уходит в расфокус
     netFadeUntil = now() + 1200;
     rotTarget = 0; rotSpeed = 0;
     tweenCam({ x: en.px, y: en.py + 8, s: 5.2 }, 1100, t => t * t * (3 - 2 * t));
@@ -1211,18 +1129,15 @@ export function startPulse(DATA) {
     $("#fPanel").classList.remove("on"); $("#fPanel").innerHTML = "";
     await sleep(450); if (tok !== fTok) return;
     stage.classList.add("focusing");
-    // 2) узел вырастает в шар серии
     const t0 = now();
     await new Promise(res => { const st = () => { if (tok !== fTok) return res(); const k = c01((now() - t0) / 800); F.os = lerp(.1, 1, easeBack(k)); F.alpha = c01(k * 1.6); layoutDom(); k < 1 ? requestAnimationFrame(st) : res(); }; reduce ? (F.os = 1, F.alpha = 1, layoutDom(), res()) : st(); });
     F.ringAt = now();
-    // 3) заголовок набирается по буквам
     await typeText($("#fTitle b"), tn.t.name, 50, tok);
     await typeText($("#fTitle span"), `${e.ep ? `${e.ep} серия` : "серия"} · ${STAGES[e.stage]}`, 40, tok);
     if (tok !== fTok) return;
     $("#fChip").innerHTML = `<b>ОТКРЫТО <em>${e.qc}</em></b><i style="--p:${Math.min(100, e.qc * 25)}%"></i>`; $("#fChip").classList.add("on");
     renderCards(); layoutDom(); renderPanel();
     await sleep(150); if (tok !== fTok) return;
-    // 4) кометы рождают карточки по одной, шар отъезжает влево
     tweenP(1, 1300);
     const cardEls = $("#fCards").querySelectorAll(".f-card");
     for (let i = 0; i < F.cards.length; i++) {
@@ -1234,11 +1149,9 @@ export function startPulse(DATA) {
     await sleep(600); if (tok !== fTok) return;
     cardEls[2].classList.add("sel");
     await sleep(300); if (tok !== fTok) return;
-    // 5) всё уезжает влево, веер рисуется сверху вниз
     await tweenP(2, 1100); if (tok !== fTok) return;
     renderFan(now());
     await sleep(reduce ? 0 : F.fan.length * 85 + 500); if (tok !== fTok) return;
-    // 6) панель поворачивается и заполняется
     panelIn(tok);
   }
   async function focusClose() {
@@ -1263,7 +1176,7 @@ export function startPulse(DATA) {
   $("#fStage").addEventListener("change", e => { FILTER.stage = Number(e.target.value); });
   function setCalm(v) {
     CALM = v;
-    try { localStorage.setItem("pulse-bright", v ? "0" : "1"); } catch (_) { /* без памяти */ }
+    try { localStorage.setItem("pulse-bright", v ? "0" : "1"); } catch (_) { }
     $("#calmBtn").setAttribute("aria-pressed", String(!v));
     if (!v) rotTarget = 1;
   }
@@ -1271,11 +1184,7 @@ export function startPulse(DATA) {
   $("#zIn").addEventListener("click", () => { stopAuto(); if (!F) tweenCam({ s: clamp(cam.s * 1.3, .7, 3) }, 450); });
   $("#zOut").addEventListener("click", () => { stopAuto(); if (!F) tweenCam({ s: clamp(cam.s / 1.3, .7, 3) }, 450); });
 
-  // ---------- главный цикл ----------
-  // Экономия: сцена, скрытая в другой вкладке, не рисуется и отдаёт память холстов; в покое — 30 кадров/с;
-  // если кадры дольше 26 мс — качество холста снижается (и поднимается обратно, когда стало легко).
   let last = now(), lastDraw = 0, lastAct = now(), lastScroll = 0, slowN = 0, fastN = 0;
-  // пока листается панель (сведения о человеке, правая колонка), сцена не рисуется: прокрутке достаются все 60 кадров/с
   document.addEventListener("scroll", () => { lastScroll = now(); }, { capture: true, passive: true });
   document.addEventListener("wheel", e => { if (e.target.closest && e.target.closest("#pdet, .rcol")) lastScroll = now(); }, { capture: true, passive: true });
   ["pointermove", "pointerdown", "wheel", "keydown"].forEach(ev => addEventListener(ev, () => { lastAct = now(); }, { passive: true }));
@@ -1290,7 +1199,7 @@ export function startPulse(DATA) {
     const t = now();
     if (t - lastScroll < 220) { last = t; return; }
     const panelOpen = !$("#pdet").hidden;
-    if (t - lastDraw < (panelOpen ? 30 : 15.5)) return;     // ровно 60 кадров/с (на мониторах 144–240 Гц не рисуем лишнее), с панелью — 30
+    if (t - lastDraw < (panelOpen ? 30 : 15.5)) return;
     const idle = t - lastAct > 4000 && !playing && !F && !auto && !comets.length && !toasts.length;
     const dt = Math.min(50, t - last); last = t;
     const cost = t - lastDraw; lastDraw = t;
@@ -1298,7 +1207,6 @@ export function startPulse(DATA) {
       if (cost > 36) { fastN = 0; if (++slowN > 90 && QUAL > .85) { QUAL = .85; slowN = 0; resize(); } }
       else { slowN = 0; if (++fastN > 600 && QUAL < 1) { QUAL = 1; fastN = 0; resize(); } }
     }
-    // ошибка в одном слое не должна останавливать всю сцену
     for (const step of [() => ambient(t, dt), project, () => drawNet(t), () => drawFx(t)]) {
       try { step(); } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }
     }
@@ -1312,11 +1220,8 @@ export function startPulse(DATA) {
     });
   }
 
-  // ---------- режиссура, как в ролике ----------
   let auto = null;
   function stopAuto() { if (auto) { auto.stop = true; rotTarget = 1; } }
-  // Вступление — 2–3 секунды и только при первом открытии за день;
-  // «Показать вступление» проигрывает его ещё раз.
   async function run(force) {
     stopAuto();
     const tok = auto = { stop: false };
@@ -1329,7 +1234,7 @@ export function startPulse(DATA) {
     renderKpis(); setDay(DAYS - 1, false);
     const today = new Date().toISOString().slice(0, 10);
     let seen = false;
-    try { seen = localStorage.getItem("pulse-intro") === today; localStorage.setItem("pulse-intro", today); } catch (_) { /* без памяти */ }
+    try { seen = localStorage.getItem("pulse-intro") === today; localStorage.setItem("pulse-intro", today); } catch (_) { }
     camTok++;
     if (reduce || (seen && !force)) {
       finishIntro(); cam.x = HOMEX; cam.y = CY; cam.s = HOMES;

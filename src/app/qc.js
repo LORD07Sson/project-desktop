@@ -1,5 +1,3 @@
-// QC звука по локальному файлу — целиком в Rust (src-tauri/src/audio_qc.rs),
-// этот модуль только открывает диалог выбора файла и рисует результат.
 
 import { invoke, pickInputFiles, pickOutputFile, revealInFolder, appWindow, sendNotification } from "./tauri.js";
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "./media-formats.js";
@@ -10,9 +8,6 @@ const FINDING_LABELS = {
   clipping: "Клиппинг", silence: "Пауза", quiet: "Тихо", loud: "Громко",
 };
 
-// Список расширений, которые умеет разбирать qc_analyze — общий и для
-// диалога выбора файла ниже, и для file-drop.js (перетащить файл на
-// окно без открытой карточки отчёта — тоже запускает этот же QC).
 export const QC_EXTENSIONS = [...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS];
 
 function baseName(path) {
@@ -28,9 +23,6 @@ function pluralFiles(n) {
 
 const SCISSORS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.1 8.1L20 20M8.1 15.9L20 4"/></svg>';
 
-// path — необязателен: когда он есть (одиночный QC и раскрытая строка
-// пакетного QC — там путь файла тоже известен), рядом с находкой
-// рисуется кнопка «вырезать фрагмент», см. wireExportButtons ниже.
 function findingsHtml(findings, path) {
   return findings.map(f => `
     <div class="qc-finding ${f.severity}">
@@ -46,12 +38,6 @@ function findingsHtml(findings, path) {
   `).join("");
 }
 
-// ---------- волна с маркерами находок ----------
-// Огибающая амплитуды (min/max по бакетам, из Rust —
-// generate_waveform в audio_qc.rs) рисуется под находками той же
-// шкалой времени, с подсвеченными диапазонами находок — тот же приём,
-// что маркеры в Adobe Audition/iZotope RX, только без открытия
-// отдельного приложения.
 const WAVEFORM_BUCKETS = 400;
 
 function drawWaveform(canvas, waveform, findings) {
@@ -69,8 +55,6 @@ function drawWaveform(canvas, waveform, findings) {
   const buckets = waveform.peaks.length / 2;
   const barWidth = cssWidth / buckets;
 
-  // Диапазоны находок — полупрозрачные полосы под волной, цвет по
-  // серьёзности (та же пара цветов, что .qc-finding.error/.warn).
   const css = window.getComputedStyle(document.documentElement);
   const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
 
@@ -104,10 +88,6 @@ function drawWaveform(canvas, waveform, findings) {
   ctx.stroke();
 }
 
-// Подгружается отдельно от самого QC-отчёта и не блокирует его показ:
-// не всякий файл вообще имеет смысл рисовать волной (например, видео
-// без звуковой дорожки), и вторая ffmpeg-команда не должна тормозить
-// уже готовый список находок.
 async function loadWaveform(overlay, path, findings) {
   const canvas = overlay.querySelector(".qc-waveform");
   if (!canvas) return;
@@ -116,20 +96,10 @@ async function loadWaveform(overlay, path, findings) {
     if (!overlay.isConnected) return;
     drawWaveform(canvas, waveform, findings);
   } catch {
-    // Тихо убираем плейсхолдер — не аудио/видео с дорожкой, или ffmpeg
-    // не смог прочитать поток. Сам QC-анализ (qc_analyze) в этот момент
-    // уже отрисован, вторая ошибка тем же текстом ничего не добавляет.
     canvas.remove();
   }
 }
 
-// Экспорт фрагмента вокруг находки — делегирование на document, а не
-// точечная навеска после каждого рендера: кнопки живут и в одиночном
-// QC, и в раскрытых строках пакетного QC, рендерятся динамически.
-// Секунда запаса до/после находки — чтобы в вырезанном кусочке было
-// слышно контекст, а не только сам щелчок клиппинга/срез паузы;
-// верхнюю границу под длительность файла не подрезаем — ffmpeg -t за
-// пределами файла просто останавливается на EOF сам.
 document.addEventListener("click", async e => {
   const btn = e.target.closest(".qc-export-btn");
   if (!btn) return;
@@ -157,12 +127,6 @@ document.addEventListener("click", async e => {
   }
 });
 
-// Сам прогон QC + отрисовка результата — вынесено отдельной функцией,
-// чтобы её могли звать и обычный диалог выбора файла (ниже), и
-// file-drop.js напрямую с уже известным путём (без диалога).
-// opts.reportId — прогон запущен из карточки отчёта (кнопка «QC дорожки»),
-// значит находки можно положить прямо в заметки этого отчёта: у каждой
-// уже есть время начала, а заметки теперь понимают тайм-код.
 export async function runQcAnalysis(path, opts = {}) {
   const overlay = openSheet(`
     <h2>QC звука</h2>
@@ -197,8 +161,6 @@ export async function runQcAnalysis(path, opts = {}) {
   }
 }
 
-// Каждая находка уезжает в заметки отдельной строкой с тайм-кодом —
-// перепечатывать «на 4:12 клиппинг» руками больше не нужно.
 function wireAddToNotes(overlay, reportId, findings) {
   const actions = overlay.querySelector("#qc-actions");
   const btn = document.createElement("button");
@@ -226,11 +188,6 @@ function wireAddToNotes(overlay, reportId, findings) {
   });
 }
 
-// ---------- пакетный прогон ----------
-// Здесь всё в одну таблицу: строка на файл, заполняется по мере анализа,
-// клик по строке раскрывает находки. Файлы считаются по очереди, а не
-// параллельно — каждый прогон запускает свой ffmpeg, и десяток сразу
-// просто отнял бы у машины всё, что у неё есть.
 
 const SEVERITY_RANK = { error: 0, warn: 1, ok: 2, fail: 3 };
 
@@ -251,20 +208,7 @@ function summaryHtml(report) {
   return parts.join(" · ");
 }
 
-// Пакетный QC на десяток файлов реально занимает минуты (см. комментарий
-// у runQcBatch выше — файлы считаются по очереди, не параллельно), и
-// открытая шторка с таблицей результатов ничем не поможет, если само
-// окно приложения в этот момент свёрнуто в трей — единственный внутри-
-// оконный индикатор её никто не увидит. Системное уведомление — то,
-// что реально дойдёт до пользователя независимо от состояния окна;
-// isVisible() === false покрывает и «свёрнуто в трей», и «на другом
-// виртуальном рабочем столе», а не только буквальный минимайз.
 async function notifyBatchDoneIfHidden(total, bad, broken) {
-  // Один try на весь путь, а не только на isVisible(): sendNotification
-  // (tauri-plugin-notification) сама трогает window.Notification —
-  // в окружениях без него (например, jsdom в notes-timecodes-test.mjs)
-  // бросает синхронно, и необработанное исключение внутри async-функции
-  // без await на вызывающей стороне роняет процесс целиком.
   try {
     if (await appWindow.isVisible()) return;
     const body = bad || broken
@@ -272,7 +216,6 @@ async function notifyBatchDoneIfHidden(total, bad, broken) {
       : `Замечаний нет ни в одном из ${total}`;
     sendNotification({ title: "Project — QC завершён", body });
   } catch {
-    // нет доступа к состоянию окна/уведомлениям — молча пропускаем
   }
 }
 
@@ -303,16 +246,9 @@ export async function runQcBatch(paths) {
   const progressEl = overlay.querySelector("#qc-progress");
   const results = [];
 
-  // Индикатор на иконке в панели задач — окно приложения на время
-  // пакетного прогона часто свёрнуто в трей (команда оставляет его
-  // работать фоном), внутренняя полоска прогресса в такой момент
-  // никто не видит. Ошибку invoke здесь гасим — на платформе без
-  // поддержки (см. cfg в Rust-команде set_window_progress) это не
-  // повод ломать сам QC.
   const setTaskbarProgress = pct => invoke("set_window_progress", { progress: pct }).catch(() => {});
 
   for (let i = 0; i < paths.length; i++) {
-    // Закрыли шторку посреди прогона — дальше считать незачем.
     if (!overlay.isConnected) { setTaskbarProgress(null); return; }
     progressEl.textContent = `Анализирую ${i + 1} из ${paths.length}…`;
     setTaskbarProgress(Math.round((i / paths.length) * 100));
@@ -328,8 +264,6 @@ export async function runQcBatch(paths) {
     } catch (e) {
       error = String(e);
     }
-    // Закрыли посреди прогона — сбрасываем и индикатор на панели задач,
-    // иначе он так и оставался висеть на последнем проценте.
     if (!overlay.isConnected) { setTaskbarProgress(null); return; }
 
     const severity = rowSeverity(report);
@@ -371,7 +305,6 @@ export async function runQcBatch(paths) {
     : `Готово: замечаний нет ни в одном из ${done.length}`;
   notifyBatchDoneIfHidden(done.length, bad, broken);
 
-  // Сортировка — только когда есть что сортировать.
   const sortBtn = overlay.querySelector("#qc-sort");
   if (done.length > 1) {
     sortBtn.hidden = false;
@@ -392,7 +325,6 @@ export async function runQcBatch(paths) {
   }
 }
 
-// Один файл — подробная карточка, несколько — сводная таблица.
 export function runQc(paths) {
   const list = Array.isArray(paths) ? paths : [paths];
   if (!list.length) return;

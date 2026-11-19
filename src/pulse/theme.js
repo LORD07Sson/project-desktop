@@ -1,7 +1,3 @@
-// Тема «Пульса»: страница живёт в iframe и сама цвета приложения не знает — приложение присылает значения переменных своей темы
-// (акцент: янтарь, сакура, фиалка, небо, мята…). CSS подхватывает их через переменные, а canvas-сцена рисуется «тёплой» палитрой
-// оригинала — её теплые оттенки (оранжевый, золото) переносятся на цвета акцента, а красный (просрочка), фиолетовый и мятный
-// (серии и люди) остаются как есть, чтобы цвета не теряли смысл.
 
 const VARS = ["--bg", "--bg-2", "--bg-glow-1", "--bg-glow-2", "--surface", "--surface-2", "--surface-3", "--line", "--ink", "--ink-soft", "--ink-dim",
   "--fire", "--ember", "--gold", "--on-accent", "--fire-rgb", "--gold-rgb", "--glow-rgb"];
@@ -9,12 +5,10 @@ const VARS = ["--bg", "--bg-2", "--bg-glow-1", "--bg-glow-2", "--surface", "--su
 export function applyTheme(theme) {
   if (!theme) return;
   const root = document.documentElement;
-  // Светлая тема приложения: сцена остаётся тёмной (на светлом фоне неоновая анимация не читается), от темы берём только акцент.
   const accentOnly = theme.light ? ["--fire", "--ember", "--gold", "--on-accent", "--fire-rgb", "--gold-rgb", "--glow-rgb"] : VARS;
   for (const name of accentOnly) if (theme.vars && theme.vars[name]) root.style.setProperty(name, theme.vars[name]);
 }
 
-// ---------- перенос тёплых цветов canvas на акцент ----------
 function parseColor(str) {
   let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(str);
   if (m) {
@@ -40,15 +34,13 @@ function hslToRgb(h, s, l) {
 }
 const hueOf = hex => { const c = parseColor(hex || ""); return c ? rgbToHsl(c).h : null; };
 
-const BASE_FIRE = 18, BASE_GOLD = 38;    // оттенки оригинальной палитры: «огонь» и «золото»
+const BASE_FIRE = 18, BASE_GOLD = 38;
 let mapHue = null;
 
 export function installColorMap(theme) {
   const fire = hueOf(theme && theme.vars && theme.vars["--fire"]), gold = hueOf(theme && theme.vars && theme.vars["--gold"]);
   if (fire == null || gold == null) return;
-  // оригинал (янтарь) — ничего переносить не нужно
   if (Math.abs(fire - BASE_FIRE) < 6 && Math.abs(gold - BASE_GOLD) < 8) return;
-  // оттенок h из диапазона «огонь…золото» линейно ложится между оттенками акцента
   let dg = gold - fire;
   if (dg > 180) dg -= 360;
   if (dg < -180) dg += 360;
@@ -61,7 +53,6 @@ export function installColorMap(theme) {
     const c = parseColor(str);
     if (c) {
       const { h, s, l } = rgbToHsl(c);
-      // тёплые насыщенные цвета (оранжевый, золото) — на акцент; красный (<8°), почти белое и серое не трогаем
       if (s > .3 && l > .08 && l < .9 && h >= 8 && h <= 60) {
         const n = hslToRgb(mapHue(h), s, l);
         out = `rgba(${n.r},${n.g},${n.b},${c.a})`;

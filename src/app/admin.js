@@ -1,13 +1,3 @@
-// Админ-панель — доступ (allowed_users), заявки на доступ, заявки
-// владельцу на подтверждение (только owner), тикеты поддержки,
-// состояние системы. Портировано из openSettingsSheet/openAccessSheet/
-// openOwnerRequestsSheet/openTicketsSheet мини-аппа (miniapp/static/
-// index.html) — тот же набор /api/admin/*, /api/access-requests,
-// /api/owner/requests, /api/tickets. Desktop-клиент открыт только
-// админам (пара по коду выдаётся боту через /desktop — обычным
-// пользователям взять его неоткуда), поэтому, в отличие от мини-аппа,
-// отдельного условия "только для админов" на кнопку не нужно — сервер
-// всё равно перепроверяет каждый вызов через _require_admin/_require_owner.
 
 import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { openNoticeEditor } from "./team-notice.js";

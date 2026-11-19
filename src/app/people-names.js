@@ -1,5 +1,3 @@
-// Единые имена и понятные подписи событий. Сервер в ленте и рейтингах отдаёт @username, а карточки команды — отображаемое имя,
-// поэтому один человек выглядел по-разному. Здесь события и строки приводятся к имени из /team.
 
 import { apiGet } from "./api.js";
 
@@ -17,7 +15,6 @@ const ACTIONS = {
   report_file_send: "файл отчёта отправлен", report_torrent: "добавлен торрент отчёта",
 };
 
-// Код действия вида a365_upload → русская подпись; обычный текст не трогаем.
 export function actionLabel(action) {
   const raw = String(action || "").trim();
   if (!/^[a-z0-9_]+$/.test(raw)) return raw;
@@ -41,12 +38,10 @@ export async function loadPeopleNames() {
 
 export function forgetPeopleNames() { names = null; }
 
-// Журнал отчёта отдаёт только @username, без id.
 export const nameByUsername = username => (names && names.get(`@${username}`)) || username;
 
 export const personName = (telegramId, fallback) => (names && telegramId != null && names.get(String(telegramId))) || fallback;
 
-// Лента: имя автора и подпись действия. Возвращает те же объекты, чтобы не копировать длинные списки.
 export function humanizeEvents(events) {
   for (const ev of events || []) {
     ev.actor = personName(ev.actor_telegram_id, ev.actor);

@@ -1,5 +1,3 @@
-/* Коллекция наград (src/app/award-cards.js). Всё под префиксом .ac-,
-   общие правила kadr.css/styles.css не трогаем. */
 .ac-overlay {
   --ac-ink: #f4f1ea;
   position: fixed; inset: 0; z-index: 9000;
@@ -29,8 +27,6 @@
   display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
   gap: 34px 26px; padding: 34px 28px 30px; overflow: auto;
 }
-
-/* Палитра по редкости: фон марки, акцент, свечение. */
 .ac-card.r-common, .ac-big.r-common { --a: #7fd6c2; --b1: #16403b; --b2: #0d2420; --f1: #d9f5ec; --f2: #7fbfae; }
 .ac-card.r-rare, .ac-big.r-rare { --a: #6fb6ff; --b1: #133a6b; --b2: #0a1d3a; --f1: #d6ebff; --f2: #4f8fd6; }
 .ac-card.r-epic, .ac-big.r-epic { --a: #c58bff; --b1: #3d1c6b; --b2: #1b0d33; --f1: #ead6ff; --f2: #8a52d1; }
@@ -47,8 +43,6 @@
 .ac-grid.hovering .ac-card:not(.hot) { filter: grayscale(1) brightness(.7); }
 .ac-card.hot { transform: rotate(0deg) translateY(-10px) scale(1.04); z-index: 2; }
 .ac-card.lifted { opacity: 0; }
-
-/* Марка: перфорация маской, тень через drop-shadow (box-shadow маска срежет). */
 .ac-stamp {
   --r: 5px;
   display: block; aspect-ratio: 3 / 4;
@@ -71,7 +65,6 @@
     linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r));
   overflow: hidden;
 }
-/* Внутреннее поле марки — цветной «оттиск» с полутоном. */
 .ac-face::before {
   content: ""; position: absolute; inset: calc(2 * var(--r) + 2px);
   background:
@@ -89,9 +82,6 @@
 .ac-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: 500 10.5px/1 ui-monospace, "JetBrains Mono", monospace; color: rgba(255,255,255,.7); }
 .ac-bar { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.15); overflow: hidden; }
 .ac-bar i { display: block; height: 100%; background: var(--a); }
-/* Голографический блик (по референсу: ромбовая сетка-гильош проявляется
-   пятном под курсором, перелив золото→голубой, мягкий глянец). Слои:
-   ::before — штриховка, ::after — радужная плёнка, сам элемент — глянец. */
 .ac-sheen {
   position: absolute !important; inset: calc(2 * var(--r) + 2px); pointer-events: none; opacity: 0;
   background: radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.32), rgba(255,255,255,.08) 25%, transparent 50%);
@@ -116,13 +106,11 @@
 }
 .ac-card.hot .ac-sheen, .ac-big .ac-sheen { opacity: 1; }
 .ac-card.locked .ac-sheen::after { opacity: .2; }
-/* Полученные легендарные/особые и без наведения медленно переливаются. */
 .ac-card.won.r-legendary .ac-sheen, .ac-card.won.r-custom .ac-sheen { opacity: .45; animation: ac-drift 7s ease-in-out infinite alternate; }
 .ac-card.hot.won .ac-sheen { animation: none; opacity: 1; }
 @keyframes ac-drift { from { --mx: 15%; --my: 20%; } to { --mx: 85%; --my: 70%; } }
 @property --mx { syntax: "<percentage>"; inherits: true; initial-value: 50%; }
 @property --my { syntax: "<percentage>"; inherits: true; initial-value: 30%; }
-/* Объём: иконка и подпись чуть «всплывают» над полем при наклоне. */
 .ac-art, .ac-lb { transform: translate(calc(var(--tx, 0) * 6px), calc(var(--ty, 0) * 6px)); transition: transform .14s ease-out; }
 
 .ac-card.locked .ac-face::before { filter: grayscale(.85) brightness(.75); }
@@ -138,8 +126,6 @@
   transition: opacity .1s ease-out, transform .14s ease-out;
 }
 .ac-card.hot .ac-chip { opacity: 1; transform: translate(-50%, 0) scale(1); }
-
-/* Фокус: чёрный фон, марка крупно по центру. */
 .ac-focus {
   position: fixed; inset: 0; z-index: 9001; display: grid; place-items: center;
   background: rgba(0,0,0,0); transition: background .3s ease-out; cursor: zoom-out;
@@ -158,14 +144,7 @@
   .ac-stamp, .ac-art, .ac-lb { transform: none; }
   .ac-sheen { animation: none !important; }
 }
-
-/* Неполученные — рамка нейтральная серебристая, цвет только у полученных. */
 .ac-card.locked, .ac-big.locked { --f1: #d9dce2; --f2: #8a9099; }
-
-/* Блёстки: россыпь искр по всей марке (и по рамке, и по полю). Два слоя
-   с разным шагом сетки (простые числа — узор не повторяется на глаз)
-   мерцают в противофазе. У полученных видны всегда, при наведении и в
-   фокусе — ярче и стягиваются к свету курсора. */
 .ac-glit { position: absolute !important; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s ease-out; mix-blend-mode: screen; }
 .ac-glit::before, .ac-glit::after { content: ""; position: absolute; inset: 0; }
 .ac-glit::before {
@@ -193,10 +172,6 @@
 @media (prefers-reduced-motion: reduce) {
   .ac-glit::before, .ac-glit::after { animation: none; opacity: .6; }
 }
-
-/* Персонаж на марке: обрезан по внутреннему полю (не лезет на рамку),
-   стоит снизу и растворяется книзу под подпись; иконка награды уходит
-   в медальон в углу. Неполученные — тёмный силуэт. */
 .ac-field { position: absolute !important; inset: calc(2 * var(--r) + 2px); overflow: hidden; pointer-events: none; }
 .ac-char {
   position: absolute; left: 50%; bottom: 0; height: 104%; max-width: 125%;
@@ -216,19 +191,11 @@
 .ac-lb, .ac-foot, .ac-top { z-index: 1; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
 .ac-card.locked .ac-char, .ac-big.locked .ac-char { filter: grayscale(1) brightness(.35) contrast(1.1); }
 @media (prefers-reduced-motion: reduce) { .ac-char { transform: translateX(-50%); } }
-
-/* Те же марки, встроенные в раздел «Награды» профиля. */
 .ac-grid.ac-inline { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 30px 20px; padding: 28px 6px 6px; overflow: visible; }
 @media (max-width: 760px) { .ac-grid.ac-inline { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-/* В профиле марки крупнее и стоят ровно. Повёрнутая марка рисуется через промежуточную текстуру (тень, маска
-   перфорации) и при повороте замыливается вместе с артом и подписью; наклон остаётся только под курсором. */
 .ac-inline .ac-card:not(.hot) { transform: none; }
-/* Блёстки и перелив «живут» только на марке под курсором: бесконечные анимации с наложением на каждой марке
-   заставляли перерисовывать весь раздел каждый кадр, и прокрутка профиля теряла кадры. В покое блёстки
-   неподвижны и приглушены, чтобы не шумели поверх арта. */
 .ac-inline .ac-card:not(.hot) .ac-glit::before, .ac-inline .ac-card:not(.hot) .ac-glit::after,
 .ac-inline .ac-card:not(.hot) .ac-sheen { animation: none; }
 .ac-inline .ac-card.won:not(.hot) .ac-glit { opacity: .28; }
 .ac-inline .ac-card.won.r-legendary:not(.hot) .ac-glit, .ac-inline .ac-card.won.r-custom:not(.hot) .ac-glit { opacity: .4; }
-/* В двухколоночном профиле (Активность | Награды) колонка узкая: четыре марки в ряд сжимались до нечитаемых. */
 .pff-duo .ac-grid.ac-inline { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 18px; }

@@ -1,13 +1,3 @@
-// Плеер серий (режим «Смотреть»). Сервер находит тайтл по id Shikimori
-// (/api/player/series), отдаёт переводы серии (/api/player/episode/{id})
-// и прямые ссылки на видео (/api/player/stream/{id}); видео грузится
-// напрямую с CDN источника, не через наш сервер.
-//
-// Своё управление поверх видео вместо стандартной полосы браузера:
-// перемотка с буфером и подсказкой времени, громкость, скорость,
-// качество, «пропустить опенинг», карточка следующей серии, панель
-// серий/озвучек, весь экран вместе с управлением. Прячется, когда мышь
-// не двигается. Запоминаются серия, озвучка, качество, громкость и место.
 
 import { state } from "./state.js";
 import { apiGet, toast, API_BASE } from "./api.js";
@@ -18,7 +8,7 @@ import { parseVtt, parseSubsFile, decodeSubs } from "./subs-core.js";
 
 const SAVE_EVERY_MS = 5000;
 const HIDE_AFTER_MS = 2600;
-const NEXT_CARD_SEC = 25;      // за сколько до конца показать «Следующая серия»
+const NEXT_CARD_SEC = 25;
 const NEXT_COUNTDOWN = 10;
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
@@ -44,7 +34,7 @@ function readMem(shikiId) {
 }
 function writeMem(shikiId, patch) {
   const m = { ...readMem(shikiId), ...patch };
-  try { localStorage.setItem(memKey(shikiId), JSON.stringify(m)); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(memKey(shikiId), JSON.stringify(m)); } catch (_) { }
   return m;
 }
 const VOL_KEY = "project_player_volume";
@@ -64,12 +54,8 @@ function readSubsPrefs() {
   try { const p = JSON.parse(localStorage.getItem(SUBS_KEY) || "null"); return { on: p?.on !== false, size: SUB_SIZES.some(([id]) => id === p?.size) ? p.size : "m" }; } catch (_) { return { on: true, size: "m" }; }
 }
 
-let P = null; // состояние открытого плеера
+let P = null;
 
-// «Во весь экран» в приложении — полноэкранным становится само окно Tauri,
-// а плеер просто растягивается на него (класс fs). Fullscreen API страницы
-// в WebView2 без рамки окна оставлял снизу чёрную полосу высотой с шапку
-// и сжимал видео; он остаётся только для запуска в обычном браузере.
 const IN_TAURI = "__TAURI_INTERNALS__" in window;
 
 import { track } from "./telemetry.js";
@@ -158,14 +144,11 @@ export async function openAnimePlayer({ shikiId, name }) {
   goEpisode(Math.max(0, series.episodes.findIndex(e => e.id === mem.episodeId)));
 }
 
-// ---------- вспомогательное ----------
 const $r = sel => P.root.querySelector(sel);
 function setWait(text) {
   const w = $r("[data-ap-wait]");
   w.hidden = !text;
   w.classList.remove("err");
-  // Пока идёт загрузка, свой индикатор буфера и кнопка паузы не нужны —
-  // иначе поверх друг друга крутятся два «загружаю».
   P.root.classList.toggle("loading", !!text);
   if (text) $r("[data-ap-wait-text]").textContent = text;
 }
@@ -192,7 +175,6 @@ function poke() {
   }, HIDE_AFTER_MS);
 }
 
-// ---------- серии и озвучки ----------
 function renderEpisodes() {
   const mem = readMem(P.shikiId);
   const watched = new Set(mem.watched || []);
@@ -203,7 +185,6 @@ function renderEpisodes() {
   box.querySelectorAll("[data-ap-ep-i]").forEach(b => b.addEventListener("click", () => goEpisode(Number(b.dataset.apEpI))));
 }
 
-// Границы опенинга и эндинга — настоящие, из AniSkip. Нет данных — нет ни кнопки, ни отметки на полосе.
 function paintOp() {
   if (!P) return;
   const dur = P.video.duration;
@@ -218,7 +199,6 @@ function paintOp() {
   }
 }
 
-// Что можно пропустить прямо сейчас: опенинг, эндинг или ничего.
 function skipPart(t) {
   const inside = part => part && t >= part.start && t < part.end - 1;
   if (inside(P.op)) return { ...P.op, label: "Пропустить опенинг", done: "Опенинг пропущен" };
@@ -238,7 +218,7 @@ async function loadOp(ep) {
     P.op = d.op;
     P.ed = d.ed;
     paintOp();
-  } catch (_) { /* без кнопки пропуска */ }
+  } catch (_) { }
 }
 
 async function goEpisode(idx) {
@@ -276,7 +256,6 @@ async function goEpisode(idx) {
   pickTranslation((pickSameVoice(P.translations, mem.authors, mem.kind) || P.translations[0]).id);
 }
 
-// ---------- субтитры ----------
 function renderSubs() {
   if (!P) return;
   const box = $r("[data-ap-subs]");
@@ -308,7 +287,6 @@ function showCues(cues) {
   P.hasSubs = cues.length > 0;
   renderSubs();
 }
-// Свой файл живёт только в этом окне и только для текущей серии: на сервер не уходит.
 function pickLocalSubs() {
   const input = document.createElement("input");
   input.type = "file";
@@ -332,7 +310,7 @@ function pickLocalSubs() {
 }
 function setSubsPrefs(patch) {
   P.subsPrefs = { ...P.subsPrefs, ...patch };
-  try { localStorage.setItem(SUBS_KEY, JSON.stringify(P.subsPrefs)); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(SUBS_KEY, JSON.stringify(P.subsPrefs)); } catch (_) { }
   renderSubs();
 }
 
@@ -371,8 +349,6 @@ async function pickTranslation(trId, keepTime = false) {
   playSource(q, resumeAt);
 }
 
-// Два пути к видео: сначала напрямую с видеосервера, а если он молчит или обрывается — через наш сервер.
-// Раз прямой путь подвёл, до конца сеанса сразу идём через сервер, чтобы не ждать на каждой серии.
 const DIRECT_WAIT_MS = 12000;
 let relayPreferred = false;
 
@@ -418,7 +394,7 @@ function startWhenBuffered() {
     if (!ready) { setWait(`Загружаю видео… ${Math.floor(ahead)} из ${START_BUFFER_SEC} с`); return; }
     stopBufferGate();
     setWait("");
-    v.play().catch(() => { /* автозапуск запрещён — ждём клика */ });
+    v.play().catch(() => { });
   }, 250);
 }
 
@@ -452,7 +428,6 @@ function playSource(src, resumeAt) {
   poke();
 }
 
-// ---------- предзагрузка следующей серии ----------
 async function preloadNext(left, duration) {
   if (!P || !P.series) return;
   const next = P.series.episodes[P.episodeIdx + 1];
@@ -467,10 +442,9 @@ async function preloadNext(left, duration) {
     const s = await apiGet(`/player/stream/${tr.id}`);
     if (!P || P.root !== root) return;
     P.pre = { episodeId: next.id, trId: tr.id, translations: d.translations.filter(t => PLAYABLE_KINDS.has(t.kind)), sources: s.sources, at: Date.now() };
-  } catch (_) { /* не вышло — обычная загрузка при переходе */ }
+  } catch (_) { }
 }
 
-// ---------- следующая серия ----------
 function showNextCard() {
   if (!P || P.nextCancelled || P.episodeIdx >= P.series.episodes.length - 1) return;
   const card = $r("[data-ap-nextcard]");
@@ -500,7 +474,6 @@ function startCountdown() {
   }, 1000);
 }
 
-// ---------- прогресс ----------
 function markWatched(epId) {
   const mem = readMem(P.shikiId);
   const w = new Set(mem.watched || []);
@@ -517,12 +490,10 @@ function saveProgress() {
   const mem = readMem(P.shikiId);
   const times = { ...(mem.times || {}) };
   times[ep.id] = v.currentTime > v.duration - 20 ? 0 : Math.floor(v.currentTime);
-  // Для ряда «Продолжить просмотр» в режиме «Смотреть».
   const last = { episodeId: ep.id, label: ep.label, time: Math.floor(v.currentTime), duration: Math.floor(v.duration), at: Date.now() };
   writeMem(P.shikiId, { times, last, title: P.name });
 }
 
-// ---------- управление ----------
 function togglePlay() {
   const v = P.video;
   if (!v.src) return;
@@ -539,7 +510,7 @@ function setVolume(value, muted) {
   const v = P.video;
   v.volume = Math.max(0, Math.min(1, value));
   v.muted = muted;
-  try { localStorage.setItem(VOL_KEY, JSON.stringify({ v: v.volume, muted: v.muted })); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(VOL_KEY, JSON.stringify({ v: v.volume, muted: v.muted })); } catch (_) { }
 }
 function setFullscreen(on) {
   if (!P) return;
@@ -597,7 +568,6 @@ function wireControls() {
   settings.addEventListener("click", e => { e.stopPropagation(); renderMenu(); menu.hidden = !menu.hidden; poke(); });
   root.addEventListener("click", e => { if (!menu.hidden && !e.target.closest(".ap-menu-wrap")) menu.hidden = true; });
 
-  // клик по видео — пауза, двойной — весь экран
   let clickTimer = null;
   v.addEventListener("click", () => {
     window.clearTimeout(clickTimer);
@@ -605,7 +575,6 @@ function wireControls() {
   });
   v.addEventListener("dblclick", () => { window.clearTimeout(clickTimer); toggleFullscreen(); });
 
-  // громкость
   const volRange = root.querySelector("[data-ap-volume]");
   const muteBtn = root.querySelector("[data-ap-mute]");
   const syncVol = () => {
@@ -619,7 +588,6 @@ function wireControls() {
   v.addEventListener("volumechange", syncVol);
   syncVol();
 
-  // перемотка
   const seek = root.querySelector("[data-ap-seek]");
   const fill = root.querySelector("[data-ap-fill]");
   const buf = root.querySelector("[data-ap-buf]");
@@ -697,12 +665,10 @@ function wireControls() {
   document.addEventListener("fullscreenchange", onFullscreen);
 }
 
-// В браузере полноэкранный режим можно снять системно (Esc/F11) — догоняем.
 function onFullscreen() {
   if (P && P.fs && !document.fullscreenElement) setFullscreen(false);
 }
 
-// Сколько человек реально смотрел (только время воспроизведения) — в «Карту работы», название тайтла без номеров серий.
 function flushWatch() {
   if (P && P.watchSince) { P.watchMs = (P.watchMs || 0) + Date.now() - P.watchSince; P.watchSince = 0; }
 }
@@ -714,7 +680,7 @@ export function closeAnimePlayer() {
   flushWatch();
   if (P.watchMs > 5000) {
     const tr = (P.translations || []).find(t => t.id === P.trId);
-    track("watch", "player", `${P.name || P.shikiId}${tr && tr.authors ? ` · ${tr.authors}` : ""}`, P.watchMs);   // тайтл и озвучка
+    track("watch", "player", `${P.name || P.shikiId}${tr && tr.authors ? ` · ${tr.authors}` : ""}`, P.watchMs);
   }
   saveProgress();
   window.clearInterval(P.saveTimer);

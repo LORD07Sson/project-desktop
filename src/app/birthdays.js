@@ -1,6 +1,3 @@
-// Дни рождения — то же, что «🎂 Дни рождения» в админ-панели бота:
-// список (по ближайшим), добавить, удалить. Поздравления рассылает
-// сам бот по этой же таблице. /api/birthdays, /api/birthdays/{id}/delete.
 
 import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { esc } from "./utils.js";
@@ -8,8 +5,6 @@ import { esc } from "./utils.js";
 const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const TRASH_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
 
-// Сколько дней до ближайшего дня рождения (0 — сегодня). 29 февраля в
-// невисокосный год отмечаем 28-го, как делает и бот.
 export function daysUntil(month, day, from = new Date()) {
   const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
   const at = y => {
@@ -77,7 +72,6 @@ export async function openBirthdaysSheet(onChange) {
       e.preventDefault();
       const name = sheet.querySelector("#bd-name").value.trim();
       const noYear = sheet.querySelector("#bd-noyear").checked;
-      // Дата в привычном виде дд.мм.гггг: системный выбор даты у части пользователей показывал американский мм/дд/гггг.
       const dm = sheet.querySelector("#bd-date").value.trim().match(noYear ? /^(\d\d)\.(\d\d)(?:\.(\d{4}))?$/ : /^(\d\d)\.(\d\d)\.(\d{4})$/);
       const m = dm && [null, dm[3] || "2000", dm[2], dm[1]];
       if (!name || !m || +m[2] < 1 || +m[2] > 12 || +m[3] < 1 || +m[3] > 31) { toast("Укажите имя и дату в виде дд.мм.гггг.", "error"); return; }

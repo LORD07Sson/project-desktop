@@ -1,14 +1,3 @@
-//! «Инструменты ffmpeg» — библиотека операций (обрезка/трим без
-//! перекодирования, конвертация, извлечение/нормализация звука, склейка),
-//! открытая кнопкой «🎬» в шапке рядом с QC звука (см. audio_qc.rs — тот же
-//! ffmpeg-субпроцесс, но там только анализ; здесь — реальная перезапись
-//! файлов на диск).
-//!
-//! Резолв бинарников (ffmpeg/ffprobe: bundled рядом с .exe, иначе PATH) и
-//! обёртка Command с подавлением консольного окна на Windows —
-//! переиспользуются из audio_qc.rs (bundled_binary_path/binary_runs/
-//! resolve_binary_uncached/ffmpeg_command), дублировать эту логику здесь
-//! незачем — она не специфична для QC.
 
 use crate::audio_qc::{ffmpeg_command, hidden_command, resolve_ffmpeg};
 use serde::{Deserialize, Serialize};
@@ -23,7 +12,6 @@ pub(crate) fn resolve_ffprobe() -> &'static str {
     crate::audio_qc::cached_resolve(&RESOLVED, "ffprobe", "ffprobe.exe")
 }
 
-/// Версия программы (первая строка `-version`) или None, если не запускается.
 fn tool_version(bin: &str) -> Option<String> {
     let out = std::process::Command::new(bin).arg("-version").output().ok()?;
     if !out.status.success() {
@@ -41,8 +29,6 @@ pub struct ToolStatus {
 pub fn tool_status() -> ToolStatus {
     ToolStatus { ffmpeg: tool_version(resolve_ffmpeg()), ffprobe: tool_version(resolve_ffprobe()) }
 }
-
-// ---------- probe_media ----------
 
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -65,10 +51,6 @@ pub struct MediaInfo {
     pub audio: Option<StreamInfo>,
 }
 
-/// `ffprobe -show_format -show_streams -of json` — тот же принцип
-/// декодирования "любого файла" без знания заранее его контейнера/кодека,
-/// что и decode_pcm в audio_qc.rs, но здесь нужны метаданные, а не сами
-/// сэмплы, поэтому ffprobe, а не ffmpeg.
 pub fn probe_media(path: &str) -> Result<MediaInfo, String> {
     let ffprobe = resolve_ffprobe();
     let output = ffmpeg_command(ffprobe)
@@ -105,9 +87,6 @@ pub fn probe_media(path: &str) -> Result<MediaInfo, String> {
             let codec = s.get("codec_name").and_then(|v| v.as_str()).unwrap_or("?").to_string();
             match codec_type {
                 "video" if info.video.is_none() => {
-                    // avg_frame_rate приходит строкой вида "25/1" или "0/0"
-                    // (нет применимого значения, напр. у отдельных кадров) —
-                    // раскладываем сами, серде тут не поможет.
                     let fps = s
                         .get("avg_frame_rate")
                         .and_then(|v| v.as_str())
@@ -147,25 +126,12 @@ pub fn probe_media(path: &str) -> Result<MediaInfo, String> {
     Ok(info)
 }
 
-// ---------- probe_keyframes ----------
-
-// ---------- register_media_file (asset-protocol допуск) ----------
-
-/// Единственный мост между выбранным пользователем файлом и вебвью:
-/// разрешает asset-протоколу (см. tauri.conf.json: security.assetProtocol,
-/// Cargo.toml: фича protocol-asset) отдавать конкретно этот путь, чтобы
-/// фронтенд мог поставить его в <video src> через convertFileSrc(). Тот же
-/// принцип допуска "только то, что пользователь явно выбрал сам", что и у
-/// DroppedFiles в main.rs — просто источник доверия другой (openDialog,
-/// не drag&drop), поэтому и список отдельный, не общий с DroppedFiles.
 pub fn register_media_file(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
     use tauri::Manager;
     app.asset_protocol_scope()
         .allow_file(path)
         .map_err(|e| format!("Не удалось открыть файл для предпросмотра: {e}"))
 }
-
-// ---------- cut_media ----------
 
 fn ext_of(path: &str) -> String {
     Path::new(path)
@@ -174,40 +140,12 @@ fn ext_of(path: &str) -> String {
         .unwrap_or_else(|| "mp4".to_string())
 }
 
-// ---------- точная резка (smart cut) ----------
-//
-// Обычная резка без перекодирования умеет начинать сегмент ТОЛЬКО с
-// опорного кадра: до него данных для декодирования просто нет. При
-// типичном GOP в 250 кадров это промах до десяти секунд — для нарезки
-// реплик под укладку бесполезно.
-//
-// Точная резка делает то, что в монтажках называется smart cut:
-// голову сегмента (от запрошенной секунды до ближайшего следующего
-// опорного кадра) ПЕРЕКОДИРУЕТ, остальное копирует как есть, и
-// склеивает обе части. Перекодируется секунда-две вместо всего файла,
-// а начало получается ровно там, где попросили.
-//
-// Условие склейки — голова должна быть закодирована тем же кодеком,
-// что и хвост. Если кодек исходника нам неизвестен (экзотика вроде
-// ProRes или AV1 без известного энкодера), честно откатываемся на
-// резку по опорным кадрам, а не выдаём битый файл.
-
-/// Рабочий файл во временном каталоге: список для concat-демуксера,
-/// палитра для GIF, промежуточный кусок для точной резки. Раньше такой
-/// файл писался в общий temp с предсказуемым именем
-/// (`project_concat_<pid>.txt`) — на машине с несколькими
-/// пользователями это классический путь для symlink-подставы, а два
-/// параллельных запуска затирали список друг другу. Теперь — свой
-/// каталог со случайным именем, и он же убирается за собой в Drop, даже
-/// если операция упала или её отменили на середине.
 struct TempWork {
     path: PathBuf,
     dir: PathBuf,
 }
 
 impl TempWork {
-    /// Пустой файл с заданным именем — путь есть, содержимое запишет
-    /// сам ffmpeg (палитра GIF, промежуточный фрагмент).
     fn file(name: &str) -> Result<Self, String> {
         let dir = Self::make_dir()?;
         let path = dir.join(name);
@@ -215,10 +153,6 @@ impl TempWork {
     }
 
     fn make_dir() -> Result<PathBuf, String> {
-        // Источник «случайности» без лишней зависимости: наносекунды от
-        // старта эпохи + pid. Криптостойкость тут не нужна — нужна
-        // невозможность угадать имя заранее и уникальность между
-        // параллельными запусками.
         let unique = format!(
             "{}_{}",
             std::process::id(),
@@ -233,15 +167,11 @@ impl TempWork {
         Ok(dir)
     }
 
-    /// Список файлов для concat-демуксера.
     fn concat_list(paths: &[String]) -> Result<Self, String> {
         let dir = Self::make_dir()?;
         let path = dir.join("list.txt");
         let body = paths
             .iter()
-            // concat-демуксер: путь в одинарных кавычках, апостроф внутри
-            // экранируется как '\'' (стандартная схема самого ffmpeg для
-            // этого формата, не наша самодеятельность).
             .map(|p| format!("file '{}'\n", p.replace('\'', "'\\''")))
             .collect::<String>();
         std::fs::write(&path, body)
@@ -256,14 +186,6 @@ impl Drop for TempWork {
     }
 }
 
-// ---------- валидация параметров ----------
-// Значения из TranscodeOpts/ExtractAudioOpts уезжают в argv ffmpeg.
-// Инъекции команд тут нет по конструкции (Command::args — это argv, не
-// строка для шелла), но «свободная строка» всё равно плохая идея: она
-// либо даёт невнятную ошибку ffmpeg вместо понятного сообщения, либо
-// подсовывает кодек/фильтр, которого мы не тестировали. Поэтому —
-// закрытые списки и строгий формат битрейта.
-
 const VIDEO_CODECS: &[&str] = &["copy", "libx264", "libx265", "libvpx-vp9", "libaom-av1", "mpeg4", "prores_ks"];
 const AUDIO_CODECS: &[&str] = &["copy", "aac", "mp3", "libmp3lame", "flac", "libopus", "pcm_s16le", "pcm_s24le", "ac3"];
 
@@ -275,8 +197,6 @@ fn check_codec(value: &str, allowed: &[&str], kind: &str) -> Result<String, Stri
     }
 }
 
-/// Битрейт в записи самого ffmpeg: «128k», «2M», «4500000». Всё
-/// остальное (включая попытку передать сюда ещё один аргумент) — отказ.
 fn check_bitrate(value: &str) -> Result<String, String> {
     let v = value.trim();
     let (digits, suffix) = match v.strip_suffix(['k', 'K', 'm', 'M']) {
@@ -293,9 +213,6 @@ fn check_bitrate(value: &str) -> Result<String, String> {
     }
 }
 
-/// Разумный потолок: 16K по большей стороне. Дело не в безопасности, а
-/// в том, что опечатка в поле («19200» вместо «1920») иначе уходит в
-/// ffmpeg и выливается в час работы и гигабайты на диске.
 fn check_dimension(value: u32, name: &str) -> Result<u32, String> {
     if (1..=16384).contains(&value) {
         Ok(value)
@@ -304,33 +221,19 @@ fn check_dimension(value: u32, name: &str) -> Result<u32, String> {
     }
 }
 
-// ---------- transcode_media ----------
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscodeOpts {
     pub video_codec: Option<String>,
     pub audio_codec: Option<String>,
-    pub video_bitrate: Option<String>, // "2M", "800k" — как принимает сам ffmpeg
+    pub video_bitrate: Option<String>,
     pub audio_bitrate: Option<String>,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub crf: Option<u32>,
 }
 
-/// Обычное перекодирование (в отличие от cut_media — здесь качество и
-/// формат меняются осознанно, поэтому -c copy не подходит по определению).
-/// Готовые пресеты ("MP4 для YouTube", "сжать для Telegram" и т.п.) живут
-/// во фронтенде как заранее заполненные TranscodeOpts — здесь только
-/// сборка ffmpeg-аргументов из того, что реально попросили, без своих
-/// значений по умолчанию, кроме тех, что понятны без пресета (например,
-/// codec, если он не выбран, разумно оставить ffmpeg решать по расширению
-/// out_path — поэтому явные -c:v/-c:a пишутся только когда поле задано).
 pub fn transcode_media(progress: &Progress, path: &str, out_path: &str, opts: &TranscodeOpts) -> Result<(), String> {
-    // duration_hint — для расчёта доли выполнения в run_ffmpeg
-    // (out_time_ms / duration); если пробинг не удался (повреждённый файл
-    // и т.п.), просто не будет промежуточных обновлений прогресса — сама
-    // операция всё равно продолжится и завершится нормально.
     let duration_hint = probe_media(path).map(|m| m.duration).unwrap_or(0.0);
     let args = transcode_args(path, out_path, opts)?;
     run_ffmpeg(
@@ -341,8 +244,6 @@ pub fn transcode_media(progress: &Progress, path: &str, out_path: &str, opts: &T
     )
 }
 
-/// Сборка argv вынесена отдельно от запуска — её можно проверить
-/// юнит-тестом без ffmpeg (тот же приём, что analyze_samples в audio_qc.rs).
 fn transcode_args(path: &str, out_path: &str, opts: &TranscodeOpts) -> Result<Vec<String>, String> {
     let mut args: Vec<String> = vec!["-v".into(), "error".into(), "-y".into(), "-i".into(), path.into()];
 
@@ -370,12 +271,6 @@ fn transcode_args(path: &str, out_path: &str, opts: &TranscodeOpts) -> Result<Ve
         .transpose()?;
     if let Some(vc) = &video_codec {
         args.extend(["-c:v".into(), vc.clone()]);
-        // H.264 в 10 бит или 4:2:2 (типичный исходник с камеры/ProRes)
-        // формально валиден, но не играет ни в браузерах, ни в
-        // телефонах, ни в половине плееров — а «универсальный MP4»
-        // ровно за тем и выбирают, чтобы файл открылся у кого угодно.
-        // Явный yuv420p убирает этот класс «файл собрался, но чёрный
-        // экран у заказчика».
         if vc == "libx264" {
             args.extend(["-pix_fmt".into(), "yuv420p".into()]);
         }
@@ -403,26 +298,19 @@ fn transcode_args(path: &str, out_path: &str, opts: &TranscodeOpts) -> Result<Ve
         args.extend(["-b:a".into(), check_bitrate(ab)?]);
     }
 
-    // faststart переносит индекс (moov) в начало файла: без него mp4
-    // начинает играть в браузере/телеграме только после полной загрузки.
-    // Стоит один дополнительный проход по уже готовому файлу, на выходе
-    // — единственный формат, который у команды реально уходит наружу.
     if matches!(ext_of(out_path).as_str(), "mp4" | "m4v" | "mov") {
         args.extend(["-movflags".into(), "+faststart".into()]);
     }
     Ok(args)
 }
 
-// ---------- extract_audio ----------
-
 #[derive(Deserialize)]
 pub struct ExtractAudioOpts {
-    pub codec: String, // "copy" | "mp3" | "aac" | ...
+    pub codec: String,
     pub bitrate: Option<String>,
     pub normalize: bool,
 }
 
-/// Измеренные первым проходом loudnorm параметры дорожки.
 #[derive(Debug, PartialEq)]
 struct LoudnormMeasurement {
     input_i: String,
@@ -432,13 +320,6 @@ struct LoudnormMeasurement {
     target_offset: String,
 }
 
-/// Первый проход loudnorm: ffmpeg считает реальную громкость дорожки и
-/// печатает её JSON-ом в stderr. Без этого прохода фильтр работает в
-/// однопроходном режиме — он динамический, «на лету» подтягивает тихие
-/// места и приминает громкие, то есть меняет динамику речи. Для дубляжа
-/// это слышно: ровный по R128 файл, но с «дышащим» фоном. Двухпроходный
-/// режим применяет ОДИН постоянный коэффициент, динамика дубля остаётся
-/// как записали.
 fn measure_loudness(path: &str) -> Option<LoudnormMeasurement> {
     let ffmpeg = resolve_ffmpeg();
     let output = ffmpeg_command(ffmpeg)
@@ -455,8 +336,6 @@ fn measure_loudness(path: &str) -> Option<LoudnormMeasurement> {
     parse_loudnorm_json(&String::from_utf8_lossy(&output.stderr))
 }
 
-/// JSON лежит в хвосте stderr вперемешку с прочим выводом — берём
-/// последнюю пару фигурных скобок, а не весь поток.
 fn parse_loudnorm_json(stderr: &str) -> Option<LoudnormMeasurement> {
     let start = stderr.rfind('{')?;
     let end = stderr[start..].find('}')? + start + 1;
@@ -477,17 +356,10 @@ fn loudnorm_filter(measured: Option<&LoudnormMeasurement>) -> String {
             "loudnorm=I=-16:TP=-1.5:LRA=11:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:linear=true",
             m.input_i, m.input_tp, m.input_lra, m.input_thresh, m.target_offset
         ),
-        // Первый проход не удался (например, файл без звука вовсе) —
-        // лучше однопроходная нормализация, чем никакой.
         None => "loudnorm=I=-16:TP=-1.5:LRA=11".to_string(),
     }
 }
 
-/// -vn — выкидываем видеодорожку (если она есть, для аудиофайла это
-/// no-op). normalize — loudnorm (EBU R128) в два прохода, см.
-/// measure_loudness; несовместим с codec="copy" (фильтры требуют
-/// декодирования), поэтому при normalize=true copy откатывается на
-/// "aac", а не молча игнорирует фильтр.
 pub fn extract_audio(progress: &Progress, path: &str, out_path: &str, opts: &ExtractAudioOpts) -> Result<(), String> {
     let codec = if opts.normalize && opts.codec == "copy" { "aac" } else { opts.codec.as_str() };
     let codec = check_codec(codec, AUDIO_CODECS, "аудио")?;
@@ -499,9 +371,6 @@ pub fn extract_audio(progress: &Progress, path: &str, out_path: &str, opts: &Ext
         .transpose()?;
 
     let duration_hint = probe_media(path).map(|m| m.duration).unwrap_or(0.0);
-    // Измерение — это ещё один полный проход по файлу, то есть примерно
-    // половина всего времени операции; отражаем это в шкале, иначе
-    // полоса стоит на нуле всю первую половину.
     let (measure_span, encode_base) = if opts.normalize { (0.45, 0.45) } else { (0.0, 0.0) };
     let measured = if opts.normalize {
         progress.report(0.0, "Измеряю громкость (EBU R128)");
@@ -539,14 +408,6 @@ pub fn extract_audio(progress: &Progress, path: &str, out_path: &str, opts: &Ext
     )
 }
 
-// ---------- concat_media ----------
-
-/// Совпадают ли входы настолько, что можно склеить их без перекодирования
-/// (-c copy через concat-demuxer) — тот же критерий, которым руководствуется
-/// сам ffmpeg (concat-demuxer требует идентичных кодеков/параметров у всех
-/// входов, иначе результат бьётся или вовсе не собирается): совпадающие
-/// video-кодек+разрешение и совпадающий audio-кодек. Если у файла нет
-/// видео или нет аудио — сравниваем только то, что есть у всех.
 fn same_codecs(infos: &[MediaInfo]) -> bool {
     let first = match infos.first() {
         Some(f) => f,
@@ -567,9 +428,6 @@ fn same_codecs(infos: &[MediaInfo]) -> bool {
     })
 }
 
-/// Возвращает, каким путём прошла склейка — "copy" (быстро, без потерь)
-/// или "reencode" (потребовалось перекодирование из-за разных кодеков у
-/// входов) — фронтенд показывает это пользователю, а не гадает молча.
 pub fn concat_media(progress: &Progress, paths: &[String], out_path: &str) -> Result<String, String> {
     if paths.len() < 2 {
         return Err("Нужно как минимум два файла для склейки.".into());
@@ -599,9 +457,6 @@ pub fn concat_media(progress: &Progress, paths: &[String], out_path: &str) -> Re
         )?;
         Ok("copy".to_string())
     } else {
-        // filter_complex concat — универсальный путь для разнородных
-        // входов, но требует перекодирования: у каждого входа по одному
-        // видео- и аудио-потоку ([i:v:0][i:a:0]...concat=n=N:v=1:a=1).
         if infos.iter().any(|i| i.video.is_none()) || infos.iter().any(|i| i.audio.is_none()) {
             return Err(
                 "Склейка с перекодированием требует, чтобы у всех файлов были и видео-, и аудио-дорожка. \
@@ -632,24 +487,11 @@ pub fn concat_media(progress: &Progress, paths: &[String], out_path: &str) -> Re
     }
 }
 
-// ---------- dub_audio: подмена/подмешивание дорожки дубляжа ----------
-// Самая частая операция команды, которой до сих пор не было ни одной
-// кнопки: «вот видео, вот записанный дубль — собери». Отдельно от
-// mux_media, потому что здесь важен СДВИГ дорожки относительно картинки
-// (дубль почти никогда не ложится кадр-в-кадр) и выбор между «заменить
-// оригинальный звук» и «подмешать поверх приглушённого оригинала».
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DubOpts {
-    /// Сдвиг дорожки дубляжа в секундах: положительный — дубль звучит
-    /// позже картинки, отрицательный — раньше.
     pub offset: f64,
-    /// "replace" — оригинальный звук выбрасывается;
-    /// "mix" — дубль поверх приглушённого оригинала (референс/эффекты);
-    /// "add" — обе дорожки остаются отдельными, дубль по умолчанию.
     pub mode: String,
-    /// Громкость оригинала в режиме "mix", 0..1.
     pub original_volume: f64,
     pub audio_codec: String,
     pub audio_bitrate: Option<String>,
@@ -665,9 +507,6 @@ fn dub_args(video: &str, dub: &str, opts: &DubOpts) -> Result<Vec<String>, Strin
     let codec = check_codec(&opts.audio_codec, AUDIO_CODECS, "аудио")?;
     let mut args: Vec<String> = vec!["-v".into(), "error".into(), "-y".into()];
     args.extend(["-i".into(), video.to_string()]);
-    // -itsoffset ДО -i двигает временные метки именно этого входа —
-    // это и есть сдвиг дубля относительно картинки. Отрицательные
-    // значения ffmpeg принимает наравне с положительными.
     args.extend(["-itsoffset".into(), format!("{:.3}", opts.offset)]);
     args.extend(["-i".into(), dub.to_string()]);
 
@@ -681,9 +520,6 @@ fn dub_args(video: &str, dub: &str, opts: &DubOpts) -> Result<Vec<String>, Strin
             ]);
         }
         "add" => {
-            // Обе дорожки в файле: дубль первой (плеер возьмёт её по
-            // умолчанию), оригинал второй — так делают релизы с
-            // возможностью переключить озвучку.
             args.extend([
                 "-map".into(), "0:v:0".into(),
                 "-map".into(), "1:a:0".into(),
@@ -697,10 +533,6 @@ fn dub_args(video: &str, dub: &str, opts: &DubOpts) -> Result<Vec<String>, Strin
             ]);
         }
         "mix" => {
-            // amix сам по себе делит громкость между входами, поэтому
-            // дубль после него звучал бы вдвое тише. volume=2 на выходе
-            // возвращает его к исходному уровню, а оригинал приглушаем
-            // отдельно ДО смешивания.
             let filter = format!(
                 "[0:a]volume={:.3}[orig];[orig][1:a]amix=inputs=2:duration=first:dropout_transition=0[mix];[mix]volume=2.0[a]",
                 opts.original_volume
@@ -718,8 +550,6 @@ fn dub_args(video: &str, dub: &str, opts: &DubOpts) -> Result<Vec<String>, Strin
     if let Some(b) = opts.audio_bitrate.as_deref().filter(|b| !b.is_empty()) {
         args.extend(["-b:a".into(), check_bitrate(b)?]);
     }
-    // Видео копируется как есть, так что длину задаёт оно; без -shortest
-    // дубль длиннее исходника растянул бы файл чёрным кадром в конце.
     args.push("-shortest".into());
     Ok(args)
 }
@@ -741,13 +571,6 @@ pub fn dub_audio(
     )
 }
 
-// ---------- change_speed ----------
-
-/// atempo умеет менять темп только в пределах 0.5..2.0 за один проход —
-/// всё, что выходит за них, собирается цепочкой из нескольких atempo
-/// (2.5× = atempo=2.0,atempo=1.25). Тон при этом не плывёт: atempo
-/// растягивает время, а не частоту, в отличие от простого изменения
-/// частоты дискретизации.
 fn atempo_chain(speed: f64) -> String {
     let mut parts = Vec::new();
     let mut left = speed;
@@ -770,9 +593,6 @@ fn speed_args(path: &str, speed: f64, keep_pitch: bool) -> Result<Vec<String>, S
     let audio_filter = if keep_pitch {
         atempo_chain(speed)
     } else {
-        // Без сохранения тона — просто переразметка сэмплов: голос
-        // «поедет» вверх/вниз, как на плёнке не той скорости. Иногда
-        // именно это и нужно (эффект), поэтому оставляем выбор.
         format!("asetrate=44100*{speed:.6},aresample=44100")
     };
     Ok(vec![
@@ -802,17 +622,12 @@ pub fn change_speed(
     )
 }
 
-// ---------- кадры: стоп-кадр и контактный лист ----------
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FrameOpts {
-    /// Секунда, с которой брать кадр (для одиночного кадра).
     pub at: f64,
-    /// Сколько кадров в контактном листе; 1 — обычный стоп-кадр.
     pub count: u32,
     pub columns: u32,
-    /// Ширина одного кадра в сетке, пикселей.
     pub width: u32,
 }
 
@@ -827,8 +642,6 @@ fn frame_args(path: &str, duration: f64, opts: &FrameOpts) -> Result<Vec<String>
     if opts.count == 1 {
         return Ok(vec![
             "-v".into(), "error".into(), "-y".into(),
-            // -ss ДО -i — быстрый seek по контейнеру: на двухчасовом
-            // фильме разница между «мгновенно» и «полторы минуты».
             "-ss".into(), format!("{:.3}", opts.at),
             "-i".into(), path.into(),
             "-frames:v".into(), "1".into(),
@@ -841,8 +654,6 @@ fn frame_args(path: &str, duration: f64, opts: &FrameOpts) -> Result<Vec<String>
     if duration <= 0.0 {
         return Err("Не удалось определить длительность — контактный лист не собрать.".into());
     }
-    // Кадры равномерно по всему фильму: fps=N/длительность даёт ровно
-    // count кадров, а tile укладывает их в сетку одним изображением.
     let fps = opts.count as f64 / duration;
     Ok(vec![
         "-v".into(), "error".into(), "-y".into(),
@@ -862,20 +673,10 @@ pub fn extract_frames(progress: &Progress, path: &str, out_path: &str, opts: &Fr
         progress,
         &args,
         Path::new(out_path),
-        // Одиночный кадр мгновенный, контактный лист читает весь файл —
-        // длительность нужна только второму.
         Stage { label: label.into(), base: 0.0, span: 1.0, duration: if opts.count == 1 { 0.0 } else { duration } },
     )
 }
 
-// ---------- GIF ----------
-
-/// GIF в лоб (`-i in.mp4 out.gif`) выходит грязным: формат держит 256
-/// цветов, и ffmpeg без подсказки берёт стандартную палитру вместо
-/// подобранной под конкретный ролик. Правильный путь — два прохода:
-/// palettegen собирает палитру именно этого фрагмента, paletteuse
-/// применяет её с дизерингом. Разница видна невооружённым глазом на
-/// любом градиенте.
 pub fn make_gif(
     progress: &Progress,
     path: &str,
@@ -921,7 +722,6 @@ pub fn make_gif(
         "-lavfi".into(),
         format!("fps={fps},scale={width}:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3"),
     ];
-    // Бесконечное повторение — то, чего от GIF и ждут.
     args.extend(["-loop".into(), "0".into()]);
     run_ffmpeg(
         progress,
@@ -931,32 +731,13 @@ pub fn make_gif(
     )
 }
 
-// ---------- субтитры ----------
-
-/// Путь внутри ЗНАЧЕНИЯ фильтра ffmpeg — не то же самое, что путь в
-/// обычном аргументе. Он проходит через два разбора подряд: сначала
-/// парсер фильтрографа (для него значимы `\`, пробел, `,`, `;`, `[`,
-/// `]`, кавычка), потом парсер опций самого фильтра (для него значимо
-/// ещё и `:` — разделитель параметров, и `=`). Поэтому одни символы
-/// экранируются одним слэшем, а другие — двумя уровнями сразу.
-///
-/// Правило ниже подобрано не по памяти, а прогоном живого ffmpeg на
-/// файле с именем `a\b,c=d[e].srt` в каталоге `C:dir` — см. тест
-/// `escape_filter_path_survives_both_parsers`. Практическое следствие:
-/// виндовый `C:\Видео\ep 1.srt` доезжает до фильтра целым, а раньше
-/// разваливался на двоеточии диска.
 fn escape_filter_path(path: &str) -> String {
     let mut out = String::with_capacity(path.len() + 16);
     for ch in path.chars() {
         match ch {
-            // Оба парсера снимают по одному слэшу — значит, писать надо
-            // четыре, чтобы до файловой системы дошёл один.
             '\\' => out.push_str(r"\\\\"),
-            // Разделитель параметров фильтра: должен пережить первый
-            // разбор экранированным.
             ':' => out.push_str(r"\\:"),
             '\'' => out.push_str(r"\\\'"),
-            // Значимы только для первого разбора — хватает одного слэша.
             ' ' | ',' | ';' | '[' | ']' | '=' => {
                 out.push('\\');
                 out.push(ch);
@@ -972,8 +753,6 @@ fn burn_subtitles_args(video: &str, subs: &str, font_size: u32) -> Result<Vec<St
         return Err("Размер шрифта должен быть от 8 до 96.".into());
     }
     let escaped = escape_filter_path(subs);
-    // force_style работает только для SRT (у ASS свой стиль внутри
-    // файла) — для ASS ffmpeg его просто проигнорирует, это не ошибка.
     let filter = format!("subtitles='{escaped}':force_style='FontSize={font_size}'");
     Ok(vec![
         "-v".into(), "error".into(), "-y".into(),
@@ -1000,10 +779,6 @@ pub fn burn_subtitles(
     )
 }
 
-/// Вытащить дорожку субтитров из контейнера в отдельный файл.
-/// `-c:s` не указываем: ffmpeg сам выберет кодировщик по расширению
-/// (srt -> subrip, ass -> ass), а `copy` сломался бы на несовпадении
-/// форматов, ровно как в mux_media с mp4.
 pub fn extract_subtitles(progress: &Progress, path: &str, out_path: &str, track: u32) -> Result<(), String> {
     let args = vec![
         "-v".to_string(), "error".into(), "-y".into(),
@@ -1018,34 +793,16 @@ pub fn extract_subtitles(progress: &Progress, path: &str, out_path: &str, track:
     )
 }
 
-// ---------- mux_media ----------
-// Муксинг — собрать несколько отдельных дорожек (видео + несколько
-// дублей аудио + субтитры, каждая уже свой файл) в один контейнер с
-// подписанными языком/названием/флагом "по умолчанию" на дорожку —
-// ровно то, чем в команде закрывают "видео отдельно, дубляж на разных
-// языках отдельными файлами" перед раздачей зрителю. См. интерфейс-
-// референс пользователя (Leo MultiTools) — секции Видео/Аудио/Субтитры,
-// у каждой дорожки язык + имя + переключатель "по умолч.".
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MuxTrack {
     pub path: String,
-    pub kind: String, // "video" | "audio" | "subtitle"
+    pub kind: String,
     pub language: Option<String>,
     pub title: Option<String>,
     pub is_default: bool,
 }
 
-/// Каждая дорожка — свой `-i` (проще и надёжнее, чем угадывать номер
-/// потока внутри уже готового мультидорожечного файла: команда и так
-/// хранит каждый дубляж/сабы отдельным файлом, см. референс), поэтому
-/// `-map {i}:0` — просто первый (и обычно единственный) поток входа i.
-/// `-c copy` — без перекодирования: муксинг меняет только контейнер и
-/// метаданные, не сам сигнал. language/title/disposition пишутся через
-/// `-metadata:s:{v|a|s}:{N}`/`-disposition:{v|a|s}:{N}` с отдельным
-/// счётчиком N на каждый тип потока (нумерация потоков одного типа в
-/// выходном файле, не общий индекс среди всех -map).
 pub fn mux_media(tracks: &[MuxTrack], out_path: &str) -> Result<(), String> {
     if tracks.is_empty() {
         return Err("Не выбрано ни одной дорожки для муксинга.".into());
@@ -1060,9 +817,6 @@ pub fn mux_media(tracks: &[MuxTrack], out_path: &str) -> Result<(), String> {
         cmd.args(["-map", &format!("{i}:0")]);
     }
     cmd.args(["-c", "copy"]);
-    // SRT/ASS в MP4 скопировать нельзя — контейнер их не держит, и
-    // ffmpeg падает с "Subtitle codec 94213 not supported"; в MP4 нужен
-    // свой формат субтитров (mov_text).
     let out_ext = ext_of(out_path);
     let has_subtitles = tracks.iter().any(|t| t.kind == "subtitle");
     if has_subtitles && matches!(out_ext.as_str(), "mp4" | "m4v" | "mov") {
@@ -1100,53 +854,30 @@ pub fn mux_media(tracks: &[MuxTrack], out_path: &str) -> Result<(), String> {
     Ok(())
 }
 
-// ---------- запуск ffmpeg: прогресс и отмена ----------
-
-/// Куда на общей шкале 0..1 ложится конкретный запуск ffmpeg. Операция
-/// может состоять из нескольких проходов (нарезка N сегментов + склейка;
-/// измерение громкости + кодирование) — пользователю нужна ОДНА полоса,
-/// а не мигающая от нуля на каждом проходе.
 pub(crate) struct Stage {
     pub label: String,
     pub base: f64,
     pub span: f64,
-    /// Длительность материала этого прохода в секундах; 0 — прогресс не
-    /// считается (файл не удалось пробить ffprobe), полоса просто стоит
-    /// на начале диапазона до конца прохода.
     pub duration: f64,
 }
 
-/// Куда модуль сообщает о ходе работы. Намеренно НЕ `tauri::AppHandle`:
-/// операции ffmpeg сами по себе к окну приложения отношения не имеют, а
-/// с этим типом они целиком проверяются интеграционными тестами ниже —
-/// без запуска Tauri. Событие в вебвью шлёт вызывающая сторона
-/// (main.rs), передавая сюда замыкание.
 pub struct Progress<'a>(pub &'a (dyn Fn(f64, &str) + Sync));
 
 impl Progress<'_> {
     fn report(&self, fraction: f64, label: &str) {
         (self.0)(fraction.clamp(0.0, 1.0), label);
     }
-    /// Прогресс никуда не идёт. Нужен только тестам ниже (в приложении
-    /// у каждой операции есть окно, куда его слать), поэтому cfg(test) —
-    /// иначе обычная сборка ругается на неиспользуемую функцию.
     #[cfg(test)]
     pub fn silent() -> Progress<'static> {
         Progress(&|_, _| {})
     }
 }
 
-/// Текущий ffmpeg-процесс — один на приложение (панель инструментов не
-/// даёт запустить вторую операцию, пока идёт первая). Держим его здесь,
-/// чтобы кнопка «Отмена» из интерфейса могла до него дотянуться.
 fn current_job() -> &'static std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<Child>>>> {
     static JOB: OnceLock<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<Child>>>>> = OnceLock::new();
     JOB.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-/// Отмену отличаем от настоящей ошибки: убитый ffmpeg возвращает
-/// ненулевой код выхода, и без этого флага пользователь видел бы
-/// «ffmpeg завершился с ошибкой» на собственное нажатие «Отмена».
 static CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 pub fn cancel_current_job() -> Result<(), String> {
@@ -1164,12 +895,6 @@ pub fn cancel_current_job() -> Result<(), String> {
     }
 }
 
-/// Строка вида `ключ=значение` из `-progress`, а не текст ошибки.
-/// Ошибки ffmpeg с `-v error` всегда начинаются либо с `[`, либо с
-/// заглавной буквы — под этот шаблон они не попадают. Без фильтра весь
-/// поток прогресса (frame=, fps=, speed=, progress=continue — по
-/// двенадцать строк в секунду) подмешивался в текст ошибки, и настоящая
-/// причина тонула в нём.
 fn is_progress_line(line: &str) -> bool {
     match line.split_once('=') {
         Some((key, _)) => {
@@ -1179,13 +904,6 @@ fn is_progress_line(line: &str) -> bool {
     }
 }
 
-/// Запускает ffmpeg с `-progress pipe:2` (пишет ключ=значение построчно в
-/// stderr) и на каждой строке `out_time_ms=` шлёт событие
-/// `mediatool-progress`. Он же:
-///   * регистрирует процесс, чтобы его можно было убить кнопкой «Отмена»;
-///   * убирает за собой недописанный выходной файл — иначе после ошибки
-///     или отмены на диске остаётся битый файл с правильным именем, и
-///     его легко принять за готовый результат.
 pub(crate) fn run_ffmpeg(
     progress: &Progress,
     args: &[String],
@@ -1195,8 +913,6 @@ pub(crate) fn run_ffmpeg(
     run_ffmpeg_in(progress, args, out_path, stage, None, None)
 }
 
-/// Куда отдавать живой вывод ffmpeg (вид строки, текст): `cmd` — команда запуска, `stat` — сводка раз в секунду
-/// (кадр, fps, скорость, битрейт), `out` / `warn` / `err` — строки самого ffmpeg. Нужен консоли «Сборки у себя».
 pub(crate) type LineSink<'a> = &'a (dyn Fn(&str, &str) + Sync);
 
 fn line_kind(line: &str) -> &'static str {
@@ -1210,7 +926,6 @@ fn line_kind(line: &str) -> &'static str {
     }
 }
 
-/// Аргумент для показа: с пробелами — в кавычках, чтобы команду можно было скопировать и повторить.
 fn shell_arg(arg: &str) -> String {
     if arg.is_empty() || arg.contains(' ') || arg.contains('"') {
         format!("\"{}\"", arg.replace('"', "\\\""))
@@ -1219,8 +934,6 @@ fn shell_arg(arg: &str) -> String {
     }
 }
 
-/// То же, но ffmpeg запускается в рабочей папке `cwd` (если задана): так входные файлы можно называть короткими
-/// именами, и в строках фильтров (subtitles=…) нет путей с двоеточием. `out_path` — всегда абсолютный.
 pub(crate) fn run_ffmpeg_in(
     progress: &Progress,
     args: &[String],
@@ -1243,10 +956,6 @@ pub(crate) fn run_ffmpeg_in(
             shell_arg(&out_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
         ),
     );
-    // Существовал ли файл ДО запуска: если да, удалять его при ошибке
-    // нельзя — это чужой файл, который пользователь выбрал сам (ffmpeg
-    // с -y его, к сожалению, уже перезаписал, но убирать ещё и имя —
-    // делать хуже).
     let existed_before = out_path.exists();
 
     let mut command = hidden_command(ffmpeg);
@@ -1275,7 +984,6 @@ pub(crate) fn run_ffmpeg_in(
     progress.report(stage.base, &stage.label);
     let mut stderr_text = String::new();
     let mut next_log_percent = 5_u8;
-    // Сводка для консоли: последние значения из блока -progress, отдаётся не чаще раза в секунду.
     let (mut frame, mut fps, mut speed, mut bitrate) = (String::new(), String::new(), String::new(), String::new());
     let mut last_stat = std::time::Instant::now();
     for line in BufReader::new(stderr).lines().map_while(Result::ok) {
@@ -1296,9 +1004,6 @@ pub(crate) fn run_ffmpeg_in(
             }
         }
         if let Some(us) = line.strip_prefix("out_time_ms=").and_then(|v| v.trim().parse::<f64>().ok()) {
-            // Название поля у ffmpeg историческое: значение в
-            // МИКРОсекундах, а не в миллисекундах (рядом лежит
-            // out_time_us ровно с тем же числом).
             if stage.duration > 0.0 {
                 let frac = ((us / 1_000_000.0) / stage.duration).clamp(0.0, 1.0);
                 progress.report(stage.base + frac * stage.span, &stage.label);
@@ -1312,9 +1017,6 @@ pub(crate) fn run_ffmpeg_in(
             if !line.trim().is_empty() {
                 say(line_kind(&line), &line);
             }
-            // Ошибка на повреждённом файле умеет быть многотысячной —
-            // в сообщение пользователю столько не нужно, а в лог уедет
-            // всё равно первая строка, она и информативна.
             if stderr_text.len() < 4000 {
                 stderr_text.push_str(&line);
                 stderr_text.push('\n');
@@ -1326,10 +1028,6 @@ pub(crate) fn run_ffmpeg_in(
         let mut c = handle.lock().map_err(|_| "внутренняя ошибка блокировки")?;
         c.wait().map_err(|e| format!("ffmpeg завершился с ошибкой ожидания: {e}"))?
     };
-    // Чистим слот, только если он всё ещё указывает на ЭТУ задачу: если
-    // где-то параллельно уже запущена другая (слот успел смениться),
-    // затирать её нельзя — иначе «Отмена» и cancel_current_job перестают
-    // попадать в реально работающий процесс.
     if let Ok(mut slot) = current_job().lock() {
         if matches!(slot.as_ref(), Some(current) if std::sync::Arc::ptr_eq(current, &handle)) {
             *slot = None;
@@ -1371,23 +1069,10 @@ mod tests {
         Command::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false)
     }
 
-    // run_ffmpeg делит один процессный `current_job`/CANCEL_REQUESTED на
-    // все вызовы (см. комментарий у current_job() выше) — это осознанный
-    // компромисс для приложения, где панель не даёт запустить вторую
-    // операцию, пока идёт первая. Но `cargo test` по умолчанию гоняет
-    // тесты в несколько потоков ОДНОГО процесса, и тесты этого файла
-    // тогда нарушают то самое предположение: два run_ffmpeg из разных
-    // тестов реально работают параллельно и топчут чужой слот/флаг —
-    // тест с "Отмена" мог убить процесс от другого теста, а тот
-    // получал пустой stderr и падал с "ffmpeg завершился с ошибкой".
-    // Не баг прод-кода — баг предположения тестов, лечится сериализацией
-    // именно тестов, гоняющих реальный ffmpeg через run_ffmpeg.
     fn ffmpeg_test_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
-
-    // ---------- чистые функции без ffmpeg ----------
 
     #[test]
     fn ext_of_reads_extension_or_defaults_to_mp4() {
@@ -1404,7 +1089,7 @@ mod tests {
             audio: Some(StreamInfo { codec: "aac".into(), ..Default::default() }),
         };
         let b = MediaInfo {
-            duration: 2.0, // длительность не участвует в сравнении кодеков
+            duration: 2.0,
             container: "mov,mp4".into(),
             video: Some(StreamInfo { codec: "h264".into(), width: Some(1920), height: Some(1080), ..Default::default() }),
             audio: Some(StreamInfo { codec: "aac".into(), ..Default::default() }),
@@ -1433,8 +1118,6 @@ mod tests {
     fn same_codecs_empty_list_is_false() {
         assert!(!same_codecs(&[]));
     }
-
-    // ---------- валидация параметров ----------
 
     #[test]
     fn bitrate_accepts_ffmpeg_notation_and_rejects_everything_else() {
@@ -1470,7 +1153,6 @@ mod tests {
         let args = transcode_args("in.mov", "out.mp4", &opts).expect("валидные параметры");
         assert!(args.windows(2).any(|w| w == ["-pix_fmt", "yuv420p"]), "{args:?}");
         assert!(args.windows(2).any(|w| w == ["-vf", "scale=-2:720"]), "{args:?}");
-        // faststart — только для контейнеров, где он вообще имеет смысл.
         assert!(args.windows(2).any(|w| w == ["-movflags", "+faststart"]), "{args:?}");
         let webm = transcode_args("in.mov", "out.webm", &opts).unwrap();
         assert!(!webm.iter().any(|a| a == "+faststart"), "{webm:?}");
@@ -1511,8 +1193,6 @@ mod tests {
 
     #[test]
     fn loudnorm_measurement_is_read_from_ffmpeg_stderr() {
-        // Формат ровно такой, каким его печатает сам ffmpeg
-        // (loudnorm=print_format=json) — с предшествующим шумом в потоке.
         let stderr = r#"[Parsed_loudnorm_0 @ 0x55] 
 {
 	"input_i" : "-27.61",
@@ -1529,24 +1209,18 @@ mod tests {
         let filter = loudnorm_filter(Some(&m));
         assert!(filter.contains("measured_I=-27.61"), "{filter}");
         assert!(filter.contains("linear=true"), "{filter}");
-        // Без измерений — однопроходный вариант, но не паника и не пустая строка.
         assert_eq!(loudnorm_filter(None), "loudnorm=I=-16:TP=-1.5:LRA=11");
         assert!(parse_loudnorm_json("совсем не json").is_none());
     }
 
-    // ---------- новые операции ----------
-
     #[test]
     fn escape_filter_path_survives_both_parsers() {
-        // Эталон подобран прогоном живого ffmpeg (см. докстроку функции):
-        // обратный слэш — четырьмя, двоеточие — двумя, остальное одним.
         assert_eq!(
             escape_filter_path(r"C:\Видео\ep 1.srt"),
             r"C\\:\\\\Видео\\\\ep\ 1.srt"
         );
         assert_eq!(escape_filter_path("a'b.srt"), r"a\\\'b.srt");
         assert_eq!(escape_filter_path("a,b=c[d].srt"), r"a\,b\=c\[d\].srt");
-        // Обычный путь без спецсимволов не должен обрастать мусором.
         assert_eq!(escape_filter_path("/home/dub/ep1.srt"), "/home/dub/ep1.srt");
     }
 
@@ -1560,8 +1234,6 @@ mod tests {
             audio_bitrate: Some("192k".into()),
         };
         let args = dub_args("video.mp4", "dub.wav", &opts).expect("валидные параметры");
-        // -itsoffset должен стоять ПЕРЕД вторым -i, иначе он сдвинет не
-        // ту дорожку (или вообще ничего).
         let off = args.iter().position(|a| a == "-itsoffset").expect("нет -itsoffset");
         let dub_input = args.iter().position(|a| a == "dub.wav").expect("нет дубля");
         let video_input = args.iter().position(|a| a == "video.mp4").expect("нет видео");
@@ -1580,8 +1252,6 @@ mod tests {
         let args = dub_args("v.mp4", "d.wav", &opts).unwrap();
         let filter = args.iter().find(|a| a.contains("amix")).expect("нет amix");
         assert!(filter.contains("volume=0.150"), "{filter}");
-        // amix делит громкость между входами — без обратного умножения
-        // дубляж звучал бы вдвое тише оригинальной записи.
         assert!(filter.contains("volume=2.0"), "{filter}");
     }
 
@@ -1599,8 +1269,6 @@ mod tests {
 
     #[test]
     fn atempo_chain_stays_within_the_filters_limits() {
-        // atempo принимает только 0.5..2.0 — всё остальное собирается
-        // цепочкой, иначе ffmpeg отказывается строить фильтр.
         for speed in [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0] {
             let chain = atempo_chain(speed);
             let mut product = 1.0_f64;
@@ -1617,7 +1285,6 @@ mod tests {
     fn speed_args_invert_pts_and_reject_extremes() {
         let args = speed_args("in.mp4", 2.0, true).unwrap();
         let filter = args.iter().find(|a| a.contains("setpts")).unwrap();
-        // Вдвое быстрее — значит метки времени вдвое ближе.
         assert!(filter.contains("setpts=0.500000*PTS"), "{filter}");
         assert!(filter.contains("atempo"), "{filter}");
         let no_pitch = speed_args("in.mp4", 2.0, false).unwrap();
@@ -1632,8 +1299,6 @@ mod tests {
         let args = frame_args("in.mp4", 600.0, &opts).unwrap();
         let ss = args.iter().position(|a| a == "-ss").unwrap();
         let i = args.iter().position(|a| a == "-i").unwrap();
-        // -ss до -i: на двухчасовом файле это разница между мгновением и
-        // полной перемоткой.
         assert!(ss < i, "{args:?}");
         assert_eq!(args[ss + 1], "61.500");
         assert!(args.windows(2).any(|w| w == ["-frames:v", "1"]));
@@ -1644,10 +1309,8 @@ mod tests {
         let opts = FrameOpts { at: 0.0, count: 12, columns: 4, width: 320 };
         let args = frame_args("in.mp4", 600.0, &opts).unwrap();
         let vf = args.iter().find(|a| a.contains("tile")).unwrap();
-        // 12 кадров на 600 секунд = один кадр в 50 секунд.
         assert!(vf.contains("fps=0.020000"), "{vf}");
         assert!(vf.contains("tile=4x3"), "{vf}");
-        // Без известной длительности равномерно разложить нечего.
         assert!(frame_args("in.mp4", 0.0, &opts).is_err());
         let too_many = FrameOpts { at: 0.0, count: 9999, columns: 4, width: 320 };
         assert!(frame_args("in.mp4", 600.0, &too_many).is_err());
@@ -1663,11 +1326,6 @@ mod tests {
         assert!(burn_subtitles_args("v.mp4", "s.srt", 2).is_err());
         assert!(burn_subtitles_args("v.mp4", "s.srt", 500).is_err());
     }
-
-    // ---------- интеграционные (нужен реальный ffmpeg/ffprobe в PATH) ----------
-    // Тот же приём, что у export_clip_produces_wav_of_requested_duration в
-    // audio_qc.rs: пропускаем, а не падаем, если на машине, где гоняют
-    // тесты, ffmpeg не установлен вовсе.
 
     fn make_test_video(dir: &std::path::Path, name: &str, seconds: u32) -> String {
         let out = dir.join(name);
@@ -1745,10 +1403,7 @@ mod tests {
         let out = dir.join("project_mt_cancel_out.mp4");
         let _ = std::fs::remove_file(&out);
 
-        // Отмену шлём из другого потока, как это делает кнопка в
-        // интерфейсе: сама операция в это время блокирует свой поток.
         let canceller = std::thread::spawn(|| {
-            // Дать ffmpeg реально стартовать — до spawn отменять нечего.
             for _ in 0..100 {
                 std::thread::sleep(std::time::Duration::from_millis(50));
                 if cancel_current_job().is_ok() {
@@ -1758,7 +1413,6 @@ mod tests {
             false
         });
 
-        // Заведомо медленное кодирование, чтобы успеть отменить.
         let opts = TranscodeOpts {
             video_codec: Some("libx264".into()),
             audio_codec: Some("aac".into()),
@@ -1836,10 +1490,6 @@ mod tests {
         assert!(info.video.is_some(), "видео-поток должен быть в результате");
         assert!(info.audio.is_some(), "хотя бы один аудио-поток должен быть в результате");
 
-        // Число аудио-потоков и их language/disposition — probe_media
-        // отдаёт только первый поток каждого типа, для точной проверки
-        // метаданных читаем ffprobe напрямую тем же приёмом, что и сам
-        // probe_media (JSON), без расширения MediaInfo ради одного теста.
         let ffprobe_out = Command::new(resolve_ffprobe())
             .args(["-v", "error", "-select_streams", "a", "-show_entries", "stream_tags=language,title:stream_disposition=default", "-of", "json"])
             .arg(&out)

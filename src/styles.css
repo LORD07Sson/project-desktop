@@ -1,12 +1,4 @@
-/* Project Desktop — те же цветовые токены, что и в мини-аппе
-   (miniapp/static/index.html), плюс светлая тема и более "десктопная"
-   плотная раскладка (таблица, боковые панели), которой у мини-аппа нет. */
-
 [hidden] { display: none !important; }
-
-/* ---------- Фокус для клавиатурной навигации ----------
-   :focus-visible — чтобы кольцо появлялось только при Tab/стрелках,
-   а не при обычном клике мышью (как в остальном UI студии). */
 :focus-visible {
   outline: 2px solid var(--fire);
   outline-offset: 2px;
@@ -19,17 +11,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .btn:focus-visible, .icon-btn:focus-visible { outline-offset: 2px; }
 
 :root {
-  /* Без этого нативные виджеты (input type="date"/"month"/"color",
-     системный скроллбар и т.п.) красятся под светлую тему браузера
-     поверх нашего тёмного фона — сегменты "mm/dd/yyyy" почти
-     нечитаемы (тёмный текст на тёмной плашке). Обнаружено на новом
-     input[type="month"] в шапке доски, но баг был общий для ЛЮБОГО
-     нативного date/month-поля в приложении, просто до сих пор такого
-     поля в интерфейсе не было. Переопределяется ниже в
-     :root[data-theme="light"] — тема переключаема (theme-toggle). */
   color-scheme: dark;
-  /* Цвета логотипа Project: почти чёрный тёплый фон, огненное
-     свечение снизу, акцент — перо от оранжевого к золотому. */
   --bg: #070403;
   --bg-2: #0d0806;
   --bg-glow-1: #a8330d;
@@ -59,30 +41,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   --s-fix: #f0a063;
   --s-done: #33d17a;
   --s-stop: #ff6b6b;
-
-  /* Шкала радиусов — единая для всех компонентов вместо разбросанных
-     магических чисел (10px/12px/14px/16px/18px встречались вперемешку). */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 22px;
   --radius: var(--radius-md);
-
-  /* Шкала теней — от едва заметной (кнопки/чипы) до плавающей (модалки/поповеры). */
   --shadow-xs: 0 1px 2px rgba(0,0,0,.22);
   --shadow-sm: 0 3px 10px -4px rgba(0,0,0,.35);
   --shadow: 0 4px 16px -4px rgba(0,0,0,.4);
   --shadow-md: 0 10px 26px -10px rgba(0,0,0,.45);
   --ease: cubic-bezier(.22, .9, .3, 1);
-
-  /* Стеклянные поверхности — те же токены и та же логика, что в
-     мини-аппе (miniapp/static/index.html): точечно на шапке, боковой
-     панели вкладок, модалках/командной палитре и всплывающих карточках
-     (аватар/тайтл/контекстное меню) — там элемент реально лежит поверх
-     остального интерфейса, и размытие подчёркивает это. Карточки
-     контента (доска, bento, лента, таблица) остаются непрозрачными —
-     они не перекрывают ничего под собой, стекло там было бы просто
-     полупрозрачным фоном без физического смысла. */
   --glass-bg: rgba(22, 12, 8, .62);
   --glass-bg-strong: rgba(14, 8, 6, .82);
   --glass-border: rgba(255, 170, 120, .1);
@@ -98,8 +66,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   --bg-2: #fdf9f6;
   --bg-glow-1: #ffc9a8;
   --bg-glow-2: #fbeee6;
-  /* Цвета статусов глубже, чем в тёмной теме: яркие #33d17a/#f0a063 на белом
-     читались бледно (контраст ~2:1) в чипах, «застряло», «просрочено». */
   --s-draft: #6f625c; --s-work: #9a7300; --s-review: #2563c9; --s-fix: #b4570f; --s-done: #15864a; --s-stop: #c62f2f;
   --surface: #ffffff;
   --surface-2: #f6ede7;
@@ -118,11 +84,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   --shadow-sm: 0 3px 10px -4px rgba(60,25,10,.12);
   --shadow: 0 2px 14px rgba(60,25,10,.08);
   --shadow-md: 0 10px 26px -10px rgba(60,25,10,.16);
-
-  /* Та же стеклянная подложка, но на светлой теме: тёмное полупрозрачное
-     стекло на светлом фоне читалось бы грязным пятном, поэтому здесь
-     это светлое стекло — белёсая полупрозрачная поверхность вместо
-     чёрной. */
   --glass-bg: rgba(255, 250, 246, .7);
   --glass-bg-strong: rgba(255, 255, 255, .84);
   --glass-border: rgba(120, 50, 20, .1);
@@ -130,10 +91,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   --shadow-lg: 0 18px 40px -14px rgba(60,25,10,.22), 0 2px 8px rgba(60,25,10,.1);
   --shadow-float: 0 10px 30px -8px rgba(60,25,10,.16), 0 1px 0 rgba(255,255,255,.6) inset;
 }
-
-/* Анимируемый угол для вращающихся конусных обводок карточек (.bcell,
-   .board-card) — без @property браузер не умеет интерполировать угол
-   плавно, только резко перескакивал бы между значениями. */
 @property --angle {
   syntax: '<angle>';
   inherits: false;
@@ -146,10 +103,6 @@ html, body { height: 100%; }
 
 body {
   margin: 0;
-  /* Лёгкое фирменное свечение по углам окна вместо плоской заливки —
-     без него стеклянным шапке/боковой панели ниже было бы физически
-     нечего размывать (backdrop-filter размывает то, что реально лежит
-     под элементом; на сплошном var(--bg) эффект был бы незаметен). */
   background:
     radial-gradient(40% 35% at 100% 0%, color-mix(in srgb, var(--bg-glow-1) 22%, transparent), transparent 70%),
     radial-gradient(90% 60% at 50% 115%, var(--bg-glow-1) 0%, var(--bg-glow-2) 42%, var(--bg) 100%);
@@ -157,27 +110,19 @@ body {
   color: var(--ink);
   font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
-  /* Интерфейсный хром (кнопки, вкладки, заголовки колонок) выделять мышью незачем — иначе драг карточки на доске начинает таскать выделение текста. Но сами данные выделять надо: номер отчёта, текст заметки, сообщение об ошибке — их переносят в переписку руками. */
   user-select: none;
 }
-
-/* Содержательный текст — выделяется и копируется как обычно. */
 .content, .sheet, .statusbar, .feed-list, .note-item, .detail-section,
 .profile-bio, .status-quote, .bento, .mini-list, .td-body, .toast-text,
 #auth-error, .auth-card p, code {
   user-select: text;
 }
-/* ...кроме кнопок и полей выбора внутри них — там выделение только мешает. */
 .sheet .btn, .sheet .icon-btn, .sheet .chip, .content .btn, .content .icon-btn,
 .bento .btn, .mini-list .btn {
   user-select: none;
 }
 
 input, button, select { font: inherit; color: inherit; }
-
-/* Файл из проводника занесён над окном, пока открыта карточка отчёта
-   (см. file-drop.js/onDragDropEvent) — рамка-подсказка "сюда можно
-   отпустить", а не молчаливое ожидание без единого сигнала. */
 body.drop-armed { outline: 3px dashed var(--fire); outline-offset: -3px; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -213,9 +158,6 @@ body.drop-armed { outline: 3px dashed var(--fire); outline-offset: -3px; }
 .btn.ghost:hover { color: var(--ink); background: var(--surface-2); }
 .btn.danger { border-color: color-mix(in srgb, var(--s-stop) 55%, var(--line)); color: var(--s-stop); background: transparent; }
 .btn.danger:hover { background: var(--s-stop); color: var(--on-accent); border-color: var(--s-stop); }
-/* pointer-events:none у выключенной кнопки убивает и tooltip, и курсор
-   «недоступно» — оставляем события, но глушим нажатие видом и
-   отсутствием обработчиков (их снимает сам JS, выставляя disabled). */
 .btn:disabled, .icon-btn:disabled { opacity: .42; cursor: not-allowed; filter: grayscale(.4); }
 .btn:disabled:hover, .icon-btn:disabled:hover { background: var(--surface); border-color: var(--line); }
 .btn.primary:disabled:hover { background: var(--accent-grad); filter: grayscale(.4); }
@@ -233,11 +175,6 @@ body.drop-armed { outline: 3px dashed var(--fire); outline-offset: -3px; }
   transition: border-color .15s var(--ease), transform .12s var(--ease);
 }
 .chip.overdue { border-color: var(--s-stop); color: var(--s-stop); }
-/* Статусный чип был нейтрально-серым с одной цветной точкой внутри —
-   тот же пробел, что уже закрыт у счётчика колонки доски (#82):
-   тонируем в цвет самого статуса (STATUS_COLOR_VAR), а не оставляем
-   цвет только на точке. Общий класс на три места вывода статуса
-   (Список, карточка отчёта, пин-окно) — один источник правды. */
 .chip.status-chip {
   background: color-mix(in srgb, var(--chip-accent) 16%, var(--surface-2));
   border-color: color-mix(in srgb, var(--chip-accent) 35%, var(--line));
@@ -251,12 +188,8 @@ body.drop-armed { outline: 3px dashed var(--fire); outline-offset: -3px; }
 .dot.done { background: var(--s-done); }
 .dot.stop { background: var(--s-stop); }
 
-/* ---------- Splash / auth ---------- */
-
 #auth-screen {
   position: fixed;
-  /* Ниже полосы заголовка: она общая для всех экранов и перекрывать её
-     нельзя — иначе до входа окно нечем ни двигать, ни закрыть. */
   inset: var(--titlebar-h) 0 0 0;
   display: flex;
   align-items: center;
@@ -303,52 +236,27 @@ body.drop-armed { outline: 3px dashed var(--fire); outline-offset: -3px; }
   margin-top: 10px;
   min-height: 16px;
 }
-
-/* ---------- App shell ---------- */
-
-/* Полоса заголовка теперь общая и лежит ВНЕ #app-screen (её видно и на
-   экране входа), поэтому приложению остаётся высота окна за вычетом
-   полосы, а не весь экран — иначе нижний край контента уезжал бы под
-   границу окна ровно на её высоту. */
 #app-screen {
   height: calc(100vh - var(--titlebar-h));
   display: flex;
   flex-direction: column;
 }
-
-/* ---------- Полоса заголовка окна ----------
-   Одна на всё приложение: системный заголовок выключен
-   (tauri.conf.json: decorations:false), потому что был второй полосой
-   над этой же шапкой. Высота вынесена в токен — от неё отступают
-   экраны загрузки и входа, лежащие поверх всего (position:fixed). */
 :root { --titlebar-h: 46px; }
 
 .titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* Правый край вплотную: кнопки окна должны доходить до самого угла,
-     как системные, иначе в углу остаётся мёртвая полоса, по которой
-     пользователь промахивается мимо «закрыть». */
   padding: 0 0 0 16px;
   height: var(--titlebar-h);
   flex: none;
   border-bottom: 1px solid var(--glass-border);
-  /* Настоящее стекло — та же подложка/блюр, что в шапке мини-аппа:
-     полупрозрачная заливка + backdrop-filter, чтобы фирменное свечение
-     из фона окна (см. body выше) просвечивало размытым пятном, а не
-     плоским цветом. */
   background: var(--glass-bg-strong);
   backdrop-filter: blur(var(--glass-blur)) saturate(150%);
   box-shadow: var(--shadow-float);
   position: relative;
-  /* Выше splash (999): до входа окно тоже нужно чем-то двигать и
-     закрывать, иначе экран загрузки накрывает кнопки окна. */
   z-index: 1000;
 }
-
-/* Развёрнутое окно Windows прижимается вплотную к краям экрана —
-   скруглять ему углы и рисовать рамку уже нечему и незачем. */
 body.window-maximized .titlebar { border-radius: 0; }
 
 .titlebar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -363,13 +271,6 @@ body.window-maximized .titlebar { border-radius: 0; }
 
 .titlebar-right { display: flex; align-items: stretch; gap: 0; }
 .titlebar-apps { display: flex; align-items: center; gap: 8px; padding-right: 10px; }
-
-/* ---------- Кнопки окна ----------
-   Геометрия как у системных в Windows 11: 46×высота полосы, иконка
-   10×10 по центру, закрытие краснеет. Своя отрисовка нужна ровно
-   потому, что системную полосу мы убрали; всё остальное поведение
-   (тянуть за полосу, Aero Snap, изменение размера за край) остаётся
-   системным — окно сохраняет WS_THICKFRAME и без заголовка. */
 .window-controls { display: flex; align-items: stretch; flex: none; }
 .win-btn {
   width: 46px;
@@ -378,8 +279,6 @@ body.window-maximized .titlebar { border-radius: 0; }
   color: var(--ink-soft);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  /* Никаких transform/скруглений, в отличие от .btn: системные кнопки
-     окна не «подпрыгивают» — заливка на всю высоту полосы и всё. */
   transition: background .12s ease, color .12s ease;
 }
 .win-btn svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.1px; }
@@ -388,17 +287,11 @@ body.window-maximized .titlebar { border-radius: 0; }
 .win-btn:active { background: var(--surface-2); }
 .win-close:hover { background: #c42b1c; color: #fff; }
 .win-close:active { background: #b02a1c; color: #fff; }
-/* Иконка «развернуть» и «свернуть в окно» — одна кнопка, две картинки;
-   какая видна, решает класс на body (см. window-chrome.js). */
 .win-btn .ic-restore { display: none; }
 body.window-maximized .win-btn .ic-max { display: none; }
 body.window-maximized .win-btn .ic-restore { display: block; }
 
-/* На широком окне ПК это оставляло пустые поля по бокам у самого контента; вертикальный sidebar с иконками (тот же приём, что у VS Code/Slack/Linear) использует эту ширину и явно читается как desktop-приложение, а не перенесённая веб-страница. */
-
 .app-body { flex: 1; display: flex; min-height: 0; }
-
-/* Подписанный сайдбар (логотип + сгруппированные пункты с текстом) — перенесено вживую с референса пользователя (Dribbble: Xentra Digital Marketing Dashboard, dribbble.com/shots/27265906): там боковая панель не узкая иконка-полоска, а широкая, с секциями "MAIN MENU"/ "MANAGEMENT" и подписью у каждого пункта. */
 
 .sidebar {
   flex: none;
@@ -455,14 +348,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .tab-btn:hover { color: var(--ink); background: var(--surface-2); }
 .tab-btn.active { color: var(--ink); }
 .tab-btn.active .tab-lbl { font-weight: 600; }
-
-/* Вложенные пункты под «Доской» — статусы отчётов с точкой-цветом и
-   числом справа. Перенесено вживую с референса пользователя (Dribbble:
-   Xentra Digital Marketing Dashboard, dribbble.com/shots/27265906) —
-   там под "Projects" раскрыт именно такой список: маленькая точка,
-   подпись, голое число справа (не бейдж с заливкой — у самих пунктов
-   верхнего уровня цветной фон уже есть, второй слой заливки здесь был
-   бы лишним). Отступ слева — та же лесенка, что в файловом дереве. */
 .sidebar-sub { display: flex; flex-direction: column; padding: 2px 0 4px 8px; }
 .sidebar-sub-item {
   display: flex; align-items: center; gap: 8px;
@@ -475,25 +360,16 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .sidebar-sub-item:hover { background: var(--surface-2); color: var(--ink); }
 .sidebar-sub-item .dot { width: 6px; height: 6px; flex: none; }
 .sidebar-sub-item .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Референс держит число в собственной тёмной плашке, не голым текстом
-   рядом с подписью — тот же приём, что уже применён к .sidebar-team-cnt
-   и счётчикам колонок доски. */
 .sidebar-sub-item .cnt {
   font-size: 11px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums;
   background: var(--surface-3); border-radius: 999px; padding: 1px 8px;
 }
-
-/* Раскрытый список статусов на такой ширине тем более не поместится читаемо. */
 @media (max-width: 860px) {
   .sidebar { width: 60px; align-items: center; padding: 12px 8px; }
   .sidebar-brand-txt, .sidebar-group-label, .tab-btn .tab-lbl, .sidebar-sub { display: none; }
   .sidebar-brand { padding: 4px 0 12px; justify-content: center; }
   .tab-btn { width: 44px; height: 44px; padding: 0; justify-content: center; }
 }
-
-/* Счётчик непрочитанного на иконке вкладки (сейчас — «Лента»,
-   см. feed-badge.js) — навешивается/снимается JS-ом, разметки в
-   index.html под него нет. */
 .tab-badge {
   position: absolute; top: 2px; right: 2px; line-height: 15px; text-align: center;
   box-shadow: 0 0 0 2px var(--bg-2);
@@ -507,24 +383,7 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
-/* overflow-x:hidden — защитный барьер: что бы ни поплыло за границу
-   вправо (см. min-width:0 у .page-header/.board-toolbar выше — сама
-   причина уже исправлена, это подстраховка на будущее), оно обрежется
-   здесь, а не потребует горизонтальной прокрутки всей вкладки.
-   Горизонтальный скролл канбан-доски (.board) при этом не страдает —
-   он уже скроллится сам по себе (overflow-x:auto на .board), это
-   вложенный, независимый скролл-контейнер. */
 .scroll-panel { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 24px; }
-
-/* На «Доске» справа — реальные действия (месяц/Импорт/Добавить проект, см. board.js: POST /api/reports через create_report, тот же, что у голосового пайплайна бота, plus upload_report_file для «Импорт» — не кнопки-пустышки). На «Обзоре» действий нет — там нечего создавать напрямую, только заголовок+подпись. */
-/* min-width:0 на обоих флекс-элементах — без него заголовок (первый
-   элемент) отказывается сжиматься ниже своей "естественной" ширины
-   (умолчание flex-элемента — min-width:auto, а не 0), и на узких/
-   неровных ширинах окна кнопки справа вместо переноса на вторую
-   строку вылезали за правый край .scroll-panel, требуя горизонтальной
-   прокрутки, чтобы их увидеть целиком — тот самый "вылетает за
-   границу", который заметил пользователь. */
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; min-width: 0; }
 .page-header > div:first-child { min-width: 0; }
 .page-header h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px; letter-spacing: -.3px; }
@@ -537,18 +396,12 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 }
 .page-header-actions input[type="month"]:focus { border-color: var(--fire); outline: none; }
 
-/* ---------- Bento-грид (Обзор / Профиль) ---------- */
-
 .bento {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px;
   margin-bottom: 16px;
 }
-
-/* Превью-канбан на Обзоре — компактная витрина «Доски» (карточки те
-   же .board-card, что и там, см. Overview.jsx: boardCardHtml), только
-   уже без drag&drop — сама работа с переносом остаётся на «Доске». */
 .preview-kanban-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -576,9 +429,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .bcell:hover { border-color: color-mix(in srgb, var(--fire) 35%, var(--line)); }
 .bcell.wide, .bcell-hero { grid-column: span 2; }
 @media (max-width: 640px) { .bcell.wide, .bcell-hero { grid-column: span 1; } }
-
-/* На всю ширину бенто — для карточек, которым тесно даже в span 2
-   (превью-канбан на Обзоре: 4 колонки доски внутри одной клетки). */
 .bcell.full { grid-column: 1 / -1; }
 @keyframes bcell-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -596,20 +446,7 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .bcell .big-num.warn { color: var(--s-work); }
 .bcell .big-num.danger { color: var(--s-stop); }
 .bcell .sub { color: var(--ink-dim); font-size: 11px; margin-top: 6px; }
-
-/* KPI-плитки с дополнительной визуализацией (спарклайн/кольцо) —
-   число и график в одной строке, число не подстраивается под график:
-   тренд — это контекст сбоку, а не равноправная часть заголовка.
-   justify-content больше не space-between: третий постоянный элемент
-   (kpi-icon) в начале строки иначе растащило бы иконку и число по
-   разным углам вместо соседства — спарклайн/кольцо теперь прижимаются
-   вправо собственным margin-left:auto. */
 .kpi-row { display: flex; align-items: center; gap: 10px; }
-
-/* Цветная иконка-плашка перед числом KPI-плитки — перенесено вживую с
-   референса пользователя (Dribbble: Xentra Digital Marketing
-   Dashboard, dribbble.com/shots/27265906): там у каждой карточки в
-   шапке слева от числа сидит закруглённый цветной квадрат с пиктограммой. */
 .kpi-icon {
   width: 34px; height: 34px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
@@ -617,20 +454,11 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   position: relative;
   transition: transform .4s cubic-bezier(.34, 1.56, .64, 1), filter .25s var(--ease), box-shadow .3s var(--ease);
 }
-/* Плитка целиком реагирует, не только текст — иконка подрастает,
-   покачивается и обрастает собственным цветным свечением (не только
-   filter:brightness на самой плашке — box-shadow даёт настоящий
-   светящийся ореол вокруг, читаемый даже боковым зрением). */
 .bcell:hover .kpi-icon {
   transform: scale(1.18) rotate(-6deg) translateY(-1px);
   filter: brightness(1.25) saturate(1.4);
   box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 12%, transparent), 0 6px 18px -4px color-mix(in srgb, currentColor 55%, transparent);
 }
-/* currentColor у .kpi-icon по умолчанию наследуется от .ink — задаём
-   явно тем же цветом, что и инлайновая заливка фона (см. Overview.jsx:
-   background: color-mix(currentVar 20%, surface)), чтобы box-shadow
-   светился в тон иконке, а не в нейтральный ink. Цвет прокидывается
-   инлайн-стилем `color` рядом с `background` в Overview.jsx. */
 
 .bento-empty {
   text-align: center;
@@ -639,15 +467,10 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   font-size: 13px;
 }
 
-/* ---------- Донат-чарт ---------- */
-
 .donut-wrap { display: flex; align-items: center; gap: 16px; }
 .donut-svg circle.donut-seg {
   transition: stroke-dashoffset 1s cubic-bezier(.22,.9,.3,1), filter .15s ease, opacity .15s ease;
 }
-/* Не трогаем transform/stroke-width у самого круга — на нём уже висит
-   SVG-атрибут transform="rotate(...)" для позиционирования сегмента,
-   и CSS-transform его бы перезаписал. Подсвечиваем через filter + притушиваем соседей. */
 .donut-svg:has(circle.donut-seg:hover) circle.donut-seg:not(:hover) { opacity: .55; }
 .donut-svg circle.donut-seg:hover {
   filter: drop-shadow(0 0 4px rgba(var(--fire-rgb), .6));
@@ -666,12 +489,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .donut-legend-item .name { flex: 1; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .donut-legend-item .count { font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* ---------- Сегментированный прогресс-бар (обзор, «Всего активных») ----------
-   Перенесено вживую с референса пользователя (Dribbble: Xentra Digital
-   Marketing Dashboard, dribbble.com/shots/27265906) — карточка
-   «Projects Performance»: бейджи с числом над полосой, сама полоса из
-   цветных долей, легенда без цифр под ней (цифры уже в бейджах). */
-
 
 
 
@@ -682,8 +499,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .delta-pill.up { color: var(--s-done); background: color-mix(in srgb, var(--s-done) 18%, transparent); }
 .delta-pill.down { color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 18%, transparent); }
 
-/* ---------- Динамика за 14 дней (обзор) ---------- */
-
 .trend-chart { display: flex; align-items: flex-end; gap: 3px; height: 74px; margin-top: 8px; }
 .trend-col { flex: 1; display: flex; align-items: flex-end; gap: 1px; height: 100%; }
 .trend-bar-fill { flex: 1; min-height: 0; border-radius: 2px 2px 0 0; transition: height .8s cubic-bezier(.22,.9,.3,1); }
@@ -692,8 +507,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .trend-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-dim); margin-top: 4px; }
 .trend-legend-row { display: flex; gap: 14px; font-size: 11px; color: var(--ink-soft); margin-top: 6px; }
 .trend-legend-row i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
-
-/* ---------- Список: топ-исполнители / дни рождения / роли ---------- */
 
 .mini-list { display: flex; flex-direction: column; gap: 8px; }
 .mini-row {
@@ -717,10 +530,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   transition: width 1s cubic-bezier(.22,.9,.3,1);
 }
 
-/* ---------- Профиль (портировано из мини-аппа один в один —
-   баннер + аватар внахлёст, тир-кольцо по стажу, DEV-плашка,
-   медальный rank-tag, цитата статуса, «Структура загрузки») ---------- */
-
 .avatar {
   flex: none;
   width: 28px; height: 28px;
@@ -735,9 +544,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar.xl { width: 68px; height: 68px; font-size: 26px; border-radius: 20px; box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--line); }
 .avatar.sm { width: 20px; height: 20px; font-size: 10px; }
-/* "+N" на конце стека вместо огненного градиента — тот же приём, что
-   у референса (кружок "21+" в шапке): нейтральный, не претендует быть
-   чьим-то инициалом. */
 .avatar-overflow { background: var(--surface-3); color: var(--ink-soft); font-size: 8.5px; font-weight: 700; }
 
 .profile-banner-wrap {
@@ -787,8 +593,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .rank-tag.rank-1 { background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, var(--line)); }
 .rank-tag.rank-2 { background: color-mix(in srgb, #b9c2cc 20%, transparent); color: #cfd6dd; border-color: color-mix(in srgb, #b9c2cc 50%, var(--line)); }
 .rank-tag.rank-3 { background: color-mix(in srgb, #b0774a 20%, transparent); color: #d99a6c; border-color: color-mix(in srgb, #b0774a 50%, var(--line)); }
-
-/* Карточка-цитата статуса — с акцентной полосой слева, не голый курсив. */
 .status-quote {
   font-size: 13px; color: var(--ink);
   background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
@@ -827,8 +631,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .profile-section { margin-bottom: 14px; }
 .stat-donut-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
 .stat-donut-card.stat-donut-empty { text-align: center; color: var(--ink-dim); font-size: 13px; padding: 26px 16px; }
-
-/* Кольцо прогресса цели месяца — вместо линейного бара, как в мини-аппе. */
 .goal-ring-wrap { position: relative; width: 70px; height: 70px; flex: none; }
 .goal-ring { transform: rotate(-90deg); overflow: visible; }
 .goal-ring-track { fill: none; stroke: var(--surface-3); stroke-width: 7; }
@@ -855,8 +657,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .goal-set-row button {
   background: var(--accent-grad); color: var(--on-accent); border: none; border-radius: 10px; padding: 0 14px; font-weight: 700; font-size: 12.5px; cursor: pointer;
 }
-
-/* Широкая раскладка своей вкладки «Я» — карточка человека прилипает слева, справа (во всю оставшуюся ширину окна) — статус/структура загрузки/плитка статистики. У карточки коллеги (sheet, тесная) своя, прежняя плоская разметка — profileHeaderHtml(d) без asParts. */
 .profile-head-grid { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
 .profile-head-left {
   position: sticky; top: 0;
@@ -870,10 +670,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   .profile-head-grid { grid-template-columns: 1fr; }
   .profile-head-left { position: static; }
 }
-
-/* Карточка при наведении на любой аватар (список/доска/тизер команды/
-   топ-5) — см. avatar-hover.js. Плавающая, как обычный desktop-тултип,
-   не завязана на разметку конкретной вкладки. */
 .avatar-popover {
   position: fixed; z-index: 300;
   background: var(--glass-bg-strong); border: 1px solid var(--glass-border); border-radius: 12px;
@@ -890,10 +686,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   display: inline-block; width: 6px; height: 6px; border-radius: 50%;
   background: var(--s-done); vertical-align: middle; margin-left: 2px;
 }
-
-/* Карточка при наведении на обложку тайтла («Тайтлы») — см.
-   title-hover.js. Тот же плавающий тултип, что у avatar-popover, но
-   пошире и с картинкой сверху. */
 .title-popover {
   position: fixed; z-index: 300;
   display: flex; flex-direction: column; gap: 8px; border-radius: 12px;
@@ -908,8 +700,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .title-popover .tp-name { font-weight: 700; font-size: 13px; line-height: 1.3; }
 .title-popover .tp-line { color: var(--ink-soft); margin-top: 3px; }
 .title-popover .tp-dim { color: var(--ink-dim); }
-
-/* Контекстное меню по правому клику — см. showContextMenu в utils.js. */
 .context-menu {
   position: fixed; z-index: 400;
   background: var(--glass-bg-strong); border: 1px solid var(--glass-border); border-radius: 10px;
@@ -932,10 +722,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   transition: transform .25s cubic-bezier(.34, 1.56, .64, 1), box-shadow .25s var(--ease), z-index 0s;
 }
 .team-teaser .stack .avatar:first-child { margin-left: 0; }
-/* Аватар под курсором выходит вперёд из стопки (z-index + подъём +
-   collar свечения), соседние не двигаются — тот же читаемый акцент,
-   что "＋N Add Member" у референса, где стопка живая, не плоская
-   картинка. */
 .team-teaser .stack .avatar:hover {
   transform: translateY(-3px) scale(1.15);
   z-index: 5;
@@ -945,10 +731,6 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 .team-teaser .tsub { font-size: 11.5px; color: var(--ink-dim); }
 .team-teaser .go { margin-left: auto; color: var(--ink-dim); font-size: 14px; flex: none; }
 .goal-card { cursor: pointer; }
-
-/* Тот же .team-teaser, но компактно в общей шапке (см. loadTitlebarTeam
-   в profile.js) — кластер "N People" из референса, только на всех
-   вкладках сразу, а не только на «Я». */
 .titlebar-team {
   cursor: pointer;
   padding: 5px 10px;
@@ -957,25 +739,14 @@ body.window-maximized .win-btn .ic-restore { display: block; }
 }
 .titlebar-team:hover { background: var(--surface-2); }
 .titlebar-team .tt { font-size: 12px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
-/* На узком окне полоса заголовка и так плотная (кнопки QC/ffmpeg/
-   обновить/выйти) — подпись кластера первой уступает место. Порог выше,
-   чем кажется нужным на глаз: дефолтная ширина окна по tauri.conf.json —
-   1180px, и на ней шапка уже переносится без права на запас. */
 @media (max-width: 1300px) {
   .titlebar-team .tt { display: none; }
 }
-/* У самого минимума (760px по tauri.conf.json minWidth) даже голый стек
-   аватаров лишний — там и без него ужимаются кнопки; та же граница,
-   что уже сворачивает сайдбар. Полный список команды остаётся доступен
-   через вкладку «Я» — эта шапка только быстрый доступ, не единственный. */
 @media (max-width: 860px) {
   .titlebar-team { display: none; }
 }
 
-/* ---------- Обновление ---------- */
-
 .update-progress-track { height: 8px; border-radius: 5px; background: var(--surface-2); overflow: hidden; margin: 14px 0 6px; }
-/* Копии программы (settings.js: openInstallsSheet) */
 .inst-lead { color: var(--ink-soft); font-size: 13px; margin: 0 0 12px; }
 .inst-list { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow-y: auto; }
 .inst-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
@@ -1063,27 +834,15 @@ tbody tr {
   transition: background .12s var(--ease);
 }
 tbody tr:hover { background: var(--surface-2); }
-
-/* Быстрые действия (назначить/сменить статус) — скрыты, пока курсор не
-   над строкой, чтобы таблица не была засорена кнопками, когда они не
-   нужны (тот же приём, что кнопка "показать пароль" в полях ввода). */
 td.row-actions { opacity: 0; transition: opacity .12s ease; white-space: nowrap; }
 tbody tr:hover td.row-actions { opacity: 1; }
 td.row-actions .icon-btn { padding: 4px 6px; font-size: 12px; margin-right: 4px; vertical-align: middle; }
 tbody tr.selected { background: var(--accent-soft); }
 tbody td { padding: 10px; border-bottom: 1px solid var(--line-soft); }
-
-/* Компактная плотность (Настройки → «Плотность таблиц») — десктопу
-   есть смысл дать выбор, мини-аппу с тач-целями такой режим только
-   мешал бы: там и так всё сжато под ширину телефона. */
 :root[data-density="compact"] tbody td { padding: 4px 10px; }
 :root[data-density="compact"] .avatar-bubble { width: 20px; height: 20px; font-size: 9.5px; }
 :root[data-density="compact"] .row-in { animation-duration: .16s; }
 tbody td.num { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-
-/* Звёздочка «избранное» — видна всегда чуть приглушённой, чтобы было
-   понятно, что кликабельна, но не спорила за внимание с самим номером;
-   активная — золотом, тем же оттенком, что награды на профиле. */
 .fav-star {
   background: none; border: none; cursor: pointer; padding: 0 4px 0 0;
   font-size: 13px; line-height: 1; color: var(--ink-dim); vertical-align: -1px;
@@ -1112,7 +871,6 @@ tbody td.deadline.overdue { color: var(--s-stop); font-weight: 600; }
 .priority-chip.normal .dot { background: var(--s-review); }
 .priority-chip.high .dot { background: var(--s-work); }
 .priority-chip.urgent .dot { background: var(--s-stop); }
-/* Тот же самый пробел, что закрыт у .status-chip чуть выше — тонируем все четыре уровня одинаково, теми же цветами, что уже красят точку. */
 .priority-chip.low { color: var(--s-done); background: color-mix(in srgb, var(--s-done) 14%, var(--surface-2)); }
 .priority-chip.normal { color: var(--s-review); background: color-mix(in srgb, var(--s-review) 14%, var(--surface-2)); }
 .priority-chip.high { color: var(--s-work); background: color-mix(in srgb, var(--s-work) 14%, var(--surface-2)); }
@@ -1149,12 +907,6 @@ tbody td.deadline.overdue { color: var(--s-stop); font-weight: 600; }
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
-/* ---------- Полоса сетевой активности ----------
-   Появляется не сразу: на быстром ответе (а он обычно быстрый) полоса
-   мелькнула бы на сотню миллисекунд и только раздражала. Задержка
-   сделана через animation-delay самой заливки, а не таймером в JS —
-   один источник правды на всё приложение. */
 .net-bar {
   position: fixed; left: 0; right: 0; top: var(--titlebar-h);
   height: 2px; z-index: 1001; pointer-events: none;
@@ -1171,12 +923,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   from { transform: translateX(-100%); }
   to { transform: translateX(350%); }
 }
-
-/* ---------- Скелетоны ----------
-   Форма повторяет то, что появится на этом месте: строка заголовка
-   шире, строка подписи короче и тоньше. Одинаковые серые прямоугольники
-   одной высоты (как было) ничего не сообщают о будущем содержимом и
-   читаются просто как «сломалось». */
 .skeleton-wrap { padding: 10px 0; }
 .skeleton-row {
   height: 38px;
@@ -1194,11 +940,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   100% { background-position: 0 50%; }
 }
 @keyframes skeleton-fade-in { from { opacity: 0; } to { opacity: 1; } }
-
-/* Скелетон таблицы и сама таблица плавно перекрещиваются по opacity,
-   а не дёргаются между hidden/visible — и появляются только если
-   загрузка реально затянулась (см. setTimeout(100ms) в loadReports()),
-   чтобы на быстром ответе сервера не было мерцания. */
 #skeleton {
   opacity: 0;
   transition: opacity .18s ease;
@@ -1212,9 +953,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
 }
 .content tbody tr:last-child td { border-bottom: none; }
 .content table.loading { opacity: .35; }
-
-/* Появление строк таблицы с лёгкой нарастающей задержкой (stagger),
-   а не все разом — см. renderReports() в app.js. */
 .row-in {
   animation: row-in .28s ease both;
 }
@@ -1224,17 +962,9 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
 }
 @media (prefers-reduced-motion: reduce) {
   .row-in, .bcell, #skeleton, .content table, .toast { animation: none !important; transition: none !important; }
-  /* Бесконечные анимации при выключенном движении убираем полностью:
-     полоса загрузки остаётся видимой статичной чертой (сигнал «идёт
-     запрос» сохраняется), а мерцание скелетонов прекращается. */
   .net-bar i { animation: none !important; transform: none !important; width: 100%; opacity: .5; }
   .skeleton-row { animation: none !important; }
   .board-card-heat { transition: none !important; }
-  /* Весь декоративный слой этой сессии (вращающиеся обводки, spring-
-     появление, дыхание прогресс-баров/today-линии, каскад gantt-строк,
-     wiggle иконок, всплытие аватаров в стопке) — тоже бесконечная или
-     подчёркнуто "живая" анимация не по делу для людей, которым движение
-     физически мешает (vestibular-триггеры), поэтому гасим одним блоком. */
   .bcell::after, .board-card::after,
   .board-card, .board-card-progress-track i, .board-card-heat.is-hot,
   .gantt-today-line, .gantt-row, .gantt-tag, .gantt-bar::before, .gantt-bar::after,
@@ -1242,22 +972,12 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   .team-teaser .stack .avatar {
     animation: none !important;
   }
-  /* Эти элементы стартуют с opacity: 0 и проявляются только своей
-     анимацией (forwards). Анимацию выше гасим — значит, конечное
-     состояние надо выставить руками, иначе карточки (Сервисы, Аналитика)
-     и строки Ганта остаются невидимыми при выключенных эффектах Windows. */
   .bcell, .gantt-row, .gantt-tag { opacity: 1 !important; }
   .board-card-progress-track i::after { display: none; }
   .gantt-row { opacity: 1 !important; transform: none !important; }
   .gantt-tag { opacity: 1 !important; transform: translateX(-2px) !important; }
   .gantt-bar::before, .gantt-bar::after { transform: translateY(-50%) scale(1) !important; }
 }
-
-/* Переключение темы — плавный crossfade через View Transitions API
-   (см. theme.js). Значение по умолчанию у браузера короче и резче,
-   чем остальные переходы интерфейса — подгоняем длительность под тот
-   же ритм, что и всплытие модалок/тостов. Без поддержки API это
-   правило просто ни на что не влияет. */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .32s; }
 
 .bulk-bar {
@@ -1267,8 +987,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  /* Стеклянная — она реально лежит поверх прокручивающихся строк
-     таблицы (sticky bottom), в отличие от статичных карточек контента. */
   background: var(--glass-bg-strong);
   backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid var(--fire);
@@ -1286,8 +1004,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   font-size: 12px;
   background: var(--bg-2);
 }
-
-/* ---------- Modal / sheet ---------- */
 
 .overlay {
   position: fixed; inset: 0;
@@ -1311,9 +1027,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   from { opacity: 0; transform: translateY(8px) scale(.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-/* Заголовок карточки прилипает к верху: у отчёта с длинным чек-листом и
-   десятком заметок он уезжал из виду на первом же прокруте. Отрицательные
-   отступы — чтобы подложка перекрывала контент по всей ширине модалки. */
 .sheet h2 {
   position: sticky; top: -22px; z-index: 3;
   margin: -22px -22px 16px; padding: 20px 22px 14px;
@@ -1323,8 +1036,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
 }
 .sheet .row { display: flex; gap: 8px; margin-bottom: 10px; }
 .sheet .row > * { flex: 1; }
-/* select/input/textarea прямо в .row (статус, приоритет, срок, тема
-   в настройках и т.п.) — иначе рендерились бы нативным виджетом ОС. */
 .sheet select, .sheet input[type="text"], .sheet input[type="date"], .sheet input[type="time"],
 .sheet input[type="number"], .sheet textarea {
   padding: 8px 12px;
@@ -1346,11 +1057,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
 #rc-title, #rc-season, #rc-title-id, #rc-priority, #rc-deadline { width: 100%; }
 .sheet-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .sheet-wide { width: min(620px, 94vw); }
-
-/* Настройки — секции-карточки вместо россыпи строк, см. settings.js.
-   Заголовок секции + группа строк внутри одной поверхности — то же
-   визуальное деление, что и .detail-section в карточке отчёта, здесь
-   просто без внешней шторки-таблицы. */
 .settings-group {
   background: var(--bg-2);
   border: 1px solid var(--line);
@@ -1376,13 +1082,7 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
 .settings-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--fire); cursor: pointer; }
 .settings-hint { color: var(--ink-soft); font-size: 12px; line-height: 1.6; margin: 4px 0 4px; }
 .settings-hint b { color: var(--ink); }
-
-/* Настройки — блок альфа-канала (предупреждение + текущий/последний
-   коммит), см. settings.js: refreshAlphaBlock. */
 .alpha-warn {
-  /* Обычный rgba, не color-mix() — тот же принцип, что и везде в этом
-     проекте: не полагаться на CSS-фичи новее самого необходимого (см.
-     историю с внешним import map, не подхватившимся в реальном WebView2). */
   background: color-mix(in srgb, var(--s-work) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--s-work) 55%, transparent);
   color: var(--ink);
@@ -1399,11 +1099,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
   border-radius: 6px;
   padding: 2px 8px;
 }
-
-/* ---------- Командная палитра (Ctrl+K) ---------- */
-/* Сверху, а не по центру экрана, как обычные диалоги — привычнее для
-   command palette (VS Code/Linear), да и не перекрывает взгляд на то,
-   куда сейчас перейдёшь. */
 .cmdk-overlay { align-items: flex-start; }
 .cmdk-overlay .sheet { width: min(560px, 92vw); margin-top: 14vh; padding: 8px; max-height: 60vh; }
 .cmdk-input-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
@@ -1424,8 +1119,6 @@ html.net-busy .net-bar i { animation: net-sweep 1.1s var(--ease) .18s infinite; 
 .cmdk-item.sel { background: var(--surface-2); }
 .cmdk-item.sel .cmdk-sub { color: var(--ink-soft); }
 .cmdk-empty { padding: 16px; text-align: center; color: var(--ink-dim); font-size: 12.5px; }
-
-/* ---------- Окно "Горячие клавиши" (?) ---------- */
 .shortcuts-list { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 6px; }
 .shortcuts-group-title {
   font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
@@ -1444,8 +1137,6 @@ kbd {
   background: var(--surface-3); border: 1px solid var(--line);
   border-bottom-width: 2px; border-radius: 5px; padding: 3px 6px; color: var(--ink);
 }
-
-/* ---------- Карточка отчёта ---------- */
 
 .detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 .detail-head h2 { margin: 0; padding: 0; font-size: 18px; font-weight: 700; position: static; background: none; border: none; }
@@ -1476,9 +1167,6 @@ kbd {
   background: var(--surface-2);
   margin-bottom: 6px;
   font-size: 13px;
-  /* Прозрачная рамка вместо её отсутствия: при наведении она
-     проявляется цветом, и элемент не «дёргается» на пиксель, как было
-     бы при появлении рамки из ничего. */
   border: 1px solid transparent;
   transition: background .12s var(--ease), border-color .12s var(--ease), transform .12s var(--ease);
 }
@@ -1504,8 +1192,6 @@ kbd {
 .add-row { display: flex; gap: 6px; margin-top: 8px; }
 .add-row input, .add-row textarea { flex: 1; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-2); color: var(--ink); resize: vertical; }
 
-/* ---------- QC dialog ---------- */
-
 .qc-drop {
   border: 1.5px dashed var(--line);
   border-radius: 14px;
@@ -1528,11 +1214,6 @@ kbd {
 }
 .qc-finding .time { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .qc-finding-body { flex: 1; min-width: 0; }
-
-/* Волна с огибающей амплитуды (min/max из generate_waveform) и
-   подсвеченными диапазонами находок под ней — см. drawWaveform в
-   qc.js. Ширина 100% рамки шторки, высота фиксируется в JS (84px,
-   с поправкой на devicePixelRatio для чёткости на HiDPI). */
 .qc-waveform {
   display: block;
   width: 100%;
@@ -1547,8 +1228,6 @@ kbd {
   white-space: nowrap;
 }
 .qc-export-btn:disabled { opacity: .6; cursor: default; }
-
-/* ---------- Toast ---------- */
 
 #toast-root {
   position: fixed;
@@ -1592,14 +1271,8 @@ kbd {
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .toast.toast-out { animation: toast-out .18s ease forwards; }
 @keyframes toast-out { to { opacity: 0; transform: translateY(-4px) scale(.98); } }
-
-/* Тип тоста — цвет полоски слева и иконка перед текстом (см. TOAST_ICON
-   в api.js), не только цвет: полоска в 3px на периферии зрения легко
-   спутать с обычным акцентом интерфейса, иконка — нет. */
 .toast[data-kind="error"] { border-left-color: var(--s-stop); }
 .toast[data-kind="success"] { border-left-color: var(--s-done); }
-
-/* Полоска автозакрытия — визуально показывает, сколько времени осталось до того, как тост исчезнет сам. */
 .toast-progress {
   position: absolute;
   left: 0; bottom: 0;
@@ -1625,8 +1298,6 @@ kbd {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ---------- Лента (портировано из мини-аппа) ---------- */
-
 .feed-list { position: relative; padding: 2px 2px 2px 0; }
 .feed-item { position: relative; padding: 0 0 20px 40px; animation: row-in .25s ease both; }
 .feed-item:last-child { padding-bottom: 2px; }
@@ -1650,10 +1321,6 @@ kbd {
 .feed-meta { margin-top: 6px; display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--ink-dim); }
 .feed-meta .sep { opacity: .5; }
 .feed-load-more { display: block; width: 100%; margin-top: 6px; }
-
-/* ---------- Экран загрузки на старте (тот же маскот, что в мини-аппе:
-   miniapp/static/index.html #splash) — держим поверх окна, пока не
-   отработает tryRestoreSession()/первый /whoami. ---------- */
 
 .app-splash {
   position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 999;
@@ -1685,12 +1352,6 @@ kbd {
 @keyframes splash-shimmer { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
 .app-splash-status { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; animation: splash-dots-fade 1.6s ease-in-out infinite; }
 @keyframes splash-dots-fade { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
-
-/* ---------- Профиль: прогресс стажа, награды, пустые руки ---------- */
-
-/* Полоска «где я между порогами колец» под карточкой человека. Цвет
-   берётся инлайном из TENURE_STEPS (profile.js) — один источник и для
-   свечения кольца, и для этой полоски. */
 .tenure { margin: 12px 0 2px; }
 .tenure-lbl { display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; color: var(--ink-soft); }
 .tenure-lbl b { font-weight: 700; }
@@ -1699,8 +1360,6 @@ kbd {
 .tenure-track i { display: block; height: 100%; border-radius: 99px; transition: width .5s ease; }
 .tenure-ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .tenure-ticks .on { font-weight: 700; }
-
-/* Полученные награды — чипами, остальные — строкой с остатком. */
 .badge-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .badge-chip {
   display: inline-flex; align-items: center; gap: 5px;
@@ -1715,8 +1374,6 @@ kbd {
 .badge-todo.no-data { opacity: .6; }
 .badge-track { height: 3px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
 .badge-track i { display: block; height: 100%; border-radius: 99px; background: var(--ink-dim); transition: width .5s ease; }
-
-/* Пустые руки: вместо сообщения о пустоте — предложение работы. */
 .idle-card {
   display: flex; align-items: center; gap: 12px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px;
@@ -1729,13 +1386,6 @@ kbd {
 .idle-go { margin-left: auto; flex: none; }
 
 .big-num.muted { color: var(--ink-dim); }
-
-/* ---------- Заметки с тайм-кодом ---------- */
-
-/* Время — отдельной меткой перед текстом, а не частью строки: правки в
-   дубляже почти всегда привязаны ко времени, и глаз должен цеплять его
-   первым. Хранится оно префиксом «[4:12] » в самом тексте заметки
-   (см. parseNoteTime в utils.js) — отдельного поля в API нет. */
 .note-body { display: flex; align-items: baseline; gap: 8px; }
 .note-time {
   flex: none; font-family: ui-monospace, "SF Mono", Consolas, monospace;
@@ -1751,15 +1401,10 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 .note-add-row { align-items: flex-start; }
-
-/* Переключатель порядка живёт в самом заголовке секции — отдельная
-   строка ради одной кнопки заняла бы больше места, чем сама кнопка. */
 .notes-sort {
   float: right; padding: 2px 9px; font-size: 11.5px; font-weight: 400;
   text-transform: none; letter-spacing: 0;
 }
-
-/* ---------- Пакетный QC (сводная таблица по нескольким дорожкам) ---------- */
 
 .qc-batch-head {
   display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-soft);
@@ -1767,9 +1412,6 @@ kbd {
 .qc-batch-head #qc-sort { margin-left: auto; flex: none; }
 
 .qc-table { display: flex; flex-direction: column; }
-
-/* Сетка одна на всю таблицу: имя тянется, числа и итог — фиксированной
-   ширины, чтобы колонки не плясали по мере того, как строки досчитываются. */
 .qc-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 58px 58px minmax(120px, 170px);
@@ -1786,23 +1428,11 @@ kbd {
 .qc-row.error { border-left-color: var(--s-stop); }
 .qc-row.fail { border-left-color: var(--s-stop); opacity: .75; }
 .qc-row.expandable { cursor: pointer; }
-/* Находки раскрываются под строкой во всю её ширину — отсюда
-   grid-column: 1 / -1, иначе блок встал бы в первую колонку. */
 .qc-row-findings {
   grid-column: 1 / -1;
   display: flex; flex-direction: column; gap: 6px;
   margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line-soft);
 }
-
-/* ---------- Доска (канбан по статусам, /api/board) ---------- */
-
-/* scroll-behavior: smooth — колесо мыши едет с анимацией, а не скачком
-   (как у любого нормального карусельного слайдера). Во время ручного
-   drag'а (board.js: wireBoardScroll) переключается на auto — иначе
-   доска отставала бы от курсора, плавность там не нужна, нужна
-   мгновенная 1:1 привязка к пальцу/курсору. */
-/* touch-action: pan-y — горизонталь забираем себе (её тянет наш самодельный drag в board.js), вертикаль отдаём браузеру. Но none отнимает и вертикаль — пальцем нельзя было прокрутить страницу, стоя на доске. pan-y решает обе задачи сразу: горизонталь браузер не трогает (pointermove доходят до нас), вертикаль прокручивает сам, как на любой обычной странице. Карточкам нужно то же самое — см. .board-card ниже. */
-/* ---------- Панель управления доской ---------- Поиск и порядок карточек. */
 .board-toolbar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-bottom: 12px;
@@ -1818,9 +1448,6 @@ kbd {
 .board-search span { color: var(--ink-dim); font-size: 12px; }
 .board-search input {
   border: none; background: transparent; outline: none;
-  /* min-width вместо фиксированной width — иначе на узком окне сумма
-     фиксированных ширин (поиск + 3 select'а) могла вытолкнуть
-     .board-summary за правый край раньше, чем сработает flex-wrap. */
   width: 190px; min-width: 90px; flex: 1 1 90px;
   font-size: 12.5px; color: var(--ink);
 }
@@ -1839,28 +1466,9 @@ kbd {
 .board-sum.late { color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 14%, var(--surface-2)); }
 .board-sum.stale { color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, var(--surface-2)); }
 .board-sum.ok { color: var(--s-done); background: color-mix(in srgb, var(--s-done) 12%, var(--surface-2)); }
-
-/* ---------- Гант-таймлайн над доской ----------
-   Перенос референса пользователя: горизонтальные полоски активных
-   задач вдоль оси дат, вертикальная линия «сегодня». Диапазоны —
-   реальные created_at/deadline (см. timelineHtml в charts.js и
-   timelineSectionHtml в board.js), не выдуманные. */
-/* Ряд из 4 stat-карточек над тулбаром доски — перенос референса
-   (Xentra) на реальные счётчики по статусам, см. board.js: boardStats. */
 .board-stats-row { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
 @media (max-width: 900px) { .board-stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-/* Таймлайн + «Производительность» в одном ряду 1.7fr/1fr — та же
-   пропорция, что у "Project Timeline"/"Projects Performance" в
-   референсе. .single — когда таймлайну нечего показать (нет активных
-   серий с обоими датами) и карточка производительности одна на всю
-   ширину. */
 .board-top-row { display: grid; grid-template-columns: 1.7fr 1fr; gap: 14px; margin-bottom: 14px; align-items: start; }
-/* Без таймлайна (нет активных серий с обоими датами) карточка
-   производительности остаётся одна — растягивать её на всю ширину
-   доски смысла нет (внутри всего число+полоска+легенда, пустой
-   правый край выглядел как баг), поэтому трек сужен до размера
-   обычной карточки. */
 .board-top-row.single { grid-template-columns: minmax(0, 420px); }
 .board-top-row .board-timeline-cell, .board-performance-cell { margin-bottom: 0; }
 @media (max-width: 900px) { .board-top-row { grid-template-columns: 1fr; } }
@@ -1877,17 +1485,7 @@ kbd {
   0%, 100% { box-shadow: 0 0 6px 1px rgba(var(--fire-rgb), .5); }
   50% { box-shadow: 0 0 12px 3px rgba(var(--fire-rgb), .8); }
 }
-/* Строка стала выше и без отдельной левой колонки-подписи (у
-   референса подпись — часть плавающей плашки над полосой, не левый
-   столбец, см. .gantt-tag ниже) — track теперь на всю ширину.
-   Каждая строка появляется своим заходом — каскад по nth-child, тот же
-   принцип, что у .board-cards, только сдвиг по X, а не по Y (строки
-   и так растут по вертикали одна под другой, лишнее движение вниз
-   только мешало бы читать порядок). */
 .gantt-row { display: flex; align-items: center; height: 34px; opacity: 0; animation: gantt-row-in .5s cubic-bezier(.22,.9,.3,1) forwards; }
-/* +1 к индексу: .gantt-today-line — всегда первый ребёнок .gantt-body
-   перед строками (см. timelineHtml), поэтому первая .gantt-row — это
-   nth-child(2), не (1). */
 .gantt-row:nth-child(2) { animation-delay: .05s; }
 .gantt-row:nth-child(3) { animation-delay: .12s; }
 .gantt-row:nth-child(4) { animation-delay: .19s; }
@@ -1899,9 +1497,6 @@ kbd {
   to { opacity: 1; transform: translateX(0); }
 }
 .gantt-track { flex: 1; position: relative; height: 100%; }
-/* Плавающая плашка с датой+названием над тонкой цветной полосой —
-   обычно приглушённая, но белая и жирная, если задача пересекает
-   «сегодня» (.current) — тот же акцент, что у самой today-линии. */
 .gantt-tag {
   position: absolute; top: 0; transform: translateX(-2px) scale(1);
   font-size: 10px; font-weight: 600; color: var(--ink-soft);
@@ -1912,9 +1507,6 @@ kbd {
   opacity: 0;
   transform-origin: left center;
   animation: gantt-tag-in .5s cubic-bezier(.34, 1.56, .64, 1) forwards;
-  /* Плашка выезжает чуть позже своей строки (родитель уже начал
-     появляться) — почти незаметная, но ощутимая хореография "сначала
-     дорожка, потом подпись", а не всё одним слоем. */
   animation-delay: .15s;
 }
 .gantt-tag.end { transform-origin: right center; }
@@ -1934,12 +1526,6 @@ kbd {
   transition: width .8s cubic-bezier(.22,.9,.3,1), box-shadow .2s var(--ease), filter .2s var(--ease);
 }
 .gantt-row:hover .gantt-bar { box-shadow: 0 0 10px -1px currentColor, var(--shadow-xs); filter: brightness(1.15); }
-/* Точки-маркеры на концах полосы — начало и срок задачи, как отдельные
-   вехи на дорожке референса, а не просто обрезанный прямоугольник.
-   Правая точка "дозревает" с задержкой ~ в длительность роста самой
-   полосы (playTimelineIntro/width transition .8s) — будто добирается
-   до финиша вслед за заливкой, а не стоит на месте готовой с самого
-   начала. */
 .gantt-bar::before, .gantt-bar::after {
   content: "";
   position: absolute; top: 50%; width: 8px; height: 8px; border-radius: 50%;
@@ -1964,11 +1550,6 @@ kbd {
 }
 .board-col-head { display: flex; align-items: center; gap: 6px; }
 .board-col-head .lb { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Тонирован в цвет колонки (--col-accent, тот же STATUS_COLOR_VAR, что
-   красит точку рядом и полоску сверху) — у референса (Dribbble: Xentra
-   Digital Marketing Dashboard, dribbble.com/shots/27265906) счётчик в
-   шапке колонки цветной, не нейтрально-серый; тот же язык, что уже у
-   .pr-badge/.delta-pill/.kpi-icon в этом приложении. */
 .board-col-head .cnt {
   font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; flex: none;
   font-weight: 700; order: -1;
@@ -1977,14 +1558,11 @@ kbd {
 .board-col-head .lb .dot { width: 6px; height: 6px; }
 .board-col-head { justify-content: flex-start; padding: 0 2px; }
 .board-col-head .board-col-collapse { margin-left: auto; }
-/* Свёрнутый список (board.js: data-fold): заголовок — кнопка, стрелка повёрнута, карточки и «Показать ещё» спрятаны */
 .board-col:not(.collapsed) .board-col-head { cursor: pointer; border-radius: 8px; user-select: none; }
 .board-col-fold { flex: none; color: var(--ink-dim); transition: transform .18s ease; }
 .board-col.collapsed .board-col-fold { display: none; }
 .board-col.folded .board-col-fold { transform: rotate(-90deg); }
 .board-col.folded .board-cards, .board-col.folded .board-col-more, .board-col.folded .board-col-progress, .board-col.folded .board-col-badges { display: none; }
-
-/* Значки состояния колонки: просрочено / залежалось / без исполнителя. */
 .board-col-badges { display: flex; gap: 5px; flex-wrap: wrap; padding: 0 4px 2px; }
 .board-col-badge {
   font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 99px;
@@ -1993,15 +1571,8 @@ kbd {
 .board-col-badge.late { color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 16%, var(--surface-3)); }
 .board-col-badge.stale { color: var(--gold); background: color-mix(in srgb, var(--gold) 16%, var(--surface-3)); }
 .board-col-badge.free { color: var(--s-review); background: color-mix(in srgb, var(--s-review) 16%, var(--surface-3)); }
-
-/* Перебор по числу задач в работе — единственная метрика, ради которой
-   канбан-доски и заводят: колонка подсвечивается, счётчик краснеет. */
 .board-col.over-wip .board-col-head .cnt { color: var(--s-stop); }
 .board-col-head .cnt.over { color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 16%, var(--surface-3)); }
-
-/* Полоска «загружено N из total» под заголовком колонки — те же данные,
-   что и подпись "Показать ещё (N)" у board-col-more, просто визуально:
-   на широкой доске уже секунда взгляда, сколько ещё скрыто карточек. */
 .board-col-progress { height: 3px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin: 0 4px; }
 .board-col-progress i { display: block; height: 100%; border-radius: 99px; transition: width .5s var(--ease); }
 .board-col-collapse {
@@ -2009,11 +1580,6 @@ kbd {
   cursor: pointer; border-radius: 5px; font-size: 13px; line-height: 1; transition: transform .18s ease, background .12s ease;
 }
 .board-col-collapse:hover { background: var(--surface-3); color: var(--ink); }
-
-/* Свёрнутая колонка — узкая полоска: подпись читается сверху вниз,
-   карточки и "показать ещё" спрятаны. Ширина — не 0 и не display:none
-   у всей колонки: счётчик отчётов должен оставаться виден даже
-   свёрнутым, иначе "где мои 12 завершённых" не узнать, не разворачивая. */
 .board-col.collapsed {
   width: 40px; padding: 10px 6px; align-items: center; gap: 10px;
 }
@@ -2034,30 +1600,19 @@ kbd {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md);
   padding: 12px 12px 12px 15px; cursor: pointer; animation: board-card-in .3s var(--ease) both;
   transition: border-color .15s ease, background .15s ease, opacity .15s ease;
-  /* pan-y, как и у .board выше: горизонтальный жест пальцем по карточке
-     прокручивает доску (см. wireCardDrag), вертикальный — страницу. */
   touch-action: pan-y;
   overflow: hidden;
 }
-/* Spring-появление карточки доски — тот же язык, что у .bcell, но
-   короче и без вращения (карточки доски мельче и их много одновременно
-   на экране — лёгкий перелёт масштаба и подъём достаточно выразительны
-   и не перегружают колонку при полной перерисовке). */
 @keyframes board-card-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
-
-/* Левая полоска — не просто цвет статуса: её ширина и яркость показывают срочность (--heat считает board.rs, 0..1). Полоска отдельным элементом, а не border-left: только так её можно сделать переменной ширины, не сдвигая текст. */
 .board-card-heat {
   position: absolute; left: 0; top: 0; bottom: 0;
   width: calc(3px + var(--heat, 0) * 3px);
   opacity: calc(.35 + var(--heat, 0) * .65);
   transition: width .3s var(--ease), opacity .3s var(--ease);
 }
-/* Горящие карточки (heat >= .7, см. .is-hot в board.js) получают
-   собственное дыхание на полоске — тихий, но постоянный сигнал "смотри
-   сюда", не только насыщенность цвета. Спокойные карточки не мигают. */
 .board-card.is-hot .board-card-heat {
   animation: heat-breathe 1.8s ease-in-out infinite;
 }
@@ -2066,9 +1621,6 @@ kbd {
   50% { filter: brightness(1.5); }
 }
 .board-card.is-overdue { border-color: color-mix(in srgb, var(--s-stop) 40%, var(--line)); }
-
-/* Отметки на карточке — то, чего из названия и даты не видно:
-   сколько она лежит без движения и есть ли у неё вообще исполнитель. */
 .board-card-flags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .board-flag {
   font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 99px;
@@ -2082,35 +1634,18 @@ kbd {
 .board-card-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 5px; }
 .board-card .id { font-size: 10.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; font-weight: 600; }
 .board-card .pr-badge {
-  /* 12% заливки было почти незаметно на тёмном фоне — актуальный
-     тренд 2026 (см. дашборды на Dribbble) держит статусные бейджи
-     насыщенными, а не приглушёнными: цвет должен считываться с одного
-     взгляда на доску, а не только при наведении. */
   font-size: 10px; font-weight: 700; flex: none; padding: 3px 8px; border-radius: 999px;
   border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
   background: color-mix(in srgb, currentColor 22%, transparent);
 }
 .board-card .ttl { font-size: 13px; font-weight: 600; margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
-/* Позиция статуса в пайплайне студии, в процентах (STATUS_PROGRESS в
-   board.js — детерминированная шкала, не «реальный» процент готовности,
-   такого поля у отчёта нет). */
 .board-card-progress-row { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-dim); margin-bottom: 4px; }
 .board-card-progress-track { height: 4px; border-radius: 99px; background: var(--surface-3); overflow: visible; margin-bottom: 8px; position: relative; }
-/* Заливка едет из 0 до реального значения при появлении карточки —
-   тот же приём, что у gantt-bar/seg-bar/donut (см. playBoardCardsIntro
-   в board.js), но с "expo-out" easing — она резко срывается с места и
-   плавно тормозит у цели, ощутимо более "дорого", чем линейная. После
-   заливки полоска не замирает: лёгкое дыхание свечения (см.
-   @keyframes bar-breathe) с задержкой = длительности самой заливки,
-   чтобы пульс стартовал ровно в момент, когда бар доехал до места. */
 .board-card-progress-track i {
   display: block; height: 100%; border-radius: 99px; width: 0; overflow: hidden;
   transition: width 1.1s cubic-bezier(.16, 1, .3, 1);
   animation: bar-breathe 2.2s ease-in-out .9s infinite;
 }
-/* Бегущий блик внутри самой заливки — та же "стеклянная" идея, что у
-   .btn.primary::after, только зациклена, а не только на hover: полоска
-   выглядит как живой индикатор процесса, а не закрашенный прямоугольник. */
 .board-card-progress-track i::after {
   content: "";
   position: absolute; inset: 0;
@@ -2126,10 +1661,6 @@ kbd {
   from { background-position: 140% 0; }
   to { background-position: -40% 0; }
 }
-
-/* Карточки колонки появляются каскадом (не все разом одним row-in) —
-   первые 8 получают нарастающую задержку через nth-child, дальше
-   разница уже незаметна глазу, так что не расписываем дальше. */
 .board-cards .board-card:nth-child(1) { animation-delay: .02s; }
 .board-cards .board-card:nth-child(2) { animation-delay: .06s; }
 .board-cards .board-card:nth-child(3) { animation-delay: .1s; }
@@ -2138,18 +1669,9 @@ kbd {
 .board-cards .board-card:nth-child(6) { animation-delay: .22s; }
 .board-cards .board-card:nth-child(7) { animation-delay: .26s; }
 .board-cards .board-card:nth-child(8) { animation-delay: .3s; }
-/* Срок сдачи — маленькой строкой НАД карточкой (как "Due: May 08,
-   2026" у референса), а не пилюлей в подвале: перенос геометрии по
-   явной просьбе пользователя свериться ещё раз "точь-в-точь". */
 .board-card-due { font-size: 10.5px; color: var(--ink-dim); font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 .board-card-due.overdue { color: var(--s-stop); font-weight: 700; }
 .board-card .foot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-/* Счётчики вложений/заметок на карточке — перенесено вживую с
-   референса пользователя (Dribbble: Xentra Digital Marketing
-   Dashboard, dribbble.com/shots/27265906): там на карточке проекта
-   видно число файлов и комментариев, не только сам факт их наличия.
-   files_count/notes_count считает бэкенд (_attach_counts в
-   miniapp/server.py), прокидывает board.rs как есть. */
 .board-card-counts { display: flex; gap: 8px; margin-left: auto; }
 .board-card-counts span { font-size: 10.5px; color: var(--ink-dim); white-space: nowrap; }
 .board-col-more { width: 100%; font-size: 12px; padding: 6px; }
@@ -2157,10 +1679,6 @@ kbd {
 .board-card .avatar-bubble { width: 24px; height: 24px; font-size: 11px; border-width: 2.5px; }
 .board-col.drag-over { background: var(--surface-3); }
 .board-col.drag-over .board-cards { outline: 1px dashed var(--fire); outline-offset: 4px; border-radius: 10px; }
-
-/* Клон карточки, летящий за курсором во время ручного (pointer events)
-   переноса — сама оригинальная карточка остаётся на месте, притушенная
-   (.dragging), см. board.js: wireCardDrag. */
 .board-card-ghost {
   position: fixed;
   top: 0; left: 0;
@@ -2170,10 +1688,6 @@ kbd {
   transform: rotate(-1.5deg);
   cursor: grabbing;
 }
-
-/* ---------- Тайтлы (голосование, /api/public/*) — портировано
-   из мини-аппа: сезон-чипы + сетка постеров + герой-карточка лидера
-   сезона + развёрнутая карточка тайтла с метаданными Shikimori/AniList. ---------- */
 
 .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .qchip {
@@ -2205,10 +1719,6 @@ kbd {
 .vote-hero-tag { align-self: flex-start; font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 20px; margin-bottom: 6px; }
 .vote-hero-name { font-size: 15px; font-weight: 800; line-height: 1.25; margin-bottom: 10px; }
 .bcell.vote-hero .vote-actions { padding: 0; margin: 0; max-width: 220px; }
-
-/* Развёрнутая карточка тайтла — размытый/затемнённый постер фоном
-   сверху шторки (отрицательные margin съедают padding .sheet), дальше
-   обычный текстовый блок. */
 .td-hero { position: relative; margin: -22px -22px 0; padding: 26px 0 30px; overflow: hidden; border-radius: 16px 16px 0 0; }
 .td-bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: brightness(.4) saturate(1.15); transform: scale(1.15); }
 .td-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,6,10,.15) 0%, rgba(5,6,10,.35) 55%, var(--surface) 100%); }
@@ -2234,11 +1744,6 @@ kbd {
 .td-genre-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .td-genre-chip { font-size: 12px; padding: 5px 12px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-soft); }
 .td-desc { margin-top: 14px; font-size: 13.5px; line-height: 1.6; color: var(--ink); text-align: left; white-space: pre-line; }
-
-/* ---------- Страница тайтла (title-page.js) ----------
-   Шапка — постер и название на фоне баннера (или размытого постера),
-   плитки оценки/одобрения/серий и голосование прямо в ней; ниже —
-   описание, ход озвучки и персонажи, справа карточка «Информация». */
 .sheet.tpg-sheet { width: min(1120px, 96vw); max-height: 92vh; padding: 0; overflow: auto; }
 .tp { position: relative; }
 .tpg-hero { position: relative; overflow: hidden; border-radius: 16px 16px 0 0; isolation: isolate; }
@@ -2352,12 +1857,6 @@ kbd {
   .tpg-poster { animation: none; }
   .tpg-char:hover { transform: none; }
 }
-
-/* ---------- Режим «Смотреть» (watch.js) ----------
-   Витрина поверх приложения под шапкой окна. Тёмная «кино»-палитра;
-   в тёмных темах фон и поверхности берутся из цветовой темы, акцент —
-   всегда из неё. --amb — цвет обложки текущего слайда баннера, им плавно
-   подкрашивается вся витрина. */
 @property --amb { syntax: "<color>"; inherits: true; initial-value: #ff8a3d; }
 .btn.watch-cta {
   background: var(--accent-grad); color: var(--on-accent, #1a0d00); border-color: transparent; font-weight: 800;
@@ -2385,11 +1884,6 @@ kbd {
 .wm-loading span { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .15); border-top-color: var(--gold); animation: wm-spin .8s linear infinite; }
 @keyframes wm-spin { to { transform: rotate(360deg); } }
 .wm-pad { height: 74px; }
-
-/* навигация */
-/* Шапка — плавающий остров по центру: значок со словом, вкладки капсом
-   с наклоном (активная залита цветом темы), справа одна кнопка меню с
-   поиском, «Мне повезёт» и выходом. */
 .wm-nav { position: sticky; top: 12px; z-index: 20; width: fit-content; max-width: calc(100% - 32px); margin: 12px auto 0; display: flex; align-items: center; gap: 16px;
   padding: 6px 6px 6px 18px; border-radius: 999px; background: rgba(18, 18, 20, .5); border: 1px solid rgba(255, 255, 255, .14);
   backdrop-filter: blur(18px) saturate(1.4); box-shadow: 0 12px 34px -16px rgba(0, 0, 0, .8); transition: background .35s, box-shadow .35s; }
@@ -2397,8 +1891,6 @@ kbd {
 .wm-brand { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 15px; white-space: nowrap; }
 .wm-brand i { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, var(--fire), var(--gold)); box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--fire) 70%, transparent); }
 .wm-tabs { display: flex; gap: 2px; }
-/* Вкладки — скруглённые «таблетки» в форму самого острова: скошенный прямоугольник
-   активной вкладки выпирал углами из капсулы шапки и косил вместе с собой текст. */
 .wm-tabs button { border: none; background: none; padding: 8px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: rgba(255, 255, 255, .62);
   white-space: nowrap; cursor: pointer; transition: color .2s, background .2s; }
 .wm-tabs button:hover { color: #fff; background: rgba(255, 255, 255, .07); }
@@ -2417,8 +1909,6 @@ kbd {
 .wm-menu svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; flex: none; }
 .wm-menu i { width: 17px; text-align: center; font-style: normal; flex: none; }
 .wm-menu kbd { margin-left: auto; font: 700 11px ui-monospace, Consolas, monospace; padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .18); color: var(--wm-dim); }
-
-/* живой баннер */
 .wm-hero { position: relative; height: clamp(560px, 80vh, 760px); margin-top: -62px; overflow: hidden; }
 .wm-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s var(--wm-ease); pointer-events: none; }
 .wm-slide.on { opacity: 1; pointer-events: auto; }
@@ -2462,8 +1952,6 @@ kbd {
 #watch-mode .wm-ghost.on, .wm-modal .wm-ghost.on { box-shadow: inset 0 0 0 1.5px var(--gold); color: var(--gold); }
 .wm-next { display: inline-flex; align-items: center; gap: 9px; margin-top: 18px; padding: 7px 13px 7px 10px; border-radius: 10px; background: rgba(0, 0, 0, .38); backdrop-filter: blur(10px); border: 1px solid var(--wm-line); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .wm-next i { width: 8px; height: 8px; border-radius: 50%; background: #ff5b4a; animation: wm-live 1.6s infinite; }
-/* Следующий слайд — диагональный срез его кадра справа (Б17): подпись
-   «далее», название и полоска до смены; клик — сразу к нему. */
 .wm-peek { position: absolute; z-index: 6; top: 0; right: 0; bottom: 0; width: min(34%, 480px); padding: 0; border: none; background: none; cursor: pointer;
   -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 70%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 70%, transparent 100%); }
 .wm-peek[hidden] { display: none; }
@@ -2479,8 +1967,6 @@ kbd {
 .wm-pk-bar em { display: block; height: 100%; width: 0; background: var(--fire); animation: wm-fill 9s linear forwards; }
 .wm-hero:hover .wm-pk-bar em { animation-play-state: paused; }
 @keyframes wm-fill { to { width: 100%; } }
-
-/* ряды */
 .wm-rows { position: relative; z-index: 8; margin-top: -7vh; padding-bottom: 60px; }
 .wm-row { margin-bottom: 36px; }
 .wm-row-h { display: flex; align-items: baseline; gap: 12px; margin: 0 44px 12px; }
@@ -2516,8 +2002,6 @@ kbd {
 .wm-name { margin-top: 10px; font-size: 13.5px; font-weight: 700; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .wm-name mark { background: none; color: var(--gold); }
 .wm-meta { margin-top: 3px; font-size: 12px; color: var(--wm-dim); }
-
-/* Топ-10 строками на баннерах (Т13): две колонки по пять. */
 .wm-top10 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(5, auto); grid-auto-flow: column; gap: 8px 14px; padding: 4px 44px 10px; }
 .wm-tr { position: relative; display: grid; grid-template-columns: 34px 46px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; height: 76px; padding: 0 18px 0 14px; border: 1px solid var(--wm-line); border-radius: 14px; overflow: hidden; isolation: isolate; text-align: left; cursor: pointer; background: var(--wm-card);
   transition: transform .3s var(--wm-ease), border-color .3s; }
@@ -2547,8 +2031,6 @@ kbd {
 .wm-cname { display: block; margin-top: 9px; font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wm-bar { display: block; margin-top: 8px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .22); overflow: hidden; }
 .wm-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent-grad); }
-
-/* расписание по дням */
 .wm-weekwrap { padding: 0 44px; }
 .wm-days { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; }
 .wm-days button { flex: none; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--wm-line); background: rgba(255, 255, 255, .04); font-weight: 700; font-size: 13px; text-align: left; cursor: pointer; transition: background .2s; }
@@ -2569,8 +2051,6 @@ kbd {
 .wm-sn span { font-size: 12px; font-weight: 600; color: var(--wm-dim); }
 .wm-cd { max-width: 100px; font-size: 12px; font-weight: 700; text-align: right; color: var(--wm-soft); font-variant-numeric: tabular-nums; }
 .wm-cd.soon { color: #ff8a7a; }
-
-/* настроения */
 .wm-moods { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; padding: 0 44px; }
 .wm-mood { position: relative; height: 100px; padding: 14px; border-radius: 14px; border: none; overflow: hidden; isolation: isolate; display: flex; align-items: flex-end; text-align: left; font-size: 15px; font-weight: 800; cursor: pointer;
   background: linear-gradient(135deg, color-mix(in srgb, var(--g) 30%, #000), color-mix(in srgb, var(--g) 80%, #000)); transition: transform .25s var(--wm-spring), box-shadow .25s; }
@@ -2586,8 +2066,6 @@ kbd {
 .wm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 22px 16px; padding: 6px 44px 40px; }
 .wm-grid .wm-tile { width: auto; }
 .wm-empty { margin: 0 44px 30px; padding: 40px; border-radius: 16px; border: 1px dashed var(--wm-line); color: var(--wm-dim); text-align: center; font-size: 14px; }
-
-/* карточка при наведении */
 .wm-pop { position: absolute; z-index: 30; width: 340px; border-radius: 18px; overflow: hidden; background: var(--wm-bg2); border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 40px 80px -20px #000, 0 0 60px -20px var(--tc, var(--gold)); opacity: 0; transform: scale(.88); transform-origin: center top; pointer-events: none; transition: opacity .25s var(--wm-ease), transform .3s var(--wm-spring); }
 .wm-pop.on { opacity: 1; transform: none; pointer-events: auto; }
 .wm-ph { height: 180px; background: center / cover no-repeat; position: relative; }
@@ -2605,8 +2083,6 @@ kbd {
 .wm-round.w svg { fill: currentColor; stroke: none; }
 .wm-round.big { width: 46px; height: 46px; background: rgba(0, 0, 0, .25); backdrop-filter: blur(10px); }
 .wm-round.big svg { width: 19px; height: 19px; }
-
-/* поиск-прожектор и «мне повезёт» */
 .wm-spot, .wm-slot { position: absolute; inset: 0; z-index: 35; display: grid; background: rgba(5, 5, 8, .72); backdrop-filter: blur(14px); opacity: 0; pointer-events: none; transition: opacity .25s; }
 .wm-spot { place-items: start center; padding-top: 8vh; }
 .wm-slot { place-items: center; }
@@ -2624,8 +2100,6 @@ kbd {
 .wm-card.side { transform: scale(.82); opacity: .4; filter: blur(2px); }
 .wm-card.win { transform: scale(1.12); box-shadow: 0 0 0 3px var(--gold), 0 30px 80px -10px var(--gold); }
 .wm-slot-title { margin-top: 26px; text-align: center; font-size: 22px; font-weight: 800; min-height: 30px; }
-
-/* подробнее */
 .wm-modal { position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 48; display: grid; place-items: center; background: rgba(0, 0, 0, .82); opacity: 0; transition: opacity .3s; color: #f5f2ec;
   --wm-bg: #0b0b0e; --wm-bg2: #121217; --wm-card: #17171d; --wm-line: rgba(255, 255, 255, .08); --wm-soft: rgba(245, 242, 236, .72); --wm-dim: rgba(245, 242, 236, .45);
   --wm-ease: cubic-bezier(.22, .9, .3, 1); --wm-spring: cubic-bezier(.34, 1.56, .64, 1); }
@@ -2666,18 +2140,12 @@ body.watch-open #app-screen { pointer-events: none; }
   .wm-pk-bar em { animation: none; width: 100%; }
   .wm-pk-img { animation: none; }
 }
-
-/* ---------- Плеер серий (player-anime.js) ----------
-   Видео во всё окно под шапкой, своё управление поверх (прячется вместе
-   с курсором, когда мышь стоит), панель серий/озвучек выезжает справа.
-   Тёмный «кинотеатр» независимо от темы приложения. */
 .ap-root {
   position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 55; display: flex; background: #000; color: #f4f1ec;
   opacity: 0; transform: scale(.985); transition: opacity .25s ease, transform .3s cubic-bezier(.22, .9, .3, 1);
   --ap-accent: var(--accent-grad); user-select: none;
 }
 .ap-root.on { opacity: 1; transform: none; }
-/* Во весь экран — поверх своей шапки окна (у неё z-index 1000). */
 .ap-root.fs { inset: 0; z-index: 1001; }
 .ap-stage { position: relative; flex: 1; min-width: 0; overflow: hidden; background: #000; }
 .ap-root:not(.show-ui) .ap-stage { cursor: none; }
@@ -2793,11 +2261,7 @@ body.watch-open #app-screen { pointer-events: none; }
 
 .ap-panel { width: 0; flex: none; overflow: hidden; background: #0d0d10; border-left: 1px solid rgba(255, 255, 255, .06); transition: width .35s cubic-bezier(.22, .9, .3, 1); }
 .ap-root.panel-open .ap-panel { width: 330px; }
-/* Прокрутка внутри фиксированной колонки: полоса прокрутки не сдвигает
-   и не обрезает сетку серий. */
 .ap-panel-in { width: 330px; height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .2) transparent; }
-/* Во весь экран панель — плавающая карточка между шапкой и управлением:
-   не закрывает кнопку «Серии и озвучка» и прячется вместе с управлением. */
 .ap-root.fs .ap-panel {
   position: absolute; z-index: 3; top: 72px; right: 16px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 16px;
   background: rgba(13, 13, 16, .84); backdrop-filter: blur(18px); box-shadow: 0 24px 50px -16px rgba(0, 0, 0, .8);
@@ -2827,11 +2291,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .ap-flash.go, .ap-menu, .ap-skip, .ap-nextcard { animation: none; }
 }
 
-/* ---------- Команда / чужой профиль / режим разработчика ----------
-   Портировано из мини-аппа: список команды (тизер профиля кликабелен),
-   развёрнутая карточка коллеги (тот же profileHtml, что у своей «Я»),
-   и служебная dev-mode панель (/api/dev/*, только для owner). */
-
 .team-teaser { cursor: pointer; }
 .team-list { display: flex; flex-direction: column; gap: 2px; }
 .team-row {
@@ -2845,18 +2304,11 @@ body.watch-open #app-screen { pointer-events: none; }
 .team-row .stat { font-size: 11.5px; color: var(--ink-soft); text-align: right; flex: none; }
 .team-row .online-dot, .team-card .online-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--s-done); flex: none; }
 .team-row .online-dot.off, .team-card .online-dot.off { background: var(--ink-dim); }
-
-/* Точка-статус с подсветкой (вкладка «Сервисы») — тот же приём
-   dotRing, что у карточек «Client Projects» на Xentra-референсе:
-   цветное свечение вокруг точки, а не просто точка сама по себе. */
 .svc-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .svc-pill {
   font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
   padding: 2px 9px; border-radius: 999px; white-space: nowrap;
 }
-
-/* Строки сервисов (вкладка «Сервисы») — список как в макете Project:
-   точка, имя/описание, статус-пилюля, latency, аптайм справа. */
 .svc-list-cell { padding: 8px 4px 4px; }
 .svc-list-cell > h3 { padding: 8px 14px 0; }
 .svc-list { display: flex; flex-direction: column; }
@@ -2876,8 +2328,6 @@ body.watch-open #app-screen { pointer-events: none; }
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
   padding: 8px 12px; font-size: 11.5px; font-weight: 600;
 }
-
-/* Вкладка «Аналитика» — 4 метрики сверху, ниже столбцы загрузки и топ. */
 .an-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
 @media (max-width: 1000px) { .an-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .an-trend { font-size: 11px; color: var(--ink-dim); margin-top: 6px; }
@@ -2896,23 +2346,11 @@ body.watch-open #app-screen { pointer-events: none; }
 .an-perf-track { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
 .an-perf-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--fire), var(--gold)); }
 @media (prefers-reduced-motion: reduce) { .an-bar { animation: none; } }
-
-/* Список + история/инциденты рядом, 1.6fr/1fr — та же пропорция, что
-   у Timeline/Performance на «Доске» (.board-top-row). */
 .svc-bottom-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; align-items: start; }
 @media (max-width: 900px) { .svc-bottom-row { grid-template-columns: 1fr; } }
-
-/* Полоса 30-дневного аптайма — один блок на календарный день,
-   см. services.js: historyStripHtml. "Нет данных" (--ink-dim, тусклый) —
-   честный статус для дней до включения мониторинга, не зелёная
-   заливка наугад. */
 .svc-history-strip { display: flex; gap: 3px; }
 .svc-history-bar { flex: 1; height: 22px; border-radius: 2px; min-width: 3px; }
 .svc-history-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-dim); margin-top: 8px; }
-
-/* Сетка карточек команды (вкладка «Команда», team.js) — перенос
-   референса на реальные /api/team данные: без выдуманных тегов
-   специализации, только роль и настоящие счётчики. */
 .team-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2968,23 +2406,12 @@ body.watch-open #app-screen { pointer-events: none; }
 .dev-badge-row input:first-child { flex: 0 0 52px; text-align: center; }
 .dev-badge-row input:last-child { flex: 1; }
 
-/* ---------- Шапка карточки отчёта: действия ---------- */
-
 .detail-head-actions { display: flex; align-items: center; gap: 6px; flex: none; }
-/* Активный переключатель — тот же приём подсветки, что у выбранной
-   вкладки в сайдбаре (.tab-btn.active), чтобы "включено" читалось с
-   первого взгляда, а не только по тексту кнопки. */
 .icon-btn.active {
   color: var(--fire);
   border-color: color-mix(in srgb, var(--fire) 45%, var(--line));
   background: var(--accent-soft);
 }
-
-/* ---------- Окно «📌 Открепить в окне» (pin.html/pin-window.js) ----------
-   Тот же стеклянный/статусный словарь, что и у основной карточки
-   отчёта (.chip/.dot/.note-time уже определены выше) — окно должно
-   узнаваться как часть той же студии, а не выглядеть отдельным
-   приложением, просто в разы компактнее. */
 .pin-body { margin: 0; -webkit-user-select: none; user-select: none; }
 .pin-root { padding: 10px; box-sizing: border-box; min-height: 100vh; }
 .pin-card {
@@ -3016,12 +2443,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .pin-empty { color: var(--ink-dim); font-size: 12px; font-style: italic; }
 .pin-error { color: var(--s-stop); font-size: 13px; padding: 8px 2px; }
 
-/* ---------- «Инструменты ffmpeg» (media-tools.js) ----------
-   Модалка-библиотека операций: вкладки-переключатели наверху, дальше
-   панель конкретной операции. Тот же язык токенов, что у остального
-   редизайна (radius/shadow), но без стекла — модалка сама уже стеклянная
-   (.sheet-wide), доп. слои размытия внутри неё только замусорили бы вид. */
-
 .mt-op-tabs { display: flex; flex-wrap: wrap; }
 .mt-op-tab { cursor: pointer;
   transition: all .15s var(--ease);
@@ -3040,53 +2461,22 @@ body.watch-open #app-screen { pointer-events: none; }
 .mt-file-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
 .mt-file-row .btn { margin-left: auto; padding: 5px 10px; font-size: 12px; }
 .mt-info-line { font-weight: 400; }
-
-/* .mt-video сам по себе ничего не рисует — это просто зарезервированное
-   место, а картинку рисует нативное окно mpv поверх него (см.
-   media-tools.js: videoSurfaceRect/mpv_embed.rs). Фиксированная высота
-   важна: от неё считается прямоугольник, который передаётся в
-   mpv_set_bounds — если бы высота была "auto", до первого кадра
-   плейсхолдер был бы нулевой высоты и окно mpv получило бы 0×0. */
 .mt-video { width: 100%; height: 260px; background: #000; display: block; margin-bottom: 8px; }
-/* Панель управления плеером — СНАРУЖИ прямоугольника .mt-video, не
-   оверлеем поверх него: там физически рисует нативное окно mpv (см.
-   mpv_embed.rs), и порядок отрисовки веб-слоя относительно нативного
-   child-окна не гарантирован — оверлей на этом месте рисковал бы быть
-   перекрыт видео и никогда не увиден. */
 .mt-player-bar {
-  /* flex-wrap — панель управления (12+ элементов: перемотка, play,
-     A-B, скриншот, дорожки, громкость, скорость) шире узкого окна
-     плеера. Без wrap лишнее не переносилось, а обрезалось краем
-     модалки — до элементов вроде выбора скорости нужно было
-     докручивать по горизонтали, что легко пропустить. */
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px;
 }
-/* white-space: nowrap — без него кнопка "🔁 A-B" при нехватке места
-   переносила подпись на две строки ("A-" / "B" друг под другом)
-   вместо того, чтобы остаться на одной строке или уйти на новую
-   строку панели целиком (см. flex-wrap выше). */
 .mt-player-bar .icon-btn { white-space: nowrap; }
-/* justify-content: center обязателен — у .icon-btn его нет (не нужен
-   там, где кнопка ровно по контенту), а здесь min-width шире одного
-   символа-глифа ("▶"/"⏸"), и без центрирования по flex-start глиф
-   прижимался к левому краю, оставляя пустоту справа — кнопка выглядела
-   кривой. */
 .mt-player-bar .mt-play { font-size: 15px; justify-content: center; }
 .mt-player-spacer { flex: 1; }
 .mt-time {
   font-family: ui-monospace, "SF Mono", monospace; font-size: 12px;
   color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-/* Ползунок громкости и выбор скорости — узкие, чтобы панель оставалась
-   одной строкой и на минимальной ширине окна (760px). */
 .mt-volume { width: 92px; accent-color: var(--fire); }
 .mt-speed {
   padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--line);
   background: var(--surface-2); color: var(--ink); font: inherit; font-size: 12px;
 }
-
-/* Выбор дорожек звука/субтитров прямо в панели плеера — у релиза с
-   несколькими языками дубляжа их столько же, сколько языков. */
 .mt-track-picks { display: flex; gap: 6px; align-items: center; }
 .mt-track-pick { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-soft); }
 .mt-track-pick select {
@@ -3094,31 +2484,15 @@ body.watch-open #app-screen { pointer-events: none; }
   background: var(--surface-2); color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--radius-sm);
 }
-/* Включённая петля A-B должна быть видна с одного взгляда: в этом
-   режиме плеер ведёт себя иначе, и забытая петля выглядит как
-   «перемотка сама прыгает назад». */
-
-/* Переключатель точной резки — с пояснением под самой подписью:
-   разница между режимами не очевидна из названия, а цена ошибки
-   (сегмент на секунды длиннее нужного) заметна только после экспорта. */
 .mt-precise {
   display: flex; align-items: flex-start; gap: 8px;
   font-size: 12.5px; color: var(--ink-soft); cursor: pointer; margin-bottom: 10px;
 }
 .mt-precise input { accent-color: var(--fire); width: 16px; height: 16px; margin-top: 1px; flex: none; }
 .mt-precise i { display: block; font-style: normal; color: var(--ink-dim); font-size: 11.5px; margin-top: 2px; }
-
-/* Готовые множители скорости рядом с полем ввода: в дубляже почти
-   всегда нужны 0.95/1.05, а не произвольное число. */
 .mt-speed-presets { display: flex; gap: 4px; flex-wrap: wrap; }
 .mt-speed-preset { padding: 4px 9px; font-size: 11.5px; }
-
-/* Подсказка по горячим клавишам под панелью обрезки — держим её
-   визуально тихой: нужна новичку один раз, остальным мешать не должна. */
 .mt-hotkeys { color: var(--ink-dim); font-size: 11.5px; line-height: 1.7; }
-
-/* Полоса длинной операции ffmpeg с кнопкой отмены — одна на всю
-   модалку (любая вкладка), поэтому живёт в каркасе, а не в панелях. */
 .mt-job { margin: 12px 0 4px; }
 .mt-job-head { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; }
 .mt-job-label { color: var(--ink-soft); }
@@ -3129,8 +2503,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .mt-timeline {
   display: block; width: 100%;
   cursor: ew-resize; margin-bottom: 10px;
-  /* Перетаскивание плейхеда — это pointer-жест; без этого браузер
-     перехватывает движение как скролл/выделение и seek срывается. */
   touch-action: none; user-select: none;
 }
 
@@ -3160,8 +2532,6 @@ body.watch-open #app-screen { pointer-events: none; }
   background: var(--surface-2); color: var(--ink); font: inherit; font-size: 12.5px;
 }
 .mt-form-row label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
-
-/* ---------- Муксинг (media-tools.js: muxPanelHtml) ---------- */
 .mt-mux-section { margin-bottom: 16px; }
 .mt-mux-section:last-of-type { margin-bottom: 14px; }
 .mt-mux-section-head {
@@ -3185,11 +2555,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .mt-mux-default-toggle input { accent-color: var(--fire); width: 15px; height: 15px; }
 .mt-mux-section-add { display: flex; align-items: center; gap: 8px; }
 .mt-mux-section-add .btn { padding: 4px 10px; font-size: 12px; }
-
-/* ---------- Общий пул файлов (media-tools.js: poolBarHtml) ----------
-   Живёт над вкладками-операциями, не пересобирается при переключении
-   между ними (renderActivePanel трогает только #mt-body) — файл,
-   добавленный один раз, доступен в любой вкладке через <select>. */
 .mt-pool-bar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 10px 12px; margin-bottom: 14px;
@@ -3210,9 +2575,6 @@ body.watch-open #app-screen { pointer-events: none; }
   background: var(--surface-3); color: var(--ink); font: inherit; font-size: 12.5px;
   max-width: 220px;
 }
-
-/* Вкладка «Обзор» — раскладка макета Dashboard: 4 показателя, ниже
-   график «создано/завершено» и колонка «внимание + активность». */
 .dash-stat { display: flex; align-items: baseline; gap: 8px; }
 .dash-pill { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
 .dash-main-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
@@ -3253,28 +2615,15 @@ body.watch-open #app-screen { pointer-events: none; }
 .dash-link:hover { text-decoration: underline; }
 .dash-secondary { margin-bottom: 0; }
 @media (prefers-reduced-motion: reduce) { .dash-trend-bar { animation: none; } }
-
-/* Доска — заголовок секции канбана и столбцы «Производительности»,
-   как в макете Projects. */
 .board-section-title { font-weight: 700; font-size: 14px; margin: 4px 0 10px; }
 .board-perf-bars { display: flex; align-items: flex-end; gap: 10px; min-height: 110px; }
 .board-perf-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .board-perf-col .an-bar { max-width: 34px; }
-
-/* Кнопки-действия внутри строк модалок (снять исполнителя, удалить
-   пункт чек-листа) — компактные и без подложки, чтобы не спорить с
-   содержимым строки. */
 .sheet .detail-section .icon-btn {
   min-width: 26px; height: 26px; padding: 0 6px;
   background: transparent; border-color: transparent; color: var(--ink-dim);
 }
 .sheet .detail-section .icon-btn:hover { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
-
-/* ================= QC звука и инструменты ffmpeg — вёрстка Project =================
-   Перекрывает ранние правила этих модалок: плоские карточки var(--bg-2)
-   внутри модалки, мелкие заглавные подписи, SVG-иконки вместо эмодзи. */
-
-/* ---------- QC: одиночный файл ---------- */
 .qc-file {
   font-size: 12px; color: var(--ink-soft); margin: -6px 0 14px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -3311,8 +2660,6 @@ body.watch-open #app-screen { pointer-events: none; }
 }
 .qc-export-btn svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; }
 .qc-export-btn:hover { border-color: var(--surface-4); background: var(--surface-2); color: var(--ink); }
-
-/* ---------- QC: пакетная таблица ---------- */
 .qc-batch-head { margin: 0 0 12px; }
 .qc-table { gap: 6px; }
 .qc-table-head, .qc-row {
@@ -3339,8 +2686,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .qc-row.warn { --row-accent: var(--s-work); }
 .qc-row.error, .qc-row.fail { --row-accent: var(--s-stop); }
 .qc-row.expandable:hover { background: var(--surface-2); }
-
-/* ---------- ffmpeg: каркас ---------- */
 .mt-pool-bar { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; }
 .mt-pool-chip { background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
 .mt-pool-chip > :first-child, .mt-pool-chip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3373,8 +2718,6 @@ body.watch-open #app-screen { pointer-events: none; }
   outline: none; border-color: color-mix(in srgb, var(--fire) 60%, var(--line));
 }
 .mt-form-row > span:first-child { font-size: 12.5px; }
-
-/* ---------- ffmpeg: плеер и таймлайн обрезки ---------- */
 .mt-video { border-radius: 12px; border: 1px solid var(--line); }
 .mt-player-bar { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 6px 8px; }
 .mt-player-bar .icon-btn { height: 30px; min-width: 30px; padding: 0 8px; gap: 5px; font-size: 12px; }
@@ -3406,11 +2749,7 @@ body.watch-open #app-screen { pointer-events: none; }
 .mt-speed-preset.active { background: color-mix(in srgb, var(--fire) 18%, var(--surface)); border-color: color-mix(in srgb, var(--fire) 55%, transparent); color: var(--ink); }
 .mt-job { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .mt-hotkeys { background: var(--bg-2); border-radius: 10px; padding: 8px 10px; }
-/* Плееру и таблицам операций нужна ширина: в 620px панель управления
-   плеером переносилась на вторую строку. */
 .sheet.mt-sheet { width: min(860px, 94vw); }
-
-/* Список: сохранённые фильтры, догрузка страниц, подсказка срока. */
 .quick-filters { align-items: center; }
 .qf-sep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
 .preset-chips { display: contents; }
@@ -3425,8 +2764,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .toolbar select { max-width: 200px; }
 .list-more { display: flex; margin: 12px auto 0; }
 .deadline-hint { margin-left: 8px; font-size: 11px; font-weight: 700; }
-
-/* ---------- Тайтлы: переключатель вида, карточки, таблица ---------- */
 .seg-toggle {
   display: inline-flex; gap: 2px; padding: 3px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
@@ -3483,8 +2820,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .tt-vote-actions .vote-btn { padding: 5px 6px; }
 @media (max-width: 1100px) { .tt-studio, .tt-table thead th:nth-child(5) { display: none; } }
 @media (prefers-reduced-motion: reduce) { .tt-loading { animation: none; } }
-
-/* ---------- Логотип Project: прорисовка при запуске, поворот и блик при наведении ---------- */
 .brand-logo {
   position: relative; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
@@ -3517,8 +2852,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .brand-logo::after { animation: none; }
   .brand-mark { transition: none; }
 }
-
-/* Всплывающее окно тайтла — плавное появление со стороны постера. */
 .title-popover {
   opacity: 0; pointer-events: none;
   transform: translateX(-6px) scale(.97);
@@ -3532,18 +2865,8 @@ body.watch-open #app-screen { pointer-events: none; }
 .title-popover.shown { opacity: 1; pointer-events: auto; transform: none; }
 .title-popover .tp-poster { border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) { .title-popover { transition: none; transform: none; } }
-
-/* Фото в кружках исполнителей (список, доска, карточка отчёта, активность)
-   — loadAvatars подменяет букву картинкой. */
 .avatar-bubble { overflow: hidden; }
 .avatar-bubble img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-/* ================================================================
-   Стиль «Золотое свечение» (по мотивам Golden Glow Dark UI).
-   Включается атрибутом data-look="glow" на <html> и только в тёмной
-   теме: почти чёрное стекло, золотые кромки карточек, луч света,
-   бьющий сверху в первый ряд метрик.
-   ================================================================ */
 :root[data-look="glow"][data-theme="dark"] {
   --bg: #040302;
   --bg-2: #080605;
@@ -3564,8 +2887,6 @@ body.watch-open #app-screen { pointer-events: none; }
     radial-gradient(90% 60% at 50% 118%, var(--bg-glow-1) 0%, var(--bg-glow-2) 40%, var(--bg) 100%);
   background-attachment: fixed;
 }
-
-/* Карточки: стекло с золотой кромкой — ярче сверху, гаснет к низу. */
 :root[data-look="glow"][data-theme="dark"] .bcell {
   background: linear-gradient(180deg, rgba(var(--glow-rgb), .035), rgba(255, 255, 255, 0) 60%), var(--surface);
   border-color: transparent;
@@ -3580,8 +2901,6 @@ body.watch-open #app-screen { pointer-events: none; }
   opacity: .75;
 }
 :root[data-look="glow"][data-theme="dark"] .bcell:hover::after { opacity: 1; }
-
-/* Первый ряд метрик — общая «сцена», на которую падает луч. */
 :root[data-look="glow"][data-theme="dark"] .an-metrics {
   position: relative;
   margin-top: 40px;
@@ -3594,10 +2913,7 @@ body.watch-open #app-screen { pointer-events: none; }
   box-shadow: inset 0 1px 0 rgba(var(--glow-rgb), .28), inset 0 40px 60px -48px rgba(var(--glow-rgb), .45);
   isolation: isolate;
 }
-:root[data-look="glow"][data-theme="dark"] .an-metrics::before {
-  /* луч: тонкий, плавно проявляется сверху, ярчает к точке удара */
-  /* Тише, чем было, и без пульсации: прежний яркий луч на 150px,
-     мерцающий каждые 4 с, отвлекал от цифр (план, п. 3 — «перебор»). */ position: absolute; left: 50%; bottom: 100%; width: 1px; height: 70px;
+:root[data-look="glow"][data-theme="dark"] .an-metrics::before { position: absolute; left: 50%; bottom: 100%; width: 1px; height: 70px;
   transform: translateX(-50%);
   background: linear-gradient(180deg, rgba(var(--glow-rgb), 0) 0%, rgba(var(--glow-rgb), .55) 100%);
   box-shadow: 0 0 10px 1px rgba(var(--glow-rgb), .18);
@@ -3605,7 +2921,6 @@ body.watch-open #app-screen { pointer-events: none; }
           mask: linear-gradient(180deg, transparent, #000 60%);
 }
 :root[data-look="glow"][data-theme="dark"] .an-metrics::after {
-  /* блик по кромке: плоский, яркий в центре и тающий к краям */
   content: ""; position: absolute; left: 50%; top: -1px; width: 70%; height: 2px;
   transform: translateX(-50%);
   background: linear-gradient(90deg, transparent, rgba(var(--glow-rgb), .35) 30%, rgba(var(--glow-rgb), .8) 50%, rgba(var(--glow-rgb), .35) 70%, transparent);
@@ -3616,9 +2931,6 @@ body.watch-open #app-screen { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   :root[data-look="glow"] .an-metrics::before, :root[data-look="glow"] .an-metrics::after { animation: none; }
 }
-
-
-/* Боковая панель: активная вкладка — золотая риска и мягкий ореол. */
 :root[data-look="glow"][data-theme="dark"] .tab-btn.active {
   background: linear-gradient(90deg, rgba(var(--glow-rgb), .12), rgba(var(--glow-rgb), .02));
   color: #ffe2b0;
@@ -3633,10 +2945,6 @@ body.watch-open #app-screen { pointer-events: none; }
   box-shadow: 0 0 0 1px rgba(var(--glow-rgb), .35) inset, 0 6px 22px -8px rgba(var(--glow-rgb), .8);
 }
 :root[data-look="glow"][data-theme="dark"] .big-num { text-shadow: 0 0 22px rgba(var(--glow-rgb), .18); }
-
-/* ================================================================
-   Тайтлы: баннер сезона (по мотивам AniVerse).
-   ================================================================ */
 .tl-hero {
   position: relative; height: 460px; margin-bottom: 18px;
   border-radius: 18px; overflow: hidden; isolation: isolate;
@@ -3731,10 +3039,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .tl-hero-poster { display: none; }
   .tl-hero-thumb { width: 118px; }
 }
-
-/* ================================================================
-   Календарь — неделя по часам (по мотивам Untitled UI Week view).
-   ================================================================ */
 .cal-layers .cal-layer { display: inline-flex; align-items: center; gap: 6px; }
 .cal-layer i { width: 8px; height: 8px; border-radius: 3px; background: var(--c, var(--ink-dim)); opacity: .45; }
 .cal-layer.on i { opacity: 1; }
@@ -3820,10 +3124,6 @@ body.watch-open #app-screen { pointer-events: none; }
   background: linear-gradient(180deg, rgba(var(--glow-rgb), .05), rgba(255, 255, 255, 0) 55%), rgba(14, 10, 8, .55);
   backdrop-filter: blur(6px);
 }
-
-/* ================================================================
-   Лента — компактная активность по дням.
-   ================================================================ */
 .fd-search {
   display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; min-width: 260px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px; color: var(--ink-dim);
@@ -3899,10 +3199,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .fd-time { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-dim); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fd-new-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fire); box-shadow: 0 0 8px var(--fire); }
 @media (max-width: 1000px) { .fd-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-/* ================================================================
-   Объявление для команды — баннер над вкладками.
-   ================================================================ */
 .team-notice {
   flex: none; display: flex; align-items: center; gap: 12px;
   margin: 10px 24px 0; padding: 5px 6px 5px 8px; border-radius: 11px;
@@ -3931,10 +3227,6 @@ body.watch-open #app-screen { pointer-events: none; }
 }
 .tn-input:focus { outline: none; border-color: var(--fire); }
 .tn-count { text-align: right; font-size: 11px; color: var(--ink-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
-
-/* ================================================================
-   Тикеты поддержки — список слева, переписка справа.
-   ================================================================ */
 .sheet.tk-sheet { width: min(980px, calc(100vw - 48px)); max-width: none; padding: 0; overflow: hidden; display: flex; flex-direction: column; height: min(680px, calc(100vh - 80px)); }
 .tk-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
 .tk-head h2 { margin: 0; position: static; padding: 0; border: none; background: none; font-size: 17px; flex: 1; }
@@ -3987,10 +3279,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .tk-send svg { width: 16px; height: 16px; }
 .tk-closed-note { border-top: 1px solid var(--line); padding: 14px 18px; color: var(--ink-dim); font-size: 12.5px; text-align: center; }
 .dash-clickable { cursor: pointer; }
-
-/* ================================================================
-   Дни рождения
-   ================================================================ */
 .bd-form { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto auto; gap: 8px; align-items: center; margin-bottom: 14px; }
 .bd-form input[type="text"], .bd-form input[type="date"] {
   height: 36px; padding: 0 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); font: inherit; font-size: 13px; min-width: 0;
@@ -4013,10 +3301,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .bd-del { opacity: .6; }
 .bd-del:hover { opacity: 1; color: var(--s-stop); }
 .cal-chip-bday { cursor: pointer; }
-
-/* ================================================================
-   Роли
-   ================================================================ */
 .sheet.rl-sheet { width: min(860px, calc(100vw - 48px)); max-width: none; }
 .rl-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; min-height: 0; }
 .rl-layout.targeted { grid-template-columns: minmax(0, 1fr); }
@@ -4057,10 +3341,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .rl-person { grid-template-columns: 30px minmax(0, 1fr); }
   .rl-role-checks { grid-column: 1 / -1; }
 }
-
-/* ================================================================
-   Журнал действий
-   ================================================================ */
 .sheet.al-sheet { width: min(980px, calc(100vw - 48px)); max-width: none; }
 .al-types { padding: 0 0 12px; }
 .al-types .qchip[disabled] { opacity: .45; cursor: default; }
@@ -4081,10 +3361,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .al-detail { color: var(--ink-soft); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-pager { align-items: center; }
 .al-range { font-size: 12px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
-
-/* ================================================================
-   Пост в канал — редактор слева, предпросмотр справа.
-   ================================================================ */
 .sheet.cp-sheet { width: min(1180px, calc(100vw - 40px)); max-width: none; height: calc(100vh - 60px); padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 .cp-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .cp-head h2 { margin: 0; position: static; padding: 0; border: none; background: none; font-size: 17px; }
@@ -4161,10 +3437,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .cp-publish { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
 .cp-publish-btn { justify-content: center; height: 40px; }
 @media (max-width: 1000px) { .cp-layout { grid-template-columns: 1fr; } .cp-side { border-left: none; border-top: 1px solid var(--line); } }
-
-/* ================================================================
-   Карточка человека: работа, пауза, передача дел
-   ================================================================ */
 .pp-pause { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); padding: 3px 10px; border-radius: 999px; background: var(--surface-2); }
 .pp-pause svg { width: 11px; height: 11px; fill: currentColor; }
 .pp-pause.on { color: var(--s-work); background: color-mix(in srgb, var(--s-work) 14%, transparent); font-weight: 600; }
@@ -4181,10 +3453,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .pp-transfer-item { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-transfer-item b { color: var(--fire); margin-right: 6px; }
 #pause-card.pp-paused { border-color: color-mix(in srgb, var(--s-work) 45%, var(--line)); }
-
-/* ================================================================
-   Напоминания и сроки
-   ================================================================ */
 .rm-form { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 8px; margin-bottom: 16px; }
 .rm-form input { height: 36px; padding: 0 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); font: inherit; font-size: 13px; min-width: 0; color-scheme: dark; }
 :root[data-theme="light"] .rm-form input { color-scheme: light; }
@@ -4206,8 +3474,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .cal-chip-rem svg { width: 12px; height: 12px; flex: none; fill: none; stroke: var(--fire); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .sheet.rm-sheet { width: min(680px, calc(100vw - 48px)); max-width: none; }
 .rm-dl { grid-template-columns: 160px 72px minmax(0, 1fr) auto; }
-
-/* Состояние бота на вкладке «Сервисы» */
 .bs-card { margin-top: 16px; }
 .bs-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
 .bs-cell { background: var(--surface-2); border-radius: 10px; padding: 9px 12px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
@@ -4222,8 +3488,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .bs-err.err { border-color: var(--s-stop); }
 .bs-err.warn { border-color: var(--s-work); color: var(--ink-soft); }
 @media (max-width: 1000px) { .bs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-/* Список на упоминание */
 .sheet.mn-sheet { width: min(720px, calc(100vw - 48px)); max-width: none; }
 .mn-auto { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 12px; }
 .mn-auto-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -4248,10 +3512,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .mn-name span { font-size: 11px; color: var(--ink-dim); }
 .mn-count { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; }
 .mn-count.many { color: var(--s-work); font-weight: 600; }
-
-/* ================================================================
-   Настройки — навигация слева, разделы справа.
-   ================================================================ */
 .sheet.st-sheet { max-width: none; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 .st-head { display: flex; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); }
 .st-head h2 { margin: 0; position: static; padding: 0; border: none; background: none; font-size: 18px; flex: 1; }
@@ -4330,10 +3590,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .st-keys span { margin-left: 6px; }
 .st-keys kbd { font: 600 11px ui-monospace, "SF Mono", Consolas, monospace; min-width: 22px; text-align: center; padding: 3px 7px; border-radius: 6px; background: var(--surface-3); border: 1px solid var(--line); border-bottom-width: 2px; color: var(--ink); }
 @media (max-width: 760px) { .st-layout { grid-template-columns: 1fr; } .st-nav { display: none; } }
-
-/* ================================================================
-   Экран входа — бренд слева, карточка с кодом справа.
-   ================================================================ */
 #auth-screen {
   background:
     radial-gradient(50% 60% at 25% 45%, color-mix(in srgb, var(--fire) 18%, transparent), transparent 70%),
@@ -4346,8 +3602,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .auth-beam { position: absolute; left: 38px; top: -40vh; width: 2px; height: 40vh; background: linear-gradient(transparent, #ffd28a); box-shadow: 0 0 14px 3px rgba(var(--glow-rgb), .5); opacity: .85; animation: glow-beam 4s ease-in-out infinite; }
 .auth-logo { width: 78px; height: 78px; border-radius: 22px; display: flex; align-items: center; justify-content: center; background: var(--accent-grad);
   box-shadow: 0 18px 40px -12px rgba(var(--fire-rgb), .7), 0 0 0 1px rgba(var(--glow-rgb), .35) inset; animation: auth-orbit 6s linear infinite; margin-bottom: 22px; }
-/* Логотип летает по небольшому кругу, не переворачиваясь: поворот → сдвиг
-   по радиусу → обратный поворот. */
 @keyframes auth-orbit {
   from { transform: rotate(0deg) translateX(9px) rotate(0deg); }
   to { transform: rotate(360deg) translateX(9px) rotate(-360deg); }
@@ -4389,11 +3643,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .auth-foot { margin-top: 6px; font-size: 11.5px; color: var(--ink-dim); text-align: center; line-height: 1.5; }
 @media (max-width: 860px) { .auth-split { grid-template-columns: 1fr; gap: 28px; width: min(420px, 92vw); } .auth-points, .auth-beam { display: none; } .auth-brand { align-items: center; } }
 @media (prefers-reduced-motion: reduce) { .auth-logo, .auth-beam, .auth-points li, .code-cell.filled { animation: none; } }
-
-/* ---------- Анимация надписи Project на экране входа ----------
-   1) буквы влетают по одной снизу с размытием;
-   2) по надписи раз в несколько секунд пробегает огненный блик;
-   3) из-под «DUB» поднимаются искры. */
 .auth-word { display: flex; gap: .28em; white-space: nowrap; }
 .aw-part { position: relative; display: inline-flex; }
 .aw-part i {
@@ -4439,8 +3688,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .aw-part i { animation: none; opacity: 1; transform: none; filter: none; background-position: 50% 0; }
   .aw-embers { display: none; }
 }
-
-/* Окошко «упала» над карточкой входа, когда код не подошёл */
 .auth-card-wrap { position: relative; }
 .auth-oops {
   position: absolute; left: 50%; bottom: calc(100% + 14px); width: 400px; transform: translateX(-50%);
@@ -4467,10 +3714,6 @@ body.watch-open #app-screen { pointer-events: none; }
 @keyframes oops-tilt { 0% { transform: rotate(-25deg) scale(.8); } 50% { transform: rotate(8deg) scale(1.05); } 100% { transform: none; } }
 @keyframes oops-leave { to { opacity: 0; transform: translate(-50%, -30px) scale(.96); } }
 @media (prefers-reduced-motion: reduce) { .auth-oops.drop, .auth-oops.drop .auth-oops-img, .auth-oops.leave { animation: none; } }
-
-/* ================================================================
-   Сообщения — список бесед слева, беседа справа.
-   ================================================================ */
 .ms-root { flex: 1; min-height: 0; display: flex; padding: 16px 24px 20px; }
 .ms-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--surface); }
 .ms-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 35%, var(--surface)); }
@@ -4518,7 +3761,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .ms-msg.grouped { margin-top: 2px; }
 .ms-msg.in { align-self: flex-start; }
 .ms-msg.out { align-self: flex-end; flex-direction: row-reverse; }
-/* :root[data-density] — иначе компактная плотность ужимала аватар до 20px */
 .ms-av, :root[data-density] .ms-msg .ms-av { width: 36px; height: 36px; margin: 0; font-size: 14px; flex: none; }
 .ms-msg-col { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ms-msg.out .ms-msg-col { align-items: flex-end; }
@@ -4561,10 +3803,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .ms-chat-av.person.lg { width: 42px; height: 42px; }
 .ms-people-more { font-size: 11px; color: var(--ink-dim); margin-left: 6px; align-self: center; }
 .ms-tc { cursor: default; }
-
-/* Рядовой участник студии: только «Тайтлы», «Сообщения», «Команда», «Я».
-   Админские кнопки и разделы — прочь (сервер их всё равно не пустит). */
-/* data-perm-show / data-perm-reports ставит perm-visibility.js: роль без звания админа, которой владелец выдал право. */
 :root[data-role="member"]:not([data-nyaa="1"]) .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-perm-show="1"]),
 :root[data-role="member"][data-nyaa="1"] .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-tab="nyaa"]):not([data-perm-show="1"]),
 :root[data-role="member"]:not([data-perm-reports="1"]) #sidebar-board-sub,
@@ -4573,16 +3811,12 @@ body.watch-open #app-screen { pointer-events: none; }
 :root[data-role="member"] #team-roles-btn:not([data-perm-show="1"]),
 :root[data-role="member"] #tn-edit:not([data-perm-show="1"]),
 :root[data-role="member"] #idle-slot { display: none !important; }
-
-/* Удаление сообщений */
 .ms-bubble-row { display: flex; align-items: center; gap: 6px; }
 .ms-del { opacity: 0; width: 26px; height: 26px; border-radius: 8px; border: none; background: transparent; color: var(--ink-dim); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; transition: opacity .15s; }
 .ms-del svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .ms-msg:hover .ms-del, .ms-del:focus-visible { opacity: 1; }
 .ms-del:hover { color: var(--s-stop); background: var(--surface-2); }
 .ms-deleted { font-style: italic; color: var(--ink-dim) !important; background: transparent !important; border: 1px dashed var(--line) !important; }
-
-/* Каналы и темы в «Сообщениях» */
 .ms-section { display: flex; align-items: center; gap: 6px; padding: 12px 10px 4px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--ink-dim); }
 .ms-section span { flex: 1; }
 .ms-section-btn { width: 22px; height: 22px; border-radius: 7px; border: none; background: var(--surface-2); color: var(--ink-soft); display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -4622,8 +3856,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .ms-cf-title b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-cf-title i { font-style: normal; font-size: 11px; color: var(--ink-dim); }
 .ms-cf-title.taken { opacity: .5; cursor: default; }
-
-/* ---------- «Я»: шапка во всю ширину, работа слева, сводка справа ---------- */
 .pf { display: flex; flex-direction: column; gap: 14px; max-width: 1280px; margin: 0 auto; }
 .pf-card, .pf-hero, .pf-side .team-teaser, .pf-side .goal-card {
   background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
@@ -4736,8 +3968,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .pf-side { position: static; }
   .pf-kpis { grid-template-columns: repeat(2, 1fr); }
 }
-
-/* ---------- «Список»: строка серии с постером, этапами и сроком ---------- */
 .content td.ls-series { width: 44%; }
 .ls-series-in { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .ls-poster {
@@ -4749,7 +3979,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .ls-names { min-width: 0; }
 .ls-name { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; }
 .ls-name > :first-child { overflow: hidden; text-overflow: ellipsis; }
-/* Название сжимается с «…», а номер серии и флаг справа остаются целыми. */
 .ls-name-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ls-ep { flex: none; font-size: 11.5px; font-weight: 600; color: var(--gold); padding: 1px 7px; border-radius: 99px; background: color-mix(in srgb, var(--gold) 12%, transparent); }
 .ls-prio { flex: none; font-size: 11px; font-weight: 700; }
@@ -4774,8 +4003,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .ls-dl-pill.late { color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 14%, transparent); }
 .ls-dl-date { margin-left: 7px; font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .ls-dl-none { font-size: 12px; color: var(--ink-dim); }
-
-/* ---------- Карточка отчёта: баннер, путь статусов, вкладки, две колонки ---------- */
 .overlay.report-detail-overlay .sheet { padding: 0; overflow: hidden auto; max-width: 980px; width: min(980px, 94vw); }
 .rd-hero { position: relative; padding: 18px 22px 16px; overflow: hidden; border-bottom: 1px solid var(--line); }
 .rd-hero-bg { position: absolute; inset: -30px; background: center / cover no-repeat; filter: blur(28px) saturate(1.3); opacity: .4; }
@@ -4845,8 +4072,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .rd-side-foot .btn { width: 100%; justify-content: center; }
 .rd-panel[hidden] { display: none; }
 @media (max-width: 860px) { .rd-body { grid-template-columns: 1fr; } .rd-side { border-left: none; border-top: 1px solid var(--line); } }
-
-/* ---------- «Команда»: сводка, фильтры, группы по ролям ---------- */
 .tm-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .tm-stat { flex: 1; min-width: 120px; display: flex; align-items: baseline; gap: 8px; padding: 12px 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
 .tm-stat b { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -4894,8 +4119,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .tm-act { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft); cursor: pointer; }
 .tm-act:hover { color: var(--fire); border-color: color-mix(in srgb, var(--fire) 50%, var(--line)); }
 .tm-act svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
-
-/* ---------- плеер дорожки в карточке отчёта ---------- */
 .tp { --tp-done: var(--fire); --tp-done2: var(--gold); --tp-rest: color-mix(in srgb, var(--ink) 26%, transparent);
   margin: 0 0 20px; padding: 14px 16px 16px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--fire) 28%, var(--line));
   background: radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--fire) 8%, transparent), transparent 60%), var(--surface); outline: none; }
@@ -4938,8 +4161,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .tp-at { flex: none; font: 700 12px ui-monospace, Consolas, monospace; color: var(--fire); padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--fire) 12%, transparent); }
 .tp-add input { flex: 1; min-width: 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; font-size: 13px; }
 @media (max-width: 900px) { .tp-keys { display: none; } }
-
-/* ---------- центр уведомлений ---------- */
 .ib-wrap { position: relative; }
 .ib-bell { position: relative; }
 .ib-bell em { position: absolute; top: -5px; right: -6px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; background: var(--fire); color: var(--on-accent);
@@ -4971,16 +4192,12 @@ body.watch-open #app-screen { pointer-events: none; }
 .ib-it.unread::after { content: ""; position: absolute; right: 10px; top: 16px; width: 8px; height: 8px; border-radius: 50%; background: var(--fire); box-shadow: 0 0 8px var(--fire); }
 .ib-empty { padding: 34px 12px; text-align: center; font-size: 13px; color: var(--ink-dim); }
 @media (prefers-reduced-motion: reduce) { .ib-bell.ring svg, .ib-panel { animation: none; } }
-
-/* Диалог «Исполнители / кого уведомить» — несколько галочек сразу */
 .assign-q { width: 100%; margin-bottom: 8px; }
 .assign-list { display: grid; gap: 2px; max-height: 320px; overflow-y: auto; margin-bottom: 4px; }
 .assign-pick { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
 .assign-pick:hover { background: var(--glass-hi); }
 .assign-pick[hidden] { display: none; }
 .assign-pick input { accent-color: var(--fire); }
-
-/* Аварийный режим («Саботаж», lockdown.js) — полоса над вкладками и окно включения */
 .lockdown-banner {
   flex: none; display: flex; align-items: center; gap: 12px;
   margin: 12px 24px 0; padding: 10px 10px 10px 14px; border-radius: 12px;
@@ -5003,8 +4220,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .ld-ack input { margin-top: 2px; accent-color: var(--s-stop); }
 .ld-sub { font-size: 12px; font-weight: 400; color: var(--ink-dim); margin-left: 8px; }
 .ld-item .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* Вложения (attachments.js): картинки и файлы в сообщениях, заметках, тикетах */
 .att-img { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 10px; overflow: hidden; max-width: 320px; }
 .att-img img { display: block; max-width: 320px; max-height: 260px; width: auto; height: auto; object-fit: contain; background: var(--glass-hi); }
 .att-file { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; border-radius: 10px; background: var(--glass-hi); border: 1px solid var(--line); min-width: 220px; max-width: 340px; }
@@ -5034,15 +4249,11 @@ body.watch-open #app-screen { pointer-events: none; }
 .raw-row.on { border-color: color-mix(in srgb, var(--s-done) 45%, var(--line)); }
 .raw-label { font-size: 13px; font-weight: 600; flex: none; min-width: 170px; }
 .raw-name { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* Прогресс отправки большого файла (api.js:apiUpload) */
 .upload-progress { position: fixed; right: 18px; bottom: 18px; z-index: 9999; width: 300px; padding: 10px 12px 12px; border-radius: 12px;
   background: var(--glass-bg-strong); border: 1px solid var(--glass-border); box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 12.5px; color: var(--ink); }
 .upload-progress span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px; }
 .upload-progress i { display: block; height: 4px; width: 0; border-radius: 4px; background: var(--fire); transition: width .2s; }
 .upload-progress + .upload-progress { bottom: 84px; }
-
-/* «Чаты бота» (bot-chats.js) */
 .bc-hint { color: var(--ink-dim); font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
 .bc-chat { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
 .bc-chat.target { border-color: color-mix(in srgb, var(--fire) 50%, var(--line)); }
@@ -5060,11 +4271,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .bc-thread { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim); }
 .bc-thread input { width: 90px; }
 .bc-warn { padding: 10px 12px; border-radius: 10px; font-size: 13px; background: color-mix(in srgb, var(--gold) 14%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); margin-bottom: 10px; }
-
-/* ---------- Обучение (tour.js) ----------
-   Подсветка — «окно» в затемнении (огромная тень вокруг рамки), рамка
-   плавно переезжает между шагами; карточка урока рядом с ней.
-   Приветствие для новичка и подсказка «Впервые в разделе?» — там же. */
 .tr-root { position: fixed; inset: 0; z-index: 3000; opacity: 0; transition: opacity .25s ease; }
 .tr-root.on { opacity: 1; }
 .tr-catch { position: absolute; inset: 0; }
@@ -5164,10 +4370,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .tr-spot, .tr-card, .tr-w-card, .tr-hint { transition: none; }
   .tr-spot::after, .tr-w-glow, .tr-card.swap .tr-text, .tr-card.swap h3 { animation: none; }
 }
-
-/* ---------- Экран входа: стена обложек сезона ----------
-   Слева наклонённые колонки постеров едут навстречу друг другу,
-   справа — бренд и форма входа. Затемнение уводит стену в фон. */
 #auth-screen .auth-split { position: relative; z-index: 2; grid-template-columns: 420px; gap: 0; width: 420px; margin-left: auto; margin-right: max(6vw, 32px); }
 #auth-screen .auth-brand { align-items: flex-start; margin-bottom: 22px; }
 #auth-screen .auth-points, #auth-screen .auth-beam { display: none; }
@@ -5194,10 +4396,6 @@ body.watch-open #app-screen { pointer-events: none; }
     linear-gradient(0deg, var(--bg) 0%, transparent 16%, transparent 84%, var(--bg) 100%); }
 @media (max-width: 860px) { .auth-wall, .auth-wall-shade { display: none; } #auth-screen .auth-split { margin: 0 auto; width: min(420px, 92vw); grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .aw-col { animation: none; } }
-
-/* ================================================================
-   UI 2.0 — шапка: поиск-команды, меню «Инструменты» и профиля.
-   ================================================================ */
 .tb-search {
   display: flex; align-items: center; gap: 9px; height: 34px; width: clamp(180px, 24vw, 340px); padding: 0 8px 0 11px;
   border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-dim);
@@ -5241,23 +4439,13 @@ body.watch-open #app-screen { pointer-events: none; }
 .tb-me-head span { font-size: 11.5px; color: var(--ink-dim); }
 @media (max-width: 1180px) { .tb-search-lbl, .tb-search kbd { display: none; } .tb-search { width: 34px; justify-content: center; padding: 0; } }
 @media (max-width: 980px) { #tools-btn .btn-lbl { display: none; } }
-
-/* Боковое меню: одна и та же подсветка активного пункта везде — заливка
-   и риска слева; фокус с клавиатуры — тонкой рамкой внутри, а не
-   оранжевым прямоугольником поверх пункта. */
 .tab-btn.active { background: var(--accent-soft); }
 .tab-btn.active::before {
   content: ""; position: absolute; left: -16px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--fire);
 }
 .tab-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fire) 55%, transparent); }
 @media (max-width: 860px) { .tab-btn.active::before { left: -8px; } }
-
-/* Вертикальный «луч» над метриками Обзора читался как артефакт отрисовки. */
 :root[data-look="glow"][data-theme="dark"] .an-metrics::before { content: none; }
-
-/* ================================================================
-   UI 2.0 — Обзор.
-   ================================================================ */
 .ov2-head .sub { font-size: 13px; }
 .ov2-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
 .ov2-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -5367,10 +4555,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .ov2-stage::after { display: none; }
   .ov2-steps { grid-template-columns: minmax(0, 1fr); }
 }
-
-/* ================================================================
-   UI 2.0 — Тайтлы: компактный лидер голосования, фильтры, сортировка.
-   ================================================================ */
 .tl-spot {
   position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: 150px minmax(0, 1fr) 260px; gap: 24px;
   padding: 18px; margin-bottom: 18px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface);
@@ -5433,10 +4617,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .tl-spot-poster { width: 120px; height: 170px; }
   .tl-spot-vote { grid-column: 1 / -1; }
 }
-
-/* ================================================================
-   UI 2.0 — «Моя очередь».
-   ================================================================ */
 .tab-badge {
   margin-left: auto; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px; display: grid; place-items: center;
   background: var(--fire); color: var(--on-accent); font-style: normal; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
@@ -5514,7 +4694,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .my-status-actions select { min-width: 0; flex: 1; }
 .my-status-actions .btn { min-height: 34px; }
 .my-status-empty { padding: 16px 8px; border: 1px dashed var(--line); border-radius: 12px; color: var(--ink-dim); font-size: 12px; text-align: center; }
-/* «Мои статусы» (queue.js: renderPersonalStatuses): доска на всю ширину, три фиксированные колонки */
 .psb-head .kd-sum > div { position: relative; }
 .psb-sum-bar { position: absolute; left: 12px; right: 12px; bottom: 7px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .psb-sum-bar em { display: block; height: 100%; background: var(--s-done); }
@@ -5572,8 +4751,6 @@ body.watch-open #app-screen { pointer-events: none; }
   .my-status-board { grid-auto-columns: minmax(260px, 84vw); padding-left: 14px; padding-right: 14px; }
 }
 @media (max-width: 1100px) { .q-cols { grid-template-columns: minmax(0, 1fr); } .q-stats { flex-wrap: wrap; } .q-stats > i { display: none; } }
-
-/* «Взять в работу» в Тайтлах и окно настройки работы над тайтлом. */
 .tl-take { border-color: color-mix(in srgb, var(--fire) 55%, var(--line)); color: var(--ember); }
 .tl-take.on { background: color-mix(in srgb, var(--s-done) 14%, transparent); border-color: color-mix(in srgb, var(--s-done) 45%, var(--line)); color: var(--s-done); }
 .vote-card { position: relative; }
@@ -5631,7 +4808,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .tw-crew-hint { font-size: 12px; color: var(--ink-dim); margin: 4px 0 6px; line-height: 1.45; }
 .tw-crew-hint:empty { display: none; }
 .tw-crew-hint .bad { color: #ff8a8a; }
-/* «Файлы серий» в окне «Взять в работу»: серия, под ней строка на каждый вид — как «Равки» в карточке отчёта */
 .tw-files-ep { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tw-files-ep select { height: 38px; min-width: 240px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; }
 .tw-files-ep small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
@@ -5657,8 +4833,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .tw-foot { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--line); }
 .tw-summary { margin-left: auto; font-size: 12px; color: var(--ink-soft); text-align: right; }
 @media (max-width: 760px) { .tw-body { grid-template-columns: minmax(0, 1fr); } }
-
-/* Календарь: статус нашей работы на серии взятого тайтла. */
 .cal-ev .cal-work {
   display: inline-block; margin-top: 3px; padding: 1px 6px; border-radius: 5px; font-style: normal; font-size: 10px; font-weight: 800;
   background: rgba(0, 0, 0, .35); color: rgba(255, 255, 255, .75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
@@ -5689,11 +4863,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .tw-nyaa-send-note { color: var(--s-done); font-size: 11.5px; }
 .tw-field > label.tw-toggle { display: flex; margin: 0; font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink); }
 @media (max-width: 560px) { .tw-nyaa-q { grid-template-columns: minmax(0, 1fr) 74px; } .tw-nyaa-q > button { grid-column: 1 / -1; } .tw-nyaa-options { align-items: flex-start; flex-direction: column; } }
-
-/* ================================================================
-   Настройки 2.0 — большое окно: разделы слева (с поиском), справа один
-   раздел за раз, строки сгруппированы в карточки.
-   ================================================================ */
 .sheet.st-sheet { width: min(1060px, calc(100vw - 48px)); height: min(760px, calc(100vh - 48px)); }
 .st-sheet .st-layout { grid-template-columns: 250px minmax(0, 1fr); height: 100%; }
 .st-sheet .st-nav { padding: 20px 14px; gap: 1px; overflow-y: auto; }
@@ -5742,19 +4911,14 @@ body.watch-open #app-screen { pointer-events: none; }
 .st-ping.slow { color: var(--s-work); }
 .st-ping.bad { color: var(--s-stop); white-space: normal; max-width: 220px; }
 .st-empty { padding: 40px 0; text-align: center; color: var(--ink-dim); }
-/* Поиск: видны все разделы, в которых что-то нашлось, и только найденные строки. */
 .st-sheet.st-finding .st-sec, .st-finding .st-sheet .st-sec { display: none; }
 .st-finding .st-sec.st-hit { display: block; margin-bottom: 26px; }
 .st-finding .st-lead, .st-finding .st-learn-top, .st-finding .st-learn-grid, .st-finding .st-learn-foot, .st-finding #s-alpha-block, .st-finding .st-group-h { display: none; }
 .st-finding .st-group:not(:has([data-st-find]:not([hidden]))) { display: none; }
 [data-st-find][hidden] { display: none !important; }
-
-/* Анимации выключены (Настройки → Внешний вид). */
 :root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
   animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important;
 }
-
-/* Компактное боковое меню — то же, что на узком окне. */
 :root[data-sidebar="compact"] .sidebar { width: 60px; align-items: center; padding: 12px 8px; }
 :root[data-sidebar="compact"] .sidebar-brand-txt, :root[data-sidebar="compact"] .sidebar-group-label,
 :root[data-sidebar="compact"] .tab-btn .tab-lbl, :root[data-sidebar="compact"] .sidebar-sub { display: none; }
@@ -5764,10 +4928,6 @@ body.watch-open #app-screen { pointer-events: none; }
 :root[data-sidebar="compact"] .tab-badge { position: absolute; top: 4px; right: 2px; min-width: 16px; height: 15px; font-size: 9.5px; padding: 0 4px; }
 
 @media (max-width: 900px) { .st-sheet .st-layout { grid-template-columns: 200px minmax(0, 1fr); } .st-cards-3 { grid-template-columns: 1fr 1fr; } }
-
-/* ================================================================
-   Сообщения 2.0: ответ с цитатой, реакции, закреплённые, панель «о беседе».
-   ================================================================ */
 .ms-layout.info-open { grid-template-columns: 300px minmax(0, 1fr) 270px; }
 .ms-info { display: none; min-height: 0; overflow-y: auto; border-left: 1px solid var(--line); padding: 16px 14px; background: color-mix(in srgb, var(--bg) 35%, var(--surface)); }
 .ms-layout.info-open .ms-info { display: block; }
@@ -5833,11 +4993,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .ms-replybar .icon-btn { width: 26px; min-width: 26px; height: 26px; padding: 0; }
 @media (max-width: 1280px) { .ms-layout.info-open { grid-template-columns: 260px minmax(0, 1fr) 240px; } }
 @media (max-width: 1080px) { .ms-layout.info-open { grid-template-columns: 260px minmax(0, 1fr); } .ms-layout.info-open .ms-info { display: none; } }
-
-/* ================================================================
-   Лента 2.0: колонка справа (сегодня, кто активен), постер серии,
-   свёрнутые подряд идущие правки, фильтр по человеку.
-   ================================================================ */
 .fd-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
 .fd-main-col { min-width: 0; }
 .fd-side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; }
@@ -5864,11 +5019,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .fd-group-row time { margin-left: auto; font-size: 11px; color: var(--ink-dim); flex: none; }
 .fd-group-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
 @media (max-width: 1150px) { .fd-wrap { grid-template-columns: minmax(0, 1fr); } .fd-side { position: static; display: grid; grid-template-columns: 1fr 1fr; } }
-
-/* ================================================================
-   Цветовые темы (Настройки → Внешний вид): каждая перекрашивает всё —
-   фон, поверхности, линии, текст, свечение и акцент. «Огонь» — :root.
-   ================================================================ */
 :root[data-accent="sakura"]:not([data-theme="light"]) {
   --bg: #090407; --bg-2: #10070c; --bg-glow-1: #a3164a; --bg-glow-2: #2a0614;
   --surface: #170c12; --surface-2: #1f1118; --surface-3: #2a1720; --surface-4: #37202b;
@@ -5913,8 +5063,6 @@ body.watch-open #app-screen { pointer-events: none; }
 :root[data-accent="mint"][data-theme="light"] {
   --fire: #11985a; --ember: #11985a; --gold: #3f8a12; --on-accent: #ffffff; --accent-soft: rgba(17, 152, 90, .12);
 }
-
-/* Настройки → Цветовая тема: образцы палитр. */
 .st-palettes { display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 10px; padding: 14px 16px; }
 .st-palette { display: flex; flex-direction: column; gap: 7px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; cursor: pointer; text-align: left; transition: border-color .15s, transform .15s; }
 .st-palette:hover { transform: translateY(-1px); border-color: var(--surface-4); }
@@ -5927,10 +5075,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .st-pal-prev i:nth-child(3) { left: calc(20% + 12px); top: 28px; width: 34%; height: 12px; background: linear-gradient(90deg, var(--p2), var(--p3)); }
 .st-pal-prev i:nth-child(4) { right: 6px; bottom: 6px; width: 18px; height: 18px; border-radius: 50%; background: var(--p2); box-shadow: 0 0 10px var(--p2); }
 @media (max-width: 900px) { .st-palettes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-
-/* ================================================================
-   Тайтлы — афиша: крупные постеры, всё поверх картинки.
-   ================================================================ */
 .af-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
 .af-card { position: relative; aspect-ratio: 2 / 3; border-radius: 18px; overflow: hidden; isolation: isolate; cursor: pointer;
   background: var(--surface-2); border: 1px solid var(--line); animation: row-in .25s ease both; transition: transform .25s var(--ease), box-shadow .25s; }
@@ -5970,15 +5114,11 @@ body.watch-open #app-screen { pointer-events: none; }
 .af-add b { font-size: 34px; font-weight: 300; color: var(--ink-soft); }
 .af-add span { font-size: 13px; font-weight: 700; }
 .af-add em { font-style: normal; font-size: 11px; }
-
-/* Сортировка — кнопкой, а не серым системным списком. */
 .tl-sort select { height: 30px; padding: 0 28px 0 10px; border-radius: 8px; border: 1px solid var(--line); background-color: var(--surface);
   color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%), linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
   background-position: calc(100% - 14px) 13px, calc(100% - 9px) 13px; background-size: 5px 5px; background-repeat: no-repeat; }
 .tl-sort select:hover { border-color: var(--surface-4); }
-
-/* Пост в канал: оформление, публикация, вид на телефоне и компьютере */
 .cp-style-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 12px; margin-top: 6px; }
 .cp-style { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--ink-dim); }
 .cp-style select { height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; font-size: 13px; padding: 0 8px; }
@@ -5996,8 +5136,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .cp-pv-text blockquote { margin: 4px 0; padding: 2px 8px; border-left: 3px solid #6ab3f3; }
 .cp-pv-buttons { grid-template-columns: minmax(0, 1fr); width: 100%; box-sizing: border-box; }
 .cp-pv-row { min-width: 0; }
-
-/* Предпросмотр кнопок: на телефоне — крупные кнопки Android, на компьютере — компактные, как в Telegram Desktop; значок ссылки ↗ в углу */
 .cp-pv-buttons span { position: relative; }
 .cp-pv-buttons span::after { content: "↗"; position: absolute; top: 2px; right: 6px; font-size: 9px; opacity: .55; font-weight: 400; }
 .cp-preview[data-view="phone"] .cp-pv-buttons { gap: 4px; }
@@ -6010,8 +5148,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .cp-cutwarn:empty { display: none; }
 .cp-pv-buttons span.cut { text-overflow: clip; }
 .cp-preview[data-view="phone"] .cp-pv-buttons span { font-size: 14px; }
-
-/* «Смотреть как…» (role-preview.js): плашка поверх окна, пока владелец примеряет роль. */
 #role-preview-bar {
   position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 9000;
   display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px;
@@ -6029,12 +5165,8 @@ body.watch-open #app-screen { pointer-events: none; }
   padding: 5px 14px; font: inherit; font-weight: 600; cursor: pointer;
 }
 html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), .45); }
-
-/* Окно подтверждения (api.js::askConfirm) вместо системного confirm(). */
 .sheet.ask-sheet { max-width: 440px; }
 .ask-text { white-space: pre-wrap; font-size: 14px; line-height: 1.5; color: var(--ink); margin: 4px 0 18px; overflow-wrap: anywhere; }
-
-/* Принудительное обновление (force-update.js): поверх всего, не закрывается. */
 .force-update { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 16px;
   background: rgba(4, 3, 2, .82); backdrop-filter: blur(8px); }
 .force-update-card { max-width: 440px; padding: 28px 26px; border-radius: 20px; text-align: center; display: grid; gap: 12px; justify-items: center;
@@ -6046,8 +5178,6 @@ html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), 
 .force-update-src { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft); }
 .force-update-src select { max-width: 260px; }
 .force-update-more { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 2px; }
-
-/* Экран ожидания (idle-scene.js): сцена на весь экран, поверх всего, плавное появление */
 .idle-scene { position: fixed; inset: 0; z-index: 9000; background: #0b1530; opacity: 0; transition: opacity .6s ease; }
 .idle-scene.on { opacity: 1; }
 .idle-scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
@@ -6062,8 +5192,6 @@ html[data-preview="1"] body { box-shadow: inset 0 0 0 2px rgba(var(--fire-rgb), 
 .idle-seg button { height: 30px; padding: 0 14px; border-radius: 999px; border: 0; background: transparent; color: rgba(255, 255, 255, .85); font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .idle-seg button.on { background: rgba(255, 255, 255, .9); color: #10203a; }
 .idle-hint { font-size: 12px; opacity: .75; text-shadow: 0 1px 6px rgba(0, 0, 0, .5); }
-
-/* Таймкоды и @упоминания внутри текста заметки (decorateNote в report-detail.js). */
 .note-text { line-height: 1.6; }
 .note-time.inline { display: inline-block; padding: 0 7px; margin: 0 1px; line-height: 1.55; vertical-align: baseline; }
 .note-mention { display: inline-block; padding: 0 6px; border-radius: 6px; line-height: 1.55; font-weight: 600; background: rgba(120, 174, 252, .14); color: #a9c9ff; }
@@ -6141,7 +5269,6 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pr-req:hover { border-color: var(--line); background: rgba(255,255,255,.02); }
 .pr-req-ct { font-size: 11.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pr-req-url { font-size: 11.5px; color: var(--ink-soft); font-family: var(--mono, ui-monospace, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* Очередь загрузок: имя сверху, статус целиком под ним (у торрента — МБ, скорость, сколько ещё, сиды и пиры). */
 .pr-job { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "url act" "ct act"; row-gap: 2px; }
 .pr-job .pr-req-url { grid-area: url; }
 .pr-job .pr-req-ct { grid-area: ct; white-space: normal; font-variant-numeric: tabular-nums; }
@@ -6150,13 +5277,9 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pr-req.on { background: rgba(80, 200, 120, .08); border-color: rgba(80, 200, 120, .35); }
 .pr-dl-progress { position: relative; min-width: 160px; overflow: hidden; z-index: 0; font-variant-numeric: tabular-nums; }
 .pr-dl-progress::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--pr-progress, 0%); background: linear-gradient(90deg, rgba(120,174,252,.4), rgba(120,174,252,.25)); z-index: -1; transition: width .2s ease; }
-
-/* Загрузчик: окно кодового слова */
 .pr-access-form { display: grid; gap: 10px; margin-top: 12px; }
 .pr-access-key { width: 100%; }
 .pr-access-err { color: var(--danger, #e5484d); font-size: 12px; }
-
-/* Загрузчик: каталог авторов */
 .pc-wrap { display: grid; gap: 12px; }
 .pc-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pc-search { flex: 1 1 240px; min-width: 0; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
@@ -6225,7 +5348,6 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pc-file { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 13px; padding: 3px 0; cursor: pointer; min-width: 0; }
 .pc-fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-file small { color: var(--ink-dim); }
-/* Каталог: оформление в стиле шапки загрузчика */
 .pr-wrap:has(> * .pc-wrap), .pr-wrap:has(.pc-wrap) { max-width: 1440px; }
 .pc-ico { width: 15px; height: 15px; margin-right: 6px; vertical-align: -3px; }
 .pc-wrap { gap: 14px; }
@@ -6298,7 +5420,6 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 @media (max-width: 720px) { .pc-rmain { grid-template-columns: 1fr; } }
 @keyframes pc-sk { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .pc-sk { animation: none; } .pc-card, .pc-post, .pc-post .pc-thumb img { transition: none; } }
-/* Переключатель источника во вкладке каталога */
 .pc-tab { display: inline-flex; align-items: center; gap: 6px; }
 .pc-src { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 7px; background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .22); cursor: pointer; transition: background .15s ease; }
 .pc-src:hover { background: rgba(255, 255, 255, .26); }
@@ -6308,7 +5429,6 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pc-src.flip { animation: pc-flip .45s cubic-bezier(.2, .8, .2, 1); }
 @keyframes pc-flip { 0% { transform: rotateX(90deg); opacity: 0; } 60% { transform: rotateX(-12deg); opacity: 1; } 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .pc-src.flip { animation: none; } }
-/* Загрузчик: панель «Настройки» */
 .pr-hero-body { position: relative; }
 .pr-gear { position: absolute; top: 16px; right: 16px; z-index: 2; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(0, 0, 0, .25); color: rgba(255, 255, 255, .75); cursor: pointer; transition: color .15s ease, background .15s ease, transform .3s ease; }
 .pr-gear svg { width: 18px; height: 18px; }
@@ -6331,7 +5451,6 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pr-acc-empty { font-size: 13px; color: var(--ink-dim); padding: 6px 2px; }
 .pr-access-field { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-dim); }
 .pr-access-form { display: grid; gap: 10px; }
-/* Каталог: страница поста */
 .pp-nav { display: flex; gap: 6px; margin-left: auto; }
 .pp { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 1fr); gap: 0; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 14px 40px rgba(0, 0, 0, .28); }
 .pp.no-media { grid-template-columns: 1fr; }

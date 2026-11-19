@@ -1,4 +1,3 @@
-// Экран входа по коду из бота + экран загрузки при старте (splash).
 
 import { maybeAskNda } from "./nda.js";
 import { invoke } from "./tauri.js";
@@ -20,10 +19,6 @@ import { maybeWelcome, resetTourUi } from "./tour.js";
 import { refreshPermissions, startPermissionsPolling } from "./permissions-refresh.js";
 import { initAppAtmos } from "./nyaa-atmos.js";
 
-// Экран загрузки при старте — тот же маскот/прогресс-бар, что и в
-// мини-аппе (см. #splash в miniapp/static/index.html). Держим минимум
-// 700мс, чтобы не мигать на мгновенном /whoami, и прячем сразу же,
-// как только известно, куда вести — в приложение или на экран входа.
 const SPLASH_MIN_MS = 700;
 const splashShownAt = Date.now();
 export function hideSplash() {
@@ -31,12 +26,10 @@ export function hideSplash() {
   if (!el || el.dataset.hidden) return;
   el.dataset.hidden = "1";
   const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashShownAt));
-  // Интро заставки доигрывает само и уводит плитку на место логотипа в шапке (splash.js).
-  // DevSkim: ignore DS172411 — таймер вызывает функцию, не строку
+  // DevSkim: ignore DS172411
   setTimeout(() => import("./splash.js").then(m => m.finishSplash()), wait);
 }
 
-// Имя в шапке.
 export function setDisplayName(name) {
   state.name = name || null;
   const el = $("#whoami");
@@ -44,16 +37,13 @@ export function setDisplayName(name) {
   setTitlebarIdentity(state.name);
 }
 
-// Один запрос /me на старте закрывает сразу двоих: имя для шапки и
-// is_developer для переключателя в Настройках (иначе его дёргает сам
-// диалог настроек при первом открытии).
 async function hydrateIdentity() {
   try {
     const me = await apiGet("/me");
     setDisplayName(me.display_name || me.name);
     state.isDeveloper = !!me.is_developer;
     document.documentElement.dataset.dev = state.isDeveloper ? "1" : "0";
-  } catch (_) { /* не критично: шапка просто останется без имени */ }
+  } catch (_) { }
 }
 
 export async function tryRestoreSession() {
@@ -71,16 +61,13 @@ export async function tryRestoreSession() {
     hydrateIdentity();
     await refreshAll();
   } catch (e) {
-    // Нет сети — это не отзыв токена: токен не трогаем (иначе после запуска без интернета
-    // пришлось бы заново привязывать приложение кодом), а пробуем ещё раз через несколько секунд.
     if (e.network) {
       hideSplash();
       const note = `${e.message} Пробую снова…`;
-      if ($("#auth-screen").hidden) showAuth(note); else $("#auth-error").textContent = note; // без повторного показа заставки
+      if ($("#auth-screen").hidden) showAuth(note); else $("#auth-error").textContent = note;
       setTimeout(() => { if ($("#app-screen").hidden && state.token) tryRestoreSession(); }, 8000);
       return;
     }
-    // токен отозван/протух — просим войти заново, а не молча виснем.
     await invoke("token_clear").catch(() => {});
     resetSessionState();
     hideSplash();
@@ -88,8 +75,6 @@ export async function tryRestoreSession() {
   }
 }
 
-// Искры над «DUB» — случайные позиция, размер, скорость и снос, чтобы
-// не шли строем. Создаются один раз, дальше крутятся на CSS.
 function spawnEmbers() {
   const host = document.querySelector(".aw-embers");
   if (!host || host.childElementCount) return;
@@ -104,30 +89,21 @@ function spawnEmbers() {
   }
 }
 
-// Надпись влетает заново при каждом показе экрана входа (после выхода
-// тоже), а не только при первой загрузке окна.
 function replayWordmark() {
   const word = document.querySelector(".auth-word");
   if (!word) return;
   word.querySelectorAll(".aw-part i").forEach(i => { i.style.animation = "none"; void i.offsetWidth; i.style.animation = ""; });
 }
 
-// Админ или рядовой участник: у участника прячем админские вкладки и
-// кнопки (CSS по data-role) и не запускаем опросы админских данных.
 export async function applyRole(isAdmin, nyaaAccess = false) {
   state.isAdmin = isAdmin;
   state.nyaaAccess = isAdmin || nyaaAccess;
   document.documentElement.dataset.role = isAdmin ? "admin" : "member";
-  // Роспись и звукари видят «Релизы» (Няшку), хотя остальное админское скрыто.
   document.documentElement.dataset.nyaa = !isAdmin && nyaaAccess ? "1" : "0";
   await refreshPermissions();
   startPermissionsPolling();
 }
 
-// Стена обложек на экране входа. Картинки — с нашего сервера по номеру
-// (/api/login-wall/N): входа ещё нет, а внешние картинки CSP не пускает.
-// Размер пула спрашиваем один раз за запуск, а набор и порядок обложек —
-// новые при каждом показе экрана входа (и после выхода тоже).
 let wallCount = null;
 async function loadLoginWall() {
   const host = $("#auth-wall");
@@ -141,9 +117,6 @@ async function loadLoginWall() {
     if (!count) return;
     host.classList.remove("on");
     const COLS = 5;
-    // Сервер держит пул на ~200 тайтлов (популярные и лучшие на Shikimori
-    // за все годы); каждый показ — свои случайные 40 в случайном порядке,
-    // поэтому стена не повторяется.
     const order = Array.from({ length: count }, (_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -164,7 +137,7 @@ async function loadLoginWall() {
       img.addEventListener("error", () => img.remove(), { once: true });
     });
     requestAnimationFrame(() => host.classList.add("on"));
-  } catch (_) { /* без стены — просто фон */ }
+  } catch (_) { }
 }
 
 export function showAuth(err) {
@@ -173,14 +146,8 @@ export function showAuth(err) {
   replayWordmark();
   $("#auth-screen").hidden = false;
   $("#app-screen").hidden = true;
-  // Полоса заголовка теперь общая для всех экранов (окно без системных
-  // decorations, см. window-chrome.js), поэтому кнопки приложения в ней
-  // прячем отдельно — до входа «Обновить» и «Выйти» бессмысленны.
   $("#titlebar-apps").hidden = true;
   resetInbox();
-  // Всегда перезаписываем, а не только при наличии err: иначе после
-  // «Сессия истекла: …» и обычного выхода старое сообщение продолжало
-  // висеть над формой входа.
   $("#auth-error").textContent = err || "";
   $("#code-input").focus();
   loadCodeLength();
@@ -189,17 +156,13 @@ export function showAuth(err) {
 export function showApp() {
   $("#auth-screen").hidden = true;
   $("#app-screen").hidden = false;
-  initAppAtmos().catch(() => { /* без атмосферы баннера — обычные цвета */ });
+  initAppAtmos().catch(() => { });
   $("#titlebar-apps").hidden = false;
   setDisplayName(state.name);
-  // Первый пинг присутствия — сразу, а не через минуту: модуль
-  // presence.js стартует при загрузке страницы, когда токена ещё нет,
-  // и его первый заход всегда уходил впустую.
   pingPresence();
   loadTitlebarTeam();
   refreshQueueBadge();
   refreshInbox();
-  // Новичку — приветствие с предложением пройти обучение (один раз).
   maybeWelcome();
   maybeAskNda();
 }
@@ -235,9 +198,6 @@ async function submitCode() {
   }
 }
 
-// Окошко «упала» над карточкой, когда код не подошёл или истёк: сверху
-// падает персонаж с текстом ошибки, при новом вводе — уезжает. Картинок
-// может быть несколько — берётся случайная.
 const OOPS_MASCOTS = [
   {
     src: oopsFrierenGif,
@@ -258,14 +218,9 @@ function showOops(message) {
   if (!box) return;
   const expired = /истек|устар|expired|не найден|неверн|invalid|401/i.test(message || "");
   const mascot = OOPS_MASCOTS[Math.floor(Math.random() * OOPS_MASCOTS.length)];
-  // Код не подошёл — шутит персонаж; другая ошибка (нет связи и т.п.) —
-  // тот же персонаж, но с настоящим текстом ошибки, чтобы было понятно,
-  // что делать.
   $("#auth-oops-title").textContent = expired ? mascot.title : "Упс, что-то пошло не так";
   $("#auth-oops-text").textContent = expired ? mascot.text : (message || "Попробуйте ещё раз.");
   $("#auth-oops-img").src = mascot.src;
-  // Отменяем отложенное скрытие прошлого окошка — иначе при быстром
-  // «стёр → ввёл новый неверный код» оно прятало уже новое.
   window.clearTimeout(oopsLeaveTimer);
   box.hidden = false;
   box.classList.remove("leave", "drop");
@@ -285,10 +240,6 @@ function hideOops() {
 $("#submit-code").addEventListener("click", submitCode);
 $("#code-input").addEventListener("keydown", e => { if (e.key === "Enter") submitCode(); });
 
-// Ячейки — только картинка поверх одного настоящего поля ввода: вставка
-// из буфера, автозаполнение и ввод работают как обычно, а ячейки просто
-// показывают цифры. Последняя цифра — сразу вход. Сколько цифр в коде,
-// решает сервер (/desktop/pair-info): 6 или 8; не ответил — 6.
 let CODE_LEN = 6;
 
 function layoutCodeCells(n) {
@@ -309,7 +260,7 @@ async function loadCodeLength() {
     const info = await apiGet("/desktop/pair-info");
     const n = Number(info && info.code_length);
     if ((n === 6 || n === 8) && n !== CODE_LEN) layoutCodeCells(n);
-  } catch (_) { /* старый сервер или нет сети — остаёмся на 6 */ }
+  } catch (_) { }
 }
 
 function renderCodeCells() {
@@ -326,9 +277,6 @@ function renderCodeCells() {
   return digits;
 }
 
-// Поле невидимое, поэтому курсор в нём держим всегда в конце: иначе клик
-// по ячейке ставил его в середину, и ввод/стирание шли не туда, куда
-// смотрит человек.
 function caretToEnd() {
   const input = $("#code-input");
   const n = input.value.length;
@@ -347,7 +295,6 @@ $("#code-input").addEventListener("input", codeChanged);
 $("#code-input").addEventListener("keydown", e => {
   const input = e.currentTarget;
   if (e.key === "Backspace" || e.key === "Delete") {
-    // Всегда стираем последнюю видимую цифру (с Ctrl — все).
     e.preventDefault();
     input.value = e.ctrlKey ? "" : input.value.slice(0, -1);
     codeChanged();
@@ -363,11 +310,6 @@ $("#code-input").addEventListener("keydown", e => {
 $("#code-input").addEventListener("blur", renderCodeCells);
 renderCodeCells();
 
-// Полный выход: и состояние, и уже отрисованные данные на вкладках, и
-// точки отсчёта фоновых опросов. Без сброса последних следующий
-// вошедший на этой машине получал системное уведомление «вам назначено
-// N новых отчётов» на весь свой список (diff считался относительно
-// списка предыдущего пользователя).
 function logout() {
   resetTourUi();
   resetSessionState();
@@ -387,8 +329,6 @@ $("#logout-btn").addEventListener("click", async () => {
 });
 
 document.addEventListener("session-expired", async e => {
-  // Мы уже на экране входа (например, 401 прилетел из самого
-  // tryRestoreSession) — там сообщение покажут без нас.
   if ($("#app-screen").hidden) return;
   await invoke("token_clear").catch(() => {});
   logout();

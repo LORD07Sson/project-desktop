@@ -1,12 +1,3 @@
-// Проверка вкладки «Я» и пакетного QC на СОБРАННОМ бандле — тот же
-// приём, что в board-gestures-test.mjs:
-//
-//   npm run build && npm run test:profile
-//
-// Обе фичи целиком построены на данных, которые сервер уже отдаёт, и
-// ломаются молча: прогресс наград или порог кольца легко посчитать не от
-// того числа, и на экране всё равно будет «какая-то полоска». Поэтому
-// проверяются конкретные значения, а не факт отрисовки.
 
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
@@ -21,7 +12,6 @@ const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-onl
 const w = dom.window;
 const setGlobal = (n, v) => Object.defineProperty(globalThis, n, { value: v, writable: true, configurable: true });
 for (const n of ["window", "document", "localStorage", "navigator", "Image", "MutationObserver", "CustomEvent", "Event", "getComputedStyle"]) setGlobal(n, w[n]);
-// Соглашение о неразглашении (nda.js) для тестового пользователя уже принято — иначе его окно считалось бы лишней модалкой.
 w.localStorage.setItem("project-nda-v1-7269587205", "test");
 setGlobal("requestAnimationFrame", w.requestAnimationFrame || (cb => setTimeout(cb, 0)));
 document.elementFromPoint = () => null;
@@ -91,8 +81,6 @@ let qcCalls = 0;
 w.__TAURI_INTERNALS__ = {
   invoke: async (cmd, args) => {
     if (cmd === "token_load") return "dsk_test";
-    // Диалог выбора файла теперь открывает Rust (file_scope.rs), а не
-    // JS-плагин — стабим свою команду, а не plugin:dialog|open.
     if (cmd === "pick_input_files") return ["/tmp/ep12_kaguya.wav", "/tmp/ep12_fujiwara.wav"];
     if (cmd === "qc_analyze") {
       qcCalls++;

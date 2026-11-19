@@ -1,7 +1,3 @@
-// Личные настройки вида (Настройки → Внешний вид / Поведение): акцентный
-// цвет, масштаб интерфейса, анимации, фон из обложки тайтла, стартовый
-// раздел. Хранятся в localStorage и применяются сразу при импорте модуля —
-// до первой отрисовки, чтобы не мигало.
 
 const KEYS = {
   accent: "project-accent",
@@ -11,11 +7,6 @@ const KEYS = {
   start: "project-start-tab",
 };
 
-// Цветовая тема: перекрашивает всё приложение — фон, карточки, линии,
-// текст, свечение и акцент (палитры — в styles.css, :root[data-accent]).
-// sw — цвета для образца в Настройках: фон, карточка, акцент, золото.
-// «Оригинал» — палитра десктопа 2.0 «Кадр» (по умолчанию); «Янтарь» —
-// прежняя оранжевая тема до 2.0.
 export const ACCENTS = {
   original: { label: "Оригинал", sw: ["#0b0908", "#1d1713", "#ff7a3d", "#ffb35c"] },
   amber: { label: "Янтарь", sw: ["#070403", "#1c1310", "#ff6a2b", "#ffb444"] },
@@ -31,19 +22,15 @@ function get(key, fallback) {
   try { return localStorage.getItem(key) || fallback; } catch (_) { return fallback; }
 }
 function set(key, value) {
-  try { localStorage.setItem(key, value); } catch (_) { /* приватный режим — просто не запомним */ }
+  try { localStorage.setItem(key, value); } catch (_) { }
 }
 
 const root = document.documentElement;
 
-// Старое значение "fire" было темой по умолчанию до 2.0 — такие
-// пользователи получают новый «Оригинал», а прежние цвета остаются
-// выбором «Янтарь».
 export function currentAccent() { const v = get(KEYS.accent, "original"); return ACCENTS[v] ? v : "original"; }
 export function applyAccent(name) {
   const key = ACCENTS[name] ? name : "original";
   set(KEYS.accent, key);
-  // Старые сборки красили акцент инлайн-стилями — убираем их.
   ["--fire", "--ember", "--gold", "--on-accent", "--accent-soft", "--accent-grad"].forEach(p => root.style.removeProperty(p));
   if (key === "original") delete root.dataset.accent;
   else root.dataset.accent = key;
@@ -66,8 +53,6 @@ export function applyMotion(mode) {
   else delete root.dataset.motion;
 }
 
-// Размытая обложка тайтла за интерфейсом (app/backdrop.js). Выключенная
-// оставляет ровный фон — на слабом компьютере блюр на всё окно дорогой.
 export function backdropOn() { return get(KEYS.backdrop, "on") !== "off"; }
 export function applyBackdrop(on) {
   set(KEYS.backdrop, on ? "on" : "off");
@@ -75,7 +60,6 @@ export function applyBackdrop(on) {
   else root.dataset.backdrop = "off";
 }
 
-// Стартовый раздел: «last» — как раньше, последний открытый.
 export function startTab() { const v = get(KEYS.start, "last"); return START_TABS[v] ? v : "last"; }
 export function setStartTab(v) { set(KEYS.start, START_TABS[v] ? v : "last"); }
 

@@ -1,17 +1,6 @@
-// Заставка при запуске — повторяет интро-ролик Reroll целиком (разобран покадрово, 60 к/с), в цветах пользователя:
-//   0,00 с  сцена «кубик»: тёмный стеклянный кубик с точкой на фоне размытых «лепестков» акцента, камера плывёт
-//   0,52 с  склейка → угол окна программы с доком: плитка-логотип, значок чата, ещё приложение; камера отъезжает
-//   0,95 с  склейка → «P» из размытия, плитка с поворотом садится на место «o», буквы выпрыгивают снизу
-//   3,20 с  слово гаснет → три точки (пока грузятся данные, «дышат» волной)
-//   затем   точки сливаются в одну → контур квадрата по часовой → заливка → плитка подрастает и кувыркается
-//           3D-кубиком (грани 1–6) → карточка профиля (аватар-круг, имя, подпись) → «монета» с пунктирными
-//           кольцами → плитка с крестиком логотипа улетает на своё место в шапке, фон растворяется.
-// Цвет — акцент пользователя (--fire / --gold / --accent-grad), фон — его тема (--bg). Клик или Esc — пропустить.
 
-// Без Web Animations API (тесты в jsdom, старый WebView) — как при «уменьшить движение»: без интро.
 const reduce = () => typeof window.Element?.prototype.animate !== "function" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const OUT = "cubic-bezier(.22, .9, .3, 1)";
-// Темп: ролик чуть медленнее оригинала — сцены успевают рассмотреть, но без затянутости.
 const S = 1.2;
 let skipped = false;
 const wait = ms => (skipped ? Promise.resolve() : new Promise(r => setTimeout(r, ms * S)));
@@ -21,7 +10,7 @@ const play = (el, frames, opts = {}) => {
   return a.finished.catch(() => {});
 };
 
-let ready = null;      // промис «интро доиграло до точек»
+let ready = null;
 let wave = [];
 let t0 = 0;
 
@@ -77,11 +66,7 @@ function build(root) {
     <div class="app-splash-status" data-status>Загружаем данные…</div>`;
 }
 
-// Кость — настоящая 3D-модель на canvas: куб со скруглёнными рёбрами и углами (сетка граней, спроецированная
-// на скруглённую коробку), освещение и блик по нормалям, утопленные точки. Из плоских CSS-граней такую не собрать:
-// у них либо острые рёбра, либо щели у вершин. Модель выпуклая, поэтому достаточно отбросить грани, смотрящие от камеры.
 const PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
-// грань: нормаль (ось и знак), базис u/v на ней и число точек — как раскладывал CSS-кубик (1 спереди, 2 сверху…)
 const DIE_FACES = [
   { n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], pips: 1 },
   { n: [0, 0, -1], u: [-1, 0, 0], v: [0, 1, 0], pips: 6 },
@@ -90,15 +75,14 @@ const DIE_FACES = [
   { n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1], pips: 2 },
   { n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1], pips: 5 },
 ];
-const DIE_R = .13;                                   // радиус скругления рёбер (куб — от −0,5 до 0,5)
+const DIE_R = .13;
 const DIE_A = .5 - DIE_R;
-const DIE_GRID = (() => {                            // мельче у рёбер, крупно на плоской части
+const DIE_GRID = (() => {
   const edge = [0, .2, .4, .6, .8].map(k => -.5 + DIE_R * k);
   return [...edge, ...[-1, -.6, -.2, .2, .6, 1].map(k => k * DIE_A), ...edge.map(x => -x).reverse()];
 })();
 const clampA = x => Math.max(-DIE_A, Math.min(DIE_A, x));
 const norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-// точка сетки грани → точка скруглённой коробки и её нормаль
 function rounded(p) {
   const c = p.map(clampA);
   const n = norm([p[0] - c[0], p[1] - c[1], p[2] - c[2]]);
@@ -134,13 +118,12 @@ function dieRenderer(canvas, size) {
   const fire = parseColor(ctx, cs.getPropertyValue("--fire").trim(), "#3aa0ff");
   const gold = parseColor(ctx, cs.getPropertyValue("--gold").trim(), "#7fd0ff");
   const bg = parseColor(ctx, cs.getPropertyValue("--bg").trim(), "#05070a");
-  const D = 700 / size;                               // перспектива как у CSS-сцены (700px), в единицах куба
-  const L = norm([-.38, -.6, .7]);                    // свет сверху-слева-спереди (ось y вниз, как в CSS)
+  const D = 700 / size;
+  const L = norm([-.38, -.6, .7]);
   const H = norm([L[0], L[1], L[2] + 1]);
   const rgb = (c, k, sp) => `rgb(${c.map(x => Math.round(Math.min(255, x * k + 255 * sp))).join(",")})`;
 
   return (ax, ay, az) => {
-    // поворот как у CSS «rotateX(ax) rotateY(ay) rotateZ(az)»: сначала Z, потом Y, потом X
     const [sx, cx, sy, cy, sz, cz] = [Math.sin(ax), Math.cos(ax), Math.sin(ay), Math.cos(ay), Math.sin(az), Math.cos(az)];
     const rot = ([x, y, z]) => {
       [x, y] = [x * cz - y * sz, x * sz + y * cz];
@@ -170,7 +153,6 @@ function dieRenderer(canvas, size) {
       ctx.fill();
       ctx.stroke();
     }
-    // точки — лунки на плоской части видимых граней
     for (const f of DIE_FACES) {
       const n = rot(f.n);
       if (!facing(rot(f.n.map(x => x * .5)), n)) continue;
@@ -191,7 +173,6 @@ function dieRenderer(canvas, size) {
         ring(r, .002);
         ctx.fillStyle = rgb(bg, 1, 0);
         ctx.fill();
-        // тонкий светлый край лунки снизу — видно, что она утоплена
         ctx.strokeStyle = `rgba(255,255,255,${.22 * dim})`;
         ctx.lineWidth = .8;
         ctx.stroke();
@@ -200,7 +181,6 @@ function dieRenderer(canvas, size) {
   };
 }
 
-// cubic-bezier для собственной анимации кости (та же кривая, что была у CSS-кувырка)
 function bezier(x1, y1, x2, y2) {
   const f = (t, a, b) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
   return x => {
@@ -210,8 +190,6 @@ function bezier(x1, y1, x2, y2) {
   };
 }
 
-// Переход между сценами — «пролёт сквозь»: уходящая сцена наезжает на камеру и размывается,
-// новая проявляется из лёгкого отдаления и размытия; на стыке — короткая вспышка акцента.
 function cut(root, name) {
   const next = root.querySelector(`[data-s="${name}"]`);
   const prev = root.querySelector(".sp-scene.on");
@@ -226,18 +204,14 @@ function cut(root, name) {
   return next;
 }
 
-// Камера облетает кубик: плиты поворачиваются против часовой (~14°), кубик — от «виден верх и правый бок»
-// к «виден низ и левая фаска». Кубик прозрачный: что за ним — видно сквозь стекло, как в ролике.
 async function sceneCube(root) {
   const s = cut(root, "cube");
   const g = s.querySelector(".sp-glass");
-  // плиты — 3D-лопасти вокруг кубика; камера облетает их по трём осям, поэтому перспектива плит меняется, как в ролике
   play(s.querySelector(".sp-glow"), [{ transform: "rotateX(var(--cx0)) rotateY(var(--cy0)) rotateZ(var(--cz0))" }, { transform: "rotateX(var(--cx1)) rotateY(var(--cy1)) rotateZ(var(--cz1))" }], { duration: 520, easing: "ease-in-out" });
   play(g, [{ transform: "perspective(900px) rotateX(-17deg) rotateY(-15deg) rotateZ(10deg)" }, { transform: "perspective(900px) rotateX(13deg) rotateY(8deg) rotateZ(-1deg)" }], { duration: 520, easing: "ease-in-out" });
   play(g.querySelector(".g-top"), [{ height: "15%" }, { height: "0%" }], { duration: 520, easing: "ease-in-out" });
   play(g.querySelector(".g-bottom"), [{ height: "3%" }, { height: "19%" }], { duration: 520, easing: "ease-in-out" });
   play(g.querySelector(".g-left"), [{ width: "3%" }, { width: "9%" }], { duration: 520, easing: "ease-in-out" });
-  // пятно плиты, видное сквозь стекло, сползает вслед за поворотом камеры
   play(g.querySelector(".g-see"), [{ transform: "translate(-6%, 10%) scale(.8)", opacity: .75 }, { transform: "none", opacity: 1 }], { duration: 520, easing: "ease-in-out" });
   await wait(520);
 }
@@ -268,14 +242,12 @@ async function sceneWord(root) {
     ], { duration: 420, easing: "ease-out" });
   };
 
-  // «P» из размытия, крупнее и тусклее → резко, 220 мс
   grow(0, 1);
   play(letters[0], [
     { filter: "blur(14px)", opacity: 0, transform: "scale(1.18)" },
     { filter: "blur(0)", opacity: 1, transform: "none" },
   ], { duration: 220, easing: OUT });
 
-  // плитка справа от «P»: поворот −18° → 45° (ромб) → 0°, садится в слот «o»
   const ws = word.getBoundingClientRect();
   const em = parseFloat(getComputedStyle(word).fontSize) || 84;
   flyer.style.left = `${widths[0] + em * .62}px`;
@@ -298,17 +270,14 @@ async function sceneWord(root) {
     { left: flyer.style.left, top: flyer.style.top },
     { left: `${so.left - st.left + so.width / 2}px`, top: `${so.top - st.top + so.height / 2}px` },
   ], { duration: 220, easing: OUT });
-  // плитка села — дальше живёт внутри слота «o»: слово ещё растёт и сдвигается к центру, плитка едет вместе с ним
   flyer.getAnimations().forEach(a => a.cancel());
   Object.assign(flyer.style, { left: "50%", top: "50%", opacity: "1", transform: "translate(-50%, -50%)" });
   slot.style.position = "relative";
   slot.append(flyer);
   for (let i = 3; i < letters.length; i++) { rise(i); await wait(80); }
-  // слово держится до отметки 3 с от начала ролика
   await wait(Math.max(380, 3000 - (Date.now() - t0) / S));
 }
 
-// слово гаснет (≈35 мс), пауза, три точки слева направо с шагом 50 мс; пока грузится — «дышат» волной
 async function toDots(root) {
   const s = root.querySelector('[data-s="word"]');
   const dots = [...s.querySelectorAll("[data-dots] i")];
@@ -330,7 +299,6 @@ async function toTile(root) {
   wave = [];
   await wait(200);
 
-  // слияние: левая перетекает в среднюю (110 мс), пауза, две оставшиеся — в одну; ряд держится по центру
   const gap = dots[1].getBoundingClientRect().left - dots[0].getBoundingClientRect().left;
   const merge = async (from, into, shift) => {
     play(box, [{ transform: `translateX(${shift[0]}px)` }, { transform: `translateX(${shift[1]}px)` }], { duration: 110, easing: "ease-in-out" });
@@ -341,14 +309,12 @@ async function toTile(root) {
   await wait(130);
   await merge(dots[1], dots[2], [-gap / 2, -gap]);
 
-  // контур по часовой от правого края (220 мс), пауза 220 мс, заливка цветом и потемневшая точка (200 мс)
   mark.style.opacity = "1";
   play(box, [{ opacity: 1 }, { opacity: 0 }], { duration: 1 });
   await play(mark.querySelector(".sp-stroke"), [{ strokeDashoffset: 100 }, { strokeDashoffset: 0 }], { duration: 220, easing: "cubic-bezier(.45,0,.55,1)" });
   await wait(220);
   play(mark.querySelector(".sp-fill"), [{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
   await play(mark.querySelector(".sp-dot"), [{ fill: "var(--fire)" }, { fill: "var(--bg)" }], { duration: 200 });
-  // плитка чуть подрастает перед кувырком (≈150 мс)
   await play(mark, [{ transform: "scale(1)" }, { transform: "scale(1.12)" }], { duration: 150, easing: "ease-out" });
 }
 
@@ -358,7 +324,6 @@ async function sceneDice(root) {
   const draw = dieRenderer(s.querySelector(".sp-dcv"), box.offsetWidth || 120);
   draw(0, 0, 0);
   cut(root, "dice");
-  // кувырок: грани 1 → 3 → 4/6 → 5 → снова 1, ~370 мс; затем оседает и уменьшается (≈150 мс)
   const keys = [[0, 0, 0, 0], [.25, -35, -50, 10], [.55, -160, -120, 25], [.85, -300, -240, 10], [1, -360, -360, 0]];
   const ease = bezier(.3, .1, .3, 1);
   const dur = 370 * S;
@@ -394,9 +359,6 @@ async function sceneCoin(root) {
   await wait(470);
 }
 
-// плитка «монеты» → логотип: точка уступает место крестику, плитка летит в шапку, фон растворяется.
-// Плитку на время полёта выносим поверх всего окна: заставка начинается под шапкой и обрезала бы её верхние углы,
-// а размер и скругление ведём напрямую (не scale) — углы на любом размере остаются ровными и в конце совпадают с логотипом.
 async function flyHome(root) {
   const t = root.querySelector('[data-s="coin"] .sp-t');
   const coin = root.querySelector(".sp-coin");
@@ -418,7 +380,6 @@ async function flyHome(root) {
   try {
     await play(t, [{ ...box(from), borderRadius: `${r0}px` }, { ...box(to), borderRadius: `${r1}px` }], { duration: 480, delay: 120, easing: "cubic-bezier(.65,0,.35,1)" });
     logo.style.opacity = "";
-    // логотип уже на месте — плитка тает поверх него, без скачка
     await play(t, [{ opacity: 1 }, { opacity: 0 }], { duration: 120 });
   } finally {
     logo.style.opacity = "";
@@ -426,8 +387,6 @@ async function flyHome(root) {
   }
 }
 
-// Окно загрузилось (страница, шрифты) и главный поток отпустило — несколько кадров подряд без задержек.
-// Не дольше 2,5 с: на медленной машине лучше начать, чем держать чёрный экран.
 async function settled() {
   const limit = Date.now() + 2500;
   if (document.readyState !== "complete") await new Promise(r => window.addEventListener("load", r, { once: true }));
@@ -450,19 +409,16 @@ export function startSplash() {
   root.addEventListener("click", skip);
   document.addEventListener("keydown", e => { if (e.key === "Escape") skip(); }, { once: true });
   ready = (async () => {
-    // пока окно только открылось, держим чёрный экран: ролик стартует, когда всё загружено и кадры идут ровно
     await settled();
     t0 = Date.now();
     await sceneCube(root);
     await sceneDock(root);
     await sceneWord(root);
     await toDots(root);
-    // загрузка затянулась — через пару секунд под точками появится «Загружаем данные…»
     setTimeout(() => { if (wave.length) root.querySelector("[data-status]")?.classList.add("on"); }, 1800);
   })();
 }
 
-// Вызывается, когда известно, куда вести (программа или вход): доигрываем ролик и уводим заставку.
 export async function finishSplash() {
   const root = document.getElementById("app-splash");
   if (!root) return;

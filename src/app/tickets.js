@@ -1,12 +1,3 @@
-// Тикеты поддержки — то же, что «🎫 Тикеты» в админ-панели бота
-// (admin/tickets.py): список обращений, переписка целиком, ответ человеку
-// (уходит ему в Telegram от бота), готовые ответы, закрыть и открыть
-// заново. Владелец видит все обращения, обычный админ — только
-// переданные ему (сервер проверяет сам).
-//
-// /api/tickets?status=open|closed, /api/tickets/{id},
-// /api/tickets/{id}/reply {text}, /reply-attach (файл + подпись),
-// /api/tickets/{id}/close, /reopen.
 
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { attachHtml, wireAttachments, pickFile, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";

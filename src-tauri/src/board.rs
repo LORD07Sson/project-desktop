@@ -1,44 +1,18 @@
-//! Раскладка доски: сортировка, метрики колонок и поиск.
-//!
-//! Раньше вкладка «Доска» рисовала ровно то, что прислал сервер, в том
-//! порядке, в каком оно пришло: карточки шли вперемешку, и чтобы понять,
-//! что горит, доску приходилось читать глазами целиком. Здесь она
-//! превращается из списка в раскладку — у каждой карточки считается
-//! срочность, у каждой колонки метрики, и порядок появляется сам.
-//!
-//! Почему в Rust, а не в JS. Выигрыш тут не в скорости — на сотне
-//! карточек разницы не будет, а IPC-переход её и вовсе съест. Выигрыш в
-//! том, что это чистая функция: у неё есть ровно один вход, ровно один
-//! выход и нет DOM, поэтому вся арифметика дат, порогов и весов
-//! прогоняется юнит-тестами (ниже их дюжина), а не проверяется глазами
-//! на живой доске. Раньше такой логики просто не существовало —
-//! появляться ей сразу в обработчиках рендера означало бы появиться
-//! непроверяемой.
 
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-// ---------- даты без лишней зависимости ----------
-
-/// Дней от 1970-01-01 до указанной даты по григорианскому календарю.
-/// Алгоритм Говарда Хиннанта (days_from_civil) — тот же, что лежит в
-/// основе `<chrono>` в C++20 и `time`/`chrono` в Rust; тянуть ради двух
-/// вычитаний целый крейт незачем, а писать «примерно» нельзя: ошибка в
-/// високосном году тихо сдвинет все дедлайны студии на сутки.
 fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = if y >= 0 { y } else { y - 399 } / 400;
-    let yoe = y - era * 400; // [0, 399]
-    let mp = (m + 9) % 12; // март = 0
-    let doy = (153 * mp + 2) / 5 + d - 1; // [0, 365]
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     era * 146_097 + doe - 719_468
 }
 
-/// "YYYY-MM-DD" или "YYYY-MM-DD HH:MM:SS" — дата в днях от эпохи.
-/// Всё, что не разбирается, даёт None: сервер может прислать пустую
-/// строку или null, и это нормальная ситуация («без срока»), а не сбой.
 fn parse_date(value: &str) -> Option<i64> {
     let date = value.get(..10)?;
     let mut parts = date.split('-');
@@ -51,8 +25,6 @@ fn parse_date(value: &str) -> Option<i64> {
     Some(days_from_civil(y, m, d))
 }
 
-// ---------- вход ----------
-
 #[derive(Deserialize, Clone)]
 pub struct BoardCard {
     pub public_id: String,
@@ -62,22 +34,12 @@ pub struct BoardCard {
     pub priority: Option<String>,
     #[serde(default)]
     pub deadline: Option<String>,
-    /// Когда карточка последний раз менялась — из неё считается
-    /// «сколько она уже лежит в этом статусе».
     #[serde(default)]
     pub updated_at: Option<String>,
-    /// Когда отчёт создан — вместе с deadline даёт реальный (не
-    /// выдуманный) диапазон дат для таймлайна на доске: «когда взяли»
-    /// → «когда сдать». Прокидывается как есть, без вычислений здесь.
     #[serde(default)]
     pub created_at: Option<String>,
-    /// Прокидывается обратно в неизменном виде: рисует его фронтенд,
-    /// разбирать здесь нечего.
     #[serde(default)]
     pub assignees: serde_json::Value,
-    /// Число вложений/заметок — тоже прокидывается как есть, посчитаны
-    /// на сервере (см. _attach_counts в miniapp/server.py). Нужны для
-    /// бейджей 📎N/💬N на карточке (перенос референса Xentra).
     #[serde(default)]
     pub files_count: u32,
     #[serde(default)]
@@ -101,26 +63,17 @@ pub struct BoardColumnIn {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoardView {
-    /// "smart" | "deadline" | "priority" | "age" | "none"
     #[serde(default)]
     pub sort: String,
-    /// Поиск по номеру и названию, регистронезависимый.
     #[serde(default)]
     pub query: String,
-    /// Сегодняшняя дата глазами клиента ("YYYY-MM-DD"): часовой пояс
-    /// студии знает фронтенд, а не бэкенд, и «просрочено» должно
-    /// считаться по местному календарю пользователя.
     #[serde(default)]
     pub today: String,
-    /// Сколько карточек в колонке считается перебором. Ключ — статус.
     #[serde(default)]
     pub wip_limits: HashMap<String, u32>,
-    /// Сколько дней без движения считать «залежалось».
     #[serde(default)]
     pub stale_after_days: i64,
 }
-
-// ---------- выход ----------
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -131,15 +84,11 @@ pub struct BoardCardOut {
     pub deadline: Option<String>,
     pub created_at: Option<String>,
     pub assignees: serde_json::Value,
-    /// Дней до срока: отрицательное — просрочено, None — срока нет.
     pub days_left: Option<i64>,
     pub overdue: bool,
-    /// Дней без изменений.
     pub age_days: Option<i64>,
     pub stale: bool,
     pub unassigned: bool,
-    /// 0..1 — насколько карточка «горит». Фронтенд рисует этим
-    /// насыщенность полоски, а не придумывает свою шкалу.
     pub heat: f64,
     pub files_count: u32,
     pub notes_count: u32,
@@ -157,9 +106,6 @@ pub struct BoardColumnOut {
     pub unassigned: u32,
     pub stale: u32,
     pub avg_age_days: Option<i64>,
-    /// Лимит по статусу и превышен ли он — «сколько работы взяли в
-    /// параллель» это единственная метрика, ради которой канбан-доски
-    /// вообще заводят.
     pub wip_limit: Option<u32>,
     pub over_wip: bool,
     pub cards: Vec<BoardCardOut>,
@@ -169,8 +115,6 @@ pub struct BoardColumnOut {
 #[serde(rename_all = "camelCase")]
 pub struct BoardLayout {
     pub columns: Vec<BoardColumnOut>,
-    /// Сколько карточек отсеял поиск — иначе пустая доска выглядит как
-    /// сбой загрузки.
     pub filtered_out: u32,
     pub total_overdue: u32,
     pub total_stale: u32,
@@ -192,23 +136,9 @@ fn priority_weight(priority: Option<&str>) -> f64 {
         .unwrap_or(0.33)
 }
 
-/// «Насколько горит» — одно число от 0 до 1, в которое сведены приоритет,
-/// близость срока и застой. Им доска красит полоску карточки, и он же
-/// второй ключ сортировки в режиме «умно».
-///
-/// Просрочка НЕ участвует здесь как «чем дольше, тем горячее»: день
-/// просрочки и год просрочки требуют внимания одинаково — важно, что
-/// срок уже прошёл. А то, что просроченное идёт выше непросроченного
-/// при любых приоритетах, решается не весами, а отдельным ключом
-/// сортировки (см. sort_cards): это разные категории работы, а не
-/// разные значения одной шкалы, и смешивать их в одно число значит
-/// рано или поздно подобрать веса так, что срочная задача «на
-/// послезавтра» перекроет то, что горит уже неделю.
 fn heat(days_left: Option<i64>, priority: Option<&str>, age_days: Option<i64>, stale_after: i64) -> f64 {
     let p = priority_weight(priority) * 0.4;
     let deadline = match days_left {
-        // Просрочено — максимум и дальше не растёт: «просрочено на день»
-        // и «просрочено на год» одинаково требуют внимания сейчас.
         Some(d) if d < 0 => 0.45,
         Some(d) => (0.45 * (1.0 - (d as f64 / 14.0)).clamp(0.0, 1.0)).max(0.0),
         None => 0.0,
@@ -235,9 +165,6 @@ fn matches_query(card: &BoardCard, needle: &str) -> bool {
     card.public_id.to_lowercase().contains(needle) || card.title.to_lowercase().contains(needle)
 }
 
-/// Основная функция модуля. Чистая: ничего не читает из окружения (даже
-/// сегодняшнюю дату — её передаёт фронтенд), поэтому целиком
-/// воспроизводима в тестах.
 pub fn layout(columns: Vec<BoardColumnIn>, view: &BoardView) -> BoardLayout {
     let today = parse_date(&view.today);
     let needle = view.query.trim().to_lowercase();
@@ -267,8 +194,6 @@ pub fn layout(columns: Vec<BoardColumnIn>, view: &BoardView) -> BoardLayout {
                 (Some(t), Some(u)) => Some((t - u).max(0)),
                 _ => None,
             };
-            // Завершённое и отменённое не бывает «просроченным» — там
-            // срок уже неважен, а красная метка только шумит.
             let terminal = matches!(col.status.as_str(), "completed" | "cancelled");
             let overdue = !terminal && days_left.map(|d| d < 0).unwrap_or(false);
             let stale = !terminal && age_days.map(|a| a >= stale_after).unwrap_or(false);
@@ -321,11 +246,8 @@ pub fn layout(columns: Vec<BoardColumnIn>, view: &BoardView) -> BoardLayout {
 
 fn sort_cards(cards: &mut [BoardCardOut], sort: &str) {
     match sort {
-        // Порядок с сервера — «как было», на случай если кому-то из
-        // студии привычнее именно он.
         "none" => {}
         "deadline" => cards.sort_by(|a, b| {
-            // Без срока — в конец: иначе они занимают весь верх доски.
             let key = |c: &BoardCardOut| c.days_left.unwrap_or(i64::MAX);
             key(a).cmp(&key(b)).then_with(|| a.public_id.cmp(&b.public_id))
         }),
@@ -339,17 +261,10 @@ fn sort_cards(cards: &mut [BoardCardOut], sort: &str) {
             let key = |c: &BoardCardOut| c.age_days.unwrap_or(-1);
             key(b).cmp(&key(a)).then_with(|| a.public_id.cmp(&b.public_id))
         }),
-        // "smart" и всё незнакомое
         _ => cards.sort_by(|a, b| {
-            // Сначала категория «уже просрочено» целиком, и только
-            // внутри неё — по срочности. Иначе достаточно повесить на
-            // задачу ярлык «срочно» со сроком «послезавтра», чтобы она
-            // перекрыла то, что горит уже неделю.
             b.overdue
                 .cmp(&a.overdue)
                 .then_with(|| b.heat.partial_cmp(&a.heat).unwrap_or(std::cmp::Ordering::Equal))
-                // При равной срочности — по номеру, чтобы порядок был
-                // устойчивым между перерисовками и карточки не прыгали.
                 .then_with(|| a.public_id.cmp(&b.public_id))
         }),
     }
@@ -397,24 +312,19 @@ mod tests {
         }
     }
 
-    // ---------- даты ----------
-
     #[test]
     fn days_from_civil_matches_known_reference_points() {
         assert_eq!(days_from_civil(1970, 1, 1), 0);
         assert_eq!(days_from_civil(1969, 12, 31), -1);
         assert_eq!(days_from_civil(2000, 3, 1), 11017);
-        // 2000 — високосный (делится на 400), 1900 — нет (делится на 100).
         assert_eq!(days_from_civil(2000, 2, 29) + 1, days_from_civil(2000, 3, 1));
         assert_eq!(days_from_civil(1900, 2, 28) + 1, days_from_civil(1900, 3, 1));
-        // Ровно год без високосного дня.
         assert_eq!(days_from_civil(2027, 1, 1) - days_from_civil(2026, 1, 1), 365);
     }
 
     #[test]
     fn parse_date_reads_both_shapes_and_refuses_junk() {
         assert_eq!(parse_date("2026-09-18"), Some(days_from_civil(2026, 9, 18)));
-        // Сервер отдаёт время в том же поле — берём только дату.
         assert_eq!(parse_date("2026-09-18 14:31:02"), Some(days_from_civil(2026, 9, 18)));
         assert_eq!(parse_date(""), None);
         assert_eq!(parse_date("вчера"), None);
@@ -422,13 +332,8 @@ mod tests {
         assert_eq!(parse_date("2026-09-99"), None);
     }
 
-    // ---------- срочность ----------
-
     #[test]
     fn overdue_is_its_own_tier_not_just_a_higher_score() {
-        // Просроченная «обычная» идёт выше срочной со сроком завтра —
-        // и это решает ключ сортировки, а не подбор весов: по одному
-        // только heat срочная-на-завтра как раз выигрывает.
         let cols = vec![column("working", vec![
             card("R-URGENT", "urgent", Some("2026-09-19"), Some("2026-09-18"), true),
             card("R-LATE", "normal", Some("2026-09-10"), Some("2026-09-17"), true),
@@ -454,18 +359,14 @@ mod tests {
         assert!((0.0..=1.0).contains(&hottest), "{hottest}");
         let coldest = heat(None, Some("low"), None, 7);
         assert!(coldest >= 0.0);
-        // Просрочка на день и на год одинаково «горят»: важно, что срок
-        // прошёл, а не насколько давно.
         assert_eq!(heat(Some(-1), Some("normal"), None, 7), heat(Some(-365), Some("normal"), None, 7));
     }
-
-    // ---------- раскладка ----------
 
     #[test]
     fn smart_sort_puts_the_burning_card_first() {
         let cols = vec![column("working", vec![
             card("R-1", "low", Some("2026-12-01"), Some("2026-09-18"), true),
-            card("R-2", "normal", Some("2026-09-10"), Some("2026-09-17"), true), // просрочено
+            card("R-2", "normal", Some("2026-09-10"), Some("2026-09-17"), true),
             card("R-3", "urgent", Some("2026-09-19"), Some("2026-09-18"), true),
         ])];
         let out = layout(cols, &view("smart"));
@@ -478,7 +379,7 @@ mod tests {
     #[test]
     fn column_metrics_count_what_the_column_head_shows() {
         let cols = vec![column("working", vec![
-            card("R-1", "normal", Some("2026-09-01"), Some("2026-09-01"), false), // просрочено, ничьё, залежалось
+            card("R-1", "normal", Some("2026-09-01"), Some("2026-09-01"), false),
             card("R-2", "normal", Some("2026-10-01"), Some("2026-09-18"), true),
         ])];
         let out = layout(cols, &view("smart"));
@@ -487,14 +388,11 @@ mod tests {
         assert_eq!(c.unassigned, 1);
         assert_eq!(c.stale, 1);
         assert_eq!(c.shown, 2);
-        // Средний возраст: 17 дней и 0 дней.
         assert_eq!(c.avg_age_days, Some(8));
     }
 
     #[test]
     fn completed_column_is_never_overdue_or_stale() {
-        // В «Завершено» карточка может лежать месяцами с давно прошедшим
-        // сроком — это норма, а не пожар.
         let cols = vec![column("completed", vec![
             card("R-9", "urgent", Some("2020-01-01"), Some("2020-01-01"), true),
         ])];
@@ -517,17 +415,12 @@ mod tests {
         assert_eq!(out.columns[0].cards.len(), 1);
         assert_eq!(out.columns[0].cards[0].public_id, "R-2");
         assert_eq!(out.filtered_out, 1);
-        // Счётчик колонки остаётся серверным (сколько всего в статусе),
-        // а shown — сколько реально видно после фильтра.
         assert_eq!(out.columns[0].total, 2);
         assert_eq!(out.columns[0].shown, 1);
     }
 
     #[test]
     fn wip_limit_is_measured_against_the_whole_column_not_the_loaded_page() {
-        // Колонка подгружается порциями: если считать по загруженным
-        // карточкам, лимит «сработает» только после нажатия «показать
-        // ещё», то есть никогда.
         let mut col = column("working", vec![card("R-1", "normal", None, None, true)]);
         col.total = 12;
         col.has_more = true;
@@ -569,8 +462,6 @@ mod tests {
 
     #[test]
     fn broken_today_disables_date_math_instead_of_lying() {
-        // Если дату «сегодня» прислать не смогли, лучше показать доску
-        // без отметок «просрочено», чем разметить всё наугад.
         let cols = vec![column("working", vec![
             card("R-1", "normal", Some("2020-01-01"), Some("2020-01-01"), true),
         ])];
@@ -584,9 +475,6 @@ mod tests {
 
     #[test]
     fn stable_order_for_equally_urgent_cards() {
-        // Без вторичного ключа карточки с одинаковой срочностью
-        // переставлялись бы между перерисовками — доска «дышала» бы на
-        // каждое обновление.
         let cols = vec![column("working", vec![
             card("R-3", "normal", None, None, true),
             card("R-1", "normal", None, None, true),

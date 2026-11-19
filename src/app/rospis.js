@@ -1,11 +1,7 @@
-// «Новая серия» для Росписи: участник с ролью «Роспись» в составе тайтла
-// сам заводит серию (название, срок) — без админа. Сервер создаёт по
-// отчёту на каждую роль состава и уведомляет исполнителей.
 
 import { apiGet, apiPost, openSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
 
-// Тайтлы, где пользователь — Роспись. Старый сервер без эндпоинта → [].
 export async function loadRospisTitles() {
   try {
     const res = await apiGet("/my/rospis-titles");

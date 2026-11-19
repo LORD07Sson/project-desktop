@@ -1,15 +1,3 @@
-//! Копии программы на компьютере и «починка» установки.
-//!
-//! Что ломалось у людей:
-//!  * после обновлений рядом оставались старые копии (портативная папка на рабочем столе, распакованный zip в
-//!    «Загрузках», прежняя установка) — запускали не ту, ярлык «Пуска» указывал на старую (desktop_notify пересоздаёт
-//!    его на exe последнего запуска), и было непонятно, где настоящая программа;
-//!  * установка в %LOCALAPPDATA% «зависала»: недокачанный пакет (*.partial) или полузаменённая папка — обновление
-//!    больше не ставилось;
-//!  * папку переносили вручную, и программа после этого не обновлялась.
-//! Поэтому: `find_installs` находит все копии (по Update.exe + current\project-desktop.exe) с версией и каналом,
-//! `remove_install` убирает выбранную старую (и её ярлыки), `reinstall_app` скачивает установщик (GitHub или наш
-//! сервер — тот же выбор источника, что у обновлений) и ставит программу начисто в обычное место.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -18,7 +6,6 @@ use serde::Serialize;
 use tauri::Emitter;
 
 const MAIN_EXE: &str = "project-desktop.exe";
-/// Сколько уровней папок под каждой точкой поиска смотреть: «Рабочий стол\Project\ProjectDesktop» — это 2.
 const SCAN_DEPTH: usize = 3;
 const SKIP_DIRS: &[&str] = &[
     "windows", "program files", "program files (x86)", "programdata", "$recycle.bin", "system volume information",
@@ -31,9 +18,7 @@ pub struct InstallInfo {
     pub version: String,
     pub channel: String,
     pub portable: bool,
-    /// Это та копия, что запущена сейчас.
     pub current: bool,
-    /// Обычная установка (%LOCALAPPDATA%\ProjectDesktop), а не папка, разложенная руками.
     pub standard: bool,
 }
 
@@ -42,7 +27,6 @@ fn last_scan() -> &'static Mutex<Vec<PathBuf>> {
     SCAN.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-/// Корень запущенной копии (папка с Update.exe), если программа стоит через Velopack.
 pub fn current_root() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let root = exe.parent()?.parent()?.to_path_buf();
@@ -89,7 +73,7 @@ fn describe(dir: &Path, current: Option<&Path>) -> InstallInfo {
 fn walk(dir: &Path, depth: usize, found: &mut Vec<PathBuf>) {
     if is_install(dir) {
         found.push(dir.to_path_buf());
-        return; // внутри установки других копий нет
+        return;
     }
     if depth == 0 {
         return;
@@ -108,7 +92,6 @@ fn walk(dir: &Path, depth: usize, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// Где искать: обычное место установки, папки пользователя и корни дисков (копию часто кладут в D:\Программы\…).
 fn search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(profile) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
@@ -126,7 +109,6 @@ fn search_roots() -> Vec<PathBuf> {
     roots
 }
 
-/// Только локальные диски: сетевой или пустой картридер может подвесить поиск на минуты.
 #[cfg(windows)]
 fn is_fixed_drive(root: &Path) -> bool {
     use windows::core::HSTRING;
@@ -167,7 +149,6 @@ pub fn find_installs() -> Vec<InstallInfo> {
     out
 }
 
-/// Цель ярлыка .lnk (через IShellLinkW) — чтобы убрать ярлыки, ведущие в удалённую копию.
 #[cfg(windows)]
 fn lnk_target(lnk: &Path) -> Option<PathBuf> {
     use windows::core::{Interface, HSTRING};
@@ -205,7 +186,6 @@ fn shortcut_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-/// Ярлыки «Project Desktop», ведущие внутрь dir. Возвращает, сколько убрано.
 fn remove_shortcuts_into(dir: &Path) -> usize {
     let prefix = dir.to_string_lossy().to_lowercase();
     let mut removed = 0;
@@ -225,8 +205,6 @@ fn remove_shortcuts_into(dir: &Path) -> usize {
     removed
 }
 
-/// Убирает копию программы. Только из последнего поиска (find_installs) и никогда — запущенную.
-/// Папку сначала переименовываем: если та копия сейчас открыта, Windows не даст — и мы ничего не испортим.
 #[tauri::command(async)]
 pub fn remove_install(path: String) -> Result<usize, String> {
     let dir = PathBuf::from(&path);
@@ -253,8 +231,6 @@ pub fn remove_install(path: String) -> Result<usize, String> {
     Ok(shortcuts)
 }
 
-/// Недокачанные пакеты обновления (*.partial) мешают следующей закачке — убираем их при каждом запуске
-/// (в этот момент закачка точно не идёт).
 pub fn drop_partial_packages(packages_dir: &Path) {
     let Ok(entries) = std::fs::read_dir(packages_dir) else { return };
     for entry in entries.flatten() {
@@ -268,8 +244,6 @@ pub fn drop_partial_packages(packages_dir: &Path) {
     }
 }
 
-/// Скачивает установщик и ставит программу начисто в обычное место (%LOCALAPPDATA%\ProjectDesktop): Setup.exe
-/// Velopack ставит поверх зависшей установки, создаёт ярлыки и запускает программу. Прогресс — "update-progress".
 pub async fn download_setup(app: &tauri::AppHandle, urls: &[(String, String)]) -> Result<PathBuf, String> {
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(20))
@@ -318,10 +292,6 @@ async fn fetch(client: &reqwest::Client, url: &str, target: &Path, app: &tauri::
     Ok(())
 }
 
-/// Ярлыки «Project Desktop», которые ведут в уже несуществующий exe (старая копия удалена или переехала), Windows
-/// показывает пустым листом — особенно закреплённые на панели задач. При запуске из установленной копии
-/// перенаправляем такие ярлыки на текущий exe: закрепление остаётся, иконка возвращается. Чужие ярлыки и рабочие не
-/// трогаем — только с нашим именем или нашим exe в цели, и только если цели больше нет.
 #[cfg(windows)]
 pub fn repair_dead_shortcuts() {
     let Ok(exe) = std::env::current_exe() else { return };
@@ -345,7 +315,6 @@ pub fn repair_dead_shortcuts() {
                 continue;
             }
             let Some(target) = lnk_target(&path).map(|t| expand_env(&t)) else { continue };
-            // Цель с %ПЕРЕМЕННЫМИ%, которые не раскрылись, — не уверены, что она мёртвая: не трогаем.
             if target.to_string_lossy().contains('%') || target.exists() || same_path(&target, &exe) {
                 continue;
             }
@@ -362,7 +331,6 @@ pub fn repair_dead_shortcuts() {
     }
     if fixed > 0 {
         log::info!("Починено ярлыков, ведущих в удалённую копию: {fixed}");
-        // Explorer кэширует иконки — просим перерисовать, иначе пустой лист висит до перезахода.
         unsafe {
             use windows::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
             SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None);
@@ -394,7 +362,6 @@ fn retarget_shortcut(lnk: &Path, exe: &Path) -> windows::core::Result<()> {
     Ok(())
 }
 
-/// Цель ярлыка «как записана» (SLGP_RAWPATH) может содержать %LOCALAPPDATA% и т.п. — раскрываем.
 fn expand_env(path: &Path) -> PathBuf {
     let text = path.to_string_lossy();
     let mut out = String::new();

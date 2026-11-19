@@ -1,8 +1,3 @@
-// Режим разработчика (/api/dev/*, только для owner) — тумблер хранится
-// в localStorage: это только переключение того,
-// что показать (панель правки на карточке). Авторизацию на КАЖДОЕ
-// действие сервер всё равно проверяет заново по OWNER_IDS
-// (_require_owner) — фронту тут доверять нельзя.
 
 import { state } from "./state.js";
 import { apiGet, apiPost, askConfirm, openSheet, toast } from "./api.js";
@@ -92,7 +87,6 @@ export function devPanelHtml(d) {
   `;
 }
 
-// Срок общий для серии: перенос или снятие видно всей команде, поэтому сначала спрашиваем.
 function fillDevOverdue(root, telegramId, list) {
   const card = root.querySelector("#dev-overdue");
   if (!card || !list.length) return;
@@ -140,7 +134,6 @@ async function fillDevExtra(root, telegramId) {
   }));
 }
 
-// Кнопка сохранения: блокировка на время запроса, тост, перерисовка профиля.
 function wireSave(root, sel, send, done, onSaved) {
   const btn = root.querySelector(sel);
   if (!btn) return;
@@ -200,7 +193,6 @@ export function wireDevPanel(root, telegramId, onSaved, d) {
   });
   const joinedBtn = root.querySelector("#dev-joined-save");
   if (joinedBtn) joinedBtn.addEventListener("click", async () => {
-    // Поле в виде дд.мм.гггг; на сервер уходит гггг-мм-дд.
     const dm = root.querySelector("#dev-joined-input").value.trim().match(/^(\d\d)\.(\d\d)\.(\d{4})$/);
     if (!dm || +dm[2] < 1 || +dm[2] > 12 || +dm[1] < 1 || +dm[1] > 31) { toast("Укажите дату в виде дд.мм.гггг.", "error"); return; }
     const date = `${dm[3]}-${dm[2]}-${dm[1]}`;
@@ -228,7 +220,6 @@ export function wireDevPanel(root, telegramId, onSaved, d) {
   });
 }
 
-// Все поля записи из базы: значение копируется кликом, вся запись — кнопкой.
 const REPORT_DOCS = {
   id: "Внутренний номер записи в базе. На него ссылаются файлы, заметки и журнал, поэтому не меняется.",
   public_id: "Номер отчёта, который видит команда, например R-000063.",
@@ -275,7 +266,6 @@ function rawHtml(row, editable = {}, docs = {}) {
   return `<dl class="dev-raw">${Object.entries(row).map(([k, v]) => `<dt>${docs[k] ? `<details class="dev-doc"><summary>${esc(k)}</summary><p>${esc(docs[k])}</p></details>` : esc(k)}</dt><dd><button type="button" class="dev-raw-v" data-copy="${esc(String(v ?? ""))}" title="Копировать">${v == null || v === "" ? "—" : esc(String(v))}</button>${editable[k] ? `<button type="button" class="dev-raw-edit" data-dev-edit="${esc(k)}">изменить</button>` : ""}</dd>`).join("")}</dl>`;
 }
 
-// Какие поля отчёта правятся напрямую и что подсказать. Статус, срок и исполнители — в самой карточке.
 const REPORT_EDITABLE = {
   title: "Короткое название, от 1 до 200 знаков",
   created_at: "ГГГГ-ММ-ДД ЧЧ:ММ:СС",
@@ -321,7 +311,6 @@ function wireCopy(box, row) {
   box.querySelector("[data-dev-json]")?.addEventListener("click", () => copy(JSON.stringify(row, null, 2)));
 }
 
-// Вкладка «Служебное» в карточке отчёта.
 export async function fillReportDevPanel(box, publicId) {
   box.innerHTML = `<div class="dev-hint">загружаю…</div>`;
   let row;
@@ -347,7 +336,6 @@ export async function fillReportDevPanel(box, publicId) {
   });
 }
 
-// Блок внизу страницы тайтла.
 export async function appendTitleDevPanel(sheet, titleId) {
   const box = document.createElement("section");
   box.className = "tpg-dev";

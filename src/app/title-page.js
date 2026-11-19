@@ -1,10 +1,3 @@
-// Страница тайтла (по мотивам Shikimori, но не копия): баннер, крупный
-// постер, колонка информации, оценка и одобрение команды, ход озвучки
-// по сериям и персонажи с теми, кто из команды их озвучивает.
-// Данные — /api/public/titles/{id}; картинки — /api/titles/{id}/art/*:
-// сервер берёт самую крупную обложку (AniList, иначе Shikimori),
-// масштабирует под ширину, которую просит экран (с учётом
-// devicePixelRatio), и кэширует до удаления тайтла.
 
 import { mediaUrl, forceMediaToken } from "./api.js";
 import { state } from "./state.js";
@@ -15,23 +8,14 @@ export function imgProxy(url) {
   return url ? mediaUrl("/img_proxy", { url }) : "";
 }
 
-// Ширина картинки в пикселях экрана, а не CSS: на 150% масштабе Windows
-// постер в 240px должен быть 360px, иначе он мылится.
 function screenWidth(cssWidth) {
   return Math.round(cssWidth * Math.min(3, window.devicePixelRatio || 1));
 }
 
-// Постер или баннер тайтла с нашего сервера (AniList, иначе Shikimori;
-// под нужную ширину, кэш на диске) — для «Кадра»: фон окна, герой Обзора.
-// Баннера у тайтла может не быть — сервер тогда отвечает без картинки,
-// и вызывающий код берёт запасной вариант (обычно imgProxy постера).
 export function titleArt(titleId, kind, cssWidth) {
   return titleId ? mediaUrl(`/titles/${titleId}/art/${kind}`, { w: screenWidth(cssWidth) }) : "";
 }
 
-// HD-постер с запасным вариантом: если сервер не смог собрать картинку
-// (204) — <img> получает error, и подставляется обычный постер Shikimori
-// (см. обработчик ниже).
 export function hdPosterAttrs(titleId, posterUrl, cssWidth) {
   const hd = mediaUrl(`/titles/${titleId}/art/poster`, { w: screenWidth(cssWidth) });
   const fallback = imgProxy(posterUrl);
@@ -39,9 +23,6 @@ export function hdPosterAttrs(titleId, posterUrl, cssWidth) {
   return `src="${hd}"${fallback ? ` data-fallback="${fallback}"` : ""}`;
 }
 
-// Картинка со своего сервера не загрузилась — один раз берём свежий
-// токен и пробуем снова (после перезапуска сервера старый mtok
-// недействителен, хотя по часам ещё не истёк).
 document.addEventListener("error", async e => {
   const img = e.target;
   if (!img || img.tagName !== "IMG") return;
@@ -101,7 +82,7 @@ function plural(n, one, few, many) {
 
 function scoreTile(score) {
   if (score == null) return "";
-  const stars = Math.round(score) / 2; // 0–5 с шагом 0.5
+  const stars = Math.round(score) / 2;
   const star = i => `<i class="tpg-star" style="--fill:${Math.max(0, Math.min(1, stars - i)) * 100}%"></i>`;
   return `
     <div class="tpg-tile tpg-score">
@@ -238,7 +219,6 @@ export function titlePageHtml(d) {
     </div>`;
 }
 
-// После вставки в DOM: баннер, «показать полностью», аватарки, профили.
 export function wireTitlePage(root, d, { openProfile } = {}) {
   const banner = root.querySelector("[data-tpg-banner]");
   if (banner) {
@@ -261,8 +241,6 @@ export function wireTitlePage(root, d, { openProfile } = {}) {
   const desc = root.querySelector("[data-tpg-desc]");
   const more = root.querySelector("[data-tpg-more]");
   if (desc && more) {
-    // С line-clamp scrollHeight в Chromium равен видимой высоте — поэтому
-    // сравниваем высоту с обрезкой и без неё.
     requestAnimationFrame(() => {
       const clamped = desc.clientHeight;
       desc.classList.remove("clamped");

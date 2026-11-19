@@ -1,4 +1,3 @@
-// Разбор WebVTT для плеера «Смотреть». Теги и сущности убираем: на экран текст идёт как обычный текст.
 
 const TIME = "((?:\\d+:)?\\d{1,2}:\\d{2}[.,]\\d{1,3})";
 const TIMING = new RegExp(`^\\s*${TIME}\\s*-->\\s*${TIME}`);
@@ -15,7 +14,6 @@ function plain(line) {
   return s.replace(/&(?:amp|lt|gt|nbsp|quot|#39);/g, m => ENTITIES[m]).trim();
 }
 
-/** Реплики из .ass/.ssa: теги оформления убираем, векторные рисунки и повторы слоёв пропускаем. */
 export function parseAss(ass) {
   let fields = null;
   const seen = new Set();
@@ -37,18 +35,15 @@ export function parseAss(ass) {
   return cues.sort((a, b) => a.start - b.start);
 }
 
-/** Реплики из файла субтитров по его имени. */
 export function parseSubsFile(name, text) {
   return /\.(ass|ssa)$/i.test(name || "") ? parseAss(text) : parseVtt(text);
 }
 
-/** Текст файла: UTF-8, а старые субтитры — Windows-1251. */
 export function decodeSubs(bytes) {
   const { TextDecoder: Decoder } = globalThis;
   try { return new Decoder("utf-8", { fatal: true }).decode(bytes); } catch (_) { return new Decoder("windows-1251").decode(bytes); }
 }
 
-/** Реплики из текста WebVTT или SRT: [{ start, end, text }], по времени начала. */
 export function parseVtt(vtt) {
   const cues = [];
   for (const block of String(vtt || "").replace(/^﻿/, "").split(/\r?\n\s*\r?\n/)) {

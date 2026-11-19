@@ -1,10 +1,3 @@
-// Управление тайтлами/сезонами (админская часть — /api/seasons,
-// /api/titles/*) — отдельно от голосования (titles.js, /api/public/*).
-// Портировано из admin-веток мини-аппа (openSeasonsAdmin/openSeasonDetail/
-// openTitleDetail в miniapp/static/index.html, admin/titles.py у бота —
-// та же бизнес-логика). Открывается кнопкой «🛠 Управление» на вкладке
-// «Тайтлы» — доступно любому админу (сервер и так перепроверяет
-// _require_admin на каждый вызов), отдельного gate на кнопку не нужно.
 
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm } from "./api.js";
 import { pickFile } from "./attachments.js";
@@ -12,14 +5,12 @@ import { pauseSuffix } from "./people.js";
 import { esc } from "./utils.js";
 import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./watermark-editor.js";
 
-// «1 серия», «3 серии», «5 серий» — серии студии (отчёты по тайтлу), а не вышедшие в эфире эпизоды с карточки.
 function seriesCount(n) {
   const mod10 = n % 10, mod100 = n % 100;
   const word = mod10 === 1 && mod100 !== 11 ? "серия" : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "серии" : "серий";
   return `${n} ${word}`;
 }
 
-// «вышло 4 / 25 эп.» — как на карточке тайтла; сервер постарше этих полей не шлёт.
 function airedText(t) {
   if (t.episodes_aired == null && t.episodes_total == null) return "";
   return `вышло ${t.episodes_aired ?? 0} / ${t.episodes_total ?? "?"} эп. · `;
@@ -29,12 +20,6 @@ function imgProxy(url) {
   return url ? mediaUrl("/img_proxy", { url }) : "";
 }
 
-// Экспортируются — те же кэши переиспользует редактор пайплайна в
-// report-detail.js (тот же список ролей/исполнителей, дважды его
-// заводить незачем).
-// Кэши живут до следующего «Обновить» (clearDirectoryCache зовёт
-// refreshAll в tabs.js) — иначе только что заведённый коллега не
-// появлялся в списках назначения до перезапуска приложения.
 let META_ROLES_CACHE = null;
 export async function loadRoles() {
   if (META_ROLES_CACHE) return META_ROLES_CACHE;
@@ -60,18 +45,11 @@ export function userOptionsHtml(users, selectedTelegramId) {
   ).join("");
 }
 
-// ---------- Список сезонов ----------
 
 export async function openSeasonsAdminSheet(onClose) {
   const overlay = openSheet(`<h2>Управление тайтлами</h2>${dialogSkeletonHtml(5)}`, "wide");
   const sheet = overlay.querySelector(".sheet");
 
-  // Список сезонов/тайтлов на вкладке «Тайтлы» мог устареть, пока была
-  // открыта эта шторка (создали/удалили/переименовали) — обновляем его
-  // при закрытии ЛЮБЫМ способом (кнопка «Закрыть», клик по фону, ✕ у
-  // конкретной строки не относится — тут это просто overlay.remove()),
-  // поэтому наблюдаем за самим удалением из DOM, а не вешаем колбэк на
-  // каждую отдельную кнопку.
   if (onClose) {
     new MutationObserver((_muts, obs) => {
       if (!overlay.isConnected) { obs.disconnect(); onClose(); }
@@ -153,7 +131,6 @@ export async function openSeasonsAdminSheet(onClose) {
   await render();
 }
 
-// ---------- Тайтлы внутри сезона ----------
 
 async function openSeasonDetailAdmin(seasonId) {
   const overlay = openSheet(dialogSkeletonHtml(5), "wide");
@@ -205,13 +182,6 @@ async function openSeasonDetailAdmin(seasonId) {
         await render();
       } catch (e) { toast(`Не удалось создать: ${e.message}`, "error"); }
     });
-    // Создание в один шаг по ссылке на Shikimori — тот же create_title,
-    // что и у обычной кнопки «+», плюс сразу постер и персонажи (см.
-    // /api/seasons/{id}/titles/from-shikimori на сервере: parse id из
-    // ссылки → fetch_shikimori_by_id → create_title → fetch_title_characters).
-    // Двухшаговый путь (создать по имени → «🔍 Найти» внутри карточки
-    // тайтла) остаётся — годится, если по ссылке тайтл не нашёлся или
-    // нужен именно AniList.
     sheet.querySelector("#title-shiki-add").addEventListener("click", async () => {
       const input = sheet.querySelector("#title-shiki");
       const raw = input.value.trim();
@@ -225,8 +195,6 @@ async function openSeasonDetailAdmin(seasonId) {
       btn.disabled = true;
       btn.textContent = "Добавляю…";
       try {
-        // На сервер уходит только номер: его разбор ссылки знает лишь
-        // домены shikimori.one/.me, а голый id принимает всегда.
         const res = await apiPost(`/seasons/${seasonId}/titles/from-shikimori`, { url: String(shikiId) });
         input.value = "";
         toast(`Тайтл создан: ${res.name}${res.characters_count ? ` · ${res.characters_count} персонажей` : ""}`);
@@ -242,10 +210,6 @@ async function openSeasonDetailAdmin(seasonId) {
   await render();
 }
 
-// Номер тайтла из того, что вставили: голый id («59193»), кусок адреса
-// («59193-mushoku-tensei…»), или ссылка на любом зеркале Shikimori —
-// shikimori.one/.me/.io/.org, с www и без, с префиксом архивных тайтлов
-// «z» (…/animes/z5114-…).
 export function parseShikimoriId(input) {
   const raw = String(input || "").trim();
   if (!raw) return null;
@@ -262,9 +226,7 @@ export function parseShikimoriId(input) {
   return m ? Number(m[1]) : null;
 }
 
-// ---------- Детальная карточка тайтла (состав, персонажи, серии) ----------
 
-// section: "watermark" — открыть сразу на этом разделе (кнопка «Водяной знак» в карточке серии).
 export async function openTitleAdminDetail(titleId, onClose, section) {
   const overlay = openSheet(dialogSkeletonHtml(6), "wide");
   const sheet = overlay.querySelector(".sheet");
@@ -397,7 +359,6 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
         `).join("") : `<div class="no-assignee">Ничего не найдено</div>`;
         box.querySelectorAll("[data-confirm-candidate]").forEach(btn => {
           btn.addEventListener("click", async () => {
-            // Два отдельных экранированных атрибута.
             const { source, sourceId } = btn.dataset;
             btn.disabled = true;
             try {
@@ -420,9 +381,6 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
     });
     sheet.querySelector("#crew-add").addEventListener("click", async () => {
       const role = sheet.querySelector("#crew-role-new").value;
-      // Number, а не строка из value: в остальных вызовах API
-      // telegram_id уходит числом, и расхождение типов на сервере —
-      // лишний повод для «молча не сработало».
       const rawUser = sheet.querySelector("#crew-user-new").value;
       const telegram_id = rawUser ? Number(rawUser) : null;
       if (!role) { toast("Выберите роль.", "error"); return; }

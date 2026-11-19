@@ -1,13 +1,3 @@
-// Карточка человека, передача дел и пауза — то же, что admin/people.py
-// и /pause в боте.
-//  • «Работа» в профиле: сколько назначено/закрыто/просрочено, средний
-//    срок, что сейчас в работе (со сроками), пауза.
-//  • «Передать дела…» — все незакрытые серии человека другому одним
-//    действием (только владелец; завершённые остаются за прежним — это
-//    история). Новому исполнителю бот пишет в Telegram.
-//  • Пауза — бот не напоминает о сроках и не пишет о просрочке до даты
-//    (отпуск). Себе ставит любой, другому — владелец.
-// /api/people/{tid}, /api/people/{tid}/transfer, /api/people/{tid}/pause.
 
 import { state } from "./state.js";
 import { apiGet, apiPost, openSheet, toast, askConfirm } from "./api.js";
@@ -27,12 +17,10 @@ function plural(n, one, few, many) {
   return m10 === 1 && m100 !== 11 ? one : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many);
 }
 
-// Пометка в выпадающих списках исполнителей: « · на паузе до 30 сентября».
 export function pauseSuffix(u) {
   return u && u.paused_until ? ` · на паузе до ${fmtDay(u.paused_until)}` : "";
 }
 
-// null — если сервер старый (без /people) или ответ неполный.
 export async function fetchPerson(telegramId) {
   try {
     const p = await apiGet(`/people/${telegramId}`);
@@ -135,7 +123,6 @@ export async function openTransferDialog(p, onChange) {
   });
 }
 
-// Карточка «Пауза уведомлений» во вкладке «Я».
 export async function fillPauseCard(root, telegramId) {
   const slot = root.querySelector("#pause-card");
   if (!slot) return;

@@ -1,5 +1,3 @@
-// Роли и специализации участников. Один человек может совмещать несколько
-// ролей; переключение сохраняет остальные назначения.
 
 import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml } from "./api.js";
 import { esc } from "./utils.js";

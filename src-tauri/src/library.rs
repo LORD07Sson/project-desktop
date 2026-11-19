@@ -1,8 +1,3 @@
-//! Локальная медиатека для «Релизов»: папка с аниме, имена файлов из которой
-//! сопоставляются с раздачами («уже скачано»). Папку выбирает пользователь
-//! нативным диалогом, её путь запоминается здесь, в каталоге данных программы:
-//! повторное сканирование читает его оттуда, а не из вебвью. Наружу уходят
-//! только имена файлов и имя родительской папки — содержимое не читается.
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -39,8 +34,6 @@ fn is_media(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Обход папки в ширину: глубина и число файлов ограничены, ссылки на каталоги
-/// не раскрываются (чтобы не уйти за пределы выбранной папки).
 pub fn scan_dir(root: &Path) -> (Vec<LibFile>, bool) {
     let mut out = Vec::new();
     let mut truncated = false;
@@ -77,7 +70,6 @@ fn scan_to_result(dir: &Path) -> LibraryScan {
     LibraryScan { dir: dir.to_string_lossy().into_owned(), files, truncated }
 }
 
-/// Выбрать папку медиатеки и просканировать её.
 #[tauri::command(async)]
 pub fn library_pick(app: tauri::AppHandle) -> Option<LibraryScan> {
     let dir = app.dialog().file().blocking_pick_folder()?.into_path().ok()?;
@@ -90,7 +82,6 @@ pub fn library_pick(app: tauri::AppHandle) -> Option<LibraryScan> {
     Some(scan_to_result(&dir))
 }
 
-/// Повторное сканирование ранее выбранной папки.
 #[tauri::command(async)]
 pub fn library_rescan(app: tauri::AppHandle) -> Option<LibraryScan> {
     let saved = std::fs::read_to_string(store_path(&app)?).ok()?;
@@ -101,7 +92,6 @@ pub fn library_rescan(app: tauri::AppHandle) -> Option<LibraryScan> {
     Some(scan_to_result(&dir))
 }
 
-/// Забыть папку медиатеки.
 #[tauri::command(async)]
 pub fn library_clear(app: tauri::AppHandle) {
     if let Some(p) = store_path(&app) {

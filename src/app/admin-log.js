@@ -1,6 +1,3 @@
-// Журнал действий админов — то же, что «🧾 Журнал действий» в боте
-// (admin/log_view.py): кто выдал или отозвал доступ, одобрил заявку,
-// удалил отчёт. Только владельцу. /api/admin-log?page&page_size&action_type.
 
 import { apiGet, openSheet, dialogSkeletonHtml } from "./api.js";
 import { esc, relTime } from "./utils.js";
@@ -24,7 +21,6 @@ function fmtWhen(iso) {
 
 function rowHtml(e) {
   const m = TYPE_META[e.action_type] || { c: "var(--ink-dim)", ic: '<circle cx="12" cy="12" r="3"/>' };
-  // Удалённый отчёт открыть уже нельзя — ссылка только на живые.
   const isReport = /^R-\d+$/.test(e.target || "") && e.action_type !== "delete_report";
   return `
     <tr>

@@ -1,7 +1,3 @@
-//! Хранение desktop-токена (`dsk_...`) в нативном хранилище учётных данных
-//! ОС — Credential Manager на Windows, Keychain на macOS, Secret
-//! Service/KWallet на Linux. Тот же подход, что был в PySide6-версии через
-//! Python `keyring`, только теперь напрямую из Rust.
 
 use keyring::Entry;
 
@@ -32,12 +28,6 @@ pub fn clear() -> Result<(), String> {
 mod tests {
     use super::*;
 
-    // Настоящий save/load/clear требует живого хранилища учётных данных
-    // ОС (Keychain/Credential Manager/Secret Service) — на headless
-    // CI-раннере (особенно Linux без запущенной сессии D-Bus) его нет,
-    // поэтому эти тесты #[ignore] по умолчанию и гоняются только вручную
-    // (`cargo test -- --ignored`) на разработческой машине с реальным
-    // окружением рабочего стола.
     #[test]
     #[ignore = "нужно реальное хранилище учётных данных ОС — недоступно на headless CI"]
     fn save_load_clear_roundtrip() {
@@ -51,8 +41,6 @@ mod tests {
     #[test]
     #[ignore = "нужно реальное хранилище учётных данных ОС — недоступно на headless CI"]
     fn clear_on_missing_entry_is_not_an_error() {
-        // NoEntry — не ошибка вызывающей стороне: token_clear() дёргается
-        // и при выходе из уже разлогиненного состояния, падать там не за что.
         clear().expect("clear() без сохранённого токена не должен быть ошибкой");
         clear().expect("повторный clear() тоже не должен быть ошибкой");
     }

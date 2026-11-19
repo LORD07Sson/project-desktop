@@ -1,6 +1,3 @@
-// Вкладка «Календарь» в духе «Кадра»: слева расписание на две недели —
-// сроки серий полосами от начала работы до сдачи (ромб — срок), справа
-// повестка выбранного дня и месяц.
 
 import { state, can } from "./state.js";
 import { fetchReminders, openRemindersSheet } from "./reminders.js";
@@ -14,7 +11,6 @@ import { openBirthdaysSheet } from "./birthdays.js";
 
 const DAY_MS = 86400000;
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-// Цвета блоков серий: тайтл получает один и тот же оттенок всю неделю.
 const TITLE_HUES = ["#3b5bdb", "#9c36b5", "#c2255c", "#e8590c", "#2b8a3e", "#1098ad", "#5f3dc4", "#d9480f"];
 
 const FILTER_KEY = () => `project_calendar_filters_${state.telegramId || "anon"}`;
@@ -26,7 +22,7 @@ let requestSeq = 0;
 
 function startOfWeek(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const wd = (x.getDay() + 6) % 7; // Пн = 0
+  const wd = (x.getDay() + 6) % 7;
   x.setDate(x.getDate() - wd);
   return x;
 }
@@ -40,38 +36,31 @@ function getFilters() {
   try {
     const v = JSON.parse(localStorage.getItem(FILTER_KEY()) || "null");
     if (v && typeof v === "object") return { episodes: v.episodes !== false, deadlines: v.deadlines !== false, birthdays: v.birthdays !== false, reminders: v.reminders !== false };
-  } catch (_) { /* по умолчанию всё включено */ }
+  } catch (_) { }
   return { episodes: true, deadlines: true, birthdays: true, reminders: true };
 }
 function setFilters(f) {
-  try { localStorage.setItem(FILTER_KEY(), JSON.stringify(f)); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(FILTER_KEY(), JSON.stringify(f)); } catch (_) { }
 }
 
-// ---------- данные ----------
 
 async function fetchAirings() {
   let seasons;
   try { seasons = (await apiGet("/public/seasons")).seasons || []; } catch (_) { return []; }
   if (!seasons.length) return [];
-  // Эфир-сезоны отсортированы сервером от свежего к старому — онгоинги
-  // живут в первом, реже во втором (длинные двухкуровые сериалы).
   const titles = [];
   for (const s of seasons.slice(0, 2)) {
-    try { titles.push(...((await apiGet(`/public/seasons/${s.id}/titles`)).titles || [])); } catch (_) { /* пропускаем сезон */ }
+    try { titles.push(...((await apiGet(`/public/seasons/${s.id}/titles`)).titles || [])); } catch (_) { }
   }
-  // Расписание серий — одним пакетным запросом вместо запроса на каждый тайтл.
   const dets = await fetchTitleDetails(titles.map(t => t.id));
   return titles.filter(t => dets.get(t.id)?.next_episode_at).map(t => ({ title: t, det: dets.get(t.id) }));
 }
 
-// Ход нашей работы по сериям взятых тайтлов (/work/episodes, только
-// админам): {title_id: {номер: {total, completed, overdue}}}.
 async function fetchWork() {
   if (!can("reports.calendar")) return {};
   try { return (await apiGet("/work/episodes")).titles || {}; } catch (_) { return {}; }
 }
 
-// Подпись серии взятого тайтла: что с ней у студии.
 function workPill(e, work, past) {
   const eps = work[String(e.id)];
   if (!eps) return "";
@@ -89,14 +78,11 @@ async function fetchDeadlines(from, to) {
   } catch (_) { return { deadlines: [], undated: [] }; }
 }
 
-// Полный список (/birthdays); на старом сервере без него — 5 ближайших
-// из /overview.
 async function fetchBirthdays() {
-  try { return (await apiGet("/birthdays")).birthdays || []; } catch (_) { /* старый сервер */ }
+  try { return (await apiGet("/birthdays")).birthdays || []; } catch (_) { }
   try { return (await apiGet("/overview")).birthdays || []; } catch (_) { return []; }
 }
 
-// ---------- «Кадр»: расписание на две недели, повестка дня, месяц ----------
 
 const RANGE_DAYS = 14;
 const WD_SHORT = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
@@ -114,7 +100,6 @@ function parseDay(s) { const [y, m, d] = String(s).slice(0, 10).split("-").map(N
 let selected = startOfDay(new Date());
 let monthCursor = new Date(selected.getFullYear(), selected.getMonth(), 1);
 
-// Серии тайтлов в промежутке [start, end): next_episode_at ± k недель.
 function airingsBetween(airings, start, end) {
   const events = [];
   for (const { title, det } of airings) {
@@ -134,8 +119,6 @@ function airingsBetween(airings, start, end) {
   return events;
 }
 
-// Все события дня, по времени: серии (со временем), напоминания,
-// дни рождения и сроки (срок — до конца дня, поэтому в самом низу).
 function dayEvents(date, data) {
   const f = getFilters();
   const key = ymd(date);
@@ -153,7 +136,6 @@ function stageOf(r) {
   return cleanLabel(r.status_label) || "";
 }
 function seriesName(r) { return r.title_name || String(r.title || "").replace(/\s*[,—–-]\s*сери[яи].*$/i, ""); }
-// Номер серии — тем же разбором, что на «Доске» и в «Списке»: отчёты пишут и «4 серия», и «Кредит - 05».
 function epOf(r) { const m = /(\d+)$/.exec(seriesParts(r).ep); return m ? Number(m[1]) : null; }
 function daysWord(n) { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? "день" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "дня" : "дней"; }
 function dueWords(n) { return n < 0 ? "просрочено" : n === 0 ? "сегодня" : n === 1 ? "завтра" : `через ${n} дн.`; }
@@ -184,12 +166,9 @@ function ganttHtml(data) {
     .filter(r => r.status !== "cancelled" && r.deadline <= ymd(days[RANGE_DAYS - 1])
       && (r.deadline >= ymd(days[0]) || (r.status !== "completed" && dayDiff(today, days[0]) >= 0 && dayDiff(today, days[0]) < RANGE_DAYS)))
     .sort((a, b) => a.deadline.localeCompare(b.deadline)) : [];
-  // 12 строк, но серии со сроком сегодня и завтра — всегда на виду: раньше их вытесняли старые просрочки
-  // (порядок по сроку), и «сдать сегодня» оказывалось в «ещё N в списке».
   const urgent = new Set(rows.filter(r => r.status !== "completed" && [0, 1].includes(dayDiff(parseDay(r.deadline), today))).slice(0, 12));
   const shown = [...urgent, ...rows.filter(r => !urgent.has(r))].slice(0, Math.max(12, urgent.size))
     .sort((a, b) => a.deadline.localeCompare(b.deadline));
-  // Серии в работе без срока — полоса от создания до сегодня, открытая справа: видно, что серия идёт, но срока нет.
   const undated = f.deadlines ? (data.undated || []).slice(0, Math.max(0, 12 - shown.length)) : [];
   const head = days.map((d, i) => {
     const evs = dayEvents(d, data);
@@ -198,7 +177,7 @@ function ganttHtml(data) {
   }).join("");
   const cols = days.map(d => `<span class="${d.getDay() % 6 === 0 ? "we" : ""}${sameDay(d, selected) ? " pick" : ""}" data-col="${ymd(d)}"></span>`).join("");
   const body = shown.map(r => {
-    const end = Math.max(0, dayDiff(parseDay(r.deadline), days[0]));   // срок раньше окна: просроченную серию всё равно показываем, у левого края
+    const end = Math.max(0, dayDiff(parseDay(r.deadline), days[0]));
     const created = r.created_at ? dayDiff(parseDay(r.created_at), days[0]) : end - 2;
     const st = Math.max(0, Math.min(created, end));
     const cut = created < 0;
@@ -216,7 +195,7 @@ function ganttHtml(data) {
     const created = r.created_at ? dayDiff(parseDay(r.created_at), days[0]) : 0;
     const nowCol = dayDiff(today, days[0]);
     const st = Math.max(0, Math.min(created, RANGE_DAYS - 1));
-    const end = Math.max(st, Math.min(nowCol + 3, RANGE_DAYS - 1));   // хвост на пару дней вперёд: серия идёт, конца не видно
+    const end = Math.max(st, Math.min(nowCol + 3, RANGE_DAYS - 1));
     if (nowCol < 0 || created > RANGE_DAYS - 1) return "";
     const ep = epOf(r);
     const poster = r.poster_url ? mediaUrl("/img_proxy", { url: r.poster_url }) : "";
@@ -291,7 +270,7 @@ function placeNowLine(root) {
   line.style.left = `calc(210px + (100% - 210px) * ${((idx + frac) / RANGE_DAYS).toFixed(4)})`;
 }
 
-let cache = null; // { airings, birthdays, reminders, work, deadlines, from, to }
+let cache = null;
 
 function wireBody(body) {
   body.querySelectorAll("[data-cal-report]").forEach(b => b.addEventListener("click", () => openReportDetail(b.dataset.calReport)));
@@ -305,8 +284,6 @@ function wireBody(body) {
   }));
 }
 
-// Выбор дня: внутри двух недель — подсветка колонки и новая повестка;
-// за их пределами — расписание сдвигается на неделю этого дня.
 function pickDay(d) {
   selected = startOfDay(d);
   if (selected.getMonth() !== monthCursor.getMonth() || selected.getFullYear() !== monthCursor.getFullYear()) monthCursor = new Date(selected.getFullYear(), selected.getMonth(), 1);
@@ -319,7 +296,6 @@ async function renderWeek() {
   const root = $("#calendar-body");
   const body = root.querySelector("#cal-body");
   const seq = ++requestSeq;
-  // Сроки — на две недели расписания и на весь показанный месяц.
   const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
   const fromD = monthCursor < weekStart ? startOfWeek(monthCursor) : weekStart;
   const toD = addDays(weekStart, RANGE_DAYS - 1) > monthEnd ? addDays(weekStart, RANGE_DAYS - 1) : addDays(startOfWeek(monthEnd), 6);

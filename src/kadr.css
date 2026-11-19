@@ -1,18 +1,3 @@
-/* ================================================================
-   Десктоп 2.0 «Кадр» — каркас: шрифт, палитра, фон из обложки тайтла,
-   шапка-остров с разделами вместо бокового меню, общие кнопки и меню.
-   Подключается после styles.css и переопределяет его; экраны
-   переводятся на новый вид по одному — их стили дописываются ниже
-   отдельными секциями.
-
-   Правила, которых держимся (см. обсуждение дизайна):
-   — один акцентный цвет, и только на главном действии и на том, что
-     горит; всё остальное — спокойные полупрозрачные слои;
-   — никакого мигания, сплошного капса и плотных рамок: мелкие подписи
-     капсом с разрядкой — единственное исключение;
-   — плавность: элементы проявляются и сдвигаются, а не щёлкают.
-   ================================================================ */
-
 :root {
   --font: "Manrope Variable", Manrope, "Segoe UI", system-ui, sans-serif;
   --titlebar-h: 58px;
@@ -40,8 +25,6 @@
   --glass-blur: 26px;
   --hairline: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .035) 38%, rgba(255, 255, 255, .06));
   --kadr-ease: cubic-bezier(.22, .9, .3, 1);
-
-  /* «Оригинал» — акцент «Кадра» */
   --fire: #ff7a3d;
   --ember: #ff9a5c;
   --gold: #ffb35c;
@@ -70,12 +53,8 @@ body {
   -webkit-font-smoothing: antialiased;
   background: var(--bg);
 }
-
-/* ---------- Фон из кадра (app/backdrop.js) ---------- */
 .app-backdrop {
   position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
-  /* Запасной фон, пока нет кадра тайтла (пустая очередь, нет сети): мягкие
-     пятна цвета акцента, чтобы стекло карточек было на чём размывать. */
   background:
     radial-gradient(60% 55% at 18% 8%, rgba(var(--fire-rgb), .22), transparent 70%),
     radial-gradient(55% 60% at 88% 30%, rgba(var(--gold-rgb), .12), transparent 70%),
@@ -96,11 +75,7 @@ body {
 :root[data-theme="light"] .app-backdrop i { filter: blur(70px) saturate(1.1) brightness(1.25); }
 :root[data-theme="light"] .app-backdrop i.on { opacity: .45; }
 :root[data-backdrop="off"] .app-backdrop { display: none; }
-/* Шапка остаётся выше всего (z-index 1000 в styles.css) — из неё
-   выпадают меню; экран приложения просто поднят над слоем фона. */
 #app-screen { position: relative; z-index: 1; }
-
-/* ---------- Шапка ---------- */
 .titlebar {
   height: var(--titlebar-h);
   padding-left: 20px;
@@ -124,8 +99,6 @@ body {
 .titlebar-right { flex: 1; min-width: 0; justify-content: flex-end; }
 .titlebar-apps { flex: 1; min-width: 0; gap: 14px; padding-right: 8px; }
 .titlebar-apps[hidden] { display: none; }
-
-/* Остров разделов */
 .tb-nav {
   margin: 0 auto; display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 16px;
   background: color-mix(in srgb, var(--bg) 52%, transparent);
@@ -166,11 +139,8 @@ body {
   content: ""; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%;
   background: var(--fire); box-shadow: 0 0 0 2px var(--bg);
 }
-
-/* Меню шапки — стекло с тонкой кромкой */
 .tb-menu {
   top: calc(100% + 10px); padding: 8px; border-radius: 18px;
-  /* почти непрозрачная подложка: иначе текст страницы просвечивает сквозь меню */
   background: color-mix(in srgb, var(--surface) 97%, transparent);
   backdrop-filter: blur(30px) saturate(1.3);
   border: 1px solid var(--glass-border);
@@ -182,8 +152,6 @@ body {
 .tb-mi:hover, .tb-mi:focus-visible { background: rgba(255, 255, 255, .06); }
 :root[data-theme="light"] .tb-mi:hover, :root[data-theme="light"] .tb-mi:focus-visible { background: rgba(80, 40, 20, .06); }
 .tb-sep { margin: 6px 8px; }
-
-/* «Ещё»: пункты с иконкой в плашке и пояснением */
 #more-menu { left: auto; right: 0; width: 330px; }
 #more-menu .tb-mi { height: auto; padding: 9px 10px; gap: 13px; justify-content: flex-start; width: 100%; color: var(--ink); letter-spacing: 0; text-transform: none; }
 #more-menu .tb-mi .tab-ic {
@@ -198,8 +166,6 @@ body {
 #more-menu .tab-btn.active { background: rgba(255, 255, 255, .07); }
 #more-menu .tab-btn.active::before { content: none; }
 #more-menu .tab-badge { position: static; margin-left: auto; box-shadow: none; }
-
-/* Справа: поиск, колокольчик, инструменты, «Смотреть», аватар */
 .tb-actions { display: flex; align-items: center; gap: 6px; flex: none; }
 .tb-search {
   width: 196px; height: 36px; border-radius: 12px; padding: 0 7px 0 12px;
@@ -232,9 +198,6 @@ body {
 .titlebar-team .tt { display: none; }
 .window-controls { margin-left: 4px; }
 .win-btn:hover { background: rgba(255, 255, 255, .06); }
-
-/* Узкое окно: сначала прячем подписи у поиска и «Смотреть», потом
-   имя рядом с логотипом, и под конец остров переходит на иконки. */
 @media (max-width: 1679px) { .titlebar-team { display: none !important; } }
 @media (max-width: 1519px) {
   .tb-search { width: 36px; padding: 0; justify-content: center; }
@@ -252,16 +215,11 @@ body {
   #tabstrip > .tab-btn, .tb-more-btn { width: 40px; padding: 0; }
   #tabstrip > .tab-btn .tab-badge { position: absolute; top: 2px; right: 1px; min-width: 15px; height: 14px; font-size: 9px; padding: 0 4px; }
 }
-
-/* Старое правило узкого окна для бокового меню (styles.css, 860px)
-   прятало подписи у всех .tab-btn — в меню «Ещё» они нужны всегда. */
 @media (max-width: 860px) {
   #more-menu .tb-mi { width: 100%; height: auto; padding: 9px 10px; justify-content: flex-start; }
   #more-menu .tab-lbl { display: inline; }
 }
 :root[data-role="member"] #more-menu .tb-sep:first-of-type { display: none; }
-
-/* ---------- Экран приложения без бокового меню ---------- */
 .app-body { display: block; height: 100%; }
 .app-content { height: 100%; }
 .scroll-panel { padding: 10px 32px 40px; }
@@ -271,8 +229,6 @@ body {
 .page-header { margin: 12px 0 22px; align-items: flex-end; }
 .page-header h1 { font-size: 32px; font-weight: 800; letter-spacing: -.025em; line-height: 1.1; margin: 0 0 6px; }
 .page-header .sub { font-size: 13px; color: var(--ink-dim); }
-
-/* ---------- Общие элементы ---------- */
 .btn {
   height: 36px; padding: 0 15px; border-radius: 12px; font-weight: 700; font-size: 12.5px;
   background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .09);
@@ -303,11 +259,7 @@ body {
 :root[data-theme="light"] .chip { background: rgba(80, 40, 20, .06); }
 
 input, select, textarea { font-family: inherit; }
-
-/* Модалки и выпадашки — стекло с тонкой кромкой, мягкое появление */
-/* Модалки открываются под шапкой: она выше всего (меню, кнопки окна),
-   и карточка, заехавшая под остров, выглядела обрезанной. */
-.overlay { top: var(--titlebar-h); background: none; backdrop-filter: none; }   /* без затемнения и размытия фона за окнами */
+.overlay { top: var(--titlebar-h); background: none; backdrop-filter: none; }
 .sheet { max-height: calc(100vh - var(--titlebar-h) - 40px); }
 :root[data-theme="light"] .overlay { background: none; }
 .sheet {
@@ -318,11 +270,6 @@ input, select, textarea { font-family: inherit; }
 
 :root[data-motion="off"] .tab-panel.active, :root[data-motion="off"] .tb-menu, :root[data-motion="off"] .app-backdrop i { animation: none; transition: none; }
 @media (prefers-reduced-motion: reduce) { .tab-panel.active, .tb-menu, .app-backdrop i { animation: none; transition: none; } }
-
-/* ================================================================
-   Общие детали «Кадра»: стеклянная карточка, заголовок секции с
-   ромбом, мелкая подпись капсом, ссылка, дорожка прогресса.
-   ================================================================ */
 .kd-gl {
   position: relative; border-radius: var(--radius-lg);
   background: var(--glass-bg);
@@ -353,10 +300,6 @@ input, select, textarea { font-family: inherit; }
 .kd-ch { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .kd-ch h3 { margin: 0; font-size: 14px; font-weight: 800; }
 .kd-ch .kd-label { margin-left: 2px; }
-
-/* ================================================================
-   Обзор
-   ================================================================ */
 .kd-ov > * { animation: kadr-rise .7s var(--kadr-ease) both; }
 .kd-ov > :nth-child(2) { animation-delay: .07s; }
 .kd-ov > :nth-child(3) { animation-delay: .14s; }
@@ -378,10 +321,8 @@ input, select, textarea { font-family: inherit; }
   box-shadow: 0 30px 60px -20px #000, 0 0 0 1px rgba(255, 255, 255, .12); transform: rotate(2deg) translateY(8px); opacity: 0; transition: transform .9s var(--kadr-ease), opacity .9s var(--kadr-ease); }
 .kd-slide.no-ban .kd-slide-ban { display: none; }
 .kd-slide.no-ban .kd-slide-art { display: block; }
-/* Тикает срок — треснувшая обложка нужна и поверх баннера: трещины, осколки и линза живут только на ней. */
 .kd-slide.doom .kd-slide-art { display: block; }
 .kd-slide.on .kd-slide-art { opacity: 1; transform: rotate(2deg); }
-/* Обложка: стекло с трещинами обрезано по скруглению, а осколки (.kd-shards) вылетают за край. */
 .kd-art-glass { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }
 .kd-art-glass > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .kd-shards { position: absolute; inset: 0; pointer-events: none; perspective: 600px; z-index: 2; }
@@ -395,9 +336,7 @@ input, select, textarea { font-family: inherit; }
   12% { transform: translate(calc(var(--dx) * .08), calc(var(--dy) * -.04)) rotate(calc(var(--rot) * .05)); opacity: 1; }
   100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) rotateX(var(--tilt)); opacity: 0; }
 }
-/* Трещины по сроку (Crack.jsx): тёмная щель + светлый скол сбоку — как стекло. Длина растёт через dashoffset. */
 .kd-crack { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-/* Толщина — в единицах viewBox (100 × 140): non-scaling-stroke ломает пунктир через pathLength — линии шли рваными. */
 .kd-crack path:not(.kd-crack-hole) { fill: none; stroke-linecap: round; stroke-linejoin: round;
   stroke-dasharray: 1 1; stroke-dashoffset: var(--off); transition: stroke-dashoffset 1.6s cubic-bezier(.2, .7, .2, 1); }
 .kd-crack-dark { stroke: rgba(0, 0, 0, .6); stroke-width: calc(var(--w) * 1.1px); }
@@ -408,7 +347,6 @@ input, select, textarea { font-family: inherit; }
 .kd-crack:not(.broken) .kd-crack-hole { display: none; }
 .kd-crack.broken { filter: drop-shadow(0 0 6px rgba(var(--fire-rgb), .55)); }
 .kd-slide-art:has(.kd-crack.broken) > img { filter: saturate(.55) brightness(.8) contrast(1.1); }
-/* Последний день: стекло «потрескивает» — короткая дрожь, тем чаще, чем ближе полночь. */
 .kd-slide.on .kd-slide-art.creak { animation: kd-creak var(--creak) infinite; }
 @keyframes kd-creak {
   0%, 90%, 100% { translate: 0 0; }
@@ -567,13 +505,9 @@ button.kd-tile:hover { transform: translateY(-2px); }
 :root[data-theme="light"] .kd-dl-d { background: rgba(80, 40, 20, .05); }
 :root[data-motion="off"] .kd-ov > *, :root[data-motion="off"] .kd-slide, :root[data-motion="off"] .kd-slide * { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .kd-ov > *, .kd-slide, .kd-slide * { animation: none !important; transition: none !important; } }
-
-/* ================================================================
-   Карточка серии (report-detail.js)
-   ================================================================ */
 .overlay.report-detail-overlay .sheet {
   width: min(1400px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - var(--titlebar-h) - 20px);
-  border-radius: 26px; background: var(--surface);   /* сплошной цвет темы: полупрозрачный пропускал текст списка, а зашитый коричневый не совпадал с палитрой «Небо»/«Мята»… */
+  border-radius: 26px; background: var(--surface);
   backdrop-filter: blur(30px);
   animation: kadr-pop .5s var(--kadr-ease) both;
 }
@@ -590,7 +524,7 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-poster { width: 56px; height: 78px; border-radius: 11px; box-shadow: 0 24px 40px -16px #000, 0 0 0 1px rgba(255, 255, 255, .12); }
 .rd-titles { padding-bottom: 4px; }
 .rd-titles h2 { margin: 4px 0 4px; font-size: 21px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; }
-.rd-titles h2 .rd-tn { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }   /* длинное название — две строки, целиком в title; флажок приоритета остаётся виден */
+.rd-titles h2 .rd-tn { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .rd-titles .kd-kick { color: var(--ink-dim); }
 .rd-sub { font-size: 12px; }
 .rd-hero .detail-head-actions { position: absolute; top: -12px; right: -14px; }
@@ -598,8 +532,6 @@ button.kd-tile:hover { transform: translateY(-2px); }
   background: rgba(10, 8, 7, .45); backdrop-filter: blur(10px); color: rgba(241, 235, 230, .75); }
 .rd-hero .detail-head-actions .icon-btn:hover { background: rgba(10, 8, 7, .7); color: #fff; }
 :root[data-theme="light"] .rd-hero .detail-head-actions .icon-btn { background: rgba(255, 255, 255, .7); color: var(--ink-soft); }
-
-/* Путь статусов — сегментами-пилюлями */
 .rd-steps { margin-top: 20px; gap: 4px; flex-wrap: wrap; }
 .rd-step, .rd-step:first-child, .rd-step:last-child { margin: 0; border-radius: 10px; height: 32px; padding: 0 13px; border: 0; gap: 8px;
   background: rgba(255, 255, 255, .04); color: var(--ink-dim); font-size: 12px; font-weight: 700; transition: background .2s, color .2s; }
@@ -607,17 +539,13 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-step.done { color: var(--ink-soft); }
 .rd-step.cur { color: var(--ink); background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent); }
 .rd-step i { width: 7px; height: 7px; }
-/* будущие этапы — пустой кружок, но в цвет своего статуса: серый контур на тёмном не было видно */
 .rd-step:not(.cur):not(.done) i { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 65%, transparent); }
 .rd-step-side { height: 32px; border-radius: 10px; margin-left: 8px; }
 :root[data-theme="light"] .rd-step { background: rgba(80, 40, 20, .05); }
-
-/* Вкладки — подчёркивание градиентом */
 .rd-tabs { padding: 0 30px; gap: 4px; border-bottom: 1px solid var(--line); }
 .rd-tab { position: relative; padding: 12px 14px; border-bottom: 0; font-size: 12.5px; font-weight: 700; color: var(--ink-dim); }
 .rd-tab.on { border-bottom: 0; }
 .rd-tab.on::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--fire), var(--gold)); }
-/* «Уведомления» в карточке отчёта: доставлено / не доставлено и почему */
 .rd-tab-bad { display: inline-grid; place-items: center; min-width: 17px; height: 17px; margin-left: 6px; padding: 0 5px; border-radius: 99px; font: 800 10px/1 var(--mono, monospace); color: #fff; background: var(--s-stop); vertical-align: 1px; }
 .rd-tab-bad[hidden] { display: none; }
 .rd-nt-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
@@ -639,8 +567,6 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-side { padding: 22px 24px 24px; background: rgba(255, 255, 255, .015); }
 .rd-sec h3 { font-size: 13.5px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--ink); margin-bottom: 12px; }
 .rd-sec h3 .n { font-size: 11.5px; font-weight: 700; color: var(--ink-dim); }
-
-/* Пайплайн шкалой */
 .rd-timeline { position: relative; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); border-radius: 18px;
   background: rgba(255, 255, 255, .03); border: 1px solid var(--line); }
 .rd-timeline::before, .rd-timeline::after { content: ""; position: absolute; top: 34px; height: 2px; border-radius: 2px; left: calc(8px + (100% - 16px) / var(--n) / 2); }
@@ -664,8 +590,6 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .rd-pass b { color: var(--ink); }
 .rd-pass > span { flex: 1 1 260px; }
 .rd-pass .field-input { width: auto; min-width: 160px; height: 34px; }
-
-/* Чек-лист, заметки, файлы */
 .checklist-item { padding: 9px 10px; border-radius: 11px; background: transparent; border: 0; gap: 12px; transition: background .2s; }
 .checklist-item:hover { background: rgba(255, 255, 255, .04); }
 .checklist-item.done { opacity: 1; text-decoration: none; }
@@ -688,8 +612,6 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .file-item:hover { background: rgba(255, 255, 255, .06); }
 .add-row input, .add-row textarea { border-radius: 12px; background: rgba(255, 255, 255, .04); border-color: var(--line); }
 .rd-add { border-radius: 12px; }
-
-/* Правая колонка — плашки */
 .rd-meta { gap: 14px; }
 .rd-meta-row { padding: 14px 16px; border-radius: 16px; background: rgba(255, 255, 255, .035); border: 1px solid var(--line); gap: 8px; }
 .rd-meta-row > span { font-size: 9.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); }
@@ -704,11 +626,6 @@ button.kd-tile:hover { transform: translateY(-2px); }
 :root[data-theme="light"] .rd-meta-row, :root[data-theme="light"] .file-item, :root[data-theme="light"] #checklist-list { background: rgba(255, 255, 255, .6); }
 :root[data-theme="light"] .rd-side { background: rgba(80, 40, 20, .015); }
 @media (max-width: 860px) { .rd-timeline { grid-template-columns: 1fr; gap: 10px; } .rd-timeline::before, .rd-timeline::after { display: none; } }
-
-/* ================================================================
-   Общие: подпись над заголовком, переключатель-сегменты, поля и
-   выпадашки тулбаров — один вид на всех экранах.
-   ================================================================ */
 .page-header .kd-label { display: block; margin-bottom: 8px; }
 .kd-seg { display: inline-flex; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); }
 .kd-seg button { height: 28px; padding: 0 13px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 12px; font-weight: 700; color: var(--ink-dim); cursor: pointer; transition: color .2s, background .2s; }
@@ -716,10 +633,6 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .kd-seg button.on { background: rgba(255, 255, 255, .09); color: var(--ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }
 :root[data-theme="light"] .kd-seg { background: rgba(255, 255, 255, .6); }
 :root[data-theme="light"] .kd-seg button.on { background: #fff; box-shadow: 0 2px 6px -3px rgba(60, 25, 10, .25); }
-
-/* ================================================================
-   Доска
-   ================================================================ */
 #board-body .page-header { margin-bottom: 20px; }
 .board-toolbar { gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
 .board-search { height: 36px; min-width: 260px; padding: 0 12px; gap: 9px; border-radius: 11px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); }
@@ -743,14 +656,11 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .board-col-head .lb .dot { width: 8px; height: 8px; background: var(--col-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--col-accent) 16%, transparent); }
 .board-col-head .cnt { order: 1; font-size: 12px; font-weight: 700; color: var(--ink-dim); background: none; padding: 0; }
 .board-col-head .board-col-collapse { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; padding: 0; color: var(--ink-soft); }
-/* ореол точки (box-shadow 4px) не должен срезаться overflow:hidden подписи */
 .board-col-head .lb { padding: 4px 0 4px 4px; margin: -4px 0 -4px -4px; }
 .board-col.collapsed .board-col-head .lb { padding: 0; margin: 0; }
 .board-col-head .board-col-collapse:hover { background: rgba(255, 255, 255, .07); }
 .board-col.collapsed { width: 48px; padding: 12px 6px; }
 .board-col.collapsed .board-col-head .lb .dot { box-shadow: none; }
-/* Скрыть/показать карточки (board.js: data-fold): без подсветки полосой — при наведении светлеет подпись;
-   стрелка справа рядом с «свернуть в полоску», приглушённая; в свёрнутом виде у счётчика тихая пометка «скрыто» */
 .board-col:not(.collapsed) .board-col-head:hover { background: none; }
 .board-col:not(.collapsed) .board-col-head:hover .lb { color: #fff; }
 .board-col-head .board-col-fold { order: 2; margin-left: auto; width: 26px; height: 26px; padding: 7px; border-radius: 8px; opacity: .5; transition: opacity .15s, transform .18s ease, background .12s; }
@@ -788,16 +698,11 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .kc-ft .avatar-bubble:first-child { margin-left: 0; }
 :root[data-theme="light"] .kc-ft .avatar-bubble { box-shadow: 0 0 0 2px #fff; }
 .kc-none { font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
-/* «Срочно» — тёплая точка: синий акцент темы читался как «непрочитано». */
 .kc-flag { position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--s-work); box-shadow: 0 0 0 3px color-mix(in srgb, var(--s-work) 22%, transparent); }
 :root[data-theme="light"] .board-card { background: rgba(255, 255, 255, .75); }
 :root[data-theme="light"] .kc-ft .board-card-progress-track { background: rgba(80, 40, 20, .08); }
 .board-top-row { margin-bottom: 16px; }
 .board-top-row .bcell { border-radius: var(--radius-lg); }
-
-/* ================================================================
-   Моя очередь
-   ================================================================ */
 .kd-sum { display: flex; gap: 10px; flex-wrap: wrap; }
 .kd-sum > div { padding: 9px 16px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
 .kd-sum small { display: block; font-size: 9px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
@@ -824,15 +729,9 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .kd-qr-bot { font-size: 11.5px; color: var(--ink-dim); }
 @media (max-width: 1100px) { .kd-qr { grid-template-columns: 64px minmax(0, 1fr) 140px 120px; } .kd-qr-pr { display: none; } .kd-qr-pc { width: 64px; height: 88px; } }
 @media (max-width: 860px) { .kd-qr { grid-template-columns: 56px minmax(0, 1fr) 110px; gap: 14px; } .kd-qr-ac { display: none; } .kd-qr-pc { width: 56px; height: 76px; } }
-
-/* ================================================================
-   Список серий
-   ================================================================ */
 .tab-panel[data-panel="list"] { padding: 10px 32px 0; }
 .list-page-header { margin-bottom: 20px; }
-/* Заголовок — по тому же краю, что и на других вкладках (у панели уже свой отступ 32px). */
 .tab-panel[data-panel="list"] .list-page-header { padding-left: 0; padding-right: 0; }
-/* Длинный подзаголовок серии обрезается многоточием, а не растягивает таблицу шире окна. */
 .content td.ls-series { max-width: 0; }
 .ls-id { display: block; overflow: hidden; text-overflow: ellipsis; }
 .ls-id .fav-star { vertical-align: middle; }
@@ -911,22 +810,17 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .col-check input:checked::after, .row-check:checked::after { content: ""; width: 7px; height: 4px; border: 2px solid var(--on-accent); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
 :root[data-theme="light"] .col-check input, :root[data-theme="light"] .row-check { border-color: rgba(80, 40, 20, .3); }
 .row-actions .icon-btn { opacity: 0; transition: opacity .2s; }
-tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacity: 1; }   /* с клавиатуры (Tab) кнопки тоже видны */
+tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacity: 1; }
 .bulk-bar { position: sticky; bottom: 18px; margin: 16px auto; width: fit-content; padding: 8px 8px 8px 18px; border-radius: 16px; gap: 10px;
   background: var(--glass-bg-strong); backdrop-filter: blur(20px); border: 1px solid var(--glass-border); box-shadow: 0 20px 50px -20px #000; }
 .bulk-bar .spacer { display: none; }
 .statusbar { border-top: 0; background: transparent; color: var(--ink-dim); padding: 10px 4px 14px; }
 .tab-panel[data-panel="list"] .statusbar { color: var(--ink-soft); }
 @media (max-width: 1100px) { .tab-panel[data-panel="list"] .col-prog, .tab-panel[data-panel="list"] .ls-prog { display: none; } }
-/* Даём названию минимум и убираем «Этап» и быстрые кнопки (всё это есть в карточке серии). */
 @media (max-width: 900px) {
   .tab-panel[data-panel="list"] .content td.ls-series, .content td.ls-series { min-width: 200px; }
   .tab-panel[data-panel="list"] [data-list-col="stage"], .tab-panel[data-panel="list"] [data-list-col="actions"] { display: none; }
 }
-
-/* ================================================================
-   Общие чипы и переключатели старых экранов — под «Кадр»
-   ================================================================ */
 .seg-toggle { padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); gap: 0; }
 .seg-btn { height: 28px; padding: 0 13px; border-radius: 9px; font-size: 12px; font-weight: 700; color: var(--ink-dim); background: transparent; border: 0; }
 .seg-btn.active { background: rgba(255, 255, 255, .09); color: var(--ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }
@@ -935,10 +829,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .qchip:hover, .tl-filter:hover { color: var(--ink-soft); border-color: rgba(255, 255, 255, .16); }
 .qchip.on, .tl-filter.on { background: rgba(var(--fire-rgb), .13); border-color: rgba(var(--fire-rgb), .35); color: var(--gold); }
 .tl-filter.on span { color: var(--gold); }
-
-/* ================================================================
-   Тайтлы: голосование афишей
-   ================================================================ */
 .tl-spot {
   min-height: 236px; padding: 28px 30px; gap: 26px; margin-bottom: 24px; grid-template-columns: 124px minmax(0, 1fr) 250px; align-items: center;
   border: 0; border-radius: 22px; background: #120e0c; color: #f1ebe6; box-shadow: 0 40px 80px -40px rgba(0, 0, 0, .95);
@@ -976,7 +866,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .af-tag.lead { background: rgba(var(--fire-rgb), .92); }
 .af-rank { width: 28px; height: 28px; font-size: 12px; border-radius: 9px; }
 .af-body { position: static; padding: 12px 2px 0; gap: 6px; flex: 1; }
-/* Название всегда занимает две строки, голоса прижаты к низу — проценты и кнопки в ряду на одной высоте. */
 .af-name { font-size: 14px; font-weight: 800; color: var(--ink); text-shadow: none; min-height: 2.4em; }
 .af-body .af-votes { margin-top: auto; }
 .af-meta { font-size: 11.5px; color: var(--ink-dim); }
@@ -986,10 +875,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .af-acts .vote-btn { height: 30px; border-radius: 10px; background: rgba(255, 255, 255, .05); border-color: var(--line); backdrop-filter: none; }
 :root[data-theme="light"] .af-acts .vote-btn { background: rgba(255, 255, 255, .7); }
 .af-add { aspect-ratio: 3 / 4.15; border-radius: 16px; }
-
-/* ================================================================
-   Календарь: расписание, повестка, месяц
-   ================================================================ */
 .kcal { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
 .kcal-layers button { white-space: nowrap; }
 .kcal-ib { width: 36px; padding: 0; justify-content: center; }
@@ -1027,7 +912,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent); transition: filter .25s, transform .3s var(--kadr-ease); }
 :root[data-theme="light"] .kcal-bar { color: color-mix(in srgb, var(--c) 70%, #000); }
 .kcal-bar:hover { filter: brightness(1.25); transform: translateY(-1px); }
-/* Без срока: правый край открыт и тает — срока сдачи (ромба) нет. */
 .kcal-bar.open {
   background: linear-gradient(90deg, color-mix(in srgb, var(--c) 18%, transparent), color-mix(in srgb, var(--c) 4%, transparent));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 22%, transparent); }
@@ -1085,10 +969,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 :root[data-theme="light"] .kcal-ac { background: rgba(255, 255, 255, .6); }
 @media (max-width: 1240px) { .kcal { grid-template-columns: 1fr; } .kcal-side { display: grid; grid-template-columns: 1fr 1fr; } }
 @media (max-width: 1000px) { .kcal-h, .kcal-r { grid-template-columns: 150px repeat(14, minmax(0, 1fr)); } .kcal-cols { left: 150px; } .kcal-who img, .kcal-ph { display: none; } .kcal-bar > span { display: none; } }
-
-/* ================================================================
-   Чат — три стеклянные панели: беседы, переписка, о беседе
-   ================================================================ */
 .ms-root { padding: 14px 32px 22px; }
 .ms-layout { gap: 14px; border: 0; border-radius: 0; overflow: visible; background: none; }
 .ms-layout.info-open { grid-template-columns: 300px minmax(0, 1fr) 290px; }
@@ -1152,11 +1032,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .ms-info-sec h4 { font-size: 9.5px; letter-spacing: .22em; margin: 18px 0 8px; }
 .ms-mem { border-radius: 10px; }
 @media (max-width: 1080px) { .ms-layout.info-open { grid-template-columns: 260px minmax(0, 1fr); } }
-
-/* ================================================================
-   Остальные экраны (лента, аналитика, сервисы, команда, профиль,
-   настройки): те же стеклянные карточки, что и на переписанных.
-   ================================================================ */
 .bcell, .fd-sum-cell, .fd-day, .pf-card, .pf-hero, .pf-kpi, .tm-card, .tm-stat, .st-group, .vote-card, .cal-card, .fd-body,
 .pf-side .team-teaser, .pf-side .goal-card {
   background: var(--glass-bg); border: 0; border-radius: var(--radius-lg);
@@ -1183,10 +1058,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .st-nav-title { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
 .st-palette.on, .st-card.on { border-color: rgba(var(--gold-rgb), .5); box-shadow: 0 0 0 3px rgba(var(--gold-rgb), .1); }
 .page-header-actions .btn, .page-header-actions .icon-btn { height: 36px; }
-
-/* ================================================================
-   Команда: карточки с кольцом у аватара
-   ================================================================ */
 .tm-stats { gap: 10px; margin-bottom: 16px; }
 .tm-stat { flex: none; min-width: 0; padding: 12px 18px; gap: 10px; border-radius: 14px; }
 .tm-stat b { font-size: 20px; font-weight: 800; }
@@ -1200,7 +1071,7 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .tm-card.paused { opacity: .62; }
 .tm-av { margin-bottom: 12px; padding: 3px; border-radius: 50%; background: conic-gradient(from 210deg, var(--fire), var(--gold), rgba(255, 255, 255, .15), var(--fire)); }
 .tm-av .avatar.xl { width: 66px; height: 66px; font-size: 24px; box-shadow: 0 0 0 3px var(--bg); }
-.tm-dot { right: 5px; bottom: 5px; width: 12px; height: 12px; border: 0; background: var(--s-done); box-shadow: 0 0 0 2px var(--bg), 0 0 6px color-mix(in srgb, var(--s-done) 55%, transparent); }   /* одно тонкое кольцо цвета зазора у аватара, а не рамка + тень */
+.tm-dot { right: 5px; bottom: 5px; width: 12px; height: 12px; border: 0; background: var(--s-done); box-shadow: 0 0 0 2px var(--bg), 0 0 6px color-mix(in srgb, var(--s-done) 55%, transparent); }
 .tm-name { font-size: 15px; font-weight: 800; }
 .tm-role { background: none; padding: 0; font-size: 12px; font-weight: 500; color: var(--ink-dim); }
 .tm-state { display: inline-block; max-width: 100%; margin: 12px 0 14px; padding: 5px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: rgba(255, 255, 255, .05); color: var(--ink-soft); }
@@ -1211,10 +1082,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .tm-foot b { font-size: 16px; color: var(--ink); }
 .tm-actions { opacity: 0; }
 .tm-act { border: 0; background: rgba(255, 255, 255, .07); }
-
-/* ================================================================
-   Сервисы: орб состояния
-   ================================================================ */
 .svc-hero { display: flex; align-items: center; gap: 24px; padding: 24px 28px; margin-bottom: 16px; }
 .svc-hero h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
 .svc-hero p { margin: 3px 0 0; color: var(--ink-soft); }
@@ -1229,10 +1096,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .svc-history-bar:hover { opacity: 1; }
 .bs-card { margin-top: 14px; }
 .bs-cell { border-radius: 14px; background: rgba(255, 255, 255, .035); border: 1px solid var(--line); }
-
-/* ================================================================
-   Аналитика и Лента
-   ================================================================ */
 .fd-day { overflow: hidden; }
 .fd-day-head { background: transparent; border-bottom: 1px solid var(--line); padding: 14px 16px 12px; }
 .fd-day-head b { font-size: 10px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-dim); }
@@ -1241,10 +1104,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .fd-row.linkable:hover { background: rgba(255, 255, 255, .03); }
 .fd-sum-cell { padding: 14px 16px; }
 .fd-person-sel { height: 36px; border-radius: 11px; background-color: rgba(255, 255, 255, .045); border: 1px solid var(--line); }
-
-/* ================================================================
-   Профиль и достижения
-   ================================================================ */
 .pf-hero { border-radius: 24px; overflow: hidden; }
 .pf-banner { position: relative; }
 .pf-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 40%, transparent) 60%, transparent); opacity: .85; }
@@ -1263,10 +1122,6 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .badge-item:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, .14); }
 .badge-item.unlocked { background: linear-gradient(160deg, rgba(var(--gold-rgb), .12), rgba(255, 255, 255, .03)); border-color: rgba(var(--gold-rgb), .25); }
 .badge-item .lbl { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
-
-/* ================================================================
-   Настройки
-   ================================================================ */
 .st-layout { gap: 18px; }
 .st-nav { border-right: 0; padding: 14px 12px; border-radius: var(--radius-lg); background: var(--glass-bg); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
 .st-nav-grp { font-size: 9.5px; letter-spacing: .22em; }
@@ -1282,11 +1137,7 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .st-card:hover, .st-palette:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, .16); }
 :root[data-theme="light"] .st-nav { background: rgba(255, 255, 255, .7); }
 :root[data-theme="light"] .st-card, :root[data-theme="light"] .st-palette, :root[data-theme="light"] .badge-item { background: rgba(255, 255, 255, .7); }
-
-/* Аналитика: график, столбцы, рейтинг */
 @media (max-width: 1000px) { .an-two { grid-template-columns: 1fr; } }
-
-/* Профиль: достижения медальонами, цель месяца кольцом, показатели */
 .pf-kpis { gap: 14px; }
 .pf-kpi .l { font-size: 9.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); }
 .pf-kpi b { display: block; margin: 6px 0 4px; }
@@ -1312,17 +1163,10 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .goal-ring-label b { font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
 :root[data-theme="light"] .pf-badge { background: rgba(255, 255, 255, .7); }
 :root[data-theme="light"] .pf-badge .ic::before { background: linear-gradient(145deg, #e9ddd4, #cdbbae); }
-
-/* Фон «Матовое стекло» (по умолчанию): прежних лучей свечения нет. */
 .st-cards-3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .st-prev-kadr { background: radial-gradient(80% 100% at 30% 0, rgba(60, 120, 140, .5), transparent 70%), #0b0908; }
 .st-prev-kadr i { background: rgba(255, 255, 255, .07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); backdrop-filter: blur(4px); }
 :root[data-look="kadr"] .an-metrics::before, :root[data-look="kadr"] .an-metrics::after { content: none; }
-
-/* ================================================================
-   Режим разработчика и «Инструменты ffmpeg» — в языке «Кадра»:
-   стеклянные карточки, акцент вместо фиолетового/синего.
-   ================================================================ */
 .dev-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 10px; }
 .dev-tag { font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; color: var(--gold); background: rgba(var(--fire-rgb), .1); border: 1px solid rgba(var(--fire-rgb), .22); }
 .dev-bento { gap: 12px; margin-top: 0; }
@@ -1352,12 +1196,9 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .dev-bcell .field-input:focus, .dev-bcell .field-textarea:focus { border-color: rgba(var(--fire-rgb), .5); box-shadow: 0 0 0 3px rgba(var(--fire-rgb), .1); }
 .dev-save-btn { padding: 9px 18px; border-radius: 11px; box-shadow: 0 8px 20px -10px rgba(var(--fire-rgb), .6); transition: transform .2s var(--kadr-ease), filter .2s; }
 .dev-save-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
-
-/* ffmpeg */
 .mt-sheet { background: var(--glass-bg-strong); backdrop-filter: blur(30px) saturate(1.2); }
 .mt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .mt-head h2 { position: static; margin: 4px 0 0; padding: 0; background: none; border: 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
-/* Общее правило «.sheet h2» липкое и с подложкой — в шапке окон инструментов это рисовало тёмный прямоугольник за заголовком. */
 .mt-head-close { width: 34px; height: 34px; padding: 0; border-radius: 11px; display: grid; place-items: center; flex: none; }
 .mt-pool-bar { background: rgba(255, 255, 255, .035); border: 1px dashed rgba(255, 255, 255, .14); border-radius: 16px; padding: 12px 14px; }
 .mt-pool-chip { border-radius: 999px; background: rgba(var(--fire-rgb), .1); border-color: rgba(var(--fire-rgb), .25); }
@@ -1368,14 +1209,9 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .mt-empty { border: 1px dashed rgba(255, 255, 255, .14); border-radius: 18px; padding: 34px 24px; background: rgba(255, 255, 255, .02); }
 :root[data-theme="light"] .mt-op-tabs, :root[data-theme="light"] .mt-pool-bar { background: rgba(80, 40, 20, .04); }
 @media (max-width: 760px) { .dev-ids { grid-template-columns: 1fr; } }
-
-/* Выпадающие списки: у нативного <select> окно выбора рисуется системой с
-   белым фоном, а цвет текста у <option> наследуется светлый — пункты
-   становились неразличимы. Задаём и фон, и цвет. */
 select { color-scheme: dark; }
 :root[data-theme="light"] select { color-scheme: light; }
 select option, select optgroup { background-color: var(--surface); color: var(--ink); }
-/* ---------- Соглашение (nda.js) ---------- */
 .nda { max-width: 520px; }
 .nda h2 { margin: 4px 0 12px; }
 .nda p { color: var(--ink-soft); line-height: 1.55; margin: 8px 0; }
@@ -1386,8 +1222,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .sc-row i { width: 9px; height: 9px; border-radius: 50%; background: #6fe39a; }
 .sc-row.warn i { background: #ffc857; } .sc-row.bad i { background: #ff7b7b; }
 .sc-row em { min-width: 0; overflow-wrap: anywhere; font-style: normal; color: var(--ink-dim); }
-
-/* ---------- Релизы · Nyaa (nyaa.js) ---------- */
 .ny { margin: 0 auto; }
 .ny-hero { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 .ny-hero h2 { position: static; padding: 0; background: none; border: 0; }
@@ -1466,8 +1300,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
   .ny-row { grid-template-columns: 22px 40px minmax(0, 1fr) auto; }
   .ny-meta, .ny-health { display: none; }
 }
-
-/* ---------- Nyaa: источники, страница раздачи ---------- */
 .ny-hero-t { display: grid; gap: 4px; justify-items: start; }
 .ny-src-btn { margin-top: 8px; display: inline-flex; align-items: center; gap: 8px; font: inherit; cursor: pointer; }
 .ny-src-btn:hover { border-color: rgba(var(--fire-rgb), .5); }
@@ -1652,8 +1484,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-lb img { max-width: 94vw; max-height: 86vh; border-radius: 12px; }
 .ny-lb .ny-ib { position: absolute; top: 14px; right: 18px; }
 @media (max-width: 760px) { .ny-drawer { border-radius: 0; } }
-
-/* ---------- Nyaa: фильтры, «Показать ещё», просмотренные ---------- */
 .ny-flt-btn { display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink-soft); font: inherit; font-size: 12.5px; cursor: pointer; }
 .ny-flt-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linejoin: round; }
 .ny-flt-btn:hover, .ny-flt-btn.on { color: var(--ink); border-color: rgba(var(--fire-rgb), .5); }
@@ -1678,8 +1508,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-sel-all .ny-sp { flex: 1; }
 .ny-row.seen .ny-title { font-weight: 500; }
 .ny-row.seen .ny-kind { opacity: .55; }
-
-/* ---------- Nyaa: торрент-клиент и слежение ---------- */
 .ny-hero-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .ny-hero-btns .ny-src-btn { margin-top: 0; }
 .ny-hero-t > .ny-src-btn + .ny-hero-btns { margin-top: 8px; }
@@ -1696,8 +1524,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-mon-add { display: flex; flex-wrap: wrap; gap: 8px; }
 .ny-mon-add select, .ny-mon-add input { background: #0b0e18; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); padding: 8px 10px; font: inherit; font-size: 13px; }
 .ny-mon-add input { flex: 1; min-width: 200px; }
-
-/* ---------- Nyaa: внешние источники и «Похожее» ---------- */
 .ny-srcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; align-items: start; }
 .ny-src-card { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); display: grid; gap: 8px; align-content: start; }
 .ny-src-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -1723,8 +1549,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-sim-card .ny-link { justify-self: start; padding: 0; margin-top: 2px; }
 .ny-sim-cover { width: 56px; height: 80px; border-radius: 9px; border: 0; padding: 0; flex: none; overflow: hidden; cursor: pointer; background: linear-gradient(135deg, rgba(var(--fire-rgb), .3), rgba(255, 255, 255, .06)); }
 .ny-sim-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-/* Источники: длинные тексты не раздвигают карточку */
 .ny-src-card { min-width: 0; }
 .ny-src-card .ny-hint { overflow-wrap: anywhere; margin: 0; }
 .ny-src-top b { min-width: 0; }
@@ -1750,14 +1574,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-use { width: 28px; height: 28px; padding: 0; display: inline-grid; place-items: center; }
 .ny-use svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 760px) { .ny-mir2, .ny-cols { grid-template-columns: 10px minmax(0, 1fr) 52px 52px auto; } }
-
-/* ===== Nyaa: оформление =====
-   Основано на практике реальных систем, а не на «красивостях»:
-   • цвет по ролям шкалы Radix: фон → фон элемента → наведение → выбранное → тонкие границы → граница
-     интерактивного → сплошной акцент → текст (второй и основной) — один акцент (--fire) только для действий и выбранного;
-   • таблица по Primer DataTable: плотность «condensed», числа справа и в табличных цифрах, заголовки колонок —
-     это кнопки сортировки, действия строки в последней колонке без заголовка, из нескольких — одно основное и меню;
-   • шаг 4 px (как в Fluent 2), скругления 6 и 8 px, тени только у плавающих слоёв (меню, страница раздачи, панель выбранных). */
 .ny {
   font-variant-numeric: tabular-nums; font-size: 13px;
 }
@@ -1769,8 +1585,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-stats { gap: 16px; align-items: baseline; }
 .ny-stat { min-width: 0; padding: 0; border: 0; background: none; display: flex; gap: 4px; align-items: baseline; }
 .ny-stat b { font-size: 13px; font-weight: 600; } .ny-stat span { font-size: 12px; color: var(--n-t3); }
-
-/* элементы управления: высота 32, один набор состояний */
 .ny .btn { height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; box-shadow: none; text-shadow: none; }
 .ny .btn.primary { background: var(--fire); border-color: var(--fire); color: var(--on-accent); }
 .ny .btn.primary:hover { filter: brightness(1.08); }
@@ -1783,22 +1597,16 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-src-btn { height: 28px; padding: 0 10px; border-radius: 6px; box-shadow: none; background: transparent; border: 1px solid var(--n-line-i); font-size: 12px; color: var(--n-t2); }
 .ny-src-btn:hover { background: var(--n-hover); color: var(--n-t1); }
 .ny-src-btn i, .ny-mir i, .ny-mir2 > i, .ny-top > i, .ny-status > i { box-shadow: none !important; }
-
-/* поиск */
 .ny-search { height: 36px; padding: 0 4px 0 10px; border-radius: 6px; background: var(--n-hover); border: 1px solid var(--n-line-i); gap: 8px; }
 .ny-search:focus-within { border-color: var(--n-line-f); box-shadow: none; }
 .ny-search input { font-size: 13px; padding: 0; }
 .ny-search .btn { height: 28px; }
-
-/* категории — вкладки с подчёркиванием, а не «пилюли» */
 .ny-cats { gap: 0; margin: 12px 0 8px; border-bottom: 1px solid var(--n-line); flex-wrap: wrap; align-items: stretch; }
 .ny-cat { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 0; background: none; padding: 8px 12px; font-size: 13px; color: var(--n-t3); }
 .ny-cat:hover { color: var(--n-t1); background: none; }
 .ny-cat.on { color: var(--n-t1); border-bottom-color: var(--fire); background: none; }
 .ny-cats select { height: 32px; margin: 2px 0 2px 8px; border-radius: 6px; padding: 0 8px; background: transparent; border: 1px solid transparent; color: var(--n-t3); font-size: 13px; }
 .ny-cats select:hover { background: var(--n-hover); color: var(--n-t1); }
-
-/* панель фильтров и переключателей */
 .ny-ctl { gap: 4px 12px; margin-bottom: 8px; }
 .ny-seg { padding: 0; border: 0; background: none; gap: 2px; border-radius: 6px; }
 .ny-seg button { border-radius: 6px; padding: 4px 10px; font-size: 13px; color: var(--n-t3); height: 28px; }
@@ -1808,11 +1616,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-status { padding: 6px 10px; margin: 0 0 8px; border: 0; border-radius: 6px; background: var(--n-hover); font-size: 12px; color: var(--n-t2); }
 .ny-status:hover { background: var(--n-press); }
 .ny-sel-all { justify-content: flex-start; font-size: 12px; color: var(--n-t3); margin: 8px 0 4px; }
-
-/* таблица раздач */
-/* размер · дата · ↑ · ↓ · ✓ — пять отдельных колонок; заголовок (nyaa.js listHtml) идёт по той же сетке */
 .ny-head, .ny-row { grid-template-columns: 24px 40px minmax(0, 1fr) 72px 84px 56px 48px 60px 56px; gap: 0 10px; }
-/* Липкие заголовок и подпись дня — стекло в тон фона, а не сплошная чёрная полоса поверх полупрозрачной страницы */
 .ny-head { display: grid; align-items: center; padding: 0 8px; height: 32px; font-size: 12px; color: var(--n-t3); border-bottom: 1px solid var(--n-line); position: sticky; background: var(--surface-2); z-index: 2; }
 .ny-head .r { justify-self: end; text-align: right; }
 .ny-h2 { cursor: default; }
@@ -1841,7 +1645,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-tags i.ok svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .ny-tags i.warn { color: #e58a8a; background: none; }
 .ny-tags i.sd-b { color: #7cc8ff; } .ny-tags i.sd-a { color: #e8b565; } .ny-tags i.have-i { color: #8fd8a0; }
-/* обёртки .ny-meta/.ny-health/.ny-nums растворяются: их дети становятся ячейками сетки строки */
 .ny-meta, .ny-health, .ny-nums { display: contents; }
 .ny-meta b, .ny-meta span, .ny-nums span { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ny-meta b { font-size: 13px; font-weight: 500; }
@@ -1849,18 +1652,13 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-bar-bg { display: none; }
 .ny-nums span { font-size: 13px; }
 .ny-nums .se { color: var(--n-t1); font-weight: 500; } .ny-nums .le, .ny-nums .dl { color: var(--n-t3); font-weight: 400; }
-/* кнопки строки видны всегда, но приглушённо — колонка справа не выглядит пустой полосой */
 .ny-act { opacity: .3; justify-content: flex-end; gap: 0; transition: opacity .1s; }
 .ny-row:hover .ny-act, .ny-row.sel .ny-act, .ny-row:focus-within .ny-act { opacity: 1; }
 .ny-grp { border-radius: 8px; background: transparent; border: 1px solid var(--n-line); margin-bottom: 8px; }
 .ny-more-wrap { margin-top: 8px; }
-
-/* меню действий строки — плавающий слой */
 .ny-menu { position: fixed; z-index: 80; min-width: 220px; padding: 4px; border-radius: 8px; background: var(--surface-2, #1c1310); border: 1px solid var(--n-line-i); box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
 .ny-menu button { display: block; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--n-t1); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .ny-menu button:hover, .ny-menu button:focus-visible { background: var(--n-press); outline: 0; }
-
-/* панель «Источники и зеркала» */
 .ny-sources { border-radius: 8px; box-shadow: none; backdrop-filter: none; background: transparent; border: 1px solid var(--n-line); padding: 16px; }
 .ny-src-head { margin-bottom: 12px; }
 .ny-svc { border-radius: 8px; background: transparent; border: 1px solid var(--n-line); padding: 12px; }
@@ -1880,8 +1678,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-use { border-radius: 6px; border: 0; background: none; }
 .ny-log, .ny-log-f button { border-radius: 6px; }
 .ny-bar { box-shadow: 0 8px 24px rgba(0, 0, 0, .45); border-radius: 8px; }
-
-/* страница раздачи */
 .ny-drawer { border-radius: 0; }
 .ny-d-head h3 { font-size: 16px; font-weight: 600; }
 .ny-d-acts { gap: 8px; }
@@ -1897,8 +1693,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-d-tabs button.on { background: none; box-shadow: none; color: var(--n-t1); border-bottom-color: var(--fire); }
 .ny-link { color: var(--n-t2); }
 .ny-d-links .ny-link { color: var(--gold); }
-
-/* ===== Nyaa: боковая панель + таблица (ориентиры: qBittorrent redesign — Ario Seno, Quik for Desktop — GoPro Design) ===== */
 .ny { max-width: 1280px; }
 .ny-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 0 28px; align-items: start; }
 .ny-side { position: sticky; top: 8px; display: grid; gap: 20px; padding-top: 2px; }
@@ -1929,13 +1723,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-main-col { min-width: 0; }
 .ny-main-col .ny-search { margin-bottom: 8px; }
 .ny-day { position: sticky; top: 22px; z-index: 1; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; color: var(--n-t2); background: var(--surface-2); border-bottom: 1px solid var(--n-line); }
-/* У .scroll-panel сверху 10px отступа, и липкое «top: 0» вставало на 10px ниже края прокрутки — строки ехали в этой
- * щели над шапкой («убегало за рамку»). Поднимаем шапку на отступ, полосу дня — следом (32 − 10).
- * Фон шапки и полосы дня почти плотный (92%): размытие WebView2 рисует не везде, а на 55% строки читались сквозь них. */
 .ny-head { top: -10px; }
-/* «Источники и зеркала» */
-/* Карточки разной высоты (у Nyaa шесть зеркал, у AniList два) — колонками «кирпичиками», без общей высоты ряда:
-   иначе под короткими карточками оставались дыры в пол-экрана. */
 .ny-src-grid { display: block; columns: 3 340px; column-gap: 12px; }
 .ny-src-grid > .ny-svc { break-inside: avoid; margin: 0 0 12px; width: 100%; }
 .ny-mir2, .ny-cols { grid-template-columns: 10px minmax(0, 1fr) 64px 64px 60px; }
@@ -1943,7 +1731,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-cols span:nth-child(3), .ny-cols span:nth-child(4) { text-align: right; }
 .ny-c { justify-content: flex-end; text-align: right; }
 .ny-c.has-ping { align-items: flex-end; }
-.ny-mir2-t b { white-space: normal; }   /* «minitg…:84…» — порт важнее всего: не обрезаем, переносим по точкам и перед портом (<wbr>) */
+.ny-mir2-t b { white-space: normal; }
 .ny-mir2-a .ny-ib { color: var(--n-t2); }
 .ny-top.busy b { color: var(--n-t1); }
 .ny-top > .ny-spin { flex: none; }
@@ -1959,8 +1747,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
   .ny-layout { grid-template-columns: 1fr; }
   .ny-side { position: static; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 }
-
-/* ===== кнопка с прогрессом внутри ===== */
 .fx-wrap { position: relative; display: inline-flex; align-items: center; vertical-align: middle; transition: padding .4s cubic-bezier(.2,.9,.25,1); }
 .fx-wrap.has-x { padding-right: 40px; }
 .fx-run { position: relative; overflow: hidden; }
@@ -1978,8 +1764,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .fx-x svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; }
 .fx-wrap.has-x::after { content: ""; position: absolute; right: 24px; top: 8px; width: 12px; height: 16px; background: var(--n-press, rgba(255, 255, 255, .08)); border-radius: 4px; animation: fxneck .4s ease-out forwards; z-index: -1; }
 @keyframes fxneck { from { transform: scaleX(0); opacity: 0; } 60% { opacity: 1; } to { transform: scaleX(1); opacity: .0; } }
-
-/* ===== отправить участнику ===== */
 .fx-share { position: fixed; z-index: 1200; padding: 14px; display: grid; gap: 10px; border-radius: 12px; background: var(--bg-2, #1a1310); border: 1px solid var(--line); box-shadow: 0 18px 48px rgba(0, 0, 0, .55); font-size: 13px; }
 .fx-sh-h { display: grid; gap: 2px; } .fx-sh-h b { font-size: 14px; } .fx-sh-h span, .fx-sh-load { color: var(--ink-dim); font-size: 12px; }
 .fx-field { display: grid; gap: 4px; } .fx-field > span { font-size: 11px; color: var(--ink-dim); }
@@ -1996,8 +1780,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .fx-none { padding: 10px 8px; color: var(--ink-dim); }
 .fx-foot { display: flex; align-items: center; gap: 8px; } .fx-sp { flex: 1; } .fx-stack { display: inline-flex; }
 .fx-send:disabled { opacity: .45; cursor: default; }
-
-/* ===== навигация «жидкий металл» ===== */
 .tb-nav.liquid { position: relative; isolation: isolate; }
 .tb-nav.liquid::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s;
   background: radial-gradient(160px circle at var(--nx, 50%) var(--ny, 50%), rgba(255, 255, 255, .09), transparent 70%); }
@@ -2010,7 +1792,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 #tabstrip.liquid > .tab-btn.active::before { content: ""; width: calc(100% - 26px); height: 2px; background: var(--fire); box-shadow: 0 0 10px rgba(var(--fire-rgb), .8); }
 #tabstrip.liquid > .tab-btn.active::after { content: none; }
 .brand-logo { transition: transform .5s cubic-bezier(.2, .9, .25, 1); }
-.titlebar-left .brand-logo:hover { transform: rotate(90deg); }   /* только над самим логотипом: левый край шапки — область перетаскивания окна, логотип крутился при каждом захвате */
+.titlebar-left .brand-logo:hover { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .fx-glow, .fx-av.pop { animation: none; } .brand-logo { transition: none; } }
 .fx-attach { display: flex; align-items: center; gap: 8px; min-width: 0; } .fx-file { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fx-unpick { border: 0; background: none; color: var(--ink); cursor: pointer; font-size: 14px; padding: 0 4px; }
@@ -2040,17 +1822,12 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .btn.sm { padding: 4px 10px; font-size: 12px; height: 28px; }
 .ny-sk.blk2 { height: 34px; width: 100px; border-radius: 4px; } .ny-sk.w60 { width: 60%; justify-self: end; }
 .ny-seg button.on { background: var(--accent-soft); color: var(--ember); }
-
-/* ---------- Значки вместо эмодзи (app/icons.js) ---------- */
 .ei { display: inline-block; width: 1.15em; height: 1.15em; vertical-align: -.2em; flex: none; }
 .ei svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .ei-dot { display: inline-block; width: .62em; height: .62em; border-radius: 50%; background: var(--d, currentColor); vertical-align: .02em; }
 .icon-btn .ei { width: 16px; height: 16px; vertical-align: middle; }
 .rd-add .ei, .btn .ei, .pf-link .ei { margin-right: 5px; }
 .q-empty-ic .ei, .empty-state .ei { width: 1em; height: 1em; }
-
-
-/* ---------- Настройки: вид по выбору — список / плитки / карточки ---------- */
 .st-home, .st-back { display: none; }
 .st-modes { display: inline-flex; gap: 2px; padding: 3px; margin: 0 4px 12px; border-radius: 11px; background: rgba(255, 255, 255, .045); box-shadow: inset 0 0 0 1px var(--line); }
 .st-modes button { flex: 1; border: 0; background: transparent; color: var(--ink-dim); font: inherit; font-size: 11.5px; font-weight: 600; padding: 6px 8px; border-radius: 8px; cursor: pointer; transition: background .2s, color .2s; }
@@ -2093,17 +1870,9 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .st-layout.st-mode-cards .st-tile::after { content: "›"; grid-row: 1 / 3; grid-column: 3; font-size: 22px; color: var(--ink-dim); }
 :root[data-theme="light"] .st-tile, :root[data-theme="light"] .st-modes { background: rgba(255, 255, 255, .7); }
 @media (max-width: 900px) { .st-layout.st-mode-tiles .st-nav, .st-layout.st-mode-cards .st-nav { display: flex; } }
-
-
-/* ---------- Матрица прав ролей ---------- */
-
-/* Недоступное по правам роли — убрано совсем (perm-visibility.js) */
 [data-perm-hidden="1"] { display: none !important; }
-
-/* Пайплайн: несколько человек в одном этапе (Даббер → Даббер → Даббер) стоят друг под другом — «одновременно» */
 .rd-tl-ent { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
 .rd-tl-ent + .rd-tl-ent { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, .12); width: 100%; }
-/* Этап «одновременно»: участники плитками в сетку, а не столбиком по центру — втрое ниже при тех же данных. */
 .rd-tl-ents { display: contents; }
 .rd-tl-ents.many { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; width: 100%; margin-top: 12px; }
 .rd-tl-ents.many .rd-tl-ent { margin: 0; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px; background: rgba(255, 255, 255, .02); width: auto; }
@@ -2111,13 +1880,10 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .rd-tl-ents.many .rd-tl-ent.sub { border-color: color-mix(in srgb, var(--s-done) 35%, transparent); }
 .rd-tl-ents.many .rd-tl-t { margin-top: 0; }
 .rd-tl-par { margin-top: 8px; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--gold); background: rgba(var(--gold-rgb), .12); }
-/* Отметка о сдаче в пайплайне: кнопка у своего звена, галочка и время после сдачи. */
 .rd-tl-sub { margin-top: 8px; padding: 6px 14px; font-size: 12px; }
 .rd-tl-mark, .rd-tl-undo { margin-top: 6px; font-size: 11px; }
 .rd-tl-undo { margin: 0 0 0 6px; color: var(--ink-dim); }
 .rd-tl-ok { margin-top: 6px; font-weight: 700; color: var(--s-done); }
-
-/* Она лежит поверх постера и только проявляется. 2) Подъём на 5px сдвигал нижнюю кромку выше курсора — край карточки мигал. Запас снизу не даёт курсору «выпасть». */
 .af-card { container-type: inline-size; padding-bottom: 8px; margin-bottom: -8px; }
 .af-card .tl-take:not(.on) {
   display: flex; position: absolute; left: 10px; right: 10px; width: auto; z-index: 3;
@@ -2125,11 +1891,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
   opacity: 0; pointer-events: none; transition: opacity .18s ease;
 }
 .af-card:hover .tl-take:not(.on) { opacity: 1; pointer-events: auto; }
-/* «В работе» — там же на постере, но видна всегда: под кнопками голоса она удлиняла карточку,
-   и голоса с кнопками у соседей в ряду оказывались ниже. */
 .af-card .tl-take.on { position: absolute; left: 10px; right: 10px; width: auto; z-index: 3; top: calc(100cqw * 1.3833 - 48px); backdrop-filter: blur(8px); }
-
-/* ---------- Антивирус ---------- */
 .av-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 10px 0 14px; }
 .av-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 16px; background: rgba(255, 255, 255, .035); border: 1px solid var(--line); font-size: 12.5px; color: var(--ink-soft); }
 .av-card b { font-size: 20px; font-weight: 800; color: var(--ink); }
@@ -2149,12 +1911,8 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .av-path { margin-top: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--ink-dim); word-break: break-all; }
 .av-clean { padding: 22px; text-align: center; border-radius: 16px; font-weight: 700; color: var(--s-done); background: color-mix(in srgb, var(--s-done) 10%, transparent); }
 
-/* График «Завершено по дням»: отметки лежат в одной пластине с кривой, подсказка — по наведению на день */
-
 .av-cover { margin: 0 0 10px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); }
 .av-cover summary { cursor: pointer; font-size: 12.5px; font-weight: 700; }
-
-/* Антивирус: главный экран в духе «статус защиты» */
 .av-hero { display: flex; align-items: center; gap: 18px; padding: 20px 22px; border-radius: 22px; margin-bottom: 12px; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(var(--c-rgb, 80, 200, 140), .16), rgba(255, 255, 255, .02)); --c: var(--s-done); --c-rgb: 80, 200, 140; }
 .av-hero.warn { --c: var(--gold); --c-rgb: 255, 190, 80; }
 .av-hero.bad { --c: var(--s-stop); --c-rgb: 240, 80, 80; }
@@ -2171,8 +1929,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .av-sw-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .av-sw-t b { font-size: 13.5px; }
 .av-sw-t span { font-size: 11.5px; color: var(--ink-dim); line-height: 1.35; }
-
-/* «Архив серий» */
 .ar { display: grid; gap: 14px; }
 .ar-hero { padding: 20px 22px; border-radius: 22px; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01)); }
 .ar-hero.on { border-color: rgba(var(--fire-rgb), .35); background: linear-gradient(135deg, rgba(var(--fire-rgb), .16), rgba(var(--gold-rgb), .04) 60%, rgba(255, 255, 255, .01)); }
@@ -2253,8 +2009,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ar-chipbtn { border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink-soft); font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 99px; cursor: pointer; }
 .ar-chipbtn:hover { border-color: rgba(var(--fire-rgb), .4); color: var(--ink); }
 @media (max-width: 640px) { .ar-stats { grid-template-columns: repeat(2, 1fr); } }
-
-/* «Права ролей»: роли слева, права справа */
 .pm { display: grid; gap: 14px; }
 .pm-lead { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink-dim); max-width: 760px; }
 .pm-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -2284,7 +2038,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .pm-item-text { display: grid; gap: 2px; min-width: 0; }
 .pm-item-text b { font-size: 14px; font-weight: 650; }
 .pm-item-text small { font-size: 12px; color: var(--ink-dim); line-height: 1.4; }
-/* Превью «что увидит роль»: видно — цвет акцента и глаз, скрыто — тускло и перечёркнутый глаз; изменённое последней правкой вспыхивает. */
 .pm-preview { padding: 14px 18px 16px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface-2); display: grid; gap: 12px; }
 .pm-preview header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .pm-preview header b { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
@@ -2311,8 +2064,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
   .pm-roles { position: static; display: flex; max-height: none; overflow-x: auto; padding-bottom: 6px; }
   .pm-role { flex: 0 0 auto; min-width: 130px; }
 }
-
-/* «Чаты бота» */
 .bcn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
 .bcn { padding: 16px 18px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--line); display: grid; gap: 12px; align-content: start; }
 .bcn.work { border-color: rgba(var(--fire-rgb), .4); background: linear-gradient(135deg, rgba(var(--fire-rgb), .1), var(--surface-2) 55%); }
@@ -2329,8 +2080,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .bcn-mention { display: grid; gap: 8px; border-radius: 14px; background: rgba(0, 0, 0, .18); }
 .bcn-thread { display: flex; align-items: center; gap: 10px; padding: 0 14px 10px; font-size: 12.5px; color: var(--ink-dim); }
 .bcn-thread .field-input { width: 110px; }
-
-/* Ход сборки финала в карточке отчёта */
 .rd-asm { margin: 10px 0 4px; padding: 14px 16px; border-radius: 16px; border: 1px solid rgba(var(--fire-rgb), .35); background: linear-gradient(135deg, rgba(var(--fire-rgb), .12), rgba(255, 255, 255, .02)); display: grid; gap: 6px; }
 .rd-asm.ok { border-color: color-mix(in srgb, var(--s-done) 45%, transparent); background: color-mix(in srgb, var(--s-done) 10%, transparent); }
 .rd-asm.bad { border-color: color-mix(in srgb, var(--s-stop) 45%, transparent); background: color-mix(in srgb, var(--s-stop) 10%, transparent); }
@@ -2345,7 +2094,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .rd-asm-stall > span, .lr-error-summary { color: var(--ink-soft); line-height: 1.5; }
 .rd-asm-support { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .lr-error-detail { max-height: 32vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .2); white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
-/* Журнал «Сборки у себя»: шаги, команда ffmpeg, сводка кадр/fps/скорость, предупреждения и ошибки — как консоль. */
 .lr-console { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .22); }
 .lr-console > summary { display: flex; align-items: center; gap: 10px; padding: 7px 12px; cursor: pointer; font-size: 12px; font-weight: 650; color: var(--ink-soft); list-style: none; }
 .lr-console > summary::-webkit-details-marker { display: none; }
@@ -2362,10 +2110,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .lr-line.k-out { display: none; color: var(--ink-dim); }
 .lr-show-out .lr-line.k-out { display: block; }
 .lr-error-log { max-height: 26vh; }
-
-/* Окно «Собрать финал» */
 .ad-body { display: grid; gap: 2px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
-/* Окно «Собрать финал» шире обычного (480 px): кнопки «Собрать и сделать пост» / «Собрать финал» переносились на две строки. */
 .sheet.ad-sheet { width: min(620px, 94vw); }
 .ad-sheet .sheet-actions .btn { white-space: nowrap; }
 .ad-prof-edit { margin-left: 8px; font-size: 11.5px; font-weight: 600; text-transform: none; letter-spacing: 0; }
@@ -2387,14 +2132,10 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-rb-bar { position: relative; height: 10px; border-radius: 99px; background: rgba(0,0,0,.3); overflow: hidden; }
 .ny-rb-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent-grad); border-radius: 99px; transition: width .6s ease; }
 .ny-srv { font-size: 15px; }
-
-/* «Отправить участнику»: не вылезает за окно, длинные имена файлов обрезаются, а не растягивают окошко */
 .fx-share { width: min(360px, calc(100vw - 24px)); grid-template-columns: minmax(0, 1fr); overflow-x: hidden; }
 .fx-share > * { min-width: 0; }
 .fx-modes button { min-width: 0; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fx-foot .btn { flex: none; }
-
-/* ===== «Завод»: линии автоматизации в стиле производственной схемы ===== */
 .fc { display: grid; }
 .fc-trunk { border-radius: 18px; background: linear-gradient(135deg, rgba(var(--fire-rgb), .12), rgba(255, 255, 255, .03)); border: 1px solid rgba(var(--fire-rgb), .3); display: grid; }
 .fc-trunk-title { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; } .fc-trunk-title span, .fc-trunk-sub { color: var(--ink-dim); font-size: 12px; }
@@ -2421,28 +2162,18 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 @keyframes fcitem { from { left: -14px; } to { left: 56px; } }
 @keyframes fcpulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .fc-belt.on, .fc-belt.on span, [data-led="run"] .fc-led { animation: none; } }
-
-/* справка вкладок Автоматизации */
 .au-help { margin-bottom: 12px; border: 1px solid var(--line-soft); border-radius: 14px; background: rgba(255, 255, 255, .03); padding: 0 14px; }
 .au-help summary { cursor: pointer; padding: 10px 0; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
 .au-help div { padding-bottom: 10px; font-size: 12.5px; color: var(--ink-dim); } .au-help p { margin: 0 0 6px; } .au-help ul { margin: 0; padding-left: 18px; }
-
-/* «Завод» компактнее: четыре машины в линии помещаются без прокрутки */
 .fc { gap: 12px; } .fc-line { padding: 12px 14px 14px; gap: 8px; } .fc-m-head b { line-height: 1.15; } .fc-sub { font-size: 10.5px; line-height: 1.1; } .fc-state { font-size: 10.5px; }
 @keyframes fcitem { from { left: -14px; } to { left: 24px; } }
 .fc-trunk { padding: 10px 14px; gap: 6px; }
-
-/* «Права ролей»: создание роли */
 .pm-add { border-style: dashed !important; color: var(--ink-dim); text-align: center; font-weight: 700; }
 .pm-new { display: grid; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid rgba(var(--fire-rgb), .35); background: rgba(255, 255, 255, .03); }
 .pm-new small { color: var(--ink-dim); font-size: 11px; } .pm-new-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* кнопка «Ещё/Команда» в активном состоянии — как остальные вкладки (без чёрной плашки), в любой теме */
 .tb-nav.liquid .tb-more-btn.active, :root[data-theme="light"] .tb-nav.liquid .tb-more-btn.active { background: none; box-shadow: none; }
 .tb-nav.liquid .tb-more-btn.active::before { content: ""; width: calc(100% - 26px); height: 2px; background: var(--fire); box-shadow: 0 0 10px rgba(var(--fire-rgb), .8); }
 .tb-nav.liquid .tb-more-btn.active::after { content: none; }
-
-/* ===== Карточка отчёта: карточки-секции, «Производство финала», файлы одной сеткой ===== */
 .rd-panel[data-rd-panel="main"] > .rd-sec { padding: 16px 18px; border-radius: 18px; background: var(--surface-2); border: 1px solid var(--line); margin: 0 0 14px; }
 .rd-panel[data-rd-panel="main"] > .rd-sec h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .rd-h-tools { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; }
@@ -2466,11 +2197,8 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .rd-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
 .rd-summary div { display: grid; gap: 2px; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--line-soft); background: rgba(255, 255, 255, .03); text-align: center; }
 .rd-summary b { font-size: 17px; } .rd-summary span { font-size: 10.5px; color: var(--ink-dim); line-height: 1.15; }
-/* 44px — высота залипающих вкладок. Колонка должна помещаться между ними и низом окна карточки (её max-height минус рамка 2px минус вкладки):
-   выше — её низ обрезается, а в конце прокрутки верх уезжает под вкладки, и до края колонки не долистать. */
 .rd-side { position: sticky; top: 44px; align-self: start; max-height: calc(100vh - var(--titlebar-h) - 20px - 2px - 44px); overflow-y: auto; }
 @media (max-width: 860px) { .rd-side { position: static; max-height: none; overflow-y: visible; } }
-/* Что мешает сейчас: одна строка с кнопкой над этапами (productionHtml). */
 .rd-now { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(255, 176, 32, .5); background: rgba(255, 176, 32, .1); }
 .rd-now b { display: block; font-size: 14px; color: #ffc457; }
 .rd-now small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-soft); }
@@ -2478,10 +2206,8 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .rd-now.go b { color: #6fe0a0; }
 .rd-now-go { margin-left: auto; flex: none; padding: 9px 16px; border: 0; border-radius: 10px; font-weight: 800; cursor: pointer; background: linear-gradient(90deg, var(--fire), var(--gold)); color: #1a0f08; }
 .rd-now-go:hover { filter: brightness(1.08); }
-/* Пайплайн внутри «Производства финала». */
 .rd-pipe { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .rd-pipe > h3 { margin-top: 0; font-size: 13px; }
-/* Колонка справа: срок сверху, исполнители аватарками (имя — в подсказке, снять — по наведению). */
 .rd-due.late { border-color: rgba(255, 90, 80, .35); }
 .rd-people { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 8px; }
 .rd-people > span:first-child { flex: 0 0 100%; margin-bottom: 8px; }
@@ -2515,12 +2241,9 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .rd-more summary { cursor: pointer; list-style: none; padding: 8px 12px; color: var(--ink-dim); font-size: 13px; border-radius: 10px; } .rd-more summary:hover { background: rgba(255, 255, 255, .04); color: var(--ink-soft); }
 .rd-more[open] { display: grid; gap: 4px; }
 @media (max-width: 860px) { .rd-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rd-fs::after { display: none; } }
-
-/* карточка отчёта: правки вёрстки по скриншотам */
 .rd-files { min-width: 0; overflow: hidden; }
 .file-item { flex-wrap: wrap; gap: 8px 10px; }
 .file-item > div:first-child { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
-/* Кто загрузил файл: аватарка и имя под названием. */
 .file-by { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
 .file-by .avatar-bubble { width: 20px; height: 20px; margin: 0; border-width: 1px; font-size: 9.5px; }
 .file-by b { font-weight: 600; color: var(--ink); }
@@ -2533,20 +2256,14 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .rd-fs-act .rd-add { gap: 5px; justify-content: center; }
 .rd-fs.done .rd-fs-act .rd-add.primary { background: none; color: var(--ink-soft); border-style: dashed; }
 .rd-fs-act .rd-add .ei { margin-right: 0; }
-
-/* оценка размера в окне «Собрать финал» */
 .ad-est { display: grid; gap: 3px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); font-size: 12.5px; }
 .ad-est b { font-size: 15px; } .ad-est small { color: var(--ink-dim); font-size: 11px; } .ad-est span { color: var(--ink-soft); }
 .ad-est.bad { border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .07); } .ad-est.bad span { color: #ffb3a8; }
-
-/* пост в канал: кадр видео в миниатюре и в превью */
 .cp-thumb img[data-cp-poster] { filter: brightness(.8); }
 .cp-thumb-video.over { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 4px; text-shadow: 0 1px 4px #000; pointer-events: none; }
 .cp-pv-video { position: relative; display: grid; place-items: center; overflow: hidden; }
 .cp-pv-video img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(.8); }
 .cp-pv-video svg { position: relative; z-index: 1; }
-
-/* «Опасная зона» (Видео с Nyaa) */
 .rd-add.danger-zone { border-color: color-mix(in srgb, var(--s-stop) 70%, transparent); color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 10%, transparent); font-weight: 700; letter-spacing: .02em; }
 .rd-add.danger-zone:hover { background: color-mix(in srgb, var(--s-stop) 20%, transparent); }
 .dz-title { color: var(--s-stop); }
@@ -2555,8 +2272,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .dz-ack { display: flex; gap: 8px; align-items: center; margin: 12px 0; font-size: 13px; cursor: pointer; }
 .btn.dz-go { background: var(--s-stop); border-color: var(--s-stop); color: #fff; }
 .btn.dz-go:disabled { opacity: .4; cursor: not-allowed; }
-
-/* Карточка скачивания */
 #dl-root { position: fixed; right: 16px; bottom: 16px; z-index: 120; display: flex; flex-direction: column; gap: 8px; }
 #toast-root { bottom: 16px; }
 .dl-card { padding: 12px 14px; border-radius: 14px; background: var(--glass-bg-strong, #1b1f27); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); display: grid; gap: 8px; }
@@ -2571,15 +2286,11 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .dl-card.ok { border-color: rgba(74, 222, 128, .5); } .dl-card.err { border-color: color-mix(in srgb, var(--s-stop) 60%, transparent); }
 .dl-card.err .dl-note { color: var(--s-stop); }
 .dl-act:empty { display: none; }
-
-/* Кнопки в карточках шагов не вылезают за рамку: переносятся и занимают всю ширину */
 .rd-fs { min-width: 0; }
 .rd-fs-act .rd-add { width: 100%; min-width: 0; box-sizing: border-box; white-space: normal; text-align: center; line-height: 1.2; padding: 7px 8px; font-size: 12.5px; }
 .rd-add.danger-zone { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .rd-add.danger-zone .dz-l1 { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .rd-add.danger-zone .dz-l2 { font-size: 12px; font-weight: 600; opacity: .9; }
-
-/* Пост в канал: вид, подпись, обложка видео */
 .cp-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; margin-bottom: 10px; line-height: 1.35; }
 .cp-sub { margin-top: 10px; display: block; }
 .cp-thumb-cover { position: absolute; left: 4px; bottom: 4px; right: 4px; padding: 3px 6px; font-size: 10.5px; border-radius: 8px; border: none; background: rgba(0, 0, 0, .7); color: #fff; cursor: pointer; }
@@ -2589,8 +2300,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .cp-frame img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .cp-frame span { position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, .7); color: #fff; font-size: 11px; }
 .cp-frame:hover { border-color: var(--line); } .cp-frame.on { border-color: var(--fire, #f97316); }
-
-/* Водяной знак: свободная расстановка на макете кадра */
 .wm-edit { display: grid; gap: 8px; margin: 6px 0 10px; }
 .wm-stage { position: relative; width: 100%; max-width: 560px; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg, #1b2330, #2a3447 55%, #1e2736); border: 1px solid var(--line); cursor: crosshair; touch-action: none; user-select: none; }
 .wm-g { position: absolute; pointer-events: none; background: rgba(255, 255, 255, .14); }
@@ -2602,8 +2311,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .wm-stage-note { position: absolute; left: 8px; bottom: 6px; font-size: 10px; color: rgba(255, 255, 255, .35); pointer-events: none; }
 .wm-pos-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wm-presets { display: inline-flex; gap: 6px; }
-
-/* Водяной знак: лупа и фон макета */
 .wm-zoombar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .wm-view { width: 100%; max-width: 760px; max-height: 420px; overflow: auto; border-radius: 12px; border: 1px solid var(--line); background: #0d121b; }
 .wm-view .wm-stage { max-width: none; border: 0; border-radius: 0; }
@@ -2613,25 +2320,16 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .bd-form { grid-template-columns: minmax(0, 1fr) auto; }
 .bd-form #bd-name { grid-column: 1 / -1; }
 .bd-form button[type="submit"] { grid-column: 1 / -1; justify-self: end; }
-
-/* Настройки → Обновления: заметная плашка «Доступно обновление» с пульсом. */
 .st-upd { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; width: fit-content; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; color: var(--gold, #f5c26b); background: rgba(var(--fire-rgb), .14); border: 1px solid rgba(var(--fire-rgb), .3); }
 .st-upd::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: stUpdPulse 1.8s ease-in-out infinite; }
 @keyframes stUpdPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
 .st-version .st-text { display: flex; flex-direction: column; }
-
-/* Автоматизация: вкладки переносятся на вторую строку вместо скрытой прокрутки (последняя вкладка «Логи» обрезалась). */
 .ar-tabs { flex-wrap: wrap; overflow: visible; }
-/* 8 вкладок с отступом 14px не влезали в раздел настроек (860px): «Логи» уезжали одни на вторую строку на всю ширину */
 .ar-tabs button { flex: 1 1 auto; padding: 9px 10px; gap: 6px; transition: background .18s, color .18s, transform .18s; }
 .ar-tabs button:active { transform: scale(.97); }
-
-/* Корзина: операции удаления сгруппированы. */
 .ld-group { margin: 8px 0; padding: 6px 8px 4px; border-radius: 14px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line-soft); }
 .ld-group-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 4px 8px; font-size: 13px; }
 .ld-group .ld-item { margin-top: 2px; }
-
-/* Профиль: пустая шапка получает акцентный градиент с мягким «дыханием» вместо глухого тёмного блока. */
 .pf-banner { height: 140px; background:
   radial-gradient(60% 120% at 18% 0%, rgba(var(--fire-rgb), .34), transparent 70%),
   radial-gradient(50% 110% at 85% 10%, rgba(80, 140, 200, .22), transparent 70%),
@@ -2640,8 +2338,6 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 @media (prefers-reduced-motion: reduce) { .pf-banner { animation: none; } }
 
 .ms-empty-act { display: block; margin-top: 8px; }
-
-/* Общая «живость»: мягкое нажатие кнопок, подъём карточек при наведении, плавное появление разделов настроек. */
 .btn { transition: transform .14s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .btn:not(:disabled):active { transform: scale(.97); }
 .board-card, .pf-badge, .ar-card, .ld-group { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
@@ -2656,75 +2352,48 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 
 .bc-warn-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .bc-pick { display: inline-flex; gap: 8px; flex-wrap: wrap; }
-
-/* Тикеты: когда обращений нет — маленькое окно с одной надписью, без пустой левой колонки на 680 px. */
 .sheet.tk-sheet.tk-none { height: auto; width: min(520px, calc(100vw - 48px)); }
 .tk-sheet.tk-none .tk-layout { grid-template-columns: 1fr; min-height: 150px; }
 .tk-sheet.tk-none .tk-list { display: none; }
 .board-col { transition: width .28s ease; }
 .board-col:not(.collapsed) { flex: 1 0 268px; max-width: 440px; }
-/* Колонка, где идёт работа, забирает освободившееся место и раскладывает карточки в два ряда. */
 .board-col.wide:not(.collapsed) { flex: 2.4 0 560px; max-width: none; }
 .board-col.wide:not(.collapsed):not(.folded) > .board-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); align-items: start; }
-/* Пайплайн на карточке: по звену на человека, сдавшие закрашены. */
 .kc-pipe { flex: 1; min-width: 0; display: grid; gap: 5px; }
 .kc-pipe-seg { display: flex; gap: 3px; }
 .kc-pipe-seg i { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .1); }
 .kc-pipe-seg i.on { background: var(--s-done); }
 .kc-pipe small { font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kc-pipe small b { color: var(--ink-soft); }
-.board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { flex: .45 0 192px; max-width: 260px; }   /* 192 — влезает «Перезапись 0» со счётчиком и кнопкой свернуть */
+.board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { flex: .45 0 192px; max-width: 260px; }
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) .board-col-empty { font-size: 12px; opacity: .6; }
-
-/* Обзор: при одной-двух сериях «плёнка» не занимает полэкрана — карточки компактные. */
 .kd-reel-few .kd-fr { width: 118px; }
 .kd-reel-few .kd-fr > b { font-size: 12.5px; }
-
-/* Профиль: подпись ранга в одну строку, остаток дней справа; имя не прилипает к краю шапки; цель месяца с абзацами. */
 .tenure-lbl { flex-wrap: wrap; row-gap: 2px; }
 .tenure-lbl .tl-main { margin-left: 0; color: var(--ink-soft); white-space: nowrap; }
 .tenure-lbl span:not(.tl-main) { white-space: nowrap; }
 .pf-hero-body { margin-top: -44px; }
 .pf-who .nm-row { padding-top: 6px; }
 .goal-hint { line-height: 1.5; }
-
-/* Сервисы: подпись цветов полоски аптайма. */
 .svc-history-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11px; color: var(--ink-dim); }
 .svc-history-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
 .ms-bubble-row { position: relative; }
-/* Сбоку от пузыря по центру, а не над ним: сверху панель закрывала имя автора и время. */
 .ms-bubble-row > .ms-acts { position: absolute; top: 50%; left: calc(100% + 6px); z-index: 3; pointer-events: none; transform: translate(-4px, -50%); }
 .ms-msg:hover .ms-bubble-row > .ms-acts, .ms-bubble-row > .ms-acts:focus-within { pointer-events: auto; transform: translate(0, -50%); }
 .ms-msg.out .ms-bubble-row > .ms-acts { left: auto; right: calc(100% + 6px); transform: translate(4px, -50%); }
 .ms-msg.out:hover .ms-bubble-row > .ms-acts, .ms-msg.out .ms-bubble-row > .ms-acts:focus-within { transform: translate(0, -50%); }
-/* Панель висит в 6px от пузыря: пока курсор шёл через этот зазор, наведение на сообщение терялось и кнопки
-   (в том числе «Удалить») исчезали раньше, чем до них доберёшься. Невидимый мостик через зазор — часть самой панели,
-   а на уход курсора панель гаснет не сразу. */
 .ms-bubble-row > .ms-acts::before { content: ""; position: absolute; top: -8px; bottom: -8px; left: -14px; right: -14px; z-index: -1; }
 .ms-bubble-row > .ms-acts { transition: opacity .15s .25s, transform .15s .25s; }
 .ms-msg:hover .ms-bubble-row > .ms-acts, .ms-bubble-row > .ms-acts:hover { transition-delay: 0s; }
-
-/* Полосы прокрутки: тонкие вместо толстой плашки под Доской и Списком. */
 .board, .table-scroll, .list-scroll { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .18) transparent; }
 .board::-webkit-scrollbar { height: 8px; }
 .board::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .16); border-radius: 8px; }
 .board::-webkit-scrollbar-track { background: transparent; }
-
-/* Доска: в узкой пустой колонке длинное название («Перезапись/дозапись») переносится на вторую строку, а не обрезается. */
 .board-col:not(.collapsed):has(> .board-cards[data-count="0"]) { width: 176px; }
-/* названия колонок однословные («Перезапись/дозапись» → «Перезапись», полное — в подсказке), перенос не нужен */
-
-/* Профиль: нижний край шапки плавно растворяется, а не режет карточку резкой линией (найдено на живом окне). */
 .pf-banner { -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent 100%); mask-image: linear-gradient(180deg, #000 30%, transparent 100%); }
 .pf-banner::after { display: none; }
-
-/* Лента: системные события (напоминания о сроках) — иконка колокольчика вместо «?». */
 .fd-sys-ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .avatar-bubble.fd-sys { display: grid; place-items: center; }
-
-/* Аналитика: число над каждой точкой графика */
-
-/* Карта работы (Аналитика) */
 .wm-svg { width: 100%; height: auto; display: block; }
 .wm-row { font-size: 10px; font-weight: 700; letter-spacing: .2em; fill: var(--ink-dim); }
 .wm-edge { fill: none; stroke: rgba(var(--gold-rgb), .38); stroke-linecap: round; transition: stroke .15s; }
@@ -2753,13 +2422,10 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .wm-rec b { color: var(--ink); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wm-rec span { color: var(--ink); opacity: .85; }
 .wm-rec i { color: var(--ink-dim); font-style: normal; font-size: 12px; white-space: nowrap; }
-
-/* Окно согласия на статистику */
 .sheet.tm-sheet { width: min(620px, 94vw); max-width: 620px; }
 .tm-head { display: flex; align-items: center; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
 .tm-head h2 { margin: 0 0 4px; font-size: 20px; line-height: 1.25; }
 .tm-sub { margin: 0; color: var(--ink-dim); font-size: 13px; line-height: 1.4; }
-/* Фон у гифки прозрачный, а линии и одежда чёрные: на тёмном окне их не видно — обводим белым «контуром стикера». */
 .tm-stare-img { height: 104px; width: auto; flex: none; user-select: none;
   filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff); }
 .tm-sheet .tm-text { max-height: 44vh; overflow-y: auto; padding: 0 8px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink); }
@@ -2771,24 +2437,13 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .tm-details li { margin-bottom: 6px; }
 .tm-sheet .sheet-actions { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 @media (max-width: 560px) { .tm-head { flex-direction: column; text-align: center; } }
-
-/* Вкладка «Пульс»: страница с canvas-анимацией в iframe */
 .pulse-frame { display: block; width: 100%; height: calc(100vh - 96px); min-height: 520px; border: 0; border-radius: 20px; background: #070403; }
 #analytics-body .pulse-frame { height: calc(100vh - 92px); min-height: 560px; }
-
-/* Настройки → Обновления: фиолетовая плашка версии не торчит острыми углами из скруглённой рамки. */
 .st-group:has(> .st-version:first-child) { overflow: clip; }
 .st-group > .st-version:first-child { border-radius: 16px 16px 0 0; }
-/* Без затемнения фона окна должны быть непрозрачными, иначе сквозь них просвечивает страница. */
 .sheet { background: linear-gradient(var(--surface), var(--surface)), var(--bg-2); }
-
-/* Список: у ячейки с кнопками строки не гасим саму ячейку (opacity давал «шов» другого оттенка на фоне наведённой строки) — появляются только кнопки. */
 td.row-actions { opacity: 1; transition: none; }
-
-/* ---------- Светлая тема: цвета, заданные под тёмный фон ---------- */
-/* Взятая в работу карточка тайтла: светло-мятный текст лежал на белой кнопке и не читался. */
 :root[data-theme="light"] .af-card .tl-take.on { background: color-mix(in srgb, var(--s-done) 14%, #fff); color: var(--s-done); border: 1px solid color-mix(in srgb, var(--s-done) 35%, transparent); }
-/* Nyaa: пинг, метки и ошибки были яркими пастельными — на белом почти пропадали. */
 :root[data-theme="light"] .ny-pi.ok b, :root[data-theme="light"] .ny-ping.ok b { color: var(--s-done); }
 :root[data-theme="light"] .ny-pi.slow b, :root[data-theme="light"] .ny-ping.slow b { color: var(--s-work); }
 :root[data-theme="light"] .ny-ping.bad b, :root[data-theme="light"] .ny-ev b.bad, :root[data-theme="light"] .ny-ev.fail { color: var(--s-stop); }
@@ -2796,29 +2451,17 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-theme="light"] .ny-tags i.sd-b { color: var(--s-review); }
 :root[data-theme="light"] .ny-tags i.sd-a { color: var(--s-work); }
 :root[data-theme="light"] .ny-tags i.have-i { color: var(--s-done); }
-
-/* Водяной знак тайтла: длинное имя файла — в одну строку с многоточием, кнопки не переносятся по словам */
 #ta-watermark .add-row { flex-wrap: wrap; }
 #ta-watermark .wm-fname { flex: 1 1 120px; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #ta-watermark .add-row > .btn { flex: none; white-space: nowrap; }
-
-/* Переключатели «Своего профиля» сборки: чёрная подложка 25% на светлой теме давала грязно-серый блок */
 :root[data-theme="light"] .ar-seg { background: rgba(80, 40, 20, .06); }
 :root[data-theme="light"] .ar-seg button:hover { background: rgba(80, 40, 20, .05); }
 :root[data-theme="light"] .ar-seg button.on { background: var(--surface); box-shadow: 0 2px 8px -4px rgba(60, 25, 10, .3), inset 0 0 0 1px rgba(var(--fire-rgb), .4); }
 :root[data-theme="light"] .ar-tabs { background: rgba(80, 40, 20, .04); }
 :root[data-theme="light"] .ar-tabs button:hover { background: rgba(80, 40, 20, .05); }
-
-/* Активная вкладка своим фоном перекрывала кольцо фокуса — при навигации Tab было не видно, где фокус */
 #tabstrip > .tab-btn.active:focus-visible, #tabstrip.liquid > .tab-btn.active:focus-visible { box-shadow: inset 0 0 0 1.5px var(--fire); }
-
-/* Статусы отчёта без права «Вести отчёт» — только показ: без курсора-руки и подсветки, чтобы не казалось, что кликается. */
 .rd-step:disabled, .rd-step-side:disabled { cursor: default; pointer-events: none; }
 .rd-step:disabled:not(.cur):not(.done), .rd-step-side:disabled:not(.on) { opacity: .55; }
-
-/* ---- Автоматизация: «Завод» 2 ----
-   Вкладки — ровная сетка 4×2 вместо рваного переноса; у линии одна плашка состояния и одна кнопка;
-   карточки этапов одной высоты, заголовок в одну строку; подпись магистрали — над полосой. */
 .ar-tabs.au-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
 .ar-tabs.au-tabs button { min-width: 0; padding: 9px 8px; overflow: hidden; text-overflow: ellipsis; }
 .fc-gauge { height: 8px; border-radius: 99px; border: 0; background: rgba(255, 255, 255, .06); }
@@ -2853,8 +2496,6 @@ td.row-actions { opacity: 1; transition: none; }
 .fc-belt.on { background: rgba(var(--fire-rgb), .18); animation: none; }
 :root[data-theme="light"] .fc-machine { background: rgba(255, 255, 255, .7); }
 :root[data-theme="light"] .fc-belt, :root[data-theme="light"] .fc-gauge, :root[data-theme="light"] .fc-pill { background: rgba(80, 40, 20, .06); }
-
-/* «Взять в работу»: номера шагов и легенда серий — окно читается сверху вниз как инструкция. */
 .tw-n { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; border-radius: 50%; font-style: normal; font-size: 10.5px; font-weight: 800; color: var(--on-accent); background: var(--fire); vertical-align: 1px; }
 .tw-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 11.5px; color: var(--ink-dim); }
 .tw-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -2862,8 +2503,6 @@ td.row-actions { opacity: 1; transition: none; }
 .tw-legend .aired::before { border-color: color-mix(in srgb, var(--fire) 60%, transparent); background: var(--accent-soft); }
 .tw-legend .exists::before { border-color: color-mix(in srgb, var(--s-done) 60%, transparent); background: color-mix(in srgb, var(--s-done) 18%, transparent); }
 .tw-summary b { color: var(--ink); }
-
-/* ---- Заставка запуска (app/splash.js): слово «Pr▢ject» с плиткой акцента, точки, значок, полёт в шапку ---- */
 .app-splash { cursor: default; }
 .sp-stage { position: relative; display: grid; place-items: center; }
 .sp-word { display: flex; align-items: baseline; white-space: nowrap; font-weight: 800; letter-spacing: -.025em; line-height: 1; }
@@ -2881,42 +2520,27 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-x { fill: none; stroke: #fff; stroke-width: 3.4; stroke-linecap: round; stroke-dasharray: 10; stroke-dashoffset: 10; }
 .app-splash .app-splash-status { position: absolute; bottom: 14%; left: 0; right: 0; text-align: center; opacity: 0; animation: none; transition: opacity .4s ease .6s; }
 .app-splash .app-splash-status.on { opacity: .8; }
-
-/* Прокрутка цифр (roll-digits.js): у каждой цифры своё окошко с запасом ниже строки — новая въезжает снизу,
-   старая уходит вверх; два знака на время смены лежат в одной клетке сетки друг на друге. */
 .rd { display: inline-flex; font-variant-numeric: tabular-nums; }
 .rd-c { display: inline-grid; overflow: hidden; height: 1.12em; line-height: 1.12em; padding-bottom: .1em; margin-bottom: -.1em; }
 .rd-g { grid-area: 1 / 1; display: block; will-change: transform; }
 .kd-now .q-clock { font-size: 26px; font-weight: 800; letter-spacing: .01em; line-height: 1; }
-
-/* ---- Заставка 2: все сцены ролика (кубик → док → слово → точки → кубик-кость → профиль → монета) ----
-   Сцены — слои на весь экран, склейки — мгновенная смена видимости, как в ролике. Акцент — --fire/--gold,
-   поверхности — из темы (--bg/--surface-2), поэтому в светлой теме ролик светлый. */
 .sp-scene { position: absolute; inset: 0; display: grid; place-items: center; visibility: hidden; overflow: hidden; }
 .sp-scene.on { visibility: visible; }
 .sp-glow { position: absolute; inset: 0; pointer-events: none; transform-origin: 50% 50%; }
 .sp-glow i { position: absolute; left: 50%; top: 50%; margin: -15vmin 0 0; transform-origin: 0 50%; }
 .sp-glow.sm i { width: 40vmin; height: 24vmin; margin-top: -12vmin; }
-
-/* стеклянный кубик */
 .sp-c3 { position: relative; transform-style: preserve-3d; }
 .sp-cf { position: absolute; inset: 0; }
 .sp-cf.f1 { display: grid; place-items: center; }
 .sp-cf.f1 b { border-radius: 50%; }
-
-/* плитка-логотип (общая для дока, профиля, монеты) */
 .sp-t { position: relative; display: grid; place-items: center; border-radius: 28%; background: var(--accent-grad, var(--fire)); }
 .sp-t > i { width: 34%; height: 34%; border-radius: 50%; }
 .sp-tx { position: absolute; left: 18%; top: 18%; width: 64%; height: 64%; fill: none; stroke: #fff; stroke-width: 2.8; stroke-linecap: round; }
 .sp-tx path { stroke-dasharray: 10; stroke-dashoffset: 10; }
-
-/* угол окна с доком */
 .sp-win { position: absolute; overflow: hidden; }
 .sp-dock { position: absolute; display: flex; }
 .sp-dock .sp-t, .sp-ic { flex: none; }
 .sp-ic { display: grid; place-items: center; }
-
-/* кубик-кость */
 .sp-dice { perspective: 700px; }
 .sp-d3 { position: relative; }
 .sp-df { position: absolute; background: var(--accent-grad, var(--fire)); backface-visibility: hidden;
@@ -2925,8 +2549,6 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-df i.on { background: var(--bg); }
 .sp-df.d1 { padding: 0; grid-template-columns: 1fr; grid-template-rows: 1fr; place-items: center; }
 .sp-df.d1 i { display: none; } .sp-df.d1 i.on { display: block; margin: 0; }
-
-/* карточка профиля */
 .sp-prof { position: relative; overflow: hidden; transform-origin: 40% 50%; }
 .sp-prof aside { position: absolute; left: 0; top: 0; bottom: 0; }
 .sp-banner { position: absolute; right: 0; top: 0; overflow: hidden; }
@@ -2935,15 +2557,10 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-who { position: absolute; display: grid; gap: .4vmin; text-align: left; }
 .sp-who b { font-weight: 800; }
 .sp-who p { margin: 1.2vmin 0 0; }
-
-/* монета с пунктирными кольцами */
 .sp-coin { position: relative; display: grid; place-items: center; }
 .sp-disc { position: absolute; inset: 0; border-radius: 50%; }
 .sp-disc i { position: absolute; border-radius: 50%; }
 .sp-coin .sp-t { z-index: 1; }
-
-/* ---- Заставка: масштаб как в ролике (камера крупно) ----
-   слово ≈ треть ширины, плитка/точки/кость в тех же пропорциях; док и монета крупные; профиль на весь кадр. */
 .app-splash { --sp-u: min(1vw, 1.7vh); }
 .sp-stage { font-size: calc(var(--sp-u) * 10); min-width: 0; min-height: 0; }
 .sp-dots { gap: calc(var(--sp-u) * 1.7); }
@@ -2960,19 +2577,12 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-df.d2 { transform: rotateX(90deg) translateZ(calc(var(--ds) / 2)); }
 .sp-df.d5 { transform: rotateX(-90deg) translateZ(calc(var(--ds) / 2)); }
 .sp-cf.f1 b { border-width: 1.2vmin; }
-/* док: крупный план угла окна */
 .sp-win { border-width: 2.2vmin; }
 .sp-dock .sp-t, .sp-ic { width: 21vmin; height: 21vmin; }
 .sp-t.rim { box-shadow: 0 0 0 1.8vmin #0d0e11, 0 0 0 2.1vmin rgba(255, 255, 255, .2); }
-/* профиль на весь кадр */
 .sp-prof { width: 100%; height: 100%; } .sp-who small, .sp-who p { font-size: 2.5vmin; }
-/* монета */
-
-/* ---- Заставка 3: внешний вид сцен как в ролике ---- */
 .sp-scene { transform-origin: 50% 50%; will-change: transform, filter, opacity; }
 .sp-flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; }
-
-/* «лепестки»: крупные скруглённые плиты с чёткими краями, яркий внешний край → тёмный центр */
 .sp-glow i { width: 64vmin; height: 46vmin; margin-top: -23vmin; border-radius: 9vmin; filter: blur(.5vmin); opacity: .96;
   background: linear-gradient(90deg, transparent 4%, color-mix(in srgb, var(--fire) 30%, transparent) 26%, color-mix(in srgb, var(--fire) 85%, transparent) 62%, color-mix(in srgb, var(--fire) 70%, #fff 30%) 100%);
   box-shadow: inset 0 0 7vmin rgba(0, 0, 0, .45); }
@@ -2981,60 +2591,36 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-glow i:nth-child(3) { transform: rotate(196deg) translateX(9vmin) scale(.95); opacity: .85; }
 .sp-glow i:nth-child(4) { transform: rotate(262deg) translateX(18vmin) scale(.6); opacity: .25; }
 .sp-scene[data-s="cube"]::after { position: absolute; inset: 0; pointer-events: none; }
-
-/* глянцевый кубик почти анфас, блики по рёбрам, стеклянное кольцо */
 .sp-cf.f1 b { border: 0; box-shadow: none; }
-
-/* плитка: фаска снизу, блик сверху, «лунка» точки */
 .sp-t { box-shadow: inset 0 -.8vmin 0 rgba(0, 0, 0, .16), inset 0 .5vmin .7vmin rgba(255, 255, 255, .35), 0 1.2vmin 3vmin -1vmin color-mix(in srgb, var(--fire) 65%, transparent); }
 .sp-t > i { background: radial-gradient(circle at 50% 32%, #44474d, #050506 68%); box-shadow: 0 .25vmin 0 rgba(255, 255, 255, .25); }
-
-/* угол окна: толстая металлическая рамка, «лепестки» внутри, светлая стеклянная полоса дока */
-/* «лепестки» в окне — по центру видимого угла кадра, как в ролике, а не по центру огромного окна */
 .sp-win .sp-glow { inset: auto; width: 80vmax; height: 80vmax; }
 .sp-win .sp-glow i { width: 78vmin; height: 54vmin; margin-top: -27vmin; }
 .sp-ic.app { display: grid; place-items: center; }
-
-/* профиль крупно */
 .sp-prof aside { width: 22%; }
 .sp-banner { left: 22%; height: 46%; }
 .sp-ava { left: 26%; top: 22%; width: 44vmin; height: 44vmin; }
 .sp-who { left: 26%; top: 70%; }
 .sp-who b { font-size: 6.4vmin; letter-spacing: -.02em; } .sp-who small { font-size: 3.4vmin; } .sp-who p { font-size: 2.4vmin; }
-
-/* монета: рифлёный обод, толстые дуговые сегменты */
 .sp-disc::before { content: ""; position: absolute; inset: 0; border-radius: 50%; }
-
-/* ---- Заставка 4: сцены по замерам кадров ролика (1 vmin ≈ 1 % высоты кадра) ----
-   Фон всего ролика — чисто чёрный, как в оригинале; цвет акцента остаётся пользовательским. */
 .app-splash.sp-run { background: #000; }
-/* Пока идёт ролик — на всё окно, поверх заголовка с вкладками (z 1000) и полоски сети (1001); пропуск — клик или Esc. */
 .app-splash.sp-run { inset: 0; z-index: 1002; }
 .sp-word { color: #fff; }
-
-/* «лепестки»: точка-якорь в центре сцены, каждая плита — своё смещение, размер и поворот;
-   светится сторона, обращённая к центру, к краям уходит в черноту */
 .app-splash .sp-glow { inset: auto; left: 50%; top: 50%; width: 0; height: 0; }
 .app-splash .sp-glow i { left: 0; top: 0; margin: 0; width: var(--w); height: var(--h); border-radius: 8vmin; opacity: 1; box-shadow: none;
   transform: translate(-50%, -50%) translate(var(--x), var(--y)) rotate(var(--r)); }
 .app-splash .sp-glow i:nth-child(4) { display: none; }
-/* сцена 1: справа-сверху, слева, снизу */
 .sp-glow.c i:nth-child(1) { --lx: 8%; --ly: 70%; }
 .sp-glow.c i:nth-child(2) { --lx: 96%; --ly: 30%; }
 .sp-glow.c i:nth-child(3) { --lx: 48%; --ly: 0%; }
-/* сцена 2 (в окне): крупная светлая плита слева-сверху, тёмная справа-сверху, тёмная снизу за доком */
 .sp-win .sp-glow { left: 44vmin !important; top: auto !important; bottom: 62vmin; }
 .sp-glow.w i:nth-child(1) { --x: -6vmin; --y: -12vmin; --w: 60vmin; --h: 66vmin; --r: -14deg; --lx: 30%; --ly: 20%; }
 .sp-glow.w i:nth-child(2) { --x: 52vmin; --y: -28vmin; --w: 58vmin; --h: 40vmin; --r: 18deg; --lx: 10%; --ly: 80%; opacity: .7; }
 .sp-glow.w i:nth-child(3) { --x: 40vmin; --y: 54vmin; --w: 64vmin; --h: 40vmin; --r: -6deg; --lx: 30%; --ly: 10%; opacity: .55; }
-/* баннер профиля */
 .sp-banner .sp-glow { left: 62% !important; top: 34% !important; }
 .sp-glow.b i:nth-child(1) { --x: -10vmin; --y: -4vmin; --w: 46vmin; --h: 40vmin; --r: -20deg; --lx: 20%; --ly: 70%; }
 .sp-glow.b i:nth-child(2) { --x: 34vmin; --y: -8vmin; --w: 40vmin; --h: 34vmin; --r: 16deg; --lx: 10%; --ly: 60%; opacity: .8; }
 .sp-glow.b i:nth-child(3) { --x: 16vmin; --y: 26vmin; --w: 40vmin; --h: 30vmin; --r: -8deg; --lx: 40%; --ly: 0%; opacity: .6; }
-
-/* кубик: скруглённый «шайбой», наклонён верхом от зрителя, блик слева сверху, стеклянный правый бок,
-   нижняя грань подсвечена акцентом снизу */
 .sp-cf { border: 1px solid rgba(255, 255, 255, .26);
   background: radial-gradient(110% 100% at 22% 12%, #2c2e33 0%, #0c0d0f 38%, #020203 75%);
   box-shadow: inset .7vmin .7vmin .9vmin rgba(255, 255, 255, .42), inset -.6vmin -.4vmin 1vmin rgba(255, 255, 255, .06); }
@@ -3045,8 +2631,6 @@ td.row-actions { opacity: 1; transition: none; }
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fire) 45%, transparent)); opacity: .55; }
 .sp-cf.f1 b { position: relative; }
 .sp-cf.f1 b::after { content: ""; position: absolute; right: 24%; bottom: 22%; width: 18%; height: 12%; border-radius: 50%; background: rgba(255, 255, 255, .7); filter: blur(.25vmin); transform: rotate(-35deg); }
-
-/* док: угол окна в кадре (слева снизу), толстая светлая металлическая рамка, полоса дока уходит за правый край */
 .sp-win { left: calc(50% - 46vmin); bottom: 4vmin; width: 220vmin; height: 220vmin; border-radius: 20vmin; border: 3.2vmin solid #26272a;
   box-shadow: 0 0 0 .5vmin #74767c, inset 0 0 0 .5vmin #3d3f44, 0 0 0 1vmin #0b0b0c; background: #000; transform-origin: 0 100%; }
 .sp-dock { left: 20vmin; bottom: 18vmin; height: 43vmin; gap: 3.6vmin; padding: 6.5vmin 7vmin; border-radius: 22vmin;
@@ -3055,8 +2639,6 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-ic.chat svg { fill: #a7a9ad; filter: drop-shadow(0 -.4vmin .3vmin rgba(255, 255, 255, .25)) drop-shadow(0 .6vmin .6vmin rgba(0, 0, 0, .6)); }
 .sp-ic:last-child { background: linear-gradient(160deg, #111214, #020203); }
 .sp-ic:last-child::after { content: ""; display: block; width: 66%; height: 66%; margin: 17%; border-radius: 5vmin; background: #3a3b3e; }
-
-/* монета: тонкий рифлёный обод, ровный тёмный диск, два кольца дуг разной длины, плитка без ореола */
 .sp-coin { width: 66vmin; height: 66vmin; }
 .sp-disc { background: radial-gradient(circle at 50% 44%, #141516 0, #0b0b0c 58%, #060607 100%); }
 .sp-disc::before {
@@ -3069,16 +2651,12 @@ td.row-actions { opacity: 1; transition: none; }
   background: conic-gradient(from 20deg, #bfc2c6 0 22deg, transparent 22deg 70deg, #bfc2c6 70deg 84deg, transparent 84deg 150deg, #bfc2c6 150deg 196deg, transparent 196deg 250deg, #bfc2c6 250deg 262deg, transparent 262deg 320deg, #bfc2c6 320deg 344deg, transparent 344deg 360deg); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - .45vmin), #000 calc(100% - .35vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - .45vmin), #000 calc(100% - .35vmin)); }
 .sp-disc .r4 { inset: 26%; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .05); }
 .sp-coin .sp-t { width: 39%; height: 39%; box-shadow: inset 0 -1vmin 0 rgba(0, 0, 0, .2), inset 0 .5vmin .6vmin rgba(255, 255, 255, .25); }
-
-/* профиль — тёмный, как в ролике */
 .sp-prof { background: #000; }
 .sp-prof aside { background: #141414; }
 .sp-banner { background: #000; }
 .sp-ava { background: #1a1a1b; box-shadow: 0 0 0 2.4vmin #000; }
 .sp-who b { color: #fff; } .sp-who small { color: #8a8a8e; } .sp-who p { color: #c9c9cc; }
 .sp-flash { background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--fire) 30%, transparent), transparent 60%); }
-
-/* ---- Заставка 5: доводка по второму сравнению с кадрами ---- */
 .app-splash .sp-glow i { filter: blur(.7vmin);
   background: radial-gradient(130% 120% at var(--lx) var(--ly), color-mix(in srgb, var(--fire) 60%, #fff 40%) 0%, var(--fire) 28%, color-mix(in srgb, var(--fire) 62%, #000) 56%, color-mix(in srgb, var(--fire) 22%, #000) 82%, #000 100%); }
 .sp-glow.w i:nth-child(1) { filter: blur(1vmin); }
@@ -3098,13 +2676,7 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-disc .r1 { opacity: .95;
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.05vmin), #000 calc(100% - .95vmin)); mask: radial-gradient(farthest-side, transparent calc(100% - 1.05vmin), #000 calc(100% - .95vmin)); }
 .sp-disc .r2 { opacity: .55; }
-
-/* сцена кубика: «лепестки» быстрее гаснут к краям, между ними чёрное, виньетка плотнее — как в кадре ролика */
 .sp-scene[data-s="cube"]::after { background: radial-gradient(circle at 50% 50%, transparent 26%, rgba(0, 0, 0, .7) 78%, #000 100%); }
-
-/* ---- Заставка 6: сцена «кубик» по кадру ролика в полном разрешении ----
-   Фон: три сплошные плиты акцента + общий «свет» от центра (яркость зависит только от расстояния до кубика),
-   между плитами — чёрный крест. Кубик — прозрачное стекло: видно то, что за ним; сам он — кромки, блики и капля. */
 .sp-glow.c i { background: color-mix(in srgb, var(--fire) 86%, #fff 14%); filter: blur(.9vmin); border-radius: 6vmin; box-shadow: none; }
 .sp-glow.c i:nth-child(1) { --x: 29vmin; --y: -14vmin; --r: 35deg; }
 .sp-glow.c i:nth-child(2) { --x: -37vmin; --y: -9vmin; --r: -35deg; }
@@ -3139,9 +2711,6 @@ td.row-actions { opacity: 1; transition: none; }
 .app-splash .sp-glow i { transform-origin: 50% 50%; }
 .g-left { width: 11%; background: linear-gradient(90deg, rgba(78, 80, 84, .95), rgba(30, 31, 33, .65) 50%, transparent); }
 .g-drop { background: radial-gradient(circle at 44% 64%, #4a4c50 0%, #1e1f21 25%, #050506 55%, #000 72%); }
-
-/* стекло кубика как в кадре: корпус тёмный, по периметру толстая тёмно-серая кромка;
-   плита просвечивает только в правой верхней четверти пятном со скруглённым краем (преломление) */
 .sp-glow.c i:nth-child(1) { --h: 48vmin; }
 .sp-glow.c i:nth-child(2) { --h: 48vmin; }
 .sp-glow.c i:nth-child(3) { --h: 44vmin; }
@@ -3149,12 +2718,6 @@ td.row-actions { opacity: 1; transition: none; }
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13), inset 0 0 1.2vmin .9vmin rgba(44, 46, 50, .8), inset 0 0 0 1.4vmin rgba(18, 19, 21, .9); }
 .g-see { left: 58%; top: 1.5%; right: 2.5%; height: 39%; border-radius: 0 5.4vmin 0 70% / 0 5.4vmin 0 62%;
   background: linear-gradient(200deg, color-mix(in srgb, var(--fire) 80%, #fff 20%), var(--fire) 60%, color-mix(in srgb, var(--fire) 80%, #000)); filter: blur(.25vmin); }
-
-/* затухание плит от центра: ярко у кубика, к дальним краям — почти чёрное, как в кадре ролика */
-
-/* ---- Заставка 7: плиты фона — настоящие 3D-лопасти ----
-   Три плиты через 120° вокруг кубика; каждая повёрнута вдоль своей радиальной оси (шаг, как у лопасти пропеллера)
-   и отодвинута вглубь. Сцена с перспективой, камера облетает конструкцию (углы — в --cx/--cy/--cz). */
 .sp-scene[data-s="cube"] { perspective: 95vmin; perspective-origin: 50% 50%; }
 .sp-glow.c { transform-style: preserve-3d;
   --cx0: 16deg; --cy0: -18deg; --cz0: 12deg; --cx1: -6deg; --cy1: 10deg; --cz1: -3deg;
@@ -3162,16 +2725,10 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-glow.c i { transform-origin: 50% 50%; width: var(--w); height: var(--w); backface-visibility: visible;
   transform: translate(-50%, -50%) rotateZ(var(--a)) translateX(var(--R)) translateZ(var(--z)) rotateX(var(--p)) rotateZ(var(--s)); }
 
-/* подбор по кадрам: широкие плиты с умеренным шагом, внутренние углы уходят за кубик */
-
 .sp-glow.c i:nth-child(1) { --a: -43deg; --R: 34vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 48vmin; }
 .sp-glow.c i:nth-child(2) { --a: 182deg; --R: 35vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 48vmin; }
 .sp-glow.c i:nth-child(3) { --a: 84deg; --R: 32vmin; --z: -4vmin; --p: 28deg; --s: 14deg; --w: 44vmin; }
 .sp-shade { background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 18vmin, rgba(0, 0, 0, .28) 30vmin, rgba(0, 0, 0, .6) 44vmin, rgba(0, 0, 0, .88) 60vmin, #000 74vmin); }
-
-/* ---- Заставка 8: плиты фона — толстые скруглённые бруски («клавиши») в 3D ----
-   Если поднять экспозицию кадра ролика, у каждой плиты видна боковая грань: это объёмные бруски вне фокуса.
-   Лицевая грань + 4 боковые (толщина --t), боковые темнее; кромка у кубика светлее; всё мягко размыто. */
 .sp-glow.c .sp-blade { position: absolute; left: 0; top: 0; width: var(--w); height: var(--w); transform-style: preserve-3d; --t: 9vmin; }
 .sp-glow.c .sp-blade:nth-child(1) { --a: -43deg; --R: 36vmin; --z: -6vmin; --w: 50vmin; }
 .sp-glow.c .sp-blade:nth-child(2) { --a: 182deg; --z: -6vmin; }
@@ -3185,8 +2742,6 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-blade .s.b { bottom: 0; left: 7vmin; right: 7vmin; height: var(--t); transform-origin: 50% 100%; transform: translateZ(calc(var(--t) / 2)) rotateX(90deg); }
 .sp-blade .s.l { left: 0; top: 7vmin; bottom: 7vmin; width: var(--t); transform-origin: 0 50%; transform: translateZ(calc(var(--t) / 2)) rotateY(90deg); }
 .sp-blade .s.r { right: 0; top: 7vmin; bottom: 7vmin; width: var(--t); transform-origin: 100% 50%; transform: translateZ(calc(var(--t) / 2)) rotateY(-90deg); }
-
-/* грани брусков: селекторы специфичнее старых правил «лепестков» (.app-splash .sp-glow i), всё унаследованное сброшено */
 .app-splash .sp-glow.c .sp-blade > i { position: absolute; display: block; margin: 0; opacity: 1; width: auto; height: auto; left: auto; top: auto; right: auto; bottom: auto;
   border-radius: 0; box-shadow: none; background: color-mix(in srgb, var(--fire) 42%, #000); }
 .app-splash .sp-glow.c .sp-blade > i.f { inset: 0; border-radius: 7vmin; transform-origin: 50% 50%; transform: translateZ(calc(var(--t) / 2));
@@ -3200,31 +2755,18 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-glow.c .sp-blade:nth-child(2) { --R: 38vmin; --w: 46vmin; }
 .sp-glow.c .sp-blade:nth-child(3) { --R: 37vmin; --w: 44vmin; }
 .app-splash .sp-glow.c .sp-blade > i { filter: blur(1.15vmin); }
-
-/* наклон плит поперёк радиуса: внешний край ближе к камере (крупнее и сильнее размыт), как в ролике */
 .sp-glow.c .sp-blade { transform: translate(-50%, -50%) rotateZ(var(--a)) translateX(var(--R)) translateZ(var(--z)) rotateY(var(--p)) rotateZ(var(--s)); }
 .sp-glow.c .sp-blade:nth-child(1) { --p: -32deg; --s: 12deg; }
 .sp-glow.c .sp-blade:nth-child(2) { --p: -32deg; --s: 12deg; }
 .sp-glow.c .sp-blade:nth-child(3) { --p: -32deg; --s: 12deg; }
-
-/* ---- Заставка 9: кость — сплошная внутри ----
-   Грани скруглены, поэтому у вершин между ними щели: при кувырке сквозь них было видно пустоту.
-   Внутри — ядро-кубик чуть меньше, его вершины ложатся ровно на скругления граней, и щели закрыты. */
 .sp-dcore { position: absolute; transform-style: preserve-3d; pointer-events: none; }
 .sp-dcore i { position: absolute; inset: 0; }
-
-/* Кольцо — сплошная подложка, тень у аватара убрана. */
 .tm-av, .pf-hero .avatar-ring { padding: 3px; background: var(--bg); box-shadow: 0 0 0 1px rgba(255, 255, 255, .07); }
 .tm-av .avatar.xl, .pf-hero .avatar-ring .avatar.xl { box-shadow: none; }
 .pf-hero .avatar-ring.tier-bronze { box-shadow: 0 0 0 2px #b0774a; }
 .pf-hero .avatar-ring.tier-silver { box-shadow: 0 0 0 2px #b9c2cc; }
 .pf-hero .avatar-ring.tier-gold { box-shadow: 0 0 0 2px var(--gold); }
-
-/* ---- Стиль «Свечение»: риска активной вкладки верхней навигации ----
-   Правило «золотой риски» для боковой панели (left: -16px; top: 8px) сдвигало полоску верхней навигации влево-вверх. */
 :root[data-look="glow"][data-theme="dark"] #tabstrip > .tab-btn.active::before { left: 50%; top: auto; bottom: 3px; width: calc(100% - 26px); height: 2px; border-radius: 2px; transform: translateX(-50%); }
-
-/* ---- Баннер профиля: картинка стоит на месте (без «дыхания» фона) и двигается только по желанию ---- */
 .pf-banner.has-img, .profile-banner-wrap.has-img { animation: none; }
 .pf-ban-move { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; opacity: 0; transition: opacity .2s;
   background: rgba(0, 0, 0, .45); border: 1px solid rgba(255, 255, 255, .14); color: #fff; backdrop-filter: blur(8px); }
@@ -3236,9 +2778,6 @@ td.row-actions { opacity: 1; transition: none; }
 .pf-ban-bar { position: absolute; top: 10px; right: 12px; z-index: 2; display: flex; align-items: center; gap: 6px; }
 .pf-ban-hint { padding: 5px 10px; border-radius: 8px; font-size: 12px; color: #fff; background: rgba(0, 0, 0, .5); backdrop-filter: blur(8px); }
 .pf-ban-bar .btn.ghost { background: rgba(0, 0, 0, .45); color: #fff; }
-
-/* ---- Кость в заставке: цельная, а не склеенные карточки ----
-   Скругление меньше (щели у вершин меньше), ядро того же цвета, что и грани, по краям граней — фаска-тень. */
 .sp-df { border-radius: 20%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), inset 0 0 calc(var(--ds) * .1) rgba(0, 0, 0, .22); }
 .sp-dcore { inset: 6%; }
 .sp-dcore i:nth-child(1) { transform: translateZ(calc(var(--ds) * .44)); }
@@ -3247,15 +2786,9 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-dcore i:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--ds) * .44)); }
 .sp-dcore i:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--ds) * .44)); }
 .sp-dcore i:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--ds) * .44)); }
-/* верх светлее, низ и бока темнее — грани читаются как один объём */
 .sp-df.d2 { filter: brightness(1.12); }
 .sp-df.d5 { filter: brightness(.78); }
 .sp-df.d3, .sp-df.d4 { filter: brightness(.9); }
-
-/* ---- Кость: щели у вершин ----
-   Ядро-кубик с острыми углами закрывало не всё: у вершин между тремя скруглёнными гранями оставались тёмные «зарубки»,
-   а грань, видная с ребра, торчала тонким лезвием. Второй слой ядра — чуть больше и скруглён — ложится между гранями
-   и ядром ступенькой, вершина выглядит круглой; оба слоя в цвет граней, тёмных провалов нет. */
 .sp-dcore i { background: color-mix(in srgb, var(--fire) 94%, #000); backface-visibility: visible; }
 .sp-dcore.b { inset: 2.5%; }
 .sp-dcore.b i { border-radius: 12%; }
@@ -3265,23 +2798,13 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-dcore.b i:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--ds) * .475)); }
 .sp-dcore.b i:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--ds) * .475)); }
 .sp-dcore.b i:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--ds) * .475)); }
-/* грани чуть меньше куба: вдоль рёбер видна скруглённая кромка второго слоя — с ребра кость не выглядит острой коробкой */
 .sp-df { inset: 2.5%; }
 .sp-dcore.b i { background: color-mix(in srgb, var(--fire) 86%, #000); }
-
-/* ---- Кость — 3D-модель на canvas (см. dieRenderer в splash.js); CSS-грани больше не используются ---- */
 .sp-d3 { transform-style: flat; }
 .sp-dcv { position: absolute; left: 50%; top: 50%; width: 190%; height: 190%; transform: translate(-50%, -50%); }
-
-/* Чаты: заглушённая беседа или канал — приглушённый значок 🔕 рядом со счётчиком */
 .ms-muted { font-size: 11px; opacity: .55; margin-left: 4px; flex: none; }
-
-/* Зеркала: под полным временем ответа — настоящий пинг (время соединения), мелко и приглушённо */
 .ny-c.has-ping { flex-direction: column; line-height: 1.15; gap: 1px; }
 .ny-c .ny-rtt { font-size: 10px; font-weight: 500; color: var(--ink-dim); opacity: .8; white-space: nowrap; }
-
-/* Осколок-окно в «прошлое» (TimeLens в Crack.jsx): та же обложка, целая и ярче, в неровном стекле под курсором.
-   Обрезка — на .kd-lens-clip, кромка (drop-shadow) — на обёртке, увеличение — на картинке вокруг курсора. */
 .kd-slide-art { z-index: 1; }
 .kd-slide-art.timepiece { cursor: pointer; }
 .kd-lens { position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
@@ -3295,8 +2818,6 @@ td.row-actions { opacity: 1; transition: none; }
   filter: saturate(1.35) brightness(1.12) contrast(1.05); }
 .kd-lens-clip::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(circle at var(--lx, 50%) var(--ly, 50%), transparent 30px, rgba(140, 200, 255, .22) 62px); }
-
-/* Прыжок во времени: вспышка из точки щелчка и рябь по слайду, потом открывается серия. */
 .kd-hero.jump .kd-slide.on { animation: kd-jump .7s cubic-bezier(.3, .7, .3, 1); }
 .kd-hero.jump::after { content: ""; position: absolute; inset: 0; z-index: 7; pointer-events: none;
   background: radial-gradient(circle at var(--jx, 50%) var(--jy, 50%), rgba(255, 255, 255, .95), rgba(170, 220, 255, .55) 18%, rgba(120, 180, 255, 0) 55%);
@@ -3307,8 +2828,6 @@ td.row-actions { opacity: 1; transition: none; }
   100% { filter: none; transform: none; }
 }
 @keyframes kd-jump-flash { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.6); } }
-
-/* «Удар из прошлого»: цели видны только сквозь осколок. Метка Чужого — тёмное кольцо с алым свечением. */
 .kd-target { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .kd-target .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 13px; font-weight: 800;
   background: #1a0f12 center / cover; color: #f3d6d6; box-shadow: 0 0 0 2px #0b0607, 0 0 0 3.5px rgba(255, 60, 60, .85), 0 0 18px 4px rgba(255, 30, 30, .55);
@@ -3318,10 +2837,8 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-target.hit .avatar { animation: kd-hit .6s ease-out forwards; }
 @keyframes kd-mark { 50% { box-shadow: 0 0 0 2px #0b0607, 0 0 0 3.5px rgba(255, 60, 60, 1), 0 0 26px 8px rgba(255, 30, 30, .75); } }
 @keyframes kd-hit { 0% { transform: scale(1); } 30% { transform: scale(1.35); filter: brightness(2.5) saturate(0); } 100% { transform: scale(.9); filter: grayscale(1) brightness(.6); } }
-/* Прицел: курсор над целью — кромка осколка краснеет. */
 .kd-slide-art.timepiece.aim { cursor: crosshair; }
 .kd-slide-art.aim .kd-lens { filter: drop-shadow(0 0 .7px #fff) drop-shadow(0 0 1.5px rgba(255, 70, 70, 1)) drop-shadow(0 0 14px rgba(255, 30, 30, .6)); }
-/* Сам удар: алая вспышка из точки щелчка, слайд вздрагивает, по обложке — рассечение. */
 .kd-hero.strike::after { content: ""; position: absolute; inset: 0; z-index: 7; pointer-events: none;
   background: radial-gradient(circle at var(--jx, 50%) var(--jy, 50%), rgba(255, 235, 235, .9), rgba(255, 40, 40, .55) 12%, rgba(120, 0, 0, .35) 40%, rgba(0, 0, 0, 0) 70%);
   animation: kd-jump-flash .8s ease-out forwards; }
@@ -3331,8 +2848,6 @@ td.row-actions { opacity: 1; transition: none; }
   transform: rotate(-24deg) scaleX(0); transform-origin: var(--lx, 50%) center; animation: kd-slash .55s ease-out forwards; }
 @keyframes kd-slash { 0% { transform: rotate(-24deg) scaleX(0); opacity: 1; } 35% { transform: rotate(-24deg) scaleX(1); opacity: 1; } 100% { transform: rotate(-24deg) scaleX(1.05); opacity: 0; } }
 @keyframes kd-strike-shake { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); } 30%, 50%, 70% { transform: translate(-6px, 2px); } 40%, 60% { transform: translate(6px, -1px); } }
-
-/* Глаза в темноте (Eyes в Crack.jsx): пары огоньков появляются из мрака, моргают и следят за курсором. */
 .kd-eyes { position: absolute; inset: 0; z-index: 1; pointer-events: none; --eye: 255, 196, 92; }
 .kd-eyes.red { --eye: 255, 40, 28; }
 .kd-eye-pair { position: absolute; display: flex; gap: calc(var(--s) * 13px); transform: translate(-50%, -50%) rotate(var(--tilt)) scale(var(--s));
@@ -3344,7 +2859,6 @@ td.row-actions { opacity: 1; transition: none; }
   animation: kd-blink var(--blink) var(--delay) infinite; }
 .kd-eye-pair i:first-child { transform: rotate(8deg); }
 .kd-eye-pair i:last-child { transform: rotate(-8deg) scaleX(-1); }
-/* Зрачок — вертикальная щель, смотрит на курсор. */
 .kd-eye-pair i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2px; height: 6px; margin: -3px 0 0 -1px; border-radius: 1px; background: #120404;
   transform: translate(var(--px, 0), var(--py, 0)); transition: transform .25s ease-out; }
 .kd-eye-pair i:last-child::after { transform: translate(calc(var(--px, 0) * -1), var(--py, 0)); }
@@ -3354,8 +2868,6 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-eye-pair i:last-child { animation-name: kd-blink-r; }
 @keyframes kd-blink-l { 0%, 92%, 100% { transform: rotate(8deg) scaleY(1); } 95% { transform: rotate(8deg) scaleY(.08); } }
 @keyframes kd-blink-r { 0%, 92%, 100% { transform: rotate(-8deg) scaleX(-1) scaleY(1); } 95% { transform: rotate(-8deg) scaleX(-1) scaleY(.08); } }
-/* Полночь (Pieces в Crack.jsx): обложка разлетается на куски, и они парят. Внешний слой — взрыв (разлёт на место),
-   средний — бесконечное покачивание, внутренний — обрезка по куску. От целой обложки остаётся тёмный призрак. */
 .kd-art-glass.shattered > img { opacity: .1; filter: grayscale(1) blur(2px); transition: opacity .25s; }
 .kd-art-glass.shattered .kd-crack { display: none; }
 .kd-pieces { position: absolute; inset: 0; z-index: 1; pointer-events: none; perspective: 700px; }
@@ -3363,10 +2875,8 @@ td.row-actions { opacity: 1; transition: none; }
   animation: kd-explode 1.3s cubic-bezier(.12, .9, .25, 1) backwards;
   filter: drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
 .kd-pieces.settled span { animation: none; }
-/* На доске осколки парят только под мышью (тройная тень × 128 штук опускала её до 25 кадров); в обзоре — всегда, но только у активного слайда. */
 .kd-pieces em { position: absolute; inset: 0; }
 .board-card:hover .kd-pieces em, .kd-slide.on .kd-pieces em { animation: kd-float 6s ease-in-out infinite alternate; }
-/* Фильтр — один на всю обложку, а не на каждый осколок: 16 отфильтрованных слоёв на обложку тормозили доску. */
 .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1); }
 .kd-pieces i { position: absolute; inset: 0; background: center / cover no-repeat; }
 @keyframes kd-explode {
@@ -3375,11 +2885,8 @@ td.row-actions { opacity: 1; transition: none; }
   100% { transform: translate(calc(var(--ex) * var(--k, 1)), calc(var(--ey) * var(--k, 1))) rotate(var(--er)) scale(var(--ez)); }
 }
 @keyframes kd-float { from { transform: translateY(calc(var(--fy) * -1)) rotate(calc(var(--fr) * -1)); } to { transform: translateY(var(--fy)) rotate(var(--fr)); } }
-/* Вспышка самого взрыва по всему слайду. */
 .kd-slide:has(.kd-pieces:not(.settled)) .kd-slide-art::before { content: ""; position: absolute; inset: -60%; z-index: 0; pointer-events: none; border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 245, 235, .9), rgba(255, 80, 40, .4) 30%, transparent 62%); animation: kd-jump-flash 1.1s ease-out forwards; }
-
-/* Профиль: «Вклад росписи» (prepHtml в profile.js). */
 .pf-prep { background: radial-gradient(120% 90% at 0% 0%, rgba(var(--gold-rgb), .10), transparent 60%), var(--surface); }
 .pf-prep-m { font-size: 11.5px; font-weight: 700; color: var(--gold); }
 .pf-prep-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
@@ -3387,8 +2894,6 @@ td.row-actions { opacity: 1; transition: none; }
 .pf-prep-t b { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
 .pf-prep-t span { font-size: 11px; color: var(--ink-dim); }
 @media (max-width: 720px) { .pf-prep-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-/* Lofi-радио (lofi.js): кнопка в шапке — когда играет, вместо значка прыгают три полоски. */
 .lr-wrap { position: relative; }
 .lofi-btn { position: relative; }
 .lofi-eq { display: none; position: absolute; inset: 0; align-items: flex-end; justify-content: center; gap: 2.5px; padding-bottom: 10px; }
@@ -3405,7 +2910,6 @@ td.row-actions { opacity: 1; transition: none; }
   background: radial-gradient(120% 80% at 0% 0%, rgba(var(--gold-rgb), .12), transparent 60%), radial-gradient(90% 70% at 100% 100%, rgba(140, 110, 255, .12), transparent 60%), var(--surface); }
 .lr-panel[hidden] { display: none; }
 .lr-top { display: flex; align-items: center; gap: 12px; }
-/* Пластинка: бороздки, наклейка, блик; крутится, пока играет. */
 .lr-vinyl { flex: none; width: 64px; height: 64px; border-radius: 50%; position: relative;
   background: repeating-radial-gradient(circle, #0e0c0b 0 1.5px, #1b1816 1.5px 3px); box-shadow: 0 6px 16px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .06);
   animation: lr-spin 3.2s linear infinite; animation-play-state: paused; }
@@ -3444,8 +2948,6 @@ td.row-actions { opacity: 1; transition: none; }
 .lr-row input { width: 100%; accent-color: var(--gold); }
 :root[data-theme="light"] .lr-st { background: rgba(0, 0, 0, .03); }
 :root[data-motion="off"] .lr-vinyl, :root[data-motion="off"] .lr-eq i, :root[data-motion="off"] .lofi-eq i { animation: none !important; }
-
-/* Карточки «Доски» со сроком — те же трещины в миниатюре (doomPosterHtml в Crack.jsx). */
 .kc-doom { position: relative; overflow: visible; background: none; box-shadow: none; }
 .kc-doom > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit;
   filter: saturate(calc(1 - var(--gloom, 0) * .65)) brightness(calc(1 - var(--gloom, 0) * .42)); }
@@ -3462,17 +2964,13 @@ td.row-actions { opacity: 1; transition: none; }
   96% { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)); opacity: 0; }
   100% { transform: none; opacity: 0; }
 }
-/* Глаза на карточке: одна пара в темноте обложки. */
 .kc-eyes { position: absolute; top: 38%; z-index: 2; display: flex; gap: 5px; pointer-events: none; --eye: 255, 196, 92; animation: kd-eyes-in 2.4s ease-out; }
 .kc-eyes.red { --eye: 255, 40, 28; }
 .kc-eyes i { width: 6px; height: 3px; border-radius: 60% 60% 50% 50% / 100% 100% 40% 40%;
   background: radial-gradient(ellipse at 50% 60%, rgba(255, 255, 230, .95), rgba(var(--eye), .95) 50%, rgba(var(--eye), .5));
   box-shadow: 0 0 4px 1px rgba(var(--eye), .6), 0 0 10px 3px rgba(var(--eye), .25); animation: kd-blink-l 4.3s infinite; }
 .kc-eyes i:last-child { animation: kd-blink-r 4.3s infinite; }
-/* Сама карточка: мрак к полуночи и красное сердцебиение по рамке с последнего дня. */
 .board-card.doom { background: linear-gradient(rgba(0, 0, 0, calc(var(--gloom, 0) * .45)), rgba(0, 0, 0, calc(var(--gloom, 0) * .45))), rgba(255, 255, 255, .035); }
-/* Сердцебиение — тень нарисована один раз на ::after, в такт меняется только opacity (композитор, без перерисовки).
-   Анимация самого box-shadow перерисовывала все просроченные карточки каждый кадр: доска падала до ~70 к/с. */
 .board-card.dread::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
   box-shadow: 0 0 0 1px rgba(255, 40, 30, calc(var(--doom) * .7)), inset 0 0 18px rgba(255, 30, 20, calc(var(--doom) * .3));
   opacity: .36; will-change: opacity; animation: kc-beat var(--beat, 1.6s) infinite; }
@@ -3480,8 +2978,6 @@ td.row-actions { opacity: 1; transition: none; }
 .board-card.flicker::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: #000; opacity: 0; pointer-events: none; z-index: 3; animation: kd-flicker 4.7s infinite; }
 :root[data-motion="off"] .kc-chip, :root[data-motion="off"] .board-card.dread::after, :root[data-motion="off"] .board-card.flicker::before { animation: none !important; }
 :root[data-motion="off"] .kc-chip { display: none; }
-/* Просрочено: карточка тонет во тьме — кровавые прожилки бьются в такт сердцу, сверху сочатся подтёки,
-   из темноты справа смотрит вторая пара глаз, а заголовок иногда «сбоит», как испорченная плёнка. */
 .board-card.dead { position: relative; isolation: isolate; border-color: rgba(190, 20, 20, .55);
   background: radial-gradient(130% 150% at 0% 50%, rgba(130, 6, 6, .42), transparent 62%), radial-gradient(90% 120% at 100% 100%, rgba(0, 0, 0, .7), transparent 70%), #0d0707; }
 .board-card.dead.dread::after { box-shadow: 0 0 0 1px rgba(255, 40, 30, .9), inset 0 0 34px rgba(170, 0, 0, .55); opacity: .34; }
@@ -3516,7 +3012,6 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-motion="off"] .board-card.dead, :root[data-motion="off"] .board-card.dead *, :root[data-motion="off"] .kc-dead-fx::after { animation: none !important; }
 :root[data-motion="off"] .kc-dead-fx > b::after { display: none; }
 :root[data-motion="off"] .kc-lurk { opacity: .7; }
-/* То же на слайде «Обзора»: прожилки расходятся от разбитой обложки справа (зеркально), подтёки длиннее, глаза свои. */
 .kd-dead { position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit; }
 .kd-dead .kc-dead-fx svg { transform: scaleX(-1); }
 .kd-dead .kc-dead-fx path { stroke-width: 2.6; filter: drop-shadow(0 0 4px rgba(255, 20, 10, 1)) drop-shadow(0 0 12px rgba(255, 0, 0, .5)); animation-name: kd-vein; }
@@ -3530,13 +3025,11 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-slide.dead .kc-dead-fx path, .kd-slide.dead .kc-dead-fx > b, .kd-slide.dead .kc-dead-fx > b::after { animation-play-state: paused; }
 .kd-slide.dead.on .kc-dead-fx path, .kd-slide.dead.on .kc-dead-fx > b, .kd-slide.dead.on .kc-dead-fx > b::after { animation-play-state: running; }
 .kd-slide.dead .kd-ttl { animation: kc-glitch 5.3s infinite; }
-/* Плашка и кнопки просроченного слайда — запёкшаяся кровь, с плашки стекают капли. */
 .kd-slide.dead .kd-strip { background: linear-gradient(180deg, rgba(70, 2, 2, .62), rgba(28, 0, 0, .78));
   box-shadow: inset 0 0 0 1px rgba(210, 24, 20, .42), inset 0 -12px 26px rgba(150, 0, 0, .4), 0 0 26px rgba(160, 0, 0, .28); }
 .kd-slide.dead .kd-strip > div { border-left-color: rgba(210, 30, 24, .28); }
 .kd-slide.dead .kd-strip small { color: rgba(255, 120, 108, .6); }
 .kd-slide.dead .kd-strip > div:last-child b { color: #ff3b30; text-shadow: 0 0 10px rgba(255, 30, 20, .7); }
-/* Кнопки — обычные, но треснувшие (btnCrackHtml в Crack.jsx): тёмный разлом с бликом, как на стекле, и отколотый уголок. */
 .kd-slide.dead .kd-acts .btn { position: relative; overflow: hidden; }
 .kd-acts .btn .kd-btn-crack { position: absolute; inset: 0; pointer-events: none; }
 .kd-acts .btn .kd-btn-crack svg { width: 100%; height: 100%; display: block; fill: none; stroke-linecap: round; stroke-linejoin: round; }
@@ -3547,9 +3040,6 @@ td.row-actions { opacity: 1; transition: none; }
 @keyframes kd-kick-beat { 0%, 40%, 100% { text-shadow: 0 0 6px rgba(255, 30, 20, .4); } 8% { text-shadow: 0 0 14px rgba(255, 30, 20, 1), 0 0 2px #fff; } 26% { text-shadow: 0 0 10px rgba(255, 30, 20, .75); } }
 .kd-slide.dead .kd-kick i { background: #ff2a1f; box-shadow: 0 0 0 4px rgba(255, 30, 20, .2), 0 0 12px rgba(255, 30, 20, .8); }
 :root[data-motion="off"] .kd-slide.dead .kd-ttl, :root[data-motion="off"] .kd-slide.dead .kd-kick, :root[data-motion="off"] .kd-dead * { animation: none !important; }
-
-/* Мрак последних 10 часов (--gloom 0…1 на слайде, gloomLevel в Crack.jsx): краски выцветают, свет гаснет,
-   тьма смыкается вокруг обложки. В последний час свет мигает, как умирающая лампа. Текст поверх — чтобы читался. */
 .kd-slide { --gloom: 0; }
 .kd-slide-tx { z-index: 2; }
 .kd-slide-amb { filter: blur(34px) saturate(calc(1.2 - var(--gloom) * .8)) brightness(calc(.55 - var(--gloom) * .3)); }
@@ -3559,18 +3049,12 @@ td.row-actions { opacity: 1; transition: none; }
 .kd-gloom::after { content: ""; position: absolute; inset: 0; background: #000; opacity: 0; }
 .kd-slide.flicker .kd-gloom::after { animation: kd-flicker 4.7s infinite; }
 @keyframes kd-flicker { 0%, 61%, 66%, 70%, 100% { opacity: 0; } 62% { opacity: .55; } 64% { opacity: .2; } 68% { opacity: .7; } 69% { opacity: .1; } }
-/* Сердцебиение: тёмно-красная виньетка бьётся дважды за такт, к полуночи — чаще. */
 .kd-dread { position: absolute; inset: 0; pointer-events: none; opacity: var(--dread);
   background: radial-gradient(ellipse at 60% 50%, transparent 35%, rgba(70, 0, 4, .55) 75%, rgba(25, 0, 2, .9));
   animation: kd-heart var(--beat) infinite; }
 @keyframes kd-heart { 0%, 40%, 100% { filter: brightness(1); transform: scale(1); } 8% { filter: brightness(1.6); transform: scale(1.015); } 18% { filter: brightness(1.15); } 26% { filter: brightness(1.45); transform: scale(1.01); } }
-
-/* Сезонное оформление (app/season.js): частицы на холсте за интерфейсом — сразу за фоном из обложки
-   (#app-backdrop, z 0) и под окном приложения (z 1), видны сквозь стекло. Свечение сезона по краям — ::before. */
 .season-fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 .season-fx[hidden] { display: none; }
-/* Частицы (летучие мыши, снег, листья) видны только на полях: колонка контента (~1280 px по центру) их гасит.
-   Окно стеклянное — без этого мыши летали прямо по цифрам таблиц и тексту карточек. */
 .season-fx canvas { position: absolute; inset: 0; width: 100%; height: 100%;
   -webkit-mask-image: linear-gradient(to right, #000 calc(50% - 700px), transparent calc(50% - 630px), transparent calc(50% + 630px), #000 calc(50% + 700px));
   mask-image: linear-gradient(to right, #000 calc(50% - 700px), transparent calc(50% - 630px), transparent calc(50% + 630px), #000 calc(50% + 700px)); }
@@ -3586,14 +3070,10 @@ td.row-actions { opacity: 1; transition: none; }
 :root[data-season="halloween"] .season-fx::before { background: radial-gradient(110% 55% at 80% -10%, rgba(150, 70, 255, .13), transparent 60%),
   radial-gradient(60% 45% at 20% 110%, rgba(255, 110, 20, .12), transparent 70%); }
 :root[data-theme="light"] .season-fx::before { mix-blend-mode: multiply; opacity: .5; }
-/* Гирлянда внутри панелей (season.js): по верхнему краю вкладок, поиска и «Смотреть», над надписями. */
 #tabstrip:has(> .sg-in), #open-cmdk:has(> .sg-in), #open-watch:has(> .sg-in) { position: relative; }
 .sg-in { position: absolute; left: 0; top: 0; height: 18px; overflow: visible; pointer-events: none; z-index: 2; }
-/* У кнопок свои правила для svg-иконок (размер 14px, обводка currentColor) — гирлянде они не нужны. */
 .btn svg.sg-in, .tb-search svg.sg-in { height: 18px; stroke: none; fill: none; flex: none; }
 .sg-wire { fill: none; stroke: rgba(20, 30, 40, .9); stroke-width: .8; }
-/* Мерцание ступенями: плавная анимация прозрачности внутри SVG не уходит на видеокарту и перерисовывала шапку
-   каждый кадр (на 240 Гц — заметная доля времени кадра на любой вкладке). Шесть ступеней за цикл глазу не видны. */
 .sg-led { animation: sg-twinkle 4s steps(3) infinite; }
 @keyframes sg-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .75; } }
 :root[data-motion="off"] .sg-led, :root[data-motion="off"] .sg-pumpkin { animation: none; }
@@ -3602,15 +3082,12 @@ td.row-actions { opacity: 1; transition: none; }
 .sg-face { fill: #fff1a8; filter: drop-shadow(0 0 1.2px #ffd04d) drop-shadow(0 0 3px #ff9a1f); }
 :root[data-season="halloween"] .sg-wire { stroke: #0d0d0d; stroke-width: 1.1; }
 :root[data-theme="light"] .sg-wire { stroke: #6a7a8c; }
-/* Шапка Деда Мороза на логотипе — только зимой: опушка ровно по ширине логотипа и садится на его верхний край. */
 .season-hat { display: none; position: absolute; left: 2px; top: -12px; width: 28px; height: 24px; pointer-events: none; transform: rotate(-6deg); transform-origin: 45% 85%;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .45)); z-index: 2; }
 :root[data-season] .titlebar-left { position: relative; }
 :root[data-season="winter"] .season-hat.santa, :root[data-season="halloween"] .season-hat.witch, :root[data-season="autumn"] .season-hat.beanie,
 :root[data-season="spring"] .season-hat.crown, :root[data-season="summer"] .season-hat.straw { display: block; }
 :root[data-season="spring"] .season-hat.crown { transform: none; }
-
-/* Апскейл обложки/баннера (upscale-ui.js): выбор, прогресс, сравнение «до/после» ползунком. */
 .up-overlay .sheet { width: min(820px, 94vw); }
 .up { display: flex; flex-direction: column; gap: 14px; }
 .up-head h3 { white-space: nowrap; }
@@ -3624,7 +3101,6 @@ td.row-actions { opacity: 1; transition: none; }
 .up-cmp { --cut: 50%; position: relative; max-height: calc(62vh - 20px); max-width: 100%; height: calc(62vh - 20px); border-radius: 10px; overflow: hidden; cursor: ew-resize; user-select: none; touch-action: none; }
 .up-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .up-layer img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform-origin: 0 0; transform: var(--tf, none); }
-/* Срез — на неподвижном слое, а приближение — на картинках внутри: линия сравнения не уезжает при зуме. */
 .up-cmp .up-after { clip-path: inset(0 0 0 var(--cut)); }
 .up-zoom { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); padding: 3px 9px; border-radius: 8px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; pointer-events: none; white-space: nowrap; }
 .up-knob { position: absolute; top: 0; bottom: 0; left: var(--cut); width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 8px rgba(0, 0, 0, .6); pointer-events: none; }
@@ -3643,8 +3119,6 @@ td.row-actions { opacity: 1; transition: none; }
 .up-link.danger { color: var(--s-stop); }
 .up-dims { display: block; font-style: normal; font-weight: 500; font-size: 11.5px; color: var(--ink-dim); margin-top: 2px; }
 .up-src { max-width: 100%; max-height: calc(62vh - 20px); border-radius: 10px; object-fit: contain; }
-
-/* ---- Карточка отчёта: полоса показателей, лента этапов, «Детали» и «Последняя активность» (в конце файла: перебивает прежние .rd-fs) ---- */
 .rd-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .rd-kpi { min-width: 0; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .035); }
 .rd-kpi h4 { margin: 0 0 8px; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim); }
@@ -3675,13 +3149,9 @@ td.row-actions { opacity: 1; transition: none; }
 .rd-prod .rd-fs-act .rd-add:not(.danger-zone):not(.primary) { border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .04); }
 .rd-prod .rd-fs-act .rd-add.danger-zone { align-items: flex-start; }
 @media (max-width: 860px) { .rd-prod .rd-flow { flex-wrap: wrap; } .rd-prod .rd-fs { flex-basis: 50%; } }
-
-/* Пайплайн: имя — колонка фиксированной ширины, роли и отметки о сдаче стоят ровно друг под другом во всех строках и шагах */
 .rd-tl-ent, .rd-tl-ents.many .rd-tl-ent { grid-template-columns: 30px minmax(0, 180px) max-content minmax(0, 1fr); }
 .rd-tl-t, .rd-tl-ents.many .rd-tl-t { justify-self: start; }
 .rd-tl-ok { justify-content: space-between; min-width: min(196px, 100%); }
-
-/* Низ боковой колонки: «Открепить в окне» и «Ещё» — одна высота, один отступ, один шрифт */
 .rd-side-foot .btn, .rd-more summary { min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: 13px; font-weight: 600; }
 .rd-more summary { display: flex; align-items: center; border: 1px solid transparent; }
 .rd-side-foot .rd-more .btn { display: flex; width: 100%; }
@@ -3702,46 +3172,31 @@ td.row-actions { opacity: 1; transition: none; }
 .rd-ev small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink-dim); }
 .rd-recent .pf-link { margin-top: 6px; }
 :root[data-theme="light"] .rd-details, :root[data-theme="light"] .rd-recent { background: rgba(255, 255, 255, .6); }
-
-/* Под открытой карточкой отчёта доски не видно, а её анимации (эффекты просроченных, осколки) держали прокрутку карточки на ~35 к/с.
-   Пока карточка открыта — выключаем их совсем: animation-play-state: paused не помогает, animation: none возвращает 230+ к/с. */
 body:has(.report-detail-overlay) .tab-panel *,
 body:has(.report-detail-overlay) .tab-panel *::before,
 body:has(.report-detail-overlay) .tab-panel *::after { animation: none !important; }
-
-/* ---- Правки по проверке всех панелей ---- */
-/* Сезонные листья: декор не должен спорить с текстом, который просвечивает над ними */
 .season-fx canvas { opacity: .45; }
-/* Заголовки страниц на одной высоте, фильтры очереди по левому краю заголовка */
 .tab-panel[data-panel="list"] .list-page-header { padding-top: 0; }
 .q-view-switch, .psb-toolbar, .my-status-toolbar { padding-left: 0; padding-right: 0; }
 .psb-board { padding-left: 0; padding-right: 0; }
 .q-empty-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-/* Просроченная карточка: срок читается, эффект остаётся на рамке и постере */
 .board-card.dead .kc-sg .hot, .board-card.is-overdue .kc-sg .hot { color: #ff9d94; text-shadow: 0 1px 2px rgba(0, 0, 0, .8); animation: none; }
 .board-col-head .cnt.over { background: none; }
-/* Трещины на кнопках героя не должны лежать на подписи */
 .kd-acts .btn .kd-btn-crack { opacity: .35; }
-/* Список: «+4» в одну строку с аватарами */
 td[data-list-col="team"] { white-space: nowrap; }
 td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: middle; }
-/* Чат: сообщения без горизонтальной прокрутки, панель сведений убирается раньше, чем сжимает переписку */
 .ms-msgs { overflow-x: hidden; }
 @media (max-width: 1280px) { .ms-layout.info-open { grid-template-columns: 280px minmax(0, 1fr); } .ms-layout.info-open .ms-info { display: none; } }
 :root[data-theme="light"] .board-card.dead .kc-sg .hot, :root[data-theme="light"] .board-card.is-overdue .kc-sg .hot { color: #b3261e; text-shadow: none; }
 .board-card .kc-id { position: relative; z-index: 3; }
 :root[data-role="member"] .pf-card:has(> #idle-slot) { display: none; }
 .ib-panel { width: 450px; }
-
-/* Профиль коллеги — полной страницей, как своя «Я» */
 .overlay.pf-page-overlay { padding: 0; align-items: stretch; justify-content: stretch; }
 .overlay.pf-page-overlay .sheet { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: 20px 28px 32px; border: 0; border-radius: 0; box-shadow: none; background: var(--bg-2); overflow-y: auto; animation: none; }
 .pf-page-overlay .pf-back { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; width: max-content; margin-bottom: 12px; }
 .pf-page-overlay .pf-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pf-manage { display: flex; flex-direction: column; gap: 8px; }
 .pf-manage h3 { margin: 0; }
-
-/* Панель разработчика: действия */
 .dev-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .dev-acts { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
 .dev-act { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
@@ -3749,8 +3204,6 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .dev-act span { color: var(--ink-soft); }
 .dev-act small { display: block; margin-top: 2px; color: var(--ink-dim); font-size: 11.5px; }
 .dev-bcell input[type="range"] { display: block; width: 100%; margin-bottom: 12px; }
-
-/* Служебные данные отчёта и тайтла */
 .dev-actions-top { margin-bottom: 14px; }
 .dev-raw { display: grid; gap: 2px 14px; margin: 0; font-size: 12.5px; }
 .dev-raw dt { padding: 4px 0; color: var(--ink-dim); font-family: var(--mono, monospace); }
@@ -3769,15 +3222,11 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .dev-binding { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 16px; }
 .dev-binding label { display: flex; flex-direction: column; gap: 5px; color: var(--ink-dim); font-size: 11px; font-weight: 700; }
 .dev-binding .field-input { width: 150px; }
-
-/* Страница тайтла: кнопка «Смотреть» */
 .tpg-actions button.tpg-watch { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #10141a; border-color: transparent; font-weight: 700; }
 .tpg-actions button.tpg-watch:hover { background: #e8edf2; border-color: transparent; }
 .tpg-watch svg { width: 15px; height: 15px; fill: currentColor; }
 
 .ap-op[hidden] { display: none; }
-
-/* Хранилище разработчика */
 .vault-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
 .vault-sheet { width: min(720px, 94vw); }
 .vault-gate, .vault-form { display: flex; flex-direction: column; gap: 10px; }
@@ -3800,8 +3249,6 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .vault-chip.on { background: var(--surface-2); border-color: var(--accent, currentColor); }
 .vault-kind { font-weight: 400; font-size: 12px; opacity: .6; margin-left: 6px; }
 .vault-item[hidden] { display: none; }
-
-/* ---------- Nyaa: «баннеры» — обложка размытым фоном всей строки, слева затемнение, название поверх ---------- */
 .ny-list { gap: 10px; }
 .ny-list .ny-row { position: relative; overflow: hidden; isolation: isolate; min-height: 92px; padding: 14px 18px; border-radius: 14px !important; border: 0 !important; background: var(--ny-panel, #0e1016) !important; }
 .ny-list .ny-row > .ny-main { grid-column: 3; }
@@ -3811,8 +3258,6 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .ny-list .ny-kind:not(.has-cover) { opacity: .5; }
 .ny-list .ny-row.sk::after { display: none; }
 .ny-list .ny-title { font-size: 15px; font-weight: 800; -webkit-line-clamp: 1; }
-
-/* ---------- Nyaa: баннер-слайд-шоу в шапке и палитра баннера на всю страницу (applyBanner/setPalette в nyaa.js) ---------- */
 @property --ny-neon { syntax: "<color>"; inherits: true; initial-value: #7cc7ff; }
 @property --ny-neon2 { syntax: "<color>"; inherits: true; initial-value: #f2c46d; }
 @property --ny-bg { syntax: "<color>"; inherits: true; initial-value: #08101a; }
@@ -3820,7 +3265,6 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 @property --ny-panel2 { syntax: "<color>"; inherits: true; initial-value: #142135; }
 .ny {
   transition: --ny-neon 1.4s ease, --ny-neon2 1.4s ease, --ny-bg 1.4s ease, --ny-panel 1.4s ease, --ny-panel2 1.4s ease;
-  /* общие переменные страницы — из палитры баннера: панели, линии, выделение, акцент, текст */
   --fire: var(--ny-neon); --ember: var(--ny-neon); --gold: var(--ny-neon2);
   --surface-2: var(--ny-panel); --glass-bg: color-mix(in srgb, var(--ny-panel) 80%, transparent); --glass-border: color-mix(in srgb, var(--ny-neon) 18%, transparent);
   --line: color-mix(in srgb, var(--ny-neon) 14%, transparent);
@@ -3831,7 +3275,6 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
   position: relative; padding: 0 18px 28px; border-radius: 24px;
   background: radial-gradient(1100px 420px at 72% 0%, color-mix(in srgb, var(--ny-neon) 13%, transparent), transparent 62%), radial-gradient(800px 500px at 0% 100%, color-mix(in srgb, var(--ny-neon2) 7%, transparent), transparent 60%), var(--ny-bg);
 }
-/* шапка с баннером */
 .ny-hero { position: relative; isolation: isolate; overflow: hidden; min-height: 230px; align-items: flex-end; padding: 26px 28px 22px; border-radius: 20px; border: 1px solid color-mix(in srgb, var(--ny-neon) 45%, transparent); background: var(--ny-bg); box-shadow: 0 18px 60px -28px var(--ny-neon), 0 0 40px -18px var(--ny-neon2); }
 .ny-hero-bg { position: absolute; inset: 0; z-index: -2; background: center / cover no-repeat; opacity: 0; transform: scale(1.06); transition: opacity 1.4s ease, transform 8s ease-out; }
 .ny-hero-bg.on { opacity: 1; transform: scale(1.02); }
@@ -3843,7 +3286,6 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .ny-hero .ny-stat { background: color-mix(in srgb, var(--ny-bg) 60%, transparent); border: 1px solid color-mix(in srgb, var(--ny-neon) 35%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .ny-hero .ny-stat b { color: #fff; text-shadow: 0 0 12px color-mix(in srgb, var(--ny-neon) 55%, transparent); }
 .ny-hero .ny-stat span { color: rgba(255, 255, 255, .72); }
-/* панели под баннером: поиск, переключатели, статус, заголовок таблицы, дни, меню слева */
 .ny .ny-search:focus-within { border-color: color-mix(in srgb, var(--ny-neon) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ny-neon) 18%, transparent); }
 .ny #ny-go { background: var(--ny-neon); color: #08090d; box-shadow: 0 0 18px -4px var(--ny-neon); animation: ny-glow 3.2s ease-in-out infinite; }
 .ny .ny-flt-btn, .ny .ny-ib.wide { background: var(--ny-panel); border-color: color-mix(in srgb, var(--ny-neon) 18%, transparent); }
@@ -3852,15 +3294,12 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .ny .ny-list > .ny-day { color: var(--ny-neon2); }
 .ny .ny-side .ny-seg button.on, .ny .ny-cats button.on { color: #fff; }
 .ny input[type="checkbox"] { accent-color: var(--ny-neon); }
-/* строки */
 .ny-list .ny-row:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--row-neon, var(--ny-neon)) 50%, transparent), 0 8px 30px -12px var(--row-neon, var(--ny-neon)) !important; }
 .ny-list .ny-row.sel { box-shadow: inset 0 0 0 2px var(--ny-neon), 0 0 24px -10px var(--ny-neon) !important; }
 .ny-list .ny-nums .se { color: var(--ny-neon); }
 .ny-list .ny-tags i { color: color-mix(in srgb, #fff 70%, var(--ny-neon)); }
 @keyframes ny-glow { 0%, 100% { box-shadow: 0 0 12px -6px var(--ny-neon); } 50% { box-shadow: 0 0 22px -2px var(--ny-neon); } }
 @media (prefers-reduced-motion: reduce) { .ny-hero .ny-beta, .ny #ny-go { animation: none; } .ny-hero-bg { transition: opacity .3s; transform: none; } }
-
-/* ---------- Nyaa: атмосфера (nyaa-atmos.js) — точки слайд-шоу, полоска при прокрутке, частицы, каскад, атмосфера на всё приложение ---------- */
 .ny-hero > :not(.ny-hero-bg):not(.ny-sparks) { position: relative; z-index: 1; }
 .ny-sparks { position: absolute; inset: 0; z-index: 0; pointer-events: none; mix-blend-mode: screen; }
 .ny-dots { position: absolute !important; top: 14px; right: 16px; z-index: 2 !important; display: flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 99px; background: color-mix(in srgb, var(--ny-bg) 55%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
@@ -3877,18 +3316,14 @@ td[data-list-col="team"] .avatar-stack { display: inline-flex; vertical-align: m
 .ny.ny-compact .ny-mini > div { transform: none; opacity: 1; }
 .ny-in { animation: ny-rise .5s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--ny-i, 0) * 26ms); }
 @keyframes ny-rise { from { opacity: 0; transform: translateY(12px); } }
-/* пока открыта Nyaa — атмосфера баннера на всём приложении */
 :root[data-ny-atmos]:not([data-theme="light"]) body { background-color: var(--ny-bg) !important; background-image: radial-gradient(1400px 700px at 75% -10%, color-mix(in srgb, var(--ny-neon) 12%, transparent), transparent 60%), radial-gradient(900px 600px at 0% 110%, color-mix(in srgb, var(--ny-neon2) 8%, transparent), transparent 60%) !important; transition: background-color 1.4s ease; }
 :root[data-ny-atmos] .tab-btn.active { color: var(--ny-neon); text-shadow: 0 0 12px color-mix(in srgb, var(--ny-neon) 60%, transparent); }
 .ny.ny-compact .ny-day { top: 52px; transition: top .35s ease; }
 .ny.ny-compact .ny-head { top: 46px; }
-
-/* ---------- Nyaa: правки — без сезонных частиц, на всю ширину, баннер без приближения, кнопки и страница раздачи в палитре баннера ---------- */
 body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 .tab-panel[data-panel="nyaa"] .ny { max-width: none; margin: -10px -32px -40px; padding: 14px 32px 80px; min-height: calc(100% + 50px); border-radius: 0; }
 .tab-panel[data-panel="nyaa"] .ny-mini > div { margin: 0 -32px; padding: 0 32px; }
 .ny-hero-bg, .ny-hero-bg.on { transform: none; transition: opacity 1.4s ease; }
-/* кнопки */
 .ny .btn { border-radius: 10px; border: 1px solid color-mix(in srgb, var(--ny-neon) 22%, transparent); background: color-mix(in srgb, var(--ny-panel) 85%, transparent); color: var(--ink); transition: background-color .2s, border-color .2s, box-shadow .2s, color .2s; }
 .ny .btn:hover { border-color: color-mix(in srgb, var(--ny-neon) 60%, transparent); background: color-mix(in srgb, var(--ny-neon) 14%, var(--ny-panel)); box-shadow: 0 0 16px -6px var(--ny-neon); }
 .ny .btn.ghost { background: transparent; border-color: transparent; }
@@ -3902,7 +3337,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 .ny #ny-view button.on { border-color: var(--ny-neon); box-shadow: 0 0 12px -4px var(--ny-neon); }
 .ny .ny-ib { border-radius: 10px; transition: all .2s; }
 .ny .ny-ib:hover { color: var(--ny-neon); background: color-mix(in srgb, var(--ny-neon) 14%, transparent); box-shadow: 0 0 12px -5px var(--ny-neon); }
-/* страница раздачи */
 :root[data-ny-atmos] .ny-drawer { --ink: #f2f4f8; --ink-soft: color-mix(in srgb, #fff 74%, var(--ny-neon)); --n-t1: #f2f4f8; --n-t2: color-mix(in srgb, #fff 74%, var(--ny-neon)); --n-t3: color-mix(in srgb, #8a8f9c 75%, var(--ny-neon)); --n-line: color-mix(in srgb, var(--ny-neon) 14%, transparent); --line: color-mix(in srgb, var(--ny-neon) 14%, transparent);
   color: var(--ink); padding-top: 0; border-left: 1px solid color-mix(in srgb, var(--ny-neon) 45%, transparent); border-radius: 22px 0 0 0;
   background: radial-gradient(700px 400px at 100% 0%, color-mix(in srgb, var(--ny-neon) 12%, transparent), transparent 60%), var(--ny-bg); box-shadow: -30px 0 80px -30px var(--ny-neon); }
@@ -3920,7 +3354,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 :root[data-ny-atmos] .ny-d-sub .ny-link:hover { color: var(--ny-neon); text-decoration: none; }
 :root[data-ny-atmos] .ny-d-tabs button.on { color: #fff; border-bottom-color: var(--ny-neon); text-shadow: 0 0 10px color-mix(in srgb, var(--ny-neon) 60%, transparent); }
 :root[data-ny-atmos] .ny-scrim { background: color-mix(in srgb, var(--ny-bg) 60%, rgba(0, 0, 0, .4)); backdrop-filter: blur(3px); }
-/* строки: обложка чётче, текст с мягкой обводкой для читаемости поверх картинки */
 .ny-list .ny-kind.has-cover { filter: none; opacity: .38; }
 .ny-list .ny-kind.has-cover img { filter: none; image-rendering: auto; }
 .ny-list .ny-row:hover .ny-kind.has-cover { opacity: .5; }
@@ -3931,8 +3364,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 .ny-list .ny-kind.has-cover { left: 30%; -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%); mask-image: linear-gradient(90deg, transparent, #000 25%); }
 .ny-list .ny-tags i + i::before { content: none; }
 .ny-list .ny-tags { gap: 5px; }
-
-/* ---------- Nyaa: меню слева и панели над лентой — один общий мягкий отсвет баннера за всей страницей, панели тёмное стекло ---------- */
 .ny { isolation: isolate; }
 .ny::before { content: ""; position: absolute; left: 0; right: 0; top: 200px; height: 900px; z-index: -1; pointer-events: none;
   background: var(--ny-banner) center 40% / cover no-repeat; filter: blur(70px) saturate(1.4); opacity: .16;
@@ -3947,8 +3378,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 .ny .ny-status { border-radius: 10px; background: color-mix(in srgb, var(--ny-bg) 45%, transparent); border-color: color-mix(in srgb, var(--ny-neon) 10%, transparent); }
 .ny .ny-head { border-radius: 10px; background: color-mix(in srgb, var(--ny-bg) 80%, transparent); border-color: color-mix(in srgb, var(--ny-neon) 14%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .ny .ny-list > .ny-day { border-radius: 10px; background: linear-gradient(90deg, color-mix(in srgb, var(--ny-neon2) 10%, var(--ny-bg)), color-mix(in srgb, var(--ny-bg) 70%, transparent) 60%); border-color: color-mix(in srgb, var(--ny-neon2) 14%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-
-/* ---------- Nyaa: страница раздачи — шапка с обложкой тайтла, компактные кнопки, сведения одной панелью ---------- */
 :root[data-ny-atmos] .ny-d-head::before { background: var(--d-cover, var(--ny-banner)) center 25% / cover no-repeat; opacity: .5; filter: saturate(1.15); }
 :root[data-ny-atmos] .ny-d-head { padding-top: 84px; }
 :root[data-ny-atmos] .ny-d-head h3 { font-size: 18px; font-weight: 800; line-height: 1.3; }
@@ -3965,9 +3394,7 @@ body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 :root[data-ny-atmos] .ny-d-grid b.mono { font-size: 12px; color: var(--n-t2); }
 .ny-desc-h { display: block; margin: 6px 0 2px; font-size: 14px; color: var(--ink); }
 .ny-desc a { color: var(--ny-neon, var(--gold)); cursor: pointer; }
-/* карточка скачивания: длинные имена и пути не вылезают за край */
 #dl-root { width: 360px; max-width: calc(100vw - 32px); }
-/* Круглая кнопка разделов (#tabstrip.fan, 48px в 24px от угла) — карточки встают над ней, а не под неё. */
 body:has(#tabstrip.fan:not([hidden])) :is(#dl-root, .upload-progress) { bottom: 84px; }
 .dl-card { min-width: 0; overflow: hidden; }
 .dl-head { min-width: 0; }
@@ -3979,9 +3406,6 @@ body:has(#tabstrip.fan:not([hidden])) :is(#dl-root, .upload-progress) { bottom: 
 .ny-dots button.pin:hover { opacity: 1; background: transparent; }
 .ny-dots button.pin.on { width: 20px; filter: none; opacity: 1; background: transparent; box-shadow: none; transform: rotate(-20deg); text-shadow: 0 0 8px var(--ny-neon); }
 .ny-drawer > * { flex-shrink: 0; }
-
-
-/* ---------- атмосфера баннера на всём приложении (тёмные темы): фон, стекло, линии, отсвет картинки за окном ---------- */
 :root[data-ny-atmos]:not([data-theme="light"]) {
   --bg: var(--ny-bg); --bg-2: var(--ny-panel);
   --surface: color-mix(in srgb, var(--ny-panel) 92%, #000); --surface-2: var(--ny-panel); --surface-3: var(--ny-panel2); --surface-4: color-mix(in srgb, var(--ny-panel2) 80%, #fff 6%);
@@ -3990,18 +3414,11 @@ body:has(#tabstrip.fan:not([hidden])) :is(#dl-root, .upload-progress) { bottom: 
   --line: color-mix(in srgb, var(--ny-neon) 12%, transparent); --line-soft: color-mix(in srgb, var(--ny-neon) 7%, transparent);
   --ink-soft: color-mix(in srgb, #fff 72%, var(--ny-neon)); --ink-dim: color-mix(in srgb, #8a8f9c 78%, var(--ny-neon));
 }
-/* размытый баннер за всем окном — поверх кадра тайтла, мягко */
 :root[data-ny-atmos]:not([data-theme="light"]) .app-backdrop::before { content: ""; position: absolute; inset: -120px; background: var(--ny-banner) center 30% / cover no-repeat; filter: blur(90px) saturate(1.5) brightness(.55); opacity: .55; transition: background-image 1.4s; }
 :root[data-ny-atmos]:not([data-theme="light"]) .app-backdrop { background: radial-gradient(70% 55% at 75% 0%, rgba(var(--fire-rgb), .2), transparent 70%), radial-gradient(60% 60% at 0% 100%, rgba(var(--gold-rgb), .12), transparent 70%), var(--ny-bg); }
-/* шапка окна и вкладки — в тон баннера */
 :root[data-ny-atmos]:not([data-theme="light"]) .titlebar { background: color-mix(in srgb, var(--ny-bg) 80%, transparent); border-bottom-color: color-mix(in srgb, var(--ny-neon) 18%, transparent); }
 :root[data-ny-atmos] .tab-btn.active::after { background: var(--ny-neon); box-shadow: 0 0 10px var(--ny-neon); }
-/* полоса-баннер: неоновая кромка снизу, медленный блик, мягкое свечение */
-/* карточки и панели на вкладках — тонкая неоновая кромка сверху */
 :root[data-ny-atmos]:not([data-theme="light"]) .tab-panel:not([data-panel="nyaa"]) :is(.kd-card, .card, .panel, .glass) { border-color: color-mix(in srgb, var(--ny-neon) 16%, transparent); }
-
-
-/* ---------- баннер в шапке окна (nyaa-atmos.js paintStrips): на всех вкладках, кроме Nyaa ---------- */
 .titlebar { position: relative; isolation: isolate; }
 .tb-banner { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; transition: opacity .4s; }
 .tb-banner i { position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0; transition: opacity 1.4s ease; }
@@ -4009,31 +3426,21 @@ body:has(#tabstrip.fan:not([hidden])) :is(#dl-root, .upload-progress) { bottom: 
 .tb-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--ny-bg, #000) 55%, transparent) 0%, color-mix(in srgb, var(--ny-bg, #000) 72%, transparent) 30%, color-mix(in srgb, var(--ny-bg, #000) 72%, transparent) 70%, color-mix(in srgb, var(--ny-bg, #000) 50%, transparent) 100%); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ny-neon, var(--fire)) 45%, transparent); }
 body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 :root[data-theme="light"] .tb-banner { display: none; }
-/* цвета своего баннера (nyaa-atmos.js openPaletteEditor) */
 .ny-paled { position: absolute !important; top: 52px; right: 16px; z-index: 3 !important; display: grid; gap: 8px; min-width: 230px; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ny-neon) 40%, transparent); background: color-mix(in srgb, var(--ny-bg) 82%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 14px 40px -16px var(--ny-neon); font-size: 12.5px; color: #fff; animation: kadr-pop .2s var(--kadr-ease); }
 .ny-paled > b { font-size: 13px; }
 .ny-paled label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .ny-paled input[type="color"] { width: 34px; height: 24px; padding: 0; border: 1px solid rgba(255, 255, 255, .25); border-radius: 6px; background: none; cursor: pointer; }
 .ny-paled-acts { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
 .ny-paled-acts .btn { padding: 5px 10px; font-size: 12px; }
-/* полоска Nyaa при прокрутке: вплотную к верху (без щели в отступ панели), заголовок таблицы под ней, день — под заголовком */
 .tab-panel[data-panel="nyaa"] .ny-mini { top: -10px; }
 .tab-panel[data-panel="nyaa"] .ny-mini > div { background: linear-gradient(90deg, color-mix(in srgb, var(--ny-panel) 97%, transparent), color-mix(in srgb, var(--ny-panel2) 95%, transparent)); }
 .tab-panel[data-panel="nyaa"] .ny.ny-compact .ny-head { top: 36px; }
 .tab-panel[data-panel="nyaa"] .ny.ny-compact .ny-list > .ny-day { top: 68px; }
 .tab-panel[data-panel="nyaa"] .ny .ny-list > .ny-day { background: linear-gradient(90deg, color-mix(in srgb, var(--ny-neon2) 10%, var(--ny-bg)), var(--ny-bg) 60%); }
 .tab-panel[data-panel="nyaa"] .ny .ny-head { background: var(--ny-bg); }
-
-/* ================================================================
-   Профиль-портфолио (.pf-folio): одна узкая колонка по центру, как
-   сайт-визитка; секции с короткими заголовками, плавающая таблетка
-   навигации с прогрессом прокрутки, светящаяся плашка в подвале.
-   ================================================================ */
 .pf-folio { --pff-w: 900px; --pff-ease: cubic-bezier(.2, .9, .25, 1); max-width: var(--pff-w); margin: 0 auto; padding: 8px 4px 40px; display: flex; flex-direction: column; gap: 34px; }
 .pf-folio > .pff-pill, .pf-folio > #pff-about { animation: pff-in .6s var(--pff-ease) both; }
 .pf-folio > #pff-about { animation-delay: 60ms; }
-
-/* Таблетка навигации */
 .pff-pill { position: sticky; top: 8px; z-index: 5; align-self: center; display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 4px; border-radius: 99px;
   background: color-mix(in srgb, var(--surface) 78%, transparent); backdrop-filter: blur(18px) saturate(1.4);
   border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .9);
@@ -4043,13 +3450,9 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-pill button:hover { color: var(--ink); }
 .pff-pill button.on { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
 .pff-pct { min-width: 38px; text-align: right; font-size: 11px; font-weight: 700; color: var(--ink-dim); font-variant-numeric: tabular-nums; padding-left: 6px; border-left: 1px solid var(--line); }
-
-/* Приветствие */
 .pff-sec { scroll-margin-top: 60px; display: flex; flex-direction: column; gap: 14px; }
 .pf-folio .pff-hero { position: relative; overflow: hidden; padding: 30px 30px 22px; border-radius: 24px; border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
   background: var(--surface-2); }
-/* Баннер лежит над содержимым, но пропускает клики (кроме своих кнопок): иначе кнопку «Положение» закрывали аватар и текст.
-   Приглушение — накладкой, а не opacity, чтобы кнопки баннера оставались яркими. Кнопки — по центру нижней строки, где свободно. */
 .pf-folio .pff-hero { isolation: isolate; }
 .pf-folio .pff-banner { position: absolute; inset: 0; z-index: auto; height: auto; opacity: 1; filter: none; pointer-events: none; -webkit-mask-image: none; mask-image: none; }
 .pf-folio .pff-banner::after { content: ""; display: block; position: absolute; inset: 0; opacity: 1; pointer-events: none; transition: opacity .25s;
@@ -4073,14 +3476,10 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pf-folio .pff-av[class*="tier-"] .avatar.xl { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--tier-c, var(--gold)), 0 24px 50px -24px rgba(0, 0, 0, .9); }
 .pf-folio .pff-av.tier-bronze { --tier-c: #b0774a; } .pf-folio .pff-av.tier-silver { --tier-c: #b9c2cc; } .pf-folio .pff-av.tier-gold { --tier-c: var(--gold); }
 .pff-actions { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
-
-/* Цифры — ровной строкой с тонкими разделителями */
 .pf-folio .pff-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); border-radius: 20px; overflow: hidden; background: var(--surface-2); }
 .pf-folio .pff-stats .pf-kpi { border: 0; border-radius: 0; background: none; box-shadow: none; padding: 18px 20px; }
 .pf-folio .pff-stats .pf-kpi + .pf-kpi { border-left: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
 .pf-folio .pff-stats .pf-kpi b { font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
-
-/* Заголовки секций и карточки внутри */
 .pff-h { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); display: flex; align-items: center; gap: 12px; }
 .pff-h::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 12%, transparent), transparent); }
 .pf-folio .pf-card { border-radius: 20px; }
@@ -4091,8 +3490,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pf-folio .pf-badges { gap: 10px; }
 .pf-folio .pf-badge { transition: transform .3s var(--pff-ease), box-shadow .3s; }
 .pf-folio .pf-badge.won:hover { transform: translateY(-3px) rotate(-1deg); box-shadow: 0 16px 30px -18px rgba(var(--fire-rgb), .7); }
-
-/* Подвал: цитата и светящаяся плашка с бегущей кромкой */
 .pff-foot { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 30px 0 6px; text-align: center; }
 .pff-foot blockquote { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.45; color: var(--ink); max-width: 460px; }
 .pff-foot cite { display: block; margin-top: 6px; font-size: 11.5px; font-style: normal; font-weight: 500; color: var(--ink-dim); }
@@ -4114,22 +3511,11 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   .pf-folio > .pff-pill, .pf-folio > #pff-about, .pf-folio .pff-av, .pff-glow::before { animation: none; }
   .pff-role-t, .pff-pill, .pf-folio .pf-rep, .pf-folio .pf-badge { transition: none; }
 }
-
-/* ================================================================
-   Профиль-портфолио: проявление секций, «Пульс» (календарь активности),
-   таймлайн действий, живые цифры. Дополняет блок .pf-folio выше.
-   ================================================================ */
-
-/* Секции проявляются, когда до них докрутили (класс .pff-anim ставит wireFolio, если есть IntersectionObserver). */
 .pf-folio.pff-anim .pff-rv { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--pff-ease), transform .7s var(--pff-ease); }
 .pf-folio.pff-anim .pff-rv.in { opacity: 1; transform: none; }
-
-/* Таблетка: аватар в кольце прокрутки */
 .pff-pill-ic { position: relative; display: grid; place-items: center; width: 30px; height: 30px; margin-right: 4px; border-radius: 50%;
   background: conic-gradient(var(--fire) calc(var(--p, 0) * 1%), color-mix(in srgb, var(--ink) 14%, transparent) 0); }
 .pff-pill-ic .avatar.sm { width: 24px; height: 24px; margin: 0; font-size: 11px; box-shadow: 0 0 0 2px var(--surface); }
-
-/* Шапка: баннер виден справа, текст читается слева; при прокрутке баннер медленно приближается */
 .pf-folio .pff-hero { padding: 32px 32px 22px; }
 .pf-folio .pff-banner { transform: scale(calc(1.03 + var(--pff-y, 0) * .0007)); transform-origin: 70% 40%; will-change: transform; }
 .pf-folio .pff-banner.adjust { transform: none; }
@@ -4148,14 +3534,11 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   color: var(--ink-soft); font: inherit; font-size: 13px; text-align: left; cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
 .pff-bio-add:hover { color: var(--ink); border-color: rgba(var(--fire-rgb), .6); background: rgba(var(--fire-rgb), .08); }
 .pff-bio-add svg { flex: none; width: 14px; height: 14px; fill: none; stroke: var(--fire); stroke-width: 2.4; stroke-linecap: round; }
-/* Аватар: мягкое вращающееся свечение цвета ранга и точка «в сети» */
 .pf-folio .pff-av { position: relative; inset: auto; z-index: 0; animation-fill-mode: backwards; }
 .pf-folio .pff-av::before { content: ""; position: absolute; inset: -12px; z-index: -1; border-radius: 30px; opacity: .6; filter: blur(16px);
   background: conic-gradient(from 0deg, transparent 0 35%, var(--tier-c, var(--fire)) 55%, color-mix(in srgb, var(--fire) 80%, transparent) 70%, transparent 88%); animation: pff-spin 8s linear infinite; }
 .pf-folio .pff-av.online::after { content: ""; position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; border-radius: 50%;
   background: #4ade80; border: 3px solid var(--surface-2); box-shadow: 0 0 10px rgba(74, 222, 128, .7); }
-
-/* Цифры: число и дополнение в одну строку */
 .pff-kv { display: flex; align-items: center; gap: 10px; min-height: 40px; margin: 4px 0 2px; }
 .pf-folio .pff-stats .pf-kpi { transition: background .25s; }
 .pf-folio .pff-stats .pf-kpi:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
@@ -4169,8 +3552,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-ring circle { fill: none; stroke: color-mix(in srgb, var(--ink) 10%, transparent); stroke-width: 4; }
 .pff-ring .f { stroke: var(--s-done); stroke-linecap: round; stroke-dasharray: 0 100; transition: stroke-dasharray 1.1s var(--pff-ease) .15s; }
 .pff-rv.in .pff-ring .f { stroke-dasharray: var(--v) 100; }
-
-/* Цель, стаж, команда — те же карточки, что и остальные */
 .pf-folio .goal-card, .pf-folio .team-teaser { padding: 20px 22px; border: 0; border-radius: 20px; background: var(--glass-bg); backdrop-filter: blur(26px) saturate(1.2);
   box-shadow: 0 26px 50px -32px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(255, 255, 255, .06); transition: box-shadow .25s, transform .3s var(--pff-ease); }
 .pf-folio .goal-card:hover, .pf-folio .team-teaser:hover { transform: translateY(-2px); box-shadow: 0 26px 50px -32px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(var(--fire-rgb), .4); }
@@ -4183,8 +3564,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pf-folio .pf-tenure .tenure-track { height: 6px; margin: 10px 0 7px; background: color-mix(in srgb, var(--ink) 9%, transparent); }
 .pf-folio .pf-tenure .tenure-track i { transform-origin: 0 50%; transition: transform 1.1s var(--pff-ease) .2s; }
 .pf-folio.pff-anim .pff-rv:not(.in) .tenure-track i { transform: scaleX(0); }
-
-/* «Пульс»: сетка 26 недель × 7 дней, под ней — закрытые серии по неделям */
 .pff-pulse { --l1: rgba(var(--fire-rgb), .26); --l2: rgba(var(--fire-rgb), .48); --l3: rgba(var(--fire-rgb), .74); --l4: var(--fire); --l0: color-mix(in srgb, var(--ink) 6%, transparent); }
 .pff-pulse-sum { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim); }
 .pff-pulse-sum b { font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -4221,8 +3600,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-heat-leg i { width: 11px; height: 11px; border-radius: 3px; background: var(--l0); }
 .pff-heat-leg i:first-of-type { margin-left: 4px; } .pff-heat-leg i:last-of-type { margin-right: 4px; }
 .pff-heat-skel { height: 190px; border-radius: 12px; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--ink) 5%, transparent) 50%, transparent 70%) 0 0 / 200% 100%, color-mix(in srgb, var(--ink) 3%, transparent); animation: pff-shim 1.4s linear infinite; }
-
-/* Последние действия — таймлайном: значок по виду действия, линия между событиями, время справа */
 .pf-folio .pff-tl .pf-act { position: relative; align-items: flex-start; gap: 14px; margin: 0 -8px; padding: 10px 8px; border: 0; border-radius: 12px; transition: background .2s;
   animation: pff-in .5s var(--pff-ease) backwards; animation-delay: calc(var(--i) * 50ms); }
 .pf-folio .pff-tl .pf-act + .pf-act { border-top: 0; }
@@ -4235,8 +3612,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pff-tl-b { flex: 1; min-width: 0; }
 .pff-tl .m:empty { display: none; }
 .pff-tl time { flex: none; padding-top: 3px; font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
-
-/* Декоративные бесконечные анимации стоят, пока страница прокручивается и пока их не видно. */
 .pf-folio.pff-scrolling .pff-av::before, .pf-folio.pff-scrolling .pff-glow::before, .pf-folio.pff-scrolling .pff-heat-skel,
 .pf-folio.pff-scrolling .ac-glit::before, .pf-folio.pff-scrolling .ac-glit::after, .pf-folio.pff-scrolling .ac-sheen,
 .pf-folio .pff-away .pff-av::before, .pf-folio .pff-away .pff-glow::before { animation-play-state: paused; }
@@ -4253,8 +3628,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   .pf-folio .pff-banner { transform: none; }
   .pff-ring .f, .pf-folio .pf-tenure .tenure-track i, .pf-folio .goal-card, .pf-folio .team-teaser { transition: none; }
 }
-
-/* ---------- Граффити на шапке профиля (graffiti.js) ---------- */
 .pf-folio { position: relative; }
 .pf-folio .pf-graffiti { position: absolute; top: 0; left: 50%; transform: translateX(-50%); max-width: none; z-index: 4; pointer-events: none; user-select: none; }
 .pf-folio .gf-canvas { position: absolute; top: 0; left: 50%; transform: translateX(-50%); max-width: none; z-index: 6; touch-action: none; }
@@ -4276,7 +3649,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .sheet .pf-folio h2.pff-h { position: static; margin: 0; padding: 0; background: none; border: 0; font-size: 13px; font-weight: 800; letter-spacing: .14em; }
 .pff-act-r .btn { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
 .pff-act-r .btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
-/* Активность слева, награды справа — рядом, чтобы не листать вниз; на узком окне снова друг под другом. */
 .pff-duo { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .pff-duo > .pff-sec { min-width: 0; }
 .pff-duo .pff-two { grid-template-columns: 1fr; }
@@ -4284,7 +3656,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pf-folio .gf-place { position: absolute; z-index: 8; outline: 2px dashed rgba(var(--fire-rgb), .8); outline-offset: 2px; }
 .pf-folio .gf-place > img { display: block; width: 100%; height: 100%; cursor: move; user-select: none; touch-action: none; }
 .gf-place-acts { position: absolute; left: 0; top: calc(100% + 8px); display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12px; color: var(--ink-dim); }
-/* Широкое окно: Активность и Награды уходят в пустые поля слева и справа от профиля, листать вниз не нужно. */
 @media (min-width: 1720px) {
   .pf-folio:has(> .pff-duo) { position: relative; }
   .pf-folio > .pff-duo { display: block; height: 0; margin: 0; }
@@ -4292,7 +3663,6 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   .pf-folio > .pff-duo > #pff-activity { right: calc(100% + 28px); }
   .pf-folio > .pff-duo > #pff-awards { left: calc(100% + 28px); }
 }
-/* Боковые колонки спокойнее: уже, дальше от краёв, марки по 3, в ленте 4 последних действия. */
 @media (min-width: 1720px) {
   .pf-folio > .pff-duo > .pff-sec { width: min(360px, calc((100vw - 900px) / 2 - 110px)); }
   .pf-folio > .pff-duo > #pff-activity { right: calc(100% + 44px); }
@@ -4302,17 +3672,13 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
   .pf-folio > .pff-duo .pf-acts > .pf-act:nth-child(n+5) { display: none; }
   .pf-folio > .pff-duo .ac-inline .ac-no { display: none; }
 }
-/* Боковые колонки: без заголовка «Пульс», марки — только арт (подписи видны в коллекции по клику). */
 @media (min-width: 1720px) {
   .pf-folio > .pff-duo .pff-pulse .pf-card-head h3 { display: none; }
   .pf-folio > .pff-duo .pff-pulse .pf-card-head { justify-content: flex-end; }
   .pf-folio > .pff-duo .ac-inline .ac-top, .pf-folio > .pff-duo .ac-inline .ac-art,
   .pf-folio > .pff-duo .ac-inline .ac-lb, .pf-folio > .pff-duo .ac-inline .ac-foot { display: none; }
 }
-/* В плашке разделов оставлены только аватар и процент прокрутки. */
 .pff-pill [data-pff-go="pff-about"], .pff-pill [data-pff-go="pff-work"], .pff-pill [data-pff-go="pff-activity"], .pff-pill [data-pff-go="pff-awards"] { display: none; }
-
-/* ===== Заметки отчёта: автор с аватаром, таблица «имя — число», таймкоды-перемотка, действия, ответы ===== */
 .note-item .meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; font-size: 12px; }
 .note-av { width: 22px; height: 22px; font-size: 9.5px; flex: none; }
 .note-author { color: var(--ink); font-weight: 650; font-size: 12.5px; }
@@ -4337,7 +3703,6 @@ button.note-time { border: 0; cursor: pointer; font-weight: 700; transition: fil
 .notes-done > summary { cursor: pointer; padding: 6px 0; font-size: 12px; font-weight: 600; color: var(--ink-dim); list-style: none; }
 .notes-done > summary::before { content: "▸ "; }
 .notes-done[open] > summary::before { content: "▾ "; }
-/* Таблица «имя — число» */
 .note-tally { flex: 1; display: grid; gap: 5px; max-width: 460px; }
 .nt-row { display: grid; grid-template-columns: minmax(70px, 120px) 1fr 38px 34px; align-items: center; gap: 10px; font-size: 12.5px; }
 .nt-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4346,11 +3711,9 @@ button.note-time { border: 0; cursor: pointer; font-weight: 700; transition: fil
 .nt-row b { text-align: right; font-variant-numeric: tabular-nums; }
 .nt-row small { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .nt-sum { font-size: 11px; color: var(--ink-dim); padding-top: 2px; }
-/* Правка заметки */
 .note-edit { flex: 1; display: grid; gap: 6px; }
 .note-edit textarea { width: 100%; min-height: 54px; resize: vertical; }
 .note-edit-act { display: flex; justify-content: flex-end; gap: 6px; }
-/* Ввод */
 .note-replying { display: flex; align-items: center; gap: 6px; margin: 6px 0 -2px; font-size: 12px; color: var(--ink-dim); }
 .note-replying b { color: var(--ink); }
 .note-replying .icon-btn { width: 20px; height: 20px; font-size: 10px; }
@@ -4368,24 +3731,15 @@ button.note-time { border: 0; cursor: pointer; font-weight: 700; transition: fil
 button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; opacity: .8; }
 .pff-pill .pff-days { padding: 0 10px; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); white-space: nowrap; }
 .pff-pill .pff-days b { color: var(--ink); }
-/* Календарь: «просрочено N дн.» — справа от ромбика срока, за полоской (в узкой полоске текст не помещался). */
 .kcal-bar .kcal-late-lbl { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); z-index: 2; white-space: nowrap; font-style: normal; font-size: 11.5px; font-weight: 650; line-height: 1; padding: 5px 9px; border-radius: 99px; color: #ffb3ba; background: #2a1520; border: 1px solid rgba(255, 92, 110, .35); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); pointer-events: none; }
 .kcal-late { display: inline-block; width: 14px; height: 8px; border-radius: 3px; background: color-mix(in srgb, var(--s-stop) 55%, transparent); border: 1px solid var(--s-stop); vertical-align: middle; margin-right: 6px; }
 :root[data-theme="light"] .kcal-bar .kcal-late-lbl { color: #b3263a; background: #fff1f3; border-color: rgba(214, 48, 72, .35); box-shadow: 0 2px 6px rgba(120, 20, 40, .12); }
 @media (max-width: 1000px) { .kcal-bar .kcal-late-lbl { left: calc(100% + 10px); padding: 4px 7px; font-size: 11px; } }
-/* У правого края окна плашке справа места нет — ставим её внутрь полоски, перед ромбиком. */
 .kcal-bar .kcal-late-lbl.in { left: auto; right: 16px; }
-/* Ближайшие сроки — той же плашкой: «сдать сегодня» (жёлтая), «сдать завтра» (голубая). */
 .kcal-bar .kcal-late-lbl.today { color: #ffe08a; background: #2a2410; border-color: rgba(255, 200, 60, .45); }
 .kcal-bar .kcal-late-lbl.tmrw { color: #a9d4ff; background: #12202e; border-color: rgba(100, 170, 255, .4); }
 :root[data-theme="light"] .kcal-bar .kcal-late-lbl.today { color: #8a5a00; background: #fff6d6; border-color: rgba(200, 150, 0, .4); }
 :root[data-theme="light"] .kcal-bar .kcal-late-lbl.tmrw { color: #1d5fa8; background: #e9f3ff; border-color: rgba(40, 110, 220, .3); }
-
-/* ================================================================
-   Доска · обновление вида (2026-11): единая панель фильтров, цветной
-   счётчик колонки, плотнее карточки. Хоррор-состояния
-   (.doom/.dread/.dead) не трогаем — у них селекторы сильнее.
-   ================================================================ */
 #board-body .page-header h1 { font-size: 34px; letter-spacing: -.02em; }
 .board-toolbar { gap: 0; padding: 4px; width: max-content; max-width: 100%; border-radius: 14px;
   background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--fire-rgb), .22);
@@ -4427,9 +3781,6 @@ button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; o
 :root[data-theme="light"] .board-col { background: rgba(255, 255, 255, .62); }
 :root[data-theme="light"] .board-card { background: rgba(255, 255, 255, .8); border-color: rgba(80, 40, 20, .08); }
 :root[data-theme="light"] .kc-ft { border-top-color: rgba(80, 40, 20, .07); }
-
-/* Карточка отчёта · доработки (2026-11): срок правится с плашки, «Собрать финал» спокойная без видео,
-   Nyaa — действие, а не ошибка, сданные строки пайплайна тише, «снять» видно. */
 button.rd-kpi { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
 button.rd-kpi:hover { border-color: rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .055); }
 button.rd-kpi.soon:hover { border-color: rgba(255, 176, 32, .7); }
@@ -4446,8 +3797,6 @@ button.rd-kpi:focus-visible { outline: 2px solid rgba(var(--fire-rgb), .6); outl
 .rd-tl-undo { opacity: 1; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .14); color: var(--ink-soft); }
 .rd-tl-undo:hover { border-color: color-mix(in srgb, var(--s-stop) 60%, transparent); color: #ff8a80; }
 :root[data-theme="light"] button.rd-kpi:hover { background: rgba(255, 255, 255, .8); }
-
-/* Карточка отчёта · файлы, чек-лист, роспись (2026-11). */
 .file-item.fi-compact { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 9px 10px 9px 14px; margin-bottom: 6px; border-radius: 12px; }
 .fi-compact .fi-main { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
 .fi-compact .fi-name { min-width: 0; display: flex; align-items: baseline; gap: 6px; font-size: 13px; font-weight: 600; }
@@ -4476,8 +3825,6 @@ button.rd-kpi:focus-visible { outline: 2px solid rgba(var(--fire-rgb), .6); outl
 .nt-row small { color: var(--ink-soft); font-size: 12px; }
 .nt-sum { font-size: 12px; color: var(--ink-soft); padding-top: 4px; }
 .raw-row .icon-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-
-/* Роспись карточками людей: аватар сверху, реплики снизу. Не узнан — «?», по клику привязывают к человеку. */
 .note-tally.tiles { max-width: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin-top: 6px; }
 .nt-tile { position: relative; display: grid; justify-items: center; gap: 3px; padding: 12px 8px 10px; border-radius: 12px;
   background: rgba(255, 255, 255, .035); border: 1px solid var(--line); text-align: center; min-width: 0; }
@@ -4495,8 +3842,6 @@ button.rd-kpi:focus-visible { outline: 2px solid rgba(var(--fire-rgb), .6); outl
 .rb-row:hover { background: rgba(255, 255, 255, .06); border-color: var(--line); }
 .rb-row .avatar-bubble { width: 28px; height: 28px; margin: 0; font-size: 11px; }
 :root[data-theme="light"] .nt-tile { background: rgba(255, 255, 255, .7); }
-
-/* Themed dropdown over native <select> (app/fancy-select.js) */
 select.fsel-native { display: none !important; }
 .fsel { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
 .fsel:disabled { opacity: .45; cursor: default; }
@@ -4518,9 +3863,6 @@ select.fsel-native { display: none !important; }
 :root[data-theme="light"] .fsel-pop { background: rgba(255, 255, 255, .97); box-shadow: 0 14px 40px rgba(0, 0, 0, .15); }
 :root[data-theme="light"] .fsel-opt:hover { background: rgba(0, 0, 0, .05); }
 @media (prefers-reduced-motion: reduce) { .fsel-pop { animation: none; } .fsel svg { transition: none; } }
-
-/* Обзор: у активного слайда осколки парят всегда. Тени — одним фильтром на обложку,
-   а не на каждый из 16 осколков: иначе p50 кадра вырастал с 4 до 8 мс. */
 .kd-slide .kd-pieces.settled span { filter: none; }
 .kd-slide .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
 .kd-slide.on .kd-pieces em { will-change: transform; }

@@ -1,18 +1,3 @@
-//! Апскейл картинок (обложка/баннер тайтла) нейросетью ×4.
-//!
-//! Движок — upscayl-bin (поддерживаемый форк realesrgan-ncnn-vulkan от проекта Upscayl: свежий Vulkan, исправления;
-//! работает на любой видеокарте с Vulkan). Модели — из Upscayl: digital-art-4x под аниме и рисунки, ultrasharp-4x —
-//! самая резкая (реалистичные модели не берём: у нас только аниме). В установщик ничего не кладём:
-//! при первом апскейле докачиваем закреплённый релиз движка и только выбранную модель (по закреплённому коммиту),
-//! сверяем SHA-256, зашитую в приложение, и складываем в %LOCALAPPDATA%\Project Desktop\tools\upscayl — рядом с
-//! докачанным ffmpeg (audio_qc::downloaded_tools_dir).
-//!
-//! Свои модели: любые ncnn-модели (.param + .bin) — пользователь выбирает файлы, мы проверяем и копируем их в
-//! tools\upscayl\custom\models (движок требует, чтобы папка называлась именно «models»). Масштаб модели (×2/×3/×4)
-//! угадываем по имени файла — его движку надо сказать (-z), иначе он считает модель ×4.
-//!
-//! Картинку присылает вебвью байтами, результат (PNG) уходит обратно сырым ответом IPC — для превью «до/после»;
-//! сохраняется он отдельной командой, только в путь, выбранный в диалоге сохранения (file_scope).
 
 use crate::audio_qc::hidden_command;
 use sha2::{Digest, Sha256};
@@ -27,7 +12,6 @@ const ENGINE_URL: &str =
     "https://github.com/upscayl/upscayl-ncnn/releases/download/20251207-174704/upscayl-bin-20251207-174704-windows.zip";
 const ENGINE_SHA256: &str = "1f0f65c5d2ade866555e2ac467d35952c35a47080a4060fe56a1ab028f67258a";
 const EXE: &str = "upscayl-bin.exe";
-/// Модели Upscayl по закреплённому коммиту (resources/models).
 const MODELS_URL: &str = "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models";
 
 struct Model {
@@ -51,10 +35,8 @@ const MODELS: [Model; 2] = [
         bin_sha: "fb3e279d40d4cddb44db4e684d59e68d0aa39852c8cc14dc3f23ccc7e6eee9c1",
     },
 ];
-/// Больше — не обложка, а что-то не то; и памяти видеокарте хватит не на всё.
 const MAX_INPUT: usize = 25 * 1024 * 1024;
 
-/// Последний результат — его и сохраняет `save`, чтобы не гонять PNG через вебвью второй раз.
 static LAST: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 fn engine_dir() -> Option<PathBuf> {
@@ -65,7 +47,6 @@ fn progress(app: &tauri::AppHandle, fraction: f64, label: &str) {
     let _ = app.emit("upscale-progress", serde_json::json!({ "fraction": fraction, "label": label }));
 }
 
-/// Скачивает файл, на лету считая SHA-256; при несовпадении суммы удаляет его. `span` — доля общей полосы прогресса.
 async fn download(
     app: &tauri::AppHandle,
     client: &reqwest::Client,
@@ -103,7 +84,6 @@ async fn download(
     std::fs::rename(&tmp, to).map_err(|e| format!("Не удалось сохранить {label}: {e}"))
 }
 
-/// Докачивает движок и нужную модель, если их ещё нет. Возвращает папку движка.
 async fn ensure(app: &tauri::AppHandle, client: &reqwest::Client, model: Option<&Model>) -> Result<PathBuf, String> {
     let dir = engine_dir().ok_or("Не найдена папка пользователя для движка апскейла.")?;
     let models = dir.join("models");
@@ -116,7 +96,7 @@ async fn ensure(app: &tauri::AppHandle, client: &reqwest::Client, model: Option<
             .await
             .map_err(|e| format!("Распаковка движка не завершилась: {e}"))??;
     }
-    let Some(model) = model else { return Ok(dir) };   // своя модель — нужен только движок
+    let Some(model) = model else { return Ok(dir) };
     for (ext, sha, span) in [("param", model.param_sha, (0.08, 0.1)), ("bin", model.bin_sha, (0.1, 0.45))] {
         let path = models.join(format!("{}.{ext}", model.name));
         if !path.is_file() {
@@ -127,7 +107,6 @@ async fn ensure(app: &tauri::AppHandle, client: &reqwest::Client, model: Option<
     Ok(dir)
 }
 
-/// Распаковывает архив движка и оставляет только сам движок.
 fn extract(dir: &Path, zip: &Path) -> Result<(), String> {
     let tmp = dir.join("x");
     let out = hidden_command("powershell")
@@ -166,14 +145,11 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// Строка прогресса движка: «57.14%».
 fn parse_percent(line: &str) -> Option<f64> {
     let num = line.trim().strip_suffix('%')?;
     num.trim().replace(',', ".").parse::<f64>().ok().filter(|v| (0.0..=100.0).contains(v))
 }
 
-/// Размер результата: во сколько раз (2–4) или до какой ширины в пикселях. Модели всегда ×4 — движок сам ужимает
-/// до ×2/×3 или подгоняет под ширину после нейросети.
 pub enum Size {
     Scale(u32),
     Width(u32),
@@ -193,13 +169,11 @@ impl Size {
     fn args(&self) -> Vec<String> {
         match self {
             Size::Scale(s) => vec!["-s".into(), s.to_string()],
-            // «-w» вместе с «-s» движок молча игнорирует — только отдельно, с фильтром
             Size::Width(w) => vec!["-w".into(), format!("{w}:default")],
         }
     }
 }
 
-/// Своя картинка с диска — только файл, выбранный в диалоге (file_scope), и не больше 25 МБ.
 pub fn read_input(app: &tauri::AppHandle, path: &str) -> Result<Vec<u8>, String> {
     use tauri::Manager;
     let p = app.state::<crate::file_scope::FileScope>().check_read(path)?;
@@ -210,12 +184,10 @@ pub fn read_input(app: &tauri::AppHandle, path: &str) -> Result<Vec<u8>, String>
     std::fs::read(p).map_err(|e| format!("Не удалось прочитать картинку: {e}"))
 }
 
-/// Увеличивает картинку. `mode` — "anime" или "sharp", `size` — во сколько раз или до какой ширины. Возвращает PNG.
 pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Vec<u8>, mode: &str, size: Size) -> Result<Vec<u8>, String> {
     if bytes.is_empty() || bytes.len() > MAX_INPUT {
         return Err("Картинка пустая или слишком большая (больше 25 МБ).".into());
     }
-    // встроенная модель — по ключу, своя — «custom:имя»
     let (name, models_dir, model_scale): (String, PathBuf, u32) = if let Some(own) = mode.strip_prefix("custom:") {
         if !list_custom().iter().any(|m| m == own) {
             return Err("Такой своей модели нет — добавьте её заново.".into());
@@ -244,7 +216,6 @@ pub async fn upscale(app: &tauri::AppHandle, client: &reqwest::Client, bytes: Ve
             .arg("-o").arg(&output2)
             .args(["-n", name.as_str(), "-z", &model_scale.to_string()])
             .args(&size_args)
-            // плитки поменьше: видеокарта отпускает кадр чаще, и окно (и вся система) не подвисает, пока идёт апскейл
             .args(["-t", "128"])
             .args(["-f", "png", "-m"])
             .arg(&models_dir)
@@ -296,7 +267,6 @@ fn custom_dir() -> Option<PathBuf> {
     engine_dir().map(|d| d.join("custom").join("models"))
 }
 
-/// Свои модели — имена, у которых есть оба файла.
 pub fn list_custom() -> Vec<String> {
     let Some(dir) = custom_dir() else { return Vec::new() };
     let mut out: Vec<String> = std::fs::read_dir(&dir)
@@ -311,20 +281,17 @@ pub fn list_custom() -> Vec<String> {
     out
 }
 
-/// Масштаб модели по имени: «2x-…», «…_x3», «realesr-animevideov3-x2». Не нашли — ×4 (так у большинства моделей).
 fn guess_scale(name: &str) -> u32 {
     let b = name.to_lowercase().into_bytes();
     for i in 0..b.len() {
         let digit = |j: usize| b.get(j).filter(|c| (b'2'..=b'4').contains(c)).map(|c| u32::from(c - b'0'));
         let boundary = |j: Option<usize>| j.and_then(|j| b.get(j)).is_none_or(|c| !c.is_ascii_alphanumeric());
         if b[i] == b'x' {
-            // «x2» — цифра сразу после x, за ней не буква/цифра, перед x не цифра
             if let Some(d) = digit(i + 1) {
                 if boundary(Some(i + 2)) && !(i > 0 && b[i - 1].is_ascii_digit()) {
                     return d;
                 }
             }
-            // «2x» — цифра прямо перед x
             if let Some(d) = i.checked_sub(1).and_then(digit) {
                 if boundary(i.checked_sub(2)) {
                     return d;
@@ -335,8 +302,6 @@ fn guess_scale(name: &str) -> u32 {
     4
 }
 
-/// Добавляет свои модели из выбранных файлов: для каждой нужны .param и .bin, .param — настоящий ncnn (первая строка
-/// 7767517). Имя чистим до безопасных символов. Возвращает новый список своих моделей.
 pub fn add_custom(app: &tauri::AppHandle, paths: &[String]) -> Result<Vec<String>, String> {
     use std::collections::BTreeMap;
     use tauri::Manager;
@@ -393,13 +358,10 @@ fn dir_size(dir: &Path) -> u64 {
 
 #[derive(serde::Serialize)]
 pub struct Storage {
-    /// движок и скачанные модели — их можно удалить, при следующем апскейле скачаются снова
     pub engine_bytes: u64,
-    /// свои модели — их пользователь ставил сам, очистка их не трогает
     pub custom_bytes: u64,
 }
 
-/// Сколько места занимает апскейл (Настройки → Диагностика).
 pub fn storage() -> Storage {
     let Some(dir) = engine_dir() else { return Storage { engine_bytes: 0, custom_bytes: 0 } };
     let custom = dir.join("custom");
@@ -407,7 +369,6 @@ pub fn storage() -> Storage {
     Storage { engine_bytes: dir_size(&dir).saturating_sub(custom_bytes), custom_bytes }
 }
 
-/// Удаляет движок, скачанные модели и временные файлы; свои модели (custom) оставляет.
 pub fn clear() -> Result<Storage, String> {
     if let Some(dir) = engine_dir() {
         if let Ok(rd) = std::fs::read_dir(&dir) {
@@ -428,7 +389,6 @@ pub fn clear() -> Result<Storage, String> {
     Ok(storage())
 }
 
-/// Копирует последний результат в путь, выбранный пользователем в диалоге сохранения.
 pub fn save(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
     use tauri::Manager;
     let target = app.state::<crate::file_scope::FileScope>().check_write(path)?;

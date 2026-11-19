@@ -1,15 +1,15 @@
 
 export const state = {
-  softReload: false,   // идёт повторная загрузка уже открытой вкладки (tabs.js::loadActiveTab)
+  softReload: false,
   token: null,
   telegramId: null,
   name: null,
-  mediaToken: null, // короткоживущий токен для <img src> — см. ensureMediaToken() в api.js
+  mediaToken: null,
   mediaTokenExpiresAt: 0,
   reports: [],
   total: 0,
   sort: { field: "public_id", dir: "asc" },
-  selected: new Set(), // public_id
+  selected: new Set(),
   statusOptions: [
     ["draft", "Черновик"],
     ["review", "Озвучка"],
@@ -19,22 +19,16 @@ export const state = {
     ["cancelled", "Отменено"],
   ],
   users: [],
-  quickFilter: null, // null | "mine" | "overdue" | "unassigned"
+  quickFilter: null,
   activeTab: "overview",
   loadedTabs: new Set(),
   titleSeasonId: null,
-  isDeveloper: null, // null = ещё не запрашивали /api/me
-  // Админ студии или рядовой участник (/api/whoami). Участнику десктоп
-  // показывает только «Тайтлы», «Сообщения», «Команду» и «Я».
+  isDeveloper: null,
   isAdmin: true,
-  // «Смотреть как…» (role-preview.js): примеренная владельцем роль и из чего выбирать (null — не владелец).
   previewRole: (() => { try { return sessionStorage.getItem("preview-role") || null; } catch (_) { return null; } })(),
   previewChoices: null,
 };
 
-// Выход из аккаунта. Всё, что относится к конкретному человеку, сбрасываем здесь одним местом
-// (statusOptions/sort/activeTab — настройки самого интерфейса, они переживают смену пользователя). Права из
-// матрицы ролей (/api/me/permissions). Пока не загружены — ведём себя как раньше: админ может всё.
 export function can(key) {
   return state.perms ? state.perms.has(key) : !!state.isAdmin;
 }

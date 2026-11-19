@@ -1,6 +1,3 @@
-// «Пульс» без серий в работе: экран «Команда» вместо пустой карты. Люди (фото, роли, в сети ли, активность за 14 дней),
-// лента — действия, собранные в сессии, голосование сезона. По клику на человека — боковая панель со всем, что о нём известно:
-// что открывал и смотрел, откуда подключался (IP с маской — только владельцу, как в «Карте работы»), последние действия.
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const fmtDur = s => (s >= 3600 ? `${(s / 3600).toFixed(1).replace(".", ",")} ч` : s >= 60 ? `${Math.round(s / 60)} мин` : `${s} с`);
@@ -13,17 +10,15 @@ const ago = at => {
 const words = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
 const hue = name => { let h = 0; for (const c of String(name)) h = (h * 31 + c.codePointAt(0)) % 360; return h; };
 
-// Служебные нажатия окна в ленту не попадают (как и на карте, pulse.js).
 function cleanText(text) {
   const m = /^нажал в разделе «([^»]+)»: (.+)$/.exec(text);
   if (m && /^win-/.test(m[2])) return null;
   return text;
 }
-// Действия одного человека с паузами меньше 20 минут — одна сессия: какие разделы он прошёл и что ещё сделал.
 const SESSION_GAP = 20 * 60000;
 function sessions(list) {
   const out = [];
-  for (const r of list) {          // от новых к старым
+  for (const r of list) {
     const text = cleanText(String(r.text || ""));
     if (!text) continue;
     const t = toDate(r.at).getTime();
@@ -33,7 +28,7 @@ function sessions(list) {
     s.from = Math.min(s.from, t); s.n++;
     const place = /«([^»]+)»/.exec(text);
     if (place && /^(был на экране|действие в разделе|нажал в разделе)/.test(text)) {
-      if (s.places[0] !== place[1]) s.places.unshift(place[1]);      // хронологический порядок, без повторов подряд
+      if (s.places[0] !== place[1]) s.places.unshift(place[1]);
     } else if (!s.other.includes(text)) s.other.unshift(text);
   }
   return out.sort((a, b) => b.to - a.to);
@@ -42,7 +37,6 @@ function sessions(list) {
 const dayAt = i => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - (13 - i)); return d; };
 const fmtDay = d => d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 
-// Столбики за 14 дней с пунктиром «среднее»; data-i — для подсказки при наведении.
 function barsHtml(days) {
   const mx = Math.max(1, ...days), avg = days.reduce((a, b) => a + b, 0) / days.length;
   return `<div class="tm-bars">${days.map((c, i) => `<i data-i="${i}" class="${i === 13 ? "today" : ""}${c ? "" : " z"}" style="--v:${c ? Math.max(4, c / mx * 100) : 2}%"></i>`).join("")}
@@ -50,7 +44,6 @@ function barsHtml(days) {
     <div class="tm-bars-x"><span>${fmtDay(dayAt(0))}</span><span>${fmtDay(dayAt(7))}</span><span>сегодня</span></div>`;
 }
 
-// Радар: каждая ось — раздел приложения; при наведении на ось заголовок плитки показывает её число.
 function radarSvg(axes, size = 220) {
   const c = size / 2, r = size / 2 - 34, n = axes.length, mx = Math.max(1, ...axes.map(a => a.value));
   const pt = (i, k) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [c + Math.cos(a) * r * k, c + Math.sin(a) * r * k]; };
@@ -91,7 +84,6 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
   const online = people.filter(p => p.online).length;
   const week = people.filter(p => p.week > 0).length;
   const votedN = people.filter(p => p.voted).length;
-  // Активность всей команды по дням и разделы, куда ходят чаще всего (есть только у владельца — из «Карты работы»).
   const plist = Object.values(persons);
   const teamDays = plist.length ? Array.from({ length: 14 }, (_, i) => plist.reduce((a, pi) => a + ((pi.days14 || [])[i] || 0), 0)) : null;
   const hasDays = teamDays && teamDays.some(Boolean);
@@ -102,7 +94,6 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
   const teamAxes = topTools(Object.entries(toolSum).map(([label, count]) => ({ label, count })));
   const onlinePeople = people.filter(p => p.online);
 
-  // Ошибки у команды (только владельцу): одинаковые сгруппированы, внутри — кто, когда и что делал перед ошибкой.
   const errs = data.errors;
   const ERR_KIND = { toast: ["!", "показано на экране"], api: ["⇅", "сбой связи или сервера"], crash: ["✕", "сбой программы"] };
   const errHtml = g => {
@@ -124,21 +115,17 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
     const mx = Math.max(1, ...days);
     return `<span class="tm-spark" aria-label="Активность за 14 дней">${days.map(c => `<i style="height:${c ? Math.max(14, Math.round(c / mx * 100)) : 6}%"${c ? "" : ' class="z"'}></i>`).join("")}</span>`;
   };
-  // Версии программы: самая свежая у команды — эталон; у кого старее — подсвечиваем. Версию не знаем у тех, кто не заходил
-  // с программой новее 24.10 (старые версии её не сообщают) — это тоже повод обновиться.
   const verKey = v => {
     const m = /^(\d+)\.(\d+)\.(\d+)(?:-[a-z]+\.(\d+))?/i.exec(String(v || ""));
     return m ? [+m[1], +m[2], +m[3], m[4] == null ? Infinity : +m[4]] : null;
   };
   const verCmp = (a, b) => { for (let i = 0; i < 4; i++) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1; return 0; };
-  // Альфу сравниваем с альфой, стабильную — со стабильной: человек на свежей v2.3.2 не «отстал» от чьей-то альфы.
   const chan = v => (/-alpha/i.test(String(v)) ? "alpha" : "stable");
   const newest = list => list.filter(verKey).sort((a, b) => verCmp(verKey(b), verKey(a)))[0] || null;
   const latestBy = { alpha: newest(people.map(p => p.version).filter(v => v && chan(v) === "alpha")), stable: newest(people.map(p => p.version).filter(v => v && chan(v) === "stable")) };
   const latestVer = latestBy.stable || latestBy.alpha;
   const isOld = p => { const top = p.version && latestBy[chan(p.version)]; return !!(top && verKey(p.version) && verCmp(verKey(p.version), verKey(top)) < 0); };
   const shortVer = v => String(v).replace(/\+.*$/, "");
-  // Номер версии программа сообщает с v2.3.9: десктоп есть, а номера нет — значит, версия старше.
   const PRE_VER = "до v2.3.9";
   const verHtml = p => p.version ? `<span class="tm-ver${isOld(p) ? " old" : ""}" title="${esc(p.version)}">v${esc(shortVer(p.version))}</span>`
     : p.desktop ? `<span class="tm-ver old" title="Версии до 2.3.9 номер не сообщают — программу пора обновить">${PRE_VER}</span>` : "";
@@ -239,7 +226,6 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
 
   countUp(wrap);
   wrap.querySelector("[data-tomap]")?.addEventListener("click", onMap);
-  // Наведение на столбик — в заголовке плитки число и дата этого дня; ушёл — снова «за 7 дней».
   const act = wrap.querySelector(".tm-act");
   if (act) {
     const num = act.querySelector(".tm-big b"), sub = act.querySelector(".tm-big-sub");
@@ -262,7 +248,6 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
   };
   bindRadar(wrap.querySelector(".tm-rad"), teamAxes, wrap.querySelector(".tm-rad-v"));
 
-  // Переключатель «Все / В сети / Активные / Не голосовали»: подложка переезжает под выбранную кнопку.
   const seg = wrap.querySelector(".tm-seg"), ind = seg && seg.querySelector(".tm-seg-ind");
   const moveInd = btn => { if (ind && btn) { ind.style.width = `${btn.offsetWidth}px`; ind.style.transform = `translateX(${btn.offsetLeft - 4}px)`; } };
   const setFilter = key => {

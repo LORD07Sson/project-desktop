@@ -1,10 +1,6 @@
-// Здоровье зеркал для «Источников и зеркал 2.0»: по каждому адресу хранятся последние замеры
-// на двух путях — «pc» (напрямую с этого компьютера) и «server» (через сервер студии, его WireGuard).
-// Из замеров считаются медиана, потери и «пауза» после серии сбоев; по ним «Авто» выбирает лучший
-// путь и зеркало. Модуль чистый (без сети и DOM): время передаётся параметром, поэтому легко тестируется.
 
-export const HIST_MAX = 12;          // замеров на путь
-export const SLOW_MS = 1500;         // «медленно»
+export const HIST_MAX = 12;
+export const SLOW_MS = 1500;
 export const PATHS = ["pc", "server"];
 const MIN = 60_000;
 
@@ -12,10 +8,8 @@ export const newHealth = () => ({ m: {} });
 
 const entry = (h, url) => (h.m[url] ||= { pc: [], server: [], fail: { pc: 0, server: 0 }, until: { pc: 0, server: 0 } });
 
-/** Пауза после серии сбоев: 3 подряд — 5 минут, 6 и больше — 10. */
 export const cooldownMs = streak => (streak >= 6 ? 10 * MIN : streak >= 3 ? 5 * MIN : 0);
 
-/** Записать замер. ms === null — сбой. */
 export function record(h, url, path, ms, now = Date.now()) {
   if (!PATHS.includes(path) || !url) return;
   const e = entry(h, url);
@@ -30,7 +24,6 @@ export function record(h, url, path, ms, now = Date.now()) {
   }
 }
 
-/** Статистика по замерам: число, медиана успешных, доля потерь, последний замер. */
 export function statsOf(samples) {
   const n = samples.length;
   const oks = samples.filter(s => s.ms != null).map(s => s.ms).sort((a, b) => a - b);
@@ -41,7 +34,6 @@ export function statsOf(samples) {
 
 export const cooling = (h, url, path, now = Date.now()) => !!(h.m[url] && h.m[url].until[path] > now);
 
-/** Оценка пути: меньше — лучше; Infinity — не годится сейчас; null — нет данных. */
 export function pathScore(h, url, path, now = Date.now()) {
   const e = h.m[url];
   if (!e || !e[path].length) return null;
@@ -51,18 +43,15 @@ export function pathScore(h, url, path, now = Date.now()) {
   return s.median + s.loss * 3000;
 }
 
-/** Лучший путь для адреса: "pc" | "server" | null (данных нет — пробуйте по умолчанию: сначала pc). */
 export function bestPath(h, url, now = Date.now()) {
   const a = pathScore(h, url, "pc", now), b = pathScore(h, url, "server", now);
   if (a == null && b == null) return null;
   if (a == null) return b === Infinity ? null : "server";
   if (b == null) return a === Infinity ? null : "pc";
   if (a === Infinity && b === Infinity) return null;
-  // прямой путь не нагружает сервер: при почти равных значениях берём его
   return a <= b + 150 ? "pc" : "server";
 }
 
-/** Лучшая пара «зеркало + путь» среди зеркал: { url, path, score } или null. */
 export function pickMirror(h, mirrors, now = Date.now(), preferred = "") {
   let best = null;
   for (const url of mirrors) {
@@ -75,22 +64,17 @@ export function pickMirror(h, mirrors, now = Date.now(), preferred = "") {
   return best;
 }
 
-/**
- * Нужно ли переключить зеркало: текущее на паузе/не отвечает, либо медленное (>1,5 с),
- * а другое как минимум вдвое быстрее. Возвращает адрес нового зеркала или null.
- */
 export function shouldSwitch(h, current, mirrors, now = Date.now()) {
   const best = pickMirror(h, mirrors.filter(u => u !== current), now);
   if (!best) return null;
   const known = PATHS.map(p => pathScore(h, current, p, now)).filter(x => x != null);
-  if (!known.length) return null;                    // про текущее ничего не знаем — не трогаем
+  if (!known.length) return null;
   const cur = Math.min(...known);
   if (!Number.isFinite(cur)) return best.url;
   if (cur > SLOW_MS && best.score < cur / 2) return best.url;
   return null;
 }
 
-/** Точки ломаной (мини-график) для SVG: «x,y x,y …»; сбой рисуется на дне. */
 export function sparkPoints(samples, w = 70, hgt = 22) {
   if (!samples.length) return "";
   const vals = samples.map(s => (s.ms == null ? null : s.ms));
@@ -99,7 +83,6 @@ export function sparkPoints(samples, w = 70, hgt = 22) {
   return vals.map((v, i) => `${(i * step).toFixed(1)},${(v == null ? hgt - 2 : 2 + (1 - Math.min(v, max) / max) * (hgt - 6)).toFixed(1)}`).join(" ");
 }
 
-/** Класс статуса по замерам пути: ok | slow | bad | idle. */
 export function levelOf(samples, coolingNow = false) {
   if (!samples.length) return "idle";
   const s = statsOf(samples);
@@ -108,7 +91,6 @@ export function levelOf(samples, coolingNow = false) {
   return "ok";
 }
 
-/** Сохраняемое представление: без старых и без лишнего. */
 export function serialize(h, now = Date.now(), maxAgeMs = 3 * 24 * 60 * MIN) {
   const m = {};
   for (const [url, e] of Object.entries(h.m)) {
@@ -134,9 +116,7 @@ export function deserialize(raw) {
   return h;
 }
 
-// ---------- 3.0: понятные подписи и журнал событий ----------
 
-/** «только что», «12 с назад», «3 мин назад», «2 ч назад» — возраст замера. */
 export function ageText(now, t) {
   if (!t) return "ещё не было";
   const s = Math.max(0, Math.round((now - t) / 1000));
@@ -147,22 +127,18 @@ export function ageText(now, t) {
   return `${Math.floor(s / 86400)} дн назад`;
 }
 
-/** «0,5 с» или «160 мс» — длительность. */
 export function durText(ms) {
   if (ms == null) return "—";
   return ms >= 1000 ? `${(ms / 1000).toFixed(1).replace(".", ",")} с` : `${Math.round(ms)} мс`;
 }
 
 export const ACT_MAX = 80;
-/** Добавить событие в начало журнала (новые сверху), журнал ограничен. */
 export function pushActivity(list, ev, max = ACT_MAX) {
   list.unshift(ev);
   if (list.length > max) list.length = max;
   return list;
 }
 
-/** Фильтр журнала: all | ping | load | switch. */
 export const filterActivity = (list, kind) => (kind === "all" || !kind ? list : list.filter(e => e.kind === kind));
 
-/** Через сколько до следующей плановой проверки активного зеркала (мс), 0 — пора. */
 export const nextCheckIn = (now, lastAt, everyMs = 5 * 60_000) => (lastAt ? Math.max(0, lastAt + everyMs - now) : 0);

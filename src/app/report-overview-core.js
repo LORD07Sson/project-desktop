@@ -1,6 +1,3 @@
-// Показатели карточки отчёта («Прогресс / Срок / Озвучка / Материалы») и разбор файлов.
-// Чистые функции без DOM и без обращений к состоянию — права и данные приходят аргументами, чтобы всё это
-// можно было проверить в Node (scripts/overview-test.mjs). Разметку из результата собирает report-detail.js.
 import { AUDIO_RE } from "./media-formats.js";
 
 export const VIDEO_NAME_RE = /\.(mkv|mp4|mov|avi|webm|m4v|ts)$/i;
@@ -11,7 +8,6 @@ export const isVideoFile = f => f.file_type === "video" || VIDEO_NAME_RE.test(f.
 const isAudioFile = f => AUDIO_RE.test(f.file_type || "") || AUDIO_RE.test(f.file_name || "");
 const isSubsFile = f => SUBS_RE.test(f.file_name || "");
 
-// Что лежит в файлах отчёта: флаги для этапов производства и счётчики для плашки «Материалы».
 export function classifyFiles(list) {
   const files = list || [];
   const hasFinal = files.some(isFinalFile);
@@ -34,16 +30,12 @@ export function pluralFiles(n) {
   return "файлов";
 }
 
-// Доля сдавших в пайплайне: этап считается сданным, когда пройден (done) или участник уже отметил сдачу.
 export function pipelineCounts(pipeline) {
   const pipe = pipeline || [];
   const done = pipe.filter(s => s.done || s.submitted_at).length;
   return { done, total: pipe.length };
 }
 
-// Общий прогресс — четыре этапа поровну: видео, озвучка, финал, выпуск. Озвучка идёт долей сдавших
-// (или целиком, если пайплайна нет, но звук/субтитры уже лежат), выпуск считается состоявшимся при статусе
-// «Готово» (completed): отдельной отметки о посте в карточке нет.
 const STAGE_NAMES = ["видео", "озвучка", "финал", "выпуск"];
 
 export function overallProgress({ files, pipeline, status }) {
@@ -52,15 +44,11 @@ export function overallProgress({ files, pipeline, status }) {
   const voice = total ? done / total : (c.hasAudio || c.hasSubs ? 1 : 0);
   const stages = [c.hasVideo ? 1 : 0, voice, c.hasFinal ? 1 : 0, status === "completed" ? 1 : 0];
   const sum = stages.reduce((a, b) => a + b, 0);
-  // Текущий этап — первый незакрытый: «этап 2 из 4 · озвучка» не спорит с процентом, в отличие от «0 из 4 пройдено» при 11%.
   const cur = stages.findIndex(x => x < 1);
   return { percent: Math.round(sum / stages.length * 100), passed: stages.filter(x => x >= 1).length, total: stages.length,
     current: cur === -1 ? null : { n: cur + 1, name: STAGE_NAMES[cur] } };
 }
 
-// Срок: слово («просрочено 2 дн.», «сегодня», «через 3 дн.»), дата с временем по МСК и тон для цвета.
-// Те же правила, что в списке отчётов (deadlineCellHtml), но без разметки. overdue приходит готовым:
-// у отчёта бывает личная просрочка участника (isOverdue в utils.js).
 export function deadlineKpi(deadline, { status = "", overdue = false, now = new Date() } = {}) {
   if (!deadline) return { label: "без срока", date: "", tone: "none" };
   const s = String(deadline);
@@ -74,7 +62,6 @@ export function deadlineKpi(deadline, { status = "", overdue = false, now = new 
   const today = Date.parse(`${part("year")}-${part("month")}-${part("day")}T00:00:00Z`);
   const days = Math.round((Date.parse(`${dateKey}T00:00:00Z`) - today) / 86400000);
   const dueAt = time ? Date.parse(`${dateKey}T${time[1]}:00+03:00`) : Date.parse(`${dateKey}T23:59:59+03:00`);
-  // Срок без времени — календарными днями (как список, Доска, Календарь), со временем — полными сутками.
   const lateDays = time ? Math.floor((now.getTime() - dueAt) / 86400000) : -days;
   if (overdue) return { label: lateDays > 0 ? `просрочено ${lateDays} дн.` : "просрочено", date, tone: "bad" };
   if (days === 0) return { label: "сегодня", date, tone: "soon" };
@@ -82,13 +69,11 @@ export function deadlineKpi(deadline, { status = "", overdue = false, now = new 
   return { label: `через ${days} дн.`, date, tone: days <= 3 ? "soon" : "ok" };
 }
 
-// Четыре плашки полосы показателей. nameOf(entry) — как показывать участника (имя, а не ник).
 export function overviewKpis({ files, pipeline, status, deadline, overdue = false, now = new Date(), nameOf = s => s.user_name || "" }) {
   const c = classifyFiles(files);
   const { done, total } = pipelineCounts(pipeline);
   const prog = overallProgress({ files, pipeline, status });
   const due = deadlineKpi(deadline, { status, overdue, now });
-  // Один человек на двух ролях — одно имя в «ждём».
   const waiting = [...new Set((pipeline || []).filter(s => !(s.done || s.submitted_at)).map(nameOf).filter(Boolean))];
   const voiceSub = !total ? "пайплайн не задан"
     : waiting.length ? `ждём: ${waiting.slice(0, 4).join(", ")}${waiting.length > 4 ? ` и ещё ${waiting.length - 4}` : ""}` : "все сдали";

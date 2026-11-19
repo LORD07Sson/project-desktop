@@ -1,8 +1,3 @@
-// MIDI-контроллер для плеера: любая клавиатура или пэд-контроллер
-// управляет паузой, перемоткой и громкостью дорожки. Включается в
-// Настройки → Поведение. Раскладка и разбор — midi-core.js; сюда
-// относится только подключение к Web MIDI и рассылка команд плееру
-// событием project-transport (его слушает player.js).
 
 import { midiToCommand } from "./midi-core.js";
 import { toast } from "./api.js";
@@ -27,7 +22,7 @@ function bindAll() {
 
 export async function setMidiEnabled(on) {
   if (!on) {
-    try { localStorage.setItem(KEY, "0"); } catch (_) { /* не запомнится */ }
+    try { localStorage.setItem(KEY, "0"); } catch (_) { }
     if (access) access.inputs.forEach(input => { input.onmidimessage = null; });
     return true;
   }
@@ -36,7 +31,7 @@ export async function setMidiEnabled(on) {
     access = access || await navigator.requestMIDIAccess();
     access.onstatechange = bindAll;
     bindAll();
-    try { localStorage.setItem(KEY, "1"); } catch (_) { /* не запомнится */ }
+    try { localStorage.setItem(KEY, "1"); } catch (_) { }
     const n = access.inputs.size;
     toast(n ? `MIDI включён: устройств ${n}.` : "MIDI включён, устройств пока не видно.", "success");
     return true;

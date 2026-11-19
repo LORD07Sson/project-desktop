@@ -1,15 +1,8 @@
 #!/usr/bin/env node
-// MCP-сервер для отладки Project Desktop «глазами»: подключается к настоящему окну программы
-// через отладочный порт WebView2 (CDP) и даёт ИИ-агенту скриншоты, список элементов, клики и ввод.
-// Без зависимостей: JSON-RPC по stdio + встроенный WebSocket Node 22+.
-//
-// Порт открывается ТОЛЬКО если программу запустили через scripts/debug-launch.ps1 (или вручную с
-// переменной WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222). Слушает только 127.0.0.1.
 
 const PORT = Number(process.env.PROJECT_DEBUG_PORT || 9222);
 const HOST = "127.0.0.1";
 
-// ---------- CDP ----------
 let ws = null;
 let wsTarget = null;
 let nextId = 1;
@@ -28,7 +21,7 @@ async function connect(targetIndex = 0) {
   const target = targets[targetIndex];
   if (!target) throw new Error(`Нет окна №${targetIndex}. Запущена ли программа через scripts/debug-launch.ps1?`);
   if (ws && ws.readyState === 1 && wsTarget === target.id) return;
-  if (ws) try { ws.close(); } catch (_) { /* уже закрыт */ }
+  if (ws) try { ws.close(); } catch (_) { }
   ws = new WebSocket(target.webSocketDebuggerUrl);
   wsTarget = target.id;
   await new Promise((resolve, reject) => {
@@ -65,12 +58,9 @@ async function connect(targetIndex = 0) {
   await cdp("Page.enable");
   await cdp("Log.enable").catch(() => {});
   await cdp("Network.enable", { maxPostDataSize: 2000 }).catch(() => {});
-  // Новое подключение — новый CDP-сеанс: перехват прошлого сеанса браузер уже снял.
   if (sandbox.on) await applySandbox();
 }
 
-// ---------- журнал сети ----------
-// Копится с момента подключения: метод, путь, статус, время, размер, ошибка. Тело ответа — по запросу.
 const netLog = new Map();
 const NET_MAX = 400;
 function onNetwork(method, p) {
@@ -104,7 +94,6 @@ async function evaluate(expression) {
   return r.result.value;
 }
 
-// ---------- действия ----------
 const SNAPSHOT_FN = `function (root, maxText) {
   const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
     return r.width > 2 && r.height > 2 && s.visibility !== "hidden" && s.display !== "none" && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; };
@@ -160,7 +149,6 @@ const RECT_FN = `function (selector, pad) {
   return { x: Math.max(0, r.x - pad), y: Math.max(0, r.y - pad), width: r.width + pad * 2, height: r.height + pad * 2, scale: 1 };
 }`;
 
-// Значения ref/selector/text передаются в страницу КАК ДАННЫЕ (аргументы callFunctionOn), а не вставляются в текст кода.
 async function callInPage(fnSource, ...args) {
   const g = await cdp("Runtime.evaluate", { expression: "globalThis" });
   const r = await cdp("Runtime.callFunctionOn", {
@@ -209,11 +197,6 @@ async function press(key, modifiers = 0) {
   await cdp("Input.dispatchKeyEvent", { type: "keyUp", ...base });
 }
 
-// ---------- песочница: подмена ответов API ----------
-// Перехват идёт через CDP Fetch в этом же WebSocket-сеансе. Закрылся сеанс (агент отключился,
-// сервер упал) — браузер сам снимает перехват, программа снова ходит на сервер как обычно.
-// Пока песочница включена, НИ ОДИН изменяющий запрос (POST/PUT/PATCH/DELETE) не уходит на сервер:
-// он получает выдуманный ответ {ok:true} и попадает в журнал writes.
 const sandbox = { on: false, role: "as-is", perms: null, mocks: [], writes: [], bannerId: null, nextMock: 1 };
 const WRITES_MAX = 100;
 
@@ -232,7 +215,6 @@ const BANNER_JS = role => `(() => {
   document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", mount) : mount();
 })()`;
 
-// Роль: правим ответы, по которым программа решает, что показывать (auth.js, settings.js).
 const ROLES = {
   "as-is": null,
   owner: { whoami: { is_admin: true }, perms: { is_owner: true } },
@@ -264,7 +246,6 @@ function fulfillJson(requestId, request, data, status = 200) {
 }
 
 function findMock(method, path) {
-  // Последний добавленный — главный: так можно сузить общий мок частным.
   for (let i = sandbox.mocks.length - 1; i >= 0; i--) {
     const m = sandbox.mocks[i];
     if ((m.method === "*" || m.method === method) && m.re.test(path)) return m;
@@ -278,7 +259,6 @@ function roleTransform(path) {
   const p = path.split("?")[0];
   const patch = p === "/whoami" ? r.whoami : p === "/me/permissions" ? r.perms : p === "/me" ? r.me : null;
   if (!patch) return null;
-  // Права конкретной роли студии (например даббера из матрицы) — поверх роли «member».
   if (p === "/me/permissions" && Array.isArray(sandbox.perms)) return data => ({ ...data, ...patch, permissions: sandbox.perms });
   return data => ({ ...data, ...patch });
 }
@@ -289,12 +269,10 @@ async function onRequestPaused(ev) {
   if (path == null) return cdp("Fetch.continueRequest", { requestId });
   const method = request.method;
 
-  // Стадия ответа: настоящий ответ сервера пришёл, применяем роль и transform-моки.
   if (ev.responseStatusCode != null) {
     const raw = await cdp("Fetch.getResponseBody", { requestId });
     const text = raw.base64Encoded ? Buffer.from(raw.body, "base64").toString("utf8") : raw.body;
     let data;
-    // Ошибки сервера (401, 404, 500) отдаём как есть: подмена нужна для данных, а не для текста ошибки.
     if (ev.responseStatusCode >= 400) return cdp("Fetch.continueRequest", { requestId });
     try { data = JSON.parse(text); } catch (_) { return cdp("Fetch.continueRequest", { requestId }); }
     const role = roleTransform(path);
@@ -312,8 +290,6 @@ async function onRequestPaused(ev) {
     m.hits++;
     return fulfillJson(requestId, request, m.json, m.status);
   }
-  // Служебные POST без изменения данных (выдача медиатокена, «я в сети», замер связи) пропускаем:
-  // без медиатокена в песочнице не грузились картинки.
   if (method === "POST" && /^\/(media\/token|presence\/ping|telemetry\/net)/.test(path)) {
     return cdp("Fetch.continueRequest", { requestId });
   }
@@ -548,7 +524,6 @@ const TOOLS = {
       if (args.json !== undefined) m.json = args.json;
       else {
         const body = args.transform.trim();
-        // Принимаем и функцию целиком, и просто её тело.
         m.transform = /^(\(|async\b|function\b|[\w$]+\s*=>)/.test(body) ? new Function(`return (${body});`)() : new Function("data", "path", body);
       }
       sandbox.mocks.push(m);
@@ -590,7 +565,6 @@ const TOOLS = {
   },
 };
 
-// ---------- MCP по stdio ----------
 function send(obj) { process.stdout.write(JSON.stringify(obj) + "\n"); }
 
 async function handle(msg) {
@@ -617,7 +591,6 @@ async function handle(msg) {
   if (id != null) send({ jsonrpc: "2.0", id, error: { code: -32601, message: `Метод ${method} не поддерживается` } });
 }
 
-// Агент отключился штатно — снимаем плашку песочницы (перехват браузер снимет сам вместе с сеансом).
 process.stdin.on("end", async () => {
   if (sandbox.on && ws) await dropSandbox().catch(() => {});
   process.exit(0);

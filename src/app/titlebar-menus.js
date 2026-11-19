@@ -1,11 +1,3 @@
-// Меню шапки и веер разделов.
-// - «Инструменты» (QC, ffmpeg, тема, обновить, клавиши, настройки) и профиль
-//   (аватар → «Мой профиль» / «Выйти») — выпадающие меню справа в шапке.
-// - Разделы — веер (#tabstrip.fan): круглая кнопка в правом нижнем углу со
-//   значком и цветом текущего раздела; по клику пункты разлетаются вверх по
-//   дуге, выбор втягивает веер в пункт, и кнопка съезжает обратно в угол.
-// Пункты — те же .tab-btn[data-tab], #open-qc, #refresh-btn, #logout-btn и т.д.,
-// их обработчики живут в своих модулях; здесь только открыть/закрыть и клавиатура.
 
 import { state } from "./state.js";
 import { $, $all, esc } from "./utils.js";
@@ -13,10 +5,8 @@ import { loadAvatars } from "./profile.js";
 
 const reducedMotion = () => document.documentElement.dataset.motion === "off"
   || !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-// Пункт виден, если его не убрали правами: hidden, [data-perm-hidden] или CSS роли «участник».
 const isShown = el => !el.hidden && globalThis.getComputedStyle?.(el)?.display !== "none";
 
-// ---------- выпадающие меню шапки ----------
 const MENUS = $all(".tb-menu-wrap").map(wrap => ({
   wrap,
   btn: wrap.querySelector(":scope > button[aria-haspopup]"),
@@ -41,7 +31,6 @@ MENUS.forEach(m => {
     btn.setAttribute("aria-expanded", String(!menu.hidden));
     if (!menu.hidden) menu.querySelector(".tb-mi")?.focus({ preventScroll: true });
   });
-  // Пункт выбран — меню закрываем; сам клик дальше обработает модуль кнопки.
   menu.addEventListener("click", e => { if (e.target.closest(".tb-mi")) closeMenus(); });
   menu.addEventListener("keydown", e => {
     const items = [...menu.querySelectorAll(".tb-mi:not([disabled])")].filter(isShown);
@@ -55,28 +44,16 @@ MENUS.forEach(m => {
 document.addEventListener("click", e => { if (!e.target.closest(".tb-menu-wrap")) closeMenus(); });
 window.addEventListener("blur", () => { closeMenus(); closeFan(true); });
 
-// ---------- веер разделов ----------
-// Тайминги сняты покадрово с референса (60 к/с, шаг 16,7 мс; таблица — в коммите
-// и в menubar.css):
-// - открытие: текущий раздел вылетает из кнопки сразу, остальные возникают уже
-//   на ~45% пути; все приходят на место вместе (~150 мс), перелёт ~8% к ~200 мс,
-//   покой к ~370 мс; задержки между пунктами нет;
-// - наведение: весь фон перетекает в цвет пункта под курсором за ~175 мс;
-// - выбор: остальные ускоряются к кнопке и гаснут к ~90 мс, выбранный пружиной
-//   падает в кнопку (у кнопки ~150 мс, покой ~370 мс) и сам становится кнопкой.
 const fan = $("#tabstrip.fan");
 const fanBtn = $("#fan-btn");
 const fanMenu = $("#fan-menu");
 const scrim = $("#fan-scrim");
-const STEP = 40;        // шаг между пунктами, px (сжимается, если окно низкое)
-const GAP = 10;         // дополнительный зазор между группами разделов
-// Дуга — окружность с центром СПРАВА (как в референсе): середина веера левее
-// всего, низ чуть левее кнопки, верх возвращается к ней; наклон подписи — угол
-// радиуса: снизу −6°, сверху +15°.
+const STEP = 40;
+const GAP = 10;
 const TH_BOT = -6 * Math.PI / 180;
 const TH_TOP = 15 * Math.PI / 180;
-const PICK_MS = 420;    // выбранный пункт успокоился у кнопки (~370 мс) + запас
-const CLOSE_MS = 140;   // остальные пункты погасли
+const PICK_MS = 420;
+const CLOSE_MS = 140;
 let fanTimer = 0;
 
 const fanItems = () => fanMenu ? [...fanMenu.querySelectorAll(".fan-it")].filter(isShown) : [];
@@ -105,10 +82,8 @@ function layoutFan() {
   });
 }
 
-// Цвет фона: под курсором/фокусом — цвет пункта, иначе — текущего раздела.
 const setTint = color => fan.style.setProperty("--fan-c", color);
 
-// Кнопка повторяет значок и цвет активного раздела.
 function syncFanButton() {
   if (!fanBtn) return;
   const cur = fanMenu.querySelector(".tab-btn.active");
@@ -137,7 +112,6 @@ function openFan(focus) {
   fanMenu.hidden = false;
   scrim.hidden = false;
   fanBtn.setAttribute("aria-expanded", "true");
-  // Стартовое («сжатое») состояние должно отрисоваться, иначе переходам не из чего идти.
   void fanMenu.offsetWidth;
   fan.classList.add("fan-open");
   const items = fanItems();
@@ -146,13 +120,11 @@ function openFan(focus) {
   target?.focus({ preventScroll: true });
 }
 
-// picked — выбранный пункт: он падает в кнопку; без него всё гаснет в кнопке.
 function closeFan(instant, picked) {
   if (!fan || fanMenu.hidden) return;
   clearTimeout(fanTimer);
   fanBtn.setAttribute("aria-expanded", "false");
   const done = () => {
-    // Кнопка уже проявилась под выбранным пунктом — без повторного растворения.
     fanBtn.style.transition = "none";
     setTimeout(() => { fanBtn.style.transition = ""; }, 50);
     resetFan();
@@ -169,8 +141,6 @@ function closeFan(instant, picked) {
 }
 
 if (fan && fanBtn && fanMenu) {
-  // В шапке у предков бывают backdrop-filter/transform — тогда position: fixed считался бы от шапки.
-  // Кнопку держим прямо в <body>; прячется она вместе с шапкой разделов до входа (menubar.css).
   document.body.appendChild(fan);
   fanBtn.addEventListener("click", e => {
     e.stopPropagation();
@@ -180,11 +150,6 @@ if (fan && fanBtn && fanMenu) {
     if (e.key === "ArrowUp") { e.preventDefault(); openFan(); }
   });
   scrim.addEventListener("click", () => { closeFan(); fanBtn.focus({ preventScroll: true }); });
-  // Выбор пункта. Переключение раздела (tabs.js) синхронно рисует его целиком — это
-  // десятки миллисекунд главного потока, и анимация стартовала бы с опозданием
-  // (замер: ~150 мс). Поэтому сначала запускаем схлопывание, а сам клик пункта
-  // (переключение раздела, «Настройки») повторяем через 40 мс — дальше анимация
-  // transform/opacity идёт на композиторе и тяжёлая отрисовка её не сбивает.
   let replaying = false;
   fanMenu.addEventListener("click", e => {
     const it = e.target.closest(".fan-it");
@@ -195,10 +160,8 @@ if (fan && fanBtn && fanMenu) {
     fanBtn.focus({ preventScroll: true });
     setTimeout(() => { replaying = true; try { it.click(); } finally { replaying = false; } }, 40);
   }, true);
-  // Пункт под курсором/фокусом — фон перетекает в его цвет (как в референсе).
   const tintFrom = it => { if (it && fanOpen()) setTint(it.style.getPropertyValue("--c")); };
   fanMenu.addEventListener("focusin", e => tintFrom(e.target.closest(".fan-it")));
-  // Подсветка следует за мышью, а стрелки продолжают с того же пункта.
   fanMenu.addEventListener("pointermove", e => {
     const it = e.target.closest(".fan-it");
     if (!it) return;
@@ -209,14 +172,12 @@ if (fan && fanBtn && fanMenu) {
     const items = fanItems();
     const i = items.indexOf(document.activeElement);
     const go = j => { e.preventDefault(); items[(j + items.length) % items.length]?.focus(); };
-    // Веер растёт вверх: ↑ — следующий (выше), ↓ — предыдущий (ниже).
     if (e.key === "ArrowUp") return go(i + 1);
     if (e.key === "ArrowDown") return go(i < 0 ? 0 : i - 1);
     if (e.key === "Home") return go(0);
     if (e.key === "End") return go(-1);
     if (e.key === "Escape") { e.stopPropagation(); closeFan(); fanBtn.focus({ preventScroll: true }); return; }
     if (e.key === "Tab") { closeFan(true); fanBtn.focus({ preventScroll: true }); e.preventDefault(); return; }
-    // Первая буква — к следующему пункту на эту букву.
     if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && /\S/.test(e.key)) {
       const k = e.key.toLowerCase();
       for (let s = 1; s <= items.length; s++) {
@@ -225,7 +186,6 @@ if (fan && fanBtn && fanMenu) {
       }
     }
   });
-  // F10 — открыть веер с клавиатуры (как вызов меню в настольных программах).
   document.addEventListener("keydown", e => {
     if (e.key !== "F10" || e.ctrlKey || e.altKey || e.metaKey || $("#titlebar-apps")?.hidden) return;
     e.preventDefault();
@@ -233,12 +193,10 @@ if (fan && fanBtn && fanMenu) {
   });
   window.addEventListener("resize", () => { if (fanOpen()) layoutFan(); });
 
-  // Подсказка Ctrl+N у пункта — по тому же порядку .tab-btn, что и сочетание в shortcuts-help.js.
   $all(".tab-btn").forEach((b, i) => {
     if (i < 9 && b.closest("#tabstrip")) b.insertAdjacentHTML("beforeend", `<kbd class="fan-kbd" aria-hidden="true">Ctrl ${i + 1}</kbd>`);
   });
 
-  // Активный раздел, бейджи и права меняются атрибутами — следим и обновляем кнопку.
   let queued = false;
   const queue = () => { if (!queued) { queued = true; setTimeout(() => { queued = false; syncFanButton(); if (fanOpen()) layoutFan(); }); } };
   new MutationObserver(queue).observe(fanMenu, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "class", "data-perm-hidden", "data-perm-show"] });
@@ -250,11 +208,8 @@ $("#me-profile")?.addEventListener("click", () => {
   import("./tabs.js").then(m => m.switchTab("profile"));
 });
 
-// «Настройки» в веере — та же кнопка, что в «Инструментах».
 $("#more-settings")?.addEventListener("click", () => $("#open-settings")?.click());
 
-// Аватар и имя в меню профиля. Зовётся из setDisplayName (auth.js):
-// имя приходит не сразу — после /me.
 export function setTitlebarIdentity(name) {
   const av = $("#me-avatar");
   const head = $("#me-head");

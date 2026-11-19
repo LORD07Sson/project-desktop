@@ -1,19 +1,8 @@
 name: Build desktop client (alpha channel)
 
-# Отдельно от build.yml — тот собирает только на изменение VERSION
-# (настоящий релиз), это же собирает НА КАЖДЫЙ push в main, без
-# ожидания "настоящего" релиза (см. запрос: "чтобы не постоянно
-# приходилось обновлять релиз" для проверки свежих фич). Публикуется
-# отдельным Velopack-каналом ("alpha", см. docs.velopack.io/packaging/
-# channels). Канал зашит в тип сборки: alpha-клиент читает только
-# releases.alpha.json, стабильный клиент — только releases.win.json.
-#
-# Один rolling-релиз (тег alpha-latest), не новый релиз на каждый
-# push — старый alpha-latest удаляется перед публикацией нового.
 on:
   push:
     branches: [main]
-    # Правки только документации не требуют новой сборки клиента.
     paths-ignore:
       - "**.md"
       - "docs/**"
@@ -24,67 +13,27 @@ jobs:
     permissions:
       contents: write
     runs-on: windows-latest
-    # Без этого два быстрых пуша подряд (обычное дело при активной
-    # разработке — см. историю дня, когда несколько мержей ушли за
-    # минуты) гоняли бы два параллельных запуска, оба одновременно
-    # трогающих один и тот же rolling-релиз alpha-latest (удаление +
-    # публикация) — реальная гонка, а не гипотетическая. Не отменяем
-    # уже идущий запуск (cancel-in-progress: false) — обрываться
-    # посреди публикации релиза хуже, чем просто выстроиться в очередь
-    # и подождать; см. тот же приём в MHSanaei/3x-ui release.yml.
-    # Общая группа с build.yml: push, меняющий VERSION, запускает оба
-    # workflow сразу, и оба публикуют релизы через vpk в один и тот же
-    # репозиторий. Не отменяем уже идущий запуск — обрываться посреди
-    # публикации хуже, чем выстроиться в очередь и подождать; см. тот же
-    # приём в MHSanaei/3x-ui release.yml.
     concurrency:
-      # Своя очередь: общая с стабильной вытесняла ожидающий запуск —
-      # GitHub держит в группе только один pending. Релизы и фиды разные
-      # (vX.Y.Z/releases.win.json и alpha-latest/releases.alpha.json),
-      # так что параллельно они друг другу не мешают.
       group: velopack-alpha
       cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v7
 
-      # Rust stable и .NET 8 SDK уже стоят на windows-latest — отдельные шаги установки съедали ~45 с.
-
-      # Кэш скомпилированных зависимостей (tauri, windows-rs, tokio…) —
-      # без него каждая альфа собирала их с нуля, это основная часть
-      # времени сборки. Тот же action и версия, что в checks.yml.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      # vpk ставится dotnet tool'ом; кэш избавляет от скачивания на каждой сборке.
       - uses: actions/cache@v6
         with:
           path: ~/.dotnet/tools
           key: vpk-${{ runner.os }}-v1
 
-      # Node 24 — активная LTS (поддержка до апреля 2028). На 20 CI стоять
-      # больше не может: линия EOL с апреля 2026, а devDependency jsdom
-      # (его использует scripts/verify-modules.mjs) с 30.x требует
-      # ^22.22.2 || ^24.15.0 || >=26.
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
 
-      # Версия альфа-сборки — СЛЕДУЮЩАЯ после VERSION версия (патч + 1) +
-      # "-alpha.<номер запуска>+<короткий коммит>". Именно следующая: по
-      # SemVer "0.9.4-alpha.N" МЕНЬШЕ "0.9.4", и после выхода стабильной 0.9.4
-      # альфа-канал не видел ни одной новой сборки (откат версии клиент
-      # разрешает только при переходе с альфы на stable). "0.9.5-alpha.N"
-      # новее текущей стабильной, а будущая стабильная 0.9.5 — новее её.
-      # Хвост "-alpha.N" — то, по чему Velopack реально сравнивает
-      # версии (номер запуска монотонно растёт, поэтому каждая альфа-сборка
-      # гарантированно "новее" предыдущей даже если VERSION между ними не
-      # менялся); "+sha" — SemVer build-metadata, в сравнение версий не
-      # участвует (SemVer это буквально не учитывает), только для
-      # отображения "текущий/последний коммит" в Настройках (settings.js
-      # достаёт его из APP_VERSION regex'ом по "+").
       - name: Версия альфа-сборки
         shell: bash
         run: |
@@ -93,8 +42,6 @@ jobs:
           next="$(awk -F. '{printf "%d.%d.%d", $1, $2, $3 + 1}' VERSION)"
           echo "PKG_VERSION=$next-alpha.${{ github.run_number }}+$short_sha" >> "$GITHUB_ENV"
 
-      # APP_VERSION в интерфейсе подставляет Vite из PKG_VERSION (см.
-      # vite.config.js) — sed по src/app/settings.js больше не нужен.
       - name: Подставить версию в tauri.conf.json/Cargo.toml
         shell: bash
         run: |
@@ -109,9 +56,6 @@ jobs:
           sed -i.bak -E 's/^version = \"[0-9.]+\"/version = \"${{ env.PKG_VERSION }}\"/' src-tauri/Cargo.toml
           rm -f src-tauri/Cargo.toml.bak
 
-      # Фронтенд теперь собирается Vite (src/ -> dist/) — обязательно
-      # ПОСЛЕ подстановки версии выше, см. build.yml за тем же самым.
-      # Lint и тесты гоняет checks.yml параллельно (на push в main тоже) — здесь только сборка.
       - name: npm ci && vite build
         shell: bash
         run: |
@@ -126,15 +70,11 @@ jobs:
             src-tauri/binaries/ffprobe.exe
           key: ffmpeg-N-127271-32b374c9
 
-      # FFmpeg SHA синхронизирован с build.yml после проверки runner checksum.\n      # Тот же закреплённый ffmpeg.exe, что и в build.yml — держать в
-      # синхроне руками при обновлении URL/SHA256 там.
       - name: Скачать и проверить статичный ffmpeg.exe
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -e
-          # Зеркало в собственном релизе репозитория: BtbN хранит автосборки около двух недель, закреплённый у них адрес давал 404.
-          # Файл не менялся, сумма записана здесь и сверяется ниже. Обновлять: новый релиз tools-ffmpeg-*, URL и SHA256 — в build.yml и build-alpha.yml.
           url="https://github.com/LORD07Sson/project-desktop/releases/download/tools-ffmpeg-N-127271/ffmpeg-N-127271-gba987fe24d-win64-lgpl.zip"
           expected_sha256="32b374c9831ae5640e33977baa4cf04a59704f616a0c3743654697fb3c7f26de"
           curl -fL --retry 5 --retry-all-errors --retry-delay 2 --max-time 300 -o ffmpeg.zip "$url"
@@ -155,10 +95,6 @@ jobs:
         shell: bash
         env:
           PROJECT_UPDATE_CHANNEL: alpha
-          # Альфа — тестовый канал: без LTO и с параллельной кодогенерацией
-          # собирается в разы быстрее, бинарник чуть крупнее и на пару
-          # процентов медленнее. Стабильная сборка (build.yml) профиль из
-          # Cargo.toml не меняет — там LTO и codegen-units = 1.
           CARGO_PROFILE_RELEASE_LTO: "off"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
         run: cargo build --release --manifest-path src-tauri/Cargo.toml --features custom-protocol
@@ -185,24 +121,6 @@ jobs:
             --channel alpha \
             --outputDir release_output
 
-      # Тег alpha-latest — один и тот же на каждый запуск (rolling
-      # release), поэтому старый релиз под этим тегом надо снести перед
-      # публикацией нового: vpk отказывается заливать в уже занятый тег.
-      #
-      # Снос и публикация — ОДНИМ шагом и внутри одной retry-попытки.
-      # Раньше это были два шага с отдельными retry, и оно разъезжалось
-      # так: vpk заливает ассеты в черновик, падает на «Converting draft
-      # to full published release», а повторная попытка уже упирается в
-      # «There is already an existing release tagged 'alpha-latest'» —
-      # свой же недоделанный релиз. Дальше канал оставался пустым, пока
-      # кто-нибудь не запушит в main снова (у нас так и вышло: альфа
-      # стояла мёртвой три часа). Теперь каждая попытка начинается с
-      # уборки за предыдущей.
-      #
-      # Уборка — через API, а не `gh release delete`: искать надо по тегу
-      # ВСЕ релизы, включая черновики (именно черновик и остаётся после
-      # неудачной публикации), а `gh release delete` на них срабатывает
-      # не всегда.
       - name: Опубликовать альфа-релиз на GitHub
         shell: bash
         env:
@@ -218,7 +136,6 @@ jobs:
               echo "Удаляю релиз alpha-latest (id=$id)"
               gh api -X DELETE "repos/$REPO/releases/$id"
             done
-            # Тег мог остаться от релиза, удалённого без --cleanup-tag.
             gh api -X DELETE "repos/$REPO/git/refs/tags/alpha-latest" >/dev/null 2>&1 || true
           }
 
@@ -242,11 +159,6 @@ jobs:
             sleep $((i * 5))
           done
 
-      # Отдельная проверка, что релиз реально виден пользователям.
-      # vpk умеет завершиться с кодом 0, оставив релиз ЧЕРНОВИКОМ, —
-      # именно так альфа-канал и умер в прошлый раз: сборка зелёная,
-      # ассеты на месте, но черновик не отдаётся по публичным ссылкам, и
-      # клиент по прямой ссылке не видит вообще ничего.
       - name: Проверить, что альфа-релиз опубликован
         shell: bash
         env:
@@ -254,10 +166,6 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -e
-          # Под тегом alpha-latest может лежать несколько релизов: прерванный параллельный запуск
-          # оставляет черновик рядом с опубликованным. Опубликовать такой черновик GitHub не даст
-          # (422 already_exists), поэтому: есть опубликованный — лишние черновики удаляем;
-          # опубликованного нет — публикуем самый свежий черновик.
           rels=$(gh api "repos/$REPO/releases" --paginate --jq '.[] | select(.tag_name=="alpha-latest") | "\(.id) \(.draft)"')
           if [ -z "$rels" ]; then
             echo "::error::Релиза alpha-latest нет вообще"
@@ -276,8 +184,6 @@ jobs:
             gh api -X PATCH "repos/$REPO/releases/$id" -F draft=false -F prerelease=true
             for d in $(echo "$drafts" | tail -n +2); do gh api -X DELETE "repos/$REPO/releases/$d" || true; done
           fi
-          # Контрольный выстрел: фид должен скачиваться анонимно, ровно
-          # так за ним и приходит клиент.
           url="https://github.com/$REPO/releases/download/alpha-latest/releases.alpha.json"
           for i in 1 2 3; do
             if curl -fsSL -o feed_check.json "$url"; then

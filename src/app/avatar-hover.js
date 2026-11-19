@@ -1,18 +1,9 @@
-// Всплывающая карточка при наведении на любой аватар в приложении
-// (список, доска, тизер команды, топ-5 на «Обзоре») — краткий взгляд на
-// роль/загрузку коллеги без открытия целого профиля (openUserProfile —
-// заметно тяжелее, полноценный sheet, это только по клику). Все аватары
-// уже несут data-avatar-for (см. avatarHtml в profile.js), поэтому здесь
-// один делегированный обработчик на document, а не отдельный слушатель
-// на каждую аватарку — их на доске/в списке легко наберётся десятки.
 
 import { apiGet } from "./api.js";
 import { esc } from "./utils.js";
 
 const HOVER_DELAY_MS = 320;
 const HIDE_DELAY_MS = 120;
-// Данные профиля не меняются за секунды — держим в памяти на сессию,
-// чтобы повторное наведение на того же коллегу не било лишним запросом.
 const cache = new Map();
 
 let popoverEl = null;
@@ -64,20 +55,17 @@ async function loadAndShow(anchor, telegramId) {
       data = await apiGet(`/user/${telegramId}`);
       cache.set(telegramId, data);
     } catch (_) {
-      return; // необязательная подсказка — молча не показываем при ошибке сети
+      return;
     }
   }
-  if (currentId !== telegramId) return; // за время запроса курсор уже увели на другого
-  if (!anchor.isConnected) return; // список успели перерисовать — привязываться не к чему
+  if (currentId !== telegramId) return;
+  if (!anchor.isConnected) return;
   renderPopover(anchor, data);
 }
 
 document.addEventListener("mouseover", e => {
   const el = e.target.closest("[data-avatar-for]");
-  // .xl — большой аватар на самой странице открытого профиля: все эти
-  // данные там и так уже на экране целиком, подсказка ни к чему.
   if (!el || el.classList.contains("xl") || !el.dataset.avatarFor) return;
-  // Аватар в шапке открывает меню профиля — пока оно открыто, вторая карточка рядом только мешает.
   if (el.closest(".tb-menu-wrap")?.querySelector(".tb-menu:not([hidden])")) return;
   clearTimeout(hideTimer);
   if (currentId === el.dataset.avatarFor) return;
@@ -95,7 +83,6 @@ document.addEventListener("mouseout", e => {
   scheduleHide();
 });
 
-// Клик по аватару — уже действие (меню, профиль): подсказку убираем сразу, а не ждём ухода курсора.
 document.addEventListener("pointerdown", () => {
   clearTimeout(showTimer);
   clearTimeout(hideTimer);

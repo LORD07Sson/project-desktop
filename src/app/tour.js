@@ -1,14 +1,3 @@
-// Обучение: приветствие для новичка, подробные уроки по каждому разделу
-// и подсказка «Впервые здесь?» при первом входе в раздел.
-//
-// Урок — это шаги: подсвечиваем элемент интерфейса (всё вокруг
-// затемнено), рядом карточка с объяснением. Если элемента нет (раздел
-// пуст, роль не та) — карточка встаёт по центру, без подсветки.
-// Прогресс личный для каждого аккаунта и хранится в localStorage:
-// пройденные уроки, отказ от приветствия, отключённые подсказки.
-//
-// Настройки → «Обучение» (settings.js) — список всех уроков, повтор
-// любого из них и сброс.
 
 import { state } from "./state.js";
 import { esc } from "./utils.js";
@@ -16,14 +5,13 @@ import { dismissSheet } from "./api.js";
 import { openWatchMode, closeWatchMode } from "./watch.js";
 import mascotGif from "../assets/ayaya-club-ayaya.gif";
 
-// ---------- память ----------
 const memKey = () => `project_tour_${state.telegramId || "anon"}`;
 function readMem() {
   try { return { done: {}, seen: {}, hints: true, ...JSON.parse(localStorage.getItem(memKey()) || "{}") }; } catch (_) { return { done: {}, seen: {}, hints: true }; }
 }
 function writeMem(patch) {
   const m = { ...readMem(), ...patch };
-  try { localStorage.setItem(memKey(), JSON.stringify(m)); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(memKey(), JSON.stringify(m)); } catch (_) { }
   return m;
 }
 function markDone(id) { const m = readMem(); writeMem({ done: { ...m.done, [id]: Date.now() }, seen: { ...m.seen, [id]: 1 } }); }
@@ -31,10 +19,9 @@ function markSeen(id) { const m = readMem(); writeMem({ seen: { ...m.seen, [id]:
 export function tourHintsEnabled() { return readMem().hints !== false; }
 export function setTourHints(on) { writeMem({ hints: !!on }); }
 export function resetTourProgress() {
-  try { localStorage.removeItem(memKey()); } catch (_) { /* не критично */ }
+  try { localStorage.removeItem(memKey()); } catch (_) { }
 }
 
-// ---------- помощники для шагов ----------
 const wait = ms => new Promise(r => setTimeout(r, ms));
 async function waitFor(sel, timeout = 2500) {
   const t0 = Date.now();
@@ -52,15 +39,13 @@ function isVisible(el) {
   const cs = getComputedStyle(el);
   return cs.visibility !== "hidden" && cs.display !== "none";
 }
-// Шаг про раздел: сам пункт, если веер открыт, иначе кнопка веера в углу.
 const inBar = sel => [sel, "#fan-btn"];
 async function goTab(name) {
   const btn = document.querySelector(`.tab-btn[data-tab="${name}"]`);
-  // Пункты разделов живут в веере (закрытый веер — не «невидимый» раздел): проверяем права, а не размер.
   if (!btn || btn.hidden || getComputedStyle(btn).display === "none") return;
   if (!btn.classList.contains("active")) btn.click();
   await waitFor(`.tab-panel[data-panel="${name}"].active`);
-  await wait(450); // данные вкладки догружаются
+  await wait(450);
 }
 function closeOverlayWith(sel) {
   document.querySelectorAll(".overlay").forEach(o => { if (o.querySelector(sel)) dismissSheet(o); });
@@ -87,15 +72,9 @@ async function openAnyReport() {
   await waitFor(".overlay .rd-tabs", 3000);
 }
 const kbd = k => `<kbd>${k}</kbd>`;
-// Блок по его заголовку: порядок секций в карточке зависит от данных,
-// а nth-of-type считает и чужие div — надёжнее искать по тексту.
 const byHead = (sel, word) => () => [...document.querySelectorAll(sel)]
   .find(n => (n.textContent || "").trim().toLowerCase().startsWith(word.toLowerCase()));
 
-// ---------- уроки ----------
-// Шаг: { el: селектор | [селекторы — первый видимый], union: [селекторы —
-// подсветить их общую рамку], title, text: строка | (роль) => строка,
-// admin: только админам, member: только участникам, before: async () => {} }
 const TOURS = [
   {
     id: "intro", name: "Знакомство с приложением", icon: "👋", about: "Где что лежит: меню, разделы и кнопки в шапке",
@@ -329,8 +308,7 @@ export function availableTours() {
   }));
 }
 
-// ---------- движок ----------
-let T = null; // идущий урок
+let T = null;
 
 export async function startTour(id) {
   const tour = byId[id];
@@ -363,7 +341,7 @@ export async function startTour(id) {
   requestAnimationFrame(() => root.classList.add("on"));
   if (tour.setup) {
     root.classList.add("busy");
-    try { await tour.setup(); } catch (_) { /* покажем без подсветки */ }
+    try { await tour.setup(); } catch (_) { }
     root.classList.remove("busy");
   } else if (tour.tab) {
     await goTab(tour.tab);
@@ -378,7 +356,7 @@ async function go(i) {
   T.busy = true;
   const run = T;
   const step = T.steps[i];
-  try { if (step.before) await step.before(); } catch (_) { /* шаг всё равно покажем */ }
+  try { if (step.before) await step.before(); } catch (_) { }
   if (T !== run) return;
   T.i = i;
   let el = null, rect = null;
@@ -485,7 +463,7 @@ function endTour(completed) {
   if (completed) markDone(tour.id); else markSeen(tour.id);
   root.classList.remove("on");
   setTimeout(() => root.remove(), 260);
-  try { tour.cleanup?.(); } catch (_) { /* не критично */ }
+  try { tour.cleanup?.(); } catch (_) { }
   if (completed && tour.id === "intro") showDoneToast();
 }
 
@@ -507,7 +485,6 @@ function showDoneToast() {
   });
 }
 
-// ---------- приветствие ----------
 export function maybeWelcome() {
   if (!state.telegramId) return;
   const m = readMem();
@@ -554,7 +531,6 @@ export function showWelcome() {
   el.addEventListener("keydown", e => { if (e.key === "Escape") { e.stopPropagation(); decide("skipped"); } });
 }
 
-// ---------- «Впервые здесь?» ----------
 let hintEl = null;
 function hideHint() {
   if (!hintEl) return;
@@ -609,10 +585,7 @@ function hintSoon(id, delay = 900) {
   window.clearTimeout(hintTimer);
   hintTimer = window.setTimeout(() => maybeHint(id), delay);
 }
-// Вкладки: tabs.js шлёт событие при переключении (без импорта отсюда —
-// иначе циклическая зависимость tabs ↔ tour).
 document.addEventListener("project:tab", e => { hideHint(); hintSoon(e.detail); });
-// Кнопки шапки и карточка отчёта.
 document.addEventListener("click", e => {
   if (e.target.closest("#open-watch")) hintSoon("watch", 1800);
 }, true);
@@ -622,7 +595,6 @@ new MutationObserver(muts => {
   }
 }).observe(document.body, { childList: true });
 
-// Сменился пользователь — урок и подсказки от прошлого прячем.
 export function resetTourUi() {
   endTour(false);
   hideHint();

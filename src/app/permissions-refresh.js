@@ -1,5 +1,3 @@
-// Права матрицы могут измениться независимо от входа. Перечитываем их
-// при старте и при общем обновлении (F5 / кнопка «Обновить»).
 
 import { api, toast } from "./api.js";
 import { state } from "./state.js";
@@ -9,7 +7,6 @@ import { syncPreview } from "./role-preview.js";
 export async function refreshPermissions() {
   try {
     const r = await api("GET", "/me/permissions");
-    // Старый сервер не отдавал список — сохраняем прежнее поведение.
     state.perms = Array.isArray(r.permissions) ? new Set(r.permissions) : null;
     state.isOwner = !!r.is_owner;
     syncPreview(r.preview);
@@ -21,14 +18,10 @@ export async function refreshPermissions() {
     }
     return true;
   } catch (_) {
-    // При временном сбое оставляем последний успешно загруженный набор прав.
     return false;
   }
 }
 
-// Владелец меняет роли и матрицу прав, пока у человека открыта программа. Раз в минуту (и при
-// возврате в окно) перечитываем роль и права; изменилось — перерисовываем видимость и уходим с
-// вкладки, которая стала недоступна.
 const POLL_MS = 60_000;
 let pollTimer = null;
 let lastSig = null;
@@ -44,7 +37,7 @@ async function pollPermissions() {
       await applyRole(isAdmin, !!who.nyaa_access);
     } else if (!(await refreshPermissions())) return;
   } catch (_) {
-    return; // нет связи — оставляем как есть
+    return;
   }
   const sig = signature();
   if (lastSig !== null && sig !== lastSig) {
@@ -56,7 +49,7 @@ async function pollPermissions() {
 }
 
 export function startPermissionsPolling() {
-  if (pollTimer) return; // applyRole зовёт это и из самого опроса — базу сравнения тогда не трогаем
+  if (pollTimer) return;
   lastSig = signature();
   pollTimer = setInterval(pollPermissions, POLL_MS);
   window.addEventListener("focus", pollPermissions);

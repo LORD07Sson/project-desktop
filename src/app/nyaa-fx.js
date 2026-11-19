@@ -1,12 +1,8 @@
-// Живые элементы страницы «Релизы»: кнопка с прогрессом внутри и отменой («клейкий» пузырь),
-// «Отправить участнику» (бот пишет ему в личку со ссылкой на раздачу) и навигация «жидкий металл».
 import { apiGet, apiPost, apiUpload, mediaUrl, toast } from "./api.js";
 import { esc } from "./utils.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ---------- кнопка с прогрессом ----------
-// Подпись меняется по буквам с размытием (≈30 мс на букву).
 async function morph(el, text, stag = 26) {
   const old = [...el.querySelectorAll("span")];
   old.forEach((s, i) => setTimeout(() => s.classList.add("out"), i * stag));
@@ -18,11 +14,6 @@ async function morph(el, text, stag = 26) {
   await sleep(Math.min(nu.length, 12) * stag + 120);
 }
 
-/**
- * Запускает task() на кнопке: подпись «Отправляю…», мягкое свечение бежит по кнопке,
- * при onCancel сбоку выдавливается круглая кнопка отмены, в конце — «Готово» или ошибка.
- * Возвращает результат task() либо null при отмене/ошибке.
- */
 export async function liveButton(btn, task, { busy = "Работаю", done = "Готово", onCancel = null } = {}) {
   if (!btn || btn.classList.contains("fx-run")) return null;
   const idle = btn.innerHTML;
@@ -46,7 +37,7 @@ export async function liveButton(btn, task, { busy = "Работаю", done = "�
     x = document.createElement("button");
     x.type = "button"; x.className = "fx-x"; x.setAttribute("aria-label", "Отменить");
     x.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
-    x.onclick = () => { cancelled = true; try { onCancel(); } catch { /* */ } };
+    x.onclick = () => { cancelled = true; try { onCancel(); } catch { } };
     wrap.appendChild(x);
     requestAnimationFrame(() => wrap.classList.add("has-x"));
   }
@@ -65,9 +56,8 @@ export async function liveButton(btn, task, { busy = "Работаю", done = "�
   return cancelled || failed ? null : (res === undefined ? true : res);
 }
 
-// ---------- отправить участнику ----------
 let team = null;
-const sentTo = new Map(); // id раздачи -> [telegram_id]
+const sentTo = new Map();
 let pop = null;
 
 async function loadTeam() {
@@ -84,7 +74,6 @@ export function closeShare() { if (pop) { pop.remove(); pop = null; } }
 const fmtB = n => n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} ГБ` : n >= 1048576 ? `${Math.round(n / 1048576)} МБ` : `${Math.max(1, Math.round(n / 1024))} КБ`;
 const MODES = [["link", "Ссылка"], ["torrent", ".torrent"], ["get", "Скачать ботом"]];
 
-/** Открывает окошко «Отправить участнику» под элементом anchor. */
 export async function openShare(anchor, it, cover = "") {
   closeShare();
   pop = document.createElement("div");
@@ -96,7 +85,6 @@ export async function openShare(anchor, it, cover = "") {
   const r = anchor.getBoundingClientRect();
   const place = () => {
     if (!pop) return;
-    // нижняя граница — видимая часть экрана: окно программы может заходить под панель задач
     const bottom = Math.min(window.innerHeight, window.screen.availHeight - (window.screenY || 0)) - 12;
     pop.style.maxHeight = `${Math.max(240, bottom - 12)}px`;
     const h = pop.offsetHeight;
@@ -191,7 +179,7 @@ export async function openShare(anchor, it, cover = "") {
     const note = pop.querySelector(".fx-note").value;
     const start = await apiPost("/nyaa/share-job", { to: to.telegram_id, id: it.id, title: it.title, note, cover, files: [...tsel] });
     let cancelled = false;
-    cancelJob = async () => { cancelled = true; try { await apiPost("/nyaa/share-cancel", { job: start.job }); } catch { /* */ } };
+    cancelJob = async () => { cancelled = true; try { await apiPost("/nyaa/share-cancel", { job: start.job }); } catch { } };
     prog.hidden = false;
     const bar = prog.querySelector("i"), txt = prog.querySelector("span");
     for (;;) {
@@ -230,7 +218,6 @@ export async function openShare(anchor, it, cover = "") {
 document.addEventListener("keydown", e => { if (pop && e.key === "Escape") closeShare(); });
 document.addEventListener("mousedown", e => { if (pop && !pop.contains(e.target) && !e.target.closest("[data-share-open]")) closeShare(); }, true);
 
-// ---------- навигация «жидкий металл» ----------
 export function installLiquidNav() {
   const nav = document.getElementById("tabstrip");
   if (!nav || nav.dataset.liquid) return;

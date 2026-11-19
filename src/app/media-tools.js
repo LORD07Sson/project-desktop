@@ -1,21 +1,3 @@
-// «Инструменты ffmpeg» — библиотека операций поверх media_tools.rs:
-// обрезка без перекодирования (lossless keyframe cut, как в LosslessCut),
-// конвертация, извлечение/нормализация звука, склейка и муксинг
-// нескольких файлов. Каждая операция — отдельная панель с обычной формой
-// (без «сырого» поля произвольных аргументов ffmpeg), переключаемая
-// вкладками внутри одной модалки. Кнопка входа — #open-media-tools в
-// шапке, рядом с QC звука.
-//
-// Файлы выбираются не из каждой вкладки отдельным системным диалогом, а
-// один раз в общий пул (см. filePool/poolBarHtml ниже) — панель пула
-// видна на любой вкладке, а каждая операция берёт нужный(е) файл(ы) из
-// него через <select>. Так один и тот же файл (например, для обрезки
-// и следом конвертации) не нужно выбирать заново на каждой вкладке.
-//
-// Диалоги выбора файлов открывает Rust (pickInputFiles/pickOutputFile/
-// pickOutputDir в tauri.js), а не JS-плагин: бэкенд должен САМ знать,
-// какие пути пользователь разрешил трогать, иначе любая команда
-// становится «прочитай/перезапиши что скажут» — см. file_scope.rs.
 
 import {
   invoke, pickInputFiles, pickOutputFile,
@@ -56,17 +38,9 @@ function extOf(path) {
   return m ? m[1].toLowerCase() : "";
 }
 
-// ============================================================
-// Файлы добавляются один раз в общий пул (панель сверху модалки, видна
-// на любой вкладке), а каждая операция выбирает нужный(е) файл(ы) из
-// него через <select>, не через новый системный диалог.
-// ============================================================
 
-const filePool = []; // { path, info } — info может быть null (напр. .srt — ffprobe не видит в нём медиапотока)
+const filePool = [];
 
-// mt_register_media_file — допуск файла в asset-протокол для <video src>
-// (см. tauri.conf.json: security.assetProtocol) — делаем на добавление в
-// пул один раз, не на каждый выбор в конкретной вкладке.
 async function addFilesToPool(extensions) {
   const list = await pickInputFiles({ multiple: true, filters: [{ name: "Медиа", extensions }] });
   const indices = [];
@@ -78,8 +52,6 @@ async function addFilesToPool(extensions) {
       await invoke("mt_register_media_file", { path });
       info = await invoke("mt_probe_media", { path });
     } catch {
-      // не медиаконтейнер в понимании ffprobe (например, .srt) —
-      // не критично, кладём в пул без метаданных.
     }
     filePool.push({ path, info });
     indices.push(filePool.length - 1);
@@ -87,9 +59,6 @@ async function addFilesToPool(extensions) {
   return indices;
 }
 
-// Убирает файл из пула и подчищает ссылки на него во всех вкладках —
-// иначе за отваливающийся путь могли бы держаться пути вкладок
-// (что-то откроет несуществующий файл) или список склейки/муксинга.
 function removeFromPool(index) {
   const removedPath = filePool[index]?.path;
   if (removedPath == null) return;
@@ -102,8 +71,6 @@ function removeFromPool(index) {
   if (audioState.path === removedPath) { audioState.path = null; audioState.info = null; audioState.poolIndex = null; }
   else audioState.poolIndex = reindex(audioState.poolIndex);
 
-  // Вкладки с путём (Кадры, Скорость) сбрасываются, если удалили именно
-  // их файл, — иначе операция ушла бы на файл, которого в пуле уже нет.
   dubState.videoIndex = reindex(dubState.videoIndex);
   dubState.dubIndex = reindex(dubState.dubIndex);
   subsState.videoIndex = reindex(subsState.videoIndex);
@@ -159,9 +126,6 @@ function renderPoolBar(overlay) {
   wirePoolBar(overlay);
 }
 
-// selectedIndex — какой пункт пула отметить выбранным; filterFn(entry) —
-// необязательный предикат, чтобы показать не весь пул (например, только
-// файлы со звуковой дорожкой в панели «Аудио»).
 function poolSelectHtml(selectId, selectedIndex, filterFn) {
   const options = filePool
     .map((f, i) => ({ f, i }))
@@ -184,16 +148,7 @@ function infoLineHtml(info) {
   return `<div class="mt-info-line">${parts.join(" · ")}</div>`;
 }
 
-// ============================================================
-// Общий бегунок длинных операций.
-//
-// Любая операция идёт через runJob: одна полоса с подписью текущего
-// прохода («Сегмент 3 из 7», «Измеряю громкость») и кнопка «Отмена»,
-// которая доходит до самого процесса (mt_cancel).
-// ============================================================
 
-// Параллельно две операции ffmpeg запускать нечем (бэкенд держит один
-// текущий процесс) — и незачем: они делят диск и процессор.
 let jobRunning = false;
 
 function jobHtml() {
@@ -208,10 +163,6 @@ function jobHtml() {
     </div>`;
 }
 
-/**
- * Выполняет длинную операцию с общей полосой прогресса и отменой.
- * button — кнопка запуска (блокируется и меняет подпись на время работы).
- */
 async function runJob(overlay, { button, busyLabel, run }) {
   if (jobRunning) {
     toast("Дождитесь окончания текущей операции.", "error");
@@ -250,8 +201,6 @@ async function runJob(overlay, { button, busyLabel, run }) {
   try {
     return await run();
   } catch (e) {
-    // Отмена — это не сбой: пользователь сам нажал кнопку, ругаться
-    // красным тостом на собственное действие незачем.
     if (String(e).includes("отменена")) toast("Операция отменена.");
     else toast(String(e), "error");
     return null;
@@ -264,15 +213,10 @@ async function runJob(overlay, { button, busyLabel, run }) {
   }
 }
 
-// Успешный результат — с кнопкой «показать в папке», один хелпер на все
-// операции вместо пяти одинаковых блоков.
 function toastDone(text, path) {
   toast(text, "success", { label: "Показать в папке", onClick: () => revealInFolder(path) });
 }
 
-// ============================================================
-// Конвертация / транскод — см. transcode_media в media_tools.rs.
-// ============================================================
 
 const CONVERT_PRESETS = {
   mp4_h264: { label: "MP4 (H.264/AAC) — универсальный", container: "mp4", opts: { videoCodec: "libx264", audioCodec: "aac", crf: 23 } },
@@ -282,8 +226,6 @@ const CONVERT_PRESETS = {
   custom: { label: "Свои параметры", container: "mp4", opts: {} },
 };
 
-// Поля «своих параметров» переживают перерисовку панели — иначе смена
-// пресета или добавление файла в пул стирали уже введённые значения.
 const convertState = {
   poolIndex: null, path: null, info: null, preset: "mp4_h264",
   container: null,
@@ -364,8 +306,6 @@ function wireConvertPanel(root) {
 
   root.querySelector("#mt-convert-preset").addEventListener("change", e => {
     convertState.preset = e.target.value;
-    // Пресет задаёт свой контейнер — но только пока пользователь не
-    // выбрал контейнер руками.
     convertState.container = null;
     renderActivePanel(root);
   });
@@ -373,8 +313,6 @@ function wireConvertPanel(root) {
     convertState.container = e.target.value;
   });
 
-  // Запоминаем ввод сразу, а не только в момент запуска: панель
-  // перерисовывается при любых изменениях пула.
   const customFields = {
     videoCodec: "#mt-c-vcodec", audioCodec: "#mt-c-acodec",
     width: "#mt-c-width", height: "#mt-c-height",
@@ -394,8 +332,6 @@ function wireConvertPanel(root) {
       height: Math.round(Number(c.height)) || null,
       videoBitrate: c.videoBitrate.trim() || null,
       audioBitrate: c.audioBitrate.trim() || null,
-      // Number(...)||null съедал бы CRF 0 (визуально «без потерь») —
-      // проверяем именно на пустую строку.
       crf: c.crf === "" ? null : Math.round(Number(c.crf)),
     } : CONVERT_PRESETS[convertState.preset].opts;
     const container = convertContainer();
@@ -414,9 +350,6 @@ function wireConvertPanel(root) {
   });
 }
 
-// ============================================================
-// Аудио — извлечь/конвертировать/нормализовать, см. extract_audio.
-// ============================================================
 
 const AUDIO_CODEC_EXT = { copy: null, aac: "m4a", libmp3lame: "mp3", flac: "flac", libopus: "opus", pcm_s16le: "wav" };
 const audioState = { poolIndex: null, path: null, info: null, codec: "copy", bitrate: "", normalize: false };
@@ -476,8 +409,6 @@ function wireAudioPanel(root) {
   const bitrateInput = root.querySelector("#mt-audio-bitrate");
 
   bitrateInput.addEventListener("input", () => { audioState.bitrate = bitrateInput.value; });
-  // «Как есть» и нормализация несовместимы по определению (фильтр
-  // требует декодирования).
   const reconcile = () => {
     audioState.codec = codecSel.value;
     audioState.normalize = normalizeBox.checked;
@@ -510,9 +441,6 @@ function wireAudioPanel(root) {
   });
 }
 
-// ============================================================
-// Склейка — см. concat_media в media_tools.rs (сам решает copy/re-encode).
-// ============================================================
 
 const concatState = { paths: [] };
 
@@ -583,14 +511,6 @@ function wireConcatPanel(root) {
   });
 }
 
-// ============================================================
-// Муксинг — собрать видео + несколько дублей аудио (каждый уже свой
-// файл, как хранит команда) + субтитры в один контейнер с языком/именем/
-// флагом "по умолчанию" на дорожку, без перекодирования. См. mux_media
-// в media_tools.rs. Разметка секций — по образцу референса пользователя
-// (Leo MultiTools): Видео/Аудио/Субтитры отдельными группами, у каждой
-// дорожки свой язык + имя + переключатель "по умолч.".
-// ============================================================
 
 const LANGUAGE_OPTIONS = [
   { code: "und", label: "Не указан" },
@@ -610,10 +530,6 @@ const MUX_SECTIONS = [
   { kind: "subtitle", key: "subtitle", label: "Субтитры", letter: "S", extensions: SUBTITLE_EXTENSIONS },
 ];
 
-// Один файл — одна дорожка (без склейки нескольких файлов в одну
-// дорожку, в отличие от референса, где под "V1" может быть несколько
-// файлов сразу) — это покрывает реальный сценарий команды: у каждого
-// дубляжа/сабов свой отдельный файл.
 const muxState = { video: [], audio: [], subtitle: [] };
 
 function muxTrackRowHtml(section, track, i) {
@@ -686,10 +602,6 @@ function wireMuxPanel(root) {
       muxState[inp.dataset.section][Number(inp.dataset.i)].title = inp.value;
     });
   });
-  // Флаг "по умолчанию" — не больше одной дорожки на раздел (видео,
-  // аудио, субтитры отдельно), поэтому включение одной сбрасывает
-  // остальные в том же разделе; ре-рендер нужен, чтобы их чекбоксы
-  // визуально сняли отметку.
   root.querySelectorAll("[data-mux-default]").forEach(cb => {
     cb.addEventListener("change", () => {
       const section = cb.dataset.section;
@@ -717,13 +629,6 @@ function wireMuxPanel(root) {
   });
 }
 
-// ============================================================
-// Дубляж — свести записанный дубль с видео. Самая частая операция
-// команды, под которую до сих пор не было ни одной кнопки: приходилось
-// собирать муксингом, а сдвинуть дорожку относительно картинки (дубль
-// почти никогда не ложится кадр-в-кадр) было нечем вовсе.
-// См. dub_audio в media_tools.rs.
-// ============================================================
 
 const DUB_MODES = [
   ["replace", "Заменить оригинальный звук"],
@@ -808,8 +713,6 @@ function wireDubPanel(root) {
     const video = filePool[dubState.videoIndex];
     const dub = filePool[dubState.dubIndex];
     if (!video || !dub) return;
-    // mp4 не принимает PCM и капризничает с FLAC — ffmpeg падал уже на
-    // записи, после долгого прохода. Такой звук сразу кладём в mkv.
     let outExt = extOf(video.path) || "mkv";
     if (["pcm_s16le", "flac"].includes(dubState.codec) && ["mp4", "m4v"].includes(outExt)) outExt = "mkv";
     const outPath = await pickOutputFile(`${stemOf(video.path)}_dub.${outExt}`, [{ name: outExt.toUpperCase(), extensions: [outExt] }]);
@@ -837,11 +740,6 @@ function wireDubPanel(root) {
   });
 }
 
-// ============================================================
-// Кадры — стоп-кадр и контактный лист, плюс GIF. Референс для
-// переписки («вот этот кадр») и превью серии одним изображением.
-// См. extract_frames/make_gif в media_tools.rs.
-// ============================================================
 
 const framesState = {
   poolIndex: null, path: null, info: null,
@@ -956,19 +854,7 @@ function wireFramesPanel(root) {
   });
 }
 
-// ============================================================
-// Скорость — растянуть или ускорить и картинку, и звук разом.
-// В дубляже это рабочий инструмент, а не эффект: японский оригинал и
-// русская укладка редко совпадают по длине, и дубль подгоняют под
-// картинку на несколько процентов. Тон при этом сохраняется (atempo),
-// иначе голос «поедет». См. change_speed в media_tools.rs.
-// ============================================================
 
-// 1 обязателен в списке — без него у "без изменений" не было своей
-// кнопки (скачок сразу с 0.95× на 1.1×), а speedState.speed по умолчанию
-// был "1.05", а не "1": открыть вкладку и сразу нажать «Применить»,
-// не приглядевшись к числу, молча ускоряло файл на 5% вместо того,
-// чтобы ничего не менять.
 const SPEED_PRESETS = [0.5, 0.9, 0.95, 1, 1.05, 1.1, 1.25, 1.5, 2];
 const speedState = { poolIndex: null, path: null, info: null, speed: "1", keepPitch: true };
 
@@ -1015,9 +901,6 @@ function wireSpeedPanel(root) {
   if (!speedState.path) return;
 
   const value = root.querySelector("#mt-speed-value");
-  // Пересчитываем только строку длительности и подсветку пресета: полная
-  // перерисовка на каждый символ пересоздавала само поле, и фокус из
-  // него пропадал — «1.05» было не набрать, только по одной цифре.
   const syncSpeedUi = () => {
     const current = Number(speedState.speed);
     root.querySelector("#mt-speed-duration").innerHTML = speedDurationHtml();
@@ -1058,10 +941,6 @@ function wireSpeedPanel(root) {
   });
 }
 
-// ============================================================
-// Субтитры — вшить в картинку или вытащить из контейнера.
-// См. burn_subtitles/extract_subtitles в media_tools.rs.
-// ============================================================
 
 const subsState = { videoIndex: null, subsIndex: null, mode: "burn", fontSize: "28", track: "0" };
 
@@ -1157,18 +1036,7 @@ function wireSubsPanel(root) {
   });
 }
 
-// ============================================================
-// Общий каркас модалки — реестр операций (переключатель вкладок).
-// Добавить новую операцию позже = ещё одна запись здесь + свой
-// html()/wire(), остальное не трогается.
-// ============================================================
 
-// ============================================================
-// Reaper — проект .rpp из звуковых файлов пула: каждый файл — своя
-// дорожка, метки — списком «минуты:секунды название» (по строке).
-// Сборка текста — reaper-core.js; сам файл пишет Rust (write_text_file)
-// строго по пути из диалога сохранения.
-// ============================================================
 
 const reaperState = { selected: new Set(), markers: "", sampleRate: "48000" };
 
@@ -1194,7 +1062,6 @@ function reaperPanelHtml() {
     <button class="btn primary" id="mt-reaper-run">Собрать проект Reaper</button>`;
 }
 
-// «1:23 текст», «0:05.5 текст», «83 текст» — время в секундах, затем название.
 function parseReaperMarkers(text) {
   const out = [];
   for (const line of String(text).split(/\r?\n/)) {

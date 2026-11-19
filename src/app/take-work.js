@@ -1,8 +1,3 @@
-// «Взять в работу»: окно поверх «Тайтлов». План с сервера
-// (/titles/{id}/work-plan): расписание серий, текущий состав, настройки,
-// если тайтл уже взят. Сохранение — /titles/{id}/take: состав, дедлайн
-// в минутах от выхода, приоритет; вышедшие серии заводятся сразу, новые —
-// сервер заводит сам по мере выхода и пишет составу в Telegram.
 
 import { state } from "./state.js";
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
@@ -18,9 +13,7 @@ const DEADLINES = [
   [1440, "сутки"], [2880, "2 дня"], [4320, "3 дня"], [7200, "5 дней"], [10080, "неделя"],
 ];
 const PRIORITIES = [["normal", "Обычный"], ["high", "Высокий"], ["urgent", "Срочный"], ["low", "Низкий"]];
-// Названия — как роли студии (Команда → Роли): «Звукарь», а не «Звукорежиссёр», иначе состав тайтла и роли людей расходятся.
 const DEFAULT_ROLES = ["Даббер", "Звукарь", "Роспись", "Переводчик", "Тайминг"];
-// Родственные названия одной роли (женская форма, старые варианты) — одна группа в списке исполнителей.
 const ROLE_ALIASES = { "дабберша": "даббер", "звукорежиссер": "звукарь", "распись": "роспись", "расписчик": "роспись", "расписчица": "роспись" };
 const roleKey = r => { const k = String(r || "").trim().toLowerCase().replace(/ё/g, "е"); return ROLE_ALIASES[k] || k; };
 const NYAA_QUALITIES = [["any", "Любое качество"], ["480p", "480p"], ["720p", "720p"], ["1080p", "1080p"], ["1440p", "1440p"], ["2160p", "2160p"]];
@@ -46,7 +39,6 @@ function airLine(plan) {
   return `выходит по ${wd} в ${hm} · следующая — ${plan.next_episode}-я, ${shortDate(plan.next_episode_at)}`;
 }
 
-// Исполнители: сначала те, у кого в студии есть эта роль, — чтобы «Даббер» не приходилось искать среди всех подряд.
 function userOptions(selected, role) {
   const users = state.users || [];
   const opt = u => `<option value="${u.telegram_id}"${String(u.telegram_id) === String(selected || "") ? " selected" : ""}>${esc(u.name)}${u.paused_until ? " (на паузе)" : ""}</option>`;
@@ -67,13 +59,10 @@ function crewRowHtml(role, telegramId) {
     </div>`;
 }
 
-// Серии к созданию сейчас: вышедшие и ещё не заведённые (последние max_backfill).
 function backfillNumbers(plan) {
   return plan.episodes.filter(e => e.aired && !e.exists).map(e => e.n).slice(-plan.max_backfill);
 }
 
-// Файлы серий из окна «Взять в работу» — те же виды, что в карточке отчёта. Общая равка — в серию (всем её задачам,
-// можно заранее); равки для озвучки/сведения и субтитры — в задачи серии, поэтому только для заводимых сейчас или уже заведённых.
 const FILE_KINDS = [
   ["raw1080", "Равка 1080p · общая", true], ["raw480", "Равка 480p · общая", true],
   ["voice", "Равка для озвучки", false], ["mix", "Равка для сведения", false], ["subs", "Субтитры · роспись", false],
@@ -105,7 +94,6 @@ export async function openTakeWork(titleId, onDone) {
   const work = plan.work && plan.work.active ? plan.work : null;
   let nyaaCandidates = [];
   let selectedSource = null;
-  // «запомненный рав»: группа и приметы выбранной раздачи; следующие серии подбираются такими же
   let pattern = work && work.nyaa_group ? { group: work.nyaa_group, tags: (work.nyaa_tags || "").split(" ").filter(Boolean), ref: work.nyaa_ref || "" } : null;
   let browseItems = [];
   const crew = plan.crew.length ? plan.crew : DEFAULT_ROLES.map(role => ({ role, telegram_id: null }));
@@ -186,15 +174,13 @@ export async function openTakeWork(titleId, onDone) {
 
   const val = { deadline: deadlineMinutes, priority };
   const backfill = backfillNumbers(plan);
-  let queued = [];   // [{episode, kind, file}]
+  let queued = [];
   const epSelect = sheet.querySelector("[data-tf-ep]");
   const defaultEp = backfill.length ? backfill[backfill.length - 1] : (plan.episodes.find(e => !e.aired) || plan.episodes[0] || {}).n;
-  // Серии, у которых к моменту загрузки будут задачи: уже заведённые и те, что заводятся сейчас.
   const withTasks = () => new Set([...plan.episodes.filter(e => e.exists).map(e => e.n), ...(sheet.querySelector("[data-backfill]").checked ? backfill : [])]);
   const isShared = kind => FILE_KINDS.find(([k]) => k === kind)[2];
-  // Как «Равки» в карточке отчёта: выбрана серия — под ней по строке на каждый вид, у каждой своя кнопка и свои файлы.
   const renderQueued = () => {
-    if (!plan.episodes.length) {   // расписания нет — номера серий неизвестны
+    if (!plan.episodes.length) {
       sheet.querySelector("[data-tf-kinds]").innerHTML = `<div class="tw-note">Расписания пока нет — файлы можно будет добавить в карточке задачи.</div>`;
       epSelect.hidden = true;
       return;
@@ -234,7 +220,6 @@ export async function openTakeWork(titleId, onDone) {
     }
     renderQueued(); summary();
   });
-  // После «Взять в работу»: по одному файлу, с прогрессом (apiUpload сам режет крупные на части).
   const uploadQueued = async () => {
     const ok = withTasks();
     const todo = queued.filter(q => isShared(q.kind) || ok.has(q.episode));
@@ -259,12 +244,9 @@ export async function openTakeWork(titleId, onDone) {
     sheet.querySelector("[data-summary]").innerHTML = eps
       ? `Сразу: <b>${eps * roles} ${plural(eps * roles, "задача", "задачи", "задач")}</b> (${eps} ${plural(eps, "серия", "серии", "серий")} × ${roles} ${plural(roles, "роль", "роли", "ролей")})${filesNote} · дальше — по выходу серий`
       : `Сейчас ничего не создаётся${filesNote} · задачи появятся по выходу серий`;
-    renderQueued();   // от галочки «завести вышедшие» зависит, в какие серии можно класть равки и субтитры
+    renderQueued();
   };
   if (!backfill.length) sheet.querySelector("[data-backfill]").disabled = true;
-  // Подсказка по составу. Роль в составе тайтла уникальна (на сервере одна строка на роль), поэтому вторая
-  // «Даббер» получает номер — «Даббер 2»: это тоже даббер (всё, что начинается на «даббер», — один параллельный
-  // этап), и у каждого своя задача. Роль без исполнителя создаст задачу «ничью».
   let renamed = [];
   const crewCheck = () => {
     const inputs = [...sheet.querySelectorAll("[data-crew-row] .tw-role")].filter(i => i.value.trim());
@@ -372,9 +354,8 @@ export async function openTakeWork(titleId, onDone) {
     if (!it) return;
     nyaaRes.querySelectorAll("[data-browse-pick]").forEach(b => b.classList.toggle("selected", b === pick));
     pattern = { group: it.group || "", tags: it.tags || [], ref: it.title };
-    if (it.show) sheet.querySelector("[data-nyaa-q]").value = it.show;      // название — как у этой группы, а не из базы
+    if (it.show) sheet.querySelector("[data-nyaa-q]").value = it.show;
     if (it.episode != null) sheet.querySelector("[data-nyaa-episode]").value = it.episode;
-    // раздачу уже вышедшей серии отправляем составу сразу; старые серии — только запоминаем формат
     const latest = Math.max(plan.episodes_aired || 0, 1);
     if (it.episode != null && it.episode >= latest) {
       selectedSource = { url: it.url, title: it.title };
@@ -424,7 +405,7 @@ export async function openTakeWork(titleId, onDone) {
   });
 
   sheet.querySelector("[data-save]").addEventListener("click", async e => {
-    crewCheck();   // повторы ролей получают номера до отправки
+    crewCheck();
     const rows = [...sheet.querySelectorAll("[data-crew-row]")].map(r => ({
       role: r.querySelector(".tw-role").value.trim(),
       telegram_id: r.querySelector(".tw-user").value || null,

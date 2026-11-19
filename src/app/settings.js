@@ -1,4 +1,3 @@
-// Диалог «Настройки» (автозапуск, тема, режим разработчика, автообновление).
 
 import { invoke, listen } from "./tauri.js";
 import { state, can } from "./state.js";
@@ -29,15 +28,8 @@ import { availableTours, startTour, showWelcome, tourHintsEnabled, setTourHints,
 const updateLog = tagLogger("updates");
 
 
-// Версию подставляет Vite на этапе сборки (define: __APP_VERSION__ в
-// vite.config.js — читает файл VERSION, а в CI ещё и переменную
-// PKG_VERSION, куда альфа-сборка кладёт "0.6.0-alpha.N+sha").
 const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 
-// Альфа-сборки несут короткий коммит как SemVer build-metadata —
-// "0.5.8-alpha.90+78ab7a92" (см. build-alpha.yml) — само сравнение
-// версий Velopack'ом на него не смотрит (SemVer build-metadata в
-// приоритет не участвует), тут его просто вытаскиваем для отображения.
 function commitFromVersion(version) {
   const m = /\+([0-9a-f]{6,40})$/i.exec(version || "");
   return m ? m[1] : null;
@@ -52,9 +44,6 @@ async function openSettings() {
   let updateSource = "auto";
   try { updateSource = await invoke("get_update_source"); } catch (_) {}
 
-  // Переключатель dev-режима виден только реальным разработчикам студии
-  // (state.isDeveloper — из /api/me, is_developer сервер сам проверяет
-  // по OWNER_IDS на каждый /api/dev/* запрос, фронту тут не доверяют).
   if (state.isDeveloper == null) {
     try { state.isDeveloper = !!(await apiGet("/me")).is_developer; } catch (_) { state.isDeveloper = false; }
   }
@@ -359,7 +348,6 @@ async function openSettings() {
     }
   }
   overlay.querySelector(".sheet").classList.add("st-sheet");
-  // Крестик — первым: если какой-то обработчик ниже упадёт, окно всё равно можно закрыть.
   overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
   overlay.querySelector("#s-theme").value = document.documentElement.dataset.theme || "dark";
   overlay.querySelector("#s-theme").addEventListener("change", e => applyTheme(e.target.value));
@@ -440,7 +428,6 @@ async function openSettings() {
   });
   const devToggle = overlay.querySelector("#s-dev-mode");
   if (devToggle) devToggle.addEventListener("change", e => setDevModeOn(e.target.checked));
-  // Ручная проверка — всегда свежий ответ GitHub (force), и блок «последний коммит» обновляется вместе с ней.
   overlay.querySelector("#s-check-update").addEventListener("click", async () => {
     await checkForUpdates(false);
     refreshAlphaBlock(updateChannel);
@@ -456,11 +443,6 @@ async function openSettings() {
   overlay.querySelector("#s-installs").addEventListener("click", () => openInstallsSheet());
   overlay.querySelector("#s-reinstall").addEventListener("click", () => reinstallApp());
 
-  // Блок "текущий/последний коммит" — только для альфа-канала (у
-  // стабильных сборок нет вшитого коммита, см. commitFromVersion).
-  // "Последний" узнаём тем же check_for_update, которым пользуется
-  // обычная проверка обновлений — лишнего эндпоинта не нужно, только
-  // здесь мы его не открываем диалогом, а просто вытаскиваем коммит.
   async function refreshAlphaBlock(channel) {
     const block = overlay.querySelector("#s-alpha-block");
     block.hidden = channel !== "alpha";
@@ -475,9 +457,6 @@ async function openSettings() {
     latestEl.title = "";
     try {
       const update = await invoke("check_for_update");
-      // update === null у Velopack означает "на канале нечего ставить" —
-      // не то же самое, что ошибка запроса (см. catch ниже), различаем
-      // текстом, чтобы не гадать по одному "?" в обоих случаях.
       if (update) {
         latestEl.textContent = commitFromVersion(update.version) || "?";
         latestEl.title = update.version;
@@ -496,10 +475,7 @@ async function openSettings() {
   }
   refreshAlphaBlock(updateChannel);
 
-  // У участника плитки «Админ-панель» нет: без «?.» здесь падала вся настройка
-  // обработчиков ниже — не работали ни кнопки, ни даже крестик закрытия.
   overlay.querySelector("#s-open-admin")?.addEventListener("click", openAdminPanel);
-  // ---- Доступ для ИИ (MCP) ----
   const mcpBox = overlay.querySelector("#s-mcp-enable");
   if (mcpBox) {
     const stateEl = overlay.querySelector("#s-mcp-state");
@@ -544,7 +520,6 @@ async function openSettings() {
   tile("s-tile-lockdown", () => { dismissSheet(overlay); import("./lockdown.js").then(m => m.openLockdownSheet()); });
   tile("s-tile-trash", () => { dismissSheet(overlay); import("./lockdown.js").then(m => m.openTrashSheet()); });
 
-  // Обучение: список уроков, запуск закрывает настройки.
   const renderLearn = () => {
     const tours = availableTours();
     const done = tours.filter(t => t.done).length;
@@ -580,7 +555,6 @@ async function openSettings() {
   const permsRoot = overlay.querySelector("#st-perms-root");
   if (permsRoot) import("./permissions-ui.js").then(m => m.mountPermissions(permsRoot));
 
-  // ---------- Настройки 2.0: разделы по одному, поиск, новые пункты ----------
   const body = overlay.querySelector("#st-body");
   const layout = overlay.querySelector(".st-layout");
   const MODE_KEY = "st-layout";
@@ -596,7 +570,6 @@ async function openSettings() {
     overlay.querySelectorAll(".st-nav-btn[data-st-go]").forEach(b => b.classList.toggle("on", b.dataset.stGo === id));
     body.scrollTop = 0;
   };
-  // Вид настроек по выбору: список слева, плитки или карточки (запоминается).
   const applyMode = (next, save = true) => {
     mode = next;
     layout.classList.remove("st-mode-list", "st-mode-tiles", "st-mode-cards");
@@ -616,7 +589,6 @@ async function openSettings() {
     showSection(b.dataset.stGo);
   }));
 
-  // Поиск: показываем все разделы, в них — только подходящие строки.
   const applyFind = q => {
     q = q.trim().toLowerCase();
     overlay.classList.toggle("st-finding", !!q);
@@ -643,7 +615,6 @@ async function openSettings() {
   overlay.querySelector("#st-find").addEventListener("input", e => applyFind(e.target.value));
   applyMode(mode, false);
 
-  // Аккаунт
   overlay.querySelector("#s-acc-profile").addEventListener("click", () => {
     dismissSheet(overlay);
     import("./tabs.js").then(m => m.switchTab("profile"));
@@ -655,7 +626,6 @@ async function openSettings() {
   });
   loadAvatars(overlay.querySelector(".st-acc"));
 
-  // Внешний вид
   overlay.querySelectorAll("[data-st-themecard]").forEach(b => b.addEventListener("click", () => {
     overlay.querySelectorAll("[data-st-themecard]").forEach(x => x.classList.toggle("on", x === b));
     const v = b.dataset.stThemecard;
@@ -692,7 +662,6 @@ async function openSettings() {
   overlay.querySelector("#s-backdrop").addEventListener("change", e => applyBackdrop(e.target.checked));
   overlay.querySelector("#s-season-fx").addEventListener("change", e => applySeasonFx(e.target.checked));
 
-  // Уведомления
   overlay.querySelectorAll("[data-st-kind]").forEach(inp => inp.addEventListener("change", () => setNotifyKind(inp.dataset.stKind, inp.checked)));
   const kindsBox = overlay.querySelector("#st-kinds");
   const syncKinds = () => kindsBox.classList.toggle("st-off", !overlay.querySelector("#s-desktop-notify").checked);
@@ -710,13 +679,11 @@ async function openSettings() {
     else toast("Не удалось загрузить ваш профиль.", "error");
   });
 
-  // Поведение
   overlay.querySelectorAll("[data-st-start]").forEach(b => b.addEventListener("click", () => {
     pick("data-st-start", null, b.dataset.stStart);
     setStartTab(b.dataset.stStart);
   }));
 
-  // Диагностика: связь с сервером и отчёт для разработчика.
   let lastPing = null;
   const ping = async () => {
     const el = overlay.querySelector("#s-ping");
@@ -758,9 +725,6 @@ async function openSettings() {
 }
 $("#open-settings").addEventListener("click", openSettings);
 
-// ---------- источник обновлений, копии программы, переустановка ----------
-// У части студии GitHub не открывается: бот держит зеркало релизов на сервере (voice_report_bot/desktop_updates.py,
-// <сервер>/updates/…) и шлёт установщик в Telegram. «Авто» — GitHub, при сбое сам переходит на сервер.
 
 const UPDATE_SOURCES = { auto: "Авто", github: "GitHub", server: "Сервер" };
 const UPDATE_SOURCE_HINT = {
@@ -841,7 +805,6 @@ export async function reinstallApp() {
   }
 }
 
-// Раз в неделю: есть лишние копии или эта стоит не на своём месте — подсказываем открыть список.
 const INSTALLS_HINT_KEY = "project_installs_hint_at";
 async function maybeHintInstalls() {
   try {
@@ -859,36 +822,21 @@ async function maybeHintInstalls() {
   overlay.querySelector("[data-yes]").addEventListener("click", () => { dismissSheet(overlay); openInstallsSheet(); });
 }
 
-// ---------- автообновление (Velopack) ----------
-// Апдейтер целиком на Rust-стороне (см. check_for_update/
-// download_and_apply_update в main.rs, Velopack + HttpSource читает
-// релизы репозитория напрямую, без прокси на своём сервере). JS только
-// вызывает команды и слушает событие "update-progress" для прогресс-бара.
 
-// Автопроверка на каждом запуске (см. main.js) без троттлинга уходила в
-// GitHub API без токена (60 запросов/час НА IP, не на пользователя — см.
-// friendly_update_error в main.rs) при каждом старте приложения. На одном
-// рабочем месте это несущественно, но студия — несколько компьютеров за
-// одним офисным NAT, и совокупный поток запусков/перезапусков легко
-// выбивает лимит даже без единого ручного клика «Проверить обновления».
-// Ручная проверка из Настроек троттлингу не подчиняется — явный клик
-// пользователя должен сходить на сервер всегда, даже если автопроверка
-// была недавно.
-const AUTO_CHECK_THROTTLE_MS = 4 * 60 * 60 * 1000; // 4 часа
+const AUTO_CHECK_THROTTLE_MS = 4 * 60 * 60 * 1000;
 const AUTO_CHECK_STORAGE_KEY = "project_last_update_check_at";
 
-// Если перед выходом ставили обновление, а версия не сменилась — говорим об этом сразу, а не молча остаёмся на старой.
 async function reportFailedUpdate() {
   try {
     const msg = await invoke("update_failure");
     if (msg) toast(msg, "error");
-  } catch (_) { /* команды нет (браузерная сборка) — не страшно */ }
+  } catch (_) { }
 }
 
 export function maybeAutoCheckUpdates() {
   reportFailedUpdate();
   autoCheckIfDue();
-  setTimeout(maybeHintInstalls, 20000); // DevSkim: ignore DS172411 — функция, не строка
+  setTimeout(maybeHintInstalls, 20000); // DevSkim: ignore DS172411
 }
 
 function autoCheckIfDue() {
@@ -896,22 +844,17 @@ function autoCheckIfDue() {
   try {
     last = Number(localStorage.getItem(AUTO_CHECK_STORAGE_KEY) || 0);
   } catch {
-    // localStorage недоступен (приватный режим и т.п.) — считаем, что
-    // проверять можно, лучше лишний запрос, чем никогда не проверять.
   }
   if (Date.now() - last < AUTO_CHECK_THROTTLE_MS) return;
-  // Паузу в 4 часа запоминаем, только если обновления нет или человек сам нажал «Позже».
   checkForUpdates(true).then(result => {
     if (result !== "none" && result !== "declined") return;
     try {
       localStorage.setItem(AUTO_CHECK_STORAGE_KEY, String(Date.now()));
     } catch {
-      // не критично — просто не притормозит следующий запуск
     }
   });
 }
 
-// Раз в полчаса смотрим, не прошли ли те же 4 часа с последней проверки.
 setInterval(() => { if (document.visibilityState === "visible") autoCheckIfDue(); }, 30 * 60 * 1000);
 
 export async function checkForUpdates(silent) {
@@ -944,7 +887,6 @@ function confirmUpdateSheet(update) {
     `);
     overlay.querySelector("[data-no]").addEventListener("click", () => { overlay.remove(); resolve(false); });
     overlay.querySelector("[data-yes]").addEventListener("click", () => { overlay.remove(); resolve(true); });
-    // Закрытие клавишей Escape или кликом по фону — тоже ответ «позже».
     overlay.addEventListener("sheet-dismissed", () => resolve(false));
   });
 }
@@ -952,8 +894,6 @@ function confirmUpdateSheet(update) {
 let updateInstalling = false;
 
 export async function installUpdate() {
-  // Повторный клик, пока уже идёт закачка, ничего не запускает: две
-  // параллельные закачки дерутся за один файл пакета.
   if (updateInstalling) { toast("Обновление уже скачивается — подождите.", "error"); return; }
   updateInstalling = true;
   const overlay = openSheet(`
@@ -981,10 +921,6 @@ export async function installUpdate() {
     statusEl.textContent = `Скачиваю с: ${event.payload}…`;
   });
   try {
-    // При успехе download_and_apply_update завершает процесс изнутри
-    // (apply_updates_and_restart) — этот await просто никогда не
-    // вернётся управлением дальше в обычном сценарии, окно закроется
-    // само. Ветка catch — только на случай реальной ошибки.
     await invoke("download_and_apply_update");
   } catch (e) {
     unlisten();
@@ -1006,7 +942,7 @@ export async function installUpdate() {
       installUpdate();
     });
     actions.querySelector("[data-update-server]").addEventListener("click", async () => {
-      try { await invoke("set_update_source", { source: "server" }); } catch (_) { /* старая сборка без выбора источника */ }
+      try { await invoke("set_update_source", { source: "server" }); } catch (_) { }
       dismissSheet(overlay);
       installUpdate();
     });

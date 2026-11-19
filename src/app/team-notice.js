@@ -1,10 +1,3 @@
-// Объявление для команды — то же, что «📌 Объявление» в админ-панели
-// бота: одна закреплённая строка («Вася в отпуске, не назначайте»),
-// которую видят все. В десктопе — баннер над любой вкладкой.
-// /api/team-notice (GET / POST {text} / POST /clear).
-//
-// «Скрыть» убирает баннер только у себя и только для этого текста:
-// поставят новое объявление — оно снова появится.
 
 import { state } from "./state.js";
 import { apiGet, apiPost, openSheet, toast, askConfirm } from "./api.js";
@@ -14,8 +7,6 @@ import { loadAvatars } from "./profile.js";
 const POLL_INTERVAL_MS = 120_000;
 let current = null;
 let maxLength = 500;
-// Баннер — одна строка, чтобы не съедать высоту каждой вкладки; клик по
-// тексту разворачивает его целиком (и обратно).
 let expanded = false;
 
 function hiddenKey() { return `project_notice_hidden_${state.telegramId || "anon"}`; }
@@ -29,8 +20,6 @@ const EDIT_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 
 function whenText(createdAt) {
-  // Сервер пишет "YYYY-MM-DD HH:MM" по Москве — показываем как есть,
-  // только дату по-русски.
   const m = String(createdAt || "").match(/^(\d{4})-(\d\d)-(\d\d)\s+(\d\d:\d\d)/);
   if (!m) return createdAt || "";
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
@@ -55,13 +44,13 @@ function render() {
     <button type="button" class="icon-btn tn-btn" id="tn-hide" title="Скрыть у себя (появится снова, если объявление сменят)" aria-label="Скрыть объявление">${CLOSE_ICON}</button>`;
   loadAvatars(el);
   el.querySelector(".tn-body").addEventListener("click", () => {
-    if (window.getSelection && String(window.getSelection())) return; // выделяли текст, а не кликали
+    if (window.getSelection && String(window.getSelection())) return;
     expanded = !expanded;
     el.classList.toggle("expanded", expanded);
   });
   el.querySelector("#tn-edit").addEventListener("click", openNoticeEditor);
   el.querySelector("#tn-hide").addEventListener("click", () => {
-    try { localStorage.setItem(hiddenKey(), noticeSig(current)); } catch (_) { /* не критично */ }
+    try { localStorage.setItem(hiddenKey(), noticeSig(current)); } catch (_) { }
     render();
   });
 }
@@ -73,7 +62,7 @@ export async function refreshTeamNotice() {
     current = d.notice || null;
     maxLength = d.max_length || maxLength;
     render();
-  } catch (_) { /* тихо: старый сервер без эндпоинта или нет сети */ }
+  } catch (_) { }
 }
 
 export function clearTeamNotice() {

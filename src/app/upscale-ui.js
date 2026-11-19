@@ -1,14 +1,9 @@
-// «✨ Апскейл» на странице тайтла: нейросеть (upscale.rs: движок и модели Upscayl) увеличивает обложку, баннер или
-// свою картинку (файл с диска или Ctrl+V) — «Аниме» (digital-art-4x) или «Резко» (ultrasharp-4x), ×2/×3/×4 или до
-// нужной ширины; можно поставить свою ncnn-модель (.param + .bin). Обложку и баннер берём с сервера исходником (?w=0 — без серверного растягивания); при первом запуске
-// движок и модель докачиваются сами. Результат — сравнение «до/после» и сохранение PNG в выбранное место.
 
 import { invoke, listen, pickInputFile, pickInputFiles, pickOutputFile } from "./tauri.js";
 import { mediaUrl, openSheet, toast, askConfirm } from "./api.js";
 import { imgProxy } from "./title-page.js";
 import { esc } from "./utils.js";
 
-// Размер результата: во сколько раз или до какой ширины (px).
 const SIZES = [["x2", "×2"], ["x3", "×3"], ["x4", "×4"], ["w1920", "1920 px"], ["w2560", "2560 px"], ["w3840", "4K · 3840"]];
 const IMAGE_TYPES = ["png", "jpg", "jpeg", "webp", "bmp"];
 const BUILTIN = [["anime", "Аниме-арт"], ["sharp", "Максимально резко"]];
@@ -16,7 +11,6 @@ const BUILTIN = [["anime", "Аниме-арт"], ["sharp", "Максимальн
 export function openUpscale(d) {
   const sources = [["poster", "Обложка"], ...(d.has_banner ? [["banner", "Баннер"]] : []), ["own", "Своя картинка…"]];
   const pick = { src: "poster", model: "anime", size: "x4" };
-  // input — то, что увеличиваем: blob, имя для файла и размер исходника
   let input = null, busy = false, resultUrl = "", inputUrl = "";
   const seg = (attr, items, cur) => `<div class="seg-toggle" role="group">${items.map(([v, l]) => `<button type="button" class="seg-btn${v === cur ? " active" : ""}" ${attr}="${v}">${l}</button>`).join("")}</div>`;
   const overlay = openSheet(`
@@ -38,7 +32,6 @@ export function openUpscale(d) {
   const $ = sel => overlay.querySelector(sel);
   const selectSeg = (attr, value) => overlay.querySelectorAll(`[${attr}]`).forEach(x => x.classList.toggle("active", x.getAttribute(attr) === value));
   overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
-  // Нейросети: встроенные + свои (ncnn .param/.bin). Своя — ключ «custom:имя».
   let custom = [];
   const short = n => (n.length > 22 ? `${n.slice(0, 21)}…` : n);
   function renderModels() {
@@ -97,7 +90,6 @@ export function openUpscale(d) {
     $("[data-up-dims]").textContent = t ? `${input.w}×${input.h} → ${t.w}×${t.h}` : "";
   }
 
-  // Исходник показываем сразу — видно, что именно будем увеличивать.
   async function setInput(blob, name) {
     if (inputUrl) URL.revokeObjectURL(inputUrl);
     inputUrl = URL.createObjectURL(blob);
@@ -132,7 +124,6 @@ export function openUpscale(d) {
     }
   }
 
-  // Ctrl+V — картинка из буфера обмена (скриншот, скопированная из браузера).
   const onPaste = e => {
     if (!overlay.isConnected || busy) return;
     const file = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith("image/"));
@@ -204,9 +195,6 @@ export function openUpscale(d) {
     }
   });
 
-  // «До/после»: оригинал растянут до размера результата, результат поверх и срезан по линии. Вписанная в окно
-  // картинка ×4 уменьшается обратно, и разницы почти не видно — поэтому колесо приближает (до ×8) к точке под
-  // курсором, обе половины вместе; правая кнопка двигает приближенную картинку, двойной клик — обратно целиком.
   async function showCompare(before, after) {
     const [a, b] = await Promise.all([size(before), size(after)]);
     const stage = $("[data-up-stage]");
@@ -221,7 +209,6 @@ export function openUpscale(d) {
     const view = { z: 1, x: 0, y: 0 };
     const apply = () => {
       const r = cmp.getBoundingClientRect();
-      // не даём увести картинку за край: при ×z сдвиг в пределах [размер·(1−z); 0]
       view.x = Math.min(0, Math.max(r.width * (1 - view.z), view.x));
       view.y = Math.min(0, Math.max(r.height * (1 - view.z), view.y));
       cmp.style.setProperty("--tf", `translate(${view.x.toFixed(1)}px, ${view.y.toFixed(1)}px) scale(${view.z.toFixed(3)})`);
@@ -257,8 +244,6 @@ export function openUpscale(d) {
   }
 }
 
-// Сырой ответ команды (tauri::ipc::Response) приходит ArrayBuffer'ом только по двоичному каналу IPC; при запасном
-// (postMessage, как в сборке с нашей CSP) — обычным массивом чисел. Blob из такого массива — текст «137,80,…», не PNG.
 function toBytes(data) {
   return data instanceof ArrayBuffer || Array.isArray(data) ? new Uint8Array(data) : data;
 }

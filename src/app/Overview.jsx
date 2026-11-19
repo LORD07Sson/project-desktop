@@ -1,13 +1,3 @@
-// Вкладка «Обзор» — первый компонент на SolidJS в проекте (остальные
-// вкладки остаются на vanilla JS, см. tabs.js — осознанно частичная
-// миграция, не переписывание всего сразу). Данные приходят уже
-// готовыми пропом: fetch и жизненный цикл монтирования — в loadOverview()
-// в конце файла, та же схема, что была раньше (сходить на сервер, потом
-// отрисовать), только рисует теперь Solid, а не шаблонные строки.
-//
-// Обзор 2.0: вместо стены счётчиков — «что делать»: срочное с кнопкой,
-// конвейер по этапам, ближайшие дедлайны, загрузка команды. В пустой
-// студии — три шага онбординга вместо нулей.
 
 import { render } from "solid-js/web";
 import { pipelinePct } from "./utils.js";
@@ -15,9 +5,6 @@ import { loadPeopleNames, humanizeEvents, personName } from "./people-names.js";
 import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
 import { apiGet, openSheet, dialogSkeletonHtml, keepOnReload } from "./api.js";
 import { $, esc, initials, relTime, STATUS_COLOR_VAR } from "./utils.js";
-// esc() нужен только в строковых шаблонах (openMonthlyTopSheet ниже). В JSX его быть не должно: Solid экранирует
-// текстовые узлы сам, и esc() поверх этого даёт двойное экранирование —
-// имя «Иванов & Co» рендерилось как «Иванов &amp; Co».
 
 import { avatarHtml, loadAvatars } from "./profile.js";
 import { openReportDetail } from "./report-detail.js";
@@ -33,7 +20,6 @@ const DAY_MS = 86400000;
 const WEEKDAYS_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
 const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-// Этапы конвейера слева направо — в том же порядке, что колонки «Доски».
 const FLOW = ["draft", "review", "revision", "working", "completed"];
 
 function greeting() {
@@ -63,7 +49,6 @@ function todayStr() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// Дни до дедлайна относительно сегодняшней даты (дедлайн — дата без времени).
 function daysLeft(deadline) {
   if (!deadline) return null;
   return Math.round((Date.parse(deadline.slice(0, 10)) - Date.parse(todayStr())) / DAY_MS);
@@ -75,8 +60,6 @@ function ddmm(deadline) {
 
 const isOpen = r => r.status !== "completed" && r.status !== "cancelled";
 
-// «Требует внимания»: просроченное, дедлайн сегодня/завтра, застрявшее
-// без смены статуса 3+ дня — по срочности, у каждой строки своя кнопка.
 function attentionItems(reports) {
   const items = [];
   const seen = new Set();
@@ -112,7 +95,6 @@ function Sparkline(props) {
   );
 }
 
-// Пустая студия — вместо стены нулей три шага, чтобы было понятно, с чего начать.
 function EmptyStudio(props) {
   const members = props.data.access?.allowed || 0;
   const teamReady = members > 1;
@@ -145,7 +127,6 @@ function EmptyStudio(props) {
   );
 }
 
-// «Кадр»: серия — номер эпизода, этап и готовность в одном месте.
 const cleanLabel = s => (s || "").replace(/^[^\p{L}\p{N}]+/u, "");
 const epNum = r => { const m = (r.title || "").match(/сери[яи]\s*(\d+)/i); return m ? Number(m[1]) : null; };
 const showName = r => r.title_name || (r.title || "").replace(/\s*[,—–-]\s*сери[яи].*$/i, "");
@@ -157,7 +138,6 @@ const progressOf = r => pipelinePct(r) ?? STATUS_PCT[r.status] ?? 0;
 const statusColor = st => `var(${STATUS_COLOR_VAR[st] || "--s-draft"})`;
 const pad2 = n => String(n).padStart(2, "0");
 
-// Сколько осталось до конца дня срока (сроки — даты, без времени).
 function countdown(now) {
   const end = new Date(now);
   end.setHours(23, 59, 59, 0);
@@ -183,9 +163,6 @@ function heroKick(it) {
   return "Ближайший срок";
 }
 
-// Герой: самые срочные серии слайдами. Картинка — баннер тайтла с
-// нашего сервера; если баннера нет — размытая обложка и сама обложка
-// справа. Слайды листаются сами раз в 8 секунд, наведение — пауза.
 function Hero(props) {
   const items = props.items;
   const [idx, setIdx] = createSignal(0);
@@ -206,18 +183,14 @@ function Hero(props) {
           const r = it.r;
           const poster = imgProxy(r.poster_url);
           const banner = titleArt(r.title_id, "banner", 1440);
-          // Не меняем classList вручную в onError: Solid пересобирает class
-          // при смене активного слайда и стирает такую правку.
           const [bannerFailed, setBannerFailed] = createSignal(false);
           const left = daysLeft(r.deadline);
           const ep = epNum(r);
-          // Срок для трещин и мрака пересчитывается каждую секунду: в 0:00 серия становится просроченной прямо на глазах.
           const liveLeft = () => { now(); return daysLeft(r.deadline); };
           const crack = () => crackLevel(liveLeft(), now());
           const gloom = () => gloomLevel(liveLeft(), now());
           const broken = () => crack() >= 1;
           const onSlide = () => i() === idx();
-          // Кого ждёт серия — грузим при первом наведении на треснувшую обложку: окно в прошлое есть только у неё.
           const [targets, setTargets] = createSignal(null);
           const loadTargets = () => {
             if (targets() !== null || crack() <= 0) return;
@@ -250,7 +223,7 @@ function Hero(props) {
                 </div>
               </Show>
               <div class="kd-slide-fade" />
-              {/* Просрочено — подтёки и помехи, как у карточки на «Доске» (без прожилок: на большом слайде они читаются как молнии). */}
+              { }
               <Show when={broken()}><div class="kd-dead" innerHTML={deadFxHtml(r.public_id, { veins: 0, drips: 9 })} /></Show>
               <Show when={crack() > 0}><Eyes level={crack} gloom={gloom} active={onSlide} /></Show>
               <div class="kd-slide-tx">
@@ -322,8 +295,6 @@ function Overview(props) {
     (n => (n ? `${n} ${plural(n, "требует", "требуют", "требуют")} внимания` : "срочного нет"))(attention.filter(a => a.tone !== "blue").length),
   ].join(" · ");
   const flowTotal = Math.max(1, FLOW.reduce((s, st) => s + count(st), 0));
-  // Фон окна ведёт герой (смена слайда — смена фона); без героя — первая
-  // серия в работе.
   if (!heroItems.length && reel[0]) setBackdrop(titleArt(reel[0].title_id, "banner", 1440), imgProxy(reel[0].poster_url));
 
   return (
@@ -456,10 +427,6 @@ function Overview(props) {
   );
 }
 
-// Диалог «Рейтинг месяца» — остался на imperative openSheet (та же
-// функция, что и в остальном приложении), не переписан на Solid: это
-// одноразовый sheet поверх всего окна, а не часть дерева Обзора — Solid
-// тут не даёт ничего сверх того, что уже даёт openSheet.
 async function openMonthlyTopSheet() {
   const overlay = openSheet(`<h2>Рейтинг месяца</h2>${dialogSkeletonHtml(5)}`);
   const sheet = overlay.querySelector(".sheet");
@@ -480,7 +447,6 @@ async function openMonthlyTopSheet() {
       <span class="val">${p.completed} ✓</span>
     </div>
   `).join("");
-  // Роспись — отдельным рейтингом: их вклад — подготовленные серии (сабы, равки, пайплайн), а не закрытые.
   const prepRows = (d.prep_top || []).map((p, i) => `
     <div class="mini-row">
       <span class="rank">${medals[i] || i + 1}</span>
@@ -503,18 +469,10 @@ async function openMonthlyTopSheet() {
   sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
 }
 
-// Монтирование/размонтирование — та же схема, что была у старого
-// loadOverview(): сходить на сервер, затем отрисовать заново с нуля
-// (полный remount дерева на каждый вызов, не тонкое обновление сигналов
-// — ровно то же поведение, что раньше давал root.innerHTML = ...).
-// loadActiveTab()/refreshAll() в tabs.js продолжают звать loadOverview()
-// как раньше — сигнатура (async функция без аргументов, возвращающая
-// промис) не изменилась, имя файла — единственное отличие импорта.
 let disposePrev = null;
 
 export async function loadOverview() {
   const root = $("#overview-body");
-  // при повторном открытии прошлый «Обзор» остаётся на экране до прихода свежих данных
   if (!keepOnReload(root)) {
     if (disposePrev) { disposePrev(); disposePrev = null; }
     root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
@@ -524,8 +482,6 @@ export async function loadOverview() {
     [d, trend, dash, feed] = await Promise.all([
       apiGet("/overview"),
       apiGet("/trend").catch(() => null),
-      // Не критично для остального Обзора — если недоступно, просто не
-      // покажем «Требует внимания», а не завалим всю вкладку.
       apiGet("/dashboard/project").catch(() => null),
       apiGet("/feed", { offset: 0, page_size: 4 }).catch(() => null),
       loadPeopleNames(),

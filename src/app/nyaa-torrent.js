@@ -1,4 +1,3 @@
-// Nyaa/игры, вынесено из nyaa.js: торрент-клиент.
 import { invoke } from "./tauri.js";
 import { track } from "./telemetry.js";
 import { toast } from "./api.js";
@@ -6,7 +5,6 @@ import { $, esc } from "./utils.js";
 import { magnetLink, CLIENT_NAMES, CLIENT_PORTS } from "./nyaa-core.js";
 import { ICONS, attachVideoToReport, client, clientDraft, markSent, paintList, reportTarget, touch } from "./nyaa.js";
 
-// ---------- торрент-клиент ----------
 export function paintClientLabel() {
   const l = $("#ny-client-lbl");
   if (l) l.textContent = client ? CLIENT_NAMES[client.kind] || "Торрент-клиент" : "Торрент-клиент";
@@ -50,7 +48,6 @@ export function openPanel(id) {
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-// Magnet в торрент-клиенте, назначенном в системе по умолчанию: настраивать Web UI не нужно.
 export async function openInSystemClient(list) {
   const magnets = list.map(magnetLink).filter(Boolean).slice(0, 10);
   if (!magnets.length) { toast("У раздачи нет magnet-ссылки.", "error"); return; }

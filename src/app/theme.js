@@ -1,12 +1,9 @@
-// Светлая/тёмная тема — localStorage, применяется сразу при импорте модуля.
 
 export function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   try { localStorage.setItem("project-theme", theme); } catch (_) {}
 }
 
-// Фон тёмной темы (Настройки → Внешний вид → Фон): "glow" — «Свечение
-// сверху», "fire" — «Свечение снизу».
 export function applyLook(look) {
   document.documentElement.dataset.look = look;
   try { localStorage.setItem("project-look", look); } catch (_) {}
@@ -16,18 +13,11 @@ export function applyLook(look) {
   let saved = null;
   try { saved = localStorage.getItem("project-theme"); } catch (_) {}
   applyTheme(saved || "dark");
-  // Вариант оформления тёмной темы: "glow" (по умолчанию) или "fire".
   let look = null;
   try { look = localStorage.getItem("project-look"); } catch (_) {}
-  // "kadr" — матовое стекло «Кадра» (по умолчанию); "glow"/"fire" — прежние
-  // фоны со свечением.
   document.documentElement.dataset.look = look || "kadr";
 })();
 
-// View Transitions API (Chromium/WebView2 111+, см. build.yml — сборка
-// только под windows-latest, там актуальный WebView2) даёт плавный
-// crossfade почти бесплатно: браузер сам снимает снимки до/после и
-// анимирует переход между ними.
 document.querySelector("#theme-toggle").addEventListener("click", () => {
   const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
   if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {

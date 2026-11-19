@@ -1,13 +1,6 @@
 name: Build desktop client (Tauri + Velopack)
 
 on:
-  # Раньше собирали под все 3 ОС на каждый push — GitHub Actions даёт
-  # ограниченный бесплатный пакет минут на приватных репо в месяц, а
-  # macOS/Windows-раннеры съедают его в 10x/2x быстрее обычного (см.
-  # CHANGELOG v0.4.1 — упёрлись в лимит после серии пушей за день).
-  # Теперь автосборка идёт только когда меняется VERSION — то есть
-  # реально готовим релиз, а не на любую правку CI/доков/README.
-  # Собрать вне этого — вручную, кнопкой "Run workflow" (workflow_dispatch).
   push:
     branches: [main]
     paths: ["VERSION"]
@@ -15,23 +8,10 @@ on:
 
 jobs:
   build:
-    # Только Windows — раньше собирали под 3 ОС параллельно, но
-    # одновременные джобы регулярно ловили гонку при создании релиза.
     permissions:
       contents: write
     runs-on: windows-latest
-    # Одна группа с build-alpha.yml: «один джоб — гонки неоткуда взяться»
-    # верно только внутри этого workflow. Push, меняющий VERSION, — это
-    # push в main, то есть build-alpha.yml стартует на него ТОЖЕ, и оба
-    # запуска одновременно делают `vpk upload github` в один репозиторий
-    # (а он читает и дописывает общий список релизов). Очередь вместо
-    # параллели; не отменяем уже идущую публикацию — оборваться на
-    # середине заливки хуже, чем подождать.
     concurrency:
-      # Своя очередь: общая с альфой вытесняла ожидающий запуск —
-      # GitHub держит в группе только один pending. Релизы и фиды разные
-      # (vX.Y.Z/releases.win.json и alpha-latest/releases.alpha.json),
-      # так что параллельно они друг другу не мешают.
       group: velopack-stable
       cancel-in-progress: false
 
@@ -40,17 +20,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # vpk (упаковщик Velopack) — .NET-инструмент, windows-latest
-      # обычно уже несёт нужный SDK, но явный setup надёжнее, чем
-      # рассчитывать на то, что осталось в образе раннера сейчас.
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
-      # Node 24 — активная LTS (поддержка до апреля 2028). На 20 CI стоять
-      # больше не может: линия EOL с апреля 2026, а devDependency jsdom
-      # (его использует scripts/verify-modules.mjs) с 30.x требует
-      # ^22.22.2 || ^24.15.0 || >=26.
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
@@ -59,9 +32,6 @@ jobs:
         shell: bash
         run: echo "PKG_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
 
-      # Обновления (Velopack) сравнивают версии по semver: 1.0.6 МЕНЬШЕ 1.0.54 (6 < 54), хотя «десятичная» запись кажется
-      # больше. Релиз с меньшим номером выходит как «Latest», но клиенты его не предложат, а альфа-сборки (патч + 1)
-      # отстанут ещё сильнее. Поэтому сборка останавливается, если VERSION не новее уже выпущенных релизов.
       - name: Проверка версии — должна быть новее всех выпущенных
         shell: bash
         run: |
@@ -73,14 +43,6 @@ jobs:
             exit 1
           fi
 
-      # VERSION — единственный источник версии. tauri.conf.json/Cargo.toml
-      # подставляются отсюда прямо перед сборкой, чтобы номер в именах
-      # файлов установщиков не расходился с тегом релиза (однажды уже
-      # разъехалось — v0.3.0 собрал файлы "...0.2.0...").
-      # Номер, который приложение показывает в «Настройках», больше здесь
-      # не патчится: его подставляет сам Vite (define __APP_VERSION__ в
-      # vite.config.js читает VERSION, а в CI — переменную PKG_VERSION
-      # ниже), поэтому и локальная сборка показывает правду.
       - name: Подставить версию в tauri.conf.json/Cargo.toml
         shell: bash
         run: |
@@ -95,13 +57,6 @@ jobs:
           sed -i.bak -E 's/^version = \"[0-9.]+\"/version = \"${{ env.PKG_VERSION }}\"/' src-tauri/Cargo.toml
           rm -f src-tauri/Cargo.toml.bak
 
-      # Фронтенд теперь собирается Vite (src/ -> dist/, см. историю
-      # миграции vanilla JS -> Vite/Solid) — раньше dist/ был готовыми
-      # файлами прямо в git, отдельного шага сборки не требовалось.
-      # Обязательно ПОСЛЕ подстановки версии выше — иначе в собранный
-      # бандл попадёт версия из settings.js как она лежит в git.
-      # PKG_VERSION виден Vite как process.env.PKG_VERSION — см.
-      # vite.config.js, define __APP_VERSION__.
       - name: npm ci, lint && vite build
         shell: bash
         run: |
@@ -110,28 +65,10 @@ jobs:
           npm run build
           npm test
 
-      # ffmpeg нужен для локального QC звука — раньше требовался в PATH
-      # у пользователя, теперь кладём готовый статичный бинарник прямо
-      # в установщик (src-tauri/binaries/ffmpeg.exe рядом с .exe в
-      # pack_dir/, см. шаг vpk pack ниже). В git лежит только текстовый
-      # плейсхолдер (иначе даже `cargo check` падает — resources
-      # tauri.conf.json проверялись на каждой сборке, пока модуль не
-      # ушёл на Velopack-упаковку — плейсхолдер оставлен и сейчас, чтобы
-      # не плодить разные версии файла между ветками) — тут подменяем
-      # его настоящим.
-      #
-      # Источник — закреплённый (не "latest", иммутабельный) релиз
-      # BtbN/FFmpeg-Builds, статичная LGPL-сборка (без GPL-кодеков —
-      # нам для QC нужно только декодирование, лицензионно чище).
-      # SHA256 зафиксирован — если апстрим когда-нибудь переиздаст
-      # файл под тем же именем с другим содержимым, сборка упадёт
-      # явной ошибкой, а не тихо подсунет что-то другое.
       - name: Скачать и проверить статичный ffmpeg.exe
         shell: bash
         run: |
           set -e
-          # Зеркало в собственном релизе репозитория: BtbN хранит автосборки около двух недель, закреплённый у них адрес давал 404.
-          # Файл не менялся, сумма записана здесь и сверяется ниже. Обновлять: новый релиз tools-ffmpeg-*, URL и SHA256 — в build.yml и build-alpha.yml.
           url="https://github.com/LORD07Sson/project-desktop/releases/download/tools-ffmpeg-N-127271/ffmpeg-N-127271-gba987fe24d-win64-lgpl.zip"
           expected_sha256="32b374c9831ae5640e33977baa4cf04a59704f616a0c3743654697fb3c7f26de"
           curl -fL --retry 5 --retry-all-errors --retry-delay 2 --max-time 300 -o ffmpeg.zip "$url"
@@ -143,10 +80,6 @@ jobs:
           unzip -t -q ffmpeg.zip
           unzip -q ffmpeg.zip -d ffmpeg_extracted
           find ffmpeg_extracted -iname "ffmpeg.exe" -exec cp {} src-tauri/binaries/ffmpeg.exe \;
-          # ffprobe.exe — из того же архива, тот же SHA256 уже проверен выше
-          # (один zip на оба бинарника). Нужен инструментам ffmpeg (media_tools.rs:
-          # probe_media/probe_keyframes) — сам ffmpeg.exe вывод -show_streams
-          # не отдаёт, это отдельная утилита из того же дистрибутива.
           find ffmpeg_extracted -iname "ffprobe.exe" -exec cp {} src-tauri/binaries/ffprobe.exe \;
           rm -rf ffmpeg.zip ffmpeg_extracted
           test -s src-tauri/binaries/ffmpeg.exe || { echo "::error::ffmpeg.exe не найден в архиве"; exit 1; }
@@ -158,15 +91,6 @@ jobs:
           PROJECT_UPDATE_CHANNEL: stable
         run: cargo build --release --manifest-path src-tauri/Cargo.toml --features custom-protocol
 
-      # Velopack вместо tauri-action+NSIS: клиент (HttpSource) читает
-      # релизы репозитория напрямую (репозиторий публичный), тихая
-      # установка без UAC, задел на дельта-патчи между версиями. Пакуем
-      # в чистую директорию — Cargo кладёт рядом с .exe в target/release
-      # служебные файлы сборки (deps/, build/, .fingerprint/ и т.п.),
-      # которые vpk пытался бы упаковать вместе с приложением, если
-      # указать target/release как есть. ffmpeg.exe — тем же способом,
-      # рядом с главным .exe (см. audio_qc.rs: resolve_ffmpeg() ищет
-      # его именно рядом с исполняемым файлом приложения).
       - name: Собрать релиз через vpk
         shell: bash
         run: |
@@ -199,9 +123,6 @@ jobs:
             --tag "v${{ env.PKG_VERSION }}" \
             --releaseName "Project v${{ env.PKG_VERSION }}"
 
-      # Та же страховка, что и в build-alpha.yml: vpk умеет выйти с кодом
-      # 0, оставив релиз черновиком — сборка зелёная, а обновления никто
-      # не видит, потому что черновик не отдаётся публичным API.
       - name: Проверить, что релиз опубликован
         shell: bash
         env:

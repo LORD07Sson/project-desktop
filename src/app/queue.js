@@ -1,6 +1,3 @@
-// Вкладка «Моя очередь» — личный экран участника: незакрытые серии,
-// назначенные на меня, по срочности (/api/me/queue). Открыта всем, не
-// только админам: «что мне записать и к какому сроку» нужно каждому.
 
 import { rollText } from "./roll-digits.js";
 import { state, can } from "./state.js";
@@ -34,7 +31,6 @@ function dueText(left) {
   return `через ${left} ${plural(left, "день", "дня", "дней")}`;
 }
 
-// Порядок групп — порядок на экране: сначала то, что ещё не сдано (по срочности), сданное — в самом низу.
 const COLUMNS = [
   { key: "hot", label: "Горит", hint: "просрочено, сегодня и завтра", test: (it, l) => !it.personal_submitted_by_deadline && l !== null && l <= 1 },
   { key: "week", label: "На неделе", hint: "2–7 дней", test: (it, l) => !it.personal_submitted_by_deadline && l !== null && l > 1 && l <= 7 },
@@ -42,8 +38,6 @@ const COLUMNS = [
   { key: "submitted", label: "Сдано вовремя", hint: "личная сдача до срока", test: it => it.personal_submitted_by_deadline },
 ];
 
-// Готовность по статусу: у серии в очереди нет цепочки этапов, только
-// статус — шкала показывает, как далеко серия по пути статусов.
 const STATUS_PCT = { draft: 6, working: 45, revision: 60, review: 75, completed: 100 };
 const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -51,7 +45,7 @@ const pad2 = n => String(n).padStart(2, "0");
 const cleanLabel = s => String(s || "").replace(/^[^\p{L}\p{N}]+/u, "");
 const QUEUE_MODE_KEY = "project.queue.view";
 let queueMode = "deadlines";
-try { if (localStorage.getItem(QUEUE_MODE_KEY) === "statuses") queueMode = "statuses"; } catch (_) { /* без хранилища — вид по умолчанию */ }
+try { if (localStorage.getItem(QUEUE_MODE_KEY) === "statuses") queueMode = "statuses"; } catch (_) { }
 
 function viewSwitch() {
   return `<div class="q-view-switch" role="tablist" aria-label="Вид очереди">
@@ -63,12 +57,11 @@ function viewSwitch() {
 function bindViewSwitch(root) {
   root.querySelectorAll("[data-q-mode]").forEach(button => button.addEventListener("click", () => {
     queueMode = button.dataset.qMode;
-    try { localStorage.setItem(QUEUE_MODE_KEY, queueMode); } catch (_) { /* не критично */ }
+    try { localStorage.setItem(QUEUE_MODE_KEY, queueMode); } catch (_) { }
     loadQueue();
   }));
 }
 
-// Сколько осталось до конца дня срока — для серий «сегодня».
 function countdown() {
   const now = new Date();
   const end = new Date(now);
@@ -110,8 +103,6 @@ const clockText = () => {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 };
 
-// Часы «Сейчас» и живой отсчёт у серий со сроком сегодня — цифры прокручиваются (roll-digits.js).
-// Один таймер на экран, выровненный по началу секунды: цифра меняется ровно со сменой времени.
 function startTicker(root) {
   clearTimeout(tickTimer);
   const tick = () => {
@@ -138,7 +129,6 @@ export async function loadQueue() {
   }
   const today = d.today;
   const items = d.items || [];
-  // Фон окна — обложка первой (самой срочной) серии на руках.
   const lead = items.find(it => it.title_id || it.poster_url);
   if (lead) setBackdrop(titleArt(lead.title_id, "banner", 1440), imgProxy(lead.poster_url));
   const activeItems = items.filter(it => !it.personal_submitted_by_deadline);
@@ -213,15 +203,12 @@ async function loadPersonalStatuses() {
   }
 }
 
-// Колонки личной доски: цвет, подпись и пустое состояние — по смыслу колонки (их три и они фиксированные).
 const STATUS_LOOK = {
   "Очередь": { tone: "queue", hint: "ещё не начато", empty: "Назначенные вам серии появятся здесь сами", next: "В работе", nextLabel: "→ В работу" },
   "В работе": { tone: "work", hint: "делаю сейчас", empty: "Перетащите сюда серию, за которую взялись", next: "Сдано", nextLabel: "✓ Сдано" },
   "Сдано": { tone: "done", hint: "отмечено сданным", empty: "Сданные серии — здесь. Общий статус серии это не меняет" },
 };
 
-// Срок по-человечески: «просрочено 2 дн», «сегодня», «завтра», «через 5 дн», «12.11».
-// moved_at — SQLite CURRENT_TIMESTAMP, т.е. UTC без зоны.
 function doneAgo(movedAt) {
   const t = movedAt ? new Date(`${movedAt.replace(" ", "T")}Z`) : null;
   if (!t || isNaN(t)) return null;
@@ -325,9 +312,6 @@ function renderPersonalStatuses(root, data) {
   }));
 }
 
-// Перенос карточки между колонками — на Pointer Events, как на общей доске (board.js: wireCardDrag): нативный
-// HTML5 drag&drop в WebView2 программы не доставляет dragover/drop, и карточка просто не перетаскивалась.
-// До 6 px сдвига — обычный клик (открыть серию), дальше за курсором едет копия карточки, колонка под ней подсвечена.
 function wireStatusDrag(card) {
   card.addEventListener("pointerdown", down => {
     if (down.button !== 0 || down.target.closest("button")) return;
@@ -361,12 +345,12 @@ function wireStatusDrag(card) {
       card.removeEventListener("pointermove", move);
       card.removeEventListener("pointerup", up);
       card.removeEventListener("pointercancel", up);
-      if (!ghost) return;   // не сдвинули — это клик, его обработает click
+      if (!ghost) return;
       ghost.remove();
       card.classList.remove("dragging");
       document.body.style.cursor = "";
       overCol?.classList.remove("drag-over");
-      skipStatusOpenUntil = Date.now() + 500;   // click после отпускания не должен открывать серию
+      skipStatusOpenUntil = Date.now() + 500;
       const from = card.closest("[data-q-status-col]");
       if (e.type === "pointerup" && overCol && overCol !== from) moveStatusCard(card.dataset.qStatusOpen, overCol.dataset.qStatusCol);
     };
@@ -426,7 +410,6 @@ async function moveStatusCard(publicId, columnId) {
   } catch (error) { toast(`Не удалось переместить серию: ${error.message}`, "error"); }
 }
 
-// Счётчик на пункте меню — сколько серий горит (просрочено, сегодня, завтра).
 export async function refreshQueueBadge() {
   const el = $("#queue-badge");
   if (!el) return;

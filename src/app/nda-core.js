@@ -1,5 +1,3 @@
-// Соглашение о неразглашении при первом входе. Чистая часть: ключи и
-// проверка принятия — без DOM, чтобы проверять node-тестом.
 
 export const NDA_VERSION = "1";
 
@@ -13,7 +11,7 @@ export const NDA_TEXT = [
 export const ndaKey = telegramId => `project-nda-v${NDA_VERSION}-${telegramId}`;
 
 export function ndaAccepted(storage, telegramId) {
-  if (!telegramId) return true; // нет пользователя — спрашивать нечего
+  if (!telegramId) return true;
   try { return !!storage.getItem(ndaKey(telegramId)); } catch (_) { return false; }
 }
 

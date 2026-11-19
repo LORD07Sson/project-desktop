@@ -1,4 +1,3 @@
-// Nyaa/игры, вынесено из nyaa.js: внешние источники (SeaDex, AnimeTosho, nekoBT, Tsukihime); AnimeTosho: субтитры и кадры.
 import { invoke, pickOutputFile } from "./tauri.js";
 import { toast, apiBlob } from "./api.js";
 import { $, esc } from "./utils.js";
@@ -6,10 +5,6 @@ import { fmtBytes, isHash40, sourceUrls, parseToshoTorrent, parseSubtitle, parse
 import { ICONS, SRC_NAMES, detail, drawerBodyHtml, hashOf, loadSources, paintDrawer, prefs, shortErr } from "./nyaa.js";
 import { exitOf, routeOf, viaQuery } from "./nyaa-routes.js";
 
-// ---------- внешние источники (SeaDex, AnimeTosho, nekoBT, Tsukihime) ----------
-// Сначала напрямую с этого компьютера; если сайт не отвечает (закрыт у провайдера) —
-// через сервер студии (/api/meta/relay), у которого другая сеть. Ответ «404» от сайта —
-// это «в базе нет», а не поломка, поэтому дальше он не пробуется.
 export const isNotFound = e => /ответил 404/.test(String(e && e.message ? e.message : e));
 export const isNoConnection = e => /Не удалось загрузить|error sending request|timed out|connect/i.test(String(e && e.message ? e.message : e));
 
@@ -27,14 +22,13 @@ export async function metaGet(url) {
     if (mode === "pc" || isNotFound(e) || !isNoConnection(e)) throw e;
     let wrapped;
     try { wrapped = JSON.parse(await (await apiBlob(`/meta/relay?url=${encodeURIComponent(url)}${viaQuery("sources")}`)).text()); }
-    catch (_) { throw e; }                      // на сервере ручки нет или он недоступен — показываем исходную ошибку
+    catch (_) { throw e; }
     if (wrapped.status === 404) throw new Error("Сайт ответил 404");
     if (wrapped.status !== 200) throw new Error(`Сайт ответил ${wrapped.status}`);
     return String(wrapped.body || "");
   }
 }
 
-// ---------- AnimeTosho: субтитры и кадры ----------
 const DATA_SHOT = b64 => `data:image/jpeg;base64,${b64}`;
 async function toshoRelay(params) {
   const q = new URLSearchParams({ ...params, ...(exitOf("sources") ? { via: exitOf("sources") } : {}) });
@@ -48,7 +42,6 @@ async function loadTosho(d) {
   const paint = () => { if (detail === d && d.tab === "tosho") $("#ny-d-body").innerHTML = drawerBodyHtml(d); };
   const hash = hashOf(d);
   if (!isHash40(hash)) { d.tosho.state = "none"; paint(); return; }
-  // Tsukihime даёт точные номера тайтла (ссылки) и MediaInfo файла; не мешает AnimeTosho, если недоступен.
   metaGet(sourceUrls(hash).tsukihime).then(txt => {
     const r = parseTsukiFull(txt);
     if (!r.found) return;

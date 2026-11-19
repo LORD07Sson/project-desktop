@@ -1,22 +1,7 @@
-// Коллекция наград карточками-марками. Данные — те же badges из /api/me,
-// что рисует профиль плитками (profile_api._user_badges): своего бэкенда
-// нет. Открывается кликом по плитке достижения в профиле (сразу в фокус
-// этой карточки) или из командной палитры.
-//
-// Движение (разбор референса, см. заметки сессии):
-//  - hover: карточка приподнимается и наклоняется к курсору, соседние
-//    обесцвечиваются, над карточкой всплывает моно-чип с номером;
-//  - клик: фон темнеет ~300 мс, карточка FLIP-ом летит из своего места
-//    в центр, выпрямляясь (~520 мс, ease-out), в фокусе следует за
-//    курсором ±8° и гоняет блик; выход — обратный путь ~360 мс.
-// prefers-reduced-motion: без наклонов и полётов, только смена прозрачности.
 
 import { apiGet } from "./api.js";
 import { esc, BADGE_RARITY_ORDER } from "./utils.js";
 
-// Арт персонажей — официальный фанкит Arknights (arknights.global/fankit),
-// фигуры вырезаны без фона (rembg, isnet-anime). Подобран по смыслу награды:
-// «Первый отчёт» — героиня в начале пути, «Дирижёр» — командир и т.д.
 const ART_FILES = import.meta.glob("../assets/award-art/*.webp", { eager: true, query: "?url", import: "default" });
 const art = (slug, hi) => ART_FILES[`../assets/award-art/${slug}${hi ? "@4k" : ""}.webp`] || "";
 const ART_BY_LABEL = {
@@ -32,8 +17,6 @@ const ART_BY_LABEL = {
   "Дирижёр: 25 назначений": "conductor",
   "25 серий подготовлено": "series-25",
 };
-// Ручные награды (custom) и будущие без своего арта — общий портрет.
-// В сетке — лёгкая версия (720 px), в крупном фокусе — 4K (до 2160 px).
 const artFor = (b, hi) => art(ART_BY_LABEL[b.label] || "custom", hi);
 
 const RARITY = {
@@ -58,7 +41,6 @@ function cardHtml(b, i) {
   const r = RARITY[b.rarity] ? b.rarity : "common";
   const has = b.target ? Math.max(0, Math.min(b.target, b.current || 0)) : null;
   const pct = b.target ? Math.round((has / b.target) * 100) : 0;
-  // Лёгкий веер: у каждой карточки свой постоянный наклон −4…+4°.
   const tilt = ((i * 37) % 9) - 4;
   const foot = b.unlocked
     ? `<span class="ac-state">получено</span>`
@@ -86,7 +68,6 @@ function sortBadges(list) {
     || (BADGE_RARITY_ORDER[a.rarity] ?? 9) - (BADGE_RARITY_ORDER[b.rarity] ?? 9));
 }
 
-/** Открыть коллекцию; focusLabel — сразу показать эту карточку крупно. */
 export async function openAwardCollection(focusLabel) {
   if (root) return;
   root = document.createElement("div");
@@ -122,7 +103,7 @@ function closeCollection() {
   setTimeout(() => el.remove(), reduced() ? 0 : 260);
 }
 
-let focused = null; // { card, clone }
+let focused = null;
 
 function onKey(e) {
   if (e.key !== "Escape" || !root) return;
@@ -154,7 +135,6 @@ function wire(host, list) {
   wireGrid(host.querySelector(".ac-grid"), (c) => { if (list[c.dataset.i]) focusCard(c); });
 }
 
-// Наклон/подсветка/клик для любой сетки карточек — и в оверлее, и в профиле.
 function wireGrid(grid, onPick) {
   grid.addEventListener("pointermove", (e) => {
     const c = e.target.closest(".ac-card");
@@ -177,9 +157,6 @@ function wireGrid(grid, onPick) {
   });
 }
 
-// Раздел «Награды» в профиле: плитки .pf-badges (их рисует profile.js)
-// заменяем этими же марками, не трогая разметку профиля. Режим
-// разработчика (кнопки отзыва ручных наград) оставляем на плитках.
 let inlineBusy = false;
 async function upgradeProfileBadges() {
   const box = document.querySelector(".pf-badges:not([data-ac])");
@@ -195,7 +172,7 @@ async function upgradeProfileBadges() {
   grid.className = "ac-grid ac-inline";
   grid.innerHTML = list.map(cardHtml).join("");
   box.before(grid);
-  box.style.display = "none"; // плитки остаются в разметке (их проверяет profile-qc-test), карточки — вместо них на экране
+  box.style.display = "none";
   wireGrid(grid, (c) => openAwardCollection(list[c.dataset.i]?.label));
 }
 new MutationObserver(() => { if (document.querySelector(".pf-badges:not([data-ac])")) upgradeProfileBadges(); })
@@ -210,7 +187,6 @@ function focusCard(card) {
   card.classList.forEach(c => { if (c.startsWith("r-") || c === "won" || c === "locked") clone.classList.add(c); });
   const hiImg = clone.querySelector(".ac-char[data-hi]");
   if (hiImg && hiImg.dataset.hi) {
-    // 4K подменяем, только когда догрузилась, — без мигания пустым полем.
     const pre = new Image();
     pre.onload = () => { hiImg.src = pre.src; };
     pre.src = hiImg.dataset.hi;
@@ -257,8 +233,6 @@ function unfocus() {
   a.onfinish = done;
 }
 
-// Плитка достижения в профиле → коллекция с этой карточкой в фокусе.
-// Делегирование, чтобы не трогать разметку профиля.
 document.addEventListener("click", (e) => {
   const tile = e.target.closest?.(".pf-badge");
   if (!tile || e.target.closest("button")) return;

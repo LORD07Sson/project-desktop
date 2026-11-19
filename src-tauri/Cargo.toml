@@ -4,43 +4,16 @@ version = "0.6.0"
 description = "Project Desktop — клиент студии дубляжа"
 license-file = "../LICENSE"
 edition = "2021"
-# `[T]::as_chunks` в audio_qc.rs стабилизирован в 1.88 — на более
-# старом тулчейне сборка падает с невнятной ошибкой про нестабильную фичу.
 rust-version = "1.88"
 
-# Без этой фичи tauri сам решает, что грузить, по debug/release-сборке —
-# а точнее НЕ решает: без custom-protocol он всегда пытается открыть
-# tauri.conf.json -> build.devUrl (Vite dev-сервер), даже в --release,
-# если сборка идёт напрямую cargo build (как в build.yml/build-alpha.yml),
-# а не через cargo-tauri CLI (тот сам подставляет этот флаг под капотом
-# для `tauri build`, но не для `tauri dev` — тут именно так и нужно).
-# Без флага собранный .exe у пользователя пытается открыть
-# http://localhost:1420 и падает с ERR_CONNECTION_REFUSED — там же нет
-# никакого Vite dev-сервера, это не окно разработчика.
 [features]
 custom-protocol = ["tauri/custom-protocol"]
-# Правая кнопка -> «Осмотреть» в собранном бинарнике. Раньше эта фича
-# стояла в списке tauri безусловно, то есть devtools уезжали и в релиз к
-# студии: на общей рабочей машине любой желающий открывает консоль в
-# контексте приложения и оттуда вызывает ЛЮБУЮ tauri-команду с правами
-# вошедшего пользователя, а заодно читает его desktop-токен из памяти
-# страницы. Теперь это отдельный флаг, который CI не передаёт:
-#   cargo run --features devtools
 devtools = ["tauri/devtools"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# protocol-asset — доступ вебвью к произвольному локальному файлу по asset:
-# URL (convertFileSrc() на JS-стороне), нужен для видео-превью в
-# инструментах ffmpeg (media_tools.rs: register_media_file). Без неё
-# app.asset_protocol_scope() недоступен вовсе.
-# devtools здесь НЕТ намеренно — см. [features] выше: в релизной сборке
-# консоль в контексте приложения это готовый обход всех проверок на
-# JS-стороне. Диагностика «у пользователя не работает» закрыта файловыми
-# логами (tauri-plugin-log ниже + кнопка «Открыть логи» в настройках),
-# а не консолью на рабочей машине студии.
 tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-shell = "2"
@@ -49,87 +22,41 @@ tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-store = "2"
-# Файловые логи с ротацией + зеркалирование в webview-консоль — единая
-# точка диагностики для всех модулей (обновления, audio QC, инструменты
-# ffmpeg, mpv, сетевые запросы к своему API), вместо разрозненных toast/
-# eprintln!, после которых при жалобе пользователя остаётся только
-# гадать. Настройка таргетов — в main.rs::run().
 tauri-plugin-log = "2"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Автообновление — Velopack вместо tauri-plugin-updater+NSIS-инсталлятора:
-# HttpSource качает фид и пакет по прямым ссылкам на файлы релизов (прокси
-# на своём сервере не нужен), тихая установка без UAC, задел на дельта-
-# патчи вместо полного скачивания каждый раз. См. main.rs.
 velopack = "1.2.0"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
-# Разбор полезной нагрузки JWT-токенов Steam (срок действия, SteamID) в steam_session.rs.
 base64 = "0.22"
-# SHA-256 файлов для антивируса (antivirus.rs): сверка с базой хешей вредоносных образцов.
 sha2 = "0.10"
-# Поведенческий монитор (behavior.rs): процессы с нагрузкой/командными строками и наблюдатель за файлами пользователя (признаки шифровальщика).
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 notify = "8"
-# Загрузка файла, перетащенного из проводника, и скачивание вложений
-# (upload_report_file/download_report_file в main.rs) — HTTP на свой API
-# напрямую из Rust, минуя JS/fetch: не нужен tauri-plugin-fs, а токен
-# уходит заголовком, а не в строке URL. Путь на диске команда берёт не
-# на веру: читать можно только то, что пользователь сам перетащил в
-# окно (см. DroppedFiles в main.rs).
-# rustls вместо native-tls — не тащит системный OpenSSL на сборку.
 reqwest = { version = "0.12", default-features = false, features = ["multipart", "json", "rustls-tls", "stream"] }
 futures-util = "0.3"
-# IPC-клиент до mpv (mpv_embed.rs) — именованный пайп на Windows. tokio
-# уже тянется самим tauri (его runtime исполняет #[tauri::command(async)]),
-# здесь просто явная зависимость на тот же мажор ради net-типов.
 tokio = { version = "1", features = ["net", "io-util", "time", "sync"] }
-# reveal_item_in_dir для open_log_folder ("Открыть логи" в настройках) —
-# tauri-plugin-shell::Shell::open той же цели deprecated в пользу этого
-# плагина начиная с tauri 2.
 tauri-plugin-opener = "2.5.5"
-# luatools.rs: распаковка zip-архивов с lua/manifest файлами.
 zip = { version = "2", default-features = false, features = ["deflate"] }
-# luatools.rs: установка mtime на свежеустановленных файлах.
 filetime = "0.2"
 
-# windows-rs — только на Windows: mpv_embed.rs создаёт нативное child-окно
-# (CreateWindowExW) под видео mpv (--wid) и двигает его SetWindowPos при
-# ресайзе. Версия "0.62" совпадает с Tauri/Wry (Cargo.lock: tauri ->
-# windows 0.62.2), поэтому HWND из WebviewWindow::hwnd() совместим с API.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
     "Win32_Foundation",
-    # DwmSetWindowAttribute — скругление углов и цвет рамки окна под
-    # Windows 11 (main.rs: apply_windows_11_chrome). Системный заголовок
-    # выключен, так что рамку рисует только DWM, и её цвет по умолчанию
-    # не имеет ничего общего с палитрой приложения.
     "Win32_Graphics_Dwm",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
     "Win32_System_LibraryLoader",
-    # desktop_notify.rs: AUMID процесса и ярлык в «Пуске» под него —
-    # иначе Windows подписывает тосты «Windows PowerShell».
     "Win32_UI_Shell",
     "Win32_UI_Shell_PropertiesSystem",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Variant",
     "Win32_Storage_EnhancedStorage",
-    # installs.rs: цель ярлыка (IShellLinkW::GetPath) и тип диска при поиске старых копий программы.
     "Win32_Storage_FileSystem",
-    # luatools.rs: доступ к реестру Steam для определения пути установки.
     "Win32_System_Registry",
-    # luatools.rs: DPAPI шифрование токена lua.tools (как в оригинальном
-    # LuaTools-App через System.Security.Cryptography.ProtectedData).
     "Win32_Security_Cryptography",
 ] }
-# Тосты под своим AUMID (desktop_notify.rs) — та же версия, что тянет
-# tauri-plugin-notification, отдельной копии крейта не появляется.
 tauri-winrt-notification = "0.8"
-# Только для disable_browser_accelerator_keys (main.rs). Должна совпадать
-# с Tauri/Wry: их WebView2 controller использует webview2-com 0.39.1 и
-# windows-core 0.62.2; старый 0.38 создаёт несовместимые COM-типы.
 webview2-com = "0.39.1"
 
 [profile.release]

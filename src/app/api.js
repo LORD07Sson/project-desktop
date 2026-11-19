@@ -1,6 +1,3 @@
-// HTTP-клиент к тому же REST API, что и мини-апп (см. docs/API.md), плюс
-// тосты и универсальная обёртка для модалок (openSheet/dialogSkeletonHtml) —
-// используются буквально всеми остальными модулями.
 
 import { origin as SERVER_ORIGIN } from "../../server.json";
 import { state } from "./state.js";
@@ -11,38 +8,22 @@ import { getVersion } from "./tauri.js";
 
 const toastLog = tagLogger("toast");
 
-// Версия программы уходит с запросами (X-App-Version) — владелец видит в «Команде», у кого старая версия.
 let appVersion = "";
-getVersion().then(v => { appVersion = v; }).catch(() => { /* не в приложении */ });
+getVersion().then(v => { appVersion = v; }).catch(() => { });
 
-// Служебные заголовки для запросов в обход api(): XHR-загрузки, blob, медиа постов. Без версии сервер с обязательной
-// минимальной версией отвечал 426 «устарела» на свежей программе — так ломалась загрузка файлов в 2.5.5.
 export function clientHeaders(headers = {}) {
   if (state.token) headers["X-Init-Data"] = state.token;
   if (appVersion) headers["X-App-Version"] = appVersion;
   return addPreviewHeader(headers);
 }
 
-// Адрес сервера — из server.json в корне (то же место читает Rust при сборке); сменить: npm run set-server.
 export const API_BASE = `${SERVER_ORIGIN}/api`;
 
-// Без явного таймаута fetch() ждёт ответа сколько угодно — если сеть
-// до сервера просто медленная/легла (не сразу видимая ошибка, а тихое
-// зависание соединения), пользователь смотрит на неподвижный скелетон
-// без единого сигнала, что что-то пошло не так, и это неотличимо от
-// зависшего интерфейса. 20с — заметно больше обычного отклика (доли
-// секунды — единицы секунд), но не бесконечность.
 const REQUEST_TIMEOUT_MS = 20_000;
-const NET_RETRY_MS = [1500, 3000, 5000];   // паузы между повторами при обрыве связи (перезапуск сервера — до ~10 с)
+const NET_RETRY_MS = [1500, 3000, 5000];
 const BLOB_STALL_MS = 30_000;
-// Файла может не быть в кэше сервера (кэш чистится через час): сервер сначала достаёт его из Telegram и только потом начинает отвечать.
 const BLOB_START_MS = 300_000;
 
-// Токен могли отозвать прямо во время работы (вышли с другого
-// устройства, админ снял доступ). Любой 401/403 один раз поднимает
-// событие, на которое auth.js отвечает возвратом на экран входа.
-// Событие, а не прямой вызов из api.js — чтобы не заводить цикл
-// импортов api -> auth -> api.
 let sessionExpiredFired = false;
 function notifySessionExpired(detail) {
   if (sessionExpiredFired || !state.token) return;
@@ -51,10 +32,6 @@ function notifySessionExpired(detail) {
 }
 export function armSessionExpiry() { sessionExpiredFired = false; }
 
-// Счётчик запросов «в полёте» для полосы загрузки под шапкой (см.
-// #net-bar в index.html). Именно счётчик, а не флаг: запросы идут
-// параллельно (доска + лента + присутствие), и первый же завершившийся
-// гасил бы полосу, пока остальные ещё идут.
 let inFlight = 0;
 function netStart() {
   inFlight += 1;
@@ -65,9 +42,6 @@ function netEnd() {
   if (inFlight === 0) document.documentElement.classList.remove("net-busy");
 }
 
-// 401 и «доступ отозван» (403 «только для участников студии») возвращают на экран входа.
-// 403 «только для админов» — не повод выходить: так админские ручки отвечают рядовому участнику.
-// /desktop/pair — единственный запрос без токена: там 401 значит «неверный код».
 function checkSessionLost(status, detail, path) {
   const revoked = status === 403 && /участник/i.test(String(detail));
   if ((status === 401 || revoked) && path !== "/desktop/pair") notifySessionExpired(String(detail));
@@ -89,19 +63,15 @@ function formatApiError(detail, status) {
   if (detail && typeof detail === "object") {
     const message = detail.message || detail.msg || detail.detail || detail.error;
     if (typeof message === "string" && message) return message;
-    try { return JSON.stringify(detail); } catch (_) { /* ниже вернётся код ответа */ }
+    try { return JSON.stringify(detail); } catch (_) { }
   }
   return `Ошибка ${status}`;
 }
 
-// Для «Ошибок» в Аналитике (telemetry.js слушает): какой запрос не прошёл. Адрес без параметров — в них бывает поиск.
 function reportApiFail(method, path, status, message) {
   document.dispatchEvent(new CustomEvent("project:api-fail", { detail: { method, path: String(path).split("?")[0], status, message } }));
 }
 
-// ---- Запасной путь, когда не работает системный DNS (net_fallback.rs) ----
-// fetch из WebView ходит через DNS Windows; если он сломан, Rust узнаёт адрес сервера через DNS-over-HTTPS и делает
-// запрос сам. Сработал — следующие 5 минут идём сразу им, не тратя ~10 с на повторы обычного пути.
 let fallbackUntil = 0;
 async function viaFallback(method, path, init, write) {
   const tauri = window.__TAURI_INTERNALS__;
@@ -123,26 +93,19 @@ export async function api(method, path, body) {
   addPreviewHeader(headers);
   const url = `${API_BASE}${path}`;
   const controller = new AbortController();
-  // Долгие серверные операции: «взять в работу» (опрос nyaa) и AI-проверка звука — гигабайтные WAV разбираются десятки секунд.
-  // Поиск раздач на Nyaa (nyaa-test, nyaa-browse) тоже ходит на nyaa: при медленном сайте 20 с не хватало.
   const timeoutMs = /^\/titles\/\d+\/(?:take|nyaa-test|nyaa-browse)(?:\?|$)/.test(path) ? 45_000
     : /^\/report\/[^/]+\/files\/\d+\/(?:qc|peaks)(?:\?|$)/.test(path) ? 300_000
     : REQUEST_TIMEOUT_MS;
-  const timeout = setTimeout(() => controller.abort(), timeoutMs); // DevSkim: ignore DS172411 — функция, не строка
+  const timeout = setTimeout(() => controller.abort(), timeoutMs); // DevSkim: ignore DS172411
   let resp;
   const init = {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    // Свежесть ответов обеспечивает сервер (Cache-Control: no-store). Режим "no-store" в самом запросе не ставим:
-    // с ним WebView2 не берёт разрешение CORS из кэша и шлёт OPTIONS на каждый запрос — лишний круг до сервера.
     cache: "default",
     signal: controller.signal,
   };
   netStart();
-  // Оборвалось соединение или nginx ответил 502–504 (сервер перезапускается при обновлении — до нескольких секунд,
-  // мигнул VPN): чтение и пинг присутствия повторяем с нарастающей паузой, всего ~10 с. Запись не повторяем —
-  // сервер мог её уже выполнить. 502 от nginx приходит без CORS-заголовков и в браузере выглядит как «Failed to fetch».
   const retryable = method === "GET" || path === "/presence/ping";
   try {
     if (Date.now() < fallbackUntil) resp = await viaFallback(method, path, init, !retryable);
@@ -151,18 +114,15 @@ export async function api(method, path, body) {
         resp = await fetch(url, init);
         if (!(retryable && resp.status >= 502 && resp.status <= 504 && attempt < NET_RETRY_MS.length)) break;
       } catch (e) {
-        // Не соединились (не таймаут): сразу пробуем запасной путь. Запись Rust отправит, только если сломан
-        // именно DNS — тогда до сервера она точно не дошла.
         if (e.name !== "AbortError" && attempt === 0) {
           resp = await viaFallback(method, path, init, !retryable);
           if (resp) break;
         }
         if (!retryable || e.name === "AbortError" || attempt >= NET_RETRY_MS.length) throw e;
       }
-      await new Promise(r => setTimeout(r, NET_RETRY_MS[attempt])); // DevSkim: ignore DS172411 — функция, не строка
+      await new Promise(r => setTimeout(r, NET_RETRY_MS[attempt])); // DevSkim: ignore DS172411
     }
   } catch (e) {
-    // network: ошибка транспорта, а не ответ сервера — токен тут ни при чём (см. tryRestoreSession).
     const failure = e.name === "AbortError"
       ? new Error("Сервер не отвечает — проверьте соединение и попробуйте снова.")
       : new Error(`Нет связи с сервером: ${e.message}`);
@@ -177,7 +137,6 @@ export async function api(method, path, body) {
     let detail = resp.status;
     try { detail = (await resp.json()).detail ?? detail; } catch (_) {}
     checkSessionLost(resp.status, detail, path);
-    // 426 — версия ниже минимальной, которую задал владелец: окно «Нужно обновить» (force-update.js).
     if (resp.status === 426) document.dispatchEvent(new CustomEvent("project:update-required", { detail: { message: formatApiError(detail, resp.status) } }));
     const err = new Error(formatApiError(detail, resp.status));
     err.status = resp.status;
@@ -192,11 +151,6 @@ export async function api(method, path, body) {
   return data;
 }
 
-// Сервер отдаёт подписи статусов с эмодзи-кружком («🟡 В работе») — это
-// для чата и мини-аппа. Десктоп рисует рядом свою цветную точку, и
-// выходило две точки подряд. Снимаем ведущие эмодзи только у подписей
-// статусов (status_label и label объектов со статусом), остальной текст
-// ответа не трогаем.
 const LEADING_EMOJI_RE = /^(?:[\p{Extended_Pictographic}️‍]\s*)+/u;
 const STATUS_LABEL_KEYS = ["status_label", "new_status_label", "old_status_label", "priority_label"];
 function cleanLabel(value) {
@@ -216,17 +170,11 @@ function stripStatusEmoji(node) {
   return node;
 }
 
-// Файл целиком в память — для плеера дорожки: <audio> по blob-ссылке
-// умеет перематываться куда угодно, а токен уходит заголовком, не в
-// адресе. onProgress(загружено, всего) — всего бывает 0, если сервер не
-// назвал размер.
 export async function apiBlob(path, onProgress) {
   const headers = clientHeaders();
   const controller = new AbortController();
-  // Два ограничения: ответ должен начаться за REQUEST_TIMEOUT_MS, а потом данные не должны
-  // молчать дольше BLOB_STALL_MS (долгая, но живая загрузка не обрывается).
-  let timer = setTimeout(() => controller.abort(), BLOB_START_MS); // DevSkim: ignore DS172411 — функция, не строка
-  const arm = ms => { clearTimeout(timer); timer = setTimeout(() => controller.abort(), ms); }; // DevSkim: ignore DS172411 — функция, не строка
+  let timer = setTimeout(() => controller.abort(), BLOB_START_MS); // DevSkim: ignore DS172411
+  const arm = ms => { clearTimeout(timer); timer = setTimeout(() => controller.abort(), ms); }; // DevSkim: ignore DS172411
   const stalled = "Сервер перестал отвечать — проверьте соединение и попробуйте снова.";
   netStart();
   try {
@@ -268,12 +216,6 @@ export async function apiBlob(path, onProgress) {
   }
 }
 
-// Отправка файла (multipart) — вложения в сообщениях, заметках, тикетах,
-// файлы и равки отчёта, до 2 ГБ. Файл выбран через <input type=file> или
-// вставлен из буфера — браузер сам читает его с диска по ходу отправки.
-// XMLHttpRequest, а не fetch: у fetch нет прогресса отправки, а гигабайт
-// уходит минутами. Content-Type не ставим — границу multipart проставит
-// браузер.
 const PROGRESS_FROM_BYTES = 2 * 1024 * 1024;
 
 function uploadProgress(name, size) {
@@ -293,8 +235,6 @@ function uploadProgress(name, size) {
   return { set, done() { el.remove(); } };
 }
 
-// Один XHR-запрос: тело — FormData или Blob (часть файла). Отдаёт
-// разобранный JSON; ошибка несёт status, чтобы решать, повторять ли.
 function xhrRequest(url, body, { contentType, onProgress } = {}) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -309,7 +249,7 @@ function xhrRequest(url, body, { contentType, onProgress } = {}) {
     };
     xhr.onload = () => {
       let data = null;
-      try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch (_) { /* не JSON — ниже */ }
+      try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch (_) { }
       if (xhr.status >= 200 && xhr.status < 300) { resolve(stripStatusEmoji(data || {})); return; }
       const detail = (data && data.detail) || (xhr.status === 413 ? "Файл слишком большой для сервера." : `Ошибка ${xhr.status}`);
       if (xhr.status === 401) notifySessionExpired(String(detail));
@@ -321,14 +261,6 @@ function xhrRequest(url, body, { contentType, onProgress } = {}) {
   });
 }
 
-// Файлы крупнее CHUNKED_FROM уходят частями в несколько соединений:
-// провайдеры режут скорость КАЖДОГО соединения до VPS (одно ~190 КБ/с,
-// четыре ~680 КБ/с), так параллельные части дают в разы быстрее. Сервер
-// пишет каждую часть сразу на её место в файле (/api/upload/*), потом
-// обычная ручка получает upload_id вместо самого файла.
-// Порог отправки частями — 2 МБ; размер частей задаёт сервер (сейчас 8 МБ),
-// поэтому видео отправляется меньшим числом запросов. Восемь частей могут
-// передаваться одновременно.
 const CHUNKED_FROM = 2 * 1024 * 1024;
 const PARALLEL = 8;
 const CHUNK_RETRIES = 3;
@@ -356,8 +288,6 @@ async function chunkedUpload(file, ui) {
           break;
         } catch (e) {
           sent[i] = 0;
-          // Обрыв сети или сбой сервера — повторяем эту часть; отказ в
-          // доступе или «загрузка устарела» — повторять бессмысленно.
           const retryable = !e.status || e.status >= 500 || e.status === 400;
           if (!retryable || attempt >= CHUNK_RETRIES) { failed = e; return; }
           await sleep(1500 * attempt);
@@ -389,8 +319,6 @@ export async function apiUpload(path, file, fields) {
   }
 }
 
-// Одинаковые GET, пока первый ещё в пути, склеиваются в один запрос (при старте разные модули
-// одновременно просят /team, /me/permissions и т.п.). Каждый вызывающий получает свою копию ответа.
 const inflightGets = new Map();
 export function apiGet(path, params) {
   const qs = params ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)) : "";
@@ -408,34 +336,15 @@ export function apiGet(path, params) {
 export function apiPost(path, body) { return api("POST", path, body || {}); }
 export function apiDelete(path) { return api("DELETE", path); }
 
-// Адрес картинки, которую отдаёт наш же API (аватар, баннер, постер
-// через img_proxy). Заголовок X-Init-Data к <img src> не приделать,
-// поэтому единственная точка, где auth уезжает в query, вынесена сюда.
-//
-// SECURITY.md). Вместо него — mediaToken: короткоживущий (см.
-// _MEDIA_TOKEN_TTL на сервере, сейчас 5 минут) обменник, который ни на
-// что, кроме этих трёх картиночных ручек, прав не даёт. mediaUrl()
-// остаётся синхронной функцией (её вызывают десятки мест, собирая <img
-// src="..."> строкой за один проход) — токен уже должен быть в state к
-// этому моменту, см. ensureMediaToken() ниже и её вызов в auth.js
-// сразу после state.token.
 export function mediaUrl(path, params) {
   if (!state.mediaToken) return "";
   const qs = new URLSearchParams({ ...(params || {}), mtok: state.mediaToken });
   return `${API_BASE}${path}?${qs}`;
 }
 
-// Обновляет state.mediaToken заранее, до истечения — а не по факту 401
-// от уже отрисованной картинки (её тогда пришлось бы перерисовывать).
-// MEDIA_TOKEN_REFRESH_SLACK_MS — запас до истечения, с которым токен
-// считается «пора обновить»: сервер даёт 5 минут, обновляем на
-// четвёртой, чтобы не словить протухание прямо во время рендера длинного
-// списка аватарок.
 const MEDIA_TOKEN_REFRESH_SLACK_MS = 60_000;
 let mediaTokenPromise = null;
 
-// Новый токен немедленно, даже если старый по часам ещё «живой»: сервер
-// мог перезапуститься, и тогда старые ссылки на картинки отвечают 401.
 export function forceMediaToken() {
   state.mediaTokenExpiresAt = 0;
   return ensureMediaToken();
@@ -444,9 +353,6 @@ export function forceMediaToken() {
 export async function ensureMediaToken() {
   if (!state.token) return;
   if (state.mediaToken && Date.now() < state.mediaTokenExpiresAt - MEDIA_TOKEN_REFRESH_SLACK_MS) return;
-  // Несколько мест могут дёрнуть ensureMediaToken() одновременно
-  // (несколько картинок рендерятся разом) — один запрос на всех,
-  // а не по одному на каждую.
   if (mediaTokenPromise) return mediaTokenPromise;
   mediaTokenPromise = (async () => {
     try {
@@ -455,9 +361,6 @@ export async function ensureMediaToken() {
       state.mediaTokenExpiresAt = Date.now() + res.expires_in * 1000;
       document.dispatchEvent(new CustomEvent("media-token-ready"));
     } catch (_) {
-      // Сеть подвела — оставляем старый токен (если был) до следующей
-      // попытки, картинки просто продолжат грузиться на нём же, пока он
-      // не протухнет на сервере.
     } finally {
       mediaTokenPromise = null;
     }
@@ -465,11 +368,6 @@ export async function ensureMediaToken() {
   return mediaTokenPromise;
 }
 
-// Картинки с нашего сервера (постеры, баннеры, фото) <img src=".../img_proxy?...&mtok=…"> один раз перезапрашиваем, если загрузка
-// не удалась: сервер мог на секунду не ответить или перезапуститься (тогда прежний токен уже недействителен). Без этого
-// постер оставался пустым, пока экран не перерисуют. Источник (anilist/shikimori) может лежать дольше секунды — сервер тогда
-// минуту отвечает 204 на весь хост, поэтому повторов несколько и с нарастающей паузой; для реально отсутствующей картинки
-// это три дешёвых ответа из серверного кэша промахов.
 const MEDIA_RETRY_DELAYS_MS = [2500, 20_000, 75_000];
 document.addEventListener("error", ev => {
   const img = ev.target;
@@ -480,9 +378,8 @@ document.addEventListener("error", ev => {
   if (!src.startsWith(API_BASE) || !src.includes("mtok=")) return;
   img.dataset.mtokRetried = String(attempt + 1);
   setTimeout(async () => {
-    // Картинку за это время могли заменить на другую — чужой адрес не возвращаем.
     if ((img.currentSrc || img.src) !== src) return;
-    try { await forceMediaToken(); } catch (_) { /* не критично */ }
+    try { await forceMediaToken(); } catch (_) { }
     if (!img.isConnected || !state.mediaToken) return;
     const url = new URL(src);
     url.searchParams.set("mtok", state.mediaToken);
@@ -490,9 +387,6 @@ document.addEventListener("error", ev => {
   }, MEDIA_RETRY_DELAYS_MS[attempt]);
 }, true);
 
-// Фоновое обновление — тот же приём, что presence.js (pingPresence):
-// проверка раз в минуту, сам ensureMediaToken() решает, нужно ли
-// реально сходить на сервер (нет токена/сессии — тихо выходит).
 const MEDIA_TOKEN_CHECK_INTERVAL_MS = 60_000;
 setInterval(ensureMediaToken, MEDIA_TOKEN_CHECK_INTERVAL_MS);
 
@@ -505,20 +399,12 @@ export function openSheet(html, variant) {
   return overlay;
 }
 
-// Закрытие «снаружи» (клик по фону, Escape) — в отличие от прямого
-// overlay.remove() шлёт самому оверлею событие "sheet-dismissed".
-// Модалкам, которые отдают ответ промисом (диалог обновления), это
-// нужно, чтобы не зависнуть в await навсегда, когда пользователь
-// закрыл их клавишей, а не кнопкой.
 export function dismissSheet(overlay) {
   if (!overlay || !overlay.isConnected) return;
   overlay.remove();
   overlay.dispatchEvent(new CustomEvent("sheet-dismissed"));
 }
 
-// Подтверждение действия окном внутри программы. Обычный confirm() здесь не годится: плагин диалогов Tauri подменяет его
-// асинхронной функцией, `if (!confirm(...))` получал Promise (всегда «да») — и удаление шло без вопроса.
-// Ответ — промис: true — «Да», false — «Отмена», Escape или клик мимо окна.
 export function askConfirm(text, { yes = "Да", no = "Отмена", danger = /удал|отозв|снять|сотр|навсегда|карантин|заверш/i.test(String(text)) } = {}) {
   return new Promise(resolve => {
     const overlay = openSheet(`
@@ -538,28 +424,15 @@ export function askConfirm(text, { yes = "Да", no = "Отмена", danger = /
   });
 }
 
-// Escape закрывает верхнюю модалку.
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   const overlays = document.querySelectorAll(".overlay");
   if (overlays.length) dismissSheet(overlays[overlays.length - 1]);
 });
 
-// Иконка на тосте — беглый взгляд должен отличить "готово" от "ошибка"
-// раньше, чем глаза дойдут до текста (особенно на периферии зрения,
-// пока смотришь на таблицу, а не на toast-root в углу).
 const TOAST_ICON = { info: "", error: "⚠️", success: "✓" };
 
-// action — необязательная кликабельная кнопка внутри тоста, например
-// «Показать в папке» после скачивания/экспорта файла: действие само по
-// себе неважное настолько, чтобы держать под него отдельный диалог, но
-// и незаметно потерять его после закрытия шторки не хочется.
 export function toast(text, kind = "info", action = null) {
-  // Единая точка: любой error-тост в приложении (обновления, QC звука,
-  // инструменты ffmpeg, сетевые запросы, авторизация — toast() зовут
-  // отовсюду) попадает и в файловый лог, без правки каждого места
-  // вызова по отдельности. Тег "toast" — по нему легко отличить "это
-  // увидел пользователь" от прочих внутренних debug/info-записей.
   if (kind === "error") {
     toastLog.error(text);
     document.dispatchEvent(new CustomEvent("project:error-shown", { detail: { text: String(text) } }));
@@ -578,13 +451,10 @@ export function toast(text, kind = "info", action = null) {
     el.classList.add("toast-out");
     el.addEventListener("animationend", () => el.remove(), { once: true });
   };
-  const timer = setTimeout(remove, duration); // DevSkim: ignore DS172411 — вызов функции, не строки, данные не внешние
+  const timer = setTimeout(remove, duration); // DevSkim: ignore DS172411
   if (action) {
     const actionBtn = el.querySelector(".toast-action");
     actionBtn.textContent = action.label;
-    // stopPropagation — иначе клик по кнопке действия попадал бы и на
-    // обработчик тоста целиком (закрытие по клику) одновременно с
-    // самим действием.
     actionBtn.addEventListener("click", e => {
       e.stopPropagation();
       clearTimeout(timer);
@@ -595,13 +465,6 @@ export function toast(text, kind = "info", action = null) {
   el.addEventListener("click", () => { clearTimeout(timer); remove(); });
 }
 
-// Скелетон-заглушка для модалок, пока грузятся реальные данные
-// (карточка отчёта, QC-анализ) — вместо одного спиннера с текстом.
-// Скелетон-заглушка для модалок, пока грузятся реальные данные
-// (карточка отчёта, QC-анализ) — вместо одного спиннера с текстом.
-//
-// Форма повторяет будущее содержимое: сверху заголовок, под ним подпись, дальше блоки.
-// Скелетон — только при первом открытии, когда показывать ещё нечего.
 export function keepOnReload(root) {
   return !!(state.softReload && root && root.children.length && !root.querySelector(":scope > .skeleton-wrap"));
 }
@@ -615,8 +478,6 @@ export function dialogSkeletonHtml(lines = 4, variant = "rows") {
     return i === 0 ? "line" : i === 1 ? "line-sm" : "";
   };
   const rows = Array.from({ length: lines }, (_, i) =>
-    // Нарастающая задержка: строки проявляются сверху вниз, как
-    // читается настоящий список, а не вспыхивают все разом.
     `<div class="skeleton-row ${shape(i)}" style="animation-delay:${i * 70}ms;"></div>`).join("");
   return `<div class="skeleton-wrap">${rows}</div>`;
 }

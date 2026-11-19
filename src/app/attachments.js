@@ -1,17 +1,9 @@
-// Вложения — картинки и файлы в сообщениях, заметках, тикетах (и равки
-// серии). Сервер хранит только file_id из Telegram и отдаёт файл по
-// attach.path ("/api/…/file"): картинку показываем <img> по mediaUrl
-// (короткий mtok в ссылке, токен не светится), файл качаем Rust-командой
-// download_api_file — токен заголовком, путь сохранения выбирает человек.
 
 import { mediaUrl, openSheet, toast } from "./api.js";
 import { esc } from "./utils.js";
 import { pickOutputFile } from "./tauri.js";
 import { downloadWithCard } from "./download-card.js";
 
-// Картинки в заметках и тикетах — до 10 МБ. В чат — любой файл (zip, видео, документы) до 2 ГБ: крупный уходит
-// частями в несколько соединений (chunkedUpload в api.js), так провайдерский лимит на одно соединение не мешает,
-// а хранится файл в Telegram (архивная группа), не на сервере.
 export const ATTACH_MAX_MB = 10;
 export const FILE_MAX_MB = 2000;
 
@@ -19,8 +11,6 @@ const FILE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4
 const DL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
 export const CLIP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5 12.2 19.3a5 5 0 0 1-7.1-7.1l8.2-8.2a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.7 1.7 0 0 1-2.4-2.4L15 6.9"/></svg>';
 
-// Сервер отдаёт путь от корня ("/api/chats/…"), а mediaUrl и Rust-команда
-// ждут его относительно API_BASE (который уже кончается на /api).
 function apiRelative(path) { return String(path || "").replace(/^\/api\//, "").replace(/^\//, ""); }
 
 export function sizeText(bytes) {
@@ -62,7 +52,6 @@ function openImage(rel, name) {
   overlay.querySelector("#att-save").addEventListener("click", () => downloadAttachment(rel, name));
 }
 
-// Один обработчик на контейнер — переживает перерисовки содержимого.
 export function wireAttachments(root) {
   if (!root || root.dataset.attWired) return;
   root.dataset.attWired = "1";
@@ -74,8 +63,6 @@ export function wireAttachments(root) {
   });
 }
 
-// Системный диалог выбора файла — обычный <input type=file>: WebView сам
-// открывает проводник и отдаёт байты странице, Rust тут не нужен.
 export function pickFile(accept) {
   return new Promise(resolve => {
     const input = document.createElement("input");
@@ -88,8 +75,6 @@ export function pickFile(accept) {
   });
 }
 
-// Выбор нескольких файлов для равок отчёта. Обычный pickFile остаётся
-// одиночным для заметок и других вложений.
 export function pickFiles(accept) {
   return new Promise(resolve => {
     const input = document.createElement("input");
@@ -103,7 +88,6 @@ export function pickFiles(accept) {
   });
 }
 
-// Картинка из буфера обмена (Ctrl+V скриншота) — File или null.
 export function pastedFile(e) {
   const items = [...(e.clipboardData?.items || [])];
   const item = items.find(i => i.kind === "file");
@@ -116,7 +100,6 @@ export function pastedFile(e) {
   return file;
 }
 
-// anyFile — можно не только картинку (чат); maxMb — свой предел размера.
 export function tooBig(file, { anyFile = false, maxMb = ATTACH_MAX_MB } = {}) {
   if (!file) return false;
   if (!anyFile && !/^image\//.test(file.type)) {
@@ -134,9 +117,6 @@ export function tooBig(file, { anyFile = false, maxMb = ATTACH_MAX_MB } = {}) {
   return false;
 }
 
-// Плашка «будет отправлено» над полем ввода. Собирается через DOM, а не
-// строкой HTML: имя и превью приходят из выбранного человеком файла, и
-// так им негде превратиться в разметку (CodeQL: DOM text → HTML).
 export function renderPending(box, file, onCancel) {
   if (!box) return;
   box.replaceChildren();
@@ -144,8 +124,6 @@ export function renderPending(box, file, onCancel) {
   const wrap = document.createElement("div");
   wrap.className = "att-pending";
   if (/^image\//.test(file.type)) {
-    // Миниатюра рисуется на canvas прямо из байтов, без адреса в src —
-    // данным из файла некуда попасть в разметку.
     const SIDE = 44;
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = SIDE;
@@ -154,12 +132,12 @@ export function renderPending(box, file, onCancel) {
       const s = Math.min(bmp.width, bmp.height);
       canvas.getContext("2d").drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, SIDE, SIDE);
       bmp.close();
-    }).catch(() => { /* не картинка на самом деле — остаётся пустой квадрат */ });
+    }).catch(() => { });
     wrap.append(canvas);
   } else {
     const ic = document.createElement("span");
     ic.className = "att-ic";
-    ic.innerHTML = FILE_ICON; // константа, не пользовательские данные
+    ic.innerHTML = FILE_ICON;
     wrap.append(ic);
   }
   const meta = document.createElement("span");

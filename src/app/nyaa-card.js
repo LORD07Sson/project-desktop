@@ -1,8 +1,6 @@
-// Карточка раздачи Nyaa в чате: ссылка project://nyaa/<номер> показывается обложкой, названием и кнопкой «Открыть».
-// Данные подгружаются при появлении карточки на экране; тяжёлый модуль «Релизов» загружается только тогда.
 import { esc } from "./utils.js";
 
-const cache = new Map();   // номер раздачи → { title, meta, image }
+const cache = new Map();
 
 function cardInner(id) {
   const c = cache.get(id);
@@ -10,7 +8,6 @@ function cardInner(id) {
   return `<span class="ms-ny-pic">${pic}</span><span class="ms-ny-t"><b>${esc(c ? c.title : `Раздача №${id}`)}</b><small>${esc(c ? c.meta : "Загружаю…")}</small></span><button type="button" class="btn" data-nyaa-open="${id}">Открыть</button>`;
 }
 
-// Чат перерисовывает список целиком при каждом сообщении — уже загруженная карточка рисуется сразу полной.
 export function nyaaCardsHtml(ids) {
   return ids.map(id => `<div class="ms-nyaa${cache.has(Number(id)) ? " ready" : ""}" data-nyaa="${id}">${cardInner(Number(id))}</div>`).join("");
 }

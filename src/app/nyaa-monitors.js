@@ -1,4 +1,3 @@
-// Nyaa/игры, вынесено из nyaa.js: слежение.
 import { invoke } from "./tauri.js";
 import { toast } from "./api.js";
 import { state } from "./state.js";
@@ -7,7 +6,6 @@ import { $, esc } from "./utils.js";
 import { CATEGORIES, parseNyaaRss, magnetLink, makeMonitor, monitorTitle, diffMonitor, episodeKey, ruleText, freshForRule } from "./nyaa-core.js";
 import { ICONS, client, detail, load, loading, markSent, moreBusy, nyaaRss, prefs, savePrefs, touch } from "./nyaa.js";
 
-// ---------- слежение ----------
 export const MON_CHOICES = [[10, "10 минут"], [30, "30 минут"], [60, "час"], [180, "3 часа"]];
 const monEveryMs = () => (MON_CHOICES.some(c => c[0] === prefs.monEvery) ? prefs.monEvery : 30) * 60 * 1000;
 let lastMonCheck = 0;
@@ -67,7 +65,7 @@ async function checkMonitor(m, quiet) {
     m.new = (m.new || 0) + fresh.length;
     if (m.rule) m.got = [...new Set([...(m.got || []), ...fresh.map(episodeKey).filter(Boolean)])].slice(-300);
     if (m.rule && m.rule.auto && client && !quiet) {
-      try { await invoke("tc_add", { magnets: fresh.map(magnetLink).filter(Boolean) }); markSent(fresh); fresh.forEach(i => touch(i.id)); } catch (_) { /* уведомление ниже скажет о новом */ }
+      try { await invoke("tc_add", { magnets: fresh.map(magnetLink).filter(Boolean) }); markSent(fresh); fresh.forEach(i => touch(i.id)); } catch (_) { }
     }
     if (!quiet) {
       const text = `${monitorTitle(m)}: ${fresh[0].title}${fresh.length > 1 ? ` и ещё ${fresh.length - 1}` : ""}`;
@@ -100,8 +98,6 @@ export async function addMonitor({ type, q, cat, rule = null }) {
   paintMonitors();
 }
 
-// Окно можно закрыть: программа остаётся в трее, страница продолжает работать, и слежение идёт в фоне.
-// Раз в минуту смотрим, не прошёл ли выбранный интервал, — так смена интервала действует сразу.
 function startMonitoring() {
   const tick = () => {
     if (!state.token || !state.isAdmin) return;
@@ -114,7 +110,6 @@ function startMonitoring() {
 }
 startMonitoring();
 
-// Фоновое обновление ленты: раз в 5 минут, если страница открыта, ничего не грузится и поиск не набирается.
 setInterval(() => {
   if (!$("#ny-list") || loading || moreBusy || document.hidden || detail) return;
   const q = $("#ny-q");

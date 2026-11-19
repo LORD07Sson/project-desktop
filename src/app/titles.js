@@ -1,6 +1,3 @@
-// Вкладка «Тайтлы» (голосование, /api/public/*).
-// Портировано из мини-аппа: loadVote/renderVoteTitles/voteBentoHtml/
-// voteCardHtml/castVote/openTitleDetailPublic (miniapp/static/index.html).
 
 import { state, can } from "./state.js";
 import { apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, tabSkeleton } from "./api.js";
@@ -14,26 +11,21 @@ import { loadRospisTitles, openNewEpisodeSheet } from "./rospis.js";
 
 function voteActivity(t) { return t.likes + t.dislikes; }
 
-// Вид вкладки: карточки (постеры) или таблица с подробностями — как
-// переключатель table/cards в мини-аппе. Личная настройка.
 function viewKey() { return `project_titles_view_${state.telegramId || "anon"}`; }
 function getView() {
   try { return localStorage.getItem(viewKey()) === "table" ? "table" : "cards"; } catch (_) { return "cards"; }
 }
 function setView(v) {
-  try { localStorage.setItem(viewKey(), v); } catch (_) { /* не критично */ }
+  try { localStorage.setItem(viewKey(), v); } catch (_) { }
 }
 
-// Подробности Shikimori/AniList (формат, эпизоды, студия, жанры) есть
-// только в /public/titles/{id} — в списке сезона их нет. Догружаются
-// после отрисовки одним пакетным запросом (/public/title-details) и кэшируются на сессию.
 const detailsCache = new Map();
 export async function fetchTitleDetails(ids) {
   const queue = [...new Set(ids)].filter(id => !detailsCache.has(id));
   for (let i = 0; i < queue.length; i += 60) {
     const part = queue.slice(i, i + 60);
     let got = {};
-    try { got = (await apiGet("/public/title-details", { ids: part.join(",") })).details || {}; } catch (_) { /* строки останутся с прочерками */ }
+    try { got = (await apiGet("/public/title-details", { ids: part.join(",") })).details || {}; } catch (_) { }
     part.forEach(id => detailsCache.set(id, got[String(id)] || null));
   }
   return new Map(ids.map(id => [id, detailsCache.get(id) ?? null]));
@@ -51,7 +43,6 @@ function episodesText(det) {
   if (!det) return "";
   if (det.episodes_aired != null && det.episodes_total) return `${det.episodes_aired} / ${det.episodes_total}`;
   if (det.episodes_total) return String(det.episodes_total);
-  // Онгоинг, у которого Shikimori ещё не знает общего числа серий: вышедшие всё равно показываем.
   if (det.episodes_aired) return `${det.episodes_aired} / ?`;
   return "";
 }
@@ -138,8 +129,6 @@ function titlesTableHtml(titles) {
     </div>`;
 }
 
-// Слева постер, по центру описание и кнопки, справа панель голосов:
-// сколько «за» и «против», доля одобрения, ваш голос.
 const HERO_ICONS = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.3v5.4l4.6-2.7z" fill="currentColor" stroke="none"/></svg>',
   flame: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 1.5 1 2.5 2 3-.5-3 0-6 1-8.5Z"/></svg>',
@@ -150,11 +139,8 @@ function heroTitle(titles) {
   return titles.slice().sort(TABLE_SORTS.rank)[0] || null;
 }
 
-// «Взять в работу» — только админам; у взятого тайтла та же кнопка
-// открывает его настройки (состав, дедлайн, остановить автосерии).
 function takeButtonHtml(t) {
   if (!can("titles.work")) return "";
-  // Серии заведены вручную, но тайтл не «взят» — настроек ещё нет, кнопка предлагает взять (старый сервер work_taken не знает).
   return (t.work_taken ?? t.in_work)
     ? `<button class="btn tl-take on" data-take-title="${t.id}" title="Состав, дедлайн, автосерии">● В работе</button>`
     : `<button class="btn tl-take" data-take-title="${t.id}">⚑ Взять в работу</button>`;
@@ -207,7 +193,6 @@ function heroBodyHtml(t, seasonName) {
     </div>`;
 }
 
-// Баннера у тайтла может не быть — тогда остаётся размытая обложка.
 function wireBanner(hero) {
   hero.querySelector(".tl-spot-ban")?.addEventListener("error", e => e.currentTarget.remove());
 }
@@ -229,14 +214,9 @@ function wireHero(wrap, titles, seasonName) {
     wireBanner(hero);
   };
   wireBanner(hero);
-  // Подробности (описание, серии) догружаются после отрисовки, голоса
-  // меняются кликами — перерисовываем блок лидера из тех же объектов.
   hero._refresh = id => { if (Number(hero.dataset.heroId) === id) redraw(); };
 }
 
-// Афиша: крупный постер, поверх — место в рейтинге, метки, название,
-// доля одобрения и кнопки голоса. Лидер — в цветной рамке; «Взять в
-// работу» (админам) — при наведении.
 function votesWord(n) {
   const m10 = n % 10, m100 = n % 100;
   if (m10 === 1 && m100 !== 11) return "голос";
@@ -244,7 +224,6 @@ function votesWord(n) {
   return "голосов";
 }
 
-// showWork — метка «В работе» различает карточки, только когда в работе не все: если взяты все 12 из 12, она шум.
 function voteCardHtml(t, rank, isLeader, showWork = true) {
   const posterSrc = imgProxy(t.poster_url);
   const pct = approvalPct(t);
@@ -273,8 +252,6 @@ function leaderOf(titles) {
 }
 
 async function castVote(titleId, choice, btn) {
-  // Пара кнопок 👍/👎 живёт в двух разных обёртках: .vote-actions (карточка
-  // сезона и герой-блок) и .td-vote-cta (шторка тайтла).
   const group = btn.closest(".vote-actions, .td-vote-cta");
   if (!group) return;
   const pendingHost = btn.closest(".vote-card, .af-card") || group;
@@ -288,16 +265,10 @@ async function castVote(titleId, choice, btn) {
     const r = await apiPost(`/public/titles/${titleId}/vote`, { vote });
     likeBtn.classList.toggle("on-like", r.my_vote === 1);
     dislikeBtn.classList.toggle("on-dislike", r.my_vote === -1);
-    // В шторке у кнопок текстовые подписи («👍 Нравится») без <span> со
-    // счётчиком — числа там показывают отдельные .td-stat-pill.
     setCount(likeBtn.querySelector("span"), r.likes);
     setCount(dislikeBtn.querySelector("span"), r.dislikes);
-    // Модель обновляем всегда, а не только из строки таблицы: баннер
-    // перерисовывает слайд из этих объектов, и после «Нравится» →
-    // другой тайтл → обратно там всплывал старый счётчик.
     const t = currentTitles.find(x => x.id === titleId);
     if (t) { t.likes = r.likes; t.dislikes = r.dislikes; t.my_vote = r.my_vote; }
-    // Та же пара кнопок есть и в баннере, и в таблице/сетке — синхронизируем.
     document.querySelectorAll(`[data-vote-title="${titleId}"]`).forEach(b => {
       if (b === likeBtn || b === dislikeBtn) return;
       const like = b.dataset.voteChoice === "1";
@@ -371,8 +342,6 @@ export async function openTitleDetail(titleId) {
 }
 
 export async function loadTitlesTab() {
-  // Вкладку открыли заново или нажали «Обновить» — подробности (счётчик
-  // серий, статус) берём свежие, а не из кэша прошлого показа.
   detailsCache.clear();
   clearTitleHoverCache();
   const root = $("#titles-body");
@@ -467,7 +436,6 @@ function renderTitlesBody(wrap) {
     });
   });
   const seq = titlesRequestSeq;
-  // Сначала подробности лидера — его описание видно сразу.
   const heroIds = [heroTitle(currentTitles)].filter(Boolean).map(t => t.id);
   loadDetails([...heroIds, ...currentTitles.map(t => t.id).filter(id => !heroIds.includes(id))], (id, det) => {
     if (seq !== titlesRequestSeq || !wrap.isConnected) return;
@@ -534,7 +502,7 @@ function renderTitlesForSeason(seasons) {
   const seasonId = state.titleSeasonId;
   apiGet(`/public/seasons/${seasonId}/titles`).then(d => {
     const wrap = $("#titles-grid");
-    if (!wrap || seq !== titlesRequestSeq) return; // успели переключить сезон/вкладку, пока грузилось
+    if (!wrap || seq !== titlesRequestSeq) return;
     if (!d.titles.length) {
       wrap.innerHTML = `<div class="empty-state"><div style="font-size:34px; margin-bottom:8px;">🎬</div>Тайтлов в этом сезоне пока нет.</div>`;
       return;

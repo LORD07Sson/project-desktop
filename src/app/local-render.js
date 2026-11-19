@@ -1,8 +1,3 @@
-// «Собрать у себя»: рендер финала на ПК (видеокарта NVIDIA, NVENC) вместо слабого сервера.
-// Ход: сервер присылает план шагов ffmpeg (POST /report/{id}/local-render/plan) → Rust (local_render_run) скачивает файлы,
-// рендерит и отдаёт путь → готовый файл уходит на сервер (local_render_upload), где бот делает с ним то же, что после серверной
-// сборки: обложка и превью, отправка в Telegram, прикрепление к отчёту, уборка исходника, пересылка выбранным, черновик поста.
-// Прогресс рендера — событие localrender-progress, отмена — local_render_cancel; дальше ход ведёт карточка сборки отчёта.
 
 import { invoke, listen } from "./tauri.js";
 import { getLocalVideo, pickLocalVideo } from "./local-video.js";
@@ -10,19 +5,17 @@ import { apiPost, toast, openSheet, dismissSheet } from "./api.js";
 import { state } from "./state.js";
 import { esc } from "./utils.js";
 
-let running = null; // publicId идущей сборки
+let running = null;
 
-let preparing = null; // идущая проверка (одна на приложение)
+let preparing = null;
 let lastStatus = null;
 
-/** Автопроверка: находит ffmpeg (рядом с приложением → докачанный → PATH), при отсутствии докачивает из релиза на GitHub,
- *  определяет видеокарту и рабочие кодировщики. onProgress({fraction,label}) — ход докачки. Всегда возвращает статус. */
 export function prepareLocalRender(onProgress, force = false) {
   if (preparing && !force) return preparing;
   const run = async () => {
     let unlisten = null;
     if (typeof onProgress === "function") {
-      try { unlisten = await listen("ffmpeg-fetch-progress", ev => onProgress(ev.payload || {})); } catch (_) { /* не критично */ }
+      try { unlisten = await listen("ffmpeg-fetch-progress", ev => onProgress(ev.payload || {})); } catch (_) { }
     }
     try {
       lastStatus = await invoke("local_render_prepare");
@@ -48,7 +41,6 @@ const SOURCE_LABEL = { bundled: "встроенный", downloaded: "скача�
 const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 const STALL_AFTER_MS = 60_000;
 
-/** Человеческое описание состояния инструментов — чтобы в окне никогда не было пусто. */
 export function describeTools(st) {
   if (!st) return "Проверяю ffmpeg и видеокарту…";
   const parts = [];
@@ -68,8 +60,6 @@ function card(overlay) {
     el = document.createElement("div");
     el.id = "rd-local-card";
     el.className = "rd-asm";
-    // Шапка перерисовывается на каждое событие прогресса; консоль — отдельный постоянный блок,
-    // иначе её прокрутка и раскрытие сбрасывались бы несколько раз в секунду.
     el.innerHTML = `<div class="lr-head"></div>
       <details class="lr-console" open>
         <summary><span>Журнал рендера</span> <em class="lr-count">0 строк</em>
@@ -84,10 +74,9 @@ function card(overlay) {
   return el;
 }
 
-// ---------- журнал рендера: что сделано, что делается, вывод ffmpeg ----------
 const JOURNAL_MAX = 800;
-let journal = [];        // {at, kind, text}
-let journalEl = null;    // .lr-log текущей карточки
+let journal = [];
+let journalEl = null;
 const KIND_MARK = { step: "▶", ok: "✓", warn: "!", err: "✗", cmd: "$", stat: "⏱", out: "·" };
 
 function journalReset(el) {
@@ -102,7 +91,6 @@ function journalAdd(kind, text) {
   if (journal.length > JOURNAL_MAX) journal.splice(0, journal.length - JOURNAL_MAX);
   if (!journalEl || !journalEl.isConnected) return;
   const atBottom = journalEl.scrollHeight - journalEl.scrollTop - journalEl.clientHeight < 24;
-  // Сводка «кадр · fps · скорость» обновляется на месте, а не сыплется новой строкой раз в секунду.
   const last = journalEl.lastElementChild;
   let row = kind === "stat" && last && last.classList.contains("k-stat") ? last : null;
   if (!row) {
@@ -142,7 +130,7 @@ function paint(el, { title, label, fraction, cancel, warning, diagnostic }) {
     ${cancel ? `<button type="button" class="btn rd-asm-cancel" data-lr-cancel>⏹ Отменить</button>` : ""}`;
   el.querySelector("[data-lr-cancel]")?.addEventListener("click", async e => {
     e.currentTarget.disabled = true;
-    try { await invoke("local_render_cancel"); } catch (_) { /* не критично */ }
+    try { await invoke("local_render_cancel"); } catch (_) { }
   });
   el.querySelector("[data-lr-copy]")?.addEventListener("click", () => copySupportReport(diagnostic));
   el.querySelector("[data-lr-logs]")?.addEventListener("click", openAppLogs);
@@ -193,7 +181,6 @@ function showRenderFailure(error, monitor, startedAt, phase) {
     ${journal.length ? `<details class="lr-console" open><summary><span>Журнал рендера — последние строки</span></summary><pre class="lr-error-detail lr-error-log">${esc(journalText(60))}</pre></details>` : ""}
     <p class="lr-error-summary">Скопируйте диагностику и отправьте её разработчику. Подробная причина также записана в лог приложения.</p>
     <div class="sheet-actions"><button type="button" class="btn" data-lr-logs>Открыть логи</button><button type="button" class="btn primary" data-lr-copy>Скопировать диагностику</button><button type="button" class="btn" data-lr-close>Закрыть</button></div>`);
-  // Ошибка — в самом конце журнала: показываем его сразу с последних строк.
   const tail = sheet.querySelector(".lr-error-log");
   if (tail) tail.scrollTop = tail.scrollHeight;
   sheet.querySelector("[data-lr-copy]")?.addEventListener("click", () => copySupportReport(report));
@@ -201,7 +188,6 @@ function showRenderFailure(error, monitor, startedAt, phase) {
   sheet.querySelector("[data-lr-close]")?.addEventListener("click", () => dismissSheet(sheet));
 }
 
-/** Окно «Сохранить копию себе?»: после рендера, пока файл ещё лежит во временной папке (потом её убирают). */
 function askSaveCopy(done) {
   return new Promise(resolve => {
     const overlay = openSheet(`<h2>Сохранить копию себе?</h2>
@@ -220,13 +206,12 @@ async function saveCopy(done) {
     if (!dir) return;
     const saved = await invoke("local_render_save_copy", { path: done.path, dir, name: done.out_name });
     toast("Копия сохранена.", "success");
-    try { await invoke("reveal_in_folder", { path: saved }); } catch (_) { /* не критично */ }
+    try { await invoke("reveal_in_folder", { path: saved }); } catch (_) { }
   } catch (e) {
     toast(`Копию сохранить не удалось: ${String((e && e.message) || e)}`, "error");
   }
 }
 
-/** Видео «у себя» (равка, которую качает торрент-клиент): ждём, пока докачается, и берём параметры файла. Сервер файла не видит. */
 async function prepareLocalVideo(publicId, el) {
   let cancelled = false;
   const waitText = v => `Жду, пока видео докачается на компьютер: ${Math.round((v.progress || 0) * 100)}%${v.speed > 0 ? ` · ${(v.speed / 1048576).toFixed(1)} МБ/с` : ""}`;
@@ -245,7 +230,6 @@ async function prepareLocalVideo(publicId, el) {
   try {
     info = await invoke("local_render_probe", { path });
   } catch (e) {
-    // после перезапуска приложения доступ к файлу сброшен — просим выбрать его ещё раз (диалог заново выдаёт доступ)
     if (!/не выбирали|доступ/i.test(String((e && e.message) || e))) throw e;
     toast("Укажите файл видео ещё раз — после перезапуска приложение не помнит разрешение на чтение.", "info");
     path = await pickLocalVideo(publicId);
@@ -255,7 +239,6 @@ async function prepareLocalVideo(publicId, el) {
   return { path, info };
 }
 
-/** selection — тело, как у /assemble/start (video, sub, audios, mode, profile, inscription). */
 export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   if (running) { toast("Сборка у себя уже идёт — дождитесь или отмените её.", "error"); return false; }
   running = publicId;
@@ -269,7 +252,7 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   let unlistenLog = () => {};
   try {
     unlistenLog = await listen("localrender-log", ev => { const p = ev.payload || {}; journalAdd(p.kind || "out", String(p.text || "")); });
-  } catch (_) { /* без журнала рендер всё равно идёт; причина ошибки будет в окне ошибки */ }
+  } catch (_) { }
   let stallTimer = null;
   let warnedMinute = 0;
   let phase = "подготовка";
@@ -310,7 +293,7 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
       monitor.fraction = fraction;
       paintMonitor();
     });
-  } catch (_) { /* без слушателя сборка всё равно может завершиться; лог доступен через настройки */ }
+  } catch (_) { }
   let plan = null;
   try {
     let localPath = null;
@@ -373,6 +356,6 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
     unlisten();
     unlistenLog();
     running = null;
-    try { await invoke("local_render_cleanup", { publicId }); } catch (_) { /* временная папка уберётся сама */ }
+    try { await invoke("local_render_cleanup", { publicId }); } catch (_) { }
   }
 }

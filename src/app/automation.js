@@ -1,5 +1,3 @@
-// «Автоматизация» (Настройки, владелец): всё, что бот делает сам, в одном месте — архив серий, чаты бота и ограничения скорости.
-// Вкладки собраны в том же стиле, что «Архив серий»; каждая вкладка подгружается при первом открытии.
 
 import { apiGet, apiPost, toast } from "./api.js";
 import { esc } from "./utils.js";
@@ -15,7 +13,6 @@ const TABS = [
   ["speed", "Скорость", '<path d="M12 14l4-5M4 17a8 8 0 1 1 16 0"/>'],
   ["logs", "Логи", '<path d="M5 4h14v16H5zM8 9h8M8 13h8M8 17h5"/>'],
 ];
-// Справка по вкладкам: как это работает (алгоритм простыми словами) и что менялось последним.
 const HELP = {
   factory: {
     how: ["Схема показывает четыре линии: серии, отчёты, документы и производство финала. Зелёный огонёк — машина работает, синий — ждёт работу, жёлтый — пауза, красный — ошибки.",
@@ -230,7 +227,6 @@ async function mountSpeed(root) {
 const STATE = { done: "отправлен", failed: "ошибка", retry: "повтор", dup: "дубль — пропущен", skipped: "исключён" };
 const CAT_ICON = { video: "🎞", torrent: "🧲", sub: "💬", audio: "🎙", inscr: "🏷", zip: "📦", other: "📄", photo: "🖼" };
 
-// «Маршруты» архива документов: какой файл куда уезжает. Первый подошедший маршрут по порядку, иначе маршрут по умолчанию.
 function wireDocsRoutes(box, d, saveAll) {
   const st = { routes: d.routes.map(r => ({ ...r })), def: { scheme: d.default_route.scheme, prefix: d.default_route.prefix } };
   const chatOpts = sel => `<option value=""${sel ? "" : " selected"}>— группа по умолчанию —</option>${d.chats.map(c => `<option value="${c.chat_id}"${String(c.chat_id) === String(sel) ? " selected" : ""}>${esc(c.title)}${c.is_forum ? " · с темами" : ""}</option>`).join("")}`;
@@ -505,11 +501,11 @@ export function mountAutomation(root) {
       const info = document.createElement("details");
       info.className = "au-help";
       let open = false;
-      try { open = localStorage.getItem(`au-help-${name}`) === "1"; } catch (_) { /* без хранилища — свернуто */ }
+      try { open = localStorage.getItem(`au-help-${name}`) === "1"; } catch (_) { }
       info.open = open;
       info.innerHTML = `<summary>Как это работает${help.news.length ? " · что нового" : ""}</summary>
         <div>${help.how.map(t => `<p>${esc(t)}</p>`).join("")}${help.news.length ? `<p class="au-news"><b>Что нового:</b></p><ul>${help.news.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}</div>`;
-      info.addEventListener("toggle", () => { try { localStorage.setItem(`au-help-${name}`, info.open ? "1" : "0"); } catch (_) { /* не критично */ } });
+      info.addEventListener("toggle", () => { try { localStorage.setItem(`au-help-${name}`, info.open ? "1" : "0"); } catch (_) { } });
       host.appendChild(info);
       const body = document.createElement("div");
       host.appendChild(body);
@@ -528,7 +524,6 @@ export function mountAutomation(root) {
   };
   root.querySelectorAll("[data-au-tab]").forEach(b => b.addEventListener("click", () => show(b.dataset.auTab)));
   show("factory");
-  // F5 / «Обновить»: перечитать открытую вкладку Автоматизации.
   const onRefresh = () => {
     if (!root.isConnected) { document.removeEventListener("app:refresh", onRefresh); return; }
     const active = root.querySelector("[data-au-tab].on");
