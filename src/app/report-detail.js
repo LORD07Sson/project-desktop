@@ -14,7 +14,7 @@ import { classifyFiles, overviewKpis, isFinalFile, isVideoFile } from "./report-
 import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./tauri.js";
 import { relTime, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange, formatWhen } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
-import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, deadlineCellHtml, posterSrc } from "./reports.js";
+import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, posterSrc } from "./reports.js";
 import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from "./titles-admin.js";
 import { setDropTarget } from "./file-drop.js";
 import { downloadWithCard } from "./download-card.js";
@@ -28,6 +28,17 @@ import { titleArt } from "./title-page.js";
 // "clip"/"noise"/"silence"/"silence_long"/"no_speech".
 const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silence_long: "Долгая тишина", no_speech: "Речь не найдена" };
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
+// Иконки ряда файла — линейные, в одном стиле (эмодзи 📤/⬇️/🗑 выбивались цветом и размером).
+const svg = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const FILE_ACT_ICONS = {
+  play: svg('<path d="M8 5.5v13l10.5-6.5z"/>'),
+  qc: svg('<path d="M3 12h3l2.5-6 4 12 3-9 2 3H21"/>'),
+  send: svg('<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>'),
+  download: svg('<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/>'),
+  trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
+};
+// «195.0 МБ» → «195 МБ», «17.2 МБ» → «17,2 МБ».
+const prettySize = label => String(label || "").replace(/\.0(?=\s)/, "").replace(/(\d)\.(\d)/, "$1,$2");
 
 // Экран хода сборки финала. Сборку ведёт бот и пишет состояние на сервер (/assemble-progress) — здесь оно опрашивается
 // раз в 3 секунды: шаг, полоса, кадры, сколько прошло и осталось. Карточка встаёт под кнопкой «Собрать финал»
@@ -266,10 +277,10 @@ export async function openReportDetail(publicId) {
   let pipeEdit = null;   // { draft: [{role, telegram_id, name}], parallel }
 
   async function render() {
-    let detail, notes, checklist, files, roles, assignable, raws;
+    let detail, notes, checklist, files, roles, assignable, raws, roster;
     const canEdit = can("reports.manage");
     try {
-      [detail, notes, checklist, files, roles, assignable, raws] = await Promise.all([
+      [detail, notes, checklist, files, roles, assignable, raws, roster] = await Promise.all([
         apiGet(`/report/${publicId}`),
         apiGet(`/report/${publicId}/notes`),
         apiGet(`/report/${publicId}/checklist`),
@@ -278,6 +289,8 @@ export async function openReportDetail(publicId) {
         canEdit ? loadAssignable().catch(() => []) : Promise.resolve([]),
         // Старый сервер без /raws — карточка открывается и без раздела.
         apiGet(`/report/${publicId}/raws`).catch(() => ({ raws: [] })),
+        // Привязки имён из росписи к людям; старый сервер без них — только автоузнавание.
+        apiGet("/roster/aliases").catch(() => ({ aliases: {} })),
       ]);
     } catch (e) {
       if (e.status === 404 || e.status === 403) forgetRecentReport(publicId);
@@ -322,7 +335,8 @@ export async function openReportDetail(publicId) {
     }
     const topNotes = orderedNotes.filter(n => !(n.parent_id && noteIds.has(n.parent_id)));
     const openNotes = topNotes.filter(n => !n.resolved_at), doneNotes = topNotes.filter(n => n.resolved_at);
-    const noteCtx = { canEdit, me: state.telegramId, owner: !!state.isDeveloper, editing: editingNote };
+    const noteCtx = { canEdit, me: state.telegramId, owner: !!state.isDeveloper, editing: editingNote,
+      roster: { people: rosterPeople(detail.assignees, state.users), aliases: roster.aliases || {}, canBind: canEdit } };
     const noteThread = n => noteHtml(n, noteCtx) + ((repliesOf.get(n.id) || []).length
       ? `<div class="note-replies">${repliesOf.get(n.id).map(r => noteHtml(r, noteCtx)).join("")}</div>` : "");
 
@@ -358,7 +372,7 @@ export async function openReportDetail(publicId) {
 
     // Пайплайн живёт внутри «Производства финала» (один блок про путь к финалу); без прав на производство — отдельной секцией.
     const pipeInner = `
-              <h3>Пайплайн ${hasPipe ? `<span class="n">${detail.pipeline_parallel ? "без очереди · " : ""}${detail.pipeline.filter(s => s.done).length} из ${detail.pipeline.length}${detail.pipeline.every(s => s.done) ? " · пройден" : ""}</span>` : ""}
+              <h3>Пайплайн ${hasPipe ? `<span class="n">${[detail.pipeline_parallel ? "без очереди" : "", detail.pipeline.every(s => s.done) ? "пройден" : ""].filter(Boolean).join(" · ")}</span>` : ""}
                 ${canEdit ? `<button class="pf-link rd-h-act" id="pipe-edit-toggle">${hasPipe ? (pipeEdit ? "отмена" : "изменить") : ""}</button>` : ""}</h3>
               <div id="pipe-view"${pipeEdit ? " hidden" : ""}>
               ${hasPipe ? pipelineTimelineHtml(detail.pipeline, !!detail.pipeline_parallel, !!state.isAdmin, detail.assignees) + (detail.dub_only ? "" : pipelineAdvanceHtml(detail.pipeline, assignable, canEdit, !!detail.can_advance)) : (canEdit ? `<button class="rd-add" id="pipe-add-open">+ Собрать пайплайн: перевод → тайминг → озвучка…</button>` : `<div class="no-assignee">Пайплайн пока не задан.</div>`)}
@@ -380,10 +394,17 @@ export async function openReportDetail(publicId) {
     const prodHtml = productionHtml(detail, files.files, pipeInner);
     // Полоса показателей: прогресс, срок, озвучка, материалы (расчёт — report-overview-core.js).
     const assigneeNames = new Map((detail.assignees || []).map(a => [String(a.telegram_id), a.first_name || a.username || ""]));
+    // Кто уже отметил сдачу в пайплайне — его файлы помечаются «✓ сдача · роль».
+    const submittedRole = new Map((detail.pipeline || []).filter(s => s.telegram_id && (s.submitted_at || s.done)).map(s => [String(s.telegram_id), s.role]));
     const kpisHtml = `<div class="rd-kpis">${overviewKpis({
       files: files.files, pipeline: detail.pipeline, status: detail.status, deadline: detail.deadline, overdue,
       nameOf: s => (s.telegram_id && assigneeNames.get(String(s.telegram_id))) || s.user_name || "",
-    }).map(k => `<div class="rd-kpi${k.tone ? ` ${k.tone}` : ""}"><h4>${esc(k.title)}</h4><b>${esc(k.value)}</b><small>${esc(k.sub)}</small>${k.bar != null ? `<div class="rd-kpi-bar"><i style="width:${k.bar}%"></i></div>` : ""}</div>`).join("")}</div>`;
+    }).map(k => {
+      // Срок правится прямо с плашки — отдельная строка «Срок» в боковой колонке дублировала её.
+      const edit = k.key === "deadline" && canEdit;
+      const tag = edit ? `button type="button" id="chip-deadline" title="Изменить срок"` : "div";
+      return `<${tag} class="rd-kpi${k.tone ? ` ${k.tone}` : ""}${edit ? " edit" : ""}"><h4>${esc(k.title)}</h4><b>${esc(k.value)}</b><small>${esc(edit && !detail.deadline ? "поставить срок" : k.sub)}</small>${k.bar != null ? `<div class="rd-kpi-bar"><i style="width:${k.bar}%"></i></div>` : ""}</${edit ? "button" : "div"}>`;
+    }).join("")}</div>`;
 
     overlay.querySelector(".sheet").innerHTML = `
       <div class="rd-hero${banner ? "" : " no-ban"}">
@@ -426,7 +447,7 @@ export async function openReportDetail(publicId) {
             <div id="rd-player-host"></div>
             ${kpisHtml}
             ${prodHtml || `<div class="rd-sec">${pipeInner}</div>`}
-            <div class="rd-sec">
+            <div class="rd-sec rd-checklist${checklist.items.length ? "" : " empty"}">
               <h3>Чек-лист ${checklist.items.length ? `<span class="n">${doneItems} из ${checklist.items.length}</span>` : ""}</h3>
               <div id="checklist-list">${checklist.items.map(item => checklistItemHtml(item, canEdit)).join("")}</div>
               ${canEdit ? `<div class="add-row">
@@ -452,10 +473,10 @@ export async function openReportDetail(publicId) {
               <h3>Файлы ${files.files.length ? `<span class="n">${files.files.length}</span>` : ""}
                 <span class="rd-h-act rd-h-tools">
                   <button class="rd-add" id="report-file-add">${detail.is_sound ? "+ Сдать готовую дорожку" : "+ Добавить файл"}</button>
-                  ${can("titles.edit") ? `<button class="rd-add" id="report-watermark" title="${detail.title_id ? "Логотип, угол, прозрачность и размер — общие для всех серий тайтла" : "Серия без тайтла — при сборке берётся общий водяной знак студии"}">💧 Водяной знак</button>` : ""}
+                  ${can("titles.edit") ? `<button class="rd-add" id="report-watermark" title="${detail.title_id ? "Логотип, угол, прозрачность и размер — общие для всех серий тайтла" : "Серия без тайтла — при сборке берётся общий водяной знак студии"}" aria-label="Водяной знак">💧</button>` : ""}
                 </span>
               </h3>
-              ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit)).join("")}</div>` : `<div class="rd-empty">Файлов пока нет — добавьте кнопкой выше или перетащите файл в окно.</div>`}
+              ${files.files.length ? `<div id="files-list">${files.files.map(file => fileHtml(file, canEdit, submittedRole.get(String(file.uploaded_by?.telegram_id || "")), assigneeNames.get(String(file.uploaded_by?.telegram_id || "")))).join("")}</div>` : `<div class="rd-empty">Файлов пока нет — добавьте кнопкой выше или перетащите файл в окно.</div>`}
               ${detail.is_sound ? `<div class="no-assignee" style="margin:8px 0;">🎚 Сдача звукаря: загрузите итоговый файл — видео с новым звуком или готовую дорожку. Админ сразу получит уведомление «Дорожка сдана».</div>` : ""}
 
               ${(raws.raws || []).length ? `
@@ -478,8 +499,6 @@ export async function openReportDetail(publicId) {
 
         <aside class="rd-side">
           <div class="rd-meta">
-            <div class="rd-meta-row rd-due${overdue ? " late" : ""}"><span>Срок</span>
-              ${canEdit ? `<button class="rd-meta-btn" id="chip-deadline">${detail.deadline ? deadlineCellHtml(detail, overdue) : `<span class="ls-dl-none">без срока — поставить</span>`}</button>` : `<div class="rd-meta-btn" aria-disabled="true">${detail.deadline ? deadlineCellHtml(detail, overdue) : "без срока"}</div>`}</div>
             <div class="rd-meta-row rd-people"><span>Исполнители / кого уведомить</span>
               ${(detail.assignees || []).map(a => `<div class="rd-person" data-assignee="${a.telegram_id}" title="${esc(a.first_name || a.username || `ID ${a.telegram_id}`)}">
                 <span class="avatar-bubble" data-avatar-for="${a.telegram_id}">${esc(initials(a.first_name || a.username))}</span>
@@ -560,6 +579,11 @@ export async function openReportDetail(publicId) {
     sheet.querySelector("#pipeline-parallel")?.addEventListener("change", e => { if (pipeEdit) pipeEdit.parallel = e.target.checked; });
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
     loadAvatars(sheet);
+    sheet.querySelectorAll("[data-roster-bind]").forEach(el => {
+      const open = () => rosterBindDialog(el.dataset.rosterBind, noteCtx.roster.people, render);
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    });
     sheet.querySelectorAll("[data-rd-jump]").forEach(b => b.addEventListener("click", () => sheet.querySelector(b.dataset.rdJump)?.scrollIntoView({ block: "start", behavior: "smooth" })));
     sheet.querySelectorAll("[data-rd-click]").forEach(b => b.addEventListener("click", () => sheet.querySelector(b.dataset.rdClick)?.click()));
     sheet.querySelectorAll("[data-nav]").forEach(b => b.addEventListener("click", () => {
@@ -701,6 +725,9 @@ export async function openReportDetail(publicId) {
         if (res.advanced) { toast(`Передано: ${res.role}.`); await render(); }
         else { toast(res.detail || "Не удалось передать.", "error"); advanceBtn.disabled = false; }
       } catch (e) { toast(`Не удалось передать этап: ${e.message}`, "error"); advanceBtn.disabled = false; }
+    });
+    sheet.querySelector("#checklist-new")?.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sheet.querySelector("#checklist-add")?.click(); }
     });
     sheet.querySelector("#checklist-add")?.addEventListener("click", async () => {
       const input = sheet.querySelector("#checklist-new");
@@ -1072,7 +1099,7 @@ export async function openReportDetail(publicId) {
       btn.addEventListener("click", async () => {
         const fileId = btn.dataset.qcFile;
         btn.disabled = true;
-        btn.textContent = "Анализ…";
+        btn.classList.add("busy");
         try {
           const res = await apiPost(`/report/${publicId}/files/${fileId}/qc`, {});
           const resultEl = sheet.querySelector(`#qc-result-${fileId}`);
@@ -1090,7 +1117,7 @@ export async function openReportDetail(publicId) {
           toast(`AI-проверка не удалась: ${e.message}`, "error");
         } finally {
           btn.disabled = false;
-          btn.textContent = "AI-проверка";
+          btn.classList.remove("busy");
         }
       });
     });
@@ -1117,16 +1144,81 @@ function decorateNote(escapedHtml) {
     .replace(NOTE_INLINE_AT, (_, pre, nick) => `${pre}<span class="note-mention" title="упоминание — человеку придёт уведомление">@${nick}</span>`)).join("");
 }
 
-// «LissaDor — 140 Oni — 93 …» — раскладка реплик по людям. Если вся заметка состоит из пар «имя — число»
-// (в строку или по строкам), рисуем её мини-таблицей с полосками долей, иначе null.
 const TALLY_RE = /([^\s—–\-:\d,;][^—–\n]*?)\s*[—–-]\s*(\d+)(?=[\s,;]|$)/g;
-function tallyHtml(text) {
+// Кто есть кто для росписи: сначала исполнители отчёта, потом вся команда. Имена — какими их видят в карточке.
+function rosterPeople(assignees = [], users = []) {
+  const seen = new Map();
+  for (const u of [...(assignees || []), ...(users || [])]) {
+    const id = String(u.telegram_id || "");
+    if (!id || seen.has(id)) continue;
+    seen.set(id, { id, name: u.first_name || u.display_name || u.name || u.username || "", names: [u.first_name, u.display_name, u.name, u.username].filter(Boolean) });
+  }
+  return [...seen.values()];
+}
+const rosterKey = name => String(name || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase().split("ё").join("е").slice(0, 60);
+// «Совесть» = Совесть, «Богдан» → «богданчик <3», «LissaDor» → Lissa, «Ewaii» → ник Ewaii_Ren, «Jull» → Juliana.
+// Сначала ручная привязка, затем точное совпадение, начало имени или часть ника, затем общее начало от 3 букв —
+// только если такой человек один, иначе честно «не узнан».
+function rosterMatch(name, roster) {
+  if (!roster) return null;
+  const key = rosterKey(name);
+  const bound = roster.aliases[key];
+  if (bound != null) return roster.people.find(p => p.id === String(bound)) || { id: String(bound), name: "" };
+  const norm = roster.people.map(p => ({ p, ks: p.names.map(rosterKey) }));
+  const pick = test => { const hit = norm.filter(({ ks }) => ks.some(test)); return hit.length === 1 ? hit[0].p : null; };
+  const prefix = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return i; };
+  return pick(k => k === key)
+    || pick(k => k.startsWith(key) || key.startsWith(k) && k.length >= 3)
+    || pick(k => k.split(/[_\s.-]+/).includes(key))
+    || pick(k => prefix(k, key) >= 3);
+}
+
+// «LissaDor — 140 Oni — 93 …» — раскладка реплик по людям. Если вся заметка состоит из пар «имя — число»
+// (в строку или по строкам), рисуем её карточками людей: аватар сверху, реплики снизу. Иначе null.
+function tallyHtml(text, roster = null) {
   const rows = [...String(text).matchAll(TALLY_RE)].map(m => ({ name: m[1].trim(), n: Number(m[2]) }));
   if (rows.length < 2) return null;
   if (String(text).replace(TALLY_RE, "").replace(/[\s,;]/g, "")) return null;
   const max = Math.max(...rows.map(r => r.n)) || 1;
   const sum = rows.reduce((acc, r) => acc + r.n, 0);
-  return `<div class="note-tally">${rows.map(r => `<div class="nt-row"><span class="nt-name">${esc(r.name)}</span><span class="nt-bar"><i style="width:${(r.n / max * 100).toFixed(1)}%"></i></span><b>${r.n}</b><small>${Math.round(r.n / sum * 100)}%</small></div>`).join("")}<div class="nt-sum">всего ${sum}</div></div>`;
+  const tile = r => {
+    const who = rosterMatch(r.name, roster);
+    const bind = roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
+    return `<div class="nt-tile${who ? "" : " unknown"}"${bind}>
+      <span class="avatar-bubble"${who ? ` data-avatar-for="${esc(who.id)}"` : ""}>${who ? esc(initials(who.name || r.name)) : "?"}</span>
+      <span class="nt-name">${esc(r.name)}</span>
+      <b>${r.n}</b>
+      <small>${Math.round(r.n / sum * 100)}%</small>
+      <span class="nt-bar"><i style="width:${(r.n / max * 100).toFixed(1)}%"></i></span>
+    </div>`;
+  };
+  return `<div class="note-tally tiles">${rows.map(tile).join("")}<div class="nt-sum">всего ${sum}</div></div>`;
+}
+
+// Привязка имени из росписи к человеку: список команды, исполнители отчёта — сверху.
+function rosterBindDialog(name, people, onDone) {
+  const overlay = openSheet(`<h2>«${esc(name)}» — это кто?</h2>
+    <p class="sheet-sub">Привязка запомнится для всех росписей. Реплики будут считаться этому человеку.</p>
+    <input class="field-input" id="rb-q" placeholder="Поиск по имени или нику" autocomplete="off">
+    <div class="rb-list">${people.map(p => `<button type="button" class="rb-row" data-rb="${esc(p.id)}" data-q="${esc(p.names.join(" ").toLowerCase())}"><span class="avatar-bubble" data-avatar-for="${esc(p.id)}">${esc(initials(p.name))}</span>${esc(p.name)}</button>`).join("")}</div>
+    <div class="sheet-actions"><button class="btn ghost" data-rb-clear>Отвязать</button><button class="btn" data-close>Отмена</button></div>`);
+  const sheet = overlay.querySelector(".sheet");
+  loadAvatars(sheet);
+  const save = async telegramId => {
+    try {
+      await apiPost("/roster/alias", { name, telegram_id: telegramId });
+      overlay.remove();
+      onDone();
+    } catch (e) { toast(`Не удалось привязать: ${e.message}`, "error"); }
+  };
+  sheet.querySelector("#rb-q").addEventListener("input", e => {
+    const q = e.target.value.trim().toLowerCase();
+    sheet.querySelectorAll(".rb-row").forEach(b => { b.hidden = !!q && !b.dataset.q.includes(q); });
+  });
+  sheet.querySelectorAll("[data-rb]").forEach(b => b.addEventListener("click", () => save(b.dataset.rb)));
+  sheet.querySelector("[data-rb-clear]").addEventListener("click", () => save(null));
+  sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+  sheet.querySelector("#rb-q").focus();
 }
 
 function noteHtml(n, ctx = {}) {
@@ -1139,7 +1231,7 @@ function noteHtml(n, ctx = {}) {
   const role = who && who.roles && who.roles.length ? who.roles.join(", ") : "";
   const mine = n.author_telegram_id && String(n.author_telegram_id) === String(ctx.me);
   const editing = ctx.editing === n.id;
-  const tally = body && !editing ? tallyHtml(body) : null;
+  const tally = body && !editing ? tallyHtml(body, ctx.roster) : null;
   const text = editing
     ? `<div class="note-edit"><textarea rows="2">${esc(n.text)}</textarea><div class="note-edit-act"><button type="button" class="btn ghost" data-note-act="cancel">Отмена</button><button type="button" class="btn" data-note-act="save">Сохранить</button></div></div>`
     : tally || (body ? `<span class="note-text">${decorateNote(linkifyProject(esc(body)))}</span>` : "");
@@ -1328,9 +1420,9 @@ function productionHtml(detail, fileList, pipeInner = "") {
     </div>`;
   const sendFile = [...list].reverse().find(isFinalFile) || [...list].reverse().find(isVideoFile);
   const sendBtn = sendFile ? `<button class="rd-add" data-send-file="${sendFile.id}" data-file-name="${esc(sendFile.file_name || "видео")}" title="Бот перешлёт видео выбранным людям">📤 Прислать…</button>` : "";
-  const nyaa = can("reports.files") && !detail.dub_only ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l1">⚠ Опасная зона</span><span class="dz-l2">Видео с Nyaa</span></button>` : "";
+  const nyaa = can("reports.files") && !detail.dub_only ? `<button class="rd-add danger-zone" id="report-nyaa" title="Опасная зона: сервер скачивает видео целиком — нагружает канал и диск"><span class="dz-l2">Видео с Nyaa</span><span class="dz-l1">⚠ тяжёлая загрузка</span></button>` : "";
   // Яркая — только когда собирать уже есть из чего; пока ждём видео, кнопка спокойная (окно сборки само скажет, чего не хватает).
-  const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal && !pipeLeft && (detail.pipeline_roles || []).length ? " primary" : ""}" id="report-assemble">🎬 Собрать финал</button>` : "";
+  const assemble = can("reports.assemble") ? `<button class="rd-add${hasVideo && !hasFinal && !pipeLeft && (detail.pipeline_roles || []).length ? " primary" : hasVideo ? "" : " idle"}" id="report-assemble"${hasVideo ? "" : ` title="Сначала нужно видео — окно сборки подскажет, чего не хватает"`}>🎬 Собрать финал</button>` : "";
   const post = can("posts.manage") && hasFinal ? `<button class="rd-add" id="report-post">📣 Пост в канал</button>` : "";
   // Что мешает сейчас — одной строкой и с кнопкой, а не угадыванием по четырём карточкам этапов.
   // Даббер видео не добавляет: подсказка «нет видео» с кнопкой ему ни к чему.
@@ -1360,15 +1452,15 @@ function rawKindsHtml(kinds, { canAdd, addAttr, dlAttr }) {
   const row = (k, f) => dlAttr === "raw"
     ? `<div class="raw-row on">
         <span class="raw-name">${esc(f.name || "файл")}${f.character_name ? ` · ${esc(f.character_name)}` : (f.character_id ? ` · персонаж #${Number(f.character_id)}` : "")}</span>
-        <button class="icon-btn" data-raw-dl="${esc(k.kind)}" data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-legacy="${f.legacy || f.id == null ? "1" : "0"}" data-raw-character="${Number(f.character_id || 0)}" data-raw-name="${esc(f.name || k.kind)}" title="Скачать">⬇️</button>
-        <button class="icon-btn" data-media-send="${f.id == null ? (f.legacy || f.id == null ? `raws/legacy/${esc(k.kind)}/${Number(f.character_id || 0)}` : `raws/${esc(k.kind)}`) : `raws/files/${esc(f.id)}`}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">📤</button>
-        ${f.can_delete ? `<button class="icon-btn danger-zone" data-raw-delete data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-kind="${esc(k.kind)}" data-raw-character="${Number(f.character_id || 0)}" data-file-name="${esc(f.name || k.kind)}" title="Удалить файл" aria-label="Удалить ${esc(f.name || k.kind)}">🗑</button>` : ""}
+        <button class="icon-btn" data-raw-dl="${esc(k.kind)}" data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-legacy="${f.legacy || f.id == null ? "1" : "0"}" data-raw-character="${Number(f.character_id || 0)}" data-raw-name="${esc(f.name || k.kind)}" title="Скачать">${FILE_ACT_ICONS.download}</button>
+        <button class="icon-btn" data-media-send="${f.id == null ? (f.legacy || f.id == null ? `raws/legacy/${esc(k.kind)}/${Number(f.character_id || 0)}` : `raws/${esc(k.kind)}`) : `raws/files/${esc(f.id)}`}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">${FILE_ACT_ICONS.send}</button>
+        ${f.can_delete ? `<button class="icon-btn danger-zone" data-raw-delete data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-kind="${esc(k.kind)}" data-raw-character="${Number(f.character_id || 0)}" data-file-name="${esc(f.name || k.kind)}" title="Удалить файл" aria-label="Удалить ${esc(f.name || k.kind)}">${FILE_ACT_ICONS.trash}</button>` : ""}
       </div>`
     : `<div class="raw-row on">
         <span class="raw-name">${esc(f.name || "файл")}</span>
-        <button class="icon-btn" data-source-dl="${esc(f.id)}" data-source-name="${esc(f.name || k.kind)}" title="Скачать">⬇️</button>
-        <button class="icon-btn" data-media-send="sources/files/${esc(f.id)}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">📤</button>
-        ${f.can_delete ? `<button class="icon-btn danger-zone" data-source-delete="${esc(f.id)}" data-file-name="${esc(f.name || k.kind)}" title="Удалить общий исходник" aria-label="Удалить ${esc(f.name || k.kind)}">🗑</button>` : ""}
+        <button class="icon-btn" data-source-dl="${esc(f.id)}" data-source-name="${esc(f.name || k.kind)}" title="Скачать">${FILE_ACT_ICONS.download}</button>
+        <button class="icon-btn" data-media-send="sources/files/${esc(f.id)}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">${FILE_ACT_ICONS.send}</button>
+        ${f.can_delete ? `<button class="icon-btn danger-zone" data-source-delete="${esc(f.id)}" data-file-name="${esc(f.name || k.kind)}" title="Удалить общий исходник" aria-label="Удалить ${esc(f.name || k.kind)}">${FILE_ACT_ICONS.trash}</button>` : ""}
       </div>`;
   return `
   <div class="raw-list">${filled.map(k => `
@@ -1385,18 +1477,22 @@ function rawKindsHtml(kinds, { canAdd, addAttr, dlAttr }) {
     : `<span class="rd-chip off">${esc(k.label)}</span>`).join("")}</div>` : ""}`;
 }
 
-function fileHtml(f, canEdit = true) {
+function fileHtml(f, canEdit = true, sub = null, shownName = "") {
   const audioRe = AUDIO_RE;
   const isAudio = audioRe.test(f.file_type || "") || audioRe.test(f.file_name || "");
   const canDelete = f.can_delete === undefined ? canEdit : !!f.can_delete;
-  return `<div class="file-item">
-    <div>${esc(FILE_ICONS[f.file_type] || "📎")} ${esc(f.file_name || f.file_type)} <span class="meta">${esc(f.file_size_label || "")}</span>${f.uploaded_by ? `
-      <span class="file-by"><span class="avatar-bubble" data-avatar-for="${esc(f.uploaded_by.telegram_id || "")}">${esc(initials(f.uploaded_by.name || "?"))}</span><b>${esc(f.uploaded_by.name || "")}</b>${f.created_at ? `<em>${esc(submittedWhen(f.created_at))}</em>` : ""}</span>` : ""}</div>
-    ${isAudio ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-play-file="${f.id}">▶ Слушать</button>` : ""}
-    ${isAudio && canEdit ? `<button class="btn" style="padding:4px 10px; font-size:12px;" data-qc-file="${f.id}">AI-проверка</button>` : ""}
-    <button class="icon-btn" data-send-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Прислать кому-то">📤</button>
-    <button class="icon-btn" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать">⬇️</button>
-    ${canDelete ? `<button class="icon-btn danger-zone" data-delete-file="${f.id}" data-file-name="${esc(f.file_name || f.file_type || "")}" title="Удалить файл" aria-label="Удалить файл">🗑</button>` : ""}
+  const name = esc(f.file_name || f.file_type || "");
+  // sub — этап пайплайна, который этот человек уже сдал: видно, что файл и есть его сдача.
+  return `<div class="file-item fi-compact">
+    <div class="fi-main"><div class="fi-name">${esc(FILE_ICONS[f.file_type] || "📎")} <span>${esc(f.file_name || f.file_type)}</span> <span class="meta">${esc(prettySize(f.file_size_label))}</span></div>${f.uploaded_by ? `
+      <span class="file-by"><span class="avatar-bubble" data-avatar-for="${esc(f.uploaded_by.telegram_id || "")}">${esc(initials(f.uploaded_by.name || "?"))}</span><b${shownName && shownName !== f.uploaded_by.name ? ` title="${esc(f.uploaded_by.name || "")}"` : ""}>${esc(shownName || f.uploaded_by.name || "")}</b>${f.created_at ? `<em>${esc(submittedWhen(f.created_at))}</em>` : ""}${sub ? `<span class="fi-sub" title="Этот человек отметил сдачу в пайплайне">✓ сдача · ${esc(sub)}</span>` : ""}</span>` : ""}</div>
+    <div class="fi-acts">
+    ${isAudio ? `<button class="icon-btn fi-act" data-play-file="${f.id}" title="Слушать" aria-label="Слушать">${FILE_ACT_ICONS.play}</button>` : ""}
+    ${isAudio && canEdit ? `<button class="icon-btn fi-act" data-qc-file="${f.id}" title="AI-проверка звука" aria-label="AI-проверка">${FILE_ACT_ICONS.qc}</button>` : ""}
+    <button class="icon-btn fi-act" data-send-file="${f.id}" data-file-name="${name}" title="Прислать кому-то" aria-label="Прислать кому-то">${FILE_ACT_ICONS.send}</button>
+    <button class="icon-btn fi-act" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать" aria-label="Скачать">${FILE_ACT_ICONS.download}</button>
+    ${canDelete ? `<button class="icon-btn fi-act fi-del danger-zone" data-delete-file="${f.id}" data-file-name="${name}" title="Удалить файл" aria-label="Удалить файл">${FILE_ACT_ICONS.trash}</button>` : ""}
+    </div>
     <div id="qc-result-${f.id}" style="width:100%;"></div>
   </div>`;
 }

@@ -124,6 +124,8 @@ const boardView = { sort: readSort(), query: "", seasonId: 0, titleId: 0, month:
 // Последний ответ сервера — чтобы пересортировать и отфильтровать доску
 // мгновенно, не ходя за теми же данными второй раз.
 let lastBoardData = null;
+// Раскладка последней отрисовки: переключателю «Колонки/Таймлайн» нужна только она, без пересборки доски.
+let lastLayout = null;
 
 // Кэшируется в памяти (сезоны редко меняются в рамках одной сессии),
 // не в localStorage: список студии актуальнее всего при живом
@@ -715,7 +717,7 @@ async function renderBoard(root) {
   const active = layout.columns.filter(c => c.status !== "completed" && c.status !== "cancelled").reduce((n, c) => n + (c.total || 0), 0);
   const canCreateReport = can("reports.create");
   const timeline = boardMode() === "timeline";
-  const timelineCell = timeline ? timelineSectionHtml(layout) : "";
+  lastLayout = layout;
   root.innerHTML = `
     <div class="page-header">
       <div>
@@ -732,13 +734,10 @@ async function renderBoard(root) {
       </div>
     </div>
     ${boardToolbarHtml()}
-    ${timeline ? `<div class="board-top-row${timelineCell ? "" : " single"}">${timelineCell}${performanceHtml(stats)}</div>` : ""}
+    ${timeline ? topRowHtml(layout, stats) : ""}
     <div class="board">${layout.columns.map(col => columnHtml(col, collapsed, expanded, folded)).join("")}</div>
   `;
-  root.querySelectorAll("[data-board-mode]").forEach(b => b.addEventListener("click", () => {
-    setBoardMode(b.dataset.boardMode);
-    renderBoard(root);
-  }));
+  root.querySelectorAll("[data-board-mode]").forEach(b => b.addEventListener("click", () => switchBoardMode(root, b.dataset.boardMode)));
   wireBoardCards(root);
   loadAvatars(root);
   wireBoardScroll(root.querySelector(".board"));
@@ -747,6 +746,22 @@ async function renderBoard(root) {
   wireBoardHeaderActions(root);
   playTimelineIntro(root);
   playBoardCardsIntro(root);
+}
+
+function topRowHtml(layout, stats) {
+  const timelineCell = timelineSectionHtml(layout);
+  return `<div class="board-top-row${timelineCell ? "" : " single"}">${timelineCell}${performanceHtml(stats)}</div>`;
+}
+
+// «Колонки/Таймлайн» меняет только блок над колонками. Полная перерисовка пересобирала все карточки
+// и заново запускала их входные анимации (появление, глаза, прогресс) — переключение шло рывками.
+function switchBoardMode(root, mode) {
+  setBoardMode(mode);
+  root.querySelectorAll("[data-board-mode]").forEach(b => b.classList.toggle("on", b.dataset.boardMode === mode));
+  root.querySelector(".board-top-row")?.remove();
+  if (mode !== "timeline" || !lastLayout) return;
+  root.querySelector(".board")?.insertAdjacentHTML("beforebegin", topRowHtml(lastLayout, boardStats(lastLayout)));
+  playTimelineIntro(root);
 }
 
 // Заливка прогресс-бара карточки едет из 0 до реального значения при

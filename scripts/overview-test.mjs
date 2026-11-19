@@ -26,13 +26,13 @@ assert.deepEqual(pipelineCounts(null), { done: 0, total: 0 });
 
 // видео нет, озвучка 2 из 4 → (0 + .5 + 0 + 0) / 4 ≈ 13 %
 let p = overallProgress({ files: [], pipeline: pipe, status: "voicing" });
-assert.deepEqual(p, { percent: 13, passed: 0, total: 4 });
+assert.deepEqual(p, { percent: 13, passed: 0, total: 4, current: { n: 1, name: "видео" } });
 // видео есть, пайплайн пройден, финала нет → 2 этапа из 4
 p = overallProgress({ files: [{ file_name: "a.mkv" }], pipeline: [{ done: true }], status: "voicing" });
 assert.deepEqual([p.percent, p.passed], [50, 2]);
 // финал собран, статус «Готово» → все четыре
 p = overallProgress({ files: [{ file_name: "ep_final.mp4" }], pipeline: [{ done: true }], status: "completed" });
-assert.deepEqual([p.percent, p.passed], [100, 4]);
+assert.deepEqual([p.percent, p.passed, p.current], [100, 4, null]);
 // без пайплайна озвучка засчитана, если звук уже лежит
 assert.equal(overallProgress({ files: [{ file_name: "v.wav" }], pipeline: [], status: "draft" }).percent, 25);
 
@@ -60,8 +60,9 @@ assert.equal(k[1].tone, "bad");
 assert.equal(k[2].value, "1 из 6");
 assert.equal(k[2].sub, "ждём: Ren, Совесть, Nataly, Lissa и ещё 1");   // не больше четырёх имён
 assert.equal(k[3].value, "4 файла");
-assert.equal(k[3].sub, "2 аудио · 1 субтитры · 1 видео");
-assert.equal(overviewKpis({ files: [], pipeline: [], status: "draft", deadline: "", now })[3].sub, "0 аудио · 0 субтитры · видео нет");
+assert.equal(k[3].sub, "2 аудио · 1 субт. · 1 видео");
+assert.equal(overviewKpis({ files: [], pipeline: [], status: "draft", deadline: "", now })[3].sub, "аудио нет · субтитров нет · видео нет");
+assert.equal(k[0].sub.startsWith("этап "), true);
 assert.equal(overviewKpis({ files: [], pipeline: [], status: "draft", deadline: "", now })[2].value, "—");
 assert.equal(overviewKpis({ files: [], pipeline: [{ done: true }], status: "draft", deadline: "", now })[2].sub, "все сдали");
 console.log("overview-test: ok");

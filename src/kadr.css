@@ -3366,7 +3366,9 @@ td.row-actions { opacity: 1; transition: none; }
 /* Осколки парят только под мышью: у каждого осколка тройная тень, и 128 штук сразу опускали «Доску» до 25 кадров. */
 .kd-pieces em { position: absolute; inset: 0; }
 .board-card:hover .kd-pieces em, .kd-slide:hover .kd-pieces em { animation: kd-float 6s ease-in-out infinite alternate; }
-.kd-pieces i { position: absolute; inset: 0; background: center / cover no-repeat; filter: saturate(.6) brightness(.85) contrast(1.1); }
+/* Фильтр — один на всю обложку, а не на каждый осколок: 16 отфильтрованных слоёв на обложку тормозили доску. */
+.kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1); }
+.kd-pieces i { position: absolute; inset: 0; background: center / cover no-repeat; }
 @keyframes kd-explode {
   0% { transform: none; filter: brightness(3) drop-shadow(0 0 8px #fff); }
   12% { transform: translate(calc(var(--ex) * var(--k, 1) * 1.8), calc(var(--ey) * var(--k, 1) * 1.8)) rotate(calc(var(--er) * 2)) scale(1.06); }
@@ -3451,7 +3453,7 @@ td.row-actions { opacity: 1; transition: none; }
 .kc-doom .kd-crack { border-radius: inherit; overflow: hidden; }
 .kc-doom .kd-crack-dark { stroke-width: calc(var(--w) * 2.6px); }
 .kc-doom .kd-crack-lit { stroke-width: calc(var(--w) * 1.1px); transform: translate(.5px, -.4px); }
-.kc-doom .kd-pieces span { filter: drop-shadow(0 0 .5px rgba(255, 255, 255, .9)) drop-shadow(0 0 2px rgba(var(--fire-rgb), .5)) drop-shadow(0 4px 4px rgba(0, 0, 0, .7)); }
+.kc-doom .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1) drop-shadow(0 0 .5px rgba(255, 255, 255, .9)) drop-shadow(0 0 2px rgba(var(--fire-rgb), .5)) drop-shadow(0 4px 4px rgba(0, 0, 0, .7)); }
 .kc-chip { position: absolute; inset: 0; pointer-events: none; animation: kc-chip 6s linear infinite; filter: drop-shadow(0 0 .6px #fff) drop-shadow(0 3px 3px rgba(0, 0, 0, .6)); }
 .kc-chip i { position: absolute; inset: 0; background: center / cover no-repeat; border-radius: 9px; filter: brightness(1.2); }
 @keyframes kc-chip {
@@ -3469,22 +3471,20 @@ td.row-actions { opacity: 1; transition: none; }
 .kc-eyes i:last-child { animation: kd-blink-r 4.3s infinite; }
 /* Сама карточка: мрак к полуночи и красное сердцебиение по рамке с последнего дня. */
 .board-card.doom { background: linear-gradient(rgba(0, 0, 0, calc(var(--gloom, 0) * .45)), rgba(0, 0, 0, calc(var(--gloom, 0) * .45))), rgba(255, 255, 255, .035); }
-.board-card.dread { animation: kc-dread var(--beat, 1.6s) infinite; }
-@keyframes kc-dread { 0%, 40%, 100% { box-shadow: 0 0 0 1px rgba(255, 40, 30, calc(var(--doom) * .25)); }
-  8% { box-shadow: 0 0 0 1px rgba(255, 40, 30, calc(var(--doom) * .7)), 0 0 18px rgba(255, 30, 20, calc(var(--doom) * .35)); }
-  26% { box-shadow: 0 0 0 1px rgba(255, 40, 30, calc(var(--doom) * .55)), 0 0 12px rgba(255, 30, 20, calc(var(--doom) * .25)); } }
+/* Сердцебиение — тень нарисована один раз на ::after, в такт меняется только opacity (композитор, без перерисовки).
+   Анимация самого box-shadow перерисовывала все просроченные карточки каждый кадр: доска падала до ~70 к/с. */
+.board-card.dread::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(255, 40, 30, calc(var(--doom) * .7)), inset 0 0 18px rgba(255, 30, 20, calc(var(--doom) * .3));
+  opacity: .36; will-change: opacity; animation: kc-beat var(--beat, 1.6s) infinite; }
+@keyframes kc-beat { 0%, 40%, 100% { opacity: .36; } 8% { opacity: 1; } 26% { opacity: .78; } }
 .board-card.flicker::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: #000; opacity: 0; pointer-events: none; z-index: 3; animation: kd-flicker 4.7s infinite; }
-:root[data-motion="off"] .kc-chip, :root[data-motion="off"] .board-card.dread, :root[data-motion="off"] .board-card.flicker::before { animation: none !important; }
+:root[data-motion="off"] .kc-chip, :root[data-motion="off"] .board-card.dread::after, :root[data-motion="off"] .board-card.flicker::before { animation: none !important; }
 :root[data-motion="off"] .kc-chip { display: none; }
 /* Просрочено: карточка тонет во тьме — кровавые прожилки бьются в такт сердцу, сверху сочатся подтёки,
    из темноты справа смотрит вторая пара глаз, а заголовок иногда «сбоит», как испорченная плёнка. */
 .board-card.dead { position: relative; isolation: isolate; border-color: rgba(190, 20, 20, .55);
   background: radial-gradient(130% 150% at 0% 50%, rgba(130, 6, 6, .42), transparent 62%), radial-gradient(90% 120% at 100% 100%, rgba(0, 0, 0, .7), transparent 70%), #0d0707; }
-.board-card.dead.dread { animation: kc-dead-beat var(--beat, 1s) infinite; }
-@keyframes kc-dead-beat {
-  0%, 40%, 100% { box-shadow: 0 0 0 1px rgba(255, 30, 20, .3), inset 0 0 22px rgba(120, 0, 0, .35); }
-  8% { box-shadow: 0 0 0 1px rgba(255, 40, 30, .9), 0 0 26px rgba(255, 20, 10, .5), inset 0 0 34px rgba(170, 0, 0, .55); }
-  26% { box-shadow: 0 0 0 1px rgba(255, 40, 30, .7), 0 0 16px rgba(255, 20, 10, .32), inset 0 0 28px rgba(150, 0, 0, .45); } }
+.board-card.dead.dread::after { box-shadow: 0 0 0 1px rgba(255, 40, 30, .9), inset 0 0 34px rgba(170, 0, 0, .55); opacity: .34; }
 .kc-dead-fx { position: absolute; inset: 0; z-index: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
 .board-card.dead > :not(.kc-dead-fx) { position: relative; z-index: 1; }
 .board-card.dead > .kc-flag { position: absolute; }
@@ -4380,3 +4380,118 @@ button.note-time::before { content: "▶"; font-size: .8em; margin-right: 5px; o
 .kcal-bar .kcal-late-lbl.tmrw { color: #a9d4ff; background: #12202e; border-color: rgba(100, 170, 255, .4); }
 :root[data-theme="light"] .kcal-bar .kcal-late-lbl.today { color: #8a5a00; background: #fff6d6; border-color: rgba(200, 150, 0, .4); }
 :root[data-theme="light"] .kcal-bar .kcal-late-lbl.tmrw { color: #1d5fa8; background: #e9f3ff; border-color: rgba(40, 110, 220, .3); }
+
+/* ================================================================
+   Доска · обновление вида (2026-11): единая панель фильтров, цветной
+   счётчик колонки, плотнее карточки. Хоррор-состояния
+   (.doom/.dread/.dead) не трогаем — у них селекторы сильнее.
+   ================================================================ */
+#board-body .page-header h1 { font-size: 34px; letter-spacing: -.02em; }
+.board-toolbar { gap: 0; padding: 4px; width: max-content; max-width: 100%; border-radius: 14px;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--fire-rgb), .22);
+  box-shadow: 0 0 14px -2px rgba(var(--fire-rgb), .14), inset 0 0 10px -4px rgba(var(--fire-rgb), .12); }
+.board-toolbar:focus-within { border-color: rgba(var(--fire-rgb), .38); box-shadow: 0 0 18px -2px rgba(var(--fire-rgb), .22), inset 0 0 12px -4px rgba(var(--fire-rgb), .16); }
+.board-search:focus-within { box-shadow: none; }
+.board-toolbar > * + * { margin-left: 4px; }
+.board-search, .board-sort { height: 34px; border-radius: 10px; border-color: transparent; background-color: transparent; }
+.board-search { min-width: 240px; }
+.board-search:focus-within { background-color: rgba(255, 255, 255, .05); }
+.board-sort:hover, .board-search:hover { border-color: transparent; background-color: rgba(255, 255, 255, .06); }
+
+.board-col { border-radius: 18px; background: rgba(14, 10, 16, .55);
+  box-shadow: 0 30px 60px -36px rgba(0, 0, 0, 1), inset 0 0 0 1px rgba(255, 255, 255, .05); }
+.board-col:not(.collapsed) .board-col-head { padding: 4px 6px 12px; }
+.board-col-head .lb { font-size: 13.5px; letter-spacing: -.01em; }
+.board-col:not(.collapsed) .board-col-head .cnt { padding: 2px 8px; border-radius: 99px;
+  background: color-mix(in srgb, var(--col-accent) 14%, transparent); color: color-mix(in srgb, var(--col-accent) 70%, #fff); }
+.board-col.over-wip:not(.collapsed) .board-col-head .cnt { background: color-mix(in srgb, var(--s-stop) 18%, transparent); color: #ff8a80; }
+
+.board-col.collapsed { width: 46px; padding: 14px 6px 10px; border-radius: 16px; }
+.board-col.collapsed .board-col-head .lb { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.board-col.collapsed .board-col-head .cnt { min-width: 22px; height: 22px; display: grid; place-items: center; border-radius: 99px;
+  font-size: 11px; background: rgba(255, 255, 255, .06); }
+.board-col.collapsed:hover { box-shadow: 0 30px 60px -36px rgba(0, 0, 0, 1), inset 0 0 0 1px color-mix(in srgb, var(--col-accent) 45%, transparent); }
+
+.board-cards { gap: 10px; }
+.board-card { grid-template-columns: 46px minmax(0, 1fr); gap: 2px 12px; padding: 11px 12px 10px; border-radius: 13px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02)); border-color: rgba(255, 255, 255, .07); }
+.board-card:hover { background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .03));
+  border-color: color-mix(in srgb, var(--accent-dot) 45%, transparent); }
+.board-card .kc-pc { width: 46px; height: 64px; border-radius: 8px; }
+.board-card .kc-id { font-size: 9.5px; letter-spacing: .1em; opacity: .75; }
+.board-card .ttl { font-size: 13.5px; letter-spacing: -.01em; }
+.kc-ft { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(255, 255, 255, .05); }
+.kc-ft .board-card-progress-track { height: 3px; border-radius: 99px; }
+
+:root[data-theme="light"] .board-toolbar { background: rgba(255, 255, 255, .55); }
+:root[data-theme="light"] .board-col { background: rgba(255, 255, 255, .62); }
+:root[data-theme="light"] .board-card { background: rgba(255, 255, 255, .8); border-color: rgba(80, 40, 20, .08); }
+:root[data-theme="light"] .kc-ft { border-top-color: rgba(80, 40, 20, .07); }
+
+/* Карточка отчёта · доработки (2026-11): срок правится с плашки, «Собрать финал» спокойная без видео,
+   Nyaa — действие, а не ошибка, сданные строки пайплайна тише, «снять» видно. */
+button.rd-kpi { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
+button.rd-kpi:hover { border-color: rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .055); }
+button.rd-kpi.soon:hover { border-color: rgba(255, 176, 32, .7); }
+button.rd-kpi.bad:hover { border-color: rgba(255, 90, 80, .75); }
+button.rd-kpi:focus-visible { outline: 2px solid rgba(var(--fire-rgb), .6); outline-offset: 2px; }
+.rd-add.idle { opacity: .45; }
+.rd-add.idle:hover { opacity: .8; }
+.rd-prod .rd-fs-act .rd-add.danger-zone { border-style: solid; border-color: color-mix(in srgb, var(--s-stop) 35%, transparent);
+  background: color-mix(in srgb, var(--s-stop) 6%, transparent); color: var(--ink); }
+.rd-add.danger-zone .dz-l2 { font-size: 12.5px; font-weight: 700; opacity: 1; }
+.rd-add.danger-zone .dz-l1 { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: none; color: color-mix(in srgb, var(--s-stop) 75%, #fff); }
+.rd-tl-ent.sub, .rd-tl-ents.many .rd-tl-ent.sub { background: transparent; border-color: color-mix(in srgb, var(--s-done) 22%, transparent); }
+.rd-tl-ent.sub .rd-tl-p { opacity: .75; }
+.rd-tl-undo { opacity: 1; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .14); color: var(--ink-soft); }
+.rd-tl-undo:hover { border-color: color-mix(in srgb, var(--s-stop) 60%, transparent); color: #ff8a80; }
+:root[data-theme="light"] button.rd-kpi:hover { background: rgba(255, 255, 255, .8); }
+
+/* Карточка отчёта · файлы, чек-лист, роспись (2026-11). */
+.file-item.fi-compact { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 9px 10px 9px 14px; margin-bottom: 6px; border-radius: 12px; }
+.fi-compact .fi-main { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+.fi-compact .fi-name { min-width: 0; display: flex; align-items: baseline; gap: 6px; font-size: 13px; font-weight: 600; }
+.fi-compact .fi-name > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fi-compact .file-by { margin: 0; }
+.fi-sub { margin-left: 8px; padding: 1px 7px; border-radius: 99px; font-size: 10.5px; font-weight: 700; color: var(--s-done); background: color-mix(in srgb, var(--s-done) 14%, transparent); }
+.fi-acts { display: flex; align-items: center; gap: 4px; flex: none; }
+.fi-act { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border-radius: 8px; color: var(--ink-soft); }
+.fi-act svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.fi-act[data-play-file] svg { fill: currentColor; stroke: none; }
+.fi-act:hover { color: var(--ink); background: rgba(255, 255, 255, .07); }
+.fi-act.fi-del { margin-left: 8px; background: transparent; border-color: transparent; color: var(--ink-dim); }
+.fi-act.fi-del:hover { color: #ff8a80; background: color-mix(in srgb, var(--s-stop) 14%, transparent); }
+.fi-act.busy { pointer-events: none; animation: fi-busy 1s ease-in-out infinite; }
+@keyframes fi-busy { 50% { opacity: .35; } }
+:root[data-motion="off"] .fi-act.busy { animation: none; opacity: .5; }
+#report-watermark { min-width: 34px; justify-content: center; }
+.rd-subhead { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.rd-checklist.empty { padding-top: 12px; padding-bottom: 12px; }
+.rd-checklist.empty h3 { display: none; }
+.rd-checklist.empty .add-row { margin: 0; }
+.rd-checklist.empty #checklist-new { background: transparent; border-color: transparent; }
+.rd-checklist.empty #checklist-new:focus { background: rgba(255, 255, 255, .04); border-color: var(--line); }
+.rd-checklist.empty #checklist-add { display: none; }
+.rd-checklist.empty:focus-within #checklist-add { display: inline-flex; }
+.nt-row small { color: var(--ink-soft); font-size: 12px; }
+.nt-sum { font-size: 12px; color: var(--ink-soft); padding-top: 4px; }
+.raw-row .icon-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Роспись карточками людей: аватар сверху, реплики снизу. Не узнан — «?», по клику привязывают к человеку. */
+.note-tally.tiles { max-width: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin-top: 6px; }
+.nt-tile { position: relative; display: grid; justify-items: center; gap: 3px; padding: 12px 8px 10px; border-radius: 12px;
+  background: rgba(255, 255, 255, .035); border: 1px solid var(--line); text-align: center; min-width: 0; }
+.nt-tile[data-roster-bind] { cursor: pointer; transition: border-color .15s, background .15s; }
+.nt-tile[data-roster-bind]:hover, .nt-tile[data-roster-bind]:focus-visible { border-color: rgba(var(--fire-rgb), .45); background: rgba(255, 255, 255, .06); outline: none; }
+.nt-tile .avatar-bubble { width: 40px; height: 40px; margin: 0 0 4px; font-size: 14px; border: 0; }
+.nt-tile.unknown .avatar-bubble { background: transparent; border: 1px dashed rgba(255, 255, 255, .25); color: var(--ink-dim); }
+.nt-tile .nt-name { max-width: 100%; font-size: 12px; color: var(--ink-soft); }
+.nt-tile b { font-size: 20px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; text-align: center; }
+.nt-tile small { font-size: 11px; color: var(--ink-dim); }
+.nt-tile .nt-bar { width: 100%; margin-top: 6px; }
+.note-tally.tiles .nt-sum { grid-column: 1 / -1; }
+.rb-list { display: grid; gap: 4px; max-height: 340px; overflow: auto; margin-top: 10px; }
+.rb-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; border: 1px solid transparent; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.rb-row:hover { background: rgba(255, 255, 255, .06); border-color: var(--line); }
+.rb-row .avatar-bubble { width: 28px; height: 28px; margin: 0; font-size: 11px; }
+:root[data-theme="light"] .nt-tile { background: rgba(255, 255, 255, .7); }

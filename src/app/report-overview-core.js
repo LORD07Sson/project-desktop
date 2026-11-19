@@ -44,13 +44,18 @@ export function pipelineCounts(pipeline) {
 // Общий прогресс — четыре этапа поровну: видео, озвучка, финал, выпуск. Озвучка идёт долей сдавших
 // (или целиком, если пайплайна нет, но звук/субтитры уже лежат), выпуск считается состоявшимся при статусе
 // «Готово» (completed): отдельной отметки о посте в карточке нет.
+const STAGE_NAMES = ["видео", "озвучка", "финал", "выпуск"];
+
 export function overallProgress({ files, pipeline, status }) {
   const c = classifyFiles(files);
   const { done, total } = pipelineCounts(pipeline);
   const voice = total ? done / total : (c.hasAudio || c.hasSubs ? 1 : 0);
   const stages = [c.hasVideo ? 1 : 0, voice, c.hasFinal ? 1 : 0, status === "completed" ? 1 : 0];
   const sum = stages.reduce((a, b) => a + b, 0);
-  return { percent: Math.round(sum / stages.length * 100), passed: stages.filter(x => x >= 1).length, total: stages.length };
+  // Текущий этап — первый незакрытый: «этап 2 из 4 · озвучка» не спорит с процентом, в отличие от «0 из 4 пройдено» при 11%.
+  const cur = stages.findIndex(x => x < 1);
+  return { percent: Math.round(sum / stages.length * 100), passed: stages.filter(x => x >= 1).length, total: stages.length,
+    current: cur === -1 ? null : { n: cur + 1, name: STAGE_NAMES[cur] } };
 }
 
 // Срок: слово («просрочено 2 дн.», «сегодня», «через 3 дн.»), дата с временем по МСК и тон для цвета.
@@ -88,9 +93,9 @@ export function overviewKpis({ files, pipeline, status, deadline, overdue = fals
   const voiceSub = !total ? "пайплайн не задан"
     : waiting.length ? `ждём: ${waiting.slice(0, 4).join(", ")}${waiting.length > 4 ? ` и ещё ${waiting.length - 4}` : ""}` : "все сдали";
   return [
-    { key: "progress", title: "Прогресс", value: `${prog.percent}%`, sub: `${prog.passed} из ${prog.total} этапов пройдено`, bar: prog.percent, tone: "" },
+    { key: "progress", title: "Прогресс", value: `${prog.percent}%`, sub: prog.current ? `этап ${prog.current.n} из ${prog.total} · ${prog.current.name}` : "все этапы пройдены", bar: prog.percent, tone: "" },
     { key: "deadline", title: "Срок", value: due.label, sub: due.date || "дата не указана", bar: null, tone: due.tone },
     { key: "voice", title: "Озвучка", value: total ? `${done} из ${total}` : "—", sub: voiceSub, bar: total ? Math.round(done / total * 100) : null, tone: "" },
-    { key: "files", title: "Материалы", value: `${c.total} ${pluralFiles(c.total)}`, sub: `${c.audio} аудио · ${c.subs} субтитры · ${c.video ? `${c.video} видео` : "видео нет"}${c.total - c.audio - c.subs - c.video > 0 ? ` · ${c.total - c.audio - c.subs - c.video} прочее` : ""}`, bar: null, tone: "" },
+    { key: "files", title: "Материалы", value: `${c.total} ${pluralFiles(c.total)}`, sub: `${c.audio ? `${c.audio} аудио` : "аудио нет"} · ${c.subs ? `${c.subs} субт.` : "субтитров нет"} · ${c.video ? `${c.video} видео` : "видео нет"}${c.total - c.audio - c.subs - c.video > 0 ? ` · ${c.total - c.audio - c.subs - c.video} прочее` : ""}`, bar: null, tone: "" },
   ];
 }

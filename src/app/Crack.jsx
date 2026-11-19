@@ -379,8 +379,11 @@ function clipHalf(poly, a, b) {
 }
 
 const piecesCache = new Map();
-function piecesFor(seed) {
-  if (piecesCache.has(seed)) return piecesCache.get(seed);
+// extra — сколько случайных осколков добавить к семи у точки удара. Слайду «Обзора» нужны все 16,
+// на обложке карточки 46×64 их не разглядеть, а каждый — это слой во всю обложку.
+function piecesFor(seed, extra = 9) {
+  const key = `${seed}:${extra}`;
+  if (piecesCache.has(key)) return piecesCache.get(key);
   const g = geometryFor(seed);
   const rand = rng(`${seed}:pieces`);
   const seeds = [];
@@ -388,7 +391,7 @@ function piecesFor(seed) {
     const a = rand() * Math.PI * 2, r = 4 + rand() * 22;
     seeds.push([g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r * 1.2]);
   }
-  for (let i = 0; i < 9; i++) seeds.push([rand() * W, rand() * H]);
+  for (let i = 0; i < extra; i++) seeds.push([rand() * W, rand() * H]);
   const pieces = seeds.map((s, i) => {
     let poly = [[0, 0], [W, 0], [W, H], [0, H]];
     seeds.forEach((o, j) => { if (j !== i && poly.length) poly = clipHalf(poly, s, o); });
@@ -409,7 +412,7 @@ function piecesFor(seed) {
       fr: `${(1 + rand() * 3).toFixed(1)}deg`,
     };
   }).filter(Boolean);
-  piecesCache.set(seed, pieces);
+  piecesCache.set(key, pieces);
   return pieces;
 }
 
@@ -484,7 +487,7 @@ function chipsHtml(seed, level, src) {
 function piecesHtml(seed, src) {
   const settled = exploded.has(seed) || motionOff();
   exploded.add(seed);
-  return `<span class="kd-pieces${settled ? " settled" : ""}" style="--k:.09">${piecesFor(seed).map(p =>
+  return `<span class="kd-pieces${settled ? " settled" : ""}" style="--k:.09">${piecesFor(seed, 0).map(p =>
     `<span style="transform-origin:${p.origin};--ex:${p.ex};--ey:${p.ey};--er:${p.er};--ez:${p.ez}"><em style="transform-origin:${p.origin};--fy:${p.fy};--fr:${p.fr};animation-duration:${p.fdur};animation-delay:${p.fdelay}">`
     + `<i style="background-image:url(&quot;${attr(src)}&quot;);clip-path:${p.clip}"></i></em></span>`).join("")}</span>`;
 }
