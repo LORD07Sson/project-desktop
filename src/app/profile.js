@@ -285,9 +285,27 @@ function wireProfileCommon(root, telegramId, onReload) {
   });
   const teaser = root.querySelector("#team-teaser");
   if (teaser) teaser.addEventListener("click", openTeamSheet);
-  root.querySelectorAll("[data-pf-title]").forEach(btn => btn.addEventListener("click", async () => {
-    const { openTitleDetail } = await import("./titles.js");
-    openTitleDetail(Number(btn.dataset.pfTitle));
+  // Voiced titles: the poster swings its characters out like a lighter lid; one open at a time.
+  const setVr = (card, open) => {
+    const lid = card.querySelector(".pf-vr-lid");
+    card.querySelector("[data-pf-vr]").setAttribute("aria-expanded", String(open));
+    if (open) {
+      card.classList.remove("closing");
+      card.classList.add("open");
+      lid.hidden = false;
+      return;
+    }
+    if (!card.classList.contains("open")) return;
+    const done = () => { card.classList.remove("open", "closing"); lid.hidden = true; };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "off") { done(); return; }
+    card.classList.add("closing");
+    lid.addEventListener("animationend", done, { once: true });
+  };
+  root.querySelectorAll("[data-pf-vr]").forEach(btn => btn.addEventListener("click", () => {
+    const card = btn.closest(".pf-vr");
+    const open = !card.classList.contains("open") || card.classList.contains("closing");
+    root.querySelectorAll(".pf-vr.open").forEach(c => { if (c !== card) setVr(c, false); });
+    setVr(card, open);
   }));
 }
 
@@ -796,14 +814,21 @@ function voicedRolesHtml(d) {
   return `
     <section class="pf-card pf-voiced">
       <div class="pf-card-head"><h3>🎙️ Озвученные персонажи</h3><span class="pf-voiced-m">${total} в ${groups.length} ${pluralRu(groups.length, "тайтле", "тайтлах", "тайтлах")}</span></div>
-      ${groups.map(g => `
-        <div class="pf-voiced-group">
-          <button type="button" class="pf-voiced-title" data-pf-title="${g.title_id}">${esc(g.title_name || "Без названия")}</button>
-          <div class="pf-voiced-chars">${g.characters.map(c => {
+      <div class="pf-vr-grid">${groups.map(g => {
+        const poster = imgProxy(g.poster_url);
+        return `
+        <div class="pf-vr">
+          <button type="button" class="pf-vr-poster" data-pf-vr aria-expanded="false" title="${esc(g.title_name || "")}">
+            ${poster ? `<img src="${poster}" alt="" loading="lazy">` : `<span class="ph"></span>`}
+            <span class="pf-vr-count">${g.characters.length}</span>
+            <span class="pf-vr-name">${esc(g.title_name || "Без названия")}</span>
+          </button>
+          <div class="pf-vr-lid" hidden><div class="pf-voiced-chars">${g.characters.map(c => {
             const img = imgProxy(c.image_url);
             return `<div class="pf-voiced-char">${img ? `<img src="${img}" alt="" loading="lazy">` : `<span class="ph"></span>`}<span>${esc(c.name)}</span></div>`;
-          }).join("")}</div>
-        </div>`).join("")}
+          }).join("")}</div></div>
+        </div>`;
+      }).join("")}</div>
     </section>`;
 }
 
