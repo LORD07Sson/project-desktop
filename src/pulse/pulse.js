@@ -28,7 +28,7 @@ export function startPulse(DATA) {
   const minDay = Math.min(DATA.days - 1, ...DATA.titles.flatMap(t => t.eps.map(e => e.day)));
   const SHIFT = Math.max(0, Math.min(minDay - 14, DATA.days - 60));
   const TITLES = DATA.titles.map(t => ({ id: t.id, name: t.name, roles: t.roles || [], air: t.air, nextEp: t.nextEp,
-    eps: t.eps.map(e => ({ ...e, day: e.day - SHIFT, who: e.who.map(byName).filter(Boolean) })) }));
+    eps: t.eps.map(e => ({ ...e, day: e.day - SHIFT, who: e.who.map(byName).filter(Boolean), owe: Array.isArray(e.owe) ? e.owe : null })) }));
   const START = new Date(new Date(`${DATA.start}T00:00:00`).getTime() + SHIFT * 86400000);
   const MONTHS_RU = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
   const MONTHS_GEN = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
@@ -230,7 +230,9 @@ export function startPulse(DATA) {
     if (n.kind === "person") return FILTER.who === "mine" ? n.p.n === ME : links.some(l => l.a === n && vis(l.b) && epPass(l.b));
     return true;
   }
-  const personLoad = pn => { const eps = epNodes.filter(en => en.e.who.includes(pn.p) && vis(en) && en.e.stage < 4); return { n: eps.length, late: eps.filter(late).length, titles: [...new Set(eps.map(e => e.tn.t.name))] }; };
+  // Просрочка серии — на тех, кто свою часть ещё не сдал (owe с сервера); сдавший не «просрочил», ждут не его.
+  const owes = (en, name) => !en.e.owe || en.e.owe.includes(name);
+  const personLoad = pn => { const eps = epNodes.filter(en => en.e.who.includes(pn.p) && vis(en) && en.e.stage < 4); return { n: eps.length, late: eps.filter(en => late(en) && owes(en, pn.p.n)).length, titles: [...new Set(eps.map(e => e.tn.t.name))] }; };
 
   // ---------- окружение и живые события ----------
   let twinkles = [], pulses = [], inflow = [], waves = [], comets = [], toasts = [];
@@ -936,7 +938,7 @@ export function startPulse(DATA) {
       ${lastAt ? `<div class="pd-last">Последняя активность: <b>${esc(ago(lastAt.at))}</b></div>` : ""}<div class="pd-kpis"><div><b>${ld.n}</b><span>в работе</span></div><div class="${ld.late ? "bad" : ""}"><b>${ld.late}</b><span>просрочено</span></div><div><b>${pf.completed || 0}</b><span>сдано за 30 дн</span></div></div>
       <div class="pd-body">
         ${pi && pi.days14 && !pi.days14.some(Boolean) ? `<h4>Активность по дням · 14 дн</h4><div class="attn-empty">Нет данных: человек не включал учёт использования приложения.</div>` : pi && pi.days14 ? `<h4>Активность по дням · 14 дн</h4><div class="pd-days" title="Сколько действий в приложении в день">${(mx => pi.days14.map(c => `<i style="height:${c ? Math.max(8, Math.round(c / mx * 100)) : 3}%" title="${c}"></i>`).join(""))(Math.max(1, ...pi.days14))}</div>` : ""}
-        <h4>Серии на руках</h4>${mine.length ? mine.map(en => `<button type="button" class="rrow${en.e.days < 0 ? " late" : ""}" data-open="${esc(en.e.public_id)}"><b>${esc(en.tn.t.name)}${en.e.ep ? ` · ${en.e.ep} серия` : ""}</b><span>${esc(STAGES[en.e.stage])} · ${esc(dueText(en.e.days))}</span></button>`).join("") : `<div class="attn-empty">Сейчас серий на руках нет.</div>`}
+        <h4>Серии на руках</h4>${mine.length ? mine.map(en => `<button type="button" class="rrow${en.e.days < 0 && owes(en, name) ? " late" : ""}" data-open="${esc(en.e.public_id)}"><b>${esc(en.tn.t.name)}${en.e.ep ? ` · ${en.e.ep} серия` : ""}</b><span>${esc(STAGES[en.e.stage])} · ${owes(en, name) ? esc(dueText(en.e.days)) : "своё сдал(а), ждём остальных"}</span></button>`).join("") : `<div class="attn-empty">Сейчас серий на руках нет.</div>`}
         <h4>Чем пользуется</h4>${tools.length ? tools.map(t => `<div class="pd-tool"><span>${esc(t.label)}</span><i>${t.count} раз${t.seconds ? ` · ${esc(fmtDur(t.seconds))}` : ""}</i></div>`).join("") : `<div class="attn-empty">Данных об использовании пока нет.</div>`}
         ${watch.length ? `<h4>Что смотрел</h4>${watch.map(w => `<div class="pd-tool"><span>${esc(w.title)}</span><i>${esc(fmtDur(w.seconds))}</i></div>`).join("")}` : (pi && pi.watch_s ? `<div class="pd-tool"><span>Смотрел в приложении</span><i>${esc(fmtDur(pi.watch_s))}</i></div>` : "")}
         ${did.length ? `<h4>Действия в отчётах и Telegram</h4>${did.map(a => `<div class="pd-tool"><span>${esc(String(a.label).replace(/^[^\p{L}\p{N}]+/u, ""))}</span><i>${a.count} раз</i></div>`).join("")}` : ""}
