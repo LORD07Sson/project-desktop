@@ -2,6 +2,10 @@
 import { API_BASE, apiGet, apiPost, openSheet, toast, dialogSkeletonHtml, mediaUrl, ensureMediaToken, askConfirm, clientHeaders } from "./api.js";
 import { esc } from "./utils.js";
 
+document.addEventListener("error", e => {
+  if (e.target.tagName === "IMG" && e.target.closest(".cp-pv-video")) e.target.remove();
+}, true);
+
 const SAVE_DELAY_MS = 700;
 const ALLOWED = new Set(["B", "STRONG", "I", "EM", "U", "INS", "S", "STRIKE", "DEL", "CODE", "PRE", "BLOCKQUOTE", "SPAN", "TG-SPOILER", "TG-EMOJI", "A", "BR"]);
 const I = {
@@ -447,7 +451,7 @@ export async function openChannelPostSheet(openId = null) {
     const pv = sheet.querySelector("#cp-preview");
     const media = d.media.map((m, i) => m.kind === "photo"
       ? `<img src="${mediaUrl(`/posts/${post.id}/media/${i}`)}" alt="">`
-      : `<span class="cp-pv-video"><img src="${mediaUrl(`/posts/${post.id}/media/${i}`)}" alt="" onerror="this.remove()">${I.play}</span>`).join("");
+      : `<span class="cp-pv-video"><img src="${mediaUrl(`/posts/${post.id}/media/${i}`)}" alt="">${I.play}</span>`).join("");
     const text = post.html ? sanitize(post.html) : `<span class="cp-pv-empty">Пустой пост — начните с заголовка</span>`;
     const links = d.links.filter(l => l.text);
     pv.innerHTML = `

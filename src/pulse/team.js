@@ -108,7 +108,7 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
   };
   const av = (name, size = "", ring = "") => {
     const p = byName[name] || {};
-    const img = p.avatar ? `<img src="${esc(p.avatar)}" alt="" loading="lazy" onerror="this.remove()">` : "";
+    const img = p.avatar ? `<img src="${esc(p.avatar)}" alt="" loading="lazy">` : "";
     return `<span class="tm-av ${size} ${ring}" style="--h:${hue(name)}" title="${esc(name)}">${esc((String(name).trim()[0] || "?").toUpperCase())}${img}</span>`;
   };
   const spark = days => {

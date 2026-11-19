@@ -5,6 +5,10 @@ import { showTeam } from "./team.js";
 
 let started = false;
 
+document.addEventListener("error", e => {
+  if (e.target.tagName === "IMG" && e.target.closest(".tm-av")) e.target.remove();
+}, true);
+
 function savedView() {
   try { return sessionStorage.getItem("pulse-view") || "map"; } catch (_) { return "map"; }
 }
