@@ -5505,7 +5505,7 @@ button.pr-engine.on small { color: rgba(26, 15, 46, .68); }
 .pp-expand { justify-self: start; padding: 0; border: 0; background: none; color: #c4a1ff; font: inherit; font-weight: 700; cursor: pointer; }
 .pp-zoom { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: rgba(5, 3, 10, .9); cursor: zoom-out; padding: 24px; }
 .pp-zoom { overflow: hidden; touch-action: none; user-select: none; }
-.pp-zoom img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; transform-origin: center; will-change: transform; }
+.pp-zoom img { max-width: calc(100vw - 48px); max-height: calc(100vh - 48px); object-fit: contain; border-radius: 8px; transform-origin: center; will-change: transform; }
 .pp-zoom img { cursor: zoom-in; }
 .pp-zoom.is-zoomed, .pp-zoom.is-zoomed img { cursor: grab; }
 .pp-zoom.is-zoomed:active { cursor: grabbing; }
