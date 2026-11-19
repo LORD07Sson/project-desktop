@@ -86,6 +86,56 @@ const DICE = `<svg class="pc-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x
 const TAB_KEY = "pc-last-tab";
 const saveTab = t => { try { localStorage.setItem(TAB_KEY, t); } catch (_) { } };
 
+// Full-screen viewer: wheel zooms toward the cursor, drag pans, click on the image toggles
+// zoom, click on the backdrop or Esc closes. `srcHtml` is already HTML-escaped.
+function openZoom(srcHtml) {
+  const ov = document.createElement("div");
+  ov.className = "pp-zoom";
+  ov.innerHTML = `<img src="${srcHtml}" alt="" referrerpolicy="no-referrer" draggable="false">`;
+  const img = ov.querySelector("img");
+  let s = 1, x = 0, y = 0, drag = null, moved = false;
+  const apply = () => {
+    img.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+    ov.classList.toggle("is-zoomed", s > 1);
+  };
+  const zoomAt = (ns, cx, cy) => {
+    ns = Math.min(8, Math.max(1, ns));
+    const r = ov.getBoundingClientRect();
+    const px = cx - r.left - r.width / 2, py = cy - r.top - r.height / 2;
+    x = px - (px - x) * (ns / s);
+    y = py - (py - y) * (ns / s);
+    s = ns;
+    if (s === 1) { x = 0; y = 0; }
+    apply();
+  };
+  const close = () => { ov.remove(); document.removeEventListener("keydown", onKey, true); };
+  const onKey = e => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+  ov.addEventListener("wheel", e => { e.preventDefault(); zoomAt(s * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY); }, { passive: false });
+  ov.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    drag = { sx: e.clientX, sy: e.clientY, x, y };
+    moved = false;
+    ov.setPointerCapture(e.pointerId);
+  });
+  ov.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if (!moved && Math.hypot(dx, dy) < 4) return;
+    moved = true;
+    if (s > 1) { x = drag.x + dx; y = drag.y + dy; apply(); }
+  });
+  ov.addEventListener("pointerup", () => { drag = null; });
+  ov.addEventListener("click", e => {
+    if (moved) return;
+    const r = img.getBoundingClientRect(); // pointer capture retargets click to the overlay
+    const onImg = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    if (onImg) zoomAt(s > 1 ? 1 : 2.5, e.clientX, e.clientY);
+    else close();
+  });
+  document.addEventListener("keydown", onKey, true);
+  document.body.append(ov);
+}
+
 export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   tabLabels = labels || {};
   const st = { q: "", service: "", sort: "favorited", page: 1, services: [] };
@@ -450,11 +500,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
         return;
       }
       if (el.dataset.ppZoom) {
-        const ov = document.createElement("div");
-        ov.className = "pp-zoom";
-        ov.innerHTML = `<img src="${big(+el.dataset.ppZoom)}" alt="" referrerpolicy="no-referrer">`;
-        ov.addEventListener("click", () => ov.remove());
-        document.body.append(ov);
+        openZoom(big(+el.dataset.ppZoom));
         return;
       }
       if (el.matches("[data-pp-expand]")) { el.closest(".pp-desc").classList.remove("clamp"); el.remove(); return; }
