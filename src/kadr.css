@@ -4495,3 +4495,26 @@ button.rd-kpi:focus-visible { outline: 2px solid rgba(var(--fire-rgb), .6); outl
 .rb-row:hover { background: rgba(255, 255, 255, .06); border-color: var(--line); }
 .rb-row .avatar-bubble { width: 28px; height: 28px; margin: 0; font-size: 11px; }
 :root[data-theme="light"] .nt-tile { background: rgba(255, 255, 255, .7); }
+
+/* Themed dropdown over native <select> (app/fancy-select.js) */
+select.fsel-native { display: none !important; }
+.fsel { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.fsel:disabled { opacity: .45; cursor: default; }
+.fsel svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .6; transition: transform .18s ease; }
+.fsel.open { border-color: rgba(var(--fire-rgb), .45) !important; box-shadow: 0 0 0 3px rgba(var(--fire-rgb), .12); color: var(--ink); }
+.fsel.open svg { transform: rotate(180deg); opacity: 1; }
+.fsel-pop { position: fixed; z-index: 9999; overflow-y: auto; padding: 5px; border-radius: 12px;
+  background: rgba(22, 20, 30, .96); backdrop-filter: blur(14px);
+  border: 1px solid rgba(var(--fire-rgb), .22);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5), 0 0 18px rgba(var(--fire-rgb), .08);
+  animation: fsel-in .14s ease-out; scrollbar-width: thin; }
+@keyframes fsel-in { from { opacity: 0; transform: translateY(-4px); } }
+.fsel-opt { display: flex; align-items: center; width: 100%; gap: 8px; padding: 7px 28px 7px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink-soft); font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: pointer; position: relative; white-space: nowrap; }
+.fsel-opt:hover, .fsel-opt:focus-visible { background: rgba(255, 255, 255, .06); color: var(--ink); outline: none; }
+.fsel-opt.on { color: var(--ink); background: rgba(var(--fire-rgb), .12); }
+.fsel-opt.on::after { content: ""; position: absolute; right: 10px; top: 50%; width: 6px; height: 10px; margin-top: -7px;
+  border: solid rgb(var(--fire-rgb)); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+:root[data-theme="light"] .fsel-pop { background: rgba(255, 255, 255, .97); box-shadow: 0 14px 40px rgba(0, 0, 0, .15); }
+:root[data-theme="light"] .fsel-opt:hover { background: rgba(0, 0, 0, .05); }
+@media (prefers-reduced-motion: reduce) { .fsel-pop { animation: none; } .fsel svg { transition: none; } }

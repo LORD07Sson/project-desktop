@@ -29,6 +29,7 @@ import { state, can } from "./state.js";
 import { ATTACH_EXTENSIONS } from "./file-drop.js";
 import { loadAvatars } from "./profile.js";
 import { doomState, doomPosterHtml, doomCardStyle, deadFxHtml } from "./Crack.jsx";
+import { enhanceSelects } from "./fancy-select.js";
 
 // Свёрнутые колонки — узкая студия часто держит "Завершено"/"Отменено"
 // сложенными: сами по себе они редко нужны, но занимают на широкой
@@ -777,6 +778,7 @@ function playBoardCardsIntro(root) {
 }
 
 function wireBoardToolbar(root) {
+  enhanceSelects(root);
   const search = root.querySelector("#board-search");
   const sort = root.querySelector("#board-sort");
   const season = root.querySelector("#board-season");
