@@ -4531,7 +4531,9 @@ select.fsel-native { display: none !important; }
 .st-sheet .st-layout.st-mode-tiles .st-body, .st-sheet .st-layout.st-mode-cards .st-body { --st-pt: 8px; --st-px: 26px; }
 .st-sheet .st-sec-head { position: sticky; top: calc(-1 * var(--st-pt)); z-index: 3; display: flex; align-items: center; gap: 14px;
   margin: calc(-1 * var(--st-pt)) calc(-1 * var(--st-px)) 18px; padding: calc(var(--st-pt) - 4px) 80px 14px var(--st-px);
-  background: color-mix(in srgb, var(--bg) 84%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line-soft); }
+  /* Фон — как у самого окна (.sheet: --surface), иначе шапка читается отдельным тёмным прямоугольником. Угол — по скруглению окна. */
+  background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line-soft);
+  border-top-right-radius: 24px; }
 /* «Плитки» и «Карточки»: раздел уже окна — шапка отдельной плашкой, а не во всю ширину. */
 .st-sheet .st-layout.st-mode-tiles .st-sec-head, .st-sheet .st-layout.st-mode-cards .st-sec-head { top: 0; margin: 0 0 18px; padding: 14px 18px; border: 1px solid var(--line-soft); border-radius: 16px; }
 .st-sheet .st-sec-head .st-ic { width: 44px; height: 44px; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(var(--gold-rgb), .18); }
@@ -4550,3 +4552,6 @@ select.fsel-native { display: none !important; }
 .st-nav .st-nav-btn:focus-visible { outline: 2px solid rgba(var(--gold-rgb), .6); outline-offset: -2px; }
 .st-nav .st-nav-grp:first-of-type { margin-top: 4px; }
 :root[data-theme="light"] .st-nav .st-nav-btn:hover .st-ic { background: rgba(80, 40, 20, .06); }
+/* Полоса прокрутки навигации — тонкая и только при наведении, без постоянной полосы между меню и разделом. */
+.st-sheet .st-nav { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.st-sheet .st-nav:hover { scrollbar-color: var(--line) transparent; }
