@@ -81,6 +81,7 @@ function actionsHtml(it) {
     if (!canUpload()) return "";
     return it.newer
       ? `<button type="button" class="btn primary sm" data-a3-reupload="${esc(it.newer.key)}" data-a3-replaces="${key}" data-a3-url="${esc(it.url || "")}" data-a3-label="${label}">Перезалить новую версию</button>`
+        + (it.newer.mark ? `<button type="button" class="btn ghost sm" data-a3-dismiss="${key}" data-a3-mark="${esc(it.newer.mark)}" title="Оставить на 365 залитое и убрать метку">Закрыть</button>` : "")
       : `<button type="button" class="btn ghost sm" data-a3-reupload="${key}" data-a3-replaces="${key}" data-a3-url="${esc(it.url || "")}" data-a3-label="${label}" title="Залито не то видео или перевод удалили на 365">Перезалить</button>`;
   }
   if (it.stage === "uploading") return canUpload() ? `<button type="button" class="btn ghost sm danger" data-a3-cancel="${key}" data-a3-stop="1">Остановить</button>` : "";
@@ -705,6 +706,10 @@ function bind(root) {
         busy("Проверяю…");
         await apiPost("/a365/reupload", { key: b.dataset.a3Reupload, replaces: b.dataset.a3Replaces });
         toast("Перезаливка в очереди — до старта можно отменить.", "ok");
+      } else if (b.dataset.a3Dismiss) {
+        busy("Закрываю…");
+        await apiPost("/a365/newer/dismiss", { key: b.dataset.a3Dismiss, mark: b.dataset.a3Mark });
+        toast("Метка закрыта — на 365 остаётся залитое.", "ok");
       } else if (b.dataset.a3Upall) {
         const keys = b.dataset.a3Upall.split(",").filter(Boolean);
         const ok = await askConfirm((b.dataset.a3Name ? `Залить на Anime 365 недостающие серии «${b.dataset.a3Name}» — ${keys.length} шт.?\n\n` : `Залить на Anime 365 все проверенные серии — ${keys.length} шт.?\n\n`)
