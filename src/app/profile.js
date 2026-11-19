@@ -466,13 +466,21 @@ function folioHeroHtml(d, isSelf = true) {
     ? `${d.status_text ? `<p class="pff-status">${esc(d.status_text)}</p>` : ""}${d.bio ? `<p class="pff-bio">${esc(d.bio)}</p>` : ""}`
     : !isSelf ? "" : `<button type="button" class="pff-bio-add" data-edit-profile><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Добавить статус и пару слов о себе — их видят коллеги</button>`;
   const now = new Date();
+  const dev = !!(d.is_developer || d.is_owner);
+  const devPill = `<span class="dev-pill pff-dev-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>DEV</span>`;
+  const eyebrow = isSelf
+    ? `<div class="pff-eyebrow"><span>${WEEKDAYS_RU[now.getDay()]}, ${now.getDate()} ${MONTHS_RU[now.getMonth() + 1]}</span><i class="dot"></i><span class="pff-clock" data-pff-clock></span></div>`
+    : dev
+      ? `<div class="pff-eyebrow pff-dev-cmd"><span>root@project:~$ whoami</span><i class="pff-caret" aria-hidden="true"></i>${d.is_online ? `<i class="dot"></i><span>в сети</span>` : ""}</div>`
+      : `<div class="pff-eyebrow"><span>${d.is_online ? "в сети" : "профиль коллеги"}</span></div>`;
   return `
-    <div class="pf-hero pff-hero">
+    <div class="pf-hero pff-hero${dev ? " is-dev" : ""}">
+      ${dev ? `<div class="pff-dev-fx" aria-hidden="true"></div>` : ""}
       <div class="pf-banner pff-banner" data-role="profile-banner" data-pos="${Number(d.banner_pos_y ?? 50)}"${isSelf ? ' data-editable="1"' : ""}></div>
       <div class="pff-hero-row">
         <div class="pff-intro">
-          ${isSelf ? `<div class="pff-eyebrow"><span>${WEEKDAYS_RU[now.getDay()]}, ${now.getDate()} ${MONTHS_RU[now.getMonth() + 1]}</span><i class="dot"></i><span class="pff-clock" data-pff-clock></span></div>` : `<div class="pff-eyebrow"><span>${d.is_online ? "в сети" : "профиль коллеги"}</span></div>`}
-          <h1 class="pff-hi">${isSelf ? `<span data-pff-greet>${greeting(now.getHours())}</span>, <b>${esc(first)}</b>` : `<b>${esc(name)}</b>`}${d.is_developer || d.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</h1>
+          ${eyebrow}
+          <h1 class="pff-hi">${isSelf ? `<span data-pff-greet>${greeting(now.getHours())}</span>, <b>${esc(first)}</b>` : `<b>${esc(name)}</b>`}${dev ? ` ${devPill}` : ""}</h1>
           <div class="pff-role" aria-live="polite"><span class="pff-role-t" data-pff-roles="${esc(JSON.stringify(roles))}">${esc(roles[0])}</span>${rankTagHtml(d.studio_rank)}</div>
           ${bio}
           <div class="pf-meta">${meta}</div>

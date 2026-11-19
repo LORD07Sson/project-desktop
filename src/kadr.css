@@ -2688,7 +2688,7 @@ td.row-actions { opacity: 1; transition: none; }
 .sp-glass { position: relative; width: 33vmin; height: 33vmin; border-radius: 6vmin; }
 .sp-glass > i, .sp-glass > b { position: absolute; display: block; }
 .g-body { inset: 0; border-radius: inherit; }
-.g-rim { inset: 0; border-radius: inherit; pointer-events: none;
+.g-rim { inset: 0; border-radius: inherit; pointer-events: none; filter: drop-shadow(0 0 6px rgba(167, 139, 250, .7));
   box-shadow: inset 0 .28vmin 0 rgba(255, 255, 255, .3), inset -.3vmin 0 0 rgba(255, 255, 255, .2), inset .2vmin 0 0 rgba(255, 255, 255, .1), inset 0 -.2vmin 0 rgba(255, 255, 255, .12); }
 .g-left { left: 0; top: 7%; bottom: 14%; border-radius: 6vmin 0 0 6vmin / 5vmin 0 0 5vmin; }
 .g-top { left: 2%; right: 2%; top: 0; height: 0; border-radius: 6vmin 6vmin 0 0;
@@ -2991,7 +2991,7 @@ td.row-actions { opacity: 1; transition: none; }
   box-shadow: 0 0 4px 1px rgba(var(--eye), .6), 0 0 10px 3px rgba(var(--eye), .25); animation: kd-blink-l 4.3s infinite; }
 .kc-eyes i:last-child { animation: kd-blink-r 4.3s infinite; }
 .board-card.doom { background: linear-gradient(rgba(0, 0, 0, calc(var(--gloom, 0) * .45)), rgba(0, 0, 0, calc(var(--gloom, 0) * .45))), rgba(255, 255, 255, .035); }
-.board-card.dread::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
+.board-card.dread::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; filter: drop-shadow(0 0 6px rgba(167, 139, 250, .7));
   box-shadow: 0 0 0 1px rgba(255, 40, 30, calc(var(--doom) * .7)), inset 0 0 18px rgba(255, 30, 20, calc(var(--doom) * .3));
   opacity: .36; will-change: opacity; animation: kc-beat var(--beat, 1.6s) infinite; }
 @keyframes kc-beat { 0%, 40%, 100% { opacity: .36; } 8% { opacity: 1; } 26% { opacity: .78; } }
@@ -3911,3 +3911,40 @@ select.fsel-native { display: none !important; }
 :root[data-theme="light"] .st-nav .st-nav-btn:hover .st-ic { background: rgba(80, 40, 20, .06); }
 .st-sheet .st-nav { scrollbar-width: thin; scrollbar-color: transparent transparent; }
 .st-sheet .st-nav:hover { scrollbar-color: var(--line) transparent; }
+
+/* ---------- Developer profile hero ---------- */
+@property --pff-dev-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.pf-folio .pff-hero.is-dev { --dev-1: #a78bfa; --dev-2: #22d3ee; --dev-3: var(--gold); border-color: transparent; box-shadow: 0 30px 80px -40px rgba(124, 92, 255, .55), 0 0 0 1px rgba(167, 139, 250, .12); }
+.pf-folio .pff-hero.is-dev::before { content: ""; position: absolute; inset: 0; z-index: 4; padding: 2px; border-radius: inherit; pointer-events: none; filter: drop-shadow(0 0 6px rgba(167, 139, 250, .7));
+  background: conic-gradient(from var(--pff-dev-a), var(--dev-1), var(--dev-2), transparent 30%, transparent 55%, var(--dev-3), var(--dev-1));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: pff-dev-spin 6s linear infinite; }
+.pff-dev-fx { position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit; overflow: hidden;
+  background-image: linear-gradient(rgba(167, 139, 250, .13) 1px, transparent 1px), linear-gradient(90deg, rgba(167, 139, 250, .13) 1px, transparent 1px);
+  background-size: 28px 28px; -webkit-mask-image: linear-gradient(100deg, #000 0%, rgba(0, 0, 0, .55) 45%, transparent 75%); mask-image: linear-gradient(100deg, #000 0%, rgba(0, 0, 0, .55) 45%, transparent 75%); }
+.pff-dev-fx::after { content: ""; position: absolute; left: 0; right: 0; top: -30%; height: 30%;
+  background: linear-gradient(180deg, transparent, rgba(34, 211, 238, .18), transparent); animation: pff-dev-scan 5.5s ease-in-out infinite; }
+.pf-folio .pff-hero.is-dev .pff-hero-row, .pf-folio .pff-hero.is-dev .pff-actions { position: relative; z-index: 2; }
+.pf-folio .pff-hero.is-dev .pff-hi b { background: linear-gradient(100deg, #fff 0%, var(--dev-1) 30%, var(--dev-2) 50%, var(--dev-1) 70%, #fff 100%); background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px rgba(167, 139, 250, .35)); animation: pff-dev-shine 5s linear infinite; }
+.pff-dev-cmd { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; letter-spacing: .02em; text-transform: none; font-size: 12px; color: var(--dev-2); }
+.pff-caret { display: inline-block; width: 7px; height: 13px; margin-left: -4px; background: var(--dev-2); animation: pff-dev-blink 1.05s steps(1) infinite; }
+.pff-dev-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px 3px 7px; font-size: 11px; letter-spacing: .08em; color: #e9e3ff;
+  background: linear-gradient(135deg, rgba(167, 139, 250, .35), rgba(34, 211, 238, .25)); box-shadow: 0 0 0 1px rgba(167, 139, 250, .55), 0 0 16px rgba(167, 139, 250, .45); }
+.pff-dev-pill svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pf-folio .pff-hero.is-dev .pff-av { position: relative; }
+.pf-folio .pff-hero.is-dev .pff-av::before { content: ""; position: absolute; inset: -5px; z-index: -1; border-radius: 25px;
+  background: conic-gradient(from var(--pff-dev-a), var(--dev-1), var(--dev-2), var(--dev-3), var(--dev-1)); filter: blur(.5px);
+  box-shadow: 0 0 28px rgba(124, 92, 255, .45); animation: pff-dev-spin 4s linear infinite; }
+.pf-folio .pff-hero.is-dev .pff-av .avatar.xl { box-shadow: 0 0 0 3px var(--bg), 0 24px 50px -24px rgba(0, 0, 0, .9); }
+@keyframes pff-dev-spin { to { --pff-dev-a: 360deg; } }
+@keyframes pff-dev-shine { to { background-position: -220% 0; } }
+@keyframes pff-dev-scan { 0% { top: -30%; } 60%, 100% { top: 110%; } }
+@keyframes pff-dev-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .pf-folio .pff-hero.is-dev::before, .pf-folio .pff-hero.is-dev .pff-av::before, .pf-folio .pff-hero.is-dev .pff-hi b, .pff-dev-fx::after, .pff-caret { animation: none; }
+  .pff-dev-fx::after { display: none; }
+}
+:root[data-motion="off"] .pf-folio .pff-hero.is-dev::before, :root[data-motion="off"] .pf-folio .pff-hero.is-dev .pff-av::before,
+:root[data-motion="off"] .pf-folio .pff-hero.is-dev .pff-hi b, :root[data-motion="off"] .pff-caret { animation: none; }
+:root[data-motion="off"] .pff-dev-fx::after { display: none; }
