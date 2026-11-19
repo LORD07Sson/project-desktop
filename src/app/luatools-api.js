@@ -70,11 +70,22 @@ export function ltClearSession() {
 export function ltIsLoggedIn() {
   const s = ltSession();
   if (!s?.access_token) return false;
+  if (s.refresh_token) return true; // expired access token is renewed by ltEnsureFresh
   if (s.expires_at && Date.now() / 1000 > s.expires_at) return false;
   return true;
 }
 
+let _refreshing = null;
+// Renew the access token shortly before expiry; concurrent callers share one request.
+export function ltEnsureFresh(marginSec = 120) {
+  const s = ltSession();
+  if (!s?.refresh_token) return Promise.resolve(s);
+  if (s.expires_at && Date.now() / 1000 < s.expires_at - marginSec) return Promise.resolve(s);
+  return (_refreshing ||= ltRefreshToken().finally(() => { _refreshing = null; }));
+}
+
 async function ltAuthHeaders() {
+  await ltEnsureFresh().catch(() => {});
   const s = ltSession();
   if (!s?.access_token) throw new Error("Войдите в lua.tools");
   return { Authorization: `Bearer ${s.access_token}` };
@@ -115,13 +126,18 @@ export async function ltRefreshToken() {
     headers: { "Content-Type": "application/json", apikey: cfg("supabase_anon_key") },
     body: JSON.stringify({ refresh_token: s.refresh_token }),
   });
-  if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
+  if (!res.ok) {
+    // 400/401 = refresh token revoked or already used: the session is really gone
+    if (res.status === 400 || res.status === 401) ltClearSession();
+    throw new Error(`Refresh failed: ${res.status}`);
+  }
   const data = await res.json();
+  if (!data.access_token) throw new Error("Refresh failed: no token");
   ltSaveSession({
     access_token: data.access_token,
-    refresh_token: data.refresh_token,
+    refresh_token: data.refresh_token || s.refresh_token,
     expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
-    user: data.user,
+    user: data.user || s.user,
   });
   return ltSession();
 }
@@ -187,6 +203,7 @@ async function ltApi(method, path) {
 
 export async function ltUsage() {
   try {
+    await ltEnsureFresh().catch(() => {});
     const todayUtc = new Date().toISOString().split("T")[0] + "T00:00:00Z";
     const url = `${cfg("supabase_url")}/rest/v1/user_downloads?select=appid&downloaded_at=gte.${encodeURIComponent(todayUtc)}`;
     const res = await ltFetch(url, {

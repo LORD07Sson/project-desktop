@@ -6,7 +6,7 @@ import {
   ltSearchSteam, ltFeatured, ltCheckSources, ltGameDetails,
   ltIsLoggedIn, ltSession, ltSaveSession, ltClearSession,
   ltManifestDownloadUrl, ltUsage, ltDlcGenerateUrl, ltDenuvoDownloadUrl, ltDenuvoListings, ltDenuvoFixes,
-  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser, ltDepotInfo, ltRedeemBotCode, ltPkceStart, ltPkceExchange } from "./luatools-api.js";
+  ltSetApiConfig, ltTakeLegacySession, ltOnSessionChange, ltFetchUser, ltDepotInfo, ltRedeemBotCode, ltPkceStart, ltPkceExchange, ltEnsureFresh } from "./luatools-api.js";
 import { setLuatoolsDropHandler } from "./file-drop.js";
 import { parseLua, setDepotLocked, setDepotEnabled, setDepotManifest } from "./luatools-parser.js";
 
@@ -356,6 +356,7 @@ async function refreshAll(body) {
   try { ltConfig = await invoke("lt_config_get") || {}; } catch { ltConfig = {}; }
   if (ltConfig.api_base) ltSetApiConfig({ api_base: ltConfig.api_base, manifest_backend_url: ltConfig.manifest_backend_url });
   await restoreEncryptedSession();
+  await ltEnsureFresh().catch(() => {});
   if (ltConfig.store_button) invoke("lt_store_button_state").catch(() => {});
   if (ltConfig.filter_hardware !== false) {
     invoke("lt_hardware_appids").then(ids => { for (const id of ids) hardwareAppIds.add(id); }).catch(() => {});
@@ -2313,6 +2314,7 @@ async function cachedDownload(key, url, label) {
     if (hit) { toast("Взято из кэша студии", "info"); return hit; }
   } catch { }
   if (!ltIsLoggedIn()) throw new Error("Нет в кэше студии — войдите в lua.tools");
+  await ltEnsureFresh().catch(() => {});
   const filePath = await invoke("lt_download", { url, token: ltSession()?.access_token, destDir });
   invoke("lt_cache_put", { key, label: label || "", path: filePath, headers: clientHeaders() }).catch(() => {});
   return filePath;
@@ -2353,6 +2355,7 @@ async function doDownload(appId, source, gameName) {
 
 async function ensureManifests(appId) {
   try {
+    await ltEnsureFresh().catch(() => {});
     const r = await invoke("lt_fetch_missing_manifests", { appId, token: ltSession()?.access_token || "" });
     if (r.fetched) toast(`Догружено манифестов: ${r.fetched}`, "ok");
     if (r.failed.length) toast(`Манифесты не найдены: ${r.failed.join(", ")}`, "warn");
