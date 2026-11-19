@@ -580,7 +580,7 @@ export async function openReportDetail(publicId) {
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
     loadAvatars(sheet);
     sheet.querySelectorAll("[data-roster-bind]").forEach(el => {
-      const open = () => rosterBindDialog(el.dataset.rosterBind, noteCtx.roster.people, render);
+      const open = () => rosterBindDialog(el.dataset.rosterBind, bindChoices(noteCtx.roster.people), render);
       el.addEventListener("click", open);
       el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
     });
@@ -1196,6 +1196,12 @@ function tallyHtml(text, roster = null) {
 }
 
 // Привязка имени из росписи к человеку: список команды, исполнители отчёта — сверху.
+// В окне привязки — только нынешняя команда (allowed_users через /assignable-users). Исполнитель серии,
+// которого уже убрали из команды, остаётся в detail.assignees, но привязывать к нему новые реплики незачем.
+function bindChoices(people) {
+  const team = new Set((state.users || []).map(u => String(u.telegram_id)));
+  return team.size ? people.filter(p => team.has(p.id)) : people;
+}
 function rosterBindDialog(name, people, onDone) {
   const overlay = openSheet(`<h2>«${esc(name)}» — это кто?</h2>
     <p class="sheet-sub">Привязка запомнится для всех росписей. Реплики будут считаться этому человеку.</p>
