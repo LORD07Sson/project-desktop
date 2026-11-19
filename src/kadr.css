@@ -3363,9 +3363,9 @@ td.row-actions { opacity: 1; transition: none; }
   animation: kd-explode 1.3s cubic-bezier(.12, .9, .25, 1) backwards;
   filter: drop-shadow(0 0 .7px rgba(255, 255, 255, .9)) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
 .kd-pieces.settled span { animation: none; }
-/* Осколки парят только под мышью: у каждого осколка тройная тень, и 128 штук сразу опускали «Доску» до 25 кадров. */
+/* На доске осколки парят только под мышью (тройная тень × 128 штук опускала её до 25 кадров); в обзоре — всегда, но только у активного слайда. */
 .kd-pieces em { position: absolute; inset: 0; }
-.board-card:hover .kd-pieces em, .kd-slide:hover .kd-pieces em { animation: kd-float 6s ease-in-out infinite alternate; }
+.board-card:hover .kd-pieces em, .kd-slide.on .kd-pieces em { animation: kd-float 6s ease-in-out infinite alternate; }
 /* Фильтр — один на всю обложку, а не на каждый осколок: 16 отфильтрованных слоёв на обложку тормозили доску. */
 .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1); }
 .kd-pieces i { position: absolute; inset: 0; background: center / cover no-repeat; }
@@ -4518,3 +4518,9 @@ select.fsel-native { display: none !important; }
 :root[data-theme="light"] .fsel-pop { background: rgba(255, 255, 255, .97); box-shadow: 0 14px 40px rgba(0, 0, 0, .15); }
 :root[data-theme="light"] .fsel-opt:hover { background: rgba(0, 0, 0, .05); }
 @media (prefers-reduced-motion: reduce) { .fsel-pop { animation: none; } .fsel svg { transition: none; } }
+
+/* Обзор: у активного слайда осколки парят всегда. Тени — одним фильтром на обложку,
+   а не на каждый из 16 осколков: иначе p50 кадра вырастал с 4 до 8 мс. */
+.kd-slide .kd-pieces.settled span { filter: none; }
+.kd-slide .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1) drop-shadow(0 0 .7px rgba(255, 255, 255, .9)) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
+.kd-slide.on .kd-pieces em { will-change: transform; }
