@@ -7,7 +7,6 @@ import { esc } from "./utils.js";
 
 // Что человек с ролью увидит в программе — та же логика, что у perm-visibility.js/tabs.js и проверок сервера.
 const ALWAYS = "always";
-// Группы совпадают с группами каталога прав на сервере; право, которого здесь нет, превью добавит само (previewGroups).
 const ANY_REPORT = ["reports.feed", "reports.board", "reports.overview", "reports.list", "reports.calendar", "reports.analytics", "reports.manage"];
 const PREVIEW = [
   ["Вкладки", [
@@ -44,7 +43,6 @@ const PREVIEW = [
   ["Инструменты", [["Загрузчик видео", "parser.use"]]],
 ];
 
-// Превью + всё, что есть в каталоге сервера, но не описано выше, — в группу с тем же именем (или новую в конце).
 export function previewGroups(permissions) {
   const groups = PREVIEW.map(([title, rows]) => [title, rows.slice()]);
   const covered = new Set(groups.flatMap(([, rows]) => rows.flatMap(([, need]) => [].concat(need))));

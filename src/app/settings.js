@@ -93,7 +93,6 @@ async function openSettings() {
     learn: '<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11M21.5 9v5"/>',
     hint: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4M12 17h.01"/>',
   };
-  // Иконка у каждого вида уведомлений — по смыслу, а не одна точка на всех.
   const KIND_ICONS = {
     assign: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5 1.5 0 2.9.4 4 1.2M16 14v6M13 17h6"/>',
     work: '<path d="M4 6h16M4 12h10M4 18h7M17 15l2 2 3-4"/>',
@@ -345,7 +344,6 @@ async function openSettings() {
       </div>
     </div>
   `, "wide");
-  // Шапка раздела: иконка как в навигации, группа над заголовком, описание под ним; прилипает при прокрутке.
   for (const [group, items] of NAV) {
     for (const [id, , icon] of items) {
       const h = overlay.querySelector(`#${id} > h3`);

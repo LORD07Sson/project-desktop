@@ -4314,8 +4314,7 @@ body.watch-open #app-screen { pointer-events: none; }
 .st-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; cursor: pointer; text-align: left; transition: border-color .15s, transform .15s var(--ease), background .15s; }
 .st-tile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--fire) 45%, var(--line)); background: color-mix(in srgb, var(--fire) 6%, var(--surface-2)); }
 .st-tile b { font-size: 13px; }
-.st-tile span:not(.st-ic) { font-size: 11px; color: var(--ink-dim); } /* не .st-ic: иконка остаётся в цвет акцента */
-/* Раздел «Команда»: карточки в две колонки — иконка, название с пояснением, стрелка. */
+.st-tile span:not(.st-ic) { font-size: 11px; color: var(--ink-dim); }
 #st-studio .st-tiles { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 #st-studio .st-tile { display: grid; grid-template-columns: auto 1fr auto; align-items: center; column-gap: 12px; row-gap: 1px; padding: 12px 14px; min-height: 64px; }
 #st-studio .st-tile .st-ic { grid-row: 1 / 3; width: 38px; height: 38px; border-radius: 12px; }
@@ -4565,8 +4564,7 @@ body.watch-open #app-screen { pointer-events: none; }
 
 /* Рядовой участник студии: только «Тайтлы», «Сообщения», «Команда», «Я».
    Админские кнопки и разделы — прочь (сервер их всё равно не пустит). */
-/* data-perm-show / data-perm-reports ставит perm-visibility.js: роль без звания админа, которой владелец выдал право.
-   Раздел настроек «Команда» settings.js рисует сам — только с плитками, на которые у роли есть право. */
+/* data-perm-show / data-perm-reports ставит perm-visibility.js: роль без звания админа, которой владелец выдал право. */
 :root[data-role="member"]:not([data-nyaa="1"]) .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-perm-show="1"]),
 :root[data-role="member"][data-nyaa="1"] .tab-btn:not([data-tab="queue"]):not([data-tab="titles"]):not([data-tab="messages"]):not([data-tab="team"]):not([data-tab="profile"]):not([data-tab="nyaa"]):not([data-perm-show="1"]),
 :root[data-role="member"]:not([data-perm-reports="1"]) #sidebar-board-sub,
@@ -5928,7 +5926,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .st-pal-prev i:nth-child(2) { left: calc(20% + 12px); right: 6px; top: 6px; height: 16px; background: var(--p1); }
 .st-pal-prev i:nth-child(3) { left: calc(20% + 12px); top: 28px; width: 34%; height: 12px; background: linear-gradient(90deg, var(--p2), var(--p3)); }
 .st-pal-prev i:nth-child(4) { right: 6px; bottom: 6px; width: 18px; height: 18px; border-radius: 50%; background: var(--p2); box-shadow: 0 0 10px var(--p2); }
-/* --n — число тем (settings.js): все в один ряд; на узком окне — по три, ряды ровные. */
 @media (max-width: 900px) { .st-palettes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 /* ================================================================

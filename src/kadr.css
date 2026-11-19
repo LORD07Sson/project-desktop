@@ -4525,16 +4525,12 @@ select.fsel-native { display: none !important; }
 .kd-slide .kd-pieces { filter: saturate(.6) brightness(.85) contrast(1.1) drop-shadow(0 0 4px rgba(var(--fire-rgb), .45)) drop-shadow(0 14px 14px rgba(0, 0, 0, .75)); }
 .kd-slide.on .kd-pieces em { will-change: transform; }
 
-/* ---- Настройки: шапка раздела и навигация ---- */
-/* Отступы — те же, что у .st-body (--st-pt / --st-px): шапка во всю ширину и прилипает к самому краю. */
 .st-sheet .st-body { --st-pt: 26px; --st-px: 34px; }
 .st-sheet .st-layout.st-mode-tiles .st-body, .st-sheet .st-layout.st-mode-cards .st-body { --st-pt: 8px; --st-px: 26px; }
 .st-sheet .st-sec-head { position: sticky; top: calc(-1 * var(--st-pt)); z-index: 3; display: flex; align-items: center; gap: 14px;
   margin: calc(-1 * var(--st-pt)) calc(-1 * var(--st-px)) 18px; padding: calc(var(--st-pt) - 4px) 80px 14px var(--st-px);
-  /* Фон — как у самого окна (.sheet: --surface), иначе шапка читается отдельным тёмным прямоугольником. Угол — по скруглению окна. */
   background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line-soft);
   border-top-right-radius: 24px; }
-/* «Плитки» и «Карточки»: раздел уже окна — шапка отдельной плашкой, а не во всю ширину. */
 .st-sheet .st-layout.st-mode-tiles .st-sec-head, .st-sheet .st-layout.st-mode-cards .st-sec-head { top: 0; margin: 0 0 18px; padding: 14px 18px; border: 1px solid var(--line-soft); border-radius: 16px; }
 .st-sheet .st-sec-head .st-ic { width: 44px; height: 44px; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(var(--gold-rgb), .18); }
 .st-sheet .st-sec-head .st-ic svg { width: 21px; height: 21px; }
@@ -4544,7 +4540,6 @@ select.fsel-native { display: none !important; }
 .st-sheet .st-sec-head .st-lead { margin: 3px 0 0; font-size: 12.5px; }
 .st-sec-head + .st-row { border-top: none; }
 .st-sheet .st-close { z-index: 5; }
-/* Навигация: у пунктов спокойные иконки, плашка-акцент — только у выбранного. */
 .st-nav .st-nav-btn .st-ic { background: transparent; color: var(--ink-dim); transition: background .15s, color .15s; }
 .st-nav .st-nav-btn:hover .st-ic { color: var(--ink); background: rgba(255, 255, 255, .05); }
 .st-nav .st-nav-btn.on .st-ic { background: linear-gradient(145deg, rgba(var(--gold-rgb), .22), rgba(var(--fire-rgb), .08)); color: var(--gold); }
@@ -4552,6 +4547,5 @@ select.fsel-native { display: none !important; }
 .st-nav .st-nav-btn:focus-visible { outline: 2px solid rgba(var(--gold-rgb), .6); outline-offset: -2px; }
 .st-nav .st-nav-grp:first-of-type { margin-top: 4px; }
 :root[data-theme="light"] .st-nav .st-nav-btn:hover .st-ic { background: rgba(80, 40, 20, .06); }
-/* Полоса прокрутки навигации — тонкая и только при наведении, без постоянной полосы между меню и разделом. */
 .st-sheet .st-nav { scrollbar-width: thin; scrollbar-color: transparent transparent; }
 .st-sheet .st-nav:hover { scrollbar-color: var(--line) transparent; }
