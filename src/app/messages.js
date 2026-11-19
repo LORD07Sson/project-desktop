@@ -695,7 +695,7 @@ function renderInfo() {
       ${files.length ? files.slice(0, 8).map(m => `<button type="button" class="ms-file-item" data-goto="${m.id}"><i>${m.attach.kind === "image" ? "🖼" : "📄"}</i><span><b>${esc(m.attach.name || "файл")}</b><em>${esc(m.author)} · ${esc(relTime(m.created_at))}</em></span></button>`).join("")
         : `<div class="ms-info-empty">Картинок и файлов пока нет.</div>`}
     </div>
-    ${members.length ? `<div class="ms-info-sec"><h4>Участники · ${members.length}</h4>${members.slice(0, 30).map(p => `<button type="button" class="ms-mem" data-open-profile="${p.telegram_id}"><span class="avatar-bubble" data-avatar-for="${p.telegram_id}">${initial(p.name)}</span><span>${esc(p.name)}</span></button>`).join("")}</div>` : ""}`;
+    ${c.kind !== "dm" && members.length ? `<div class="ms-info-sec"><h4>Участники · ${members.length}</h4>${members.slice(0, 30).map(p => `<button type="button" class="ms-mem" data-open-profile="${p.telegram_id}"><span class="avatar-bubble" data-avatar-for="${p.telegram_id}">${initial(p.name)}</span><span>${esc(p.name)}</span></button>`).join("")}</div>` : ""}`;
   loadAvatars(box);
   box.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => gotoMessage(b.dataset.goto)));
   box.querySelectorAll("[data-open-profile]").forEach(b => b.addEventListener("click", () => openUserProfile(Number(b.dataset.openProfile))));
