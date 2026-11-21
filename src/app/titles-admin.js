@@ -43,9 +43,9 @@ export function userOptionsHtml(users, selectedTelegramId) {
   const label = u => {
     const name = String(u.name || "").trim();
     if (!u.username) return name;
-    return !name || name.toLowerCase() === String(u.username).toLowerCase() ? `@${u.username}` : `${name} (@${u.username})`;
+    return !name || name.toLowerCase() === String(u.username).toLowerCase() ? String(u.username) : `${name} (@${u.username})`;
   };
-  const sorted = [...users].sort((a, b) => label(a).replace(/^@/, "").localeCompare(label(b).replace(/^@/, ""), "ru", { sensitivity: "base" }));
+  const sorted = [...users].sort((a, b) => label(a).localeCompare(label(b), "ru", { sensitivity: "base" }));
   return `<option value="">— не назначен —</option>` + sorted.map(u =>
     `<option value="${u.telegram_id}" ${String(u.telegram_id) === String(selectedTelegramId) ? "selected" : ""}>${esc(label(u))}${esc(pauseSuffix(u))}</option>`
   ).join("");
