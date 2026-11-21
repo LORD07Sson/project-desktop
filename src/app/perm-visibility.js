@@ -8,6 +8,7 @@ const RULES = [
   ['.tab-btn[data-tab="list"]', "reports.list"],
   ['.tab-btn[data-tab="calendar"]', "reports.calendar"],
   ['.tab-btn[data-tab="analytics"]', "reports.analytics"],
+  ['.tab-btn[data-tab="parser"]', "parser.use"],
   ['.tab-btn[data-tab="a365"]', () => !!state.isDeveloper && !state.previewRole],
   ["#titles-admin-btn", "titles.create"],
   ["#team-roles-btn", "roles.manage"],
