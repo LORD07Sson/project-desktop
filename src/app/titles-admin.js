@@ -3,6 +3,7 @@ import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, media
 import { pickFile } from "./attachments.js";
 import { pauseSuffix } from "./people.js";
 import { esc } from "./utils.js";
+import { enhanceSelects } from "./fancy-select.js";
 import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./watermark-editor.js";
 
 function seriesCount(n) {
@@ -271,7 +272,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
     const charRows = (d.characters || []).map(c => `
       <div class="mini-row" data-char="${c.id}">
         <span class="name">${esc(c.name)}${c.original_va_name ? ` <span class="meta" style="color:var(--ink-dim); font-size:11px;">(ориг. ${esc(c.original_va_name)})</span>` : ""}</span>
-        <select class="field-input" data-char-voice="${c.id}" style="max-width:180px;">${userOptionsHtml(assignable, c.voiced_by ? c.voiced_by.telegram_id : null)}</select>
+        <select class="field-input people-pick" data-char-voice="${c.id}" style="max-width:180px;">${userOptionsHtml(assignable, c.voiced_by ? c.voiced_by.telegram_id : null)}</select>
         <button class="icon-btn" data-char-delete="${c.id}" title="Удалить персонажа">✕</button>
       </div>
     `).join("");
@@ -306,7 +307,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
         <div id="crew-list">${crewRows || `<div class="no-assignee">Состав пуст</div>`}</div>
         <div class="add-row">
           <select id="crew-role-new" class="field-input"><option value="">— роль —</option>${roles.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>
-          <select id="crew-user-new" class="field-input">${userOptionsHtml(assignable, null)}</select>
+          <select id="crew-user-new" class="field-input people-pick">${userOptionsHtml(assignable, null)}</select>
           <button class="btn" id="crew-add">Назначить</button>
         </div>
       </div>
@@ -377,6 +378,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
       } catch (e) { box.innerHTML = `<div class="no-assignee">Ошибка поиска: ${esc(e.message)}</div>`; }
     });
 
+    enhanceSelects(sheet, "select.people-pick");
     sheet.querySelectorAll("[data-crew-remove]").forEach(btn => {
       btn.addEventListener("click", async () => {
         try {

@@ -13,6 +13,7 @@ import { relTime, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, 
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, posterSrc } from "./reports.js";
 import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from "./titles-admin.js";
+import { enhanceSelects } from "./fancy-select.js";
 import { setDropTarget } from "./file-drop.js";
 import { downloadWithCard } from "./download-card.js";
 import { recordRecentReport, forgetRecentReport } from "./recent-reports.js";
@@ -337,7 +338,7 @@ export async function openReportDetail(publicId) {
                 <div id="pipeline-draft-list"></div>
                 <div class="add-row">
                   <select id="pipeline-role-pick" class="field-input"><option value="">+ роль…</option>${roles.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>
-                  <select id="pipeline-user-pick" class="field-input">${userOptionsHtml(assignable, null)}</select>
+                  <select id="pipeline-user-pick" class="field-input people-pick">${userOptionsHtml(assignable, null)}</select>
                   <button class="btn" id="pipeline-add-step">+</button>
                 </div>
                 <label class="bc-feature" style="margin-top:10px;" title="Все этапы открыты сразу: даббер, звукарь, тайминг и остальные работают одновременно, никто никого не ждёт"><input type="checkbox" id="pipeline-parallel" ${pipelineParallel ? "checked" : ""}><span><b>Без очереди</b> — все этапы одновременно, не нужно ждать предыдущего</span></label>
@@ -624,6 +625,7 @@ export async function openReportDetail(publicId) {
       });
     }
     if (canEdit) renderPipelineDraft();
+    enhanceSelects(sheet, "select.people-pick");
 
     if (canEdit) sheet.querySelector("#pipeline-add-step").addEventListener("click", () => {
       const roleSel = sheet.querySelector("#pipeline-role-pick");
@@ -1192,7 +1194,7 @@ function pipelineAdvanceHtml(pipeline, assignable, canEdit = true, canAdvance = 
   if (lastCur >= pipeline.length - 1) return "";
   const who = curIdxs.map(i => `<b>${esc(pipeline[i].role)}</b>${pipeline[i].user_name ? ` (${esc(pipeline[i].user_name)})` : ""}`).join(", ");
   const picker = canEdit
-    ? `<select id="pipeline-next-user" class="field-input">${userOptionsHtml(assignable, null)}</select>`
+    ? `<select id="pipeline-next-user" class="field-input people-pick">${userOptionsHtml(assignable, null)}</select>`
     : "";
   return `<div class="rd-pass">
       <span>Сейчас — ${who}. Дальше — <b>${esc(pipeline[lastCur + 1].role)}</b>:</span>
