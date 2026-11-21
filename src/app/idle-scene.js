@@ -719,8 +719,9 @@ function buildScene(canvas) {
   function setQuality(q) { quality = Math.max(MIN_QUALITY, Math.min(1, q)); resize(); }
   const bladeCount = () => Math.round(BLADES * (0.35 + 0.65 * (quality - MIN_QUALITY) / (1 - MIN_QUALITY)));
   let cam = camera(1), aspect = 1, horizon = 0.42;
+  const weakGpu = isWeakGpu(gl);
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2) * quality;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * (weakGpu ? quality : 1);
     canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
     canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
     aspect = canvas.width / canvas.height;
@@ -842,7 +843,7 @@ function buildScene(canvas) {
 
   function dispose() { gl.getExtension("WEBGL_lose_context")?.loseContext(); }
 
-  return { resize, pick, stamp, draw, dispose, setQuality, quality: () => quality, weakGpu: () => isWeakGpu(gl) };
+  return { resize, pick, stamp, draw, dispose, setQuality, quality: () => quality, weakGpu: () => weakGpu };
 }
 
 
