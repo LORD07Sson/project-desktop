@@ -3386,12 +3386,12 @@ pub fn lt_context_menu_install() -> Result<(), String> {
             let mut key = HKEY::default();
             unsafe {
                 RegCreateKeyExW(HKEY_CURRENT_USER, windows::core::PCWSTR(sub_w.as_ptr()),
-                    0, None, REG_OPTION_NON_VOLATILE, KEY_WRITE, None, &mut key, None)
-                    .map_err(|e| e.to_string())?;
-                RegSetValueExW(key, windows::core::PCWSTR(name_w.as_ptr()), 0, REG_SZ,
-                    Some(std::slice::from_raw_parts(val_w.as_ptr() as *const u8, val_w.len() * 2)))
-                    .map_err(|e| e.to_string())?;
+                    Some(0), None, REG_OPTION_NON_VOLATILE, KEY_WRITE, None, &mut key, None)
+                    .ok().map_err(|e| e.to_string())?;
+                let set = RegSetValueExW(key, windows::core::PCWSTR(name_w.as_ptr()), Some(0), REG_SZ,
+                    Some(std::slice::from_raw_parts(val_w.as_ptr() as *const u8, val_w.len() * 2)));
                 let _ = RegCloseKey(key);
+                set.ok().map_err(|e| e.to_string())?;
             }
         }
     }
