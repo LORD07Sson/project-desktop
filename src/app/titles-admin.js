@@ -5,6 +5,9 @@ import { pauseSuffix } from "./people.js";
 import { esc } from "./utils.js";
 import { enhanceSelects } from "./fancy-select.js";
 import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./watermark-editor.js";
+import { invoke, pickOutputFile } from "./tauri.js";
+import { decodeSubs } from "./subs-core.js";
+import { assActors, planImport, applyDubbers } from "./subs-actors-core.js";
 
 function seriesCount(n) {
   const mod10 = n % 10, mod100 = n % 100;
@@ -315,7 +318,11 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
       <div class="detail-section">
         <h3>Персонажи ${d.characters.length ? `(${d.characters.length})` : ""}</h3>
         <div id="char-list">${charRows || `<div class="no-assignee">Персонажей пока нет — найдите тайтл на Shikimori/AniList выше и подтвердите</div>`}</div>
-        ${d.characters.length ? `<button class="btn ghost" id="char-delete-all" style="margin-top:8px;">Удалить всех персонажей</button>` : ""}
+        ${d.characters.length ? `<div class="add-row" style="margin-top:8px; flex-wrap:wrap;">
+          <button class="btn" id="char-import-ass" title="Взять пары «персонаж — даббер» из поля Actor и назначить дабберов">⤓ Импорт актёров из .ass</button>
+          <button class="btn" id="char-mark-ass" title="Проставить дабберов в поле Actor каждой реплики и сохранить копию файла">✎ Разметить .ass дабберами</button>
+          <button class="btn ghost" id="char-delete-all" style="margin-left:auto;">Удалить всех персонажей</button>
+        </div>` : ""}
       </div>
 
       <div class="detail-section">
@@ -416,6 +423,8 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
         } catch (e) { toast(`Не удалось удалить: ${e.message}`, "error"); }
       });
     });
+    sheet.querySelector("#char-import-ass")?.addEventListener("click", () => importActorsFromAss(titleId, d.characters, assignable, render));
+    sheet.querySelector("#char-mark-ass")?.addEventListener("click", () => markAssWithDubbers(d.characters, assignable));
     const deleteAllBtn = sheet.querySelector("#char-delete-all");
     if (deleteAllBtn) deleteAllBtn.addEventListener("click", async () => {
       if (!await askConfirm("Удалить ВСЕХ персонажей тайтла?")) return;
@@ -490,3 +499,100 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
   }
 }
 
+
+// ---------- Actor field of .ass ↔ characters and dubbers ----------
+
+const personName = u => String((u && (u.name || u.username)) || "").trim();
+
+async function readAssFile() {
+  const file = await pickFile(".ass,.ssa");
+  if (!file) return null;
+  const text = decodeSubs(await file.arrayBuffer());
+  return { name: file.name, text };
+}
+
+async function importActorsFromAss(titleId, characters, users, onDone) {
+  const file = await readAssFile();
+  if (!file) return;
+  const { total, empty, actors } = assActors(file.text);
+  if (!total) { toast("В файле нет реплик .ass с полем Actor.", "error"); return; }
+  if (!actors.length) { toast("В поле Actor пусто у всех реплик — импортировать нечего.", "error"); return; }
+  const plan = planImport(actors, characters, users);
+  const overlay = openSheet(`
+    <h2>Импорт актёров из «${esc(file.name)}»</h2>
+    <div class="no-assignee">Реплик: ${total} · без актёра: ${empty} · разных значений Actor: ${actors.length}</div>
+    ${plan.pairs.length ? `<div class="detail-section"><h3>Назначить (${plan.pairs.length})</h3>${plan.pairs.map((p, i) => {
+      const cur = p.character.voiced_by && p.character.voiced_by.telegram_id;
+      const same = cur && String(cur) === String(p.user.telegram_id);
+      return `<label class="mini-row" style="cursor:pointer;"><input type="checkbox" data-pair="${i}" ${same ? "" : "checked"}>
+        <span class="name">${esc(p.character.name)}</span>
+        <span class="val">→ ${esc(personName(p.user))}${same ? " · уже назначен" : cur ? ` · было: ${esc(p.character.voiced_by.name || "")}` : ""} · ${p.lines} реплик</span></label>`;
+    }).join("")}</div>` : `<div class="no-assignee">Пар «персонаж — даббер» не найдено. Ожидается Actor вида «Персонаж (Даббер)», «Персонаж - Даббер» или «Персонаж | Даббер».</div>`}
+    ${plan.unknownDubbers.length ? `<div class="detail-section"><h3>Даббер не найден в команде (${plan.unknownDubbers.length})</h3><div class="no-assignee">${plan.unknownDubbers.map(u => esc(u.actor)).join(" · ")}</div></div>` : ""}
+    ${plan.unknownCharacters.length ? `<div class="detail-section"><h3>Нет такого персонажа в тайтле (${plan.unknownCharacters.length})</h3><div class="no-assignee">${plan.unknownCharacters.slice(0, 40).map(esc).join(" · ")}${plan.unknownCharacters.length > 40 ? " …" : ""}</div></div>` : ""}
+    <div class="sheet-actions">
+      <button class="btn" data-close>Отмена</button>
+      ${plan.pairs.length ? `<button class="btn primary" id="ass-import-apply">Назначить отмеченных</button>` : ""}
+    </div>`, "wide");
+  const sheet = overlay.querySelector(".sheet");
+  sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
+  sheet.querySelector("#ass-import-apply")?.addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    const chosen = [...sheet.querySelectorAll("[data-pair]:checked")].map(c => plan.pairs[Number(c.dataset.pair)]);
+    if (!chosen.length) { toast("Ничего не отмечено.", "error"); return; }
+    btn.disabled = true;
+    let ok = 0;
+    for (const p of chosen) {
+      try { await apiPost(`/titles/${titleId}/characters/${p.character.id}/voice`, { telegram_id: Number(p.user.telegram_id) }); ok++; }
+      catch (err) { toast(`${p.character.name}: ${err.message}`, "error"); }
+    }
+    toast(`Назначено дабберов: ${ok} из ${chosen.length}.`, ok ? "success" : "error");
+    overlay.remove();
+    if (ok) await onDone();
+  });
+}
+
+async function markAssWithDubbers(characters, users) {
+  const file = await readAssFile();
+  if (!file) return;
+  const byTid = new Map(users.map(u => [String(u.telegram_id), u]));
+  const named = characters.map(c => {
+    if (!c.voiced_by) return c;
+    const u = byTid.get(String(c.voiced_by.telegram_id));
+    return { ...c, voiced_by: { ...c.voiced_by, name: personName(u) || c.voiced_by.name } };
+  });
+  let mode = "both";
+  const overlay = openSheet(`<h2>Разметить «${esc(file.name)}» дабберами</h2><div id="ass-mark-body"></div>`, "wide");
+  const sheet = overlay.querySelector(".sheet");
+  const paint = () => {
+    const r = applyDubbers(file.text, named, mode);
+    sheet.querySelector("#ass-mark-body").innerHTML = `
+      <div class="detail-section">
+        <label class="mini-row" style="cursor:pointer;"><input type="radio" name="ass-mode" value="both" ${mode === "both" ? "checked" : ""}> <span class="name">Персонаж (Даббер)</span></label>
+        <label class="mini-row" style="cursor:pointer;"><input type="radio" name="ass-mode" value="dubber" ${mode === "dubber" ? "checked" : ""}> <span class="name">Только даббер</span></label>
+      </div>
+      <div class="detail-section"><h3>Что получится</h3>
+        <div class="mini-row"><span class="name">Реплик размечено</span><span class="val">${r.changed}</span></div>
+        <div class="mini-row"><span class="name">Реплик без персонажа в Actor</span><span class="val">${r.noActor}</span></div>
+        ${r.unvoiced.length ? `<div class="mini-row"><span class="name">Персонажам не назначен даббер</span><span class="val">${r.unvoiced.map(esc).join(", ")}</span></div>` : ""}
+        ${r.unknownActors.length ? `<div class="mini-row"><span class="name">Нет в тайтле</span><span class="val">${r.unknownActors.slice(0, 30).map(esc).join(", ")}${r.unknownActors.length > 30 ? " …" : ""}</span></div>` : ""}
+      </div>
+      <div class="sheet-actions">
+        <button class="btn" data-close>Отмена</button>
+        <button class="btn primary" id="ass-mark-save" ${r.changed ? "" : "disabled"}>Сохранить копию…</button>
+      </div>`;
+    sheet.querySelectorAll('[name="ass-mode"]').forEach(i => i.addEventListener("change", () => { mode = i.value; paint(); }));
+    sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
+    sheet.querySelector("#ass-mark-save").addEventListener("click", async () => {
+      const stem = file.name.replace(/\.(ass|ssa)$/i, "");
+      const out = await pickOutputFile(`${stem}.dubbers.ass`, [{ name: "Субтитры", extensions: ["ass"] }]);
+      if (!out) return;
+      try {
+        await invoke("write_text_file", { path: out, content: r.text });
+        toast(`Сохранено: размечено ${r.changed} реплик.`, "success");
+        overlay.remove();
+      } catch (err) { toast(`Не удалось сохранить: ${err.message || err}`, "error"); }
+    });
+  };
+  paint();
+}
