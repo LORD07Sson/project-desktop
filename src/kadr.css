@@ -1625,6 +1625,7 @@ select option, select optgroup { background-color: var(--surface); color: var(--
 .ny-sorth:hover, .ny-sorth.on { color: var(--n-t1); }
 .ny-row { min-height: 44px; padding: 6px 8px; border: 0; border-bottom: 1px solid var(--n-line); border-radius: 0; background: transparent; align-items: center; }
 .ny-row:hover { background: var(--n-hover); border-color: var(--n-line); }
+.ny-row:not(:hover):not(:focus-within) { content-visibility: auto; contain-intrinsic-size: auto 44px; }
 .ny-row.tr, .ny-row.rm, .ny-row.sd-best, .ny-row.sd-alt { box-shadow: none; background: transparent; }
 .ny-row.tr:hover, .ny-row.rm:hover, .ny-row.sd-best:hover, .ny-row.sd-alt:hover { background: var(--n-hover); }
 .ny-row.sel, .ny-row.sel:hover { background: var(--n-sel); border-color: var(--n-line); }

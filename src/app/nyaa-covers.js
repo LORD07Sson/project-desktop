@@ -38,7 +38,7 @@ async function fetchThumb(it) {
       thumbUrls[id] = url; saveThumbs();
     }
     if (url) {
-      thumbData.set(id, await fetchPic(url));
+      thumbData.set(id, await shrinkCover(await fetchPic(url)));
       document.querySelectorAll(".ny-kind[data-tid]").forEach(el => {
         if (el.dataset.tid !== String(id) || el.querySelector("img")) return;
         el.classList.add("has-cover"); el.innerHTML = `<img src="${esc(thumbData.get(id))}" alt="">`;

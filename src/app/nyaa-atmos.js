@@ -432,12 +432,10 @@ export function cascadeRows(list) {
   const sig = [...list.querySelectorAll(".ny-row[data-id]")].slice(0, 12).map(r => r.dataset.id).join(",");
   if (!sig || sig === lastSig) return;
   lastSig = sig;
-  let n = 0;
-  list.querySelectorAll(".ny-row[data-id], .ny-day").forEach(el => {
-    if (n > 28) return;
-    el.style.setProperty("--ny-i", String(n++));
-    el.classList.remove("ny-in"); void el.offsetWidth; el.classList.add("ny-in");
-  });
+  const els = [...list.querySelectorAll(".ny-row[data-id], .ny-day")].slice(0, 29);
+  els.forEach((el, n) => { el.style.setProperty("--ny-i", String(n)); el.classList.remove("ny-in"); });
+  void list.offsetWidth;
+  els.forEach(el => el.classList.add("ny-in"));
 }
 
 const lastStats = new Map();
