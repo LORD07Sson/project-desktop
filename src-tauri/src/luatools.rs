@@ -3466,6 +3466,15 @@ pub fn lt_save_profile(name: String) -> Result<(), String> {
     if safe.is_empty() { return Err("Пустое имя профиля".into()); }
     let dest = profiles_dir(&steam).join(&safe);
     std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+    // Overwriting a profile must drop lua files that are no longer installed.
+    if let Ok(old) = std::fs::read_dir(&dest) {
+        for entry in old.flatten() {
+            let p = entry.path();
+            if p.extension().map(|x| x.eq_ignore_ascii_case("lua")).unwrap_or(false) {
+                std::fs::remove_file(&p).map_err(|e| e.to_string())?;
+            }
+        }
+    }
     let src = stplugin_dir(&steam);
     let Ok(rd) = std::fs::read_dir(&src) else { return Ok(()); };
     for entry in rd.flatten() {
