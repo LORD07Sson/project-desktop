@@ -177,6 +177,8 @@ function shell() {
       <button class="lt-nav" data-page="mode"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16m-7 6h7"/></svg> Режим</button>
       <button class="lt-nav" data-page="fixes"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Фиксы</button>
       <button class="lt-nav" data-page="plugin"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Плагин</button>
+      <button class="lt-nav" data-page="library"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg> Библиотека</button>
+      <button class="lt-nav" data-page="profiles"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/></svg> Профили</button>
     </div>
     <div class="lt-sidebar-bottom">
       <button class="lt-nav lt-nav-action" id="lt-restart-steam"><svg class="lt-icon" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Перезапустить Steam</button>
@@ -343,7 +345,7 @@ function scrollMainTop() { $("#luatools-body .lt-main")?.scrollTo(0, 0); }
 async function renderPage(page) {
   const el = $("#lt-page-content");
   if (!el) return;
-  const renderers = { home: renderHome, builds: renderBuilds, add: renderAdd, manage: renderManage, tools: renderTools, mode: renderMode, fixes: renderFixes, plugin: renderPlugin, downloads: renderDownloads, settings: renderSettings };
+  const renderers = { home: renderHome, builds: renderBuilds, add: renderAdd, manage: renderManage, tools: renderTools, mode: renderMode, fixes: renderFixes, plugin: renderPlugin, downloads: renderDownloads, settings: renderSettings, library: renderLibrary, profiles: renderProfiles };
   const fn = renderers[page];
   el.dataset.page = page;
   if (fn) await fn(el);
@@ -987,6 +989,8 @@ async function renderTools(el) {
         <button class="lt-tab ${toolsState.tab === "stats" ? "is-active" : ""}" data-tab="stats">Статистика</button>
         <button class="lt-tab ${toolsState.tab === "launch" ? "is-active" : ""}" data-tab="launch">Параметры запуска</button>
         <button class="lt-tab ${toolsState.tab === "playtime" ? "is-active" : ""}" data-tab="playtime">Время в игре</button>
+        <button class="lt-tab ${toolsState.tab === "dlcunlock" ? "is-active" : ""}" data-tab="dlcunlock">DLC-анлокер</button>
+        <button class="lt-tab ${toolsState.tab === "saves" ? "is-active" : ""}" data-tab="saves">Сохранения</button>
       </nav>
       <div id="lt-tr-body"></div>`;
     right.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => { toolsState.tab = b.dataset.tab; drawRight(); }));
@@ -1132,6 +1136,58 @@ async function renderTools(el) {
       return;
     }
 
+    if (toolsState.tab === "dlcunlock") {
+      const hasSmokeApi = await invoke("lt_smokeapi_status", { appId }).catch(() => false);
+      body.innerHTML = `<div class="lt-panel">
+        <div class="lt-panel-title">DLC-анлокер (SmokeAPI)</div>
+        <p class="lt-muted">SmokeAPI подменяет steam_api.dll в папке игры для разблокировки DLC. Оригинальные файлы сохраняются в .bak.</p>
+        <div class="lt-row-gap">
+          <button class="lt-btn ${hasSmokeApi ? "lt-btn-dangertext" : "lt-btn-accent"}" id="lt-smoke-toggle">${hasSmokeApi ? "Удалить SmokeAPI" : "Установить SmokeAPI"}</button>
+          <button class="lt-btn lt-btn-ghost" id="lt-cream-install">Запустить CreamInstaller</button>
+        </div>
+        ${hasSmokeApi ? '<div class="lt-ok" style="margin-top:8px">SmokeAPI установлен (steam_api.dll.bak найден)</div>' : ""}
+      </div>`;
+      body.querySelector("#lt-smoke-toggle").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+        try {
+          if (hasSmokeApi) {
+            await invoke("lt_smokeapi_uninstall", { appId });
+            toast("SmokeAPI удалён, оригинальные файлы восстановлены", "ok");
+          } else {
+            toast(await invoke("lt_smokeapi_install", { appId }), "ok");
+          }
+          drawRight();
+        } catch (err) { toast(errMsg(err), "error"); }
+      }));
+      body.querySelector("#lt-cream-install").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+        try { toast(await invoke("lt_creamapi_install", { appId }), "ok"); } catch (err) { toast(errMsg(err), "error"); }
+      }));
+      return;
+    }
+
+    if (toolsState.tab === "saves") {
+      body.innerHTML = '<div class="lt-loading">Загружаю…</div>';
+      const stamps = await invoke("lt_save_backup_list", { appId }).catch(() => []);
+      body.innerHTML = `<div class="lt-panel">
+        <div class="lt-panel-title">Бэкапы сохранений</div>
+        <p class="lt-muted">Локальные копии сохранений из Steam/userdata. Храните резерв перед обновлениями.</p>
+        <button class="lt-btn lt-btn-accent" id="lt-save-create" style="margin-bottom:12px">${UI_ICONS.download} Создать бэкап</button>
+        ${stamps.length ? `<div class="lt-save-list">${stamps.map(ts => {
+          const d = new Date(ts * 1000);
+          return `<div class="lt-row-gap lt-save-row"><span>${d.toLocaleString()}</span><button class="lt-btn lt-btn-sm" data-restore="${ts}">Восстановить</button></div>`;
+        }).join("")}</div>` : '<div class="lt-empty">Бэкапов пока нет</div>'}
+      </div>`;
+      body.querySelector("#lt-save-create").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+        try { const path = await invoke("lt_save_backup_create", { appId }); toast(`Бэкап создан: ${path}`, "ok"); drawRight(); }
+        catch (err) { toast(errMsg(err), "error"); }
+      }));
+      body.querySelectorAll("[data-restore]").forEach(btn => btn.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+        if (!await confirmAction("Восстановить сохранения из бэкапа? Текущие файлы будут перезаписаны.")) return;
+        try { await invoke("lt_save_backup_restore", { appId, timestamp: parseInt(btn.dataset.restore, 10) }); toast("Сохранения восстановлены", "ok"); }
+        catch (err) { toast(errMsg(err), "error"); }
+      })));
+      return;
+    }
+
     if (!lua) { body.innerHTML = '<div class="lt-empty">Lua-файл не найден</div>'; return; }
     body.innerHTML = `<div class="lt-panel">
         <div class="lt-panel-title">Активный пресет</div>
@@ -1256,6 +1312,8 @@ const MODES = [
     desc: "Nightly-сборки upstream OpenSteamTool. Свежие изменения раньше всех, но может быть нестабильным." },
   { key: "ltsp", mode: "LTSP", title: "LTSP", badges: [],
     desc: "Альтернативный анлокер (madoiscool/LTSP). Используйте, если BST и OST не работают." },
+  { key: "lumacore", mode: "LumaCore", title: "LumaCore", badges: [],
+    desc: "Преемник GreenLuma — DLL-инжектор для разблокировки. Старые файлы GreenLuma будут удалены автоматически." },
 ];
 const BADGE = {
   active: `<span class="lt-badge2 is-ok">${UI_ICONS.check} АКТИВЕН</span>`,
@@ -1355,13 +1413,17 @@ const fixState = { q: "", tag: null, mine: false, page: 0, perPage: 24 };
 async function renderFixes(el, force = false) {
   el.innerHTML = `<div class="lt-head">
       <h2 class="lt-page-title">Фиксы</h2>
-      <button class="lt-btn lt-btn-ghost" id="lt-fix-refresh">${UI_ICONS.refresh} Обновить</button>
+      <div class="lt-head-actions">
+        <button class="lt-btn lt-btn-ghost" id="lt-fix-onlinefix">🌐 Online-Fix.me</button>
+        <button class="lt-btn lt-btn-ghost" id="lt-fix-refresh">${UI_ICONS.refresh} Обновить</button>
+      </div>
     </div>
     <label class="lt-search">${UI_ICONS.search}<input type="text" id="lt-fix-search" placeholder="Поиск по имени или App ID…" value="${esc(fixState.q)}"></label>
     <div class="lt-chips" id="lt-fix-tags"></div>
     <div id="lt-fixes-list"><div class="lt-loading">Загружаю…</div></div>
     <div id="lt-fix-pager"></div>`;
   el.querySelector("#lt-fix-refresh").addEventListener("click", () => renderFixes(el, true));
+  el.querySelector("#lt-fix-onlinefix").addEventListener("click", () => { window.__TAURI__?.shell?.open("https://online-fix.me").catch(() => window.open("https://online-fix.me", "_blank")); });
 
   if (!fixesCache || force) {
     const data = await ltDenuvoListings();
@@ -1816,6 +1878,8 @@ async function renderSettings(el) {
       <div class="lt-info-row"><strong>stplug-in:</strong> ${steamInfo?.stplugin_dir ? `<code>${esc(steamInfo.stplugin_dir)}</code>` : '—'}</div>
       <div class="lt-info-row"><strong>depotcache:</strong> ${steamInfo?.depotcache_dir ? `<code>${esc(steamInfo.depotcache_dir)}</code>` : '—'}</div>
       <div class="lt-info-row"><strong>Steam запущен:</strong> ${steamInfo?.running ? '<span class="lt-ok">Да</span>' : '<span class="lt-muted">Нет</span>'}</div>
+      <label class="lt-info-row"><input type="checkbox" id="lt-cfg-block-updates"> Блокировать обновления Steam (steam.cfg)</label>
+      <div class="lt-muted lt-note lt-note-indent">Создаёт steam.cfg с BootStrapperInhibitAll=enable. Снимите флажок, чтобы удалить файл.</div>
     </div></div>
 
     <div class="lt-section"><h3>Аккаунт lua.tools</h3>
@@ -1896,6 +1960,16 @@ async function renderSettings(el) {
   saveOn("#lt-src-hubcap", "src_hubcap");
   saveOn("#lt-src-kernelua", "src_kernelua");
   saveOn("#lt-cfg-doh", "use_doh");
+  invoke("lt_steam_update_blocked").then(blocked => {
+    const cb = el.querySelector("#lt-cfg-block-updates");
+    if (cb) cb.checked = blocked;
+  }).catch(() => {});
+  el.querySelector("#lt-cfg-block-updates")?.addEventListener("change", async e => {
+    try {
+      await invoke("lt_steam_update_set_blocked", { blocked: e.target.checked });
+      toast(e.target.checked ? "Обновления Steam заблокированы" : "Блокировка обновлений снята", "ok");
+    } catch (err) { e.target.checked = !e.target.checked; toast(errMsg(err), "error"); }
+  });
   el.querySelector("#lt-cfg-store")?.addEventListener("change", async e => {
     const on = e.target.checked;
     try {

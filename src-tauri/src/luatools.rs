@@ -893,7 +893,7 @@ pub fn lt_vault_restore(app_id: u64, hash: String) -> Result<(), String> {
 pub async fn lt_install_mode(mode: String) -> Result<String, String> {
     let steam = steam_path_from_registry().ok_or("Steam не найден")?;
 
-    if !matches!(mode.as_str(), "bst" | "ost" | "ltsp" | "custom") {
+    if !matches!(mode.as_str(), "bst" | "ost" | "ltsp" | "lumacore" | "custom") {
         return Err(format!("Неизвестный режим: {mode}"));
     }
     let was_running = stop_steam().await;
@@ -906,6 +906,7 @@ pub async fn lt_install_mode(mode: String) -> Result<String, String> {
         "bst" => install_bst(&client, &steam).await,
         "ost" => install_ost(&client, &steam).await,
         "ltsp" => install_ltsp(&client, &steam).await,
+        "lumacore" => install_lumacore(&client, &steam).await,
         _ => {
             remove_unlocker_dlls(&steam);
             Ok("Custom режим установлен".into())
@@ -1099,6 +1100,47 @@ async fn install_ost(client: &reqwest::Client, steam: &str) -> Result<String, St
     extract_unlocker_zip(&tmp, steam, "stplug-in", tag)?;
     let _ = std::fs::remove_file(&tmp);
     Ok(format!("OpenSteamTool (Nightly) {tag} установлен"))
+}
+
+async fn install_lumacore(client: &reqwest::Client, steam: &str) -> Result<String, String> {
+    remove_unlocker_dlls(steam);
+    let steam_pb = PathBuf::from(steam);
+    for name in ["GreenLuma_2024_x86.dll", "GreenLuma_2024_x64.dll", "AchievementUnlocker_x86.dll", "AchievementUnlocker_x64.dll", "User32.dll"] {
+        let p = steam_pb.join(name);
+        if p.exists() { let _ = std::fs::remove_file(&p); }
+    }
+    let applist = steam_pb.join("AppList");
+    if applist.is_dir() { let _ = std::fs::remove_dir_all(&applist); }
+
+    let json: serde_json::Value = client.get("https://api.github.com/repos/KoriaPolis/LumaCore/releases/latest")
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let assets = json["assets"].as_array().ok_or("Нет assets")?;
+    let tag = json["tag_name"].as_str().unwrap_or("unknown");
+
+    let mut installed_files: Vec<String> = Vec::new();
+    for asset in assets {
+        let name = asset["name"].as_str().unwrap_or("");
+        if !name.to_lowercase().ends_with(".dll") { continue; }
+        let dl_url = asset["browser_download_url"].as_str().ok_or("Нет URL")?;
+        let bytes = gh_download(client, dl_url).await?;
+        let dest = steam_pb.join(name);
+        std::fs::write(&dest, &bytes).map_err(|e| format!("{name}: {e}"))?;
+        installed_files.push(dest.to_string_lossy().into_owned());
+    }
+    if installed_files.is_empty() { return Err("В релизе не найдено DLL-файлов".into()); }
+
+    let manifest_dir = steam_pb.join("config").join("project-desktop");
+    let _ = std::fs::create_dir_all(&manifest_dir);
+    let manifest = serde_json::json!({
+        "mode": "LumaCore",
+        "version": tag,
+        "installed_at": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+        "files": installed_files,
+    });
+    std::fs::write(manifest_dir.join("mode.json"), serde_json::to_string_pretty(&manifest).unwrap_or_default())
+        .map_err(|e| e.to_string())?;
+    Ok(format!("LumaCore {tag} установлен"))
 }
 
 #[derive(Serialize)]
@@ -2921,6 +2963,576 @@ pub async fn lt_store_button_set(app: tauri::AppHandle, enabled: bool) -> Result
 pub fn lt_store_status(app_id: u64, text: String) {
     let text: String = text.chars().take(80).collect();
     STORE_STATUS.lock().unwrap_or_else(|e| e.into_inner()).push((app_id, text));
+}
+
+#[tauri::command]
+pub fn lt_steam_update_blocked() -> bool {
+    let steam = match steam_path_from_registry() { Some(p) => p, None => return false };
+    let cfg_path = PathBuf::from(&steam).join("steam.cfg");
+    match std::fs::read_to_string(&cfg_path) {
+        Ok(text) => text.lines().any(|l| {
+            let l = l.trim().to_lowercase();
+            l.starts_with("bootstrapperinhibitall") && l.contains("enable")
+        }),
+        Err(_) => false,
+    }
+}
+
+#[tauri::command]
+pub fn lt_steam_update_set_blocked(blocked: bool) -> Result<(), String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let cfg_path = PathBuf::from(&steam).join("steam.cfg");
+    if blocked {
+        std::fs::write(&cfg_path, "BootStrapperInhibitAll=enable\n").map_err(|e| e.to_string())
+    } else if cfg_path.exists() {
+        std::fs::remove_file(&cfg_path).map_err(|e| e.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+#[tauri::command]
+pub async fn lt_smokeapi_install(app_id: u64) -> Result<String, String> {
+    let info = lt_game_install_path(app_id);
+    let game_dir = PathBuf::from(info.path.ok_or("Игра не установлена")?);
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
+    let json: serde_json::Value = client.get("https://api.github.com/repos/acidicoala/SmokeAPI/releases/latest")
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let assets = json["assets"].as_array().ok_or("Нет assets")?;
+    let tag = json["tag_name"].as_str().unwrap_or("unknown");
+
+    let mut installed = Vec::new();
+    for (original, arch) in [("steam_api.dll", "32"), ("steam_api64.dll", "64")] {
+        let orig_path = game_dir.join(original);
+        if !orig_path.exists() { continue; }
+        let backup = game_dir.join(format!("{original}.bak"));
+        if !backup.exists() {
+            std::fs::copy(&orig_path, &backup).map_err(|e| format!("Бэкап {original}: {e}"))?;
+        }
+        let zip_name = format!("SmokeAPI_{arch}.zip");
+        let zip_asset = assets.iter()
+            .find(|a| a["name"].as_str().map(|n| n.eq_ignore_ascii_case(&zip_name)).unwrap_or(false))
+            .ok_or_else(|| format!("{zip_name} не найден в релизе"))?;
+        let dl_url = zip_asset["browser_download_url"].as_str().ok_or("Нет URL")?;
+        let bytes = gh_download(&client, dl_url).await?;
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+            if entry.is_dir() { continue; }
+            let fname = Path::new(entry.name()).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            let dest = game_dir.join(&fname);
+            let mut buf = vec![];
+            std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| e.to_string())?;
+            std::fs::write(&dest, &buf).map_err(|e| format!("{fname}: {e}"))?;
+        }
+        installed.push(original.to_string());
+    }
+    if installed.is_empty() { return Err("steam_api.dll не найден в папке игры".into()); }
+    Ok(format!("SmokeAPI {tag} установлен для {}", installed.join(", ")))
+}
+
+#[tauri::command]
+pub fn lt_smokeapi_uninstall(app_id: u64) -> Result<(), String> {
+    let info = lt_game_install_path(app_id);
+    let game_dir = PathBuf::from(info.path.ok_or("Игра не установлена")?);
+    for original in ["steam_api.dll", "steam_api64.dll"] {
+        let backup = game_dir.join(format!("{original}.bak"));
+        if backup.exists() {
+            let _ = std::fs::copy(&backup, game_dir.join(original));
+            let _ = std::fs::remove_file(&backup);
+        }
+    }
+    for name in ["SmokeAPI.config.json", "SmokeAPI32.config.json", "SmokeAPI64.config.json"] {
+        let p = game_dir.join(name);
+        if p.exists() { let _ = std::fs::remove_file(&p); }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lt_smokeapi_status(app_id: u64) -> bool {
+    let info = lt_game_install_path(app_id);
+    let game_dir = match info.path { Some(p) => PathBuf::from(p), None => return false };
+    game_dir.join("steam_api.dll.bak").exists() || game_dir.join("steam_api64.dll.bak").exists()
+}
+
+#[tauri::command]
+pub async fn lt_creamapi_install(app_id: u64) -> Result<String, String> {
+    let info = lt_game_install_path(app_id);
+    let game_dir = PathBuf::from(info.path.ok_or("Игра не установлена")?);
+    let client = lt_client_builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
+    let json: serde_json::Value = client.get("https://api.github.com/repos/acidicoala/CreamInstaller/releases/latest")
+        .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let assets = json["assets"].as_array().ok_or("Нет assets")?;
+    let tag = json["tag_name"].as_str().unwrap_or("unknown");
+    let zip_asset = assets.iter()
+        .find(|a| a["name"].as_str().map(|n| n.ends_with(".zip")).unwrap_or(false))
+        .ok_or("Zip не найден в релизе")?;
+    let dl_url = zip_asset["browser_download_url"].as_str().ok_or("Нет URL")?;
+    let bytes = gh_download(&client, dl_url).await?;
+    let dir = ext_tool_dir(&ExtTool { key: "creaminstaller", repo: "acidicoala/CreamInstaller", exe: "CreamInstaller.exe", files: &[], zip: None });
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+        if entry.is_dir() { continue; }
+        let Some((out_path, _)) = zip_entry_dest(&dir, &entry) else { continue };
+        if let Some(p) = out_path.parent() { let _ = std::fs::create_dir_all(p); }
+        let mut buf = vec![];
+        std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| e.to_string())?;
+        std::fs::write(&out_path, &buf).map_err(|e| e.to_string())?;
+    }
+    let _ = std::fs::write(dir.join("version.txt"), &tag);
+    let exe = ext_tool_exe(&ExtTool { key: "creaminstaller", repo: "", exe: "CreamInstaller.exe", files: &[], zip: None });
+    if let Some(exe) = exe {
+        let _ = std::process::Command::new(&exe)
+            .arg(app_id.to_string())
+            .current_dir(exe.parent().unwrap_or(Path::new(".")))
+            .spawn();
+    }
+    Ok(format!("CreamInstaller {tag} запущен"))
+}
+
+#[tauri::command]
+pub fn lt_save_backup_create(app_id: u64) -> Result<String, String> {
+    let info = lt_game_install_path(app_id);
+    let game_dir = PathBuf::from(info.path.ok_or("Игра не установлена")?);
+    let backup_root = PathBuf::from(std::env::var("APPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned()))
+        .join("project-desktop").join("save_backups").join(app_id.to_string());
+    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let dest = backup_root.join(ts.to_string());
+    std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+
+    let userdata_dir = {
+        let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+        PathBuf::from(&steam).join("userdata")
+    };
+    let mut count = 0u32;
+    if userdata_dir.is_dir() {
+        for user_entry in std::fs::read_dir(&userdata_dir).map_err(|e| e.to_string())?.flatten() {
+            let save_dir = user_entry.path().join(app_id.to_string());
+            if !save_dir.is_dir() { continue; }
+            let rel = user_entry.file_name();
+            let target = dest.join("userdata").join(&rel).join(app_id.to_string());
+            copy_dir_recursive(&save_dir, &target)?;
+            count += 1;
+        }
+    }
+    let compat = game_dir.join("save").join("remote");
+    if compat.is_dir() {
+        copy_dir_recursive(&compat, &dest.join("game_saves"))?;
+        count += 1;
+    }
+    if count == 0 { let _ = std::fs::remove_dir_all(&dest); return Err("Сохранения не найдены".into()); }
+    Ok(dest.to_string_lossy().into_owned())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    for entry in std::fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {
+        let p = entry.path();
+        let name = entry.file_name();
+        if p.is_dir() {
+            copy_dir_recursive(&p, &dst.join(&name))?;
+        } else {
+            std::fs::copy(&p, dst.join(&name)).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lt_save_backup_list(app_id: u64) -> Vec<u64> {
+    let backup_root = PathBuf::from(std::env::var("APPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned()))
+        .join("project-desktop").join("save_backups").join(app_id.to_string());
+    let mut stamps: Vec<u64> = std::fs::read_dir(&backup_root).ok()
+        .map(|rd| rd.flatten().filter_map(|e| e.file_name().to_string_lossy().parse::<u64>().ok()).collect())
+        .unwrap_or_default();
+    stamps.sort_unstable_by(|a, b| b.cmp(a));
+    stamps
+}
+
+#[tauri::command]
+pub fn lt_save_backup_restore(app_id: u64, timestamp: u64) -> Result<(), String> {
+    let backup_root = PathBuf::from(std::env::var("APPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned()))
+        .join("project-desktop").join("save_backups").join(app_id.to_string()).join(timestamp.to_string());
+    if !backup_root.is_dir() { return Err("Бэкап не найден".into()); }
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let userdata_src = backup_root.join("userdata");
+    if userdata_src.is_dir() {
+        for user_entry in std::fs::read_dir(&userdata_src).map_err(|e| e.to_string())?.flatten() {
+            let save_src = user_entry.path().join(app_id.to_string());
+            if !save_src.is_dir() { continue; }
+            let target = PathBuf::from(&steam).join("userdata").join(user_entry.file_name()).join(app_id.to_string());
+            copy_dir_recursive(&save_src, &target)?;
+        }
+    }
+    Ok(())
+}
+
+// ── Library Scanner ──────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct ScannedGame {
+    pub app_id: u64,
+    pub name: String,
+    pub install_dir: String,
+    pub size_on_disk: u64,
+    pub has_lua: bool,
+    pub needs_manifest: bool,
+}
+
+fn parse_acf_field(text: &str, key: &str) -> Option<String> {
+    for line in text.lines() {
+        let t = line.trim().trim_matches('\t');
+        if let Some(rest) = t.strip_prefix(&format!("\"{key}\"")) {
+            let val = rest.trim().trim_matches('"');
+            if !val.is_empty() { return Some(val.to_string()); }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+pub fn lt_scan_library() -> Result<Vec<ScannedGame>, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let mut lib_paths = vec![PathBuf::from(&steam)];
+    let vdf = PathBuf::from(&steam).join("steamapps").join("libraryfolders.vdf");
+    if let Ok(text) = std::fs::read_to_string(&vdf) {
+        for line in text.lines() {
+            let t = line.trim();
+            if let Some(rest) = t.strip_prefix("\"path\"") {
+                let p = rest.trim().trim_matches('"').replace("\\\\", "\\");
+                if !p.is_empty() && !lib_paths.iter().any(|l| l.to_string_lossy().eq_ignore_ascii_case(&p)) {
+                    lib_paths.push(PathBuf::from(p));
+                }
+            }
+        }
+    }
+    let sp_dir = stplugin_dir(&steam);
+    let mut games = vec![];
+    let mut seen = std::collections::HashSet::new();
+    for lib in &lib_paths {
+        let apps_dir = lib.join("steamapps");
+        let Ok(rd) = std::fs::read_dir(&apps_dir) else { continue };
+        for entry in rd.flatten() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if !name.starts_with("appmanifest_") || !name.ends_with(".acf") { continue; }
+            let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };
+            let Some(app_id) = parse_acf_field(&text, "appid").and_then(|s| s.parse::<u64>().ok()) else { continue };
+            if !seen.insert(app_id) { continue; }
+            let game_name = parse_acf_field(&text, "name").unwrap_or_default();
+            let install_dir = parse_acf_field(&text, "installdir").unwrap_or_default();
+            let size_on_disk = parse_acf_field(&text, "SizeOnDisk").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+            let full_path = apps_dir.join("common").join(&install_dir);
+            if game_name.is_empty() || !full_path.exists() { continue; }
+            let has_lua = sp_dir.join(format!("{app_id}.lua")).exists();
+            let needs_manifest = !has_lua;
+            games.push(ScannedGame {
+                app_id,
+                name: game_name,
+                install_dir: full_path.to_string_lossy().into_owned(),
+                size_on_disk,
+                has_lua,
+                needs_manifest,
+            });
+        }
+    }
+    games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(games)
+}
+
+// ── Online-Fix opener ────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn lt_open_onlinefix(game_name: String) -> Result<(), String> {
+    let query = format!("site:online-fix.me/games {game_name}");
+    let url = format!("https://www.google.com/search?q={}", percent_encode_simple(&query));
+    #[cfg(windows)]
+    {
+        std::process::Command::new("cmd").args(["/C", "start", "", &url])
+            .spawn().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn percent_encode_simple(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' || b == b'~' {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+// ── Settings export / import ─────────────────────────────────────────
+
+#[tauri::command]
+pub fn lt_config_export() -> Result<String, String> {
+    let cfg = lt_config_get();
+    serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn lt_config_import(json: String) -> Result<(), String> {
+    let val: serde_json::Value = serde_json::from_str(&json).map_err(|_| "Некорректный JSON".to_string())?;
+    if !val.is_object() { return Err("Ожидается JSON-объект".into()); }
+    let p = config_path();
+    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
+    std::fs::write(&p, serde_json::to_string_pretty(&val).unwrap_or_default()).map_err(|e| e.to_string())
+}
+
+// ── Recent files ─────────────────────────────────────────────────────
+
+fn recent_files_path() -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
+    PathBuf::from(base).join("project-desktop").join("lt_recent.json")
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RecentFile {
+    pub app_id: u64,
+    pub name: String,
+    pub timestamp: u64,
+}
+
+#[tauri::command]
+pub fn lt_recent_files() -> Vec<RecentFile> {
+    std::fs::read_to_string(recent_files_path()).ok()
+        .and_then(|s| serde_json::from_str::<Vec<RecentFile>>(&s).ok())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn lt_recent_files_add(app_id: u64, name: String) -> Result<(), String> {
+    let mut list = lt_recent_files();
+    list.retain(|r| r.app_id != app_id);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    list.insert(0, RecentFile { app_id, name, timestamp: now });
+    list.truncate(50);
+    let p = recent_files_path();
+    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
+    std::fs::write(&p, serde_json::to_string(&list).unwrap_or_default()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn lt_recent_files_clear() -> Result<(), String> {
+    let p = recent_files_path();
+    if p.exists() { std::fs::remove_file(&p).map_err(|e| e.to_string())?; }
+    Ok(())
+}
+
+// ── Manifest watcher (stale manifest detection) ──────────────────────
+
+#[derive(Serialize)]
+pub struct StaleManifest {
+    pub app_id: u64,
+    pub name: String,
+    pub local_buildid: String,
+    pub remote_buildid: Option<String>,
+}
+
+#[tauri::command]
+pub fn lt_check_stale_manifests() -> Result<Vec<StaleManifest>, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let installed = lt_list_installed()?;
+    let mut stale = vec![];
+    let apps_dir = PathBuf::from(&steam).join("steamapps");
+    for item in &installed {
+        let acf = apps_dir.join(format!("appmanifest_{}.acf", item.app_id));
+        let Ok(text) = std::fs::read_to_string(&acf) else { continue };
+        let local_bid = parse_acf_field(&text, "buildid").unwrap_or_default();
+        let name = parse_acf_field(&text, "name").unwrap_or_else(|| item.app_id.to_string());
+        let lua_path = stplugin_dir(&steam).join(format!("{}.lua", item.app_id));
+        if !lua_path.exists() { continue; }
+        if has_active_pin(&std::fs::read_to_string(&lua_path).unwrap_or_default()) {
+            stale.push(StaleManifest {
+                app_id: item.app_id,
+                name,
+                local_buildid: local_bid,
+                remote_buildid: None,
+            });
+        }
+    }
+    Ok(stale)
+}
+
+// ── Context menu integration (Windows) ───────────────────────────────
+
+#[tauri::command]
+pub fn lt_context_menu_install() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Registry::*;
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let exe_str = exe.to_string_lossy();
+        let cmd_val = format!("\"{exe_str}\" --lua \"%1\"");
+        let label = "Открыть в LuaProject";
+        let icon_val = format!("{exe_str},0");
+        for (sub, val_name, val) in [
+            (r"Software\Classes\.lua\shell\LuaProject\command", "", cmd_val.as_str()),
+            (r"Software\Classes\.lua\shell\LuaProject", "", label),
+            (r"Software\Classes\.lua\shell\LuaProject", "Icon", icon_val.as_str()),
+        ] {
+            let sub_w: Vec<u16> = sub.encode_utf16().chain(std::iter::once(0)).collect();
+            let name_w: Vec<u16> = val_name.encode_utf16().chain(std::iter::once(0)).collect();
+            let val_w: Vec<u16> = val.encode_utf16().chain(std::iter::once(0)).collect();
+            let mut key = HKEY::default();
+            unsafe {
+                RegCreateKeyExW(HKEY_CURRENT_USER, windows::core::PCWSTR(sub_w.as_ptr()),
+                    0, None, REG_OPTION_NON_VOLATILE, KEY_WRITE, None, &mut key, None)
+                    .map_err(|e| e.to_string())?;
+                RegSetValueExW(key, windows::core::PCWSTR(name_w.as_ptr()), 0, REG_SZ,
+                    Some(std::slice::from_raw_parts(val_w.as_ptr() as *const u8, val_w.len() * 2)))
+                    .map_err(|e| e.to_string())?;
+                let _ = RegCloseKey(key);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lt_context_menu_uninstall() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Registry::*;
+        let sub = r"Software\Classes\.lua\shell\LuaProject";
+        let sub_w: Vec<u16> = sub.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe { let _ = RegDeleteTreeW(HKEY_CURRENT_USER, windows::core::PCWSTR(sub_w.as_ptr())); }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lt_context_menu_status() -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Registry::*;
+        let sub = r"Software\Classes\.lua\shell\LuaProject\command";
+        let sub_w: Vec<u16> = sub.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut key = HKEY::default();
+        let ok = unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, windows::core::PCWSTR(sub_w.as_ptr()), Some(0), KEY_READ, &mut key) };
+        if ok.is_ok() { unsafe { let _ = RegCloseKey(key); } true } else { false }
+    }
+    #[cfg(not(windows))]
+    { false }
+}
+
+// ── Injection profiles (global multi-profile) ────────────────────────
+
+fn profiles_dir(steam: &str) -> PathBuf {
+    PathBuf::from(steam).join("config").join("stplug-in").join("profiles")
+}
+
+#[derive(Serialize)]
+pub struct InjectionProfile {
+    pub name: String,
+    pub file_count: u32,
+    pub timestamp: u64,
+}
+
+#[tauri::command]
+pub fn lt_list_profiles() -> Result<Vec<InjectionProfile>, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let dir = profiles_dir(&steam);
+    if !dir.exists() { return Ok(vec![]); }
+    let mut out = vec![];
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+        let path = entry.path();
+        if !path.is_dir() { continue; }
+        let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let file_count = std::fs::read_dir(&path).ok().map(|rd| rd.flatten().filter(|e| {
+            e.path().extension().map(|x| x.eq_ignore_ascii_case("lua")).unwrap_or(false)
+        }).count() as u32).unwrap_or(0);
+        let timestamp = entry.metadata().ok().and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
+        out.push(InjectionProfile { name, file_count, timestamp });
+    }
+    out.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn lt_save_profile(name: String) -> Result<(), String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let safe = variant_safe_name(name.trim());
+    if safe.is_empty() { return Err("Пустое имя профиля".into()); }
+    let dest = profiles_dir(&steam).join(&safe);
+    std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+    let src = stplugin_dir(&steam);
+    let Ok(rd) = std::fs::read_dir(&src) else { return Ok(()); };
+    for entry in rd.flatten() {
+        let p = entry.path();
+        if p.extension().map(|x| x.eq_ignore_ascii_case("lua")).unwrap_or(false) {
+            let fname = p.file_name().unwrap_or_default();
+            std::fs::copy(&p, dest.join(fname)).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lt_load_profile(name: String) -> Result<u32, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let safe = variant_safe_name(name.trim());
+    let src = profiles_dir(&steam).join(&safe);
+    if !src.exists() { return Err("Профиль не найден".into()); }
+    let dest = stplugin_dir(&steam);
+    let Ok(rd) = std::fs::read_dir(&dest) else { return Ok(0); };
+    for entry in rd.flatten() {
+        let p = entry.path();
+        if p.extension().map(|x| x.eq_ignore_ascii_case("lua")).unwrap_or(false) {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+    let mut count = 0u32;
+    for entry in std::fs::read_dir(&src).map_err(|e| e.to_string())?.flatten() {
+        let p = entry.path();
+        if p.extension().map(|x| x.eq_ignore_ascii_case("lua")).unwrap_or(false) {
+            let fname = p.file_name().unwrap_or_default();
+            std::fs::copy(&p, dest.join(fname)).map_err(|e| e.to_string())?;
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+#[tauri::command]
+pub fn lt_delete_profile(name: String) -> Result<(), String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let safe = variant_safe_name(name.trim());
+    let dir = profiles_dir(&steam).join(&safe);
+    if dir.exists() { std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?; }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn lt_merge_profile(name: String) -> Result<u32, String> {
+    let steam = steam_path_from_registry().ok_or("Steam не найден")?;
+    let safe = variant_safe_name(name.trim());
+    let src = profiles_dir(&steam).join(&safe);
+    if !src.exists() { return Err("Профиль не найден".into()); }
+    let dest = stplugin_dir(&steam);
+    let mut count = 0u32;
+    for entry in std::fs::read_dir(&src).map_err(|e| e.to_string())?.flatten() {
+        let p = entry.path();
+        if p.extension().map(|x| x.eq_ignore_ascii_case("lua")).unwrap_or(false) {
+            let fname = p.file_name().unwrap_or_default();
+            let dst = dest.join(fname);
+            if !dst.exists() {
+                std::fs::copy(&p, &dst).map_err(|e| e.to_string())?;
+                count += 1;
+            }
+        }
+    }
+    Ok(count)
 }
 
 #[cfg(test)]
