@@ -225,14 +225,20 @@ function uploadProgress(name, size) {
   const label = document.createElement("span");
   const bar = document.createElement("i");
   el.append(label, bar);
-  document.body.append(el);
+  let host = document.getElementById("dl-root");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "dl-root";
+    document.body.append(host);
+  }
+  host.append(el);
   const set = frac => {
     const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
     label.textContent = pct < 100 ? `⬆ ${pct}% · ${name}` : `⬆ Сохраняю… · ${name}`;
     bar.style.width = `${pct}%`;
   };
   set(0);
-  return { set, done() { el.remove(); } };
+  return { set, done() { const h = el.parentElement; el.remove(); if (h && !h.children.length) h.remove(); } };
 }
 
 function xhrRequest(url, body, { contentType, onProgress } = {}) {

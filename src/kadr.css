@@ -3415,7 +3415,7 @@ body:has(.tab-panel[data-panel="nyaa"].active) .season-fx { display: none; }
 .ny-desc-h { display: block; margin: 6px 0 2px; font-size: 14px; color: var(--ink); }
 .ny-desc a { color: var(--ny-neon, var(--gold)); cursor: pointer; }
 #dl-root { width: 360px; max-width: calc(100vw - 32px); }
-body:has(#tabstrip.fan:not([hidden])) :is(#dl-root, .upload-progress) { bottom: 84px; }
+body:has(#tabstrip.fan:not([hidden])) #dl-root { bottom: 84px; }
 .dl-card { min-width: 0; overflow: hidden; }
 .dl-head { min-width: 0; }
 .dl-head b { min-width: 0; flex: 1; }
