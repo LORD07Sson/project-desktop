@@ -1,5 +1,5 @@
 
-import { apiGet, apiPost, apiUpload, openSheet, dismissSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
+import { apiGet, apiPost, apiUpload, apiBlob, openSheet, dismissSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { track } from "./telemetry.js";
 import { AUDIO_RE } from "./media-formats.js";
 import { attachHtml, wireAttachments, downloadAttachment, pickFile, pickFiles, pastedFile, renderPending, tooBig, CLIP_ICON } from "./attachments.js";
@@ -12,7 +12,8 @@ import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./
 import { relTime, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange, formatWhen } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, posterSrc } from "./reports.js";
-import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail } from "./titles-admin.js";
+import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail, markAssWithDubbers } from "./titles-admin.js";
+import { decodeSubs } from "./subs-core.js";
 import { enhanceSelects } from "./fancy-select.js";
 import { setDropTarget } from "./file-drop.js";
 import { downloadWithCard } from "./download-card.js";
@@ -26,6 +27,7 @@ const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silenc
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
 const svg = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 const FILE_ACT_ICONS = {
+  dubbers: svg('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3.2 3-5 5.5-5s4.7 1.8 5.5 5M16 6.5a3 3 0 0 1 0 5M18.5 4a6.5 6.5 0 0 1 0 10"/>'),
   play: svg('<path d="M8 5.5v13l10.5-6.5z"/>'),
   qc: svg('<path d="M3 12h3l2.5-6 4 12 3-9 2 3H21"/>'),
   send: svg('<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>'),
@@ -967,6 +969,27 @@ export async function openReportDetail(publicId) {
     sheet.querySelectorAll("[data-send-file]").forEach(btn => {
       btn.addEventListener("click", () => openSendFileSheet(publicId, btn.dataset.sendFile, btn.dataset.fileName));
     });
+    sheet.querySelectorAll("[data-mark-dubbers]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!detail.title_id) { toast("Серия не привязана к тайтлу — неоткуда взять персонажей и дабберов.", "error"); return; }
+        btn.disabled = true;
+        try {
+          const [title, users, blob] = await Promise.all([
+            apiGet(`/titles/${detail.title_id}`), loadAssignable(),
+            apiBlob(`/report/${publicId}/files/${btn.dataset.markDubbers}/download`),
+          ]);
+          if (!(title.characters || []).length) { toast("У тайтла нет персонажей — подтяните их в карточке тайтла (Shikimori/AniList).", "error"); return; }
+          const text = decodeSubs(await blob.arrayBuffer());
+          const attach = can("reports.files") ? async (name, content) => {
+            await apiUpload(`/report/${publicId}/files/upload`, new File([content], name, { type: "text/plain" }));
+            document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
+          } : null;
+          await markAssWithDubbers(title.characters, users, { name: btn.dataset.fileName || "subs.ass", text }, attach);
+        } catch (err) {
+          toast(`Не удалось открыть субтитры: ${err.message || err}`, "error");
+        } finally { btn.disabled = false; }
+      });
+    });
     sheet.querySelectorAll("[data-download-file]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const fileId = btn.dataset.downloadFile;
@@ -1385,6 +1408,7 @@ function fileHtml(f, canEdit = true, sub = null, shownName = "") {
     <div class="fi-acts">
     ${isAudio ? `<button class="icon-btn fi-act" data-play-file="${f.id}" title="Слушать" aria-label="Слушать">${FILE_ACT_ICONS.play}</button>` : ""}
     ${isAudio && canEdit ? `<button class="icon-btn fi-act" data-qc-file="${f.id}" title="AI-проверка звука" aria-label="AI-проверка">${FILE_ACT_ICONS.qc}</button>` : ""}
+    ${/\.(ass|ssa)$/i.test(f.file_name || "") ? `<button class="icon-btn fi-act" data-mark-dubbers="${f.id}" data-file-name="${name}" title="Разметить дабберами: допишет к каждой реплике, кто озвучивает персонажа" aria-label="Разметить дабберами">${FILE_ACT_ICONS.dubbers}</button>` : ""}
     <button class="icon-btn fi-act" data-send-file="${f.id}" data-file-name="${name}" title="Прислать кому-то" aria-label="Прислать кому-то">${FILE_ACT_ICONS.send}</button>
     <button class="icon-btn fi-act" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать" aria-label="Скачать">${FILE_ACT_ICONS.download}</button>
     ${canDelete ? `<button class="icon-btn fi-act fi-del danger-zone" data-delete-file="${f.id}" data-file-name="${name}" title="Удалить файл" aria-label="Удалить файл">${FILE_ACT_ICONS.trash}</button>` : ""}

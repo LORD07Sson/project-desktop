@@ -552,8 +552,9 @@ async function importActorsFromAss(titleId, characters, users, onDone) {
   });
 }
 
-async function markAssWithDubbers(characters, users) {
-  const file = await readAssFile();
+/** file: {name, text} or null to pick one; attach(name, text): optional "attach to report" action. */
+export async function markAssWithDubbers(characters, users, file = null, attach = null) {
+  file = file || await readAssFile();
   if (!file) return;
   const byTid = new Map(users.map(u => [String(u.telegram_id), u]));
   const named = characters.map(c => {
@@ -579,7 +580,8 @@ async function markAssWithDubbers(characters, users) {
       </div>
       <div class="sheet-actions">
         <button class="btn" data-close>Отмена</button>
-        <button class="btn primary" id="ass-mark-save" ${r.changed ? "" : "disabled"}>Сохранить копию…</button>
+        <button class="btn${attach ? "" : " primary"}" id="ass-mark-save" ${r.changed ? "" : "disabled"}>Сохранить копию…</button>
+        ${attach ? `<button class="btn primary" id="ass-mark-attach" ${r.changed ? "" : "disabled"}>Прикрепить к отчёту</button>` : ""}
       </div>`;
     sheet.querySelectorAll('[name="ass-mode"]').forEach(i => i.addEventListener("change", () => { mode = i.value; paint(); }));
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
@@ -592,6 +594,16 @@ async function markAssWithDubbers(characters, users) {
         toast(`Сохранено: размечено ${r.changed} реплик.`, "success");
         overlay.remove();
       } catch (err) { toast(`Не удалось сохранить: ${err.message || err}`, "error"); }
+    });
+    sheet.querySelector("#ass-mark-attach")?.addEventListener("click", async e => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const stem = file.name.replace(/\.(ass|ssa)$/i, "");
+      try {
+        await attach(`${stem}.dubbers.ass`, r.text);
+        toast(`Прикреплено к отчёту: размечено ${r.changed} реплик.`, "success");
+        overlay.remove();
+      } catch (err) { toast(`Не удалось прикрепить: ${err.message || err}`, "error"); btn.disabled = false; }
     });
   };
   paint();
