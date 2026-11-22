@@ -1820,6 +1820,91 @@ function humanDlError(e) {
   return t;
 }
 
+async function renderLibrary(el) {
+  el.innerHTML = '<h2 class="lt-page-title">Библиотека</h2><div class="lt-loading">Сканирую папки Steam…</div>';
+  let games;
+  try { games = await invoke("lt_scan_library"); } catch (e) {
+    el.innerHTML = `<h2 class="lt-page-title">Библиотека</h2><div class="lt-empty lt-error">${esc(errMsg(e))}</div>`;
+    return;
+  }
+  if (currentPage !== "library") return;
+  let filter = "";
+  let onlyLua = false;
+  const draw = () => {
+    const q = filter.toLowerCase();
+    const list = games.filter(g => (!onlyLua || g.has_lua) && (!q || String(g.app_id).includes(q) || String(g.name).toLowerCase().includes(q)));
+    const total = games.reduce((s, g) => s + (g.size_on_disk || 0), 0);
+    el.innerHTML = `<div class="lt-builds-header">
+        <h2 class="lt-page-title">Библиотека</h2>
+        <div class="lt-builds-bar">
+          <input type="text" class="lt-input" id="lt-lib-search" placeholder="Поиск по названию или AppID…" value="${esc(filter)}">
+          <label class="lt-muted"><input type="checkbox" id="lt-lib-lua" ${onlyLua ? "checked" : ""}> только с lua</label>
+          <span class="lt-muted">${list.length} из ${games.length} · ${fmtSize(total)}</span>
+        </div>
+      </div>
+      ${list.length ? `<div class="lt-builds-grid">${list.map(g => `<div class="lt-build-tile" data-appid="${g.app_id}" title="${esc(g.install_dir)}">
+          <img data-lt-img="${g.app_id}" src="${esc(steamHeader(g.app_id))}" alt="" loading="lazy">
+          <div class="lt-build-info">
+            <span class="lt-build-name">${esc(g.name || gameName(g.app_id))}</span>
+            <span class="lt-build-meta">${g.app_id} · ${fmtSize(g.size_on_disk || 0)}${g.has_lua ? ' · <span class="lt-ok">lua</span>' : ""}${g.needs_manifest ? ' · <span class="lt-error">нужен манифест</span>' : ""}</span>
+          </div>
+        </div>`).join("")}</div>` : '<div class="lt-empty">Ничего не найдено</div>'}`;
+    const search = el.querySelector("#lt-lib-search");
+    search.addEventListener("input", e => { filter = e.target.value.trim(); draw(); el.querySelector("#lt-lib-search")?.focus(); });
+    search.setSelectionRange(filter.length, filter.length);
+    el.querySelector("#lt-lib-lua").addEventListener("change", e => { onlyLua = e.target.checked; draw(); });
+  };
+  draw();
+}
+
+async function renderProfiles(el) {
+  let profiles;
+  try { profiles = await invoke("lt_list_profiles"); } catch (e) {
+    el.innerHTML = `<h2 class="lt-page-title">Профили</h2><div class="lt-empty lt-error">${esc(errMsg(e))}</div>`;
+    return;
+  }
+  if (currentPage !== "profiles") return;
+  el.innerHTML = `<h2 class="lt-page-title">Профили</h2>
+    <p class="lt-muted">Профиль — снимок текущего набора lua-файлов. Можно держать несколько наборов и переключаться между ними. После смены набора перезапустите Steam.</p>
+    <div class="lt-builds-bar">
+      <input type="text" class="lt-input" id="lt-prof-name" placeholder="Имя нового профиля" maxlength="60">
+      <button class="lt-btn lt-btn-primary" id="lt-prof-save">Сохранить текущий набор (${installedList.length} lua)</button>
+    </div>
+    ${profiles.length ? `<div class="lt-dl-block">${profiles.map(p => `<div class="lt-dl-card">
+        <div class="lt-dl-main"><div class="lt-dl-title">${esc(p.name)}</div><div class="lt-dl-sub lt-muted">${p.file_count} lua · ${fmtDate(p.timestamp)}</div></div>
+        <button class="lt-btn lt-btn-sm" data-prof="load" data-name="${esc(p.name)}" title="Заменить текущие lua этим набором">Включить</button>
+        <button class="lt-btn lt-btn-sm lt-btn-ghost" data-prof="merge" data-name="${esc(p.name)}" title="Добавить недостающие lua, текущие не трогать">Добавить к текущим</button>
+        <button class="lt-btn lt-btn-sm lt-btn-ghost" data-prof="delete" data-name="${esc(p.name)}" title="Удалить профиль">${UI_ICONS.trash}</button>
+      </div>`).join("")}</div>` : '<div class="lt-empty">Профилей пока нет</div>'}`;
+  const reloadInstalled = async () => { try { installedList = await invoke("lt_list_installed"); } catch { } };
+  el.querySelector("#lt-prof-save").addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    const name = el.querySelector("#lt-prof-name").value.trim();
+    if (!name) { toast("Введите имя профиля", "error"); return; }
+    if (profiles.some(p => p.name === name) && !await confirmAction(`Профиль «${name}» уже есть. Перезаписать?`)) return;
+    try { await invoke("lt_save_profile", { name }); toast("Профиль сохранён", "ok"); renderProfiles(el); } catch (err) { toast(errMsg(err), "error"); }
+  }));
+  el.querySelectorAll("[data-prof]").forEach(btn => btn.addEventListener("click", () => withBusy(btn, async () => {
+    const name = btn.dataset.name;
+    try {
+      if (btn.dataset.prof === "load") {
+        if (!await confirmAction(`Включить «${name}»? Текущие lua-файлы будут заменены набором профиля.`)) return;
+        const n = await invoke("lt_load_profile", { name });
+        await reloadInstalled();
+        toast(`Включено: ${n} lua. Перезапустите Steam.`, "ok");
+      } else if (btn.dataset.prof === "merge") {
+        const n = await invoke("lt_merge_profile", { name });
+        await reloadInstalled();
+        toast(n ? `Добавлено ${n} lua. Перезапустите Steam.` : "Новых lua в профиле нет", "ok");
+      } else {
+        if (!await confirmAction(`Удалить профиль «${name}»? Сами игры не затрагиваются.`)) return;
+        await invoke("lt_delete_profile", { name });
+        toast("Профиль удалён", "ok");
+      }
+      renderProfiles(el);
+    } catch (err) { toast(errMsg(err), "error"); }
+  })));
+}
+
 async function renderDownloads(el) {
   const ST = { pending: "В очереди", downloading: "Скачиваю", installing: "Устанавливаю" };
   const hist = [];
