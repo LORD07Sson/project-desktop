@@ -48,9 +48,9 @@ const TAB_BODIES = ["#queue-body", "#overview-body", "#board-body", "#titles-bod
 
 const LAST_TAB_KEY = "project-last-tab";
 
-export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile", "luatools"]);
+export const MEMBER_TABS = new Set(["queue", "titles", "messages", "team", "profile"]);
 
-export const TAB_PERMS = { a365: ["a365.view", "a365.upload"], feed: "reports.feed", board: "reports.board", overview: "reports.overview", list: "reports.list", calendar: "reports.calendar", analytics: "reports.analytics", parser: "parser.use" };
+export const TAB_PERMS = { a365: ["a365.view", "a365.upload"], feed: "reports.feed", board: "reports.board", overview: "reports.overview", list: "reports.list", calendar: "reports.calendar", analytics: "reports.analytics", parser: "parser.use", luatools: "luaproject.use" };
 
 export function tabAllowed(name) {
   if (MEMBER_TABS.has(name)) return true;

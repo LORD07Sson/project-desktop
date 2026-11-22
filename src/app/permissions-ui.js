@@ -36,7 +36,7 @@ const PREVIEW = [
     ["Сборка финала", "reports.assemble"],
   ]],
   ["Безопасность", [["Аварийный режим", "lockdown"]]],
-  ["Инструменты", [["Загрузчик видео", "parser.use"]]],
+  ["Инструменты", [["Загрузчик видео", "parser.use"], ["LuaProject", "luaproject.use"]]],
 ];
 
 export function previewGroups(permissions) {

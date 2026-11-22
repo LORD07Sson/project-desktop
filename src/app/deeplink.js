@@ -14,7 +14,8 @@ export function openProjectLink(url) {
 }
 
 async function openLuaToolsLink(lt) {
-  const { switchTab } = await import("./tabs.js");
+  const { switchTab, tabAllowed } = await import("./tabs.js");
+  if (!tabAllowed("luatools")) { toast("LuaProject недоступен: нет права в вашей роли.", "error"); return; }
   switchTab("luatools");
   await new Promise(r => setTimeout(r, 100));
   const { openDetailFromDeepLink } = await import("./luatools.js");
