@@ -1,5 +1,5 @@
 
-import { invoke, listen, openExternal, pickInputFiles, pickInputFile, pickOutputFile } from "./tauri.js";
+import { invoke, listen, openExternal, pickInputFiles, pickInputFile, pickOutputFile, revealInFolder } from "./tauri.js";
 import { $ } from "./utils.js";
 import { toast, clientHeaders, apiGet } from "./api.js";
 import {
@@ -501,23 +501,31 @@ async function renderHome(el) {
   const ps = pluginStatus;
   const ver = ps?.version ? ` · v${esc(String(ps.version).replace(/^v/i, ""))}` : "";
   el.innerHTML = `
-    <h2 class="lt-page-title">Добро пожаловать в LuaProject <span class="lt-beta">Beta</span></h2>
+    <div class="lt-home-head">
+      <h2 class="lt-page-title">Добро пожаловать в LuaProject <span class="lt-beta">Beta</span></h2>
+      <button class="lt-btn lt-btn-sm lt-btn-ghost lt-home-refresh" id="lt-home-refresh" title="Перечитать Steam, плагин и список игр">${UI_ICONS.refresh} Обновить</button>
+    </div>
     <div class="lt-hs">
-      <div class="lt-hs-card">
+      <button class="lt-hs-card lt-hs-link" data-page="manage" title="Открыть «Управление»">
         <span class="lt-hs-num">${installedList.length}</span>
         <span class="lt-hs-label">Lua на борту</span>
-      </div>
-      <div class="lt-hs-card">
+        <span class="lt-hs-go">Управление ${UI_ICONS.chevR}</span>
+      </button>
+      <div class="lt-hs-card lt-hs-link" data-page="${ps?.installed ? "plugin" : "mode"}" role="button" tabindex="0" title="${ps?.installed ? "Открыть «Плагин»" : "Открыть «Режим»"}">
         <span class="lt-hs-label">Статус плагина</span>
         <span class="lt-hs-status ${ps?.installed ? "is-ok" : ""}">${ps?.installed ? `Установлено${ver}` : "Не установлено"}</span>
-        ${ps?.installed ? "" : '<button class="lt-btn lt-hs-btn" data-page="mode">Установить</button>'}
+        ${ps?.installed ? `<span class="lt-hs-go">Плагин ${UI_ICONS.chevR}</span>` : '<button class="lt-btn lt-hs-btn" data-page="mode">Установить</button>'}
       </div>
     </div>
     <div class="lt-hi">
       <div class="lt-hi-row">${HOME_ICONS.steam}${steamInfo?.path
-        ? `<span>Steam обнаружен · ${esc(steamInfo.path)}</span>`
+        ? `<span>Steam обнаружен · ${esc(steamInfo.path)}</span>
+           <span class="lt-hi-acts">
+             <button class="lt-btn lt-btn-sm lt-btn-ghost" data-home="folder" title="Открыть папку Steam">${HOME_ICONS.folder} Папка</button>
+             <button class="lt-btn lt-btn-sm lt-btn-ghost" data-home="restart" title="Steam перечитает lua при запуске">${UI_ICONS.refresh} Перезапустить</button>
+           </span>`
         : '<span class="lt-error">Steam не найден</span>'}</div>
-      ${ps?.mode ? `<div class="lt-hi-row">${HOME_ICONS.mode}<span>Режим · ${esc(ps.mode)}</span></div>` : ""}
+      ${ps?.mode ? `<button class="lt-hi-row lt-hi-link" data-page="mode">${HOME_ICONS.mode}<span>Режим · ${esc(ps.mode)}</span><span class="lt-hi-chev">${UI_ICONS.chevR}</span></button>` : ""}
       ${steamInfo?.running && !ps?.installed ? `<div class="lt-hi-row lt-hi-warn">${HOME_ICONS.warn}<span>Steam запущен — установка плагина его перезапустит</span></div>` : ""}
       <button class="lt-hi-row lt-hi-warn lt-hi-link" id="lt-home-outdated" data-page="manage" hidden></button>
       ${ltIsLoggedIn() ? "" : `<div class="lt-hi-row">${HOME_ICONS.user}<span class="lt-muted">Вход в lua.tools не выполнен — без него недоступен основной источник</span><button class="lt-btn lt-btn-sm lt-hi-action" id="lt-login-btn">Войти</button></div>`}
@@ -530,7 +538,7 @@ async function renderHome(el) {
         <button class="lt-btn lt-btn-sm lt-hd-browse" id="lt-browse-files">${HOME_ICONS.folder} Обзор файлов…</button>
       </div>
     </div>
-    <section class="lt-section"><h3>Недавно добавленные</h3><div class="lt-grid" id="lt-recent-grid"></div></section>
+    <section class="lt-section"><div class="lt-section-head"><h3>Недавно добавленные</h3>${installedList.length > 8 ? `<button class="lt-link-btn" data-page="manage">Все ${installedList.length} ${UI_ICONS.chevR}</button>` : ""}</div><div class="lt-grid" id="lt-recent-grid"></div></section>
     <section class="lt-section"><h3>Популярное</h3><div class="lt-grid lt-grid-featured" id="lt-featured-grid"><div class="lt-loading">Загружаю…</div></div></section>`;
   el.querySelector("#lt-browse-files")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
     try {
@@ -538,6 +546,16 @@ async function renderHome(el) {
       if (paths?.length) await installPaths(paths, $("#luatools-body"));
     } catch (err) { toast(errMsg(err), "error"); }
   }));
+  el.querySelector("#lt-home-refresh")?.addEventListener("click", e => withBusy(e.currentTarget, async () => {
+    try { steamInfo = await invoke("lt_steam_info"); } catch { steamInfo = null; }
+    try { pluginStatus = await invoke("lt_plugin_status"); } catch { pluginStatus = null; }
+    try { installedList = await invoke("lt_list_installed"); } catch { installedList = []; }
+    if (currentPage === "home") await renderHome(el);
+    toast("Обновлено", "ok");
+  }));
+  el.querySelector('[data-home="folder"]')?.addEventListener("click", () => revealInFolder(steamInfo.path).catch(err => toast(errMsg(err), "error")));
+  el.querySelector('[data-home="restart"]')?.addEventListener("click", () => doRestartSteam());
+  el.querySelector('.lt-hs-link[role="button"]')?.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } });
   updateAuthUI();
   renderRecentCards();
   loadFeaturedStrip();
@@ -571,7 +589,7 @@ async function loadFeaturedStrip() {
     if (!topSellers.length) { grid.innerHTML = '<div class="lt-empty">—</div>'; return; }
     grid.innerHTML = topSellers.slice(0, 8).map(i => `
       <button class="lt-card lt-card-featured" data-appid="${i.appId}">
-        <img src="${esc(i.image)}" alt="" loading="lazy">
+        <span class="lt-cf-img"><img src="${esc(i.image)}" alt="" loading="lazy"><span class="lt-cf-cta">${UI_ICONS.plus} Подробнее и добавить</span></span>
         <div class="lt-card-info"><span class="lt-card-name">${esc(i.name)}</span>${i.discount ? `<span class="lt-discount">-${i.discount}%</span>` : ""}</div>
       </button>`).join("");
   } catch { grid.innerHTML = ''; }
