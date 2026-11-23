@@ -525,3 +525,35 @@ export function btnCrackHtml(seed) {
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path class="chip" d="${chip}"/><path class="dk" d="${d}"/><path class="lt" d="${d}"/>`
     + `</svg>`;
 }
+
+// Трещины по всей карточке: просрочка 3+ дня, карточка выглядит «брошенной». Координаты 0..100 по обеим осям.
+export function shatterHtml(seed) {
+  const r = rng(`${seed}:shatter`);
+  const cx = 18 + r() * 64, cy = 25 + r() * 50;
+  const paths = [];
+  const n = 5 + Math.floor(r() * 3);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + r() * 0.6;
+    let x = cx, y = cy, ang = a;
+    const pts = [[x, y]];
+    for (let k = 0; k < 9 && x > -2 && x < 102 && y > -2 && y < 102; k++) {
+      ang += (r() - 0.5) * 0.7;
+      const step = 6 + r() * 9;
+      x += Math.cos(ang) * step; y += Math.sin(ang) * step * 0.55;
+      pts.push([x, y]);
+      if (r() < 0.25) {
+        const b = ang + (r() < 0.5 ? 1 : -1) * (0.5 + r() * 0.6);
+        paths.push(d([[x, y], [x + Math.cos(b) * (5 + r() * 8), y + Math.sin(b) * (4 + r() * 5)]]));
+      }
+    }
+    paths.unshift(d(pts));
+  }
+  const ring = [];
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2, rr = 4 + r() * 3;
+    ring.push([cx + Math.cos(a) * rr * 1.6, cy + Math.sin(a) * rr]);
+  }
+  ring.push(ring[0]);
+  paths.push(d(ring));
+  return `<span class="kc-shatter" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(p => `<path d="${p}"/>`).join("")}</svg></span>`;
+}

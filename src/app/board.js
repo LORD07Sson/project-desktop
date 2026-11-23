@@ -9,7 +9,7 @@ import { openReportDetail } from "./report-detail.js";
 import { state, can } from "./state.js";
 import { ATTACH_EXTENSIONS } from "./file-drop.js";
 import { loadAvatars } from "./profile.js";
-import { doomState, doomPosterHtml, doomCardStyle, deadFxHtml } from "./Crack.jsx";
+import { doomState, doomPosterHtml, doomCardStyle, deadFxHtml, shatterHtml } from "./Crack.jsx";
 import { enhanceSelects } from "./fancy-select.js";
 
 function collapsedKey() { return `project_board_collapsed_${state.telegramId || "anon"}`; }
@@ -185,16 +185,18 @@ export function boardCardHtml(c, status) {
       </span>`
     : "";
   const overdue = c.overdue && !closed;
+  const abandoned = overdue && Number.isFinite(c.daysLeft) && c.daysLeft <= -3;
   const hotDue = !closed && (overdue || c.daysLeft === 0 || c.daysLeft === 1);
   const doom = poster && !closed && c.deadline ? doomState(c.deadline) : null;
   const posterHtml = doom
     ? `<span class="kc-pc kc-doom" data-doom="${esc(c.deadline)}" data-doom-key="${doom.key}" data-doom-src="${esc(poster)}">${doomPosterHtml(c.publicId, poster, doom)}</span>`
     : poster ? `<img class="kc-pc" src="${poster}" alt="" loading="lazy">` : `<span class="kc-pc kc-pc-ph">${esc(initials(parts.name))}</span>`;
   return `
-    <div class="board-card${overdue ? " is-overdue" : ""}${c.stale ? " is-stale" : ""}${(c.heat || 0) >= .7 ? " is-hot" : ""}${doom ? doomCardClass(doom) : ""}"
+    <div class="board-card${overdue ? " is-overdue" : ""}${c.stale ? " is-stale" : ""}${(c.heat || 0) >= .7 ? " is-hot" : ""}${doom ? doomCardClass(doom) : ""}${abandoned ? " is-abandoned" : ""}"
          data-open="${esc(c.publicId)}" data-id="${esc(c.publicId)}" data-status="${esc(status)}"
          style="--accent-dot: var(${STATUS_COLOR_VAR[status] || "--s-draft"});${doom ? doomCardStyle(doom) : ""}">
-      ${doom && doom.level >= 1 ? deadFxHtml(c.publicId) : ""}
+      ${doom && doom.level >= 1 && !abandoned ? deadFxHtml(c.publicId) : ""}
+      ${abandoned ? shatterHtml(c.publicId) : ""}
       ${c.priority === "urgent" && !closed ? `<i class="kc-flag" title="Срочно"></i>` : ""}
       ${posterHtml}
       <span class="kc-id">${esc(c.publicId)}${parts.ep ? ` · ${esc(parts.ep.replace("серия ", "EP "))}` : ""}</span>

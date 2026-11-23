@@ -4060,3 +4060,19 @@ select.fsel-native { display: none !important; }
 .fi-act:active:not(.dlb), .raw-row .icon-btn:active:not(.dlb) { transform: scale(.88); }
 .fi-act:hover:not(.dlb) svg, .raw-row .icon-btn:hover:not(.dlb) svg { transform: translateY(-1px); transition: transform .15s; }
 @media (prefers-reduced-motion: reduce) { .fx-trash svg, .dlb-fly svg { animation: none !important; } }
+
+/* Просрочка 3+ дня: карточка «брошена» — серая, тусклая, в трещинах, без анимаций. На наведении оживает, чтобы читалась. */
+.board-card.is-abandoned { position: relative; isolation: isolate; border-color: rgba(255, 255, 255, .1); background: rgba(14, 12, 16, .82);
+  filter: grayscale(.9) brightness(.62) contrast(.95); transition: filter .2s; }
+.board-card.is-abandoned:hover, .board-card.is-abandoned:focus-visible { filter: grayscale(.5) brightness(.9); }
+.board-card.is-abandoned, .board-card.is-abandoned * { animation: none !important; }
+.board-card.is-abandoned::after, .board-card.is-abandoned::before { display: none; }
+.board-card.is-abandoned > :not(.kc-shatter) { position: relative; z-index: 1; }
+.board-card.is-abandoned > .kc-flag { position: absolute; }
+.board-card.is-abandoned .kc-eyes { display: none; }
+.board-card > .kc-shatter { position: absolute !important; grid-area: auto; inset: 0; z-index: 2; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.kc-shatter svg { width: 100%; height: 100%; display: block; }
+.kc-shatter path { fill: none; stroke: rgba(235, 235, 245, .55); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .9)); }
+:root[data-theme="light"] .board-card.is-abandoned { background: rgba(235, 233, 238, .9); }
+:root[data-theme="light"] .kc-shatter path { stroke: rgba(30, 30, 40, .55); filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .8)); }
