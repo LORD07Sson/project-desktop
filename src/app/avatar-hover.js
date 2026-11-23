@@ -63,7 +63,36 @@ async function loadAndShow(anchor, telegramId) {
   renderPopover(anchor, data);
 }
 
+// Static popover for faces without a profile ("?" in a note tally, "+N" overflow):
+// data-avatar-tip holds "Title|subtitle" lines separated by "~~".
+function renderTip(anchor, text) {
+  const pop = ensurePopover();
+  pop.innerHTML = String(text).split("~~").filter(Boolean).map(line => {
+    const [name, sub] = line.split("|");
+    return `<div class="ap-row"><div class="ap-name">${esc(name)}</div>${sub ? `<div class="ap-role">${esc(sub)}</div>` : ""}</div>`;
+  }).join("");
+  pop.hidden = false;
+  const rect = anchor.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  let left = rect.left;
+  let top = rect.bottom + 8;
+  if (left + popRect.width > window.innerWidth - 8) left = window.innerWidth - popRect.width - 8;
+  if (top + popRect.height > window.innerHeight - 8) top = rect.top - popRect.height - 8;
+  pop.style.left = `${Math.max(8, left)}px`;
+  pop.style.top = `${Math.max(8, top)}px`;
+}
+
 document.addEventListener("mouseover", e => {
+  const tipEl = e.target.closest("[data-avatar-tip]");
+  if (tipEl) {
+    clearTimeout(hideTimer);
+    const key = `tip:${tipEl.dataset.avatarTip}`;
+    if (currentId === key) return;
+    clearTimeout(showTimer);
+    currentId = key;
+    showTimer = setTimeout(() => { if (currentId === key && tipEl.isConnected) renderTip(tipEl, tipEl.dataset.avatarTip); }, 120);
+    return;
+  }
   const el = e.target.closest("[data-avatar-for]");
   if (!el || el.classList.contains("xl") || !el.dataset.avatarFor) return;
   if (el.closest(".tb-menu-wrap")?.querySelector(".tb-menu:not([hidden])")) return;
@@ -78,7 +107,7 @@ document.addEventListener("mouseover", e => {
 });
 
 document.addEventListener("mouseout", e => {
-  if (!e.target.closest("[data-avatar-for]")) return;
+  if (!e.target.closest("[data-avatar-for], [data-avatar-tip]")) return;
   clearTimeout(showTimer);
   scheduleHide();
 });

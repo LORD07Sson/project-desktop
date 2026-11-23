@@ -3854,9 +3854,9 @@ button.rd-kpi:focus-visible { outline: 2px solid rgba(var(--fire-rgb), .6); outl
 .nt-tile .avatar-bubble { width: 40px; height: 40px; margin: 0 0 4px; font-size: 14px; border: 0; }
 .nt-tile { grid-template-columns: minmax(0, 1fr); }
 .nt-avs { display: flex; justify-content: center; align-items: center; max-width: 100%; height: 40px; margin: 0 0 4px; overflow: hidden; }
-.nt-tile .nt-avs .avatar-bubble { flex: none; cursor: help; width: 32px; height: 32px; margin: 0 !important; font-size: 12px; box-shadow: 0 0 0 2px var(--surface, #15171c); }
+.nt-tile .nt-avs .avatar-bubble { flex: none; width: 32px; height: 32px; margin: 0 !important; font-size: 12px; box-shadow: 0 0 0 2px var(--surface, #15171c); }
 .nt-tile .nt-avs .avatar-bubble ~ .avatar-bubble { margin-left: -10px !important; }
-.nt-tile .nt-avs .avatar-bubble.nt-more { cursor: help;  background: rgba(255, 255, 255, .12); color: var(--ink-soft); border: 0; font-size: 11px; font-weight: 700; }
+.nt-tile .nt-avs .avatar-bubble.nt-more {  background: rgba(255, 255, 255, .12); color: var(--ink-soft); border: 0; font-size: 11px; font-weight: 700; }
 .nt-tile.unknown > .avatar-bubble, .nt-tile .nt-avs .avatar-bubble.unk { background: transparent; border: 1px dashed rgba(255, 255, 255, .25); color: var(--ink-dim); }
 .nt-tile .nt-name { max-width: 100%; font-size: 12px; color: var(--ink-soft); }
 .nt-tile b { font-size: 20px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; text-align: center; }
@@ -3976,3 +3976,5 @@ select.fsel-native { display: none !important; }
 @media (max-width: 1280px) {
   .ms-compose { margin-right: 64px; }
 }
+
+.avatar-popover .ap-row + .ap-row { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
