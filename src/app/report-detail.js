@@ -1,4 +1,5 @@
 
+import { dlButton, trashWobble, collapseRow } from "./dl-button.js";
 import { apiGet, apiPost, apiUpload, apiBlob, openSheet, dismissSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { track } from "./telemetry.js";
 import { AUDIO_RE } from "./media-formats.js";
@@ -138,7 +139,7 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
   tick();
 }
 
-async function openSendFileSheet(publicId, fileId, fileName, ref = "") {
+async function openSendFileSheet(publicId, fileId, fileName, ref = "", button = null) {
   const overlay = openSheet(`<h2>Кому прислать?</h2><p class="bc-hint">${esc(fileName || "файл")} есть в отчёте — бот перешлёт его выбранным людям.</p>${dialogSkeletonHtml(3)}`);
   let people = [];
   try {
@@ -166,15 +167,18 @@ async function openSendFileSheet(publicId, fileId, fileName, ref = "") {
     const to = boxes.map(b => b.dataset.sendTo === "me" ? "me" : Number(b.dataset.sendTo));
     if (!to.length) { toast("Выберите, кому прислать.", "error"); return; }
     e.currentTarget.disabled = true;
+    const plane = dlButton(button, { fly: true });
     try {
       const res = ref
         ? await apiPost(`/report/${publicId}/files/send-media`, { ref, to })
         : await apiPost(`/report/${publicId}/files/${fileId}/send`, { to });
       const bad = (res.failed || []).length;
       toast(bad ? `Отправлено: ${res.sent.length}, не получилось: ${bad} (${res.failed.map(f => f.name).join(", ")})` : `Отправлено: ${res.sent.length}`, bad ? "error" : "success");
+      plane.done(res.sent.length > 0);
       dismissSheet(overlay);
     } catch (err) {
       toast(`Не удалось отправить: ${err.message}`, "error");
+      plane.done(false);
       e.currentTarget.disabled = false;
     }
   });
@@ -725,13 +729,15 @@ export async function openReportDetail(publicId) {
     }));
     sheet.querySelectorAll("[data-raw-delete]").forEach(btn => btn.addEventListener("click", async () => {
       const label = btn.dataset.fileName || "файл";
-      if (!await askConfirm(`Удалить «${label}» из отчёта?`)) return;
+      const lid = trashWobble(btn);
+      if (!await askConfirm(`Удалить «${label}» из отчёта?`)) { lid(); return; }
       btn.disabled = true;
       const path = btn.dataset.rawId
         ? `/report/${publicId}/raws/files/${btn.dataset.rawId}/delete`
         : `/report/${publicId}/raws/legacy/${btn.dataset.rawKind}/${btn.dataset.rawCharacter}/delete`;
       try {
         await apiPost(path, {});
+        await collapseRow(btn.closest(".raw-row"));
         toast("Файл удалён.", "success");
         await render();
       } catch (err) {
@@ -741,10 +747,12 @@ export async function openReportDetail(publicId) {
     }));
     sheet.querySelectorAll("[data-source-delete]").forEach(btn => btn.addEventListener("click", async () => {
       const label = btn.dataset.fileName || "исходник";
-      if (!await askConfirm(`Удалить общий исходник «${label}» для этой серии?`)) return;
+      const lid = trashWobble(btn);
+      if (!await askConfirm(`Удалить общий исходник «${label}» для этой серии?`)) { lid(); return; }
       btn.disabled = true;
       try {
         await apiPost(`/report/${publicId}/sources/files/${btn.dataset.sourceDelete}/delete`, {});
+        await collapseRow(btn.closest(".raw-row"));
         toast("Исходник удалён.", "success");
         await render();
       } catch (err) {
@@ -966,10 +974,10 @@ export async function openReportDetail(publicId) {
       await runQcAnalysis(picked, { reportId: publicId });
     });
     sheet.querySelectorAll("[data-media-send]").forEach(btn => {
-      btn.addEventListener("click", () => openSendFileSheet(publicId, "", btn.dataset.fileName, btn.dataset.mediaSend));
+      btn.addEventListener("click", () => openSendFileSheet(publicId, "", btn.dataset.fileName, btn.dataset.mediaSend, btn));
     });
     sheet.querySelectorAll("[data-send-file]").forEach(btn => {
-      btn.addEventListener("click", () => openSendFileSheet(publicId, btn.dataset.sendFile, btn.dataset.fileName));
+      btn.addEventListener("click", () => openSendFileSheet(publicId, btn.dataset.sendFile, btn.dataset.fileName, "", btn));
     });
     sheet.querySelectorAll("[data-mark-dubbers]").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -1018,10 +1026,12 @@ export async function openReportDetail(publicId) {
     sheet.querySelectorAll("[data-delete-file]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const label = btn.dataset.fileName || "файл";
-        if (!await askConfirm(`Удалить файл «${label}» из отчёта?`)) return;
+        const lid = trashWobble(btn);
+        if (!await askConfirm(`Удалить файл «${label}» из отчёта?`)) { lid(); return; }
         btn.disabled = true;
         try {
           await apiPost(`/report/${publicId}/files/${btn.dataset.deleteFile}/delete`, {});
+          await collapseRow(btn.closest(".file-item"));
           toast("Файл удалён.");
           await render();
         } catch (e) {

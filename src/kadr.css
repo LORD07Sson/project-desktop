@@ -4044,3 +4044,19 @@ select.fsel-native { display: none !important; }
 .dlb-err { animation: dlb-shake .42s; color: #ff6b6b !important; }
 @keyframes dlb-shake { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
 @media (prefers-reduced-motion: reduce) { .dlb, .dlb * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* Send (paper plane): it flies off up-right while sending, comes back from the bottom-left */
+.dlb-fly.dlb-run > svg:not(.dlb-ring) { animation: fx-plane-out .5s cubic-bezier(.5, 0, .75, .3) forwards; }
+.dlb-fly.dlb-back > svg:not(.dlb-ring), .dlb-fly.dlb-err > svg:not(.dlb-ring) { animation: fx-plane-in .42s cubic-bezier(.2, .8, .3, 1.15) both; }
+@keyframes fx-plane-out { 0% { transform: none; opacity: 1; } 25% { transform: translate(-2px, 2px) rotate(-6deg); opacity: 1; } 100% { transform: translate(16px, -16px) rotate(8deg) scale(.6); opacity: 0; } }
+@keyframes fx-plane-in { 0% { transform: translate(-14px, 14px) scale(.6); opacity: 0; filter: none; } 100% { transform: none; opacity: 1; filter: none; } }
+/* Delete: the trash lid tips open and wiggles */
+.fx-trash svg { transform-origin: 50% 90%; animation: fx-trash .6s cubic-bezier(.3, .7, .3, 1); }
+.fx-trash svg path { transform-box: view-box; }
+@keyframes fx-trash { 0% { transform: none; } 20% { transform: rotate(-12deg) scale(1.08); } 40% { transform: rotate(9deg) scale(1.08); } 60% { transform: rotate(-5deg); } 80% { transform: rotate(2deg); } 100% { transform: none; } }
+.fx-trash { color: #ff6b6b !important; }
+/* Every file action gets a soft press */
+.fi-act, .raw-row .icon-btn { transition: transform .14s cubic-bezier(.3, .7, .4, 1), background .15s, color .15s; }
+.fi-act:active:not(.dlb), .raw-row .icon-btn:active:not(.dlb) { transform: scale(.88); }
+.fi-act:hover:not(.dlb) svg, .raw-row .icon-btn:hover:not(.dlb) svg { transform: translateY(-1px); transition: transform .15s; }
+@media (prefers-reduced-motion: reduce) { .fx-trash svg, .dlb-fly svg { animation: none !important; } }
