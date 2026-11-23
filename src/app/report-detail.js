@@ -534,9 +534,11 @@ export async function openReportDetail(publicId) {
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
     loadAvatars(sheet);
     sheet.querySelectorAll("[data-roster-bind]").forEach(el => {
-      const open = () => rosterBindDialog(el.dataset.rosterBind, bindChoices(noteCtx.roster.people), render);
-      el.addEventListener("click", open);
-      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      const open = () => el.dataset.rosterParts
+        ? rosterPartsDialog(el.dataset.rosterParts.split("~~"), bindChoices(noteCtx.roster.people), render)
+        : rosterBindDialog(el.dataset.rosterBind, bindChoices(noteCtx.roster.people), render);
+      el.addEventListener("click", e => { e.stopPropagation(); open(); });
+      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); open(); } });
     });
     sheet.querySelectorAll("[data-rd-jump]").forEach(b => b.addEventListener("click", () => sheet.querySelector(b.dataset.rdJump)?.scrollIntoView({ block: "start", behavior: "smooth" })));
     sheet.querySelectorAll("[data-rd-click]").forEach(b => b.addEventListener("click", () => sheet.querySelector(b.dataset.rdClick)?.click()));
@@ -1144,12 +1146,13 @@ function tallyHtml(text, roster = null) {
     const bound = roster && roster.aliases[rosterKey(r.name)] != null;
     const group = parts.length > 1 && !bound ? parts.map(part => ({ part, who: rosterMatch(part, roster) })) : null;
     const who = group ? (group.every(g => g.who) ? { id: "", name: group.map(g => g.who.name || g.part).join(", ") } : null) : rosterMatch(r.name, roster);
-    const tipLine = (w, label) => w ? `${label}|${w.name && rosterKey(w.name) !== rosterKey(label) ? w.name : "в составе"}` : `${label}|не узнали${roster && roster.canBind ? " — нажмите на карточку, чтобы привязать" : ""}`;
-    const bubble = (w, label) => `<span class="avatar-bubble${w ? "" : " unk"}"${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : group ? ` data-avatar-tip="${esc(tipLine(w, label))}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
+    const tipLine = (w, label) => w ? `${label}|${w.name && rosterKey(w.name) !== rosterKey(label) ? w.name : "в составе"}` : `${label}|не узнали${roster && roster.canBind ? " — нажмите, чтобы выбрать" : ""}`;
+    const canBind = roster && roster.canBind;
+    const bubble = (w, label) => `<span class="avatar-bubble${w ? "" : " unk"}"${group && canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(label)}"` : ""}${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : group ? ` data-avatar-tip="${esc(tipLine(w, label))}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
     const avatars = group
-      ? `<span class="nt-avs">${(group.length > 3 ? group.slice(0, 2) : group).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more" data-avatar-tip="${esc(group.slice(2).map(g => tipLine(g.who, g.part)).join("~~"))}">+${group.length - 2}</span>` : ""}</span>`
+      ? `<span class="nt-avs">${(group.length > 3 ? group.slice(0, 2) : group).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more"${canBind ? ` role="button" tabindex="0" data-roster-bind="" data-roster-parts="${esc(group.slice(2).map(g => g.part).join("~~"))}"` : ""} data-avatar-tip="${esc(group.slice(2).map(g => tipLine(g.who, g.part)).join("~~"))}">+${group.length - 2}</span>` : ""}</span>`
       : bubble(who, r.name);
-    const bind = roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
+    const bind = group && canBind ? ` role="button" tabindex="0" data-roster-bind="" data-roster-parts="${esc(parts.join("~~"))}" title="Нажмите, чтобы привязать кого-то из них"` : roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
     return `<div class="nt-tile${who ? "" : " unknown"}"${bind}>
       ${avatars}
       <span class="nt-name" title="${esc(r.name)}">${esc(group ? parts.join(", ") : r.name)}</span>
@@ -1165,6 +1168,16 @@ function bindChoices(people) {
   const team = new Set((state.users || []).map(u => String(u.telegram_id)));
   return team.size ? people.filter(p => team.has(p.id)) : people;
 }
+function rosterPartsDialog(parts, people, onDone) {
+  const overlay = openSheet(`<h2>Кого привязать?</h2>
+    <p class="sheet-sub">В этой строке несколько человек — выберите одного.</p>
+    <div class="rb-list">${parts.map(part => `<button type="button" class="rb-row" data-rp="${esc(part)}">${esc(part)}</button>`).join("")}</div>
+    <div class="sheet-actions"><button class="btn" data-close>Отмена</button></div>`);
+  const sheet = overlay.querySelector(".sheet");
+  sheet.querySelectorAll("[data-rp]").forEach(b => b.addEventListener("click", () => { overlay.remove(); rosterBindDialog(b.dataset.rp, people, onDone); }));
+  sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
+}
+
 function rosterBindDialog(name, people, onDone) {
   const overlay = openSheet(`<h2>«${esc(name)}» — это кто?</h2>
     <p class="sheet-sub">Привязка запомнится для всех росписей. Реплики будут считаться этому человеку.</p>

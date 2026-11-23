@@ -3979,3 +3979,5 @@ select.fsel-native { display: none !important; }
 
 .avatar-popover .ap-row + .ap-row { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .avatar-popover .ap-row .ap-name { white-space: nowrap; }
+.nt-tile .nt-avs .avatar-bubble[data-roster-bind] { cursor: pointer; transition: transform .12s; }
+.nt-tile .nt-avs .avatar-bubble[data-roster-bind]:hover { transform: translateY(-2px); position: relative; z-index: 1; }
