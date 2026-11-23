@@ -129,7 +129,7 @@ function finalsHtml(d) {
     newer: "Все залитые серии — в последней версии", all: "Собранных финалов пока нет" }[finalsFilter];
   return `
     <div class="a3-tools">
-      ${filtersHtml([["todo", "Не залито", items.filter(todo).length], ["queue", "Очередь", count("queue")],
+      <span class="a3-scope" title="Вкладки считают только финалы, собранные в программе; общий счётчик сверху — вместе с архивом">Финалы</span>${filtersHtml([["todo", "Не залито", items.filter(todo).length], ["queue", "Очередь", count("queue")],
         ...(count("newer") ? [["newer", "Новая версия", count("newer")]] : []),
         ["done", "На 365", items.filter(isOn365).length], ["all", "Все", items.length]], finalsFilter, "a3-ff")}
       <span style="flex:1"></span>
@@ -473,7 +473,7 @@ function heroHtml(every) {
   const legend = s.segments.map(g => `<span><i class="${g.key}"></i>${esc(g.label)} <b>${g.count}</b></span>`).join("");
   return `
     <section class="a3-hero">
-      <div class="a3-big"><b>${s.onSite}</b><span>из ${s.total} серий на 365</span></div>
+      <div class="a3-big"><b>${s.onSite}</b><span>из ${s.total} серий на 365 · всего, вместе с архивом</span></div>
       <div class="a3-meterwrap">
         <div class="a3-meter" role="img" aria-label="${s.segments.map(g => `${esc(g.label)}: ${g.count}`).join(", ")}">${bar}</div>
         <div class="a3-mlegend">${legend}</div>

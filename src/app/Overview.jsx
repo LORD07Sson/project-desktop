@@ -8,6 +8,7 @@ import { $, esc, initials, relTime, STATUS_COLOR_VAR } from "./utils.js";
 
 import { avatarHtml, loadAvatars } from "./profile.js";
 import { openReportDetail } from "./report-detail.js";
+import { seriesParts } from "./reports.js";
 import { openTicketsSheet } from "./tickets.js";
 import { openBirthdaysSheet } from "./birthdays.js";
 import { imgProxy, titleArt } from "./title-page.js";
@@ -128,7 +129,8 @@ function EmptyStudio(props) {
 }
 
 const cleanLabel = s => (s || "").replace(/^[^\p{L}\p{N}]+/u, "");
-const epNum = r => { const m = (r.title || "").match(/сери[яи]\s*(\d+)/i); return m ? Number(m[1]) : null; };
+// Номер серии: поле episode, иначе из названия в любой форме («8 серия», «серия 8», «Святая - 05»).
+const epNum = r => { if (r.episode) return Number(r.episode); const m = /(\d+)/.exec(seriesParts(r).ep || ""); return m ? Number(m[1]) : null; };
 const showName = r => r.title_name || (r.title || "").replace(/\s*[,—–-]\s*сери[яи].*$/i, "");
 const stageOf = r => (r.pipeline_roles && r.pipeline_roles.length && r.pipeline_stage != null
   ? r.pipeline_roles[Math.min(r.pipeline_stage, r.pipeline_roles.length - 1)]

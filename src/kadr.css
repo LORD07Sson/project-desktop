@@ -4089,3 +4089,12 @@ select.fsel-native { display: none !important; }
   filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .9)); }
 :root[data-theme="light"] .board-card.is-abandoned { background: rgba(235, 233, 238, .9); }
 :root[data-theme="light"] .kc-shatter path { stroke: rgba(30, 30, 40, .55); filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .8)); }
+
+/* «Удалить все» в колонках «Завершено» / «Отменено»: стоит перед стрелкой сворачивания, краснеет на наведении. */
+.board-col-head .board-col-purge { order: 2; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-dim); cursor: pointer; opacity: .6; transition: opacity .15s, color .15s, background .15s; }
+.board-col-head .board-col-purge + .board-col-collapse { margin-left: 0; }
+.board-col-head:has(.board-col-purge) .board-col-fold { margin-left: auto; }
+.board-col-head .board-col-purge:hover, .board-col-head .board-col-purge:focus-visible { opacity: 1; color: var(--s-stop); background: color-mix(in srgb, var(--s-stop) 14%, transparent); }
+.board-col-head .board-col-purge:disabled { opacity: .3; pointer-events: none; }
+.board-col.collapsed .board-col-purge { display: none; }
+.a3-scope { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); margin-right: 4px; align-self: center; }

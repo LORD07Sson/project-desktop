@@ -113,6 +113,8 @@ function collapse(events) {
     if (prev && GROUP_TYPES.has(a.type) && (prev.group || GROUP_TYPES.has(prev.a.type)) && prev.ev.public_id === ev.public_id
       && prev.ev.actor === ev.actor && Math.abs(parseTs(prev.ev.created_at) - parseTs(ev.created_at)) <= GROUP_WINDOW_MS) {
       if (!prev.group) prev.group = [{ ev: prev.ev, a: prev.a }];
+      // Одно и то же действие, записанное дважды подряд (повторная загрузка того же файла), показываем один раз.
+      if (prev.group.some(g => g.a.label === a.label && (g.ev.detail || "") === (ev.detail || ""))) continue;
       prev.group.push({ ev, a });
       continue;
     }

@@ -1,5 +1,5 @@
 
-import { apiGet, apiPost, toast, dialogSkeletonHtml, openSheet, tabSkeleton } from "./api.js";
+import { apiGet, apiPost, toast, dialogSkeletonHtml, openSheet, tabSkeleton, askConfirm } from "./api.js";
 import { pipelinePct } from "./utils.js";
 import { invoke, pickInputFile } from "./tauri.js";
 import { $, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, PRIORITY_LABELS } from "./utils.js";
@@ -435,6 +435,7 @@ function columnHtml(col, collapsed, expanded, folded) {
         <svg class="board-col-fold" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
         <span class="lb" title="${esc(cleanLabel(col.label))}"><span class="dot ${STATUS_DOT_CLASS[col.status] || "draft"}"></span>${esc(cleanLabel(col.label).split("/")[0])}</span>
         <span class="cnt${col.overWip ? " over" : ""}" title="${col.overWip ? `Серий в этом статусе больше, чем ${col.wipLimit} — команда может не успевать` : "Всего в статусе"}">${col.total}${col.overWip ? ` · лимит ${col.wipLimit}` : ""}</span>
+        ${(col.status === "completed" || col.status === "cancelled") && col.total && can("reports.delete") ? `<button class="board-col-purge" data-purge="${esc(col.status)}" title="Удалить все серии из этой колонки" aria-label="Удалить все"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>` : ""}
         <button class="board-col-collapse" data-collapse="${esc(col.status)}" title="Свернуть/развернуть колонку" aria-label="Свернуть/развернуть колонку"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
       </div>
       <div class="board-cards" data-count="${col.cards.length}">
@@ -676,6 +677,10 @@ function wireColumnButtons(root) {
       writeExpanded(open);
     });
   });
+  root.querySelectorAll("[data-purge]").forEach(btn => {
+    btn.addEventListener("click", e => { e.stopPropagation(); purgeColumn(root, btn); });
+    btn.addEventListener("keydown", e => e.stopPropagation());
+  });
   root.querySelectorAll("[data-loadmore]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const status = btn.dataset.loadmore;
@@ -703,6 +708,49 @@ function wireColumnButtons(root) {
       }
     });
   });
+}
+
+// «Удалить все» в колонках «Завершено» / «Отменено»: берёт все серии колонки с учётом текущих фильтров (не только
+// показанные), спрашивает подтверждение и удаляет по одной. Сервер кладёт каждую в корзину на 7 дней.
+async function purgeColumn(root, btn) {
+  const status = btn.dataset.purge;
+  const filters = { season_id: boardView.seasonId || undefined, title_id: boardView.titleId || undefined, month: boardView.month || undefined };
+  btn.disabled = true;
+  let ids = [];
+  try {
+    for (let offset = 0; ; ) {
+      const res = await apiGet(`/board/column/${status}`, { offset, limit: 100, ...filters });
+      const page = (res.reports || []).map(r => r.public_id).filter(Boolean);
+      ids = ids.concat(page);
+      offset += page.length;
+      if (!res.has_more || !page.length) break;
+    }
+  } catch (e) {
+    toast(`Не удалось получить список серий: ${e.message}`, "error");
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  if (!ids.length) { toast("В колонке нечего удалять."); return; }
+  const label = status === "completed" ? "завершённых" : "отменённых";
+  const scoped = filters.season_id || filters.title_id || filters.month ? " (с учётом выбранных фильтров)" : "";
+  const ok = await askConfirm(`Удалить все ${ids.length} ${label} серий${scoped}?
+
+`
+    + "Вместе с каждой серией удалятся её файлы, заметки, роли и чек-листы. "
+    + "Удалённое 7 дней лежит в корзине, потом стирается навсегда.", { yes: `Удалить ${ids.length}`, danger: true });
+  if (!ok) return;
+  let deleted = 0, pending = 0, failed = 0;
+  for (const [i, id] of ids.entries()) {
+    btn.title = `Удаляю ${i + 1} из ${ids.length}…`;
+    try {
+      const res = await apiPost(`/report/${encodeURIComponent(id)}/delete`, {});
+      if (res.deleted) deleted++; else if (res.pending_approval) pending++; else failed++;
+    } catch { failed++; }
+  }
+  const parts = [deleted && `удалено ${deleted}`, pending && `на подтверждение владельцу ${pending}`, failed && `не вышло ${failed}`].filter(Boolean);
+  toast(`Готово: ${parts.join(", ")}.`, failed ? "error" : "success");
+  await loadBoard();
 }
 
 function reportCreateFormHtml(filePicked) {

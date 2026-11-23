@@ -166,7 +166,7 @@ export function showTeam(wrap, data, { onMap = null } = {}) {
   wrap.classList.add("team-mode");
   wrap.innerHTML = `<div class="tm">
     <header class="tm-head">
-      <div><h1>Команда</h1><p>${onMap ? "Кто в сети, чем занят, куда ходит и как голосует." : "Серий в работе сейчас нет — здесь видно, кто чем занят."}</p></div>
+      <div><h1>Аналитика команды</h1><p>${onMap ? "Кто в сети, чем занят, куда ходит и как голосует." : "Серий в работе сейчас нет — здесь видно, кто чем занят."}</p></div>
       ${onMap ? `<button type="button" class="calm tm-tomap" data-tomap>← Карта студии</button>` : ""}
     </header>
     <div class="tm-bento">

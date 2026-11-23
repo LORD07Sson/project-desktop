@@ -44,10 +44,30 @@ function serviceRowHtml(s) {
   `;
 }
 
-function historyStripHtml(history) {
+// Сколько минут за день сервисы лежали — по инцидентам (дата берётся по началу).
+function downMinutesByDay(incidents) {
+  const out = {};
+  for (const inc of incidents || []) {
+    if (!inc.started_at) continue;
+    const day = String(inc.started_at).slice(0, 10);
+    const end = inc.ongoing || !inc.ended_at ? Date.now() : parseSqliteTimestamp(inc.ended_at);
+    out[day] = (out[day] || 0) + Math.max(1, Math.round((end - parseSqliteTimestamp(inc.started_at)) / 60000));
+  }
+  return out;
+}
+
+function historyStripHtml(history, incidents) {
+  const downMin = downMinutesByDay(incidents);
   const bars = (history || []).map(d => {
-    const meta = STATUS_META[d.status] || STATUS_META.no_data;
-    return `<span class="svc-history-bar" style="background:var(${meta.colorVar});" title="${esc(d.date)}: ${esc(meta.label)}"></span>`;
+    let meta = STATUS_META[d.status] || STATUS_META.no_data;
+    let label = meta.label;
+    // День, где сбой длился минуты, не красим целиком в «не отвечает» — это короткий сбой.
+    const mins = downMin[d.date];
+    if (d.status === "down" && mins != null && mins < 60 && STATUS_META.degraded) {
+      meta = STATUS_META.degraded;
+      label = `короткий сбой, ~${mins} мин`;
+    }
+    return `<span class="svc-history-bar" style="background:var(${meta.colorVar});" title="${esc(d.date)}: ${esc(label)}"></span>`;
   }).join("");
   return `
     <div class="svc-history-strip">${bars}</div>
@@ -126,7 +146,7 @@ function servicesHtml(d) {
         <div class="bcell" style="animation-delay:200ms;">
           <h3 style="margin-bottom:4px;">Аптайм за 30 дней</h3>
           <div class="an-caption">${knownDays ? `собрано ${knownDays} из 30 дней` : "мониторинг только что включён"}</div>
-          ${historyStripHtml(d.history)}
+          ${historyStripHtml(d.history, d.incidents || incidents)}
         </div>
         <div class="bcell" style="flex-grow:1; animation-delay:240ms;">
           <h3>Последние инциденты</h3>

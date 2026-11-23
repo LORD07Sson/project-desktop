@@ -103,7 +103,8 @@ function lastLine(c) {
   const l = c.last;
   if (!l) return "пока тихо";
   const body = l.text || (l.attach ? `📎 ${l.attach.kind === "image" ? "картинка" : l.attach.name}` : "");
-  return `${l.mine ? "Вы" : esc(l.author)}: ${esc(body)}`;
+  const who = l.mine ? "Вы" : /^ID \d+$/.test(String(l.author || "")) ? "Не из команды" : l.author;
+  return `${esc(who)}: ${esc(body)}`;
 }
 
 const MUTED_ICON = `<span class="ms-muted" title="Без уведомлений">🔕</span>`;

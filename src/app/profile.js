@@ -214,7 +214,7 @@ function rankTagHtml(rank) {
   if (!rank || !rank.total || rank.total < 2) return "";
   const medals = { 1: "🥇", 2: "🥈", 3: "🥉" };
   const medal = medals[rank.place] || "🏅";
-  return `<span class="rank-tag rank-${rank.place <= 3 ? rank.place : "other"}">${medal} #${rank.place} из ${rank.total}</span>`;
+  return `<span class="rank-tag rank-${rank.place <= 3 ? rank.place : "other"}" title="Место в рейтинге студии">${medal} ${rank.place} место из ${rank.total}</span>`;
 }
 
 function goalRingHtml(pct, over) {
@@ -361,7 +361,7 @@ export async function loadProfile() {
         <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(me.telegram_id, me.display_name || me.name, "sm")}</span>
         ${[["pff-about", "Обо мне"], ["pff-work", "Работа"], ["pff-activity", "Активность"], ["pff-awards", "Награды"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
         ${pillDaysHtml(me, true)}
-        <span class="pff-pct" aria-hidden="true">0%</span>
+        <span class="pff-pct" aria-hidden="true" title="Сколько страницы пролистано" style="visibility:hidden">0%</span>
       </nav>
       <section class="pff-sec" id="pff-about">${folioHeroHtml(me)}</section>
       <div class="pf-kpis pff-stats pff-rv">
@@ -459,7 +459,7 @@ function folioHeroHtml(d, isSelf = true) {
   }
   const meta = [
     d.username ? `@${esc(d.username)}` : "",
-    d.internal_id != null ? `<span class="id-chip">#${d.internal_id}</span>` : "",
+    d.internal_id != null ? `<span class="id-chip" title="Порядковый номер в команде">№${d.internal_id}</span>` : "",
     joined ? `в команде ${joined}` : "",
   ].filter(Boolean).join(`<i class="dot"></i>`);
   const bio = d.status_text || d.bio
@@ -534,7 +534,7 @@ function wireFolio(root) {
     let cur = btns[0];
     for (const [b, sec] of secs) if (sec.getBoundingClientRect().top - top < 160) cur = b;
     const p = max > 0 ? Math.round(Math.min(1, st / max) * 100) : 100;
-    if (p !== lastP) { lastP = p; pct.textContent = `${p}%`; pill.style.setProperty("--p", String(p)); }
+    if (p !== lastP) { lastP = p; pct.textContent = `${p}%`; pct.style.visibility = p ? "" : "hidden"; pill.style.setProperty("--p", String(p)); }
     const y = reduce ? 0 : Math.round(Math.min(700, st) * 0.18);
     if (banner && y !== lastY) { lastY = y; banner.style.setProperty("--pff-y", String(y)); }
     if (cur !== lastCur) { lastCur = cur; btns.forEach(b => b.classList.toggle("on", b === cur)); }
@@ -890,7 +890,7 @@ async function fillRecentActivity(root, base = "/me") {
     return `
     <div class="pf-act k-${kind}" style="--i:${i};"${ev.public_id ? ` data-open-report="${esc(ev.public_id)}"` : ""}>
       <i><svg viewBox="0 0 24 24" aria-hidden="true">${ACT_ICONS[kind]}</svg></i>
-      <div class="pff-tl-b"><div class="a">${esc(ev.action || "")}${ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : ""}</div>
+      <div class="pff-tl-b"><div class="a">${esc(String(ev.action || "").replaceAll("(desktop)", "(десктоп)"))}${ev.detail ? ` <span>· ${esc(ev.detail)}</span>` : ""}</div>
       <div class="m">${ev.public_id ? `${esc(ev.public_id)} ${esc(ev.title || "")}` : ""}</div></div>
       <time title="${esc(formatWhen(ev.created_at))}">${esc(relTime(ev.created_at))}</time>
     </div>`;
@@ -1003,7 +1003,7 @@ async function openMyActivitySheet() {
   const rows = (d.events || []).map(ev => `
     <div class="note-item" data-open-report="${esc(ev.public_id || "")}" style="${ev.public_id ? "cursor:pointer;" : ""}">
       <div class="meta">${esc(ev.public_id || "")} ${esc(ev.title || "")} · ${esc(ev.created_at || "")}</div>
-      <div>${esc(ev.action || "")}${ev.detail ? ` — ${esc(ev.detail)}` : ""}</div>
+      <div>${esc(String(ev.action || "").replaceAll("(desktop)", "(десктоп)"))}${ev.detail ? ` — ${esc(ev.detail)}` : ""}</div>
     </div>
   `).join("");
   sheet.innerHTML = `
@@ -1129,7 +1129,7 @@ export async function openUserProfile(telegramId) {
         <span class="pff-pill-ic" aria-hidden="true">${avatarHtml(telegramId, d.display_name || d.name, "sm")}</span>
         ${[["pff-about", "О человеке"], ["pff-work", "Работа"], ["pff-activity", "Активность"], ["pff-awards", "Награды"]].map(([id, t]) => `<button type="button" data-pff-go="${id}">${t}</button>`).join("")}
         ${pillDaysHtml(d, false)}
-        <span class="pff-pct" aria-hidden="true">0%</span>
+        <span class="pff-pct" aria-hidden="true" title="Сколько страницы пролистано" style="visibility:hidden">0%</span>
       </nav>
       <section class="pff-sec" id="pff-about">${folioHeroHtml(d, false)}</section>
       <div class="pf-kpis pff-stats pff-rv">
