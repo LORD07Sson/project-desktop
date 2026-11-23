@@ -39,7 +39,7 @@
     "@tauri-apps/plugin-notification": "^2.8.1",
     "hls.js": "^1.7.4",
     "qrcode-generator": "^2.0.4",
-    "solid-js": "^1.9.19"
+    "solid-js": "^2.0.3"
   },
   "devDependencies": {
     "eslint": "^10.15.0",
