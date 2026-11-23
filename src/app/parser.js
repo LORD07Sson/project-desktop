@@ -91,7 +91,6 @@ function layout() {
           </form>
           <div class="pr-hints">
             <span>Не нашлось видео? <button type="button" class="pr-link" id="pr-deep" title="Открыть страницу в браузере на сервере и перехватить сеть">Глубокий анализ</button></span>
-            <span class="pr-kbd-hint"><kbd>Ctrl</kbd>+<kbd>V</kbd> в любом месте — вставить и найти · ссылку можно перетащить сюда</span>
           </div>
           <div class="pr-drop-hint" aria-hidden="true">Отпустите, чтобы найти видео</div>
           <div class="pr-settings" id="pr-settings" hidden>
