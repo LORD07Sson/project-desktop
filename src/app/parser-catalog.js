@@ -441,7 +441,8 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
                 ? `<button type="button" class="pp-get" data-pp-link="${i}">${svg("down")}<span>Скачать</span></button>`
                 : `<button type="button" class="pp-get ghost" data-pp-open="${esc(l.url)}">${svg("ext")}<span>Открыть</span></button>`}
             </div>`).join("")}</div>` : ""}
-          ${!downloadable ? `<div class="pp-none">В посте нет файлов для загрузки${imgs.length ? " — только картинки" : ""}.</div>` : ""}
+          ${(d.images || []).length ? `<div class="pp-imgdl"><button type="button" class="btn sm" data-pp-img>${svg("down")}Скачать эту картинку</button>${d.images.length > 1 ? `<button type="button" class="btn sm" data-pp-imgs>${svg("down")}Все картинки · ${d.images.length}</button>` : ""}</div>` : ""}
+          ${!downloadable && !(d.images || []).length ? `<div class="pp-none">В посте нет файлов для загрузки.</div>` : ""}
           <div class="pp-more"><button type="button" class="btn sm" data-pp-analyze>Открыть в загрузчике</button><button type="button" class="btn sm" data-pp-copy>Скопировать ссылку</button></div>
         </div>
       </article>
@@ -505,6 +506,28 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       }
       if (el.matches("[data-pp-expand]")) { el.closest(".pp-desc").classList.remove("clamp"); el.remove(); return; }
       if (el.dataset.ppDl) { queue(el, fileBody(files[+el.dataset.ppDl])); return; }
+      const imgBody = i => {
+        const url = imgs[i].full || imgs[i].thumb;
+        return { url, name: `${d.title || "image"}${imgs.length > 1 ? ` ${i + 1}` : ""}`, headers: {} };
+      };
+      if (el.matches("[data-pp-img]")) {
+        const i = +(box.querySelector(".pp-main")?.dataset.ppZoom || 0);
+        el.classList.remove("done");
+        el.disabled = true;
+        try { await apiPost("/parser/download", imgBody(i)); toast(`Картинка ${i + 1} в очереди загрузок`, "success"); onQueued?.(); }
+        catch (e) { toast(String(e?.message || e), "error"); }
+        el.disabled = false;
+        return;
+      }
+      if (el.matches("[data-pp-imgs]")) {
+        el.disabled = true;
+        let ok = 0;
+        for (const i of imgs.keys()) { try { await apiPost("/parser/download", imgBody(i)); ok++; } catch (_) { } }
+        el.innerHTML = `${svg("ok")}В очереди · ${ok}`;
+        toast(`Картинок в очереди: ${ok}. Заберите их в «Очереди и загрузках»`, "success");
+        onQueued?.();
+        return;
+      }
       if (el.dataset.ppLink) { queue(el, { url: links[+el.dataset.ppLink].url, name: d.title }); return; }
       if (el.matches("[data-pp-all]")) {
         el.disabled = true;
