@@ -3,7 +3,6 @@ import { apiGet, apiPost, toast, dialogSkeletonHtml, openSheet, tabSkeleton, ask
 import { pipelinePct } from "./utils.js";
 import { invoke, pickInputFile } from "./tauri.js";
 import { $, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, PRIORITY_LABELS } from "./utils.js";
-import { timelineHtml, playTimelineIntro } from "./charts.js";
 import { assigneesHtml, seriesParts, posterSrc } from "./reports.js";
 import { openReportDetail } from "./report-detail.js";
 import { state, can } from "./state.js";
@@ -60,8 +59,6 @@ const SORTS = [
 const WIP_LIMITS = { working: 8, review: 15, revision: 6 };
 const STALE_AFTER_DAYS = 7;
 
-function boardMode() { return "cols"; }
-function setBoardMode(v) { try { localStorage.setItem("project_board_mode", v); } catch (_) { } }
 
 function sortKey() { return `project_board_sort_${state.telegramId || "anon"}`; }
 function readSort() {
@@ -73,7 +70,6 @@ function writeSort(value) {
 
 const boardView = { sort: readSort(), query: "", seasonId: 0, titleId: 0, month: "" };
 let lastBoardData = null;
-let lastLayout = null;
 
 let seasonsList = null;
 const titlesBySeasonCache = new Map();
@@ -445,76 +441,6 @@ function columnHtml(col, collapsed, expanded, folded) {
     </div>`;
 }
 
-const BOARD_STAT_GROUPS = [
-  { key: "draft", label: "Черновики", statuses: ["draft"], icon: "📁" },
-  { key: "review", label: "Озвучка", statuses: ["review", "revision"], icon: "🎙" },
-  { key: "working", label: "В работе", statuses: ["working"], icon: "⏳" },
-  { key: "completed", label: "Завершено", statuses: ["completed"], icon: "✅" },
-];
-
-function boardStats(layout) {
-  const totals = {};
-  for (const col of layout.columns) totals[col.status] = col.total || 0;
-  return BOARD_STAT_GROUPS.map(g => ({
-    ...g,
-    count: g.statuses.reduce((sum, st) => sum + (totals[st] || 0), 0),
-  }));
-}
-
-function performanceHtml(stats) {
-  const total = stats.reduce((sum, s) => sum + s.count, 0);
-  const peak = Math.max(1, ...stats.map(s => s.count));
-  const colorOf = s => `var(${STATUS_COLOR_VAR[s.statuses[0]] || "--s-draft"})`;
-  return `
-    <div class="bcell board-performance-cell">
-      <h3>Производительность</h3>
-      <div class="big-num" style="font-size:30px;">${total}</div>
-      <div class="sub" style="margin:2px 0 14px;">серий на доске</div>
-      <div class="board-perf-bars">
-        ${stats.map(s => `
-          <div class="board-perf-col" title="${esc(s.label)}: ${s.count}">
-            <div class="an-bar" style="height:${Math.max(4, Math.round((s.count / peak) * 96))}px; background:${colorOf(s)};"></div>
-            <div class="an-bar-label">${s.count}</div>
-          </div>`).join("")}
-      </div>
-      <div class="dash-legend" style="margin:12px 0 0; flex-wrap:wrap;">
-        ${stats.map(s => `<span><i style="background:${colorOf(s)};"></i>${esc(s.label)}</span>`).join("")}
-      </div>
-    </div>`;
-}
-
-const TERMINAL_STATUSES = new Set(["completed", "cancelled"]);
-const TIMELINE_MAX_ROWS = 8;
-
-function timelineSectionHtml(layout) {
-  const rows = [];
-  for (const col of layout.columns) {
-    if (TERMINAL_STATUSES.has(col.status)) continue;
-    for (const c of col.cards) {
-      if (!c.createdAt || !c.deadline) continue;
-      const startMs = Date.parse(c.createdAt);
-      const endMs = Date.parse(c.deadline);
-      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue;
-      rows.push({
-        label: c.publicId,
-        title: (() => { const p = seriesParts({ ...(seriesById.get(c.publicId) || {}), title: c.title, public_id: c.publicId }); return [p.name, p.ep].filter(Boolean).join(" · "); })(),
-        colorVar: STATUS_COLOR_VAR[col.status] || "--s-draft",
-        startMs, endMs, heat: c.heat || 0,
-      });
-    }
-  }
-  if (!rows.length) return "";
-  rows.sort((a, b) => b.heat - a.heat);
-  const shown = rows.slice(0, TIMELINE_MAX_ROWS);
-  const now = Date.now();
-  const rangeStart = Math.min(...shown.map(r => r.startMs));
-  const rangeEnd = Math.max(now, ...shown.map(r => r.endMs));
-  return `
-    <div class="bcell board-timeline-cell">
-      <h3>Таймлайн активных серий</h3>
-      ${timelineHtml(shown, rangeStart, rangeEnd, now)}
-    </div>`;
-}
 
 function monthOptionsHtml(selected) {
   if (!/^\d{4}-\d{2}$/.test(selected || "")) selected = "";
@@ -551,11 +477,8 @@ async function renderBoard(root) {
   const expanded = readExpanded();
   const folded = readFolded();
   rememberSeries(lastBoardData.statuses);
-  const stats = boardStats(layout);
   const active = layout.columns.filter(c => c.status !== "completed" && c.status !== "cancelled").reduce((n, c) => n + (c.total || 0), 0);
   const canCreateReport = can("reports.create");
-  const timeline = boardMode() === "timeline";
-  lastLayout = layout;
   root.innerHTML = `
     <div class="page-header">
       <div>
@@ -568,32 +491,15 @@ async function renderBoard(root) {
       </div>
     </div>
     ${boardToolbarHtml()}
-    ${timeline ? topRowHtml(layout, stats) : ""}
     <div class="board">${layout.columns.map(col => columnHtml(col, collapsed, expanded, folded)).join("")}</div>
   `;
-  root.querySelectorAll("[data-board-mode]").forEach(b => b.addEventListener("click", () => switchBoardMode(root, b.dataset.boardMode)));
   wireBoardCards(root);
   loadAvatars(root);
   wireBoardScroll(root.querySelector(".board"));
   wireBoardToolbar(root);
   wireColumnButtons(root);
   wireBoardHeaderActions(root);
-  playTimelineIntro(root);
   playBoardCardsIntro(root);
-}
-
-function topRowHtml(layout, stats) {
-  const timelineCell = timelineSectionHtml(layout);
-  return `<div class="board-top-row${timelineCell ? "" : " single"}">${timelineCell}${performanceHtml(stats)}</div>`;
-}
-
-function switchBoardMode(root, mode) {
-  setBoardMode(mode);
-  root.querySelectorAll("[data-board-mode]").forEach(b => b.classList.toggle("on", b.dataset.boardMode === mode));
-  root.querySelector(".board-top-row")?.remove();
-  if (mode !== "timeline" || !lastLayout) return;
-  root.querySelector(".board")?.insertAdjacentHTML("beforebegin", topRowHtml(lastLayout, boardStats(lastLayout)));
-  playTimelineIntro(root);
 }
 
 function playBoardCardsIntro(root) {

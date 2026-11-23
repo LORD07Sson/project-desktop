@@ -701,8 +701,6 @@ button.kd-tile:hover { transform: translateY(-2px); }
 .kc-flag { position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--s-work); box-shadow: 0 0 0 3px color-mix(in srgb, var(--s-work) 22%, transparent); }
 :root[data-theme="light"] .board-card { background: rgba(255, 255, 255, .75); }
 :root[data-theme="light"] .kc-ft .board-card-progress-track { background: rgba(80, 40, 20, .08); }
-.board-top-row { margin-bottom: 16px; }
-.board-top-row .bcell { border-radius: var(--radius-lg); }
 .kd-sum { display: flex; gap: 10px; flex-wrap: wrap; }
 .kd-sum > div { padding: 9px 16px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
 .kd-sum small { display: block; font-size: 9px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }

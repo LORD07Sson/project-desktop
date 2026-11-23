@@ -60,44 +60,4 @@ export function deltaPillHtml(pct) {
   return `<span class="delta-pill ${positive ? "up" : "down"}">${positive ? "+" : ""}${pct}%</span>`;
 }
 
-export function timelineHtml(rows, rangeStart, rangeEnd, todayMs) {
-  const span = Math.max(1, rangeEnd - rangeStart);
-  const pct = ms => Math.max(0, Math.min(100, ((ms - rangeStart) / span) * 100));
-  const fmt = ms => {
-    const d = new Date(ms);
-    return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
-  };
-  const tagHtml = (left, current, text) => left > 65
-    ? `<div class="gantt-tag end${current ? " current" : ""}" style="right:${(100 - left).toFixed(2)}%;">${esc(text)}</div>`
-    : `<div class="gantt-tag${current ? " current" : ""}" style="left:${left.toFixed(2)}%;">${esc(text)}</div>`;
-  const bars = rows.map(r => {
-    const left = pct(r.startMs);
-    const width = Math.max(2, pct(r.endMs) - left);
-    const current = todayMs >= r.startMs && todayMs <= r.endMs;
-    return `
-      <div class="gantt-row" title="${esc(r.title)}: ${esc(fmt(r.startMs))} → ${esc(fmt(r.endMs))}">
-        <div class="gantt-track">
-          ${tagHtml(left, current, `${fmt(r.startMs)} ${r.title}`)}
-          <div class="gantt-bar" style="left:${left.toFixed(2)}%; width:0%; background:var(${r.colorVar}); color:var(${r.colorVar});" data-target-width="${width.toFixed(2)}"></div>
-        </div>
-      </div>`;
-  }).join("");
-  return `
-    <div class="gantt">
-      <div class="gantt-axis"><span>${fmt(rangeStart)}</span><span>${fmt(rangeEnd)}</span></div>
-      <div class="gantt-body" style="--today-pct:${pct(todayMs).toFixed(2)}%;">
-        <div class="gantt-today-line" title="Сегодня"></div>
-        ${bars || `<div class="no-assignee">Нет активных серий со сроком</div>`}
-      </div>
-    </div>`;
-}
 
-export function playTimelineIntro(root) {
-  const bars = root.querySelectorAll(".gantt-bar");
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      bars.forEach(el => { el.style.width = `${el.dataset.targetWidth}%`; });
-    });
-  });
-}
-
