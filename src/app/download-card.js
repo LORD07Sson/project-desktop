@@ -3,6 +3,7 @@ import { invoke, listen } from "./tauri.js";
 import { state } from "./state.js";
 import { esc } from "./utils.js";
 import { revealInFolder } from "./tauri.js";
+import { dlButton } from "./dl-button.js";
 
 let seq = 0;
 
@@ -22,7 +23,8 @@ function fmt(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
 }
 
-export async function downloadWithCard({ command, args, savePath, name }) {
+export async function downloadWithCard({ command, args, savePath, name, button = null }) {
+  const btnAnim = dlButton(button);
   const job = `dl-${Date.now()}-${++seq}`;
   const card = document.createElement("div");
   card.className = "dl-card";
@@ -39,6 +41,7 @@ export async function downloadWithCard({ command, args, savePath, name }) {
     if (p.job !== job) return;
     if (p.total > 0) {
       bar.style.width = `${Math.min(100, (p.done / p.total) * 100)}%`;
+      btnAnim.progress(p.done / p.total);
       const sec = Math.max(1, (Date.now() - started) / 1000);
       note.textContent = `${fmt(p.done)} из ${fmt(p.total)} · ${(p.done / sec / 1048576).toFixed(1)} МБ/с`;
     } else {
@@ -55,6 +58,7 @@ export async function downloadWithCard({ command, args, savePath, name }) {
     bar.style.width = "100%";
     card.classList.remove("busy");
     card.classList.add("ok");
+    btnAnim.done(true);
     note.textContent = `Сохранено в ${savePath.replace(/[\\/][^\\/]*$/, "") || savePath}`;
     note.title = savePath;
     act.innerHTML = `<button type="button" class="btn dl-reveal">📂 Показать в папке</button>`;
@@ -66,6 +70,7 @@ export async function downloadWithCard({ command, args, savePath, name }) {
     bar.classList.remove("indet");
     card.classList.remove("busy");
     card.classList.add("err");
+    btnAnim.done(false);
     note.textContent = `Не удалось скачать: ${e}`;
     return false;
   } finally {

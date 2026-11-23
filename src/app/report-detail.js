@@ -721,7 +721,7 @@ export async function openReportDetail(publicId) {
         : btn.dataset.rawLegacy === "1"
           ? `report/${publicId}/raws/legacy/${btn.dataset.rawDl}/${btn.dataset.rawCharacter}/file`
           : `report/${publicId}/raws/${btn.dataset.rawDl}/file`;
-      downloadAttachment(path, btn.dataset.rawName);
+      downloadAttachment(path, btn.dataset.rawName, btn);
     }));
     sheet.querySelectorAll("[data-raw-delete]").forEach(btn => btn.addEventListener("click", async () => {
       const label = btn.dataset.fileName || "файл";
@@ -836,7 +836,7 @@ export async function openReportDetail(publicId) {
       else toast(`Добавлено файлов: ${uploaded}.`, "success");
     }));
     sheet.querySelectorAll("[data-source-dl]").forEach(btn => btn.addEventListener("click", () => {
-      downloadAttachment(`report/${publicId}/sources/files/${btn.dataset.sourceDl}/file`, btn.dataset.sourceName);
+      downloadAttachment(`report/${publicId}/sources/files/${btn.dataset.sourceDl}/file`, btn.dataset.sourceName, btn);
     }));
     sheet.querySelectorAll("[data-source-add]").forEach(btn => btn.addEventListener("click", async () => {
       const kind = btn.dataset.sourceAdd;
@@ -999,7 +999,7 @@ export async function openReportDetail(publicId) {
         if (!savePath) return;
         btn.disabled = true;
         try {
-          const ok = await downloadWithCard({ command: "download_report_file", args: { reportId: publicId, fileId }, savePath, name: btn.dataset.fileName || "файл" });
+          const ok = await downloadWithCard({ command: "download_report_file", args: { reportId: publicId, fileId }, savePath, name: btn.dataset.fileName || "файл", button: btn });
           if (!ok && await askConfirm(`Не удалось скачать «${btn.dataset.fileName || "файл"}» на компьютер.
 
 Прислать его через бота в Telegram? Бот возьмёт файл из архива.`)) {

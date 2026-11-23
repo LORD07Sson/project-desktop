@@ -35,10 +35,10 @@ export function attachHtml(a) {
   </div>`;
 }
 
-export async function downloadAttachment(rel, name) {
+export async function downloadAttachment(rel, name, button = null) {
   const savePath = await pickOutputFile(name || "file");
   if (!savePath) return;
-  await downloadWithCard({ command: "download_api_file", args: { apiPath: rel }, savePath, name: name || "file" });
+  await downloadWithCard({ command: "download_api_file", args: { apiPath: rel }, savePath, name: name || "file", button });
 }
 
 function openImage(rel, name) {
@@ -59,7 +59,7 @@ export function wireAttachments(root) {
     const img = e.target.closest("[data-att-open]");
     if (img) { e.preventDefault(); openImage(img.dataset.attOpen, img.dataset.attName); return; }
     const dl = e.target.closest("[data-att-dl]");
-    if (dl) { e.preventDefault(); downloadAttachment(dl.dataset.attDl, dl.dataset.attName); }
+    if (dl) { e.preventDefault(); downloadAttachment(dl.dataset.attDl, dl.dataset.attName, dl); }
   });
 }
 
