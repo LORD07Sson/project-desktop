@@ -3978,3 +3978,4 @@ select.fsel-native { display: none !important; }
 }
 
 .avatar-popover .ap-row + .ap-row { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.avatar-popover .ap-row .ap-name { white-space: nowrap; }

@@ -1102,6 +1102,7 @@ function decorateNote(escapedHtml) {
 }
 
 const TALLY_RE = /([^\s—–\-:\d,;][^—–\n]*?)\s*[—–-]\s*(\d+)(?=[\s,;]|$)/g;
+const TALLY_FILLER_RE = /\s+(?:вместе|хором|все|together)\s*$/i;
 const TALLY_JOIN_RE = /\s*(?:[;,/&+]|\s(?:и|and)\s)\s*/i;
 function rosterPeople(assignees = [], users = []) {
   const seen = new Map();
@@ -1116,8 +1117,13 @@ const rosterKey = name => String(name || "").split(/\s+/).filter(Boolean).join("
 function rosterMatch(name, roster) {
   if (!roster) return null;
   const key = rosterKey(name);
+  const byId = id => roster.people.find(p => p.id === String(id)) || { id: String(id), name: "" };
   const bound = roster.aliases[key];
-  if (bound != null) return roster.people.find(p => p.id === String(bound)) || { id: String(bound), name: "" };
+  if (bound != null) return byId(bound);
+  // "Трагик вместе" / "трагик (хором)" — a bound alias as a whole word of the name.
+  const words = key.split(/[^a-zа-я0-9_]+/i).filter(Boolean);
+  const viaAlias = [...new Set(Object.entries(roster.aliases).filter(([a]) => words.includes(a)).map(([, id]) => String(id)))];
+  if (viaAlias.length === 1) return byId(viaAlias[0]);
   const norm = roster.people.map(p => ({ p, ks: p.names.map(rosterKey) }));
   const pick = test => { const hit = norm.filter(({ ks }) => ks.some(test)); return hit.length === 1 ? hit[0].p : null; };
   const prefix = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return i; };
@@ -1134,7 +1140,7 @@ function tallyHtml(text, roster = null) {
   const max = Math.max(...rows.map(r => r.n)) || 1;
   const sum = rows.reduce((acc, r) => acc + r.n, 0);
   const tile = r => {
-    const parts = String(r.name).split(TALLY_JOIN_RE).map(x => x.trim()).filter(Boolean);
+    const parts = String(r.name).split(TALLY_JOIN_RE).map(x => x.replace(TALLY_FILLER_RE, "").trim()).filter(Boolean);
     const bound = roster && roster.aliases[rosterKey(r.name)] != null;
     const group = parts.length > 1 && !bound ? parts.map(part => ({ part, who: rosterMatch(part, roster) })) : null;
     const who = group ? (group.every(g => g.who) ? { id: "", name: group.map(g => g.who.name || g.part).join(", ") } : null) : rosterMatch(r.name, roster);
