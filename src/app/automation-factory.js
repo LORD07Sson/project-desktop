@@ -86,7 +86,7 @@ export function mountFactory(root, go) {
     root.innerHTML = `
     <div class="fc">
       <div class="fc-trunk">
-        <div class="fc-trunk-title"><b>Магистраль канала</b><span>${backbone ? `лимиты до ${backbone} Мбит/с${s.total ? ` · общий потолок ${s.total}` : ""}` : "лимитов нет"} · хостинг режет выше ~50 Мбит/с</span></div>
+        <div class="fc-trunk-title"><b>Магистраль канала</b><span>${backbone ? `лимиты до ${backbone} Мбит/с${s.total ? ` · общий потолок ${s.total}` : ""}` : "лимитов нет"}</span></div>
         <div class="fc-gauge" title="Сколько из ~50 Мбит/с канала занимают лимиты"><i style="width:${Math.min(100, backbone / 50 * 100)}%"></i></div>
         <div class="fc-trunk-sub">${s.night_now ? "🌙 ночной режим" : "☀ обычный режим"} · Свободно на складе (диск): ${fmtGb(d.disk_free)}</div>
       </div>
