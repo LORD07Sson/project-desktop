@@ -276,10 +276,11 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   const fmtBytes = n => n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} ГБ` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} МБ` : `${Math.ceil(n / 1024)} КБ`;
 
   async function showRelease(x) {
+    const toList = keepPlace(showReleases);
     const my = ++seq;
     const back = `<button type="button" class="btn sm" data-pc-rback>← К раздачам</button>`;
     box.innerHTML = `<div class="pc-wrap">${tabs("releases")}<div class="pc-bar">${back}</div><div class="pc-empty">Загружаю раздачу…</div></div>`;
-    box.onclick = ev => { if (tabClick(ev)) return; if (ev.target.closest("[data-pc-rback]")) showReleases(); };
+    box.onclick = ev => { if (tabClick(ev)) return; if (ev.target.closest("[data-pc-rback]")) toList(); };
     let d;
     try {
       d = await cget(`/parser/access/release/${encodeURIComponent(x.id)}`);
@@ -339,7 +340,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     sum();
     box.onclick = async ev => {
       if (tabClick(ev)) return;
-      if (ev.target.closest("[data-pc-rback]")) { showReleases(); return; }
+      if (ev.target.closest("[data-pc-rback]")) { toList(); return; }
       if (ev.target.closest("[data-pc-get]")) {
         const on = boxes.filter(b => b.checked).map(b => files[+b.dataset.pcFile].path);
         get.disabled = true;
@@ -387,16 +388,22 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
     return document.scrollingElement;
   };
 
+  // Запоминает место в списке сейчас; вернувшись через fn, прокручивает обратно.
+  function keepPlace(fn) {
+    if (fn.keepsScroll) return fn;
+    const sc = scroller(), y = sc.scrollTop;
+    const back = async () => {
+      await fn();
+      const put = () => { sc.scrollTop = y; };
+      put(); requestAnimationFrame(put); setTimeout(put, 250);
+    };
+    back.keepsScroll = true;
+    return back;
+  }
+  let authorsBack = null;
+
   async function showPost(url, back) {
-    if (!back.keepsScroll) {
-      const sc = scroller(), y = sc.scrollTop, orig = back;
-      back = async () => {
-        await orig();
-        const put = () => { sc.scrollTop = y; };
-        put(); requestAnimationFrame(put); setTimeout(put, 250);
-      };
-      back.keepsScroll = true;
-    }
+    back = keepPlace(back);
     const my = ++seq;
     toTop();
     const backBtn = `<button type="button" class="btn sm" data-pp-back>← Назад</button>`;
@@ -508,7 +515,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (!el) return;
       if (el.matches("[data-pp-back]")) { back(); return; }
       if (el.dataset.ppGo) { showPost(el.dataset.ppGo, back); return; }
-      if (el.dataset.ppAuthor) { const [s, id] = el.dataset.ppAuthor.split("/"); showPosts(s, id, 1); return; }
+      if (el.dataset.ppAuthor) { const [s, id] = el.dataset.ppAuthor.split("/"); authorsBack = null; showPosts(s, id, 1); return; }
       if (el.dataset.ppPick) {
         const i = +el.dataset.ppPick;
         const main = box.querySelector(".pp-main");
@@ -570,7 +577,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   async function randomPick(kind) {
     try {
       const r = await apiGet(`/parser/access/random/${kind}`, { site });
-      if (kind === "post") showPost(r.url, showFeed); else showPosts(r.service, r.id, 1);
+      if (kind === "post") showPost(r.url, showFeed); else { authorsBack = null; showPosts(r.service, r.id, 1); }
     } catch (e) { toast(String(e?.message || e), "error"); }
   }
 
@@ -634,7 +641,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       const pg = ev.target.closest("[data-pc-fpage]");
       if (pg && !pg.disabled) { fs.page = +pg.dataset.pcFpage; toTop(); showFeed(); return; }
       const au = ev.target.closest("[data-pc-author]");
-      if (au) { const [service, id] = au.dataset.pcAuthor.split("/"); showPosts(service, id, 1); return; }
+      if (au) { const [service, id] = au.dataset.pcAuthor.split("/"); authorsBack = null; showPosts(service, id, 1); return; }
       const post = ev.target.closest("[data-pc-post]");
       if (post) { showPost(post.dataset.pcPost, showFeed); }
     };
@@ -684,7 +691,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (pg) { st.page = +pg.dataset.pcPage; toTop(); showAuthors(); return; }
       if (ev.target.closest("[data-pc-random]")) { randomPick("author"); return; }
       const card = ev.target.closest("[data-pc-author]");
-      if (card) { const [service, id] = card.dataset.pcAuthor.split("/"); showPosts(service, id, 1); }
+      if (card) { const [service, id] = card.dataset.pcAuthor.split("/"); authorsBack = keepPlace(showAuthors); showPosts(service, id, 1); }
     };
   }
 
@@ -697,7 +704,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       prefetch(`/parser/access/creator/${encodeURIComponent(service)}/${encodeURIComponent(id)}`, { page: page + 1, site });
     } catch (e) {
       if (my === seq) box.innerHTML = `<div class="pc-wrap"><button type="button" class="btn sm" data-pc-back>← К авторам</button><div class="pc-empty">Посты недоступны: ${esc(e.message || e)}</div></div>`;
-      box.onclick = ev => { if (ev.target.closest("[data-pc-back]")) showAuthors(); };
+      box.onclick = ev => { if (ev.target.closest("[data-pc-back]")) (authorsBack || showAuthors)(); };
       return;
     }
     if (my !== seq) return;
@@ -719,7 +726,7 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       ${pager(d.page, d.pages, "data-pc-ppage")}
     </div>`;
     box.onclick = ev => {
-      if (ev.target.closest("[data-pc-back]")) { showAuthors(); return; }
+      if (ev.target.closest("[data-pc-back]")) { (authorsBack || showAuthors)(); return; }
       const pg = ev.target.closest("[data-pc-ppage]");
       if (pg) { toTop(); showPosts(service, id, +pg.dataset.pcPpage); return; }
       const post = ev.target.closest("[data-pc-post]");

@@ -287,7 +287,7 @@ function attachGlobal(body) {
     const nav = e.target.closest("[data-page]:not(#lt-page-content)");
     if (nav) { switchPage(nav.dataset.page); return; }
     if (e.target.closest("#lt-restart-steam")) { doRestartSteam(); return; }
-    if (e.target.closest("#lt-back-btn")) { switchPage("home"); return; }
+    if (e.target.closest("#lt-back-btn")) { goBackPlace("home"); return; }
     if (e.target.closest("#lt-login-btn")) { doLogin(); return; }
     if (e.target.closest("#lt-code-btn")) { doCodeLogin(); return; }
     if (e.target.closest("#lt-logout-btn")) {
@@ -338,9 +338,23 @@ function switchPage(page) {
   if (!body) return;
   body.querySelectorAll(".lt-nav[data-page]").forEach(b => b.classList.toggle("active", b.dataset.page === page));
   scrollMainTop();
-  renderPage(page);
+  return renderPage(page);
 }
 function scrollMainTop() { $("#luatools-body .lt-main")?.scrollTo(0, 0); }
+
+// «Назад» из карточки игры или фикса — на ту же страницу и то же место списка.
+let backPlace = null;
+function rememberPlace() {
+  if (currentPage === "detail") return;
+  backPlace = { page: currentPage, y: $("#luatools-body .lt-main")?.scrollTop || 0 };
+}
+async function goBackPlace(fallback) {
+  const p = backPlace || { page: fallback, y: 0 };
+  backPlace = null;
+  await switchPage(p.page || fallback);
+  const put = () => $("#luatools-body .lt-main")?.scrollTo(0, p.y);
+  put(); requestAnimationFrame(put); setTimeout(put, 250);
+}
 
 async function renderPage(page) {
   const el = $("#lt-page-content");
@@ -1738,6 +1752,7 @@ async function renderUtilities(el) {
 }
 
 async function openFixDetail(appId) {
+  rememberPlace();
   const el = $("#lt-page-content");
   el.innerHTML = '<div class="lt-loading">Загружаю фиксы…</div>';
   try {
@@ -1772,7 +1787,7 @@ async function openFixDetail(appId) {
         </div>
       </div>`;
 
-    el.querySelector("#lt-back-fix")?.addEventListener("click", () => { switchPage("fixes"); });
+    el.querySelector("#lt-back-fix")?.addEventListener("click", () => { goBackPlace("fixes"); });
     el.querySelector("#lt-revert-fix")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       if (!await confirmAction("Откатить фикс? Оригинальные файлы будут восстановлены.")) return;
@@ -1807,7 +1822,7 @@ async function openFixDetail(appId) {
         openFixDetail(appId);
       } catch (e) { toast(errMsg(e), "error"); }
     })));
-  } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(errMsg(e))}</div>`; el.querySelector("#lt-back-fix")?.addEventListener("click", () => { switchPage("fixes"); }); }
+  } catch (e) { el.innerHTML = `<button class="lt-btn lt-btn-sm" id="lt-back-fix">← Назад</button><div class="lt-error" style="margin-top:12px">${esc(errMsg(e))}</div>`; el.querySelector("#lt-back-fix")?.addEventListener("click", () => { goBackPlace("fixes"); }); }
 }
 
 
@@ -2227,6 +2242,7 @@ async function runDiagnostics(box, appId, lua) {
 }
 
 async function openDetail(appId) {
+  rememberPlace();
   currentPage = "detail";
   scrollMainTop();
   const el = $("#lt-page-content");
