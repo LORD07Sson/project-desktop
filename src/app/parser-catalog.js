@@ -532,8 +532,8 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
       if (el.matches("[data-pp-expand]")) { el.closest(".pp-desc").classList.remove("clamp"); el.remove(); return; }
       if (el.dataset.ppDl) { queue(el, fileBody(files[+el.dataset.ppDl])); return; }
       const imgBody = i => {
-        const url = imgs[i].full || imgs[i].thumb;
-        return { url, name: `${d.title || "image"}${imgs.length > 1 ? ` ${i + 1}` : ""}`, headers: {} };
+        const url = imgs[i].orig || imgs[i].full || imgs[i].thumb;
+        return { url, name: `${d.title || "image"}${imgs.length > 1 ? ` ${i + 1}` : ""}`, headers: imgs[i].orig ? imgs[i].headers || {} : {} };
       };
       if (el.matches("[data-pp-img]")) {
         const i = +(box.querySelector(".pp-main")?.dataset.ppZoom || 0);
