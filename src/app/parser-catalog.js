@@ -378,7 +378,25 @@ export function openCatalog(box, { onPick, onClose, onQueued, labels }) {
   };
   const svg = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ICON.other}</svg>`;
 
+  // Ближайший прокручиваемый предок — чтобы «Назад» вернул на то же место списка.
+  const scroller = () => {
+    for (let e = box.parentElement; e && e !== document.body; e = e.parentElement) {
+      const oy = getComputedStyle(e).overflowY;
+      if ((oy === "auto" || oy === "scroll") && e.scrollHeight > e.clientHeight) return e;
+    }
+    return document.scrollingElement;
+  };
+
   async function showPost(url, back) {
+    if (!back.keepsScroll) {
+      const sc = scroller(), y = sc.scrollTop, orig = back;
+      back = async () => {
+        await orig();
+        const put = () => { sc.scrollTop = y; };
+        put(); requestAnimationFrame(put); setTimeout(put, 250);
+      };
+      back.keepsScroll = true;
+    }
     const my = ++seq;
     toTop();
     const backBtn = `<button type="button" class="btn sm" data-pp-back>← Назад</button>`;
