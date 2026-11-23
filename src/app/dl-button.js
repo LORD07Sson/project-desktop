@@ -9,7 +9,7 @@ export function dlButton(btn) {
   clearTimeout(btn._dlT);
   btn.querySelectorAll(".dlb-ring, .dlb-ok").forEach(n => n.remove());
   btn.classList.remove("dlb-ok-on", "dlb-err", "dlb-back");
-  btn.insertAdjacentHTML("beforeend", `<svg class="dlb-ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="t" cx="18" cy="18" r="${R}"/><circle class="a" cx="18" cy="18" r="${R}" style="stroke-dasharray:${LEN.toFixed(2)};stroke-dashoffset:${LEN.toFixed(2)}"/></svg><span class="dlb-ok" aria-hidden="true">${CHECK}</span>`);
+  btn.insertAdjacentHTML("beforeend", `<svg class="dlb-ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="t" cx="18" cy="18" r="${R}"/><circle class="a" cx="18" cy="18" r="${R}" style="stroke-dasharray:${LEN.toFixed(2)};stroke-dashoffset:${LEN.toFixed(2)}"/></svg><span class="dlb-ok" aria-hidden="true"><span class="dlb-disc">${CHECK}</span></span>`);
   const arc = btn.querySelector(".dlb-ring .a");
   btn.classList.add("dlb", "dlb-run", "dlb-indet");
   btn.setAttribute("aria-busy", "true");
