@@ -4108,3 +4108,8 @@ select.fsel-native { display: none !important; }
 .tab-panel[data-panel="list"] .ls-prog { white-space: nowrap; }
 .tab-panel[data-panel="list"] .ls-prog .kd-track { display: inline-block; vertical-align: middle; width: 90px; }
 .tab-panel[data-panel="list"] .ls-pct { margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+/* Загрузчик: выбор качества прямо в карточке видео */
+.pr-pick { display: flex; gap: 8px; align-items: center; margin: 10px 0 8px; }
+.pr-pick select { width: auto; min-width: 200px; }
+.pr-all { margin-top: 10px; }

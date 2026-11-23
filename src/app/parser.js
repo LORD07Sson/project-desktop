@@ -374,6 +374,21 @@ export async function loadParser() {
     const poster = /^https:\/\//i.test(r.poster || "") ? r.poster : "";
     const host = hostOf(input.value.trim());
     const count = (r.candidates || []).length;
+    // Лучший поток на каждое качество: mp4 по https надёжнее сегментированных и webm.
+    const byHeight = new Map();
+    (r.candidates || []).forEach((c, i) => {
+      if (typeof c.quality !== "number" || c.audio_only || c.drm || c.name) return;
+      const score = (c.protocol === "https" ? 2 : 0) + (c.ext === "mp4" ? 1 : 0);
+      const prev = byHeight.get(c.quality);
+      if (!prev || score > prev.score) byHeight.set(c.quality, { i, c, score });
+    });
+    const picks = [...byHeight.entries()].sort((a, b) => b[0] - a[0]).map(([, v]) => v);
+    const def = picks.find(p => p.c.quality <= 1080) || picks[0];
+    const pickHtml = picks.length >= 2 ? `
+          <div class="pr-pick">
+            <select id="pr-pick" class="field-input">${picks.map(p => `<option value="${p.i}"${p === def ? " selected" : ""}>${p.c.quality}p${p.c.ext ? ` · ${esc(p.c.ext)}` : ""}${p.c.filesize ? ` · ${p.c.filesize_estimated ? "≈ " : ""}${fmtSize(p.c.filesize)}` : ""}</option>`).join("")}</select>
+            <button type="button" class="btn primary" id="pr-pick-dl" data-dl="${def.i}">Скачать</button>
+          </div>` : "";
     const head = `
       <div class="pr-meta${poster ? "" : " no-poster"}">
         <div class="pr-poster">
@@ -387,6 +402,7 @@ export async function loadParser() {
             ${r.duration ? `<span class="pr-dur">${fmtDur(r.duration)}</span>` : ""}
             <span class="pr-dur">${count ? `Потоков: ${count}` : "Потоки не найдены"}</span>
           </div>
+          ${pickHtml}
           <div class="pr-diag">${diag}</div>
         </div>
       </div>`;
@@ -420,7 +436,7 @@ export async function loadParser() {
     }).join("");
 
     const candidatesBlock = (r.candidates && r.candidates.length)
-      ? `<div class="pr-list">${rowsHtml}</div>`
+      ? (pickHtml ? `<details class="pr-reqs pr-all"><summary>Все потоки (${count}) — выбрать вручную</summary><div class="pr-list">${rowsHtml}</div></details>` : `<div class="pr-list">${rowsHtml}</div>`)
       : `<div class="empty">${esc(r.reason?.message || "Видео не нашлось даже глубоким анализом.")} Проверьте, что ссылка открывает страницу с плеером, или выберите поток вручную из сетевых запросов ниже.</div>`;
 
     const allReqs = (r.requests || []).filter(x => x.status && x.status < 400);
@@ -449,6 +465,7 @@ export async function loadParser() {
     results.innerHTML = head + notice + profileHtml(r.profile) + candidatesBlock + requestsBlock;
     status.hidden = true;
     bindProfile(r);
+    $("#pr-pick")?.addEventListener("change", e => { $("#pr-pick-dl").dataset.dl = e.target.value; });
     syncEngine();
     const posterImg = $("#pr-poster-img");
     if (posterImg) {
