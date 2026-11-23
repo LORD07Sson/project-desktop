@@ -165,6 +165,13 @@ function savePendingNet(list) {
 
 let netBusy = false;
 let lastNetOk = true;
+// Замер реального скачивания с сервера: только передача байтов, без ожидания, пока сервер достанет файл.
+export function reportDownload({ bytes, ms, ok, error }) {
+  if (!trackingOn()) return;
+  if (ok && (bytes < 1048576 || ms < 300)) return;
+  apiPost("/telemetry/net", { at: Date.now(), server_ok: true, dl_bytes: Math.round(bytes || 0), dl_ms: Math.max(1, Math.round(ms || 0)), dl_ok: !!ok, dl_error: ok ? "" : String(error || "").slice(0, 120) }).catch(() => { });
+}
+
 export async function runNetCheck() {
   if (!trackingOn() || !state.token) return;
   if (netBusy || Date.now() - lastNet < 30_000) return;

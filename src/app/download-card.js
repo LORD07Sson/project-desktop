@@ -4,6 +4,7 @@ import { state } from "./state.js";
 import { esc } from "./utils.js";
 import { revealInFolder } from "./tauri.js";
 import { dlButton } from "./dl-button.js";
+import { reportDownload } from "./telemetry.js";
 
 let seq = 0;
 
@@ -36,9 +37,13 @@ export async function downloadWithCard({ command, args, savePath, name, button =
   const act = card.querySelector(".dl-act");
   card.querySelector(".dl-x").addEventListener("click", () => card.remove());
   const started = Date.now();
+  let firstByte = 0, lastByte = 0, bytes = 0;
   const unlisten = await listen("download-progress", ev => {
     const p = ev.payload || {};
     if (p.job !== job) return;
+    if (!firstByte) firstByte = Date.now();
+    lastByte = Date.now();
+    bytes = p.done || 0;
     if (p.total > 0) {
       bar.style.width = `${Math.min(100, (p.done / p.total) * 100)}%`;
       btnAnim.progress(p.done / p.total);
@@ -59,6 +64,7 @@ export async function downloadWithCard({ command, args, savePath, name, button =
     card.classList.remove("busy");
     card.classList.add("ok");
     btnAnim.done(true);
+    if (firstByte) reportDownload({ bytes, ms: lastByte - firstByte, ok: true });
     note.textContent = `Сохранено в ${savePath.replace(/[\\/][^\\/]*$/, "") || savePath}`;
     note.title = savePath;
     act.innerHTML = `<button type="button" class="btn dl-reveal">📂 Показать в папке</button>`;
@@ -71,6 +77,7 @@ export async function downloadWithCard({ command, args, savePath, name, button =
     card.classList.remove("busy");
     card.classList.add("err");
     btnAnim.done(false);
+    reportDownload({ bytes, ms: (lastByte || Date.now()) - (firstByte || started), ok: false, error: e });
     note.textContent = `Не удалось скачать: ${e}`;
     return false;
   } finally {
