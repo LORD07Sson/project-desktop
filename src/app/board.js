@@ -60,7 +60,7 @@ const SORTS = [
 const WIP_LIMITS = { working: 8, review: 15, revision: 6 };
 const STALE_AFTER_DAYS = 7;
 
-function boardMode() { try { return localStorage.getItem("project_board_mode") === "timeline" ? "timeline" : "cols"; } catch (_) { return "cols"; } }
+function boardMode() { return "cols"; }
 function setBoardMode(v) { try { localStorage.setItem("project_board_mode", v); } catch (_) { } }
 
 function sortKey() { return `project_board_sort_${state.telegramId || "anon"}`; }
@@ -563,10 +563,6 @@ async function renderBoard(root) {
         <h1>Доска</h1>
       </div>
       <div class="page-header-actions">
-        <div class="kd-seg" role="tablist">
-          <button type="button" data-board-mode="cols" class="${timeline ? "" : "on"}">Колонки</button>
-          <button type="button" data-board-mode="timeline" class="${timeline ? "on" : ""}">Таймлайн</button>
-        </div>
         ${canCreateReport ? `<button class="btn" id="board-import-btn">Импорт</button>
         <button class="btn primary" id="board-add-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Новый проект</button>` : ""}
       </div>
