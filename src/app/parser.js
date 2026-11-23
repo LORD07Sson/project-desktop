@@ -52,6 +52,17 @@ function readEngine() {
   try { const v = localStorage.getItem(ENGINE_KEY); return v === "nm3u8" || v === "ytdlp" ? v : "auto"; } catch (_) { return "auto"; }
 }
 
+let pageListeners = null;
+
+function isHttpUrl(v) {
+  try { const u = new URL(v); return u.protocol === "https:" || u.protocol === "http:"; } catch { return false; }
+}
+
+function skeletonHtml() {
+  return `<div class="pr-meta pr-skel" aria-hidden="true"><div class="pr-poster"></div><div class="pr-meta-body"><i style="width:30%"></i><i style="width:70%;height:18px"></i><i style="width:45%"></i></div></div>
+    <div class="pr-list pr-skel" aria-hidden="true">${"<div class=\"pr-row\"><i style=\"width:48px;height:22px\"></i><i style=\"flex:1\"></i><i style=\"width:150px;height:30px\"></i></div>".repeat(3)}</div>`;
+}
+
 function hostOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
@@ -62,19 +73,27 @@ function layout() {
       <section class="pr-hero" id="pr-hero">
         <div class="pr-hero-bg" id="pr-hero-bg" aria-hidden="true"></div>
         <div class="pr-hero-body">
+          <button class="pr-gear pr-cat-ic" type="button" id="pr-catalog" title="Каталог сайтов" aria-label="Каталог сайтов"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></button>
           <button class="pr-gear" type="button" id="pr-settings-btn" title="Настройки загрузчика" aria-label="Настройки загрузчика" aria-expanded="false">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
             </button>
           <div class="pr-head">
             <h2>Загрузчик видео <span class="pr-beta">Beta</span></h2>
-            <small>Вставьте ссылку: найдём постер, потоки и качества. Если сайт прячет плеер в JS, поможет глубокий анализ.</small>
+            <small>Вставьте ссылку на страницу с видео — найдём постер, потоки и качества.</small>
           </div>
           <form class="pr-form" id="pr-form">
-            <input id="pr-url" type="url" placeholder="https://… ссылка на страницу с видео" autocomplete="off" required>
+            <label class="pr-url-field" id="pr-url-field">
+              <span class="pr-host-chip" id="pr-host-chip" hidden><i id="pr-host-ic"></i><b id="pr-host-name"></b></span>
+              <input id="pr-url" type="url" placeholder="https://… ссылка на страницу с видео" autocomplete="off" required spellcheck="false">
+              <button class="pr-paste" type="button" id="pr-paste" title="Вставить ссылку из буфера" aria-label="Вставить из буфера"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM8 5.5H6.5A1.5 1.5 0 0 0 5 7v12.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H16"/></svg><span>Вставить</span></button>
+            </label>
             <button class="btn primary" type="submit" id="pr-submit">Найти</button>
-            <button class="btn" type="button" id="pr-deep" title="Открыть страницу в headless-браузере и перехватить сеть">Глубокий анализ</button>
-            <button class="btn" type="button" id="pr-catalog" title="Каталог">Каталог</button>
           </form>
+          <div class="pr-hints">
+            <span>Не нашлось видео? <button type="button" class="pr-link" id="pr-deep" title="Открыть страницу в браузере на сервере и перехватить сеть">Глубокий анализ</button></span>
+            <span class="pr-kbd-hint"><kbd>Ctrl</kbd>+<kbd>V</kbd> в любом месте — вставить и найти · ссылку можно перетащить сюда</span>
+          </div>
+          <div class="pr-drop-hint" aria-hidden="true">Отпустите, чтобы найти видео</div>
           <div class="pr-settings" id="pr-settings" hidden>
             <div class="pr-set-row pr-set-col">
               <span><b>Загрузчик</b><small>Каким движком качать потоки.</small></span>
@@ -99,6 +118,16 @@ function layout() {
       <div class="pr-status" id="pr-status" hidden></div>
       <div class="pr-results" id="pr-results"></div>
       <div class="pr-history" id="pr-history"></div>
+      <div class="pr-empty" id="pr-empty">
+        <div class="pr-empty-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M10 9l5 3-5 3z"/></svg></div>
+        <b>Здесь появятся ваши загрузки</b>
+        <small>Сервер скачает видео, а вы заберёте готовый файл. Файлы хранятся 30 минут.</small>
+        <div class="pr-empty-tips">
+          <div class="pr-tip"><b>Страница с плеером</b><small>Ссылка на серию или ролик — найдём все качества</small></div>
+          <div class="pr-tip"><b>Прямая ссылка</b><small>.m3u8, .mpd или .mp4 — скачаем как есть</small></div>
+          <button type="button" class="pr-tip" id="pr-tip-catalog"><b>Каталог сайтов</b><small>Поиск по подключённым источникам</small></button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -174,7 +203,64 @@ export async function loadParser() {
     });
   });
   deepBtn.addEventListener("click", () => analyze(true));
+  $("#pr-tip-catalog").addEventListener("click", () => catalogBtn.click());
   loadHistory();
+
+  const urlField = $("#pr-url-field");
+  const hostChip = $("#pr-host-chip");
+  function syncUrl() {
+    const v = input.value.trim();
+    const ok = isHttpUrl(v);
+    const host = ok ? hostOf(v) : "";
+    hostChip.hidden = !host;
+    if (host) { $("#pr-host-name").textContent = host; $("#pr-host-ic").textContent = host[0].toUpperCase(); }
+    urlField.classList.toggle("bad", !!v && !ok);
+    urlField.classList.toggle("has-host", !!host);
+  }
+  input.addEventListener("input", syncUrl);
+  const takeUrl = text => {
+    const m = String(text || "").match(/https?:\/\/[^\s<>"']+/i);
+    if (!m) return false;
+    input.value = m[0];
+    syncUrl();
+    analyze(false);
+    return true;
+  };
+  $("#pr-paste").addEventListener("click", async e => {
+    e.preventDefault();
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!takeUrl(text)) toast("В буфере нет ссылки", "info");
+    } catch { input.focus(); toast("Нажмите Ctrl+V, чтобы вставить", "info"); }
+  });
+  input.addEventListener("paste", e => {
+    const text = e.clipboardData?.getData("text") || "";
+    if (input.value.trim() || !isHttpUrl(text.trim())) return;
+    e.preventDefault();
+    takeUrl(text);
+  });
+  if (pageListeners) pageListeners.abort();
+  pageListeners = new AbortController();
+  document.addEventListener("paste", e => {
+    if (!input.isConnected) { pageListeners?.abort(); return; }
+    if (!input.offsetParent || hero.hidden) return;
+    const t = e.target;
+    if (t && (t.closest?.("input, textarea, [contenteditable]"))) return;
+    if (takeUrl(e.clipboardData?.getData("text"))) e.preventDefault();
+  }, { signal: pageListeners.signal });
+  hero.addEventListener("dragover", e => {
+    if (![...(e.dataTransfer?.types || [])].some(t => t === "text/uri-list" || t === "text/plain")) return;
+    e.preventDefault();
+    hero.classList.add("drop");
+  });
+  hero.addEventListener("dragleave", e => { if (!hero.contains(e.relatedTarget)) hero.classList.remove("drop"); });
+  hero.addEventListener("drop", e => {
+    hero.classList.remove("drop");
+    const text = e.dataTransfer?.getData("text/uri-list") || e.dataTransfer?.getData("text/plain");
+    if (!text) return;
+    e.preventDefault();
+    if (!takeUrl(text)) toast("Это не ссылка", "info");
+  });
 
   let analyzeReferer = null;
   let engine = readEngine();
@@ -207,6 +293,7 @@ export async function loadParser() {
   async function analyze(deep) {
     const url = input.value.trim();
     if (!url) return;
+    let fellBack = false;
     const cookies = cookieInput.value.trim();
     if (cookies && cookieOrigin && cookieOrigin !== pageOrigin(url)) {
       cookieInput.value = "";
@@ -224,12 +311,12 @@ export async function loadParser() {
     analyzeReferer = null;
     if (cookies) cookieOrigin = pageOrigin(url);
     submit.disabled = deepBtn.disabled = true;
-    (deep ? deepBtn : submit).textContent = deep ? "Браузер…" : "Ищу…";
+    submit.textContent = deep ? "Браузер…" : "Ищу…";
     status.hidden = false;
     status.textContent = deep
       ? "Глубокий анализ: запускаю headless-Chromium, 10–15 секунд…"
-      : "Анализ: yt-dlp + разбор HTML…";
-    results.innerHTML = "";
+      : "Ищу видео на странице…";
+    results.innerHTML = skeletonHtml();
     setBackdrop(null);
     try {
       const start = () => fetch(`${API_BASE}/parser/analyze/start`, {
@@ -255,14 +342,22 @@ export async function loadParser() {
         status.textContent = `${state.stage || "Анализ"}…`;
       } while (state.status === "running");
       if (state.status === "error") throw new Error(state.error || "Анализ не удался");
+      const found = (state.result?.candidates || []).length;
+      if (!deep && !found && !referer) {
+        fellBack = true;
+        status.textContent = "Обычный поиск ничего не нашёл — пробую глубокий анализ…";
+        submit.disabled = deepBtn.disabled = false;
+        return analyze(true);
+      }
       renderResults(state.result);
     } catch (err) {
+      results.innerHTML = "";
       status.textContent = `Ошибка: ${err.message || err}`;
       toast(`Загрузчик: ${err.message || err}`, "error");
     } finally {
+      if (fellBack) return;
       submit.disabled = deepBtn.disabled = false;
       submit.textContent = "Найти";
-      deepBtn.textContent = "Глубокий анализ";
     }
   }
 
@@ -327,7 +422,7 @@ export async function loadParser() {
 
     const candidatesBlock = (r.candidates && r.candidates.length)
       ? `<div class="pr-list">${rowsHtml}</div>`
-      : `<div class="empty">${esc(r.reason?.message || "Автоматически видео не найдено.")}${r.deep ? "" : " Попробуйте «Глубокий анализ»."}</div>`;
+      : `<div class="empty">${esc(r.reason?.message || "Видео не нашлось даже глубоким анализом.")} Проверьте, что ссылка открывает страницу с плеером, или выберите поток вручную из сетевых запросов ниже.</div>`;
 
     const allReqs = (r.requests || []).filter(x => x.status && x.status < 400);
     const reqs = [
@@ -579,10 +674,23 @@ export async function loadParser() {
     if (!jobs.length) { box.innerHTML = ""; return; }
     const wasOpen = open || box.querySelector("details")?.open;
     const done = jobs.filter(j => j.status === "done");
+    const active = jobs.filter(j => JOB_OPEN.has(j.status));
+    const rest = jobs.filter(j => !JOB_OPEN.has(j.status));
+    const activeHtml = active.length ? `<div class="pr-active">${active.map(j => {
+      const pct = Math.max(0, Math.min(100, Number(j.percent) || 0));
+      const line = j.status === "running"
+        ? `${ENGINE_NAMES[j.active_engine] ? `${ENGINE_NAMES[j.active_engine]} · ` : ""}${j.active_engine === "torrent" ? torrentStats(j) : `${pct}%${j.speed ? ` · ${(j.speed / 1048576).toFixed(1)} МБ/с` : ""}`}`
+        : JOB_STATUS[j.status] || j.status;
+      return `<div class="pr-act">
+        <div class="pr-act-top"><b title="${esc(j.filename || j.name)}">${esc(j.filename || j.name)}</b><button type="button" class="btn sm" data-job-cancel="${esc(j.id)}">Отмена</button></div>
+        <div class="pr-act-bar${j.status === "running" && pct > 0 ? "" : " indet"}"><i style="width:${pct}%"></i></div>
+        <small>${esc(line)}</small>
+      </div>`;
+    }).join("")}</div>` : "";
     document.dispatchEvent(new CustomEvent("parser:jobs", { detail: jobs }));
-    box.innerHTML = `<details class="pr-reqs"${wasOpen ? " open" : ""}><summary>Очередь и загрузки (${jobs.length}) — файлы хранятся 30 минут</summary>
+    box.innerHTML = activeHtml + (rest.length ? `<details class="pr-reqs"${wasOpen ? " open" : ""}><summary>Готовые и завершённые (${rest.length}) — файлы хранятся 30 минут</summary>
       ${done.length > 1 ? `<button type="button" class="btn sm" id="pr-save-all">Сохранить все готовые (${done.length}) в папку</button>` : ""}
-      <div class="pr-req-list">${jobs.map(j => `
+      <div class="pr-req-list">${rest.map(j => `
       <div class="pr-req pr-job">
         <div class="pr-req-ct">${esc(JOB_STATUS[j.status] || j.status)}${j.status === "running" ? ` · ${ENGINE_NAMES[j.active_engine] ? `${esc(ENGINE_NAMES[j.active_engine])} · ` : ""}${j.active_engine === "torrent" ? esc(torrentStats(j)) : `${j.percent || 0}%`}` : ""}${j.size ? ` · ${fmtSize(j.size)}` : ""}${j.error ? ` · ${esc(j.error)}` : ""}</div>
         <div class="pr-req-url" title="${esc(j.filename || j.name)}">${esc(j.filename || j.name)}</div>
@@ -591,7 +699,7 @@ export async function loadParser() {
           ${JOB_OPEN.has(j.status) ? `<button type="button" class="btn sm" data-job-cancel="${esc(j.id)}">Отмена</button>`
             : `<button type="button" class="btn sm" data-job-remove="${esc(j.id)}" title="${j.status === "done" ? "Убрать из списка и удалить файл с сервера" : "Убрать из списка"}">✕</button>`}
         </div>
-      </div>`).join("")}</div></details>`;
+      </div>`).join("")}</div></details>` : "");
     box.onclick = async ev => {
       const cancel = ev.target.closest("[data-job-cancel]");
       if (cancel) {
