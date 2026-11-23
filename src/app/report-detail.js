@@ -1146,7 +1146,7 @@ function tallyHtml(text, roster = null) {
     const bound = roster && roster.aliases[rosterKey(r.name)] != null;
     const group = parts.length > 1 && !bound ? parts.map(part => ({ part, who: rosterMatch(part, roster) })) : null;
     const who = group ? (group.every(g => g.who) ? { id: "", name: group.map(g => g.who.name || g.part).join(", ") } : null) : rosterMatch(r.name, roster);
-    const tipLine = (w, label) => w ? `${label}|${w.name && rosterKey(w.name) !== rosterKey(label) ? w.name : "в составе"}` : `${label}|не узнали${roster && roster.canBind ? " · нажмите" : ""}`;
+    const tipLine = (w, label) => w ? `${label}|${(w.names || [w.name]).find(x => x && rosterKey(x) !== rosterKey(label)) || ""}` : `${label}|не узнали${roster && roster.canBind ? " · нажмите" : ""}`;
     const canBind = roster && roster.canBind;
     const bubble = (w, label) => `<span class="avatar-bubble${w ? "" : " unk"}"${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
     const avatars = group
@@ -1157,7 +1157,7 @@ function tallyHtml(text, roster = null) {
       const [, sub] = tipLine(g.who, g.part).split("|");
       return `<div class="nt-fan-row${g.who ? "" : " unk"}" style="--i:${i}"${canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(g.part)}"` : ""}>
         <span class="avatar-bubble${g.who ? "" : " unk"}"${g.who && g.who.id ? ` data-avatar-for="${esc(g.who.id)}"` : ""}>${g.who ? esc(initials(g.who.name || g.part)) : "?"}</span>
-        <span class="nt-fan-txt"><b>${esc(g.part)}</b><small>${esc(sub)}</small></span>
+        <span class="nt-fan-txt"><b>${esc(g.part)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span>
       </div>`;
     }).join("")}</div>` : "";
     const bind = group && canBind ? ` role="button" tabindex="0" data-roster-bind="" data-roster-parts="${esc(parts.join("~~"))}" title="Нажмите, чтобы привязать кого-то из них"` : roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
