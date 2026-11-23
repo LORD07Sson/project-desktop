@@ -104,7 +104,7 @@ function titleRowHtml(t, rank) {
       <td class="tt-vote">
         <div class="vote-actions tt-vote-actions">
           <button class="vote-btn${t.my_vote === 1 ? " on-like" : ""}" data-vote-title="${t.id}" data-vote-choice="1" title="Нравится">${LIKE_ICON}<span>${t.likes}</span></button>
-          <button class="vote-btn${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1" title="Не то">${DISLIKE_ICON}<span>${t.dislikes}</span></button>
+          <button class="vote-btn${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1" title="Не нравится">${DISLIKE_ICON}<span>${t.dislikes}</span></button>
         </div>
       </td>
     </tr>`;
@@ -139,10 +139,10 @@ function heroTitle(titles) {
   return titles.slice().sort(TABLE_SORTS.rank)[0] || null;
 }
 
-function takeButtonHtml(t) {
+function takeButtonHtml(t, card = false) {
   if (!can("titles.work")) return "";
   return (t.work_taken ?? t.in_work)
-    ? `<button class="btn tl-take on" data-take-title="${t.id}" title="Состав, дедлайн, автосерии">● В работе</button>`
+    ? `<button class="btn tl-take on" data-take-title="${t.id}" title="Состав, дедлайн, автосерии">${card ? "⚙ Состав и сроки" : "● В работе"}</button>`
     : `<button class="btn tl-take" data-take-title="${t.id}">⚑ Взять в работу</button>`;
 }
 
@@ -180,7 +180,7 @@ function heroBodyHtml(t, seasonName) {
       </div>
       <div class="tl-spot-actions vote-actions">
         <button class="btn primary tl-hero-like${t.my_vote === 1 ? " on-like" : ""}" data-vote-title="${t.id}" data-vote-choice="1">${LIKE_ICON}Нравится <span>${t.likes}</span></button>
-        <button class="btn tl-hero-dislike${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1" title="Не то">${DISLIKE_ICON}<span>${t.dislikes}</span></button>
+        <button class="btn tl-hero-dislike${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1" title="Не нравится">${DISLIKE_ICON}<span>${t.dislikes}</span></button>
         <button class="btn tl-hero-more" data-open-title-detail="${t.id}">${HERO_ICONS.info}Подробнее</button>
         ${takeButtonHtml(t)}
       </div>
@@ -228,20 +228,25 @@ function voteCardHtml(t, rank, isLeader, showWork = true) {
   const posterSrc = imgProxy(t.poster_url);
   const pct = approvalPct(t);
   const total = voteActivity(t);
+  // Меньше трёх голосов — процент ещё ничего не значит: полоска приглушена.
+  const thin = total < 3;
+  const barTitle = total ? `Одобрение ${pct}% · ${total} ${votesWord(total)}${thin ? " — пока мало голосов" : ""}` : "Голосов пока нет";
   return `
     <div class="af-card${isLeader ? " lead" : ""}${t.in_work ? " in-work" : ""}" data-open-title-detail="${t.id}" data-af="${t.id}">
       ${posterSrc ? `<img class="af-poster" ${hdPosterAttrs(t.id, t.poster_url, 320)} alt="" loading="lazy">` : `<div class="af-poster af-poster-ph">🎬</div>`}
-      <div class="af-tags">${isLeader ? `<span class="af-tag lead">★ Лидер</span>` : ""}${t.in_work && showWork ? `<span class="af-tag work">● В работе</span>` : ""}</div>
-      <span class="af-rank">${rank}</span>
+      <div class="af-tags">${isLeader ? `<span class="af-tag lead">★ Лидер</span>` : ""}${t.in_work && showWork ? `<span class="af-tag work">● В работе</span>` : ""}${!t.in_work && !showWork ? `<span class="af-tag idle">Не в работе</span>` : ""}</div>
+      ${isLeader ? "" : `<span class="af-rank">${rank}</span>`}
       <div class="af-body">
         <h3 class="af-name">${esc(t.name)}</h3>
         <div class="af-meta" data-card-meta="${t.id}">${esc(cardMetaText(detailsCache.get(t.id)))}</div>
-        <div class="af-votes"><b>${pct == null ? "—" : `${pct}%`}</b><span class="af-bar"><i style="width:${pct ?? 0}%"></i></span><span>${total ? `${total} ${votesWord(total)}` : "нет голосов"}</span></div>
-        <div class="vote-actions af-acts">
-          <button class="vote-btn${t.my_vote === 1 ? " on-like" : ""}" data-vote-title="${t.id}" data-vote-choice="1">${LIKE_ICON}<span>${t.likes}</span></button>
-          <button class="vote-btn${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1">${DISLIKE_ICON}<span>${t.dislikes}</span></button>
+        <div class="af-votes${thin ? " thin" : ""}" title="${esc(barTitle)}">
+          <span class="af-bar"><i style="width:${pct ?? 0}%"></i></span>
+          <div class="vote-actions af-acts">
+            <button class="vote-btn${t.my_vote === 1 ? " on-like" : ""}" data-vote-title="${t.id}" data-vote-choice="1" title="Нравится">${LIKE_ICON}<span>${t.likes}</span></button>
+            <button class="vote-btn${t.my_vote === -1 ? " on-dislike" : ""}" data-vote-title="${t.id}" data-vote-choice="-1" title="Не нравится">${DISLIKE_ICON}<span>${t.dislikes}</span></button>
+          </div>
         </div>
-        ${takeButtonHtml(t)}
+        ${takeButtonHtml(t, true)}
       </div>
     </div>`;
 }
@@ -376,7 +381,7 @@ const FILTERS = {
   work: { label: "В работе", test: t => t.in_work },
   novote: { label: "Без моего голоса", test: t => !t.my_vote },
   like: { label: "Мне нравится", test: t => t.my_vote === 1 },
-  dislike: { label: "Не то", test: t => t.my_vote === -1 },
+  dislike: { label: "Не нравится", test: t => t.my_vote === -1 },
 };
 let titlesFilter = "all";
 
@@ -411,7 +416,7 @@ function renderTitlesBody(wrap) {
     ? `<button type="button" class="af-add" data-af-add><b>＋</b><span>Добавить тайтл</span><em>сезоны и тайтлы — в «Управлении»</em></button>` : "";
   wrap.innerHTML = voteHeroHtml(currentTitles, currentSeasonName) + toolbarHtml() + (!shown.length ? empty : view === "table"
     ? titlesTableHtml(shown)
-    : `<div class="af-grid">${shown.map(t => voteCardHtml(t, rankOf.get(t.id), t.id === leader, !shown.every(x => x.in_work))).join("")}${addCard}</div>`);
+    : `<div class="af-grid">${shown.map(t => voteCardHtml(t, rankOf.get(t.id), t.id === leader, shown.filter(x => x.in_work).length * 2 <= shown.length)).join("")}${addCard}</div>`);
   wrap.querySelector("[data-af-add]")?.addEventListener("click", () => openSeasonsAdminSheet(() => loadTitlesTab()));
   if (rospisTitles.length) {
     const bar = document.createElement("div");
