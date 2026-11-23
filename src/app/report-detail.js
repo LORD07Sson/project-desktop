@@ -1140,7 +1140,7 @@ function tallyHtml(text, roster = null) {
     const who = group ? (group.every(g => g.who) ? { id: "", name: group.map(g => g.who.name || g.part).join(", ") } : null) : rosterMatch(r.name, roster);
     const bubble = (w, label) => `<span class="avatar-bubble"${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
     const avatars = group
-      ? `<span class="nt-avs" style="--n:${Math.min(group.length, 3)}">${group.slice(0, 3).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more">+${group.length - 3}</span>` : ""}</span>`
+      ? `<span class="nt-avs">${(group.length > 3 ? group.slice(0, 2) : group).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more">+${group.length - 2}</span>` : ""}</span>`
       : bubble(who, r.name);
     const bind = roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
     return `<div class="nt-tile${who ? "" : " unknown"}"${bind}>
