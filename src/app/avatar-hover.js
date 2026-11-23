@@ -94,7 +94,7 @@ document.addEventListener("mouseover", e => {
     return;
   }
   const el = e.target.closest("[data-avatar-for]");
-  if (!el || el.classList.contains("xl") || !el.dataset.avatarFor) return;
+  if (!el || el.classList.contains("xl") || !el.dataset.avatarFor || el.closest(".nt-fan, .nt-tile.group .nt-avs")) return;
   if (el.closest(".tb-menu-wrap")?.querySelector(".tb-menu:not([hidden])")) return;
   clearTimeout(hideTimer);
   if (currentId === el.dataset.avatarFor) return;

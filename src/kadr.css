@@ -3979,5 +3979,28 @@ select.fsel-native { display: none !important; }
 
 .avatar-popover .ap-row + .ap-row { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .avatar-popover .ap-row .ap-name { white-space: nowrap; }
-.nt-tile .nt-avs .avatar-bubble[data-roster-bind] { cursor: pointer; transition: transform .12s; }
-.nt-tile .nt-avs .avatar-bubble[data-roster-bind]:hover { transform: translateY(-2px); position: relative; z-index: 1; }
+
+/* Combined dubbers: hover the stacked faces → a menu opens above the tile and the rows fan out of the stack */
+.nt-tile.group:has(.nt-avs:hover), .nt-tile.group:has(.nt-fan:hover) { z-index: 5; }
+.nt-fan { --row: 40px; position: absolute; left: 50%; bottom: calc(100% - 14px); width: 224px; padding: 6px; box-sizing: border-box;
+  display: flex; flex-direction: column-reverse; gap: 2px;
+  border-radius: 14px; background: var(--surface-2, #1c1612); border: 1px solid var(--line); box-shadow: 0 14px 34px rgba(0, 0, 0, .5);
+  opacity: 0; transform: translate(-50%, 8px) scale(.96); transform-origin: 50% 100%; pointer-events: none; z-index: 5;
+  transition: opacity .16s, transform .22s cubic-bezier(.2, .9, .3, 1); }
+.nt-fan::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg);
+  background: inherit; border: inherit; border-width: 0 1px 1px 0; }
+.nt-fan::before { content: ""; position: absolute; left: 0; right: 0; bottom: -18px; height: 18px; } /* hover bridge to the faces */
+.nt-fan-row { display: flex; align-items: center; gap: 10px; height: var(--row); padding: 0 8px; border-radius: 10px; text-align: left;
+  opacity: 0; transform: translateY(calc(var(--i) * var(--row))) scale(.92);
+  transition: transform .34s cubic-bezier(.2, .9, .25, 1.12), opacity .2s, background .12s; transition-delay: calc(var(--i) * 30ms); }
+.nt-fan-row .avatar-bubble { flex: none; width: 28px; height: 28px; margin: 0; font-size: 11px; border: 0; }
+.nt-fan-row .avatar-bubble.unk { background: transparent; border: 1px dashed rgba(255, 255, 255, .28); color: var(--ink-dim); }
+.nt-fan-txt { display: grid; justify-items: start; min-width: 0; line-height: 1.25; }
+.nt-fan-txt b { max-width: 100%; font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0; }
+.nt-fan-txt small { max-width: 100%; font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nt-fan-row.unk small { color: rgba(var(--fire-rgb), .9); }
+.nt-tile.group:has(.nt-avs:hover) .nt-fan, .nt-fan:hover { opacity: 1; transform: translate(-50%, -6px) scale(1); pointer-events: auto; }
+.nt-tile.group:has(.nt-avs:hover) .nt-fan-row, .nt-fan:hover .nt-fan-row { opacity: 1; transform: none; }
+.nt-fan-row[data-roster-bind] { cursor: pointer; }
+.nt-fan-row[data-roster-bind]:hover, .nt-fan-row[data-roster-bind]:focus-visible { background: rgba(255, 255, 255, .06); outline: none; }
+.nt-tile .nt-avs { cursor: default; }

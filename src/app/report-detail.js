@@ -1146,15 +1146,23 @@ function tallyHtml(text, roster = null) {
     const bound = roster && roster.aliases[rosterKey(r.name)] != null;
     const group = parts.length > 1 && !bound ? parts.map(part => ({ part, who: rosterMatch(part, roster) })) : null;
     const who = group ? (group.every(g => g.who) ? { id: "", name: group.map(g => g.who.name || g.part).join(", ") } : null) : rosterMatch(r.name, roster);
-    const tipLine = (w, label) => w ? `${label}|${w.name && rosterKey(w.name) !== rosterKey(label) ? w.name : "в составе"}` : `${label}|не узнали${roster && roster.canBind ? " — нажмите, чтобы выбрать" : ""}`;
+    const tipLine = (w, label) => w ? `${label}|${w.name && rosterKey(w.name) !== rosterKey(label) ? w.name : "в составе"}` : `${label}|не узнали${roster && roster.canBind ? " · нажмите" : ""}`;
     const canBind = roster && roster.canBind;
-    const bubble = (w, label) => `<span class="avatar-bubble${w ? "" : " unk"}"${group && canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(label)}"` : ""}${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : group ? ` data-avatar-tip="${esc(tipLine(w, label))}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
+    const bubble = (w, label) => `<span class="avatar-bubble${w ? "" : " unk"}"${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
     const avatars = group
-      ? `<span class="nt-avs">${(group.length > 3 ? group.slice(0, 2) : group).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more"${canBind ? ` role="button" tabindex="0" data-roster-bind="" data-roster-parts="${esc(group.slice(2).map(g => g.part).join("~~"))}"` : ""} data-avatar-tip="${esc(group.slice(2).map(g => tipLine(g.who, g.part)).join("~~"))}">+${group.length - 2}</span>` : ""}</span>`
+      ? `<span class="nt-avs">${(group.length > 3 ? group.slice(0, 2) : group).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more">+${group.length - 2}</span>` : ""}</span>`
       : bubble(who, r.name);
+    // Hover the stacked faces → they fan out into a list (bottom = first person), click a row to bind that one.
+    const fan = group ? `<div class="nt-fan" style="--n:${group.length}">${group.map((g, i) => {
+      const [, sub] = tipLine(g.who, g.part).split("|");
+      return `<div class="nt-fan-row${g.who ? "" : " unk"}" style="--i:${i}"${canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(g.part)}"` : ""}>
+        <span class="avatar-bubble${g.who ? "" : " unk"}"${g.who && g.who.id ? ` data-avatar-for="${esc(g.who.id)}"` : ""}>${g.who ? esc(initials(g.who.name || g.part)) : "?"}</span>
+        <span class="nt-fan-txt"><b>${esc(g.part)}</b><small>${esc(sub)}</small></span>
+      </div>`;
+    }).join("")}</div>` : "";
     const bind = group && canBind ? ` role="button" tabindex="0" data-roster-bind="" data-roster-parts="${esc(parts.join("~~"))}" title="Нажмите, чтобы привязать кого-то из них"` : roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
-    return `<div class="nt-tile${who ? "" : " unknown"}"${bind}>
-      ${avatars}
+    return `<div class="nt-tile${who ? "" : " unknown"}${group ? " group" : ""}"${bind}>
+      ${avatars}${fan}
       <span class="nt-name" title="${esc(r.name)}">${esc(group ? parts.join(", ") : r.name)}</span>
       <b>${r.n}</b>
       <small>${Math.round(r.n / sum * 100)}%</small>
