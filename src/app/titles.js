@@ -141,7 +141,7 @@ function heroTitle(titles) {
 
 function takeButtonHtml(t, card = false) {
   if (!can("titles.work")) return "";
-  return (t.work_taken ?? t.in_work)
+  return (t.work_taken || t.in_work)
     ? `<button class="btn tl-take on" data-take-title="${t.id}" title="Состав, дедлайн, автосерии">${card ? "⚙ Состав и сроки" : "● В работе"}</button>`
     : `<button class="btn tl-take" data-take-title="${t.id}">⚑ Взять в работу</button>`;
 }
