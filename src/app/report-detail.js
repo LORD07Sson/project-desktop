@@ -1102,6 +1102,7 @@ function decorateNote(escapedHtml) {
 }
 
 const TALLY_RE = /([^\s—–\-:\d,;][^—–\n]*?)\s*[—–-]\s*(\d+)(?=[\s,;]|$)/g;
+const TALLY_JOIN_RE = /\s*(?:[;,/&+]|\s(?:и|and)\s)\s*/i;
 function rosterPeople(assignees = [], users = []) {
   const seen = new Map();
   for (const u of [...(assignees || []), ...(users || [])]) {
@@ -1133,11 +1134,18 @@ function tallyHtml(text, roster = null) {
   const max = Math.max(...rows.map(r => r.n)) || 1;
   const sum = rows.reduce((acc, r) => acc + r.n, 0);
   const tile = r => {
-    const who = rosterMatch(r.name, roster);
+    const parts = String(r.name).split(TALLY_JOIN_RE).map(x => x.trim()).filter(Boolean);
+    const bound = roster && roster.aliases[rosterKey(r.name)] != null;
+    const group = parts.length > 1 && !bound ? parts.map(part => ({ part, who: rosterMatch(part, roster) })) : null;
+    const who = group ? (group.every(g => g.who) ? { id: "", name: group.map(g => g.who.name || g.part).join(", ") } : null) : rosterMatch(r.name, roster);
+    const bubble = (w, label) => `<span class="avatar-bubble"${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
+    const avatars = group
+      ? `<span class="nt-avs" style="--n:${Math.min(group.length, 3)}">${group.slice(0, 3).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more">+${group.length - 3}</span>` : ""}</span>`
+      : bubble(who, r.name);
     const bind = roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
     return `<div class="nt-tile${who ? "" : " unknown"}"${bind}>
-      <span class="avatar-bubble"${who ? ` data-avatar-for="${esc(who.id)}"` : ""}>${who ? esc(initials(who.name || r.name)) : "?"}</span>
-      <span class="nt-name">${esc(r.name)}</span>
+      ${avatars}
+      <span class="nt-name" title="${esc(r.name)}">${esc(group ? parts.join(", ") : r.name)}</span>
       <b>${r.n}</b>
       <small>${Math.round(r.n / sum * 100)}%</small>
       <span class="nt-bar"><i style="width:${(r.n / max * 100).toFixed(1)}%"></i></span>
