@@ -206,7 +206,7 @@ async function loadPersonalStatuses() {
 const STATUS_LOOK = {
   "Очередь": { tone: "queue", hint: "ещё не начато", empty: "Назначенные вам серии появятся здесь сами", next: "В работе", nextLabel: "→ В работу" },
   "В работе": { tone: "work", hint: "делаю сейчас", empty: "Перетащите сюда серию, за которую взялись", next: "Сдано", nextLabel: "✓ Сдано" },
-  "Сдано": { tone: "done", hint: "отмечено сданным", empty: "Сданные серии — здесь. Общий статус серии это не меняет" },
+  "Сдано": { tone: "done", hint: "отмечено сданным", empty: "Сюда попадут сданные серии" },
 };
 
 function doneAgo(movedAt) {
@@ -251,11 +251,11 @@ function renderPersonalStatuses(root, data) {
   const head = `<div class="page-header psb-head">
     <div><span class="kd-label">Моё · видно только вам</span><h1>Мои статусы</h1>
       <div class="sub">Отмечайте, что взяли и что сдали. Общий статус серии в студии от этого не меняется.</div></div>
-    <div class="kd-sum">
+    ${items.length ? `<div class="kd-sum">
       <div><small>Мои серии</small><b>${items.length}</b></div>
       <div><small>В работе</small><b>${working}</b></div>
       <div><small>Сдано</small><b>${done}</b><i class="psb-sum-bar"><em style="width:${pct}%"></em></i></div>
-      <div><small>Просрочено</small><b class="${overdue ? "hot" : ""}">${overdue}</b></div></div></div>`;
+      <div><small>Просрочено</small><b class="${overdue ? "hot" : ""}">${overdue}</b></div></div>` : ""}</div>`;
   const columnsHtml = columns.map(column => {
     const look = STATUS_LOOK[column.name] || { tone: column.is_done ? "done" : "queue", hint: "", empty: "Пока пусто" };
     const cards = byColumn[column.id] || [];
@@ -278,14 +278,16 @@ function renderPersonalStatuses(root, data) {
           ${item.is_manual ? `<button type="button" class="psb-act ghost" data-q-status-remove="${esc(item.public_id)}" title="Убрать только с моей доски">Убрать</button>` : ""}
         </div></article>`;
     }).join("");
-    const empty = `<div class="psb-empty"><span>${esc(look.empty)}</span>${look.tone === "queue" ? `<button type="button" class="psb-act" data-q-status-add>+ Добавить серию</button>` : ""}</div>`;
+    const empty = `<div class="psb-empty"><span>${esc(look.empty)}</span></div>`;
     return `<section class="psb-col tone-${look.tone}" data-q-status-col="${column.id}">
       <header class="psb-col-head"><i class="psb-dot"></i><b>${esc(column.name)}</b><span class="psb-count">${cards.length}</span><small>${esc(look.hint)}</small></header>
       <div class="psb-cards">${cardHtml || empty}</div></section>`;
   }).join("");
-  root.innerHTML = `${head}<div class="psb-toolbar">${viewSwitch()}<span class="psb-tip">Перетаскивайте карточки между колонками или жмите кнопки на них</span>
-      <button type="button" class="btn primary" data-q-status-add>+ Добавить серию</button></div>
-    ${columns.length ? `<div class="psb-board">${columnsHtml}</div>` : `<div class="q-empty">Групп пока нет.</div>`}`;
+  const blank = `<div class="psb-blank"><b>Пока ничего нет</b><span>Серии, которые вам назначат, появятся здесь сами. Можно добавить и вручную.</span>
+      <button type="button" class="btn primary" data-q-status-add>+ Добавить серию</button></div>`;
+  root.innerHTML = `${head}<div class="psb-toolbar">${viewSwitch()}${items.length ? `<span class="psb-tip">Перетаскивайте карточки между колонками или жмите кнопки на них</span>
+      <button type="button" class="btn primary" data-q-status-add>+ Добавить серию</button>` : ""}</div>
+    ${!columns.length ? `<div class="q-empty">Групп пока нет.</div>` : items.length ? `<div class="psb-board">${columnsHtml}</div>` : blank}`;
   bindViewSwitch(root);
   root.querySelectorAll("[data-q-status-add]").forEach(button => button.addEventListener("click", openAvailableReports));
   root.querySelectorAll("[data-q-status-open]").forEach(card => {
