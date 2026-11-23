@@ -1138,9 +1138,10 @@ function tallyHtml(text, roster = null) {
     const bound = roster && roster.aliases[rosterKey(r.name)] != null;
     const group = parts.length > 1 && !bound ? parts.map(part => ({ part, who: rosterMatch(part, roster) })) : null;
     const who = group ? (group.every(g => g.who) ? { id: "", name: group.map(g => g.who.name || g.part).join(", ") } : null) : rosterMatch(r.name, roster);
-    const bubble = (w, label) => `<span class="avatar-bubble"${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
+    const whoLabel = (w, label) => w ? (w.name && rosterKey(w.name) !== rosterKey(label) ? `${label} — ${w.name}` : label) : `${label} — не узнали`;
+    const bubble = (w, label, tip = group ? whoLabel(w, label) : "") => `<span class="avatar-bubble${w ? "" : " unk"}"${w && w.id ? ` data-avatar-for="${esc(w.id)}"` : ""}${tip ? ` title="${esc(tip)}"` : ""}>${w ? esc(initials(w.name || label)) : "?"}</span>`;
     const avatars = group
-      ? `<span class="nt-avs">${(group.length > 3 ? group.slice(0, 2) : group).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more">+${group.length - 2}</span>` : ""}</span>`
+      ? `<span class="nt-avs">${(group.length > 3 ? group.slice(0, 2) : group).map(g => bubble(g.who, g.part)).join("")}${group.length > 3 ? `<span class="avatar-bubble nt-more" title="${esc(group.slice(2).map(g => whoLabel(g.who, g.part)).join(", "))}">+${group.length - 2}</span>` : ""}</span>`
       : bubble(who, r.name);
     const bind = roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
     return `<div class="nt-tile${who ? "" : " unknown"}"${bind}>
