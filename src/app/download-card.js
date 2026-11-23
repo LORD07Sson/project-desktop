@@ -38,20 +38,26 @@ export async function downloadWithCard({ command, args, savePath, name, button =
   card.querySelector(".dl-x").addEventListener("click", () => card.remove());
   const started = Date.now();
   let firstByte = 0, lastByte = 0, bytes = 0;
+  const win = [];
   const unlisten = await listen("download-progress", ev => {
     const p = ev.payload || {};
     if (p.job !== job) return;
     if (!firstByte) firstByte = Date.now();
     lastByte = Date.now();
     bytes = p.done || 0;
+    // Текущая скорость — по последним ~3 с, а не от нажатия (туда попадало ожидание сервера).
+    win.push([lastByte, bytes]);
+    while (win.length > 2 && lastByte - win[0][0] > 3000) win.shift();
+    const [t0, b0] = win[0];
+    const bps = lastByte - t0 >= 400 ? (bytes - b0) / ((lastByte - t0) / 1000) : 0;
+    const speed = bps ? ` · ${(bps / 1048576).toFixed(1)} МБ/с (${Math.round(bps * 8 / 1e6)} Мбит/с)` : "";
     if (p.total > 0) {
       bar.style.width = `${Math.min(100, (p.done / p.total) * 100)}%`;
       btnAnim.progress(p.done / p.total);
-      const sec = Math.max(1, (Date.now() - started) / 1000);
-      note.textContent = `${fmt(p.done)} из ${fmt(p.total)} · ${(p.done / sec / 1048576).toFixed(1)} МБ/с`;
+      note.textContent = `${fmt(p.done)} из ${fmt(p.total)}${speed}`;
     } else {
       bar.classList.add("indet");
-      note.textContent = `Скачано ${fmt(p.done)}`;
+      note.textContent = `Скачано ${fmt(p.done)}${speed}`;
     }
   });
   card.classList.add("busy");
