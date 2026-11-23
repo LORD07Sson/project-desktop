@@ -4098,3 +4098,15 @@ select.fsel-native { display: none !important; }
 .board-col-head .board-col-purge:disabled { opacity: .3; pointer-events: none; }
 .board-col.collapsed .board-col-purge { display: none; }
 .a3-scope { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); margin-right: 4px; align-self: center; }
+
+/* Список серий: одна строка на серию */
+.tab-panel[data-panel="list"] table[data-density="compact"] tbody td { padding-top: 5px; padding-bottom: 5px; }
+.tab-panel[data-panel="list"] table[data-density="compact"] .ls-poster { width: 24px; height: 32px; border-radius: 5px; font-size: 10px; }
+.tab-panel[data-panel="list"] .ls-name { gap: 7px; }
+.tab-panel[data-panel="list"] .ls-name .ls-id { display: inline; flex: none; margin: 0; font-size: 11px; font-weight: 500; color: var(--ink-dim); letter-spacing: .02em; }
+.tab-panel[data-panel="list"] .ls-name .fav-star { flex: none; padding: 0 2px; font-size: 13px; opacity: 0; transition: opacity .15s; }
+.tab-panel[data-panel="list"] .ls-name .fav-star.on, .tab-panel[data-panel="list"] tr:hover .ls-name .fav-star { opacity: 1; }
+.tab-panel[data-panel="list"] .ls-stage-in { margin-left: 8px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.tab-panel[data-panel="list"] .ls-prog { white-space: nowrap; }
+.tab-panel[data-panel="list"] .ls-prog .kd-track { display: inline-block; vertical-align: middle; width: 90px; }
+.tab-panel[data-panel="list"] .ls-pct { margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }

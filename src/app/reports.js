@@ -83,12 +83,12 @@ const LIST_VIEW_COLUMNS = [
   ["progress", "Готовность"], ["team", "Команда"], ["actions", "Быстрые действия"],
 ];
 const DEFAULT_LIST_VIEW = {
-  visibleColumns: ["select", "series", ...LIST_VIEW_COLUMNS.map(([key]) => key)],
-  density: "comfortable",
+  visibleColumns: ["select", "series", ...LIST_VIEW_COLUMNS.map(([key]) => key).filter(key => key !== "stage")],
+  density: "compact",
 };
 const LIST_SORT_FIELDS = new Set(["public_id", "status", "pipeline_stage", "deadline"]);
 
-function listViewKey() { return `project_list_view_${state.telegramId || "anon"}`; }
+function listViewKey() { return `project_list_view2_${state.telegramId || "anon"}`; }
 function normalizeListView(view = {}) {
   const available = new Set(["select", "series", ...LIST_VIEW_COLUMNS.map(([key]) => key)]);
   const requested = Array.isArray(view.visibleColumns) ? view.visibleColumns : DEFAULT_LIST_VIEW.visibleColumns;
@@ -324,7 +324,8 @@ export function deadlineCellHtml(r, overdue) {
   const lateDays = time ? Math.floor((Date.now() - dueAt) / 86400000) : -days;
   const [txt, cls] = overdue ? [lateDays > 0 ? `просрочено ${lateDays} дн.` : "просрочено", "late"]
     : days === 0 ? ["сегодня", "late"] : days === 1 ? ["завтра", "soon"] : days <= 3 ? [`через ${days} дн.`, "soon"] : [`через ${days} дн.`, "ok"];
-  return `<span class="ls-dl-pill ${cls}">${txt}</span><span class="ls-dl-date">${date}</span>`;
+  const short = overdue ? (lateDays > 0 ? `−${lateDays} дн.` : "просрочено") : txt;
+  return `<span class="ls-dl-pill ${cls}" title="Срок: ${date}${overdue ? ` · ${txt}` : ""}">${short}</span>`;
 }
 
 export async function loadReports() {
@@ -467,15 +468,14 @@ export function renderReports() {
         <div class="ls-series-in">
           <span class="ls-poster"${posterSrc(r.poster_url) ? ` style="background-image:url('${esc(posterSrc(r.poster_url))}')"` : ""}>${posterSrc(r.poster_url) ? "" : esc(initials(t.name))}</span>
           <div class="ls-names">
-            <div class="ls-name"><span class="ls-name-t">${esc(t.name)}</span>${t.ep ? `<span class="ls-ep">${esc(t.ep)}</span>` : ""}${priorityFlagHtml(r.priority)}</div>
-            <div class="ls-id"><button class="fav-star ${fav ? "on" : ""}" data-fav title="${fav ? "Убрать из избранного" : "В избранное"}">${fav ? "★" : "☆"}</button>${esc(r.public_id)}${t.sub ? ` · ${esc(t.sub)}` : ""}${r.files_count ? ` · 📎${r.files_count}` : ""}${r.notes_count ? ` · 💬${r.notes_count}` : ""}</div>
+            <div class="ls-name"><span class="ls-name-t" title="${esc(t.name)}${t.sub ? ` · ${esc(t.sub)}` : ""}">${esc(t.name)}</span>${t.ep ? `<span class="ls-ep">${esc(t.ep)}</span>` : ""}${priorityFlagHtml(r.priority)}<span class="ls-id">${esc(r.public_id)}${r.files_count ? ` · 📎${r.files_count}` : ""}${r.notes_count ? ` · 💬${r.notes_count}` : ""}</span><button class="fav-star ${fav ? "on" : ""}" data-fav title="${fav ? "Убрать из избранного" : "В избранное"}">${fav ? "★" : "☆"}</button></div>
           </div>
         </div>
       </td>
-      <td data-list-col="status"><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(cleanStatus(r.status_label))}</span>${r.stuck ? `<span class="ls-stuck" title="Статус не менялся 3+ дня">застряло</span>` : ""}</td>
+      <td data-list-col="status"><span class="chip status-chip" style="--chip-accent: var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"><span class="dot ${dotClass}"></span>${esc(cleanStatus(r.status_label))}</span><span class="ls-stage-in">${esc(stageLabel(r))}</span>${r.stuck ? `<span class="ls-stuck" title="Статус не менялся 3+ дня">застряло</span>` : ""}</td>
       <td class="ls-stage" data-list-col="stage">${esc(stageLabel(r))}</td>
       <td class="ls-dl" data-list-col="deadline">${deadlineCellHtml(r, overdue)}</td>
-      <td class="ls-prog" data-list-col="progress"><span class="kd-track"><i style="width:${progressPct(r)}%; background:var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"></i></span></td>
+      <td class="ls-prog" data-list-col="progress"><span class="kd-track"><i style="width:${progressPct(r)}%; background:var(${STATUS_COLOR_VAR[r.status] || "--s-draft"})"></i></span><b class="ls-pct">${progressPct(r)}%</b></td>
       <td data-list-col="team">${assigneesHtml(r.assignees)}</td>
       <td class="row-actions" data-list-col="actions">
         <button class="icon-btn" data-quick-assign title="Назначить">👤</button>
