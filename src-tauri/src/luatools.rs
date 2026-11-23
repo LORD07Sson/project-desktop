@@ -3060,7 +3060,7 @@ pub fn lt_smokeapi_status(app_id: u64) -> bool {
 #[tauri::command]
 pub async fn lt_creamapi_install(app_id: u64) -> Result<String, String> {
     let info = lt_game_install_path(app_id);
-    let game_dir = PathBuf::from(info.path.ok_or("Игра не установлена")?);
+    info.path.ok_or("Игра не установлена")?; // CreamInstaller finds the folder itself; only check the game is installed
     let client = lt_client_builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
     let json: serde_json::Value = client.get("https://api.github.com/repos/acidicoala/CreamInstaller/releases/latest")
         .header("User-Agent", "project-desktop").send().await.map_err(|e| e.to_string())?
