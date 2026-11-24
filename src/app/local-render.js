@@ -4,6 +4,7 @@ import { getLocalVideo, pickLocalVideo } from "./local-video.js";
 import { apiPost, toast, openSheet, dismissSheet } from "./api.js";
 import { state } from "./state.js";
 import { esc } from "./utils.js";
+import { reportDownload } from "./telemetry.js";
 
 let running = null;
 
@@ -250,8 +251,10 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
   let monitor = null;
   let unlisten = () => {};
   let unlistenLog = () => {};
+  let unlistenDl = () => {};
   try {
     unlistenLog = await listen("localrender-log", ev => { const p = ev.payload || {}; journalAdd(p.kind || "out", String(p.text || "")); });
+    unlistenDl = await listen("localrender-dl", ev => { const p = ev.payload || {}; reportDownload({ bytes: p.bytes, ms: p.ms, ok: true }); });
   } catch (_) { }
   let stallTimer = null;
   let warnedMinute = 0;
@@ -355,6 +358,7 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
     if (stallTimer) clearInterval(stallTimer);
     unlisten();
     unlistenLog();
+    unlistenDl();
     running = null;
     try { await invoke("local_render_cleanup", { publicId }); } catch (_) { }
   }

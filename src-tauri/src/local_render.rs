@@ -517,7 +517,9 @@ pub async fn run(
         let mut file = std::fs::File::create(dir.join(name)).map_err(|e| format!("Не удалось создать {name}: {e}"))?;
         let mut done: u64 = 0;
         let mut last_emit = Instant::now();
+        let mut first_byte: Option<Instant> = None;
         while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Обрыв при скачивании «{label}»: {e}"))? {
+            first_byte.get_or_insert_with(Instant::now);
             if CANCEL_DOWNLOAD.load(Ordering::SeqCst) {
                 return Err("Операция отменена.".into());
             }
@@ -534,7 +536,11 @@ pub async fn run(
                 );
             }
         }
-        journal("ok", &format!("Скачано: {label} — {}", fmt_mb(done)));
+        let ms = first_byte.map_or(0, |t| t.elapsed().as_millis() as u64);
+        let speed = if ms > 0 { format!(" · {:.0} Мбит/с", done as f64 * 8.0 / ms as f64 / 1000.0) } else { String::new() };
+        journal("ok", &format!("Скачано: {label} — {}{speed}", fmt_mb(done)));
+        // Замер скорости для аналитики: только передача байтов, без ожидания ответа сервера.
+        let _ = app.emit("localrender-dl", serde_json::json!({ "bytes": done, "ms": ms }));
     }
     emit("download", 0.2, "Файлы скачаны");
 
