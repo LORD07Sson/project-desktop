@@ -5502,8 +5502,8 @@ button.pr-tip:hover { border-color: rgba(183, 148, 246, .5); background: rgba(16
 .pr-skel .pr-row { display: flex; align-items: center; gap: 14px; }
 @keyframes pr-shimmer { from { background-position: 100% 0; } to { background-position: -200% 0; } }
 /* active downloads */
-.pr-active { display: grid; gap: 8px; margin-bottom: 10px; }
-.pr-act { display: grid; gap: 7px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(183, 148, 246, .25); background: rgba(168, 85, 247, .07); animation: pr-fade .3s ease both; }
+.pr-active { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 10px; }
+.pr-act { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 7px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(183, 148, 246, .25); background: rgba(168, 85, 247, .07); animation: pr-fade .3s ease both; }
 .pr-act-top { display: flex; align-items: center; gap: 10px; }
 .pr-act-top b { flex: 1; min-width: 0; font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pr-act small { font-size: 12px; color: var(--ink-dim); }
