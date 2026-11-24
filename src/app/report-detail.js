@@ -87,13 +87,24 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
     if (t.length) lines.push(t.join(" · "));
     if (st.started && st.now) lines.push(`Всего с начала: ${clock(st.now - st.started)}`);
     const failed = st.stage === "error";
+    const audioOpen = card.querySelector(".rd-asm-audio")?.open;
     card.className = `rd-asm${failed ? " bad" : st.stage === "done" ? " ok" : ""}`;
     card.innerHTML = `
       <b>${failed ? "❌ Сборка не удалась" : st.stage === "cancelled" ? "🛑 Сборка отменена" : st.stage === "done" ? "✅ Финал собран" : st.stage === "queued" ? "⏳ Сборка в очереди" : "🎬 Сборка финала"}</b>
       <span class="rd-asm-step">${esc(st.message || "")}</span>
       ${failed || st.stage === "done" || st.stage === "queued" || st.stage === "cancelled" ? "" : `<div class="rd-asm-bar"><i style="width:${pct}%"></i><em>${pct}%</em></div>`}
       ${lines.map(l => `<span class="rd-asm-meta">${esc(l)}</span>`).join("")}
+      ${Array.isArray(st.audio_log) && st.audio_log.length ? `<details class="rd-asm-audio"${failed || audioOpen ? " open" : ""}>
+        <summary class="rd-asm-meta" style="cursor:pointer;">🔊 Журнал проверки звука</summary>
+        <pre style="margin:6px 0 0; max-height:260px; overflow:auto; font-size:12px; line-height:1.45; white-space:pre-wrap; user-select:text;">${esc(st.audio_log.join("\n"))}</pre>
+        <button type="button" class="btn" data-asm-audio-copy style="margin-top:6px;">Скопировать журнал</button>
+      </details>` : ""}
       ${failed || st.stage === "done" || st.stage === "cancelled" ? "" : `<button type="button" class="btn rd-asm-cancel" data-asm-cancel>⏹ Отменить сборку</button>`}`;
+    card.querySelector("[data-asm-audio-copy]")?.addEventListener("click", () => {
+      navigator.clipboard.writeText(st.audio_log.join("\n"))
+        .then(() => toast("Журнал проверки звука скопирован.", "success"))
+        .catch(e => toast(`Не удалось скопировать: ${e.message}`, "error"));
+    });
     card.querySelector("[data-asm-cancel]")?.addEventListener("click", async e => {
       const b = e.currentTarget;
       b.disabled = true;
@@ -122,10 +133,11 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
           import("./channel-post.js").then(m => m.openChannelPostSheet(st.post_id));
         }
         document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
-        timer = setTimeout(stop, 6000);
+        // С журналом проверки звука карточка остаётся до закрытия отчёта — чтобы его успели прочитать.
+        if (!st.audio_log?.length) timer = setTimeout(stop, 6000);
         return;
       }
-      if (st.stage === "error") { timer = setTimeout(stop, 20000); return; }
+      if (st.stage === "error") { if (!st.audio_log?.length) timer = setTimeout(stop, 20000); return; }
       if (st.stage === "cancelled") { toast("Сборка отменена.", "info"); timer = setTimeout(stop, 5000); return; }
     } else if (!seenActive) {
       if (!waitForStart || Date.now() - startedAt > 10 * 60 * 1000) { stop(); return; }
