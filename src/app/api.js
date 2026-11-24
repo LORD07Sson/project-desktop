@@ -95,6 +95,8 @@ export async function api(method, path, body) {
   const controller = new AbortController();
   const timeoutMs = /^\/titles\/\d+\/(?:take|nyaa-test|nyaa-browse)(?:\?|$)/.test(path) ? 45_000
     : /^\/report\/[^/]+\/files\/\d+\/(?:qc|peaks)(?:\?|$)/.test(path) ? 300_000
+    // План сборки: сервер сперва достаёт видео серии из Telegram (сотни МБ) — это минуты, а не 20 с.
+    : /^\/report\/[^/]+\/local-render\/plan(?:\?|$)/.test(path) ? 1_200_000
     : REQUEST_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs); // DevSkim: ignore DS172411
   let resp;

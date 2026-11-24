@@ -306,7 +306,7 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
       localPath = lv.path;
       selection = Object.assign({}, selection, { video: 0, local_video: lv.info });
     }
-    paint(el, { title: "🖥 Сборка у себя", label: "Готовлю план сборки…", fraction: 0, cancel: false });
+    paint(el, { title: "🖥 Сборка у себя", label: "Готовлю план сборки… Если видео серии ещё нет на сервере, он сначала достаёт его из Telegram — это может занять несколько минут.", fraction: 0, cancel: false });
     phase = "запрос плана сборки";
     plan = await apiPost(`/report/${publicId}/local-render/plan`, selection);
     journalAdd("ok", `План получен с сервера: файлов ${(plan.downloads || []).length}, шагов ffmpeg ${(plan.steps || []).length}`);
