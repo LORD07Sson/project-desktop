@@ -94,8 +94,9 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
       <span class="rd-asm-step">${esc(st.message || "")}</span>
       ${failed || st.stage === "done" || st.stage === "queued" || st.stage === "cancelled" ? "" : `<div class="rd-asm-bar"><i style="width:${pct}%"></i><em>${pct}%</em></div>`}
       ${lines.map(l => `<span class="rd-asm-meta">${esc(l)}</span>`).join("")}
-      ${Array.isArray(st.audio_log) && st.audio_log.length ? `<details class="rd-asm-audio"${failed || audioOpen ? " open" : ""}>
-        <summary class="rd-asm-meta" style="cursor:pointer;">🔊 Журнал проверки звука</summary>
+      ${audioCheckHtml(st.audio_check)}
+      ${Array.isArray(st.audio_log) && st.audio_log.length ? `<details class="rd-asm-audio"${audioOpen ? " open" : ""}>
+        <summary class="rd-asm-meta" style="cursor:pointer;">Подробный журнал</summary>
         <pre style="margin:6px 0 0; max-height:260px; overflow:auto; font-size:12px; line-height:1.45; white-space:pre-wrap; user-select:text;">${esc(st.audio_log.join("\n"))}</pre>
         <button type="button" class="btn" data-asm-audio-copy style="margin-top:6px;">Скопировать журнал</button>
       </details>` : ""}
@@ -134,10 +135,10 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
         }
         document.dispatchEvent(new CustomEvent("report-file-uploaded", { detail: { publicId } }));
         // С журналом проверки звука карточка остаётся до закрытия отчёта — чтобы его успели прочитать.
-        if (!st.audio_log?.length) timer = setTimeout(stop, 6000);
+        if (!st.audio_check && !st.audio_log?.length) timer = setTimeout(stop, 6000);
         return;
       }
-      if (st.stage === "error") { if (!st.audio_log?.length) timer = setTimeout(stop, 20000); return; }
+      if (st.stage === "error") { if (!st.audio_check && !st.audio_log?.length) timer = setTimeout(stop, 20000); return; }
       if (st.stage === "cancelled") { toast("Сборка отменена.", "info"); timer = setTimeout(stop, 5000); return; }
     } else if (!seenActive) {
       if (!waitForStart || Date.now() - startedAt > 10 * 60 * 1000) { stop(); return; }
@@ -149,6 +150,33 @@ function startAssemblyWatch(publicId, overlay, waitForStart, botName = "", openP
     timer = setTimeout(tick, 3000);
   };
   tick();
+}
+
+// Проверка звука финала (бот, audio_guard): итог одной строкой и график битрейта по минутам.
+// Столбик — средний битрейт минуты; красный — просадка, серый — тишина; пунктир — порог просадки.
+function audioCheckHtml(check) {
+  if (!check || !check.verdict) return "";
+  const color = check.ok ? "#3fb27f" : "#e5484d";
+  const points = Array.isArray(check.points) ? check.points : [];
+  const mmss = m => `${m}:00`;
+  let chart = "";
+  if (points.length > 1) {
+    const top = Math.max(check.norm || 0, ...points.map(p => p[2])) * 1.1 || 1;
+    const floorPct = Math.min(100, ((check.floor || 0) / top) * 100);
+    chart = `
+      <div style="position:relative; display:flex; align-items:flex-end; gap:2px; height:64px; margin-top:8px; padding-top:4px;">
+        ${points.map(([m, lo, avg, mark]) => `<i title="${mmss(m)} — в среднем ${avg} кбит/с, минимум ${lo}${mark === "bad" ? " · просадка" : mark === "silent" ? " · тишина" : ""}"
+          style="flex:1; min-width:2px; height:${Math.max(3, (avg / top) * 100)}%; border-radius:2px 2px 0 0;
+          background:${mark === "bad" ? "#e5484d" : mark === "silent" ? "rgba(150,150,160,.45)" : "#3fb27f"};"></i>`).join("")}
+        <span style="position:absolute; left:0; right:0; bottom:${floorPct}%; border-top:1px dashed rgba(229,72,77,.7);" title="порог просадки ${check.floor} кбит/с"></span>
+      </div>
+      <div class="rd-asm-meta" style="display:flex; justify-content:space-between; font-size:11px; opacity:.7;">
+        <span>0:00</span><span>норма ~${check.norm} кбит/с · порог ${check.floor}</span><span>${mmss(points[points.length - 1][0] + 1)}</span>
+      </div>`;
+  }
+  return `<div class="rd-asm-audio-check" style="margin-top:8px;">
+    <span class="rd-asm-meta" style="color:${color}; font-weight:600;">🔊 ${esc(check.verdict)}</span>${chart}
+  </div>`;
 }
 
 async function openSendFileSheet(publicId, fileId, fileName, ref = "", button = null) {
