@@ -4,7 +4,7 @@ import { getLocalVideo, pickLocalVideo } from "./local-video.js";
 import { apiPost, toast, openSheet, dismissSheet } from "./api.js";
 import { state } from "./state.js";
 import { esc } from "./utils.js";
-import { reportDownload } from "./telemetry.js";
+import { reportDownload, reportSample } from "./telemetry.js";
 
 let running = null;
 
@@ -331,7 +331,10 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
     if (await askSaveCopy(done)) await saveCopy(done);
     paint(el, { title: "⬆ Отправляю готовое видео на сервер", label: `${done.out_name} · ${(done.size / 1048576).toFixed(0)} МБ · ${done.encoder}`, fraction: 1, cancel: false });
     journalAdd("step", `Отправляю на сервер: ${done.out_name}, ${(done.size / 1048576).toFixed(0)} МБ (${done.encoder})`);
+    if (done.render_seconds) reportSample({ kind: "render", bytes: (done.media_seconds || 0) * 1000, ms: done.render_seconds * 1000, note: done.encoder });
+    const upStart = Date.now();
     await invoke("local_render_upload", { publicId, path: done.path, initData: state.token || "" });
+    reportSample({ kind: "up", bytes: done.size || 0, ms: Date.now() - upStart });
     journalAdd("ok", "Сервер принял видео — дальше бот: обложка, Telegram, отчёт");
     if (uploadRaw && localPath) {
       phase = "загрузка равки в отчёт";
@@ -352,7 +355,11 @@ export async function runLocalRender(publicId, selection, overlay, onUploaded) {
     journalAdd(/отменен/i.test(text) ? "warn" : "err", `${phase}: ${text}`);
     el.remove();
     if (/отменен/i.test(text)) toast("Сборка у себя отменена.", "info");
-    else showRenderFailure(text, monitor, startedAt, phase);
+    else {
+      showRenderFailure(text, monitor, startedAt, phase);
+      const kind = phase === "загрузка финала на сервер" ? "up" : phase === "скачивание файлов и рендер" ? "render" : "";
+      if (kind) reportSample({ kind, bytes: 0, ms: 0, ok: false, error: text });
+    }
     return false;
   } finally {
     if (stallTimer) clearInterval(stallTimer);

@@ -165,12 +165,18 @@ function savePendingNet(list) {
 
 let netBusy = false;
 let lastNetOk = true;
-// Замер реального скачивания с сервера: только передача байтов, без ожидания, пока сервер достанет файл.
-export function reportDownload({ bytes, ms, ok, error }) {
+// Замеры для аналитики: dl — скачивание, up — загрузка на сервер (bytes/ms — чистая передача);
+// render — сборка у себя (bytes = длина серии в мс, ms = время рендера, note = кодировщик).
+export function reportSample({ kind = "dl", bytes, ms, ok = true, error = "", note = "" }) {
   if (!trackingOn()) return;
-  if (ok && (bytes < 1048576 || ms < 300)) return;
-  apiPost("/telemetry/net", { at: Date.now(), server_ok: true, dl_bytes: Math.round(bytes || 0), dl_ms: Math.max(1, Math.round(ms || 0)), dl_ok: !!ok, dl_error: ok ? "" : String(error || "").slice(0, 120) }).catch(() => { });
+  if (ok && kind !== "render" && (bytes < 1048576 || ms < 300)) return;
+  if (ok && kind === "render" && (bytes < 10000 || ms < 1000)) return;
+  apiPost("/telemetry/net", {
+    at: Date.now(), server_ok: true, kind, dl_bytes: Math.round(bytes || 0), dl_ms: Math.max(1, Math.round(ms || 0)),
+    dl_ok: !!ok, dl_error: ok ? "" : String(error || "").slice(0, 120), note: String(note || "").slice(0, 60),
+  }).catch(() => { });
 }
+export const reportDownload = s => reportSample({ ...s, kind: "dl" });
 
 export async function runNetCheck() {
   if (!trackingOn() || !state.token) return;

@@ -62,6 +62,8 @@ pub struct RenderResult {
     pub size: u64,
     pub encoder: String,
     pub seconds: f64,
+    pub render_seconds: f64,
+    pub media_seconds: f64,
 }
 
 #[derive(Serialize, Clone)]
@@ -544,6 +546,8 @@ pub async fn run(
     }
     emit("download", 0.2, "Файлы скачаны");
 
+    let render_started = Instant::now();
+    let media_seconds = plan.steps.iter().map(|s| s.duration).fold(0.0_f64, f64::max);
     let encs = tauri::async_runtime::spawn_blocking(encoder_status)
         .await
         .map_err(|e| format!("Проверка кодировщиков не завершилась: {e}"))?;
@@ -603,6 +607,8 @@ pub async fn run(
         size,
         encoder: used_encoder,
         seconds: started.elapsed().as_secs_f64(),
+        render_seconds: render_started.elapsed().as_secs_f64(),
+        media_seconds,
     })
 }
 

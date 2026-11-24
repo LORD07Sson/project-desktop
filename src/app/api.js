@@ -303,7 +303,9 @@ async function chunkedUpload(file, ui) {
       }
     }
   };
+  const t0 = Date.now();
   await Promise.all(Array.from({ length: Math.min(PARALLEL, parts) }, worker));
+  import("./telemetry.js").then(m => m.reportSample({ kind: "up", bytes: file.size, ms: Date.now() - t0, ok: !failed, error: failed?.message })).catch(() => { });
   if (failed) throw failed;
   return id;
 }
