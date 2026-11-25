@@ -3489,7 +3489,9 @@ body:has(.tab-panel[data-panel="nyaa"].active) .tb-banner { opacity: 0; }
 .pf-folio .pff-banner { position: absolute; inset: 0; z-index: auto; height: auto; opacity: 1; filter: none; pointer-events: none; -webkit-mask-image: none; mask-image: none; }
 .pf-folio .pff-banner::after { content: ""; display: block; position: absolute; inset: 0; opacity: 1; pointer-events: none; transition: opacity .25s;
   background: linear-gradient(110deg, var(--surface-2) 30%, color-mix(in srgb, var(--surface-2) 66%, transparent) 100%); }
-.pf-folio .pff-banner .pf-ban-move, .pf-folio .pff-banner .pf-ban-bar { pointer-events: auto; top: auto; right: auto; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 3; }
+.pf-folio .pff-banner .pf-ban-bar { pointer-events: auto; top: auto; right: auto; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 3; }
+/* Top centre: the bottom centre collides with the action buttons (voice sample, edit, graffiti). */
+.pf-folio .pff-banner .pf-ban-move { pointer-events: auto; top: 10px; right: auto; bottom: auto; left: 50%; transform: translateX(-50%); z-index: 3; }
 .pf-folio .pff-banner.adjust { pointer-events: auto; z-index: 2; }
 .pf-folio .pff-banner.adjust::after { opacity: 0; }
 .pff-hero-row { position: relative; display: flex; align-items: flex-start; gap: 28px; justify-content: space-between; }
