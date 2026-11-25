@@ -5,7 +5,7 @@
 import { apiGet, apiPost, mediaUrl, toast, askConfirm, openSheet, dismissSheet } from "./api.js";
 import { state } from "./state.js";
 
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 50 * 1024 * 1024;
 const LIST_TTL_MS = 60_000;
 let cache = null;   // { at, ids: Set<string>, byUser: Map<string, sample[]> } | pending Promise
 let player = null;  // { audio, btn, label }
@@ -169,7 +169,7 @@ async function openManager(onChange) {
         <select class="field-input" data-vs-char disabled><option value="">Сначала тайтл</option></select>
       </div>
       <button class="btn primary" data-vs-upload>${MIC_SVG}Выбрать файл и загрузить</button>
-      <small class="vs-hint">mp3, ogg, wav, flac, m4a или webm до 10 МБ — хватит 20–60 секунд.</small>
+      <small class="vs-hint">mp3, ogg, wav, flac, m4a или webm до 50 МБ.</small>
     </div>
     <div class="sheet-actions"><button class="btn" data-close>Готово</button></div>`);
   const mine = overlay.querySelector("[data-vs-mine]");
@@ -231,7 +231,7 @@ async function openManager(onChange) {
     if (role && !characterId) { toast("Выберите тайтл и персонажа.", "error"); return; }
     const file = await pickFile();
     if (!file) return;
-    if (file.size > MAX_BYTES) { toast("Запись до 10 МБ — хватит минуты-двух голоса.", "error"); return; }
+    if (file.size > MAX_BYTES) { toast("Запись до 50 МБ.", "error"); return; }
     try {
       await apiPost("/voice-sample", { audio: await toDataUrl(file), character_id: characterId });
       toast(role ? "Запись роли сохранена." : "Свой голос сохранён — его услышат при росписи.");
