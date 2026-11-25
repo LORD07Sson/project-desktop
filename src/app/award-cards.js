@@ -17,8 +17,15 @@ const ART_BY_LABEL = {
   "10 субтитров": "subs-10",
   "Дирижёр: 25 назначений": "conductor",
   "25 серий подготовлено": "series-25",
+  // Developers (commits on GitHub). Art goes to assets/award-art/<slug>.webp (+ @4k); until then the icon shows.
+  "Первый коммит": "dev-first-commit",
+  "100 коммитов": "dev-commits-100",
+  "1000 коммитов": "dev-commits-1000",
+  "50 исправлено": "dev-fixes-50",
+  "250 исправлено": "dev-fixes-250",
+  "10 критических": "dev-critical-10",
 };
-const artFor = (b, hi) => art(ART_BY_LABEL[b.label] || "custom", hi);
+const artFor = (b, hi) => art(ART_BY_LABEL[b.label] || "custom", hi) || (b.dev ? "" : art("custom", hi));
 
 const RARITY = {
   common: "Обычная",
