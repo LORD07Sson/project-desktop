@@ -4118,3 +4118,18 @@ select.fsel-native { display: none !important; }
 
 .pp-imgdl { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
 .pp-imgdl .btn svg { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; }
+
+/* Profile action buttons hide below the card's bottom edge (only a sliver peeks out) and pop up when the
+   cursor reaches the action row; keyboard focus and a playing voice sample keep them up. */
+.pf-folio .pff-act-r > *, .pf-folio .pff-act-r .vs-slot > * {
+  transform: translateY(44px); transition: transform .34s cubic-bezier(.34, 1.56, .64, 1), opacity .2s; opacity: .55;
+}
+.pf-folio .pff-act-r > :nth-child(2), .pf-folio .pff-act-r .vs-slot > :nth-child(2) { transition-delay: .03s; }
+.pf-folio .pff-act-r > :nth-child(3), .pf-folio .pff-act-r .vs-slot > :nth-child(3) { transition-delay: .06s; }
+.pf-folio .pff-act-r > .vs-slot { transform: none; opacity: 1; }
+/* Hover zone reaches the card edge, so the risen buttons stay up while the cursor is on the peeking strip. */
+.pf-folio .pff-actions { padding-bottom: 22px; margin-bottom: -22px; }
+.pf-folio .pff-actions:hover .pff-act-r > *, .pf-folio .pff-actions:hover .pff-act-r .vs-slot > *,
+.pf-folio .pff-act-r:focus-within > *, .pf-folio .pff-act-r:focus-within .vs-slot > *,
+.pf-folio .pff-act-r:has(.playing) > *, .pf-folio .pff-act-r:has(.playing) .vs-slot > * { transform: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .pf-folio .pff-act-r > *, .pf-folio .pff-act-r .vs-slot > * { transition: opacity .15s; } }
