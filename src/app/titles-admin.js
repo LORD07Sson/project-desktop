@@ -1,4 +1,5 @@
 
+import { voiceSlotHtml, hydrateVoice, retargetVoiceSlot } from "./voice-sample.js";
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm, askText } from "./api.js";
 import { pickFile } from "./attachments.js";
 import { pauseSuffix } from "./people.js";
@@ -276,6 +277,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
       <div class="mini-row" data-char="${c.id}">
         <span class="name">${esc(c.name)}${c.original_va_name ? ` <span class="meta" style="color:var(--ink-dim); font-size:11px;">(ориг. ${esc(c.original_va_name)})</span>` : ""}</span>
         <select class="field-input people-pick" data-char-voice="${c.id}" style="max-width:180px;">${userOptionsHtml(assignable, c.voiced_by ? c.voiced_by.telegram_id : null)}</select>
+        ${voiceSlotHtml(c.voiced_by ? c.voiced_by.telegram_id : "", { mini: true })}
         <button class="icon-btn" data-char-delete="${c.id}" title="Удалить персонажа">✕</button>
       </div>
     `).join("");
@@ -406,8 +408,10 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
       } catch (e) { toast(`Не удалось назначить: ${e.message}`, "error"); }
     });
 
+    hydrateVoice(sheet);
     sheet.querySelectorAll("[data-char-voice]").forEach(sel => {
       sel.addEventListener("change", async () => {
+        retargetVoiceSlot(sel.parentElement.querySelector("[data-voice-slot]"), sel.value);
         try {
           await apiPost(`/titles/${titleId}/characters/${sel.dataset.charVoice}/voice`, { telegram_id: sel.value ? Number(sel.value) : null });
           toast("Актёр озвучки обновлён.");

@@ -5512,3 +5512,14 @@ button.pr-tip:hover { border-color: rgba(183, 148, 246, .5); background: rgba(16
 .pr-act-bar.indet i { width: 35% !important; animation: pr-indet 1.3s ease-in-out infinite; }
 @keyframes pr-indet { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
 @media (prefers-reduced-motion: reduce) { .pr-wrap *, .pr-wrap { animation: none !important; transition: none !important; } }
+
+/* Voice sample (profile / roster / casting) */
+.vs-slot { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+.vs-slot:empty { display: none; }
+.vs-slot svg { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+.vs-play.mini { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; display: inline-grid; place-items: center;
+  background: color-mix(in srgb, var(--fire, #f60) 18%, transparent); color: var(--fire, #f60); cursor: pointer; flex: none; }
+.vs-play.mini:hover { background: color-mix(in srgb, var(--fire, #f60) 30%, transparent); }
+.vs-play.playing { animation: vs-pulse 1.2s ease-in-out infinite; }
+@keyframes vs-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--fire, #f60) 25%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .vs-play.playing { animation: none; } }

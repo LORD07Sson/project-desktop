@@ -1,4 +1,5 @@
 
+import { voiceSlotHtml, hydrateVoice } from "./voice-sample.js";
 import { dlButton, trashWobble, collapseRow } from "./dl-button.js";
 import { apiGet, apiPost, apiUpload, apiBlob, openSheet, dismissSheet, toast, dialogSkeletonHtml, askConfirm } from "./api.js";
 import { track } from "./telemetry.js";
@@ -577,6 +578,7 @@ export async function openReportDetail(publicId) {
     sheet.querySelector("#pipeline-parallel")?.addEventListener("change", e => { if (pipeEdit) pipeEdit.parallel = e.target.checked; });
     sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
     loadAvatars(sheet);
+    hydrateVoice(sheet);
     sheet.querySelectorAll("[data-roster-bind]").forEach(el => {
       const open = () => el.dataset.rosterParts
         ? rosterPartsDialog(el.dataset.rosterParts.split("~~"), bindChoices(noteCtx.roster.people), render)
@@ -1214,6 +1216,7 @@ function tallyHtml(text, roster = null) {
     return `<div class="nt-tile${who ? "" : " unknown"}${group ? " group" : ""}"${bind}>
       ${avatars}${fan}
       <span class="nt-name" title="${esc(r.name)}">${esc(group ? parts.join(", ") : r.name)}</span>
+      ${!group && who && who.id ? voiceSlotHtml(who.id, { mini: true }) : ""}
       <b>${r.n}</b>
       <small>${Math.round(r.n / sum * 100)}%</small>
       <span class="nt-bar"><i style="width:${(r.n / max * 100).toFixed(1)}%"></i></span>
