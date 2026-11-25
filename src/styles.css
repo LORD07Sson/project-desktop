@@ -5532,3 +5532,18 @@ button.pr-tip:hover { border-color: rgba(183, 148, 246, .5); background: rgba(16
 .tpg-char.pickable { cursor: pointer; transition: border-color .15s, background .15s; }
 .tpg-char.pickable:hover, .tpg-char.pickable:focus-visible { border-color: color-mix(in srgb, var(--fire, #f60) 45%, transparent); outline: none; }
 .tpg-char .vs-slot.mini { margin-left: 6px; }
+.vs-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 220px; padding: 3px 9px 3px 6px; border: 0; border-radius: 999px; cursor: pointer;
+  background: color-mix(in srgb, var(--fire, #f60) 16%, transparent); color: var(--ink, #eee); font: inherit; font-size: 12px; }
+.vs-chip:hover { background: color-mix(in srgb, var(--fire, #f60) 28%, transparent); }
+.vs-chip svg { width: 12px; height: 12px; fill: var(--fire, #f60); flex: none; }
+.vs-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-chip.playing { box-shadow: 0 0 0 2px color-mix(in srgb, var(--fire, #f60) 45%, transparent); }
+.vs-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.vs-mine-row { display: flex; align-items: center; gap: 8px; }
+.vs-empty, .vs-hint { color: var(--ink-dim, #999); font-size: 12px; }
+.vs-form { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin: 6px 0 12px; border-radius: 12px; background: color-mix(in srgb, var(--ink, #fff) 4%, transparent); }
+.vs-kind { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.vs-role { display: flex; gap: 8px; flex-wrap: wrap; }
+.vs-role select { flex: 1; min-width: 160px; }
+.vs-form .btn svg { width: 14px; height: 14px; }
+.vs-pick-samples { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; max-width: 60%; }

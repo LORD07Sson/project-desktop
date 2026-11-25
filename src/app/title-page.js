@@ -1,6 +1,6 @@
 
 import { mediaUrl, forceMediaToken, apiGet, apiPost, toast } from "./api.js";
-import { voiceSlotHtml, hydrateVoice, openVoicePicker } from "./voice-sample.js";
+import { voiceSlotHtml, hydrateVoice, openVoicePicker, canCast } from "./voice-sample.js";
 import { state } from "./state.js";
 import { esc } from "./utils.js";
 import { avatarHtml, loadAvatars } from "./profile.js";
@@ -154,14 +154,14 @@ function charactersHtml(chars) {
       <div class="tpg-chars">${list.map(c => {
         const img = imgProxy(c.image_url);
         return `
-        <div class="tpg-char${c.voiced_by ? " voiced" : ""}${state.isAdmin ? " pickable" : ""}"${state.isAdmin ? ` role="button" tabindex="0" data-tpg-cast="${c.id}" title="Выбрать, кто озвучит, — с прослушиванием голосов"` : ""}>
+        <div class="tpg-char${c.voiced_by ? " voiced" : ""}" data-tpg-cast="${c.id}">
           ${img ? `<img class="tpg-char-img" src="${img}" alt="" loading="lazy">` : `<span class="tpg-char-img ph"></span>`}
           <div class="tpg-char-body">
             <b class="tpg-char-name">${esc(c.name)}</b>
             <span class="tpg-char-role">${esc(ROLE_LABELS[c.role] || "")}${c.original_va_name ? `${ROLE_LABELS[c.role] ? " · " : ""}яп. ${esc(c.original_va_name)}` : ""}</span>
             ${c.voiced_by
               ? `<span class="tpg-char-voice" data-open-profile="${c.voiced_by.telegram_id}">${avatarHtml(c.voiced_by.telegram_id, c.voiced_by.name, "sm")}${esc(c.voiced_by.name)}</span>${voiceSlotHtml(c.voiced_by.telegram_id, { mini: true })}`
-              : `<span class="tpg-char-voice none">${state.isAdmin ? "назначить голос" : "голос не назначен"}</span>`}
+              : `<span class="tpg-char-voice none">голос не назначен</span>`}
           </div>
         </div>`;
       }).join("")}</div>
@@ -265,8 +265,15 @@ export function wireTitlePage(root, d, { openProfile } = {}) {
 }
 
 // Admins cast right from the title page: click a character → pick a person while listening to voice samples.
-function wireCasting(root, d, openProfile) {
+async function wireCasting(root, d, openProfile) {
+  if (!await canCast()) return;
   root.querySelectorAll("[data-tpg-cast]").forEach(card => {
+    card.classList.add("pickable");
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+    card.title = "Выбрать, кто озвучит, — с прослушиванием голосов";
+    const none = card.querySelector(".tpg-char-voice.none");
+    if (none) none.textContent = "назначить голос";
     const open = async () => {
       const ch = (d.characters || []).find(c => String(c.id) === card.dataset.tpgCast);
       if (!ch) return;
