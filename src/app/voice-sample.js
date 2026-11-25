@@ -1,7 +1,7 @@
 /* global FileReader */
 // Voice sample on a profile: everyone attaches one short recording of their voice; subbers listen to it
 // while writing the roster or casting characters. Server keeps one file per person (/api/voice-sample).
-import { apiGet, apiPost, mediaUrl, toast, askConfirm } from "./api.js";
+import { apiGet, apiPost, mediaUrl, toast, askConfirm, openSheet, dismissSheet } from "./api.js";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const LIST_TTL_MS = 60_000;
@@ -139,4 +139,36 @@ export function retargetVoiceSlot(slot, telegramId) {
   if (!slot) return;
   slot.dataset.voiceSlot = telegramId || "";
   voiceIds().then(ids => fillSlot(slot, ids));
+}
+
+/**
+ * Pick a person while listening to voices: people with a sample come first, each with ▶.
+ * onPick(telegramId | "") is called with the chosen person ("" = nobody).
+ */
+export async function openVoicePicker({ users, selectedId = "", title = "Кого поставить", onPick }) {
+  const ids = await voiceIds();
+  const label = u => String(u.name || u.username || `ID ${u.telegram_id}`).trim();
+  const list = [...users].sort((a, b) => (ids.has(String(b.telegram_id)) - ids.has(String(a.telegram_id)))
+    || label(a).localeCompare(label(b), "ru", { sensitivity: "base" }));
+  const withVoice = list.filter(u => ids.has(String(u.telegram_id))).length;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[c]);
+  const overlay = openSheet(`
+    <h2>${esc(title)}</h2>
+    <p class="sheet-sub">${withVoice ? `Голос записали ${withVoice} из ${list.length} — нажмите ▶, чтобы послушать, и выберите человека.` : "Пока никто не записал голос в профиле — можно только выбрать по имени."}</p>
+    <div class="vs-pick">
+      ${list.map(u => `<div class="vs-pick-row${String(u.telegram_id) === String(selectedId) ? " on" : ""}" role="button" tabindex="0" data-pick="${u.telegram_id}">
+        <span class="vs-pick-name">${esc(label(u))}${u.username && label(u) !== u.username ? ` <small>@${esc(u.username)}</small>` : ""}</span>
+        ${voiceSlotHtml(u.telegram_id, { mini: true })}
+      </div>`).join("")}
+    </div>
+    <div class="sheet-actions"><button class="btn ghost" data-pick="">Никого</button><button class="btn" data-close>Закрыть</button></div>`);
+  const close = () => { stopPlayer(); dismissSheet(overlay); };
+  overlay.addEventListener("sheet-dismissed", stopPlayer);
+  overlay.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", close));
+  overlay.querySelectorAll("[data-pick]").forEach(el => {
+    const pick = () => { close(); onPick(el.dataset.pick); };
+    el.addEventListener("click", pick);
+    el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); pick(); } });
+  });
+  hydrateVoice(overlay);
 }

@@ -1,5 +1,5 @@
 
-import { voiceSlotHtml, hydrateVoice, retargetVoiceSlot } from "./voice-sample.js";
+import { voiceSlotHtml, hydrateVoice, retargetVoiceSlot, openVoicePicker } from "./voice-sample.js";
 import { apiGet, apiPost, apiUpload, openSheet, toast, dialogSkeletonHtml, mediaUrl, askConfirm, askText } from "./api.js";
 import { pickFile } from "./attachments.js";
 import { pauseSuffix } from "./people.js";
@@ -278,6 +278,7 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
         <span class="name">${esc(c.name)}${c.original_va_name ? ` <span class="meta" style="color:var(--ink-dim); font-size:11px;">(ориг. ${esc(c.original_va_name)})</span>` : ""}</span>
         <select class="field-input people-pick" data-char-voice="${c.id}" style="max-width:180px;">${userOptionsHtml(assignable, c.voiced_by ? c.voiced_by.telegram_id : null)}</select>
         ${voiceSlotHtml(c.voiced_by ? c.voiced_by.telegram_id : "", { mini: true })}
+        <button class="icon-btn" data-char-listen="${c.id}" title="Выбрать, прослушав голоса">🎧</button>
         <button class="icon-btn" data-char-delete="${c.id}" title="Удалить персонажа">✕</button>
       </div>
     `).join("");
@@ -409,6 +410,14 @@ export async function openTitleAdminDetail(titleId, onClose, section) {
     });
 
     hydrateVoice(sheet);
+    sheet.querySelectorAll("[data-char-listen]").forEach(btn => btn.addEventListener("click", () => {
+      const sel = sheet.querySelector(`[data-char-voice="${btn.dataset.charListen}"]`);
+      const name = btn.closest("[data-char]")?.querySelector(".name")?.childNodes[0]?.textContent?.trim() || "персонажа";
+      openVoicePicker({
+        users: assignable, selectedId: sel.value, title: `Кто озвучит: ${name}`,
+        onPick: id => { if (sel.value !== id) { sel.value = id; sel.dispatchEvent(new window.Event("change")); } },
+      });
+    }));
     sheet.querySelectorAll("[data-char-voice]").forEach(sel => {
       sel.addEventListener("change", async () => {
         retargetVoiceSlot(sel.parentElement.querySelector("[data-voice-slot]"), sel.value);
