@@ -859,7 +859,7 @@ function myBadgesHtml(d) {
   return `
     <section class="pf-card">
       <div class="pf-card-head"><h3>Достижения <span class="n">${won} из ${all.length}</span></h3></div>
-      <div class="pf-badges">${tiles}</div>
+      <div class="pf-badges"${d.telegram_id ? ` data-user="${esc(String(d.telegram_id))}"` : ""}>${tiles}</div>
     </section>`;
 }
 

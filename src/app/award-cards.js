@@ -68,7 +68,10 @@ function sortBadges(list) {
     || (BADGE_RARITY_ORDER[a.rarity] ?? 9) - (BADGE_RARITY_ORDER[b.rarity] ?? 9));
 }
 
-export async function openAwardCollection(focusLabel) {
+// Badges of whose profile it is: a colleague's profile must not show the viewer's own collection.
+const badgesOf = (userId) => apiGet(userId ? `/user/${encodeURIComponent(userId)}` : "/me");
+
+export async function openAwardCollection(focusLabel, userId = "") {
   if (root) return;
   root = document.createElement("div");
   root.className = "ac-overlay";
@@ -80,7 +83,7 @@ export async function openAwardCollection(focusLabel) {
   requestAnimationFrame(() => root && root.classList.add("in"));
 
   let me;
-  try { me = await apiGet("/me"); } catch (_) { me = null; }
+  try { me = await badgesOf(userId); } catch (_) { me = null; }
   if (!root) return;
   const list = sortBadges((me && me.badges) || []);
   const grid = root.querySelector(".ac-grid");
@@ -163,8 +166,9 @@ async function upgradeProfileBadges() {
   if (!box || inlineBusy || box.querySelector("[data-revoke-badge]")) return;
   inlineBusy = true;
   box.dataset.ac = "1";
+  const userId = box.dataset.user || "";
   let me;
-  try { me = await apiGet("/me"); } catch (_) { me = null; }
+  try { me = await badgesOf(userId); } catch (_) { me = null; }
   inlineBusy = false;
   const list = sortBadges((me && me.badges) || []);
   if (!list.length || !box.isConnected) return;
@@ -173,7 +177,7 @@ async function upgradeProfileBadges() {
   grid.innerHTML = list.map(cardHtml).join("");
   box.before(grid);
   box.style.display = "none";
-  wireGrid(grid, (c) => openAwardCollection(list[c.dataset.i]?.label));
+  wireGrid(grid, (c) => openAwardCollection(list[c.dataset.i]?.label, userId));
 }
 new MutationObserver(() => { if (document.querySelector(".pf-badges:not([data-ac])")) upgradeProfileBadges(); })
   .observe(document.body, { childList: true, subtree: true });
@@ -236,5 +240,5 @@ function unfocus() {
 document.addEventListener("click", (e) => {
   const tile = e.target.closest?.(".pf-badge");
   if (!tile || e.target.closest("button")) return;
-  openAwardCollection(tile.getAttribute("title") || "");
+  openAwardCollection(tile.getAttribute("title") || "", tile.closest(".pf-badges")?.dataset.user || "");
 });
