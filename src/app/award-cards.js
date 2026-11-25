@@ -1,3 +1,4 @@
+/* global DOMMatrix */
 
 import { apiGet } from "./api.js";
 import { esc, BADGE_RARITY_ORDER } from "./utils.js";
@@ -44,7 +45,7 @@ function cardHtml(b, i) {
   const tilt = ((i * 37) % 9) - 4;
   const foot = b.unlocked
     ? `<span class="ac-state">получено</span>`
-    : `<span class="ac-state">${b.target ? `${has} / ${b.target}` : "закрыто"}</span>${b.target ? `<span class="ac-bar"><i style="width:${pct}%"></i></span>` : ""}`;
+    : `<span class="ac-state">${b.target ? `${has} / ${b.target}` : "не получено"}</span>${b.target ? `<span class="ac-bar"><i style="width:${pct}%"></i></span>` : ""}`;
   return `
     <button type="button" class="ac-card r-${r}${b.unlocked ? " won" : " locked"}${b.is_nearest ? " near" : ""}"
       data-i="${i}" style="--rot:${tilt}deg" aria-label="${esc(b.label)} — ${RARITY[r]}${b.unlocked ? ", получено" : ""}">
@@ -182,10 +183,18 @@ async function upgradeProfileBadges() {
 new MutationObserver(() => { if (document.querySelector(".pf-badges:not([data-ac])")) upgradeProfileBadges(); })
   .observe(document.body, { childList: true, subtree: true });
 
+function cardPose(card) {
+  const stamp = card.querySelector(".ac-stamp");
+  const box = stamp.getBoundingClientRect();
+  const t = getComputedStyle(card).transform;
+  const m = t && t !== "none" ? new DOMMatrix(t) : new DOMMatrix();
+  return { cx: box.left + box.width / 2, cy: box.top + box.height / 2, w: stamp.offsetWidth * Math.hypot(m.a, m.b), rot: `${Math.atan2(m.b, m.a)}rad` };
+}
+
 function focusCard(card) {
   if (!card || focused || !root) return;
   const layer = root.querySelector(".ac-focus");
-  const from = card.querySelector(".ac-stamp").getBoundingClientRect();
+  const from = cardPose(card);
   const clone = card.querySelector(".ac-stamp").cloneNode(true);
   clone.classList.add("ac-big");
   card.classList.forEach(c => { if (c.startsWith("r-") || c === "won" || c === "locked") clone.classList.add(c); });
@@ -201,14 +210,13 @@ function focusCard(card) {
   card.classList.add("lifted");
   focused = { card, clone };
   const to = clone.getBoundingClientRect();
-  const rot = getComputedStyle(card).getPropertyValue("--rot").trim() || "0deg";
   requestAnimationFrame(() => layer.classList.add("on"));
   if (!reduced()) {
-    const dx = from.left + from.width / 2 - (to.left + to.width / 2);
-    const dy = from.top + from.height / 2 - (to.top + to.height / 2);
-    const s = from.width / to.width;
+    const dx = from.cx - (to.left + to.width / 2);
+    const dy = from.cy - (to.top + to.height / 2);
+    const s = from.w / clone.offsetWidth;
     clone.animate([
-      { transform: `translate(${dx}px,${dy}px) scale(${s}) rotate(${rot})` },
+      { transform: `translate(${dx}px,${dy}px) scale(${s}) rotate(${from.rot})` },
       { transform: "none" },
     ], { duration: 520, easing: EASE_IN });
   }
@@ -226,13 +234,13 @@ function unfocus() {
   layer.classList.remove("on");
   const done = () => { layer.hidden = true; layer.innerHTML = ""; card.classList.remove("lifted"); };
   if (reduced()) { done(); return; }
-  const from = clone.getBoundingClientRect();
-  const to = card.querySelector(".ac-stamp").getBoundingClientRect();
-  const rot = getComputedStyle(card).getPropertyValue("--rot").trim() || "0deg";
+  card.classList.remove("hot");
   resetTilt(clone);
+  const from = clone.getBoundingClientRect();
+  const to = cardPose(card);
   const a = clone.animate([
     { transform: "none" },
-    { transform: `translate(${to.left + to.width / 2 - (from.left + from.width / 2)}px,${to.top + to.height / 2 - (from.top + from.height / 2)}px) scale(${to.width / from.width}) rotate(${rot})` },
+    { transform: `translate(${to.cx - (from.left + from.width / 2)}px,${to.cy - (from.top + from.height / 2)}px) scale(${to.w / clone.offsetWidth}) rotate(${to.rot})` },
   ], { duration: 360, easing: EASE_OUT, fill: "forwards" });
   a.onfinish = done;
 }

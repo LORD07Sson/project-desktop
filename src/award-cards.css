@@ -112,6 +112,8 @@
 @property --mx { syntax: "<percentage>"; inherits: true; initial-value: 50%; }
 @property --my { syntax: "<percentage>"; inherits: true; initial-value: 30%; }
 .ac-art, .ac-lb { transform: translate(calc(var(--tx, 0) * 6px), calc(var(--ty, 0) * 6px)); transition: transform .14s ease-out; }
+/* The title moves less than the art and keeps a margin, so tilt never pushes it into the frame. */
+.ac-lb { transform: translate(calc(var(--tx, 0) * 3px), calc(var(--ty, 0) * 3px)); padding-inline: 4px; overflow-wrap: anywhere; }
 
 .ac-card.locked .ac-face::before { filter: grayscale(.85) brightness(.75); }
 .ac-card.locked .ac-ic { filter: grayscale(1); opacity: .55; }
@@ -133,7 +135,7 @@
 .ac-focus.on { background: rgba(0,0,0,.92); }
 .ac-big { width: min(360px, 42vh); --r: 9px; }
 .ac-big .ac-ic { font-size: 108px; }
-.ac-big .ac-lb { font-size: 26px; }
+.ac-big .ac-lb { font-size: 24px; }
 .ac-big .ac-top, .ac-big .ac-foot { font-size: 13px; }
 .ac-big.locked .ac-face::before { filter: grayscale(.85) brightness(.75); }
 .ac-big.locked .ac-ic { filter: grayscale(1); opacity: .55; }
@@ -199,3 +201,4 @@
 .ac-inline .ac-card.won:not(.hot) .ac-glit { opacity: .28; }
 .ac-inline .ac-card.won.r-legendary:not(.hot) .ac-glit, .ac-inline .ac-card.won.r-custom:not(.hot) .ac-glit { opacity: .4; }
 .pff-duo .ac-grid.ac-inline { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 18px; }
+@media (prefers-reduced-motion: reduce) { .ac-lb { transform: none; } }
