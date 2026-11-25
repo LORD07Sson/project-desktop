@@ -1,7 +1,8 @@
 
-export function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  try { localStorage.setItem("project-theme", theme); } catch (_) {}
+// Only the dark theme is left (the light one was removed); callers passing "light" still get dark.
+export function applyTheme() {
+  document.documentElement.dataset.theme = "dark";
+  try { localStorage.setItem("project-theme", "dark"); } catch (_) {}
 }
 
 export function applyLook(look) {
@@ -10,19 +11,9 @@ export function applyLook(look) {
 }
 
 (function initTheme() {
-  let saved = null;
-  try { saved = localStorage.getItem("project-theme"); } catch (_) {}
-  applyTheme(saved || "dark");
+  applyTheme();
   let look = null;
   try { look = localStorage.getItem("project-look"); } catch (_) {}
   document.documentElement.dataset.look = look || "kadr";
 })();
 
-document.querySelector("#theme-toggle").addEventListener("click", () => {
-  const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
-  if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    applyTheme(next);
-    return;
-  }
-  document.startViewTransition(() => applyTheme(next));
-});

@@ -114,9 +114,8 @@ async function openSettings() {
     "s-tile-mentions": can("posts.manage"),
     "s-tile-lockdown": state.isDeveloper || can("lockdown"),
   }[id] ?? true));
-  const theme = document.documentElement.dataset.theme || "dark";
   const look = document.documentElement.dataset.look || "glow";
-  const themeCard = theme === "light" ? "light" : look;
+  const themeCard = look;
   const density = currentDensity();
   const accent = currentAccent();
   const scale = currentScale();
@@ -187,7 +186,6 @@ async function openSettings() {
               <button type="button" class="st-card${themeCard === "kadr" ? " on" : ""}" data-st-themecard="kadr"><span class="st-prev st-prev-kadr"><i></i><i></i><i></i></span><b>Матовое стекло</b><em>фон из кадра тайтла</em></button>
               <button type="button" class="st-card${themeCard === "fire" ? " on" : ""}" data-st-themecard="fire"><span class="st-prev st-prev-fire"><i></i><i></i><i></i></span><b>Свечение снизу</b><em>тёмный, тёплое зарево</em></button>
               <button type="button" class="st-card${themeCard === "glow" ? " on" : ""}" data-st-themecard="glow"><span class="st-prev st-prev-glow"><i></i><i></i><i></i></span><b>Свечение сверху</b><em>тёмный, светлые кромки</em></button>
-              <button type="button" class="st-card${themeCard === "light" ? " on" : ""}" data-st-themecard="light"><span class="st-prev st-prev-light"><i></i><i></i><i></i></span><b>Светлый</b><em>для дня</em></button>
             </div>
           </div>
           <div class="st-group">
@@ -204,7 +202,7 @@ async function openSettings() {
             ${row(ICONS.density, "Скругления", "Острые углы или мягкие, как у таблетки", `<input type="range" class="st-range" id="s-tune-round" min="${TUNE_LIMITS.round[0]}" max="${TUNE_LIMITS.round[1]}" value="${currentTune().round}">`, "углы радиус")}
             ${row(ICONS.motion, "Сбросить", "Вернуть размытие и скругления по умолчанию", `<button type="button" class="btn" id="s-tune-reset">Сбросить</button>`)}
           </div>
-          <select id="s-theme" hidden><option value="dark">Тёмная</option><option value="light">Светлая</option></select>
+          <select id="s-theme" hidden><option value="dark">Тёмная</option></select>
           <select id="s-density" hidden><option value="comfortable">Обычная</option><option value="compact">Компактная</option></select>
         </section>
 
@@ -350,7 +348,7 @@ async function openSettings() {
   overlay.querySelector(".sheet").classList.add("st-sheet");
   overlay.querySelector("[data-close]").addEventListener("click", () => dismissSheet(overlay));
   overlay.querySelector("#s-theme").value = document.documentElement.dataset.theme || "dark";
-  overlay.querySelector("#s-theme").addEventListener("change", e => applyTheme(e.target.value));
+  overlay.querySelector("#s-theme").addEventListener("change", () => applyTheme());
   overlay.querySelector("#s-density").value = currentDensity();
   overlay.querySelector("#s-density").addEventListener("change", e => applyDensity(e.target.value));
   overlay.querySelector("#s-telemetry").addEventListener("change", async e => {
@@ -629,7 +627,6 @@ async function openSettings() {
   overlay.querySelectorAll("[data-st-themecard]").forEach(b => b.addEventListener("click", () => {
     overlay.querySelectorAll("[data-st-themecard]").forEach(x => x.classList.toggle("on", x === b));
     const v = b.dataset.stThemecard;
-    if (v === "light") { applyTheme("light"); return; }
     applyLook(v);
     applyTheme("dark");
   }));

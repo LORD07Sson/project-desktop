@@ -4,7 +4,7 @@ import { state } from "./state.js";
 import { apiGet } from "./api.js";
 import { esc, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime } from "./utils.js";
 
-try { document.documentElement.dataset.theme = localStorage.getItem("project-theme") || "dark"; } catch (_) {}
+document.documentElement.dataset.theme = "dark";
 
 const root = document.getElementById("pin-root");
 const appWindow = getCurrentWindow();
