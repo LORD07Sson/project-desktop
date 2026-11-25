@@ -5529,3 +5529,6 @@ button.pr-tip:hover { border-color: rgba(183, 148, 246, .5); background: rgba(16
 .vs-pick-row.on { background: color-mix(in srgb, var(--fire, #f60) 14%, transparent); }
 .vs-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vs-pick-name small { color: var(--ink-dim, #999); margin-left: 4px; }
+.tpg-char.pickable { cursor: pointer; transition: border-color .15s, background .15s; }
+.tpg-char.pickable:hover, .tpg-char.pickable:focus-visible { border-color: color-mix(in srgb, var(--fire, #f60) 45%, transparent); outline: none; }
+.tpg-char .vs-slot.mini { margin-left: 6px; }

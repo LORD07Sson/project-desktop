@@ -1,5 +1,6 @@
 
-import { mediaUrl, forceMediaToken } from "./api.js";
+import { mediaUrl, forceMediaToken, apiGet, apiPost, toast } from "./api.js";
+import { voiceSlotHtml, hydrateVoice, openVoicePicker } from "./voice-sample.js";
 import { state } from "./state.js";
 import { esc } from "./utils.js";
 import { avatarHtml, loadAvatars } from "./profile.js";
@@ -153,14 +154,14 @@ function charactersHtml(chars) {
       <div class="tpg-chars">${list.map(c => {
         const img = imgProxy(c.image_url);
         return `
-        <div class="tpg-char${c.voiced_by ? " voiced" : ""}">
+        <div class="tpg-char${c.voiced_by ? " voiced" : ""}${state.isAdmin ? " pickable" : ""}"${state.isAdmin ? ` role="button" tabindex="0" data-tpg-cast="${c.id}" title="Выбрать, кто озвучит, — с прослушиванием голосов"` : ""}>
           ${img ? `<img class="tpg-char-img" src="${img}" alt="" loading="lazy">` : `<span class="tpg-char-img ph"></span>`}
           <div class="tpg-char-body">
             <b class="tpg-char-name">${esc(c.name)}</b>
             <span class="tpg-char-role">${esc(ROLE_LABELS[c.role] || "")}${c.original_va_name ? `${ROLE_LABELS[c.role] ? " · " : ""}яп. ${esc(c.original_va_name)}` : ""}</span>
             ${c.voiced_by
-              ? `<span class="tpg-char-voice" data-open-profile="${c.voiced_by.telegram_id}">${avatarHtml(c.voiced_by.telegram_id, c.voiced_by.name, "sm")}${esc(c.voiced_by.name)}</span>`
-              : `<span class="tpg-char-voice none">голос не назначен</span>`}
+              ? `<span class="tpg-char-voice" data-open-profile="${c.voiced_by.telegram_id}">${avatarHtml(c.voiced_by.telegram_id, c.voiced_by.name, "sm")}${esc(c.voiced_by.name)}</span>${voiceSlotHtml(c.voiced_by.telegram_id, { mini: true })}`
+              : `<span class="tpg-char-voice none">${state.isAdmin ? "назначить голос" : "голос не назначен"}</span>`}
           </div>
         </div>`;
       }).join("")}</div>
@@ -256,7 +257,43 @@ export function wireTitlePage(root, d, { openProfile } = {}) {
   }
   root.querySelector("[data-tpg-upscale]")?.addEventListener("click", () => import("./upscale-ui.js").then(m => m.openUpscale(d)));
   loadAvatars(root);
+  hydrateVoice(root);
   if (openProfile) {
-    root.querySelectorAll("[data-open-profile]").forEach(el => el.addEventListener("click", () => openProfile(Number(el.dataset.openProfile))));
+    root.querySelectorAll("[data-open-profile]").forEach(el => el.addEventListener("click", e => { e.stopPropagation(); openProfile(Number(el.dataset.openProfile)); }));
   }
+  wireCasting(root, d, openProfile);
+}
+
+// Admins cast right from the title page: click a character → pick a person while listening to voice samples.
+function wireCasting(root, d, openProfile) {
+  root.querySelectorAll("[data-tpg-cast]").forEach(card => {
+    const open = async () => {
+      const ch = (d.characters || []).find(c => String(c.id) === card.dataset.tpgCast);
+      if (!ch) return;
+      let users = [];
+      try { users = (await apiGet("/assignable-users")).users || []; } catch (e) { toast(`Не удалось загрузить людей: ${e.message}`, "error"); return; }
+      openVoicePicker({
+        users, selectedId: ch.voiced_by ? String(ch.voiced_by.telegram_id) : "", title: `Кто озвучит: ${ch.name}`,
+        onPick: async id => {
+          try {
+            await apiPost(`/titles/${d.id}/characters/${ch.id}/voice`, { telegram_id: id ? Number(id) : null });
+            const u = users.find(x => String(x.telegram_id) === String(id));
+            ch.voiced_by = u ? { telegram_id: u.telegram_id, name: u.name || u.username || "" } : null;
+            const tpl = document.createElement("div");
+            tpl.innerHTML = charactersHtml(d.characters);
+            const section = card.closest(".tpg-section");
+            const fresh = tpl.firstElementChild;
+            section.replaceWith(fresh);
+            loadAvatars(fresh);
+            hydrateVoice(fresh);
+            if (openProfile) fresh.querySelectorAll("[data-open-profile]").forEach(el => el.addEventListener("click", e => { e.stopPropagation(); openProfile(Number(el.dataset.openProfile)); }));
+            wireCasting(fresh, d, openProfile);
+            toast(u ? `${ch.name}: ${u.name || u.username}` : `${ch.name}: голос снят`);
+          } catch (e) { toast(`Не удалось назначить: ${e.message}`, "error"); }
+        },
+      });
+    };
+    card.addEventListener("click", open);
+    card.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); open(); } });
+  });
 }
