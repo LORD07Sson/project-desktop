@@ -157,7 +157,6 @@ function aimLogoFlight() {
   if (!img.dataset.aimed) {
     img.dataset.aimed = "1";
     window.addEventListener("resize", aimLogoFlight);
-    // Each cycle dances the next half of the routine: first half, second half, first half…
   }
 }
 
