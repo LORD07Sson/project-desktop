@@ -151,6 +151,12 @@ export function applyDubbers(text, characters, mode = "both") {
 // Actor values that mark on-screen text, not a voiced line.
 const SIGN_ACTOR_RE = /^(надпис[ьи]|надпись \d+|sign|signs|text|title|caption|титр|титры|примечание|note|comment)$/;
 
+// Separators between several speakers of one line, and "together" fillers.
+const JOIN_ACTOR_RE = /\s*(?:[,;&+]|\s(?:и|and|with|с)\s)\s*/i;
+const TOGETHER_RE = /\s*[([]?\s*(?:вместе|хором|together)\s*[)\]]?\s*$/i;
+const EVERYONE_WORDS = new Set(["все", "всё", "вместе", "хором", "толпа", "all", "everyone", "together", "crowd"]);
+const isEveryone = n => { const w = n.replace(/[^a-zа-я0-9 ]+/gi, " ").split(" ").filter(Boolean); return w.length > 0 && w.every(x => EVERYONE_WORDS.has(x)); };
+
 export function countDubberLines(text, characters, users, aliases = {}) {
   const { total, empty, actors } = assActors(text);
   const idx = characterIndex(characters);
@@ -169,10 +175,8 @@ export function countDubberLines(text, characters, users, aliases = {}) {
       || one(l => l.split(/[_\s.-]+/)[0] === n)
       || (n.length >= 3 ? one(l => l.startsWith(n)) : null);
   };
-  const people = new Map(), unknown = [];
-  let signs = 0;
-  for (const { actor, lines } of actors) {
-    if (SIGN_ACTOR_RE.test(normName(actor))) { signs += lines; continue; }
+  // One Actor value → {user, character} or null.
+  const resolve = actor => {
     const { left, right } = splitActor(actor);
     let character = findCharacter(idx, left), dubber = right;
     if (!character && right) { character = findCharacter(idx, right); dubber = left; }
@@ -183,17 +187,52 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     }
     // No such character in the title: "Даббер - Персонаж" or "Персонаж - Даббер", or just the dubber.
     if (!user && !character) user = person(left) || (right ? person(right) : null);
-    if (!user) { unknown.push({ actor, lines }); continue; }
+    return user ? { user, character } : null;
+  };
+  const people = new Map(), unknown = [], everyone = [];
+  let signs = 0, joint = 0;
+  const credit = ({ user, character }, lines, shared) => {
     const key = String(user.telegram_id);
-    const p = people.get(key) || { telegram_id: key, name: user.name || user.username || "", lines: 0, chars: new Map() };
+    const p = people.get(key) || { telegram_id: key, name: user.name || user.username || "", lines: 0, joint: 0, chars: new Map() };
     p.lines += lines;
+    if (shared) p.joint += lines;
     if (character) {
       const c = p.chars.get(character.id) || { id: character.id, name: character.name, image_url: character.image_url || "", lines: 0 };
       c.lines += lines;
       p.chars.set(character.id, c);
     }
     people.set(key, p);
+  };
+  for (const { actor, lines } of actors) {
+    const n = normName(actor);
+    if (SIGN_ACTOR_RE.test(n)) { signs += lines; continue; }
+    if (isEveryone(n)) { everyone.push({ actor, lines }); continue; }
+    // Several speakers in one line: "Мэбуки и Ясуко", "Oni, Совесть - толпа", "Куруми + Мотико вместе".
+    // Split before matching the whole value: the first-word match would take "Мэбуки и Мотико" for Мэбуки alone.
+    // A character literally named with "и"/a comma stays whole.
+    const parts = idx.has(n) ? [] : actor.split(JOIN_ACTOR_RE).map(x => x.replace(TOGETHER_RE, "").trim()).filter(Boolean);
+    if (parts.length < 2) {
+      const whole = resolve(actor);
+      if (whole) credit(whole, lines, false); else unknown.push({ actor, lines });
+      continue;
+    }
+    const hits = new Map(), missed = [];
+    for (const part of parts) {
+      const r = resolve(part);
+      if (r) { if (!hits.has(String(r.user.telegram_id))) hits.set(String(r.user.telegram_id), r); } else missed.push(part);
+    }
+    if (!hits.size) { unknown.push({ actor, lines }); continue; }
+    const shared = hits.size > 1;
+    if (shared) joint += lines;
+    hits.forEach(r => credit(r, lines, shared));
+    missed.forEach(part => unknown.push({ actor: `${part} (из «${actor}»)`, lines }));
+  }
+  // "Все вместе" / "хором": everyone who speaks in this episode says it.
+  for (const { actor, lines } of everyone) {
+    if (people.size < 2) { unknown.push({ actor, lines }); continue; }
+    joint += lines;
+    people.forEach(p => { p.lines += lines; p.joint += lines; });
   }
   const list = [...people.values()].map(({ chars, ...p }) => ({ ...p, characters: [...chars.values()].sort((a, b) => b.lines - a.lines) }));
-  return { total, empty, signs, people: list.sort((a, b) => b.lines - a.lines), unknown };
+  return { total, empty, signs, joint, people: list.sort((a, b) => b.lines - a.lines), unknown };
 }

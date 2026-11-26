@@ -628,7 +628,8 @@ export async function markAssWithDubbers(characters, users, file = null, attach 
  */
 export function showDubberLines(characters, users, file, post = null, aliases = {}) {
   const r = countDubberLines(file.text, characters, users, aliases);
-  const counted = r.people.reduce((a, p) => a + p.lines, 0) + r.unknown.reduce((a, u) => a + u.lines, 0);
+  // Shared lines are credited to every speaker, so percentages are of all voiced lines and may add up past 100.
+  const counted = r.total - r.signs - r.empty;
   const max = Math.max(1, ...r.people.map(p => p.lines), ...r.unknown.map(u => u.lines));
   const pct = n => counted ? Math.round(n / counted * 100) : 0;
   const tile = p => {
@@ -638,7 +639,7 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
       <span class="avatar-bubble" data-avatar-for="${esc(p.telegram_id)}">${esc((p.name || "?").slice(0, 1).toUpperCase())}</span>
       <span class="dl-name">${esc(p.name || "без имени")}</span>
       ${p.characters.length ? `<span class="dl-cast">${esc(p.characters.slice(0, 2).map(c => c.name).join(", "))}${p.characters.length > 2 ? ` +${p.characters.length - 2}` : ""}</span>` : ""}
-      <b>${p.lines}</b><small>${pct(p.lines)}%</small>
+      <b>${p.lines}</b><small>${pct(p.lines)}%${p.joint ? ` · вместе ${p.joint}` : ""}</small>
       <span class="nt-bar"><i style="width:${(p.lines / max * 100).toFixed(1)}%"></i></span>
     </div>`;
   };
@@ -646,7 +647,7 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
   const note = r.people.map(p => `${String(p.name).replace(/[,;\-–—]/g, " ").trim()} - ${p.lines}`).join(", ");
   const overlay = openSheet(`<h2>Реплики · ${esc(file.name)}</h2>
     ${r.people.length ? `<div class="dl-tiles">${r.people.map(tile).join("")}</div>` : `<div class="no-assignee">Не нашли ни одного даббера. В поле Actor ожидается персонаж тайтла, «Персонаж (Даббер)» или имя даббера.</div>`}
-    <div class="nt-sum">всего реплик ${r.total - r.signs}${r.signs ? ` · надписей ${r.signs} (не считаем)` : ""}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}</div>
+    <div class="nt-sum">всего реплик ${r.total - r.signs}${r.signs ? ` · надписей ${r.signs} (не считаем)` : ""}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}${r.joint ? ` · совместных ${r.joint} — засчитаны каждому, кто говорит` : ""}</div>
     ${r.unknown.length ? `<details class="detail-section"><summary>Не узнали (${r.unknown.length})</summary><div class="no-assignee">${r.unknown.slice(0, 60).map(u => `«${esc(u.actor)}» — ${u.lines}`).join(", ")}${r.unknown.length > 60 ? " …" : ""}</div></details>` : ""}
     <div class="sheet-actions">
       <button class="btn" data-close>Закрыть</button>

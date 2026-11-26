@@ -98,3 +98,27 @@ console.log("subs-actors-test: ok");
   const amb = countDubberLines(sub, [], [{ telegram_id: 6, name: "богданчик" }, { telegram_id: 7, name: "Богдана" }]);
   assert.deepEqual(amb.people, []); // two people start with "богдан" — don't guess
 }
+
+{
+  // Several speakers in one line, and "все вместе".
+  const { countDubberLines } = await import("../src/app/subs-actors-core.js");
+  const chars = [
+    { id: 1, name: "Мэбуки Ямаси", voiced_by: { telegram_id: 1 } },
+    { id: 2, name: "Ясуко", voiced_by: { telegram_id: 1 } },
+    { id: 3, name: "Мотико Коганэ", voiced_by: { telegram_id: 2 } },
+  ];
+  const team = [{ telegram_id: 1, name: "Lissa" }, { telegram_id: 2, name: "Совесть" }, { telegram_id: 3, name: "Ren" }];
+  const line = a => `Dialogue: 0,0:00:01.00,0:00:02.00,Default,${a},0,0,0,,x\n`;
+  const sub = "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    + line("Мэбуки") + line("Мотико") + line("Ren - Рассказчик")
+    + line("Мэбуки и Мотико") // two people → both get it
+    + line("Мэбуки и Ясуко") // same person twice → once, not shared
+    + line("Lissa; Ren - толпа (вместе)")
+    + line("Мотико и Незнакомец") // one known, one not
+    + line("Все вместе");
+  const r = countDubberLines(sub, chars, team);
+  const got = Object.fromEntries(r.people.map(p => [p.name, [p.lines, p.joint]]));
+  assert.deepEqual(got, { Lissa: [5, 3], "Совесть": [4, 2], Ren: [3, 2] });
+  assert.equal(r.joint, 3);
+  assert.deepEqual(r.unknown, [{ actor: "Незнакомец (из «Мотико и Незнакомец»)", lines: 1 }]);
+}
