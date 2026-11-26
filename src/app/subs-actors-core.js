@@ -94,6 +94,12 @@ function fuzzyCharacter(idx, n) {
     if (d < best) { best = d; hits = new Set([c]); } else if (d === best) hits.add(c);
   }
   if (hits.size === 1) return [...hits][0];
+  if (!hits.size) {
+    // Short form inside a longer name: "Хиро" for "Такахиро Сато". 4+ letters, only one character.
+    if (word.length < 4) return null;
+    const inside = new Set([...idx.values()].filter(c => normName(c.name).split(" ").some(w => w.length > word.length && w.includes(word))));
+    return inside.size === 1 ? [...inside][0] : null;
+  }
   // A tie ("Ниа": Ния or Нил?) goes to the only main character among them, if there is one.
   const main = [...hits].filter(c => c.role === "main");
   return main.length === 1 ? main[0] : null;

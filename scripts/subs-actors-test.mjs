@@ -162,3 +162,14 @@ console.log("subs-actors-test: ok");
   const r = countDubberLines(sub, chars, [{ telegram_id: 1, name: "Lissa", username: "LissaDor" }]);
   assert.deepEqual(r.people[0].characters.map(c => c.name), ["Ния Листон"]);
 }
+
+{
+  // Short form inside a longer name.
+  const { countDubberLines } = await import("../src/app/subs-actors-core.js");
+  const chars = [{ id: 1, name: "Такахиро Сато" }, { id: 2, name: "Эльма Уиллроуз" }];
+  const sub = "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Азам - Хиро,0,0,0,,x\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Совесть - Элма,0,0,0,,y\n";
+  const r = countDubberLines(sub, chars, [{ telegram_id: 1, name: "Азам" }, { telegram_id: 2, name: "Совесть" }]);
+  assert.deepEqual(r.people.map(p => [p.name, p.characters.map(c => c.name)]), [["Азам", ["Такахиро Сато"]], ["Совесть", ["Эльма Уиллроуз"]]]);
+}
