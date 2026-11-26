@@ -1,3 +1,4 @@
+import brandLogoUrl from "../assets/brand-logo.png";
 
 import { invoke, listen } from "./tauri.js";
 import { state, can } from "./state.js";
@@ -243,7 +244,7 @@ async function openSettings() {
           <h3>Обновления</h3><p class="st-lead">Версия приложения, канал и откуда скачивать обновления.</p>
           <div class="st-group">
             <div class="st-version">
-              <div class="st-version-logo">${ic('<path d="M5 5L19 19M19 5L5 19"/>')}</div>
+              <div class="st-version-logo"><img class="brand-img" src="${brandLogoUrl}" alt="" draggable="false"></div>
               <div class="st-text"><b>Project Desktop</b><span>версия ${esc(APP_VERSION)}</span><span class="st-upd" id="s-upd-pill" hidden></span></div>
               <button class="btn primary" id="s-check-update">Проверить обновления</button>
             </div>

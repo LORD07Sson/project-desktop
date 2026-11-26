@@ -1,4 +1,5 @@
 
+import brandLogoUrl from "../assets/brand-logo.png";
 import { state } from "./state.js";
 import { apiGet, toast, forceMediaToken } from "./api.js";
 import { $, esc } from "./utils.js";
@@ -684,7 +685,7 @@ function shellHtml() {
   return `
     <div class="wm-scroll" id="wm-scroll">
       <nav class="wm-nav" id="wm-nav">
-        <div class="wm-brand"><i><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19"/><path class="bm-b" d="M19 5L5 19"/></svg></i>Смотреть</div>
+        <div class="wm-brand"><i><img class="brand-img" src="${brandLogoUrl}" alt="" draggable="false"></i>Смотреть</div>
         <div class="wm-tabs">${TABS.map(([k, label]) => `<button type="button" data-wm-tab="${k}" class="${k === tab ? "on" : ""}">${label}</button>`).join("")}</div>
         <div class="wm-menu-wrap">
           <button type="button" class="wm-menu-btn" id="wm-menu-btn" aria-label="Меню" aria-expanded="false">${I.menu}</button>

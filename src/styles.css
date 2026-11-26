@@ -5547,3 +5547,13 @@ button.pr-tip:hover { border-color: rgba(183, 148, 246, .5); background: rgba(16
 .vs-role select { flex: 1; min-width: 160px; }
 .vs-form .btn svg { width: 14px; height: 14px; }
 .vs-pick-samples { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; max-width: 60%; }
+
+/* Project logo picture instead of the drawn "X" mark: round art, no gradient plate behind it */
+.brand-logo:has(.brand-img), .titlebar-left .logo:has(.brand-img) { background: none; box-shadow: none; border-radius: 50%; overflow: visible; }
+.brand-logo:has(.brand-img)::after { content: none; }
+.brand-img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35)); transition: transform .45s cubic-bezier(.34, 1.56, .64, 1); }
+.brand-logo:hover .brand-img, .sidebar-brand:hover .brand-img { transform: rotate(-8deg) scale(1.08); }
+.st-version-logo .brand-img { width: 42px; height: 42px; }
+.wm-brand i:has(.brand-img) { background: none; box-shadow: none; }
+.wm-brand i .brand-img { width: 24px; height: 24px; }
+@media (prefers-reduced-motion: reduce) { .brand-img { transition: none; } }

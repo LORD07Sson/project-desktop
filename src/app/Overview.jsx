@@ -1,3 +1,4 @@
+import brandLogoUrl from "../assets/brand-logo.png";
 
 import { render } from "solid-js/web";
 import { pipelinePct } from "./utils.js";
@@ -101,7 +102,7 @@ function EmptyStudio(props) {
   const teamReady = members > 1;
   return (
     <div class="ov2-empty">
-      <div class="ov2-empty-mark brand-logo"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path class="bm-a" d="M5 5L19 19" /><path class="bm-b" d="M19 5L5 19" /></svg></div>
+      <div class="ov2-empty-mark brand-logo"><img class="brand-img" src={brandLogoUrl} alt="" draggable={false} /></div>
       <h1>Команда готова к первому сезону</h1>
       <p>Серий пока нет — поэтому здесь три шага вместо пустых графиков. Как только появится первая серия, тут будет живой обзор.</p>
       <div class="ov2-steps">
