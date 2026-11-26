@@ -166,7 +166,12 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -e
-          rels=$(gh api "repos/$REPO/releases" --paginate --jq '.[] | select(.tag_name=="alpha-latest") | "\(.id) \(.draft)"')
+          # The release list lags a few seconds behind a just-created release: retry before calling it missing.
+          for i in 1 2 3 4 5 6; do
+            rels=$(gh api "repos/$REPO/releases" --paginate --jq '.[] | select(.tag_name=="alpha-latest") | "\(.id) \(.draft)"')
+            [ -n "$rels" ] && break
+            sleep 10
+          done
           if [ -z "$rels" ]; then
             echo "::error::Релиза alpha-latest нет вообще"
             exit 1
