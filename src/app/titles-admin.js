@@ -646,8 +646,8 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
   const note = r.people.map(p => `${String(p.name).replace(/[,;\-–—]/g, " ").trim()} - ${p.lines}`).join(", ");
   const overlay = openSheet(`<h2>Реплики · ${esc(file.name)}</h2>
     ${r.people.length ? `<div class="dl-tiles">${r.people.map(tile).join("")}</div>` : `<div class="no-assignee">Не нашли ни одного даббера. В поле Actor ожидается персонаж тайтла, «Персонаж (Даббер)» или имя даббера.</div>`}
-    <div class="nt-sum">всего реплик ${r.total}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}</div>
-    ${r.unknown.length ? `<details class="detail-section"><summary>Не узнали (${r.unknown.length})</summary><div class="no-assignee">${r.unknown.slice(0, 60).map(u => `${esc(u.actor)} · ${u.lines}`).join(" · ")}${r.unknown.length > 60 ? " …" : ""}</div></details>` : ""}
+    <div class="nt-sum">всего реплик ${r.total - r.signs}${r.signs ? ` · надписей ${r.signs} (не считаем)` : ""}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}</div>
+    ${r.unknown.length ? `<details class="detail-section"><summary>Не узнали (${r.unknown.length})</summary><div class="no-assignee">${r.unknown.slice(0, 60).map(u => `«${esc(u.actor)}» — ${u.lines}`).join(", ")}${r.unknown.length > 60 ? " …" : ""}</div></details>` : ""}
     <div class="sheet-actions">
       <button class="btn" data-close>Закрыть</button>
       ${post && r.people.length >= 2 ? `<button class="btn primary" id="dl-post">Опубликовать в заметки</button>` : ""}

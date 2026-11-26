@@ -148,6 +148,9 @@ export function applyDubbers(text, characters, mode = "both") {
  * Returns { total, empty, people: [{telegram_id, name, lines, characters: [{id, name, image_url, lines}]}], unknown: [{actor, lines}] },
  * people and their characters sorted by lines, most first.
  */
+// Actor values that mark on-screen text, not a voiced line.
+const SIGN_ACTOR_RE = /^(надпис[ьи]|надпись \d+|sign|signs|text|title|caption|титр|титры|примечание|note|comment)$/;
+
 export function countDubberLines(text, characters, users, aliases = {}) {
   const { total, empty, actors } = assActors(text);
   const idx = characterIndex(characters);
@@ -159,11 +162,17 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     if (!n) return null;
     const tid = alias.get(n);
     if (tid) return byTid.get(tid) || { telegram_id: tid, name };
+    const one = test => { const hit = (users || []).filter(u => userLabels(u).some(test)); return hit.length === 1 ? hit[0] : null; };
+    // Exact name, then first word of a name or username ("Ewaii" ~ "Ewaii_Ren"),
+    // then a unique prefix of 3+ letters ("Богдан" ~ "богданчик <3").
     return findUser(users, name)
-      || (users || []).find(u => userLabels(u).some(l => l.split(/[_\s.-]+/)[0] === n)) || null;
+      || one(l => l.split(/[_\s.-]+/)[0] === n)
+      || (n.length >= 3 ? one(l => l.startsWith(n)) : null);
   };
   const people = new Map(), unknown = [];
+  let signs = 0;
   for (const { actor, lines } of actors) {
+    if (SIGN_ACTOR_RE.test(normName(actor))) { signs += lines; continue; }
     const { left, right } = splitActor(actor);
     let character = findCharacter(idx, left), dubber = right;
     if (!character && right) { character = findCharacter(idx, right); dubber = left; }
@@ -186,5 +195,5 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     people.set(key, p);
   }
   const list = [...people.values()].map(({ chars, ...p }) => ({ ...p, characters: [...chars.values()].sort((a, b) => b.lines - a.lines) }));
-  return { total, empty, people: list.sort((a, b) => b.lines - a.lines), unknown };
+  return { total, empty, signs, people: list.sort((a, b) => b.lines - a.lines), unknown };
 }

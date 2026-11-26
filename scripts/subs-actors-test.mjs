@@ -85,3 +85,16 @@ console.log("subs-actors-test: ok");
   assert.deepEqual(r.people.map(p => [p.telegram_id, p.lines]), [["1", 2], ["2", 1]]);
   assert.deepEqual(r.unknown, []);
 }
+
+{
+  // Unique name prefix ("Богдан" ~ "богданчик <3") and sign lines left out of the count.
+  const { countDubberLines } = await import("../src/app/subs-actors-core.js");
+  const sub = "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Богдан - Второстеп муж 1,0,0,0,,а\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,НАДПИСЬ,0,0,0,,вывеска\n";
+  const r = countDubberLines(sub, [], [{ telegram_id: 6, name: "богданчик <3" }, { telegram_id: 7, name: "Богдана" }].slice(0, 1));
+  assert.equal(r.signs, 1);
+  assert.deepEqual(r.people.map(p => [p.telegram_id, p.lines]), [["6", 1]]);
+  const amb = countDubberLines(sub, [], [{ telegram_id: 6, name: "богданчик" }, { telegram_id: 7, name: "Богдана" }]);
+  assert.deepEqual(amb.people, []); // two people start with "богдан" — don't guess
+}
