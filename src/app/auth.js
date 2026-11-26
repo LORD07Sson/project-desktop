@@ -1,6 +1,5 @@
 
 import { maybeAskNda } from "./nda.js";
-import { startGhost } from "./auth-ghost.js";
 import { invoke } from "./tauri.js";
 import oopsFallGif from "../assets/oops-fall.gif";
 import oopsFrierenGif from "../assets/friren.gif";
@@ -149,19 +148,16 @@ function aimLogoFlight() {
   const box = img && img.parentElement;
   if (!box || !box.offsetWidth) return;
   const r = box.getBoundingClientRect();
-  // Small enough that the ghost body (about 3 logo heights with arms and legs) fits on screen.
-  const target = Math.min(FLY_BOX, window.innerHeight * 0.26, window.innerWidth * 0.3);
+  const target = Math.min(FLY_BOX, Math.min(window.innerWidth, window.innerHeight) * 0.55);
   img.style.setProperty("--rest", String(r.width / FLY_BOX));
   img.style.setProperty("--big", String(target / FLY_BOX));
   img.style.setProperty("--tsz", `${target}px`);
   img.style.setProperty("--fx", `${window.innerWidth / 2 - (r.left + r.width / 2)}px`);
-  img.style.setProperty("--fy", `${window.innerHeight * 0.34 - (r.top + r.height / 2)}px`);
-  startGhost(img);
+  img.style.setProperty("--fy", `${window.innerHeight / 2 - (r.top + r.height / 2)}px`);
   if (!img.dataset.aimed) {
     img.dataset.aimed = "1";
     window.addEventListener("resize", aimLogoFlight);
     // Each cycle dances the next half of the routine: first half, second half, first half…
-    img.addEventListener("animationiteration", () => { img.classList.toggle("dance-b"); aimLogoFlight(); });
   }
 }
 
