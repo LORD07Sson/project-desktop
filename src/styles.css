@@ -5557,3 +5557,21 @@ button.pr-tip:hover { border-color: rgba(183, 148, 246, .5); background: rgba(16
 .wm-brand i:has(.brand-img) { background: none; box-shadow: none; }
 .wm-brand i .brand-img { width: 24px; height: 24px; }
 @media (prefers-reduced-motion: reduce) { .brand-img { transition: none; } }
+
+/* Sign-in logo: every 10 s flies out to the middle of the screen, dances, flies back (aimed by auth.js) */
+#auth-screen .auth-logo:has(.auth-fly) { animation: none; position: relative; z-index: 60; border-radius: 50%; }
+#auth-screen .auth-fly { position: absolute; left: calc(50% - 192px); top: calc(50% - 192px); width: 384px; height: 384px; max-width: none; transform-origin: 50% 50%; pointer-events: none;
+  transform: scale(var(--rest, .135)); animation: auth-fly 10s cubic-bezier(.45, 0, .25, 1) 1.5s infinite; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .45)); }
+#auth-screen .auth-logo:hover .auth-fly { transform: scale(var(--rest, .135)); }
+@keyframes auth-fly {
+  0%, 12% { transform: translate(0, 0) scale(var(--rest)) rotate(0); }
+  24% { transform: translate(var(--fx), var(--fy)) scale(var(--big)) rotate(-4deg); }
+  29% { transform: translate(var(--fx), calc(var(--fy) - 18px)) scale(var(--big)) rotate(7deg); }
+  34% { transform: translate(var(--fx), var(--fy)) scale(calc(var(--big) * 1.04)) rotate(-7deg); }
+  39% { transform: translate(var(--fx), calc(var(--fy) - 18px)) scale(var(--big)) rotate(7deg); }
+  44% { transform: translate(var(--fx), var(--fy)) scale(calc(var(--big) * 1.04)) rotate(-7deg); }
+  49% { transform: translate(var(--fx), calc(var(--fy) - 10px)) scale(var(--big)) rotate(3deg); }
+  54% { transform: translate(var(--fx), var(--fy)) scale(var(--big)) rotate(0); }
+  68%, 100% { transform: translate(0, 0) scale(var(--rest)) rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) { #auth-screen .auth-fly { animation: none; } }
