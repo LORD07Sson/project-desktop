@@ -71,7 +71,37 @@ function characterIndex(characters) {
   }
   return idx;
 }
-const findCharacter = (idx, name) => { const n = normName(name); return n ? idx.get(n) || idx.get(`~${n}`) || idx.get(`~${n.split(" ")[0]}`) || null : null; };
+function editDistance(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 9;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// Subbers spell names their own way: "Ниа" for "Ния Листон", "Линокис" for "Ринокис Фанк".
+// Allow 1 typo (2 for long names) against a full name or its first word, only when exactly one character fits.
+function fuzzyCharacter(idx, n) {
+  const word = n.split(" ")[0];
+  if (word.length < 3) return null;
+  const limit = word.length >= 8 ? 2 : 1;
+  let best = limit + 1, hits = new Set();
+  for (const [key, c] of idx) {
+    const k = key.startsWith("~") ? key.slice(1) : key;
+    const d = editDistance(key.startsWith("~") ? word : n, k);
+    if (d < best) { best = d; hits = new Set([c]); } else if (d === best) hits.add(c);
+  }
+  if (hits.size === 1) return [...hits][0];
+  // A tie ("Ниа": Ния or Нил?) goes to the only main character among them, if there is one.
+  const main = [...hits].filter(c => c.role === "main");
+  return main.length === 1 ? main[0] : null;
+}
+const findCharacter = (idx, name) => {
+  const n = normName(name);
+  return n ? idx.get(n) || idx.get(`~${n}`) || idx.get(`~${n.split(" ")[0]}`) || fuzzyCharacter(idx, n) : null;
+};
 
 function userLabels(u) {
   return [u.name, u.username, u.username && `@${u.username}`].map(normName).filter(Boolean);

@@ -133,3 +133,26 @@ console.log("subs-actors-test: ok");
   assert.deepEqual(r.people.map(p => [p.telegram_id, p.lines, p.joint]), [["1", 1, 1], ["2", 1, 1]]);
   assert.deepEqual(r.unknown, [{ actor: "Ewaii Незнакомец", lines: 1 }]);
 }
+
+{
+  // Spelling variants of character names, only when unambiguous.
+  const { countDubberLines } = await import("../src/app/subs-actors-core.js");
+  const chars = [{ id: 1, name: "Ния Листон", image_url: "n.jpg" }, { id: 2, name: "Ринокис Фанк", image_url: "r.jpg" }, { id: 3, name: "Анзель" }, { id: 4, name: "Анзел" }];
+  const sub = "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,LissaDor - Ниа,0,0,0,,x\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Совесть - Линокис,0,0,0,,y\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Совесть - Анзелл,0,0,0,,z\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Совесть - Мужик,0,0,0,,w\n";
+  const r = countDubberLines(sub, chars, [{ telegram_id: 1, name: "Lissa", username: "LissaDor" }, { telegram_id: 2, name: "Совесть" }]);
+  const cast = Object.fromEntries(r.people.map(p => [p.name, p.characters.map(c => c.name)]));
+  assert.deepEqual(cast, { Lissa: ["Ния Листон"], "Совесть": ["Ринокис Фанк"] }); // "Анзелл" fits two → none
+  assert.deepEqual(r.people.map(p => [p.name, p.lines]), [["Совесть", 3], ["Lissa", 1]]);
+}
+
+{
+  const { countDubberLines } = await import("../src/app/subs-actors-core.js");
+  const chars = [{ id: 1, name: "Ния Листон", role: "main" }, { id: 2, name: "Нил Листон", role: "supporting" }];
+  const sub = "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:02.00,Default,LissaDor - Ниа,0,0,0,,x\n";
+  const r = countDubberLines(sub, chars, [{ telegram_id: 1, name: "Lissa", username: "LissaDor" }]);
+  assert.deepEqual(r.people[0].characters.map(c => c.name), ["Ния Листон"]);
+}
