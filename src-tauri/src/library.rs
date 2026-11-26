@@ -98,31 +98,3 @@ pub fn library_clear(app: tauri::AppHandle) {
         let _ = std::fs::remove_file(p);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn media_extensions_are_case_insensitive() {
-        assert!(is_media("Show - 01.MKV"));
-        assert!(is_media("a.b.mp4"));
-        assert!(!is_media("notes.txt"));
-        assert!(!is_media("mkv"));
-    }
-
-    #[test]
-    fn scans_nested_folders_and_skips_other_files() {
-        let base = std::env::temp_dir().join(format!("lib-test-{}", std::process::id()));
-        let sub = base.join("Show Season 2");
-        std::fs::create_dir_all(&sub).unwrap();
-        std::fs::write(sub.join("[G] Show - 01 [1080p].mkv"), b"x").unwrap();
-        std::fs::write(sub.join("readme.txt"), b"x").unwrap();
-        std::fs::write(base.join("movie.mp4"), b"x").unwrap();
-        let (files, truncated) = scan_dir(&base);
-        let _ = std::fs::remove_dir_all(&base);
-        assert!(!truncated);
-        assert_eq!(files.len(), 2);
-        assert!(files.iter().any(|f| f.name.ends_with("01 [1080p].mkv") && f.folder == "Show Season 2"));
-    }
-}

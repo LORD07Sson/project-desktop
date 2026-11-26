@@ -4,7 +4,7 @@
 
 | Где | Что поменять |
 |---|---|
-| project-desktop | `npm run set-server -- https://новый.домен[:порт]` — правит `server.json` (его читают интерфейс и Rust при сборке) и CSP в `src-tauri/tauri.conf.json`. `npm test` проверит, что адрес нигде не вписан руками и CSP его пропускает. |
+| project-desktop | `npm run set-server -- https://новый.домен[:порт]` — правит `server.json` (его читают интерфейс и Rust при сборке) и CSP в `src-tauri/tauri.conf.json`. |
 | project-android | `SERVER_ORIGIN` в `gradle.properties`. |
 | voice_report_bot | переменная `MINIAPP_URL` в окружении сервиса (`/etc/telegram-bot.env` и юнит `telegram-miniapp`) — от неё же берут адрес бот, кнопка мини-аппа и игры. |
 | VPS | конфиг nginx и сертификат Let's Encrypt под новый домен. |

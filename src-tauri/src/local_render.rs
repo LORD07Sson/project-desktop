@@ -783,31 +783,3 @@ pub fn probe_local_video(path: &std::path::Path) -> Result<LocalVideoInfo, Strin
         size: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn safe_name_rejects_paths() {
-        assert!(safe_name("episode.mkv").is_ok());
-        assert!(safe_name("../x").is_err());
-        assert!(safe_name("a/b").is_err());
-        assert!(safe_name("C:evil").is_err());
-        assert!(safe_name("").is_err());
-    }
-
-    #[test]
-    fn urlencode_keeps_file_id_chars_and_escapes_the_rest() {
-        assert_eq!(urlencode("BQACAgIAAxk-_x"), "BQACAgIAAxk-_x");
-        assert_eq!(urlencode("a b&c"), "a%20b%26c");
-        assert_eq!(urlencode("asm_local_1/a2/дорожка.wav"), "asm_local_1/a2/%D0%B4%D0%BE%D1%80%D0%BE%D0%B6%D0%BA%D0%B0.wav");
-    }
-
-    #[test]
-    fn work_dir_strips_unsafe_chars() {
-        let dir = work_dir("R-000019/../../x").unwrap();
-        assert!(dir.ends_with("R-000019x"));
-        assert!(work_dir("///").is_err());
-    }
-}

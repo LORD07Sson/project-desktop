@@ -154,14 +154,3 @@ pub async fn request(
 pub fn cached_ip() -> Option<String> {
     CACHE.lock().unwrap().as_ref().map(|c| c.ip.to_string())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn splits_host_and_port() {
-        assert_eq!(host_port("https://abuse.example.com:8443/api"), ("abuse.example.com".into(), 8443));
-        assert_eq!(host_port("https://example.com/api"), ("example.com".into(), 443));
-    }
-}

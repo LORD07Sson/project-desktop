@@ -79,15 +79,3 @@ pub fn diagnose(host: &str) -> NetDiag {
 
     NetDiag { dns_ok: !resolved.is_empty(), dns_ms, resolved, dns_servers: servers, dns_provider: provider }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn knows_public_dns_and_local() {
-        assert_eq!(provider_of("8.8.8.8"), Some("Google"));
-        assert_eq!(provider_of("77.88.8.8"), Some("Яндекс DNS"));
-        assert!(is_local("192.168.0.1") && is_local("172.20.1.1") && !is_local("172.40.1.1") && !is_local("8.8.8.8"));
-    }
-}

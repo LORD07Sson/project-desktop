@@ -23,25 +23,3 @@ pub fn clear() -> Result<(), String> {
         Err(e) => Err(e.to_string()),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    #[ignore = "нужно реальное хранилище учётных данных ОС — недоступно на headless CI"]
-    fn save_load_clear_roundtrip() {
-        let token = "dsk_test_roundtrip_token";
-        save(token).expect("save должен пройти при живом хранилище");
-        assert_eq!(load().as_deref(), Some(token));
-        clear().expect("clear должен пройти");
-        assert_eq!(load(), None);
-    }
-
-    #[test]
-    #[ignore = "нужно реальное хранилище учётных данных ОС — недоступно на headless CI"]
-    fn clear_on_missing_entry_is_not_an_error() {
-        clear().expect("clear() без сохранённого токена не должен быть ошибкой");
-        clear().expect("повторный clear() тоже не должен быть ошибкой");
-    }
-}

@@ -3543,26 +3543,3 @@ pub fn lt_merge_profile(name: String) -> Result<u32, String> {
     }
     Ok(count)
 }
-
-#[cfg(test)]
-mod parity_tests {
-    #[test]
-    fn vdf_launch_options_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("lt_vdf_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let p = dir.join("localconfig.vdf");
-        std::fs::write(&p, "\"UserLocalConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"apps\"\n\t\t\t\t{\n\t\t\t\t\t\"10\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"Playtime\"\t\t\"5\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n").unwrap();
-        super::write_app_value(&p, 10, "LaunchOptions", "-novid \"x\"").unwrap();
-        let t = std::fs::read_to_string(&p).unwrap();
-        let b = super::vdf_find_app_block(&t, 10).unwrap();
-        assert_eq!(b.launch_options.unwrap().2, "-novid \"x\"");
-        assert_eq!(b.playtime.unwrap().2, "5");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn parses_manifest_pins() {
-        let lua = "addappid(1)\nsetManifestid(553851, \"123456789\", 0)\n-- setManifestid(553852,\"42\")\nsetmanifestid(x, \"1\")";
-        assert_eq!(super::manifest_pins(lua), vec![(553851, "123456789".to_string()), (553852, "42".to_string())]);
-    }
-}

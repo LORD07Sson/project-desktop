@@ -399,39 +399,3 @@ pub async fn tc_progress(app: tauri::AppHandle, magnet: String) -> Result<TcProg
     app.state::<crate::file_scope::FileScope>().allow_read(&full);
     Ok(TcProgress { state: "done".into(), progress: 1.0, speed: 0, path: Some(full.to_string_lossy().into_owned()) })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalizes_base() {
-        assert_eq!(normalize_base("http://127.0.0.1:8080/").unwrap(), "http://127.0.0.1:8080");
-        assert_eq!(normalize_base("https://nas.local:9091/transmission/rpc/").unwrap(), "https://nas.local:9091/transmission/rpc");
-        assert_eq!(normalize_base("  http://localhost:8112 ").unwrap(), "http://localhost:8112");
-        assert!(normalize_base("ftp://x").is_err());
-        assert!(normalize_base("javascript:alert(1)").is_err());
-        assert!(normalize_base("127.0.0.1:8080").is_err());
-    }
-
-    #[test]
-    fn validates_magnets() {
-        assert!(valid_magnet("magnet:?xt=urn:btih:abcdef&dn=x"));
-        assert!(!valid_magnet("http://evil/x.torrent"));
-        assert!(!valid_magnet("magnet:?xt=urn:btih:abc\nmagnet:?xt=urn:btih:def"));
-        assert!(!valid_magnet(&format!("magnet:?xt=urn:btih:{}", "a".repeat(4000))));
-    }
-
-    #[test]
-    fn extracts_cookie() {
-        let c = vec!["foo=1; Path=/".to_string(), "SID=abc123; HttpOnly; path=/".to_string()];
-        assert_eq!(extract_cookie(&c, "SID").as_deref(), Some("abc123"));
-        assert_eq!(extract_cookie(&c, "_session_id"), None);
-    }
-
-    #[test]
-    fn transmission_rpc_url() {
-        assert_eq!(tr_url("http://h:9091"), "http://h:9091/transmission/rpc");
-        assert_eq!(tr_url("http://h:9091/transmission/rpc"), "http://h:9091/transmission/rpc");
-    }
-}

@@ -26,4 +26,4 @@ if (!count) {
 fs.writeFileSync(confPath, conf.split(prev).join(url.origin));
 server.origin = url.origin;
 fs.writeFileSync(serverPath, `${JSON.stringify(server, null, 2)}\n`);
-console.log(`Готово: ${prev} → ${url.origin} (server.json и ${count} мест в CSP). Дальше: npm test, коммит, пуш.`);
+console.log(`Готово: ${prev} → ${url.origin} (server.json и ${count} мест в CSP). Дальше: коммит, пуш.`);

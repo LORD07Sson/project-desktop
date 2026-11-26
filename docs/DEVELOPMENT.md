@@ -46,12 +46,11 @@ cargo build --release --manifest-path src-tauri/Cargo.toml --features custom-pro
 
 ```bash
 npm run lint
-npm run build && npm test
-cargo test --manifest-path src-tauri/Cargo.toml
+npm run build && npm run verify
+cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-`npm test` проверяет собранный бандл: импорт модулей, жесты доски,
-вкладку «Я» с пакетным QC, заметки с тайм-кодами.
+`npm run verify` проверяет, что модули собранного бандла импортируются.
 
 `src-tauri/src/mpv_embed.rs` компилируется только под Windows. На другой
 ОС его можно проверить так (тесты при этом не запускаются):
@@ -96,9 +95,9 @@ Windows через `vpk`:
 | `src-tauri/` | Rust: команды, трей, автообновление, QC звука, ffmpeg, mpv |
 | `src-tauri/src/file_scope.rs` | Какие файлы вебвью вправе читать и перезаписывать |
 | `src-tauri/src/media_tools.rs` | Операции ffmpeg |
-| `src-tauri/src/board.rs` | Раскладка доски (покрыта тестами) |
+| `src-tauri/src/board.rs` | Раскладка доски |
 | `src-tauri/binaries/` | `ffmpeg.exe`, `ffprobe.exe`, `mpv.exe` для Windows-сборки |
-| `scripts/` | Тесты на собранном бандле (`npm test`) |
+| `scripts/` | Служебные скрипты: `verify-modules.mjs`, `set-server.mjs`, `debug-launch.ps1` |
 | `docs/API.md` | Эндпоинты сервера |
 | `.github/workflows/` | CI: проверки PR, stable/alpha-сборки, CodeQL |
 | `VERSION` | Номер версии |

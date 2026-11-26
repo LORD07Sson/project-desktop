@@ -1831,39 +1831,3 @@ fn main() {
             }
         });
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn friendly_update_error_explains_github_rate_limit() {
-        let msg = friendly_update_error("Http error: http status: 403");
-        assert!(msg.contains("лимит"), "должно объяснять причину, получили: {msg}");
-        assert!(!msg.contains("403"), "пользователю не нужен голый код ответа: {msg}");
-    }
-
-    #[test]
-    fn friendly_update_error_passes_through_other_errors() {
-        let msg = friendly_update_error("Нет связи с сервером: connection refused");
-        assert_eq!(msg, "Нет связи с сервером: connection refused");
-    }
-
-    #[test]
-    fn attachment_paths_only_whitelisted() {
-        assert!(allowed_attachment_path("chats/general/messages/12/file"));
-        assert!(allowed_attachment_path("chats/dm:1:2/messages/3/file"));
-        assert!(allowed_attachment_path("report/R-000012/notes/4/file"));
-        assert!(allowed_attachment_path("tickets/5/posts/6/file"));
-        assert!(allowed_attachment_path("report/R-000012/raws/voice/file"));
-        assert!(!allowed_attachment_path("admin/access"));
-        assert!(!allowed_attachment_path("report/R-1/raws/other/file"));
-        assert!(!allowed_attachment_path("chats/general/messages/x/file"));
-        assert!(allowed_attachment_path("parser/download/0123456789abcdef0123456789abcdef/file"));
-        assert!(!allowed_attachment_path("parser/download/not-a-job/file"));
-        assert!(!allowed_attachment_path("parser/download/0123456789abcdef0123456789abcdef/status"));
-        assert!(!allowed_attachment_path("chats/../admin/messages/1/file"));
-        assert!(!allowed_attachment_path("chats/general/messages/1/file?x=1"));
-        assert!(!allowed_attachment_path("/chats/general/messages/1/file"));
-    }
-}

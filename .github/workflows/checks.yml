@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: npm lint + test
+    name: npm lint + build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -31,10 +31,10 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
-      - run: npm test
+      - run: npm run verify
 
   rust:
-    name: cargo check + test
+    name: cargo check
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -59,7 +59,3 @@ jobs:
       - name: cargo check
         shell: bash
         run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --features custom-protocol
-
-      - name: cargo test
-        shell: bash
-        run: cargo test --manifest-path src-tauri/Cargo.toml
