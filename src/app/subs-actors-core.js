@@ -95,9 +95,10 @@ function fuzzyCharacter(idx, n) {
   }
   if (hits.size === 1) return [...hits][0];
   if (!hits.size) {
-    // Short form inside a longer name: "Хиро" for "Такахиро Сато". 4+ letters, only one character.
+    // Any word of the name ("Клоун" for "Жестокий клоун") or a short form inside it ("Хиро" for "Такахиро Сато").
+    // 4+ letters, only one character.
     if (word.length < 4) return null;
-    const inside = new Set([...idx.values()].filter(c => normName(c.name).split(" ").some(w => w.length > word.length && w.includes(word))));
+    const inside = new Set([...idx.values()].filter(c => normName(c.name).split(" ").some(w => w.includes(word))));
     return inside.size === 1 ? [...inside][0] : null;
   }
   // A tie ("Ниа": Ния or Нил?) goes to the only main character among them, if there is one.
