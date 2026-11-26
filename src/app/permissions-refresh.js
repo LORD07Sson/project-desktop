@@ -4,6 +4,22 @@ import { state } from "./state.js";
 import { startPermVisibility } from "./perm-visibility.js";
 import { syncPreview } from "./role-preview.js";
 
+// A failed load (server restarting, network blip) must not leave tabs that need a permission hidden until the
+// minute-long poll: keep the last known list and retry soon, backing off, until the server answers.
+const RETRY_MS = [2_000, 5_000, 15_000, 30_000, 60_000];
+let retryTimer = null;
+let retryStep = 0;
+
+function scheduleRetry() {
+  if (retryTimer || !state.token) return;
+  const wait = RETRY_MS[Math.min(retryStep, RETRY_MS.length - 1)];
+  retryStep++;
+  retryTimer = setTimeout(async () => {
+    retryTimer = null;
+    if (state.token) await refreshPermissions();
+  }, wait);
+}
+
 export async function refreshPermissions() {
   try {
     const r = await api("GET", "/me/permissions");
@@ -16,8 +32,11 @@ export async function refreshPermissions() {
       document.documentElement.dataset.nyaa = state.isAdmin ? "0" : state.nyaaAccess ? "1" : "0";
       startPermVisibility();
     }
+    retryStep = 0;
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
     return true;
   } catch (_) {
+    scheduleRetry();
     return false;
   }
 }
