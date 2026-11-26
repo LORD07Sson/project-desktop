@@ -122,3 +122,14 @@ console.log("subs-actors-test: ok");
   assert.equal(r.joint, 3);
   assert.deepEqual(r.unknown, [{ actor: "Незнакомец (из «Мотико и Незнакомец»)", lines: 1 }]);
 }
+
+{
+  // Speakers listed with spaces only.
+  const { countDubberLines } = await import("../src/app/subs-actors-core.js");
+  const sub = "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Ewaii Богдан вместе,0,0,0,,x\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Ewaii Незнакомец,0,0,0,,y\n";
+  const r = countDubberLines(sub, [], [{ telegram_id: 1, name: "Ren", username: "Ewaii_Ren" }, { telegram_id: 2, name: "богданчик <3" }]);
+  assert.deepEqual(r.people.map(p => [p.telegram_id, p.lines, p.joint]), [["1", 1, 1], ["2", 1, 1]]);
+  assert.deepEqual(r.unknown, [{ actor: "Ewaii Незнакомец", lines: 1 }]);
+}

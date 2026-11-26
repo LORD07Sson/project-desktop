@@ -213,7 +213,15 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     const parts = idx.has(n) ? [] : actor.split(JOIN_ACTOR_RE).map(x => x.replace(TOGETHER_RE, "").trim()).filter(Boolean);
     if (parts.length < 2) {
       const whole = resolve(actor);
-      if (whole) credit(whole, lines, false); else unknown.push({ actor, lines });
+      if (whole) { credit(whole, lines, false); continue; }
+      // Just listed with spaces: "Ewaii Богдан вместе". Only when every word is a person of the team.
+      const words = actor.replace(TOGETHER_RE, "").split(/\s+/).filter(Boolean);
+      const who = words.length > 1 ? words.map(person) : [];
+      const ids = new Set(who.filter(Boolean).map(u => String(u.telegram_id)));
+      if (who.length && who.every(Boolean) && ids.size > 1) {
+        joint += lines;
+        ids.forEach(id => credit({ user: who.find(u => String(u.telegram_id) === id), character: null }, lines, true));
+      } else unknown.push({ actor, lines });
       continue;
     }
     const hits = new Map(), missed = [];
