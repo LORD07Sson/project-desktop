@@ -140,7 +140,7 @@ async function loadLoginWall() {
   } catch (_) { }
 }
 
-// The sign-in logo flies out to the middle of the screen, dances and goes back (CSS auth-fly, 10 s loop).
+// The sign-in logo flies out to the middle of the screen, dances and goes back (CSS auth-dance-a/b, 10 s each).
 // The picture is laid out large (FLY_BOX) and shown scaled down at rest, so it stays sharp when it grows.
 const FLY_BOX = 384;
 function aimLogoFlight() {
@@ -151,12 +151,14 @@ function aimLogoFlight() {
   const target = Math.min(FLY_BOX, Math.min(window.innerWidth, window.innerHeight) * 0.55);
   img.style.setProperty("--rest", String(r.width / FLY_BOX));
   img.style.setProperty("--big", String(target / FLY_BOX));
+  img.style.setProperty("--tsz", `${target}px`);
   img.style.setProperty("--fx", `${window.innerWidth / 2 - (r.left + r.width / 2)}px`);
   img.style.setProperty("--fy", `${window.innerHeight / 2 - (r.top + r.height / 2)}px`);
   if (!img.dataset.aimed) {
     img.dataset.aimed = "1";
     window.addEventListener("resize", aimLogoFlight);
-    img.addEventListener("animationiteration", aimLogoFlight);
+    // Each cycle dances the next half of the routine: first half, second half, first half…
+    img.addEventListener("animationiteration", () => { img.classList.toggle("dance-b"); aimLogoFlight(); });
   }
 }
 
