@@ -9,6 +9,7 @@ import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./wat
 import { invoke, pickOutputFile } from "./tauri.js";
 import { decodeSubs } from "./subs-core.js";
 import { assActors, planImport, applyDubbers, countDubberLines } from "./subs-actors-core.js";
+import { artSlidesHtml } from "./art-slides.js";
 
 function seriesCount(n) {
   const mod10 = n % 10, mod100 = n % 100;
@@ -632,9 +633,10 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
   const max = Math.max(1, ...r.people.map(p => p.lines), ...r.groups.map(g => g.lines), ...r.unknown.map(u => u.lines));
   const pct = n => counted ? Math.round(n / counted * 100) : 0;
   const tile = p => {
-    const art = p.characters.find(c => c.image_url && !c.image_url.includes("/missing"));
+    // Every character this person voices in the roll, most lines first: several → slideshow.
+    const arts = p.characters.filter(c => c.image_url && !c.image_url.includes("/missing")).map(c => imgProxy(c.image_url));
     const cast = p.characters.map(c => `${c.name} · ${c.lines}`).join("\n");
-    return `<div class="dl-tile${art ? " art" : ""}"${art ? ` style="--art:url('${esc(imgProxy(art.image_url))}')"` : ""} title="${esc(cast)}">
+    return `<div class="dl-tile${arts.length ? " art" : ""}" title="${esc(cast)}">${artSlidesHtml(arts)}
       <span class="avatar-bubble" data-avatar-for="${esc(p.telegram_id)}">${esc((p.name || "?").slice(0, 1).toUpperCase())}</span>
       <span class="dl-name">${esc(p.name || "без имени")}</span>
       ${p.characters.length ? `<span class="dl-cast">${esc(p.characters.slice(0, 2).map(c => c.name).join(", "))}${p.characters.length > 2 ? ` +${p.characters.length - 2}` : ""}</span>` : ""}

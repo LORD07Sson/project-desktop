@@ -4150,11 +4150,14 @@ select.fsel-native { display: none !important; }
 .dl-tile { position: relative; isolation: isolate; overflow: hidden; display: grid; justify-items: center; gap: 3px; padding: 14px 10px 10px; border-radius: 14px;
   background: rgba(255, 255, 255, .035); border: 1px solid var(--line); text-align: center; min-width: 0; }
 .nt-tile.art { isolation: isolate; }
-.nt-tile.art::before, .nt-tile.art::after { border-radius: inherit; }
-.dl-tile.art::before, .nt-tile.art::before { content: ""; position: absolute; inset: 0; z-index: -2; background: var(--art) center 20% / cover no-repeat; opacity: .55; transform: scale(1.04); transition: opacity .25s, transform .4s; }
+.nt-tile.art::after { border-radius: inherit; }
+/* Character art: one layer per character, crossfading (art-slides.js); the slow zoom keeps a single picture alive too */
+.art-slides { position: absolute; inset: 0; z-index: -2; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.art-slides i { position: absolute; inset: 0; background: center 20% / cover no-repeat; opacity: 0; transform: scale(1.04); transition: opacity 1.4s ease, transform 7s ease-out; }
+.art-slides i.on { opacity: .55; transform: scale(1.12); }
+.art:hover .art-slides i.on { opacity: .75; }
+@media (prefers-reduced-motion: reduce) { .art-slides i { transition: none; transform: none; } .art-slides i.on { transform: none; } }
 .dl-tile.art::after, .nt-tile.art::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(14, 12, 20, .35) 0%, rgba(14, 12, 20, .82) 55%, rgba(14, 12, 20, .95) 100%); }
-.dl-tile.art:hover::before, .nt-tile.art:hover::before { opacity: .75; transform: scale(1.09); }
-.nt-tile.art::before, .nt-tile.art:hover::before { transform: none; }
 .dl-tile .avatar-bubble { width: 40px; height: 40px; margin: 0 0 4px; font-size: 14px; border: 0; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
 .dl-tile .dl-name { max-width: 100%; font-size: 13px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dl-tile .dl-cast { max-width: 100%; font-size: 11px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

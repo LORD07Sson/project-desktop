@@ -24,6 +24,7 @@ import { loadAvatars } from "./profile.js";
 import { createPlayer, isAudioFile } from "./player.js";
 import { linkifyProject } from "./deeplink-core.js";
 import { titleArt, imgProxy } from "./title-page.js";
+import { artSlidesHtml } from "./art-slides.js";
 
 const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silence_long: "Долгая тишина", no_speech: "Речь не найдена" };
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
@@ -1208,14 +1209,14 @@ function rosterMatch(name, roster) {
 }
 
 const castArtCache = new Map();
-/** telegram_id → image of the character they voice in this title (the first one in the title's list). Cached per title. */
+/** telegram_id → images of every character they voice in this title, in the title's order. Cached per title. */
 function titleCastArt(titleId) {
   if (!castArtCache.has(titleId)) {
     castArtCache.set(titleId, apiGet(`/titles/${titleId}`).then(t => {
       const art = new Map();
       for (const c of t.characters || []) {
         const tid = c.voiced_by && String(c.voiced_by.telegram_id || "");
-        if (tid && c.image_url && !c.image_url.includes("/missing") && !art.has(tid)) art.set(tid, c.image_url);
+        if (tid && c.image_url && !c.image_url.includes("/missing")) art.set(tid, [...(art.get(tid) || []), c.image_url]);
       }
       return art;
     }).catch(() => { castArtCache.delete(titleId); return null; }));
@@ -1250,8 +1251,8 @@ function tallyHtml(text, roster = null) {
     }).join("")}</div>` : "";
     const bind = group && canBind ? ` role="button" tabindex="0" data-roster-bind="" data-roster-parts="${esc(parts.join("~~"))}" title="Нажмите, чтобы привязать кого-то из них"` : roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
     const artId = who && who.id ? who.id : group ? (group.find(g => g.who && g.who.id && roster.art && roster.art.has(g.who.id)) || {}).who?.id : "";
-    const art = artId && roster && roster.art ? roster.art.get(String(artId)) : "";
-    return `<div class="nt-tile${who ? "" : " unknown"}${group ? " group" : ""}${art ? " art" : ""}"${art ? ` style="--art:url('${esc(imgProxy(art))}')"` : ""}${bind}>
+    const arts = artId && roster && roster.art ? roster.art.get(String(artId)) || [] : [];
+    return `<div class="nt-tile${who ? "" : " unknown"}${group ? " group" : ""}${arts.length ? " art" : ""}"${bind}>${artSlidesHtml(arts.map(imgProxy))}
       ${avatars}${fan}
       <span class="nt-name" title="${esc(r.name)}">${esc(group ? parts.join(", ") : r.name)}</span>
       ${!group && who && who.id ? voiceSlotHtml(who.id, { mini: true }) : ""}
