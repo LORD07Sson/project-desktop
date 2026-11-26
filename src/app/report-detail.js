@@ -1035,7 +1035,7 @@ export async function openReportDetail(publicId) {
           ]);
           const text = decodeSubs(await blob.arrayBuffer());
           const post = canEdit ? async note => { await apiPost(`/report/${publicId}/notes`, { text: note }); await render(); } : null;
-          showDubberLines(title.characters || [], users, { name: btn.dataset.fileName || "subs.ass", text }, post);
+          loadAvatars(showDubberLines(title.characters || [], users, { name: btn.dataset.fileName || "subs.ass", text }, post, roster.aliases || {}));
         } catch (err) {
           toast(`Не удалось посчитать реплики: ${err.message || err}`, "error");
         } finally { btn.disabled = false; }

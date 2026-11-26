@@ -626,8 +626,8 @@ export async function markAssWithDubbers(characters, users, file = null, attach 
  * Window with dialogue lines per dubber, character art behind each tile.
  * file: {name, text}; post(text): optional "post to notes" action, gets a tally note ("Имя - 12, ...").
  */
-export function showDubberLines(characters, users, file, post = null) {
-  const r = countDubberLines(file.text, characters, users);
+export function showDubberLines(characters, users, file, post = null, aliases = {}) {
+  const r = countDubberLines(file.text, characters, users, aliases);
   const counted = r.people.reduce((a, p) => a + p.lines, 0) + r.unknown.reduce((a, u) => a + u.lines, 0);
   const max = Math.max(1, ...r.people.map(p => p.lines), ...r.unknown.map(u => u.lines));
   const pct = n => counted ? Math.round(n / counted * 100) : 0;
@@ -660,4 +660,5 @@ export function showDubberLines(characters, users, file, post = null) {
     try { await post(note); toast("Подсчёт реплик добавлен в заметки.", "success"); overlay.remove(); }
     catch (err) { toast(`Не удалось добавить заметку: ${err.message || err}`, "error"); btn.disabled = false; }
   });
+  return overlay;
 }

@@ -148,21 +148,32 @@ export function applyDubbers(text, characters, mode = "both") {
  * Returns { total, empty, people: [{telegram_id, name, lines, characters: [{id, name, image_url, lines}]}], unknown: [{actor, lines}] },
  * people and their characters sorted by lines, most first.
  */
-export function countDubberLines(text, characters, users) {
+export function countDubberLines(text, characters, users, aliases = {}) {
   const { total, empty, actors } = assActors(text);
   const idx = characterIndex(characters);
   const byTid = new Map((users || []).map(u => [String(u.telegram_id), u]));
+  // Nicknames bound to people in tally notes ("Ewaii" → Ren), keys normalized like normName.
+  const alias = new Map(Object.entries(aliases || {}).map(([k, v]) => [normName(k), String(v)]));
+  const person = name => {
+    const n = normName(name);
+    if (!n) return null;
+    const tid = alias.get(n);
+    if (tid) return byTid.get(tid) || { telegram_id: tid, name };
+    return findUser(users, name)
+      || (users || []).find(u => userLabels(u).some(l => l.split(/[_\s.-]+/)[0] === n)) || null;
+  };
   const people = new Map(), unknown = [];
   for (const { actor, lines } of actors) {
     const { left, right } = splitActor(actor);
     let character = findCharacter(idx, left), dubber = right;
     if (!character && right) { character = findCharacter(idx, right); dubber = left; }
-    let user = dubber ? findUser(users, dubber) : null;
+    let user = dubber ? person(dubber) : null;
     if (!user && character && character.voiced_by) {
       const tid = String(character.voiced_by.telegram_id || "");
       user = byTid.get(tid) || (tid ? { telegram_id: tid, name: character.voiced_by.name || character.voiced_by.username || "" } : null);
     }
-    if (!user && !character) user = findUser(users, left);
+    // No such character in the title: "Даббер - Персонаж" or "Персонаж - Даббер", or just the dubber.
+    if (!user && !character) user = person(left) || (right ? person(right) : null);
     if (!user) { unknown.push({ actor, lines }); continue; }
     const key = String(user.telegram_id);
     const p = people.get(key) || { telegram_id: key, name: user.name || user.username || "", lines: 0, chars: new Map() };
