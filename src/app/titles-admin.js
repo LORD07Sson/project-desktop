@@ -637,7 +637,7 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
     const arts = p.characters.filter(c => c.image_url && !c.image_url.includes("/missing")).map(c => imgProxy(c.image_url));
     const cast = p.characters.map(c => `${c.name} · ${c.lines}`).join("\n");
     return `<div class="dl-tile${arts.length ? " art" : ""}" title="${esc(cast)}">${artSlidesHtml(arts)}
-      <span class="avatar-bubble" data-avatar-for="${esc(p.telegram_id)}">${esc((p.name || "?").slice(0, 1).toUpperCase())}</span>
+      <span class="avatar-bubble" ${p.telegram_id.startsWith("name:") ? "" : `data-avatar-for="${esc(p.telegram_id)}"`}>${esc((p.name || "?").slice(0, 1).toUpperCase())}</span>
       <span class="dl-name">${esc(p.name || "без имени")}</span>
       ${p.characters.length ? `<span class="dl-cast">${esc(p.characters.slice(0, 2).map(c => c.name).join(", "))}${p.characters.length > 2 ? ` +${p.characters.length - 2}` : ""}</span>` : ""}
       <b>${p.lines}</b><small>${pct(p.lines)}%${p.joint ? ` · ещё вместе ${p.joint}` : ""}</small>
@@ -649,7 +649,7 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
     const shown = g.members.length > 3 ? g.members.slice(0, 2) : g.members;
     const names = g.members.map(m => m.name || "?").join(", ");
     return `<div class="dl-tile dl-group" title="${esc(names)}">
-      <span class="nt-avs">${shown.map(m => `<span class="avatar-bubble" data-avatar-for="${esc(m.telegram_id)}">${esc((m.name || "?").slice(0, 1).toUpperCase())}</span>`).join("")}${g.members.length > 3 ? `<span class="avatar-bubble nt-more">+${g.members.length - 2}</span>` : ""}</span>
+      <span class="nt-avs">${shown.map(m => `<span class="avatar-bubble" ${m.telegram_id.startsWith("name:") ? "" : `data-avatar-for="${esc(m.telegram_id)}"`}>${esc((m.name || "?").slice(0, 1).toUpperCase())}</span>`).join("")}${g.members.length > 3 ? `<span class="avatar-bubble nt-more">+${g.members.length - 2}</span>` : ""}</span>
       <span class="dl-name">${esc(names)}</span>
       <span class="dl-cast">вместе</span>
       <b>${g.lines}</b><small>${pct(g.lines)}%</small>

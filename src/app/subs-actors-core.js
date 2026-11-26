@@ -226,6 +226,41 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     if (!user && !character) user = person(left) || (right ? person(right) : null);
     return user ? { user, character } : null;
   };
+  // Dubbers who aren't in the team (guests, ex-members) still get a tile by name. Which side of "A - B" is the
+  // dubber is learned from this roll's own lines that resolved ("Даббер - Персонаж" or "Персонаж - Даббер").
+  let dubLeft = 0, dubRight = 0;
+  for (const { actor, lines } of actors) {
+    const { left, right } = splitActor(actor);
+    if (!right) continue;
+    if (person(left)) dubLeft += lines;
+    else if (person(right)) dubRight += lines;
+  }
+  const guests = new Map();
+  const dubberSide = actor => {
+    const { left, right } = splitActor(actor);
+    if (!right || (!dubLeft && !dubRight)) return null;
+    return dubLeft >= dubRight ? [left, right] : [right, left];
+  };
+  for (const { actor } of actors) {
+    const n = normName(actor);
+    if (SIGN_ACTOR_RE.test(n) || isEveryone(n) || resolve(actor) || JOIN_ACTOR_RE.test(actor)) continue;
+    const side = dubberSide(actor);
+    const key = side && normName(side[0]);
+    if (key && key.length >= 2 && !findCharacter(idx, side[0]) && !isEveryone(key)) {
+      if (!guests.has(key)) guests.set(key, { telegram_id: `name:${key}`, name: side[0].trim() });
+    }
+  }
+  const resolveOrGuest = actor => {
+    const r = resolve(actor);
+    if (r) return r;
+    const side = dubberSide(actor);
+    if (side) {
+      const g = guests.get(normName(side[0]));
+      return g ? { user: g, character: findCharacter(idx, side[1]) } : null;
+    }
+    const g = guests.get(normName(actor));
+    return g ? { user: g, character: null } : null;
+  };
   const people = new Map(), groups = new Map(), unknown = [], everyone = [];
   let signs = 0, joint = 0;
   // A line several people say together goes to their group, not to each of them, so the tiles add up to the total.
@@ -258,11 +293,11 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     // A character literally named with "и"/a comma stays whole.
     const parts = idx.has(n) ? [] : actor.split(JOIN_ACTOR_RE).map(x => x.replace(TOGETHER_RE, "").trim()).filter(Boolean);
     if (parts.length < 2) {
-      const whole = resolve(actor);
+      const whole = resolveOrGuest(actor);
       if (whole) { credit(whole, lines); continue; }
       // Just listed with spaces: "Ewaii Богдан вместе". Only when every word is a person of the team.
       const words = actor.replace(TOGETHER_RE, "").split(/\s+/).filter(Boolean);
-      const who = words.length > 1 ? words.map(person) : [];
+      const who = words.length > 1 ? words.map(w => person(w) || guests.get(normName(w)) || null) : [];
       const ids = new Set(who.filter(Boolean).map(u => String(u.telegram_id)));
       if (who.length && who.every(Boolean) && ids.size > 1) together(who, lines);
       else unknown.push({ actor, lines });
@@ -270,7 +305,7 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     }
     const hits = new Map(), missed = [];
     for (const part of parts) {
-      const r = resolve(part);
+      const r = resolveOrGuest(part);
       if (r) { if (!hits.has(String(r.user.telegram_id))) hits.set(String(r.user.telegram_id), r); } else missed.push(part);
     }
     if (!hits.size) { unknown.push({ actor, lines }); continue; }
