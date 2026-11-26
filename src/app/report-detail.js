@@ -16,6 +16,7 @@ import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, posterSrc } from "./reports.js";
 import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail, markAssWithDubbers, showDubberLines } from "./titles-admin.js";
 import { decodeSubs } from "./subs-core.js";
+import { countDubberLines } from "./subs-actors-core.js";
 import { enhanceSelects } from "./fancy-select.js";
 import { setDropTarget } from "./file-drop.js";
 import { downloadWithCard } from "./download-card.js";
@@ -314,8 +315,12 @@ export async function openReportDetail(publicId) {
       overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
       return;
     }
-    // Tally notes ("Имя - 12, ...") show the dubber's character art behind the tile: needs the title's casting.
-    const castArt = detail.title_id && notes.notes.some(n => tallyHtml(n.text || "")) ? await titleCastArt(detail.title_id) : null;
+    // Tally notes ("Имя - 12, ...") show the dubber's character art behind the tile. Taken from the episode's roll
+    // (.ass with roles) by the same algorithm as the line-count window; without a roll, from the title's casting.
+    const hasTally = detail.title_id && notes.notes.some(n => tallyHtml(n.text || ""));
+    const castArt = hasTally
+      ? (await rollArt(publicId, detail.title_id, raws, files, roster.aliases || {})) || await titleCastArt(detail.title_id)
+      : null;
     if (!recentRecorded) {
       recentRecorded = true;
       recordRecentReport(publicId, (() => { const p = seriesParts(detail); return [p.name, p.ep].filter(Boolean).join(" · "); })());
@@ -1222,6 +1227,39 @@ function titleCastArt(titleId) {
     }).catch(() => { castArtCache.delete(titleId); return null; }));
   }
   return castArtCache.get(titleId);
+}
+
+/** The episode's roll: an .ass among raws or report files, preferring names with "роли"/"роспись", never "надписи". */
+function rollFilePath(publicId, raws, files) {
+  const cands = [];
+  for (const r of (raws && raws.raws) || []) {
+    for (const f of r.files || []) if (ASS_NAME_RE.test(f.name || "")) cands.push({ name: f.name, path: rawFilePath(r.kind, f) });
+  }
+  for (const f of (files && files.files) || []) {
+    if (ASS_NAME_RE.test(f.file_name || "")) cands.push({ name: f.file_name, path: `/report/{id}/files/${f.id}/download` });
+  }
+  const ok = cands.filter(c => !/надпис|sign/i.test(c.name));
+  const best = ok.find(c => /рол|роспис|role|cast/i.test(c.name)) || ok[0];
+  return best ? best.path.replace("{id}", publicId) : null;
+}
+
+const rollArtCache = new Map();
+/** telegram_id → images of the characters they voice in the roll, most lines first. Cached per roll file. */
+function rollArt(publicId, titleId, raws, files, aliases) {
+  const path = rollFilePath(publicId, raws, files);
+  if (!path) return Promise.resolve(null);
+  if (!rollArtCache.has(path)) {
+    rollArtCache.set(path, Promise.all([apiGet(`/titles/${titleId}`), loadAssignable(), apiBlob(path)]).then(async ([title, users, blob]) => {
+      const r = countDubberLines(decodeSubs(await blob.arrayBuffer()), title.characters || [], users, aliases);
+      const art = new Map();
+      for (const p of r.people) {
+        const urls = p.characters.map(c => c.image_url).filter(u => u && !u.includes("/missing"));
+        if (urls.length) art.set(String(p.telegram_id), urls);
+      }
+      return art.size ? art : null;
+    }).catch(() => { rollArtCache.delete(path); return null; }));
+  }
+  return rollArtCache.get(path);
 }
 
 function tallyHtml(text, roster = null) {
