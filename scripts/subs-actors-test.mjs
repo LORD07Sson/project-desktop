@@ -173,3 +173,12 @@ console.log("subs-actors-test: ok");
   const r = countDubberLines(sub, chars, [{ telegram_id: 1, name: "Азам" }, { telegram_id: 2, name: "Совесть" }]);
   assert.deepEqual(r.people.map(p => [p.name, p.characters.map(c => c.name)]), [["Азам", ["Такахиро Сато"]], ["Совесть", ["Эльма Уиллроуз"]]]);
 }
+
+{
+  // Any word of the character's name.
+  const { countDubberLines } = await import("../src/app/subs-actors-core.js");
+  const sub = "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Ewaii - Клоун,0,0,0,,z\n";
+  const r = countDubberLines(sub, [{ id: 1, name: "Жестокий клоун" }, { id: 2, name: "Райта" }], [{ telegram_id: 3, name: "Ren", username: "Ewaii_Ren" }]);
+  assert.deepEqual(r.people.map(p => [p.name, p.characters.map(c => c.name)]), [["Ren", ["Жестокий клоун"]]]);
+}
