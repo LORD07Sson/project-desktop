@@ -662,9 +662,18 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
     ...r.people.map(p => `${noteName(p.name)} - ${p.lines}`),
     ...r.groups.map(g => `${g.members.map(m => noteName(m.name)).join(" и ")} вместе - ${g.lines}`),
   ].join(", ");
+  // Why there is nothing to show, in plain words: a signs-only file, an empty file, or Actor filled in a way we can't read.
+  const voiced = r.total - r.signs - r.empty;
+  const emptyText = !r.total
+    ? "В файле нет ни одной строки с репликами (Dialogue). Похоже, это не субтитры или файл пустой."
+    : !voiced && (r.signs || /надпис|sign/i.test(file.name))
+      ? `Это файл надписей: в нём ${r.signs || r.total} ${plural(r.signs || r.total, "надпись", "надписи", "надписей")} и ни одной реплики для озвучки. Реплики считаются по файлу росписи — обычно он называется «… - Роли.ass» или «… - Роспись.ass».`
+      : !voiced
+        ? `У всех ${r.empty} ${plural(r.empty, "строки", "строк", "строк")} пустое поле Actor (Name) — неизвестно, кто их озвучивает. Распишите роли в Aegisub: в поле Actor укажите «Даббер - Персонаж».`
+        : `Не узнали, кто озвучивает: ${unknownLines} ${plural(unknownLines, "реплика", "реплики", "реплик")} без знакомых имён. В поле Actor пишут «Даббер - Персонаж», «Персонаж (Даббер)» или только персонажа, если в тайтле ему назначен даббер. Ники, которых нет в команде, можно привязать к людям в заметке с подсчётом.`;
   const overlay = openSheet(`<h2>Реплики · ${esc(file.name)}</h2>
-    ${r.people.length ? `<div class="dl-tiles">${r.people.map(tile).join("")}${r.groups.map(groupTile).join("")}</div>` : `<div class="no-assignee">Не нашли ни одного даббера. В поле Actor ожидается персонаж тайтла, «Персонаж (Даббер)» или имя даббера.</div>`}
-    <div class="nt-sum">всего реплик ${r.total - r.signs}${r.signs ? ` · надписей ${r.signs} (не считаем)` : ""}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}${r.joint ? ` · из них вместе ${r.joint}` : ""}</div>
+    ${r.people.length || r.groups.length ? `<div class="dl-tiles">${r.people.map(tile).join("")}${r.groups.map(groupTile).join("")}</div>` : `<div class="no-assignee">${emptyText}</div>`}
+    <div class="nt-sum"${r.people.length || r.groups.length || unknownLines ? "" : " hidden"}>всего реплик ${r.total - r.signs}${r.signs ? ` · надписей ${r.signs} (не считаем)` : ""}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}${r.joint ? ` · из них вместе ${r.joint}` : ""}</div>
     ${r.unknown.length ? `<details class="detail-section"><summary>Не узнали (${r.unknown.length})</summary><div class="no-assignee">${r.unknown.slice(0, 60).map(u => `«${esc(u.actor)}» — ${u.lines}`).join(", ")}${r.unknown.length > 60 ? " …" : ""}</div></details>` : ""}
     <div class="sheet-actions">
       <button class="btn" data-close>Закрыть</button>
@@ -679,4 +688,9 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
     catch (err) { toast(`Не удалось добавить заметку: ${err.message || err}`, "error"); btn.disabled = false; }
   });
   return overlay;
+}
+
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
 }
