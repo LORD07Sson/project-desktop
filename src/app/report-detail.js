@@ -23,7 +23,7 @@ import { recordRecentReport, forgetRecentReport } from "./recent-reports.js";
 import { loadAvatars } from "./profile.js";
 import { createPlayer, isAudioFile } from "./player.js";
 import { linkifyProject } from "./deeplink-core.js";
-import { titleArt } from "./title-page.js";
+import { titleArt, imgProxy } from "./title-page.js";
 
 const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silence_long: "Долгая тишина", no_speech: "Речь не найдена" };
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
@@ -313,6 +313,8 @@ export async function openReportDetail(publicId) {
       overlay.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
       return;
     }
+    // Tally notes ("Имя - 12, ...") show the dubber's character art behind the tile: needs the title's casting.
+    const castArt = detail.title_id && notes.notes.some(n => tallyHtml(n.text || "")) ? await titleCastArt(detail.title_id) : null;
     if (!recentRecorded) {
       recentRecorded = true;
       recordRecentReport(publicId, (() => { const p = seriesParts(detail); return [p.name, p.ep].filter(Boolean).join(" · "); })());
@@ -344,7 +346,7 @@ export async function openReportDetail(publicId) {
     const topNotes = orderedNotes.filter(n => !(n.parent_id && noteIds.has(n.parent_id)));
     const openNotes = topNotes.filter(n => !n.resolved_at), doneNotes = topNotes.filter(n => n.resolved_at);
     const noteCtx = { canEdit, me: state.telegramId, owner: !!state.isDeveloper, editing: editingNote,
-      roster: { people: rosterPeople(detail.assignees, state.users), aliases: roster.aliases || {}, canBind: canEdit } };
+      roster: { people: rosterPeople(detail.assignees, state.users), aliases: roster.aliases || {}, canBind: canEdit, art: castArt } };
     const noteThread = n => noteHtml(n, noteCtx) + ((repliesOf.get(n.id) || []).length
       ? `<div class="note-replies">${repliesOf.get(n.id).map(r => noteHtml(r, noteCtx)).join("")}</div>` : "");
 
@@ -1205,6 +1207,22 @@ function rosterMatch(name, roster) {
     || pick(k => prefix(k, key) >= 3);
 }
 
+const castArtCache = new Map();
+/** telegram_id → image of the character they voice in this title (the first one in the title's list). Cached per title. */
+function titleCastArt(titleId) {
+  if (!castArtCache.has(titleId)) {
+    castArtCache.set(titleId, apiGet(`/titles/${titleId}`).then(t => {
+      const art = new Map();
+      for (const c of t.characters || []) {
+        const tid = c.voiced_by && String(c.voiced_by.telegram_id || "");
+        if (tid && c.image_url && !art.has(tid)) art.set(tid, c.image_url);
+      }
+      return art;
+    }).catch(() => { castArtCache.delete(titleId); return null; }));
+  }
+  return castArtCache.get(titleId);
+}
+
 function tallyHtml(text, roster = null) {
   const rows = [...String(text).matchAll(TALLY_RE)].map(m => ({ name: m[1].trim(), n: Number(m[2]) }));
   if (rows.length < 2) return null;
@@ -1231,7 +1249,9 @@ function tallyHtml(text, roster = null) {
       </div>`;
     }).join("")}</div>` : "";
     const bind = group && canBind ? ` role="button" tabindex="0" data-roster-bind="" data-roster-parts="${esc(parts.join("~~"))}" title="Нажмите, чтобы привязать кого-то из них"` : roster && roster.canBind ? ` role="button" tabindex="0" data-roster-bind="${esc(r.name)}" title="${who ? `${esc(who.name || "привязан")} — нажмите, чтобы привязать к другому` : "Не узнали — нажмите, чтобы привязать к человеку"}"` : (who ? ` title="${esc(who.name)}"` : "");
-    return `<div class="nt-tile${who ? "" : " unknown"}${group ? " group" : ""}"${bind}>
+    const artId = who && who.id ? who.id : group ? (group.find(g => g.who && g.who.id && roster.art && roster.art.has(g.who.id)) || {}).who?.id : "";
+    const art = artId && roster && roster.art ? roster.art.get(String(artId)) : "";
+    return `<div class="nt-tile${who ? "" : " unknown"}${group ? " group" : ""}${art ? " art" : ""}"${art ? ` style="--art:url('${esc(imgProxy(art))}')"` : ""}${bind}>
       ${avatars}${fan}
       <span class="nt-name" title="${esc(r.name)}">${esc(group ? parts.join(", ") : r.name)}</span>
       ${!group && who && who.id ? voiceSlotHtml(who.id, { mini: true }) : ""}
