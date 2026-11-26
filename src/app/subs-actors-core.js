@@ -140,3 +140,40 @@ export function applyDubbers(text, characters, mode = "both") {
   });
   return { text: bom + out.join(eol), changed, noActor, unknownActors: [...unknown], unvoiced: [...unvoiced] };
 }
+
+/**
+ * Dialogue lines per dubber, from the Actor field.
+ * Actor may be "Персонаж (Даббер)", just "Персонаж" (dubber from the title's casting) or just "Даббер".
+ * users: [{telegram_id, name, username}].
+ * Returns { total, empty, people: [{telegram_id, name, lines, characters: [{id, name, image_url, lines}]}], unknown: [{actor, lines}] },
+ * people and their characters sorted by lines, most first.
+ */
+export function countDubberLines(text, characters, users) {
+  const { total, empty, actors } = assActors(text);
+  const idx = characterIndex(characters);
+  const byTid = new Map((users || []).map(u => [String(u.telegram_id), u]));
+  const people = new Map(), unknown = [];
+  for (const { actor, lines } of actors) {
+    const { left, right } = splitActor(actor);
+    let character = findCharacter(idx, left), dubber = right;
+    if (!character && right) { character = findCharacter(idx, right); dubber = left; }
+    let user = dubber ? findUser(users, dubber) : null;
+    if (!user && character && character.voiced_by) {
+      const tid = String(character.voiced_by.telegram_id || "");
+      user = byTid.get(tid) || (tid ? { telegram_id: tid, name: character.voiced_by.name || character.voiced_by.username || "" } : null);
+    }
+    if (!user && !character) user = findUser(users, left);
+    if (!user) { unknown.push({ actor, lines }); continue; }
+    const key = String(user.telegram_id);
+    const p = people.get(key) || { telegram_id: key, name: user.name || user.username || "", lines: 0, chars: new Map() };
+    p.lines += lines;
+    if (character) {
+      const c = p.chars.get(character.id) || { id: character.id, name: character.name, image_url: character.image_url || "", lines: 0 };
+      c.lines += lines;
+      p.chars.set(character.id, c);
+    }
+    people.set(key, p);
+  }
+  const list = [...people.values()].map(({ chars, ...p }) => ({ ...p, characters: [...chars.values()].sort((a, b) => b.lines - a.lines) }));
+  return { total, empty, people: list.sort((a, b) => b.lines - a.lines), unknown };
+}

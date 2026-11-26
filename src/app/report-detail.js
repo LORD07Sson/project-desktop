@@ -14,7 +14,7 @@ import { pickOutputFile, pickInputFile, pinReportWindow, openExternal } from "./
 import { relTime, esc, initials, STATUS_DOT_CLASS, STATUS_COLOR_VAR, isOverdue, parseNoteTime, secondsFromTimeInput, noteTimePrefix, formatRange, formatWhen } from "./utils.js";
 import { runQcAnalysis, QC_EXTENSIONS } from "./qc.js";
 import { changeStatusDialog, assignDialog, priorityDialog, deadlineDialog, loadReports, listNeighbors, seriesParts, priorityFlagHtml, posterSrc } from "./reports.js";
-import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail, markAssWithDubbers } from "./titles-admin.js";
+import { loadRoles, loadAssignable, userOptionsHtml, openTitleAdminDetail, markAssWithDubbers, showDubberLines } from "./titles-admin.js";
 import { decodeSubs } from "./subs-core.js";
 import { enhanceSelects } from "./fancy-select.js";
 import { setDropTarget } from "./file-drop.js";
@@ -29,6 +29,7 @@ const QC_FINDING_LABELS_RU = { clip: "Клиппинг", noise: "Шум", silenc
 const FILE_ICONS = { photo: "🖼", video: "🎬", audio: "🎵", voice: "🎙", document: "📄" };
 const svg = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 const FILE_ACT_ICONS = {
+  lines: svg('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
   dubbers: svg('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3.2 3-5 5.5-5s4.7 1.8 5.5 5M16 6.5a3 3 0 0 1 0 5M18.5 4a6.5 6.5 0 0 1 0 10"/>'),
   play: svg('<path d="M8 5.5v13l10.5-6.5z"/>'),
   qc: svg('<path d="M3 12h3l2.5-6 4 12 3-9 2 3H21"/>'),
@@ -1021,6 +1022,23 @@ export async function openReportDetail(publicId) {
     sheet.querySelectorAll("[data-send-file]").forEach(btn => {
       btn.addEventListener("click", () => openSendFileSheet(publicId, btn.dataset.sendFile, btn.dataset.fileName, "", btn));
     });
+    sheet.querySelectorAll("[data-count-lines]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!detail.title_id) { toast("Серия не привязана к тайтлу — неоткуда взять персонажей и дабберов.", "error"); return; }
+        btn.disabled = true;
+        try {
+          const [title, users, blob] = await Promise.all([
+            apiGet(`/titles/${detail.title_id}`), loadAssignable(),
+            apiBlob(btn.dataset.countLines.replace("{id}", publicId)),
+          ]);
+          const text = decodeSubs(await blob.arrayBuffer());
+          const post = canEdit ? async note => { await apiPost(`/report/${publicId}/notes`, { text: note }); await render(); } : null;
+          showDubberLines(title.characters || [], users, { name: btn.dataset.fileName || "subs.ass", text }, post);
+        } catch (err) {
+          toast(`Не удалось посчитать реплики: ${err.message || err}`, "error");
+        } finally { btn.disabled = false; }
+      });
+    });
     sheet.querySelectorAll("[data-mark-dubbers]").forEach(btn => {
       btn.addEventListener("click", async () => {
         if (!detail.title_id) { toast("Серия не привязана к тайтлу — неоткуда взять персонажей и дабберов.", "error"); return; }
@@ -1455,12 +1473,18 @@ function productionHtml(detail, fileList, pipeInner = "") {
   </div>`;
 }
 
+const ASS_NAME_RE = /\.(ass|ssa)$/i;
+const rawFilePath = (kind, f) => f.id != null && !f.legacy
+  ? `/report/{id}/raws/files/${f.id}/file`
+  : `/report/{id}/raws/legacy/${kind}/${Number(f.character_id || 0)}/file`;
+
 function rawKindsHtml(kinds, { canAdd, addAttr, dlAttr }) {
   const filled = kinds.filter(k => k.entries.length);
   const empty = kinds.filter(k => !k.entries.length);
   const row = (k, f) => dlAttr === "raw"
     ? `<div class="raw-row on">
         <span class="raw-name">${esc(f.name || "файл")}${f.character_name ? ` · ${esc(f.character_name)}` : (f.character_id ? ` · персонаж #${Number(f.character_id)}` : "")}</span>
+        ${ASS_NAME_RE.test(f.name || "") ? `<button class="icon-btn" data-count-lines="${esc(rawFilePath(k.kind, f))}" data-file-name="${esc(f.name || k.kind)}" title="Посчитать реплики по дабберам" aria-label="Посчитать реплики">${FILE_ACT_ICONS.lines}</button>` : ""}
         <button class="icon-btn" data-raw-dl="${esc(k.kind)}" data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-legacy="${f.legacy || f.id == null ? "1" : "0"}" data-raw-character="${Number(f.character_id || 0)}" data-raw-name="${esc(f.name || k.kind)}" title="Скачать">${FILE_ACT_ICONS.download}</button>
         <button class="icon-btn" data-media-send="${f.id == null ? (f.legacy || f.id == null ? `raws/legacy/${esc(k.kind)}/${Number(f.character_id || 0)}` : `raws/${esc(k.kind)}`) : `raws/files/${esc(f.id)}`}" data-file-name="${esc(f.name || k.kind)}" title="Прислать кому-то">${FILE_ACT_ICONS.send}</button>
         ${f.can_delete ? `<button class="icon-btn danger-zone" data-raw-delete data-raw-id="${f.id == null ? "" : esc(f.id)}" data-raw-kind="${esc(k.kind)}" data-raw-character="${Number(f.character_id || 0)}" data-file-name="${esc(f.name || k.kind)}" title="Удалить файл" aria-label="Удалить ${esc(f.name || k.kind)}">${FILE_ACT_ICONS.trash}</button>` : ""}
@@ -1497,6 +1521,7 @@ function fileHtml(f, canEdit = true, sub = null, shownName = "") {
     <div class="fi-acts">
     ${isAudio ? `<button class="icon-btn fi-act" data-play-file="${f.id}" title="Слушать" aria-label="Слушать">${FILE_ACT_ICONS.play}</button>` : ""}
     ${isAudio && canEdit ? `<button class="icon-btn fi-act" data-qc-file="${f.id}" title="AI-проверка звука" aria-label="AI-проверка">${FILE_ACT_ICONS.qc}</button>` : ""}
+    ${ASS_NAME_RE.test(f.file_name || "") ? `<button class="icon-btn fi-act" data-count-lines="/report/{id}/files/${f.id}/download" data-file-name="${name}" title="Посчитать реплики по дабберам" aria-label="Посчитать реплики">${FILE_ACT_ICONS.lines}</button>` : ""}
     ${/\.(ass|ssa)$/i.test(f.file_name || "") ? `<button class="icon-btn fi-act" data-mark-dubbers="${f.id}" data-file-name="${name}" title="Разметить дабберами: допишет к каждой реплике, кто озвучивает персонажа" aria-label="Разметить дабберами">${FILE_ACT_ICONS.dubbers}</button>` : ""}
     <button class="icon-btn fi-act" data-send-file="${f.id}" data-file-name="${name}" title="Прислать кому-то" aria-label="Прислать кому-то">${FILE_ACT_ICONS.send}</button>
     <button class="icon-btn fi-act" data-download-file="${f.id}" data-file-name="${esc(f.file_name || "")}" title="Скачать" aria-label="Скачать">${FILE_ACT_ICONS.download}</button>

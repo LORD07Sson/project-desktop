@@ -57,3 +57,20 @@ assert.ok(d.text.includes("Default,Иван,0,0,0,,Привет, мир"));
 assert.equal(applyDubbers(r.text, voiced, "both").changed, 0);
 
 console.log("subs-actors-test: ok");
+
+{
+  const { countDubberLines } = await import("../src/app/subs-actors-core.js");
+  const castChars = [
+    { id: 1, name: "Наруто Узумаки", image_url: "n.jpg", voiced_by: null },
+    { id: 2, name: "Саске", image_url: "s.jpg", voiced_by: { telegram_id: 20, name: "Олег" } },
+    { id: 3, name: "Какаши", voiced_by: { telegram_id: 30 } },
+  ];
+  const team = [{ telegram_id: 10, name: "Иван" }, { telegram_id: 20, name: "Олег" }, { telegram_id: 30, name: "Пётр" }];
+  const r = countDubberLines(ass + "Dialogue: 0,0:00:11.00,0:00:12.00,Default,Олег,0,0,0,,сам\r\n", castChars, team);
+  assert.equal(r.total, 6);
+  assert.equal(r.empty, 1);
+  assert.deepEqual(r.people.map(p => [p.name, p.lines]), [["Олег", 2], ["Иван", 1], ["Пётр", 1]]);
+  assert.deepEqual(r.people[0].characters.map(c => [c.name, c.lines, c.image_url]), [["Саске", 1, "s.jpg"]]);
+  assert.deepEqual(r.people[1].characters.map(c => c.name), ["Наруто Узумаки"]);
+  assert.deepEqual(r.unknown, [{ actor: "Прохожий", lines: 1 }]);
+}

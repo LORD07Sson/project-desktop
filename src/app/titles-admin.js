@@ -8,7 +8,7 @@ import { enhanceSelects } from "./fancy-select.js";
 import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./watermark-editor.js";
 import { invoke, pickOutputFile } from "./tauri.js";
 import { decodeSubs } from "./subs-core.js";
-import { assActors, planImport, applyDubbers } from "./subs-actors-core.js";
+import { assActors, planImport, applyDubbers, countDubberLines } from "./subs-actors-core.js";
 
 function seriesCount(n) {
   const mod10 = n % 10, mod100 = n % 100;
@@ -620,4 +620,44 @@ export async function markAssWithDubbers(characters, users, file = null, attach 
     });
   };
   paint();
+}
+
+/**
+ * Window with dialogue lines per dubber, character art behind each tile.
+ * file: {name, text}; post(text): optional "post to notes" action, gets a tally note ("Имя - 12, ...").
+ */
+export function showDubberLines(characters, users, file, post = null) {
+  const r = countDubberLines(file.text, characters, users);
+  const counted = r.people.reduce((a, p) => a + p.lines, 0) + r.unknown.reduce((a, u) => a + u.lines, 0);
+  const max = Math.max(1, ...r.people.map(p => p.lines), ...r.unknown.map(u => u.lines));
+  const pct = n => counted ? Math.round(n / counted * 100) : 0;
+  const tile = p => {
+    const art = p.characters.find(c => c.image_url);
+    const cast = p.characters.map(c => `${c.name} · ${c.lines}`).join("\n");
+    return `<div class="dl-tile${art ? " art" : ""}"${art ? ` style="--art:url('${esc(imgProxy(art.image_url))}')"` : ""} title="${esc(cast)}">
+      <span class="avatar-bubble" data-avatar-for="${esc(p.telegram_id)}">${esc((p.name || "?").slice(0, 1).toUpperCase())}</span>
+      <span class="dl-name">${esc(p.name || "без имени")}</span>
+      ${p.characters.length ? `<span class="dl-cast">${esc(p.characters.slice(0, 2).map(c => c.name).join(", "))}${p.characters.length > 2 ? ` +${p.characters.length - 2}` : ""}</span>` : ""}
+      <b>${p.lines}</b><small>${pct(p.lines)}%</small>
+      <span class="nt-bar"><i style="width:${(p.lines / max * 100).toFixed(1)}%"></i></span>
+    </div>`;
+  };
+  const unknownLines = r.unknown.reduce((a, u) => a + u.lines, 0);
+  const note = r.people.map(p => `${String(p.name).replace(/[,;\-–—]/g, " ").trim()} - ${p.lines}`).join(", ");
+  const overlay = openSheet(`<h2>Реплики · ${esc(file.name)}</h2>
+    ${r.people.length ? `<div class="dl-tiles">${r.people.map(tile).join("")}</div>` : `<div class="no-assignee">Не нашли ни одного даббера. В поле Actor ожидается персонаж тайтла, «Персонаж (Даббер)» или имя даббера.</div>`}
+    <div class="nt-sum">всего реплик ${r.total}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}</div>
+    ${r.unknown.length ? `<details class="detail-section"><summary>Не узнали (${r.unknown.length})</summary><div class="no-assignee">${r.unknown.slice(0, 60).map(u => `${esc(u.actor)} · ${u.lines}`).join(" · ")}${r.unknown.length > 60 ? " …" : ""}</div></details>` : ""}
+    <div class="sheet-actions">
+      <button class="btn" data-close>Закрыть</button>
+      ${post && r.people.length >= 2 ? `<button class="btn primary" id="dl-post">Опубликовать в заметки</button>` : ""}
+    </div>`, "wide");
+  const sheet = overlay.querySelector(".sheet");
+  sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => overlay.remove()));
+  sheet.querySelector("#dl-post")?.addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { await post(note); toast("Подсчёт реплик добавлен в заметки.", "success"); overlay.remove(); }
+    catch (err) { toast(`Не удалось добавить заметку: ${err.message || err}`, "error"); btn.disabled = false; }
+  });
 }
