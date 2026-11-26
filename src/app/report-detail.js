@@ -1215,7 +1215,7 @@ function titleCastArt(titleId) {
       const art = new Map();
       for (const c of t.characters || []) {
         const tid = c.voiced_by && String(c.voiced_by.telegram_id || "");
-        if (tid && c.image_url && !art.has(tid)) art.set(tid, c.image_url);
+        if (tid && c.image_url && !c.image_url.includes("/missing") && !art.has(tid)) art.set(tid, c.image_url);
       }
       return art;
     }).catch(() => { castArtCache.delete(titleId); return null; }));

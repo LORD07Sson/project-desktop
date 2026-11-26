@@ -632,7 +632,7 @@ export function showDubberLines(characters, users, file, post = null) {
   const max = Math.max(1, ...r.people.map(p => p.lines), ...r.unknown.map(u => u.lines));
   const pct = n => counted ? Math.round(n / counted * 100) : 0;
   const tile = p => {
-    const art = p.characters.find(c => c.image_url);
+    const art = p.characters.find(c => c.image_url && !c.image_url.includes("/missing"));
     const cast = p.characters.map(c => `${c.name} · ${c.lines}`).join("\n");
     return `<div class="dl-tile${art ? " art" : ""}"${art ? ` style="--art:url('${esc(imgProxy(art.image_url))}')"` : ""} title="${esc(cast)}">
       <span class="avatar-bubble" data-avatar-for="${esc(p.telegram_id)}">${esc((p.name || "?").slice(0, 1).toUpperCase())}</span>
