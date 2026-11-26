@@ -4163,3 +4163,7 @@ select.fsel-native { display: none !important; }
 .dl-tile .nt-bar { width: 100%; margin-top: 6px; }
 :root[data-theme="light"] .dl-tile { background: rgba(255, 255, 255, .7); }
 :root[data-theme="light"] .dl-tile.art::after, :root[data-theme="light"] .nt-tile.art::after { background: linear-gradient(180deg, rgba(255, 255, 255, .3) 0%, rgba(255, 255, 255, .85) 55%, rgba(255, 255, 255, .95) 100%); }
+.dl-tile.dl-group .nt-avs { height: 40px; margin: 0 0 4px; }
+.dl-tile.dl-group .nt-avs .avatar-bubble { width: 34px; height: 34px; margin: 0; box-shadow: 0 0 0 2px var(--surface, #15171c); }
+.dl-tile.dl-group .nt-avs .avatar-bubble ~ .avatar-bubble { margin-left: -10px; }
+.dl-tile.dl-group .nt-avs .avatar-bubble.nt-more { background: rgba(255, 255, 255, .12); color: var(--ink-soft); font-size: 11px; font-weight: 700; }

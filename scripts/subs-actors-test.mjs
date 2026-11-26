@@ -118,8 +118,13 @@ console.log("subs-actors-test: ok");
     + line("Все вместе");
   const r = countDubberLines(sub, chars, team);
   const got = Object.fromEntries(r.people.map(p => [p.name, [p.lines, p.joint]]));
-  assert.deepEqual(got, { Lissa: [5, 3], "Совесть": [4, 2], Ren: [3, 2] });
+  // [own lines, lines said together]; together-lines go to group tiles, so everything adds up to the total.
+  assert.deepEqual(got, { Lissa: [2, 3], "Совесть": [2, 2], Ren: [1, 2] });
   assert.equal(r.joint, 3);
+  assert.deepEqual(r.groups.map(g => [g.members.map(m => m.name).sort().join("+"), g.lines]).sort(),
+    [["Lissa+Ren", 1], ["Lissa+Ren+Совесть", 1], ["Lissa+Совесть", 1]].sort());
+  const all = r.people.reduce((a, p) => a + p.lines, 0) + r.groups.reduce((a, g) => a + g.lines, 0) + r.unknown.reduce((a, u) => a + u.lines, 0);
+  assert.equal(all, 8 + 1); // 8 lines; "Мотико и Незнакомец" counts for Совесть and its unknown part
   assert.deepEqual(r.unknown, [{ actor: "Незнакомец (из «Мотико и Незнакомец»)", lines: 1 }]);
 }
 
@@ -130,7 +135,8 @@ console.log("subs-actors-test: ok");
     + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Ewaii Богдан вместе,0,0,0,,x\n"
     + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,Ewaii Незнакомец,0,0,0,,y\n";
   const r = countDubberLines(sub, [], [{ telegram_id: 1, name: "Ren", username: "Ewaii_Ren" }, { telegram_id: 2, name: "богданчик <3" }]);
-  assert.deepEqual(r.people.map(p => [p.telegram_id, p.lines, p.joint]), [["1", 1, 1], ["2", 1, 1]]);
+  assert.deepEqual(r.people, []);
+  assert.deepEqual(r.groups.map(g => [g.members.map(m => m.telegram_id), g.lines]), [[["1", "2"], 1]]);
   assert.deepEqual(r.unknown, [{ actor: "Ewaii Незнакомец", lines: 1 }]);
 }
 

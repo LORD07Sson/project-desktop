@@ -219,13 +219,22 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     if (!user && !character) user = person(left) || (right ? person(right) : null);
     return user ? { user, character } : null;
   };
-  const people = new Map(), unknown = [], everyone = [];
+  const people = new Map(), groups = new Map(), unknown = [], everyone = [];
   let signs = 0, joint = 0;
-  const credit = ({ user, character }, lines, shared) => {
+  // A line several people say together goes to their group, not to each of them, so the tiles add up to the total.
+  const together = (members, lines) => {
+    const list = [...new Map(members.map(u => [String(u.telegram_id), u])).values()];
+    if (list.length < 2) { credit({ user: list[0], character: null }, lines); return; }
+    joint += lines;
+    const key = list.map(u => String(u.telegram_id)).sort().join(",");
+    const g = groups.get(key) || { members: list.map(u => ({ telegram_id: String(u.telegram_id), name: u.name || u.username || "" })), lines: 0 };
+    g.lines += lines;
+    groups.set(key, g);
+  };
+  const credit = ({ user, character }, lines) => {
     const key = String(user.telegram_id);
     const p = people.get(key) || { telegram_id: key, name: user.name || user.username || "", lines: 0, joint: 0, chars: new Map() };
     p.lines += lines;
-    if (shared) p.joint += lines;
     if (character) {
       const c = p.chars.get(character.id) || { id: character.id, name: character.name, image_url: character.image_url || "", lines: 0 };
       c.lines += lines;
@@ -243,15 +252,13 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     const parts = idx.has(n) ? [] : actor.split(JOIN_ACTOR_RE).map(x => x.replace(TOGETHER_RE, "").trim()).filter(Boolean);
     if (parts.length < 2) {
       const whole = resolve(actor);
-      if (whole) { credit(whole, lines, false); continue; }
+      if (whole) { credit(whole, lines); continue; }
       // Just listed with spaces: "Ewaii Богдан вместе". Only when every word is a person of the team.
       const words = actor.replace(TOGETHER_RE, "").split(/\s+/).filter(Boolean);
       const who = words.length > 1 ? words.map(person) : [];
       const ids = new Set(who.filter(Boolean).map(u => String(u.telegram_id)));
-      if (who.length && who.every(Boolean) && ids.size > 1) {
-        joint += lines;
-        ids.forEach(id => credit({ user: who.find(u => String(u.telegram_id) === id), character: null }, lines, true));
-      } else unknown.push({ actor, lines });
+      if (who.length && who.every(Boolean) && ids.size > 1) together(who, lines);
+      else unknown.push({ actor, lines });
       continue;
     }
     const hits = new Map(), missed = [];
@@ -260,17 +267,17 @@ export function countDubberLines(text, characters, users, aliases = {}) {
       if (r) { if (!hits.has(String(r.user.telegram_id))) hits.set(String(r.user.telegram_id), r); } else missed.push(part);
     }
     if (!hits.size) { unknown.push({ actor, lines }); continue; }
-    const shared = hits.size > 1;
-    if (shared) joint += lines;
-    hits.forEach(r => credit(r, lines, shared));
+    if (hits.size === 1) hits.forEach(r => credit(r, lines));
+    else together([...hits.values()].map(r => r.user), lines);
     missed.forEach(part => unknown.push({ actor: `${part} (из «${actor}»)`, lines }));
   }
   // "Все вместе" / "хором": everyone who speaks in this episode says it.
   for (const { actor, lines } of everyone) {
     if (people.size < 2) { unknown.push({ actor, lines }); continue; }
-    joint += lines;
-    people.forEach(p => { p.lines += lines; p.joint += lines; });
+    together([...people.values()], lines);
   }
+  const groupList = [...groups.values()].sort((a, b) => b.lines - a.lines);
+  for (const g of groupList) for (const m of g.members) { const p = people.get(m.telegram_id); if (p) p.joint += g.lines; }
   const list = [...people.values()].map(({ chars, ...p }) => ({ ...p, characters: [...chars.values()].sort((a, b) => b.lines - a.lines) }));
-  return { total, empty, signs, joint, people: list.sort((a, b) => b.lines - a.lines), unknown };
+  return { total, empty, signs, joint, people: list.sort((a, b) => b.lines - a.lines), groups: groupList, unknown };
 }
