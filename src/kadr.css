@@ -4181,3 +4181,15 @@ select.fsel-native { display: none !important; }
 .dl-skip-row.empty .dl-skip-why { color: var(--gold); }
 .dl-skip-row.unknown .dl-skip-why { color: color-mix(in srgb, var(--s-stop) 80%, var(--ink)); }
 .dl-skip-txt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-soft); }
+
+/* Replicas dialog: tally note vs file */
+.dl-diff { font-size: 12.5px; color: var(--ink-soft); }
+.dl-diff.ok { margin: 4px 0; color: var(--s-done); }
+.dl-diff-h { font-weight: 600; color: color-mix(in srgb, var(--gold) 80%, var(--ink)); margin-bottom: 6px; }
+.dl-diff-p summary { cursor: pointer; padding: 4px 0; }
+.dl-diff-p summary .dl-d-up { color: var(--s-done); font-weight: 700; }
+.dl-diff-p summary .dl-d-down { color: var(--s-stop); font-weight: 700; }
+.dl-diff-p .dl-skip-row { grid-template-columns: 32px 64px 1fr; }
+.dl-skip-n { font-variant-numeric: tabular-nums; color: var(--ink-dim); text-align: right; }
+.dl-diff-miss { padding: 3px 0; color: color-mix(in srgb, var(--s-stop) 80%, var(--ink)); }
+.dl-diff-hint { margin-top: 6px; font-size: 11.5px; color: var(--ink-dim); }

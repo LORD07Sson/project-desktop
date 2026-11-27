@@ -1041,7 +1041,7 @@ export async function openReportDetail(publicId) {
           ]);
           const text = decodeSubs(await blob.arrayBuffer());
           const post = canEdit ? async note => { await apiPost(`/report/${publicId}/notes`, { text: note }); await render(); } : null;
-          loadAvatars(showDubberLines(title.characters || [], users, { name: btn.dataset.fileName || "subs.ass", text }, post, roster.aliases || {}));
+          loadAvatars(showDubberLines(title.characters || [], users, { name: btn.dataset.fileName || "subs.ass", text }, post, roster.aliases || {}, latestTally(notes.notes, roster)));
         } catch (err) {
           toast(`Не удалось посчитать реплики: ${err.message || err}`, "error");
         } finally { btn.disabled = false; }
@@ -1260,6 +1260,18 @@ function rollArt(publicId, titleId, raws, files, aliases) {
     }).catch(() => { rollArtCache.delete(path); return null; }));
   }
   return rollArtCache.get(path);
+}
+
+// Newest note that is a tally ("Имя - 12, ..."), names resolved to people for comparing with the file.
+function latestTally(list, roster) {
+  const note = (list || []).filter(n => tallyHtml(n.text || "")).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
+  if (!note) return null;
+  const rows = [...String(note.text).matchAll(TALLY_RE)].map(m => {
+    const name = m[1].trim();
+    const who = rosterMatch(name, roster);
+    return { name, n: Number(m[2]), telegram_id: who && who.id ? who.id : "" };
+  });
+  return { author: note.author_name || note.author || "", when: note.created_at ? relTime(note.created_at) : "", rows };
 }
 
 function tallyHtml(text, roster = null) {

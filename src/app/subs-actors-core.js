@@ -222,6 +222,26 @@ export function assSkippedLines(text, unknown = []) {
   return out;
 }
 
+/** Dialogue lines in file order: [{ start: "0:03:12", actor, text }]. */
+export function assTimedLines(text) {
+  const lines = String(text || "").replace(/^\uFEFF/, "").split(/\r?\n/);
+  const layout = dialogueLayout(lines);
+  const out = [];
+  lines.forEach((line, i) => {
+    const l = layout[i];
+    if (!l) return;
+    const d = splitDialogue(line, l.fields.length);
+    if (!d) return;
+    const si = l.fields.indexOf("start");
+    out.push({
+      start: si >= 0 ? d.parts[si].trim().replace(/\.\d+$/, "") : "",
+      actor: d.parts[l.actor].trim(),
+      text: d.parts[l.fields.length - 1].replace(/\{[^}]*\}/g, "").replace(/\\[Nnh]/g, " ").replace(/\s+/g, " ").trim(),
+    });
+  });
+  return out;
+}
+
 export function countDubberLines(text, characters, users, aliases = {}) {
   const { total, empty, actors } = assActors(text);
   const idx = characterIndex(characters);
@@ -301,10 +321,12 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     g.lines += lines;
     groups.set(key, g);
   };
+  let current = "";
   const credit = ({ user, character }, lines) => {
     const key = String(user.telegram_id);
-    const p = people.get(key) || { telegram_id: key, name: user.name || user.username || "", lines: 0, joint: 0, chars: new Map() };
+    const p = people.get(key) || { telegram_id: key, name: user.name || user.username || "", lines: 0, joint: 0, chars: new Map(), actors: new Set() };
     p.lines += lines;
+    if (current) p.actors.add(current);
     if (character) {
       const c = p.chars.get(character.id) || { id: character.id, name: character.name, image_url: character.image_url || "", lines: 0 };
       c.lines += lines;
@@ -316,6 +338,7 @@ export function countDubberLines(text, characters, users, aliases = {}) {
     const n = normName(actor);
     if (SIGN_ACTOR_RE.test(n)) { signs += lines; continue; }
     if (isEveryone(n)) { everyone.push({ actor, lines }); continue; }
+    current = actor;
     // Several speakers in one line: "Мэбуки и Ясуко", "Oni, Совесть - толпа", "Куруми + Мотико вместе".
     // Split before matching the whole value: the first-word match would take "Мэбуки и Мотико" for Мэбуки alone.
     // A character literally named with "и"/a comma stays whole.
@@ -348,6 +371,6 @@ export function countDubberLines(text, characters, users, aliases = {}) {
   }
   const groupList = [...groups.values()].sort((a, b) => b.lines - a.lines);
   for (const g of groupList) for (const m of g.members) { const p = people.get(m.telegram_id); if (p) p.joint += g.lines; }
-  const list = [...people.values()].map(({ chars, ...p }) => ({ ...p, characters: [...chars.values()].sort((a, b) => b.lines - a.lines) }));
+  const list = [...people.values()].map(({ chars, actors, ...p }) => ({ ...p, actors: [...actors], characters: [...chars.values()].sort((a, b) => b.lines - a.lines) }));
   return { total, empty, signs, joint, people: list.sort((a, b) => b.lines - a.lines), groups: groupList, unknown };
 }

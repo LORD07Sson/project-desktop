@@ -8,7 +8,7 @@ import { enhanceSelects } from "./fancy-select.js";
 import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./watermark-editor.js";
 import { invoke, pickOutputFile } from "./tauri.js";
 import { decodeSubs } from "./subs-core.js";
-import { assActors, planImport, applyDubbers, countDubberLines, assSkippedLines } from "./subs-actors-core.js";
+import { assActors, planImport, applyDubbers, countDubberLines, assSkippedLines, assTimedLines } from "./subs-actors-core.js";
 import { artSlidesHtml } from "./art-slides.js";
 
 function seriesCount(n) {
@@ -627,7 +627,12 @@ export async function markAssWithDubbers(characters, users, file = null, attach 
  * Window with dialogue lines per dubber, character art behind each tile.
  * file: {name, text}; post(text): optional "post to notes" action, gets a tally note ("Имя - 12, ...").
  */
-export function showDubberLines(characters, users, file, post = null, aliases = {}) {
+/**
+ * tally (optional): the latest tally note of this episode, { author, when, rows: [{ name, n, telegram_id }] },
+ * telegram_id resolved by the caller (roster). Differences are listed with each person's numbered lines,
+ * so whoever counted by hand can see where their count drifted.
+ */
+export function showDubberLines(characters, users, file, post = null, aliases = {}, tally = null) {
   const r = countDubberLines(file.text, characters, users, aliases);
   const counted = r.total - r.signs - r.empty;
   const max = Math.max(1, ...r.people.map(p => p.lines), ...r.groups.map(g => g.lines), ...r.unknown.map(u => u.lines));
@@ -680,10 +685,12 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
         <span class="dl-skip-t">${esc(x.start)}</span><span class="dl-skip-why">${WHY[x.reason]}${x.actor && x.reason !== "empty" ? ` · ${esc(x.actor)}` : ""}</span>
         <span class="dl-skip-txt">${esc(x.text) || "—"}</span></div>`).join("")}${skipped.length > 200 ? `<div class="no-assignee">и ещё ${skipped.length - 200}</div>` : ""}</div>
     </details>` : "";
+  const diffHtml = tallyDiffHtml(r, tally, file.text);
   const overlay = openSheet(`<h2>Реплики · ${esc(file.name)}</h2>
     ${r.people.length || r.groups.length ? `<div class="dl-tiles">${r.people.map(tile).join("")}${r.groups.map(groupTile).join("")}</div>` : `<div class="no-assignee">${emptyText}</div>`}
     <div class="nt-sum"${r.people.length || r.groups.length || unknownLines ? "" : " hidden"}>всего реплик ${r.total - r.signs}${r.signs ? ` · надписей ${r.signs} (не считаем)` : ""}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}${r.joint ? ` · из них вместе ${r.joint}` : ""}</div>
     ${r.unknown.length ? `<details class="detail-section"><summary>Не узнали (${r.unknown.length})</summary><div class="no-assignee">${r.unknown.slice(0, 60).map(u => `«${esc(u.actor)}» — ${u.lines}`).join(", ")}${r.unknown.length > 60 ? " …" : ""}</div></details>` : ""}
+    ${diffHtml}
     ${skippedHtml}
     <div class="sheet-actions">
       <button class="btn" data-close>Закрыть</button>
@@ -703,4 +710,41 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
 function plural(n, one, few, many) {
   const m10 = n % 10, m100 = n % 100;
   return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+}
+
+// Note vs file: per person "в заметке 61 → по файлу 62", plus that person's numbered lines to find the drift.
+function tallyDiffHtml(r, tally, text) {
+  if (!tally || !tally.rows || !tally.rows.length) return "";
+  const noted = new Map();
+  for (const row of tally.rows) if (row.telegram_id) noted.set(String(row.telegram_id), (noted.get(String(row.telegram_id)) || 0) + row.n);
+  const timed = assTimedLines(text);
+  const diffs = [];
+  for (const p of r.people) {
+    const was = noted.get(p.telegram_id);
+    if (was == null || was === p.lines) continue;
+    diffs.push({ p, was });
+  }
+  const missing = tally.rows.filter(row => row.telegram_id && !r.people.some(p => p.telegram_id === String(row.telegram_id)));
+  const unmatched = tally.rows.filter(row => !row.telegram_id);
+  const noteSum = tally.rows.reduce((a, row) => a + row.n, 0);
+  const fileSum = r.people.reduce((a, p) => a + p.lines, 0) + r.groups.reduce((a, g) => a + g.lines, 0);
+  const head = `Сверка с заметкой${tally.author ? ` ${esc(tally.author)}` : ""}${tally.when ? ` · ${esc(tally.when)}` : ""}`;
+  if (!diffs.length && !missing.length) {
+    return `<div class="dl-diff ok">${head}: совпадает${noteSum !== fileSum && unmatched.length ? ` (кроме не узнанных: ${unmatched.map(x => esc(x.name)).join(", ")})` : ""}</div>`;
+  }
+  const person = ({ p, was }) => {
+    const own = new Set(p.actors || []);
+    const lines = timed.filter(l => own.has(l.actor));
+    const d = p.lines - was;
+    return `<details class="dl-diff-p">
+      <summary><b>${esc(p.name || "?")}</b> в заметке ${was} → по файлу ${p.lines} <span class="${d > 0 ? "dl-d-up" : "dl-d-down"}">${d > 0 ? "+" : ""}${d}</span></summary>
+      <div class="dl-skip-list">${lines.map((l, i) => `<div class="dl-skip-row"><span class="dl-skip-n">${i + 1}</span><span class="dl-skip-t">${esc(l.start)}</span><span class="dl-skip-txt">${esc(l.text) || "—"}</span></div>`).join("")}</div>
+    </details>`;
+  };
+  return `<div class="detail-section dl-diff">
+    <div class="dl-diff-h">${head}: в заметке ${noteSum}, по файлу ${fileSum}${fileSum !== noteSum ? ` (${fileSum > noteSum ? "+" : ""}${fileSum - noteSum})` : ""}</div>
+    ${diffs.map(person).join("")}
+    ${missing.map(row => `<div class="dl-diff-miss">${esc(row.name)}: в заметке ${row.n}, в файле реплик нет</div>`).join("")}
+    <div class="dl-diff-hint">Номера идут по порядку реплик человека в файле — по ним видно, где ручной счёт разошёлся.</div>
+  </div>`;
 }
