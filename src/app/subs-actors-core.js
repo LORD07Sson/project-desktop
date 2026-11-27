@@ -195,6 +195,33 @@ const TOGETHER_RE = /\s*[([]?\s*(?:вместе|хором|together)\s*[)\]]?\s*
 const EVERYONE_WORDS = new Set(["все", "всё", "вместе", "хором", "толпа", "all", "everyone", "together", "crowd"]);
 const isEveryone = n => { const w = n.replace(/[^a-zа-я0-9 ]+/gi, " ").split(" ").filter(Boolean); return w.length > 0 && w.every(x => EVERYONE_WORDS.has(x)); };
 
+/**
+ * Dialogue lines the tally skips, in file order, so the roll can be fixed in Aegisub:
+ * empty Actor, signs, and Actor values that matched nobody (pass countDubberLines(...).unknown).
+ * → [{ start: "0:03:12", reason: "empty" | "sign" | "unknown", actor, text }]
+ */
+export function assSkippedLines(text, unknown = []) {
+  const lines = String(text || "").replace(/^\uFEFF/, "").split(/\r?\n/);
+  const layout = dialogueLayout(lines);
+  // "Part (из «Actor»)" entries only partly failed; the line itself was still counted.
+  const bad = new Set(unknown.filter(u => !/ \(из «.+»\)$/.test(u.actor)).map(u => u.actor.trim()));
+  const out = [];
+  lines.forEach((line, i) => {
+    const l = layout[i];
+    if (!l) return;
+    const d = splitDialogue(line, l.fields.length);
+    if (!d) return;
+    const actor = d.parts[l.actor].trim();
+    const reason = !actor ? "empty" : SIGN_ACTOR_RE.test(normName(actor)) ? "sign" : bad.has(actor) ? "unknown" : "";
+    if (!reason) return;
+    const si = l.fields.indexOf("start");
+    const start = si >= 0 ? d.parts[si].trim().replace(/\.\d+$/, "") : "";
+    const body = d.parts[l.fields.length - 1].replace(/\{[^}]*\}/g, "").replace(/\\[Nnh]/g, " ").replace(/\s+/g, " ").trim();
+    out.push({ start, reason, actor, text: body });
+  });
+  return out;
+}
+
 export function countDubberLines(text, characters, users, aliases = {}) {
   const { total, empty, actors } = assActors(text);
   const idx = characterIndex(characters);

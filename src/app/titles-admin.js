@@ -8,7 +8,7 @@ import { enhanceSelects } from "./fancy-select.js";
 import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./watermark-editor.js";
 import { invoke, pickOutputFile } from "./tauri.js";
 import { decodeSubs } from "./subs-core.js";
-import { assActors, planImport, applyDubbers, countDubberLines } from "./subs-actors-core.js";
+import { assActors, planImport, applyDubbers, countDubberLines, assSkippedLines } from "./subs-actors-core.js";
 import { artSlidesHtml } from "./art-slides.js";
 
 function seriesCount(n) {
@@ -671,10 +671,20 @@ export function showDubberLines(characters, users, file, post = null, aliases = 
       : !voiced
         ? `У всех ${r.empty} ${plural(r.empty, "строки", "строк", "строк")} пустое поле Actor (Name) — неизвестно, кто их озвучивает. Распишите роли в Aegisub: в поле Actor укажите «Даббер - Персонаж».`
         : `Не узнали, кто озвучивает: ${unknownLines} ${plural(unknownLines, "реплика", "реплики", "реплик")} без знакомых имён. В поле Actor пишут «Даббер - Персонаж», «Персонаж (Даббер)» или только персонажа, если в тайтле ему назначен даббер. Ники, которых нет в команде, можно привязать к людям в заметке с подсчётом.`;
+  // Lines left out of the tally, with timecodes, so they can be found and fixed in Aegisub.
+  const skipped = assSkippedLines(file.text, r.unknown);
+  const WHY = { empty: "без Actor", sign: "надпись", unknown: "не узнали" };
+  const skippedHtml = skipped.length ? `<details class="detail-section dl-skip"${skipped.length <= 8 ? " open" : ""}>
+      <summary>Пропущено (${skipped.length})</summary>
+      <div class="dl-skip-list">${skipped.slice(0, 200).map(x => `<div class="dl-skip-row ${x.reason}">
+        <span class="dl-skip-t">${esc(x.start)}</span><span class="dl-skip-why">${WHY[x.reason]}${x.actor && x.reason !== "empty" ? ` · ${esc(x.actor)}` : ""}</span>
+        <span class="dl-skip-txt">${esc(x.text) || "—"}</span></div>`).join("")}${skipped.length > 200 ? `<div class="no-assignee">и ещё ${skipped.length - 200}</div>` : ""}</div>
+    </details>` : "";
   const overlay = openSheet(`<h2>Реплики · ${esc(file.name)}</h2>
     ${r.people.length || r.groups.length ? `<div class="dl-tiles">${r.people.map(tile).join("")}${r.groups.map(groupTile).join("")}</div>` : `<div class="no-assignee">${emptyText}</div>`}
     <div class="nt-sum"${r.people.length || r.groups.length || unknownLines ? "" : " hidden"}>всего реплик ${r.total - r.signs}${r.signs ? ` · надписей ${r.signs} (не считаем)` : ""}${r.empty ? ` · без Actor ${r.empty}` : ""}${unknownLines ? ` · не узнали ${unknownLines}` : ""}${r.joint ? ` · из них вместе ${r.joint}` : ""}</div>
     ${r.unknown.length ? `<details class="detail-section"><summary>Не узнали (${r.unknown.length})</summary><div class="no-assignee">${r.unknown.slice(0, 60).map(u => `«${esc(u.actor)}» — ${u.lines}`).join(", ")}${r.unknown.length > 60 ? " …" : ""}</div></details>` : ""}
+    ${skippedHtml}
     <div class="sheet-actions">
       <button class="btn" data-close>Закрыть</button>
       ${post && r.people.length >= 2 ? `<button class="btn primary" id="dl-post">Опубликовать в заметки</button>` : ""}

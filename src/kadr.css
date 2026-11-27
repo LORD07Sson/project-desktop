@@ -4170,3 +4170,14 @@ select.fsel-native { display: none !important; }
 .dl-tile.dl-group .nt-avs .avatar-bubble { width: 34px; height: 34px; margin: 0; box-shadow: 0 0 0 2px var(--surface, #15171c); }
 .dl-tile.dl-group .nt-avs .avatar-bubble ~ .avatar-bubble { margin-left: -10px; }
 .dl-tile.dl-group .nt-avs .avatar-bubble.nt-more { background: rgba(255, 255, 255, .12); color: var(--ink-soft); font-size: 11px; font-weight: 700; }
+
+/* Replicas dialog: lines the tally skipped, with timecodes for Aegisub */
+.dl-skip summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.dl-skip-list { display: grid; gap: 2px; margin-top: 8px; max-height: 260px; overflow: auto; }
+.dl-skip-row { display: grid; grid-template-columns: 64px 150px 1fr; gap: 10px; align-items: baseline; padding: 5px 8px; border-radius: 8px; font-size: 12.5px; }
+.dl-skip-row:hover { background: rgba(255, 255, 255, .04); }
+.dl-skip-t { font-variant-numeric: tabular-nums; color: var(--ink-dim); }
+.dl-skip-why { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-dim); }
+.dl-skip-row.empty .dl-skip-why { color: var(--gold); }
+.dl-skip-row.unknown .dl-skip-why { color: color-mix(in srgb, var(--s-stop) 80%, var(--ink)); }
+.dl-skip-txt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-soft); }
