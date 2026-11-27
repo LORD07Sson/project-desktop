@@ -4197,3 +4197,6 @@ select.fsel-native { display: none !important; }
 .dl-diff-guess b { color: color-mix(in srgb, var(--gold) 85%, var(--ink)); }
 .dl-skip-row.sus { background: color-mix(in srgb, var(--gold) 14%, transparent); }
 .dl-skip-row.sus .dl-skip-txt { color: var(--ink); }
+.dl-guess-row { padding: 2px 0; }
+.dl-guess-row small { color: var(--ink-dim); font-size: 11px; margin-left: 4px; }
+.dl-guess-row.top b { color: var(--gold); }

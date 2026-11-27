@@ -232,9 +232,13 @@ export function assTimedLines(text) {
     if (!l) return;
     const d = splitDialogue(line, l.fields.length);
     if (!d) return;
-    const si = l.fields.indexOf("start");
+    const si = l.fields.indexOf("start"), ei = l.fields.indexOf("end"), yi = l.fields.indexOf("style");
+    const secs = v => { const m = /^(\d+):(\d+):(\d+(?:\.\d+)?)$/.exec(String(v || "").trim()); return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : null; };
     out.push({
       start: si >= 0 ? d.parts[si].trim().replace(/\.\d+$/, "") : "",
+      t0: si >= 0 ? secs(d.parts[si]) : null,
+      t1: ei >= 0 ? secs(d.parts[ei]) : null,
+      style: yi >= 0 ? d.parts[yi].trim() : "",
       actor: d.parts[l.actor].trim(),
       text: d.parts[l.fields.length - 1].replace(/\{[^}]*\}/g, "").replace(/\\[Nnh]/g, " ").replace(/\s+/g, " ").trim(),
     });
@@ -373,4 +377,59 @@ export function countDubberLines(text, characters, users, aliases = {}) {
   for (const g of groupList) for (const m of g.members) { const p = people.get(m.telegram_id); if (p) p.joint += g.lines; }
   const list = [...people.values()].map(({ chars, actors, ...p }) => ({ ...p, actors: [...actors], characters: [...chars.values()].sort((a, b) => b.lines - a.lines) }));
   return { total, empty, signs, joint, people: list.sort((a, b) => b.lines - a.lines), groups: groupList, unknown };
+}
+
+// Why a hand count tends to lose a line, with a base weight. Weights drop for a sign that also occurs
+// in the lines of people whose hand count matched the file: that counter evidently handles it fine.
+const MISS_SIGNS = [
+  { key: "repeat", label: "повтор предыдущей строки", w: 5 },
+  { key: "sametime", label: "тот же тайминг, что у предыдущей своей строки", w: 4 },
+  { key: "rare", label: "редкое написание Actor", w: 4 },
+  { key: "overlap", label: "звучит одновременно с другой репликой", w: 3 },
+  { key: "cont", label: "продолжение фразы без паузы", w: 2 },
+  { key: "style", label: "редкий стиль", w: 2 },
+  { key: "short", label: "очень короткая", w: 1 },
+];
+
+/**
+ * Lines a hand count most likely missed.
+ * timed: assTimedLines(text); missing: [{ actors: [...], d }] people whose note is short by d lines;
+ * matched: [{ actors: [...] }] people whose note matched. → per person [{ line, score, why: [labels] }], best first.
+ */
+export function missCandidates(timed, missing, matched = []) {
+  const flat = s => String(s || "").toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "");
+  const actorUse = new Map(), styleUse = new Map();
+  for (const l of timed) {
+    actorUse.set(l.actor, (actorUse.get(l.actor) || 0) + 1);
+    styleUse.set(l.style, (styleUse.get(l.style) || 0) + 1);
+  }
+  const ownerActors = actor => [...missing, ...matched].find(p => p.actors.includes(actor))?.actors || [actor];
+  const signs = (l, i) => {
+    const prev = timed[i - 1];
+    const out = new Set();
+    if (prev && prev.actor === l.actor && flat(l.text) && flat(prev.text) === flat(l.text)) out.add("repeat");
+    if (prev && prev.actor === l.actor && l.t0 != null && prev.t0 != null && Math.abs(l.t0 - prev.t0) < 0.05 && !out.has("repeat")) out.add("sametime");
+    if ((actorUse.get(l.actor) || 0) <= 2 && ownerActors(l.actor).length > 1) out.add("rare");
+    if (prev && prev.actor !== l.actor && l.t0 != null && prev.t1 != null && l.t0 < prev.t1 - 0.05) out.add("overlap");
+    if (prev && prev.actor === l.actor && l.t0 != null && prev.t1 != null && l.t0 - prev.t1 <= 0.1 && !/[.!?…»"]$/.test(prev.text)) out.add("cont");
+    if (l.style && (styleUse.get(l.style) || 0) <= Math.max(2, timed.length * 0.05)) out.add("style");
+    if (flat(l.text).length <= 3) out.add("short");
+    return out;
+  };
+  const all = timed.map(signs);
+  const okActors = new Set(matched.flatMap(p => p.actors));
+  const handled = new Set();
+  timed.forEach((l, i) => { if (okActors.has(l.actor)) all[i].forEach(k => handled.add(k)); });
+  const weight = k => { const s = MISS_SIGNS.find(x => x.key === k); return s ? s.w * (handled.has(k) ? 0.25 : 1) : 0; };
+  return missing.map(p => {
+    const own = new Set(p.actors);
+    const list = [];
+    timed.forEach((l, i) => {
+      if (!own.has(l.actor) || !all[i].size) return;
+      const keys = [...all[i]];
+      const score = keys.reduce((a, k) => a + weight(k), 0);
+      list.push({ line: l, score, why: keys.sort((a, b) => weight(b) - weight(a)).map(k => MISS_SIGNS.find(x => x.key === k).label) });
+    });
+    return list.sort((a, b) => b.score - a.score);
+  });
 }

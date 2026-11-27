@@ -8,7 +8,7 @@ import { enhanceSelects } from "./fancy-select.js";
 import { loadWatermark, watermarkSectionHtml, wireWatermarkSection } from "./watermark-editor.js";
 import { invoke, pickOutputFile } from "./tauri.js";
 import { decodeSubs } from "./subs-core.js";
-import { assActors, planImport, applyDubbers, countDubberLines, assSkippedLines, assTimedLines } from "./subs-actors-core.js";
+import { assActors, planImport, applyDubbers, countDubberLines, assSkippedLines, assTimedLines, missCandidates } from "./subs-actors-core.js";
 import { artSlidesHtml } from "./art-slides.js";
 
 function seriesCount(n) {
@@ -732,21 +732,25 @@ function tallyDiffHtml(r, tally, text) {
   if (!diffs.length && !missing.length) {
     return `<div class="dl-diff ok">${head}: совпадает${noteSum !== fileSum && unmatched.length ? ` (кроме не узнанных: ${unmatched.map(x => esc(x.name)).join(", ")})` : ""}</div>`;
   }
-  // A hand count most often loses a repeat: the same character says the same text twice in a row
-  // ("Ваше Высочество!" / "Ваше Высочество!") and the eye takes it for one line.
-  const flat = s => String(s || "").toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "");
-  const repeats = new Set(timed.filter((l, i) => i && timed[i - 1].actor === l.actor && flat(l.text) && flat(timed[i - 1].text) === flat(l.text)));
+  // Rank each short person's lines by how easily a hand count loses them; signs that the people whose
+  // count matched also have are weighted down (missCandidates).
+  const shorts = diffs.filter(x => x.p.lines > x.was);
+  const okPeople = r.people.filter(p => noted.get(p.telegram_id) === p.lines).map(p => ({ actors: p.actors || [] }));
+  const ranked = missCandidates(timed, shorts.map(x => ({ actors: x.p.actors || [], d: x.p.lines - x.was })), okPeople);
+  const rankOf = new Map(shorts.map((x, k) => [x.p.telegram_id, ranked[k]]));
   const person = ({ p, was }) => {
     const own = new Set(p.actors || []);
     const lines = timed.filter(l => own.has(l.actor));
     const d = p.lines - was;
-    const suspects = d > 0 ? lines.filter(l => repeats.has(l)) : [];
-    const sure = suspects.length && suspects.length <= d;
-    const guess = suspects.length ? `<div class="dl-diff-guess">${sure ? "Скорее всего пропущен" : "Возможно, пропущен"} повтор предыдущей строки: ${suspects.map(l => `<b>${esc(l.start)}</b> «${esc(l.text)}»`).join(", ")}</div>` : "";
-    return `<details class="dl-diff-p"${suspects.length ? " open" : ""}>
+    const best = (rankOf.get(p.telegram_id) || []).filter(c => c.score >= 1).slice(0, Math.max(3, d));
+    // "Скорее всего" when the top d candidates clearly stand out from the rest.
+    const sure = best.length >= d && (best.length === d || best[d - 1].score >= 1.5 * best[d].score);
+    const picked = new Set(best.map(c => c.line));
+    const guess = best.length ? `<div class="dl-diff-guess">${sure ? "Скорее всего пропущено" : "Возможно, пропущено"}:${best.map((c, k) => `<div class="dl-guess-row${sure && k < d ? " top" : ""}"><b>${esc(c.line.start)}</b> «${esc(c.line.text)}» <small>${esc(c.why.join(", "))}</small></div>`).join("")}</div>` : "";
+    return `<details class="dl-diff-p"${best.length ? " open" : ""}>
       <summary><b>${esc(p.name || "?")}</b> в заметке ${was} → по файлу ${p.lines} <span class="${d > 0 ? "dl-d-up" : "dl-d-down"}">${d > 0 ? "+" : ""}${d}</span></summary>
       ${guess}
-      <div class="dl-skip-list">${lines.map((l, i) => `<div class="dl-skip-row${repeats.has(l) && suspects.length ? " sus" : ""}"><span class="dl-skip-n">${i + 1}</span><span class="dl-skip-t">${esc(l.start)}</span><span class="dl-skip-txt">${esc(l.text) || "—"}</span></div>`).join("")}</div>
+      <div class="dl-skip-list">${lines.map((l, i) => `<div class="dl-skip-row${picked.has(l) ? " sus" : ""}"><span class="dl-skip-n">${i + 1}</span><span class="dl-skip-t">${esc(l.start)}</span><span class="dl-skip-txt">${esc(l.text) || "—"}</span></div>`).join("")}</div>
     </details>`;
   };
   return `<div class="detail-section dl-diff">
