@@ -4193,3 +4193,7 @@ select.fsel-native { display: none !important; }
 .dl-skip-n { font-variant-numeric: tabular-nums; color: var(--ink-dim); text-align: right; }
 .dl-diff-miss { padding: 3px 0; color: color-mix(in srgb, var(--s-stop) 80%, var(--ink)); }
 .dl-diff-hint { margin-top: 6px; font-size: 11.5px; color: var(--ink-dim); }
+.dl-diff-guess { margin: 2px 0 6px; padding: 7px 10px; border-radius: 10px; font-size: 12.5px; color: var(--ink-soft); background: color-mix(in srgb, var(--gold) 12%, transparent); }
+.dl-diff-guess b { color: color-mix(in srgb, var(--gold) 85%, var(--ink)); }
+.dl-skip-row.sus { background: color-mix(in srgb, var(--gold) 14%, transparent); }
+.dl-skip-row.sus .dl-skip-txt { color: var(--ink); }
