@@ -1041,7 +1041,7 @@ export async function openReportDetail(publicId) {
           ]);
           const text = decodeSubs(await blob.arrayBuffer());
           const post = canEdit ? async note => { await apiPost(`/report/${publicId}/notes`, { text: note }); await render(); } : null;
-          loadAvatars(showDubberLines(title.characters || [], users, { name: btn.dataset.fileName || "subs.ass", text }, post, roster.aliases || {}, latestTally(notes.notes, roster)));
+          loadAvatars(showDubberLines(title.characters || [], users, { name: btn.dataset.fileName || "subs.ass", text }, post, roster.aliases || {}, latestTally(notes.notes, noteCtx.roster)));
         } catch (err) {
           toast(`Не удалось посчитать реплики: ${err.message || err}`, "error");
         } finally { btn.disabled = false; }
