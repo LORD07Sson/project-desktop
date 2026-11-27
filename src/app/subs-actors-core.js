@@ -384,7 +384,6 @@ export function countDubberLines(text, characters, users, aliases = {}) {
 const MISS_SIGNS = [
   { key: "repeat", label: "повтор предыдущей строки", w: 5 },
   { key: "sametime", label: "тот же тайминг, что у предыдущей своей строки", w: 4 },
-  { key: "rare", label: "редкое написание Actor", w: 4 },
   { key: "overlap", label: "звучит одновременно с другой репликой", w: 3 },
   { key: "cont", label: "продолжение фразы без паузы", w: 2 },
   { key: "style", label: "редкий стиль", w: 2 },
@@ -398,18 +397,13 @@ const MISS_SIGNS = [
  */
 export function missCandidates(timed, missing, matched = []) {
   const flat = s => String(s || "").toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "");
-  const actorUse = new Map(), styleUse = new Map();
-  for (const l of timed) {
-    actorUse.set(l.actor, (actorUse.get(l.actor) || 0) + 1);
-    styleUse.set(l.style, (styleUse.get(l.style) || 0) + 1);
-  }
-  const ownerActors = actor => [...missing, ...matched].find(p => p.actors.includes(actor))?.actors || [actor];
+  const styleUse = new Map();
+  for (const l of timed) styleUse.set(l.style, (styleUse.get(l.style) || 0) + 1);
   const signs = (l, i) => {
     const prev = timed[i - 1];
     const out = new Set();
     if (prev && prev.actor === l.actor && flat(l.text) && flat(prev.text) === flat(l.text)) out.add("repeat");
     if (prev && prev.actor === l.actor && l.t0 != null && prev.t0 != null && Math.abs(l.t0 - prev.t0) < 0.05 && !out.has("repeat")) out.add("sametime");
-    if ((actorUse.get(l.actor) || 0) <= 2 && ownerActors(l.actor).length > 1) out.add("rare");
     if (prev && prev.actor !== l.actor && l.t0 != null && prev.t1 != null && l.t0 < prev.t1 - 0.05) out.add("overlap");
     if (prev && prev.actor === l.actor && l.t0 != null && prev.t1 != null && l.t0 - prev.t1 <= 0.1 && !/[.!?…»"]$/.test(prev.text)) out.add("cont");
     if (l.style && (styleUse.get(l.style) || 0) <= Math.max(2, timed.length * 0.05)) out.add("style");
