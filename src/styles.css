@@ -514,10 +514,23 @@ body.window-maximized .win-btn .ic-restore { display: block; }
   padding: 6px 0;
 }
 .mini-row .rank {
-  width: 20px; text-align: center; font-weight: 700; color: var(--ink-dim); font-size: 12px; flex: none;
+  width: 22px; text-align: center; font-weight: 700; color: var(--ink-dim); font-size: 12px; flex: none;
 }
 .mini-row .name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-row .val { font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.mini-row .val.ok, .mini-row .val.pen { display: inline-flex; align-items: center; gap: 6px; }
+.mini-row .val .ei { width: 15px; height: 15px; vertical-align: middle; }
+.mini-row .val.ok .ei { color: var(--s-done); }
+.mini-row .val.pen .ei, .mini-h3 .ei { color: var(--accent, #c3a6f5); }
+.mini-h3 { display: flex; align-items: center; gap: 8px; margin: 18px 0 4px; font-size: 15px; }
+.mini-h3 .ei { width: 17px; height: 17px; }
+.pf-h-ic { display: flex; align-items: center; gap: 8px; }
+.pf-h-ic .ei { width: 17px; height: 17px; color: var(--accent, #c3a6f5); }
+.rank-tag .rank-dot { width: 18px; height: 18px; font-size: 10px; margin-right: 2px; vertical-align: middle; }
+.rank-dot { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--ink-dim); background: rgba(255, 255, 255, .05); }
+.rank-dot.r1 { color: #3a2a06; background: linear-gradient(145deg, #ffe08a, #e0a83a); }
+.rank-dot.r2 { color: #2a2d33; background: linear-gradient(145deg, #eef1f5, #a9b0bb); }
+.rank-dot.r3 { color: #3a1d0c; background: linear-gradient(145deg, #f1b58a, #b8693a); }
 
 .role-bar-row { margin-bottom: 10px; }
 .role-bar-row .label { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }

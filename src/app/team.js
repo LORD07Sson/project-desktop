@@ -1,5 +1,5 @@
 
-import { apiGet, tabSkeleton } from "./api.js";
+import { apiGet, tabSkeleton, mediaUrl } from "./api.js";
 import { can } from "./state.js";
 import { $, esc } from "./utils.js";
 import { avatarHtml, loadAvatars, openUserProfile } from "./profile.js";
@@ -59,8 +59,12 @@ function personHtml(u, maxLoad) {
     : u.assigned
       ? `<span class="tm-state busy" title="${esc(u.current || "")}">${u.current ? `на руках: ${esc(u.current)}` : `на руках ${u.assigned}`}</span>`
       : `<span class="tm-state free">свободен</span>`;
+  const banSrc = u.has_banner ? mediaUrl(`/banner/${encodeURIComponent(u.telegram_id)}`) : "";
+  const banPos = Math.min(100, Math.max(0, Number(u.banner_pos_y ?? 50) || 0));
+  const ban = banSrc ? `<div class="tm-ban" style="background-image:url('${esc(banSrc)}');background-position:50% ${banPos}%"></div>` : "";
   return `
-    <div class="tm-card${u.online ? " on" : ""}${u.paused_until ? " paused" : ""}" data-open-user="${u.telegram_id}">
+    <div class="tm-card${u.online ? " on" : ""}${u.paused_until ? " paused" : ""}${ban ? " has-ban" : ""}" data-open-user="${u.telegram_id}">
+      ${ban}
       <span class="tm-av">${avatarHtml(u.telegram_id, u.name, "xl")}${u.online ? `<i class="tm-dot" title="В сети"></i>` : ""}</span>
       <div class="tm-who">
         <div class="tm-name">${esc(u.name)}${u.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</div>

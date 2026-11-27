@@ -2,16 +2,17 @@ import brandLogoUrl from "../assets/brand-logo.png";
 
 import { render } from "solid-js/web";
 import { pipelinePct } from "./utils.js";
-import { loadPeopleNames, humanizeEvents, personName } from "./people-names.js";
+import { loadPeopleNames, personName } from "./people-names.js";
 import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
 import { apiGet, openSheet, dialogSkeletonHtml, keepOnReload } from "./api.js";
-import { $, esc, initials, relTime, STATUS_COLOR_VAR } from "./utils.js";
+import { $, esc, initials, STATUS_COLOR_VAR } from "./utils.js";
 
 import { avatarHtml, loadAvatars } from "./profile.js";
 import { openReportDetail } from "./report-detail.js";
 import { seriesParts } from "./reports.js";
 import { openTicketsSheet } from "./tickets.js";
 import { openBirthdaysSheet } from "./birthdays.js";
+import { iconHtml } from "./icons.js";
 import { imgProxy, titleArt } from "./title-page.js";
 import { state } from "./state.js";
 import { switchTab } from "./tabs.js";
@@ -292,7 +293,6 @@ function Overview(props) {
     : upcoming.slice(0, 3).map(r => { const l = daysLeft(r.deadline); return { r, tone: "", tag: l === 0 ? "сегодня" : l === 1 ? "завтра" : `через ${l} ${plural(l, "день", "дня", "дней")}` }; });
   const reel = reports.filter(isOpen).sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")).slice(0, 24);
   const maxAssigned = Math.max(1, ...d.performers.map(x => x.assigned));
-  const activity = (props.feed?.events || []).slice(0, 4);
   const summary = [
     `${activeTotal} ${plural(activeTotal, "серия", "серии", "серий")} в работе`,
     (n => (n ? `${n} ${plural(n, "требует", "требуют", "требуют")} внимания` : "срочного нет"))(attention.filter(a => a.tone !== "blue").length),
@@ -359,7 +359,7 @@ function Overview(props) {
                 const left = daysLeft(r.deadline);
                 const dt = new Date(r.deadline.slice(0, 10) + "T00:00:00");
                 return (
-                  <button type="button" class={`kd-dl${left <= 1 ? " hot" : ""}`} onClick={() => openReportDetail(r.public_id)}>
+                  <button type="button" class={`kd-dl${left === 0 ? " today" : ""}`} onClick={() => openReportDetail(r.public_id)}>
                     <span class="kd-dl-d"><b>{pad2(dt.getDate())}</b><small>{WEEKDAYS_SHORT[dt.getDay()]}</small></span>
                     <span class="kd-dl-t"><b>{showName(r)}{epNum(r) != null ? ` · ${epNum(r)}` : ""}</b><span>{stageOf(r)} · {left === 0 ? "сегодня" : left === 1 ? "завтра" : `через ${left} ${plural(left, "день", "дня", "дней")}`}</span></span>
                   </button>
@@ -376,7 +376,7 @@ function Overview(props) {
               {p => (
                 <div class="kd-mb">
                   <span class="avatar sm" data-avatar-for={p.telegram_id || ""}>{initials(p.name || "?")}</span>
-                  <span class="kd-mb-n"><b>{p.name}</b><span>{p.overdue ? `${p.overdue} просрочено` : "без просрочек"}</span></span>
+                  <span class="kd-mb-n"><b>{p.name}</b><span class={p.overdue ? "bad" : ""}>{p.overdue ? `${p.overdue} просрочено` : "без просрочек"}</span></span>
                   <span class="kd-mb-ld"><span class="kd-track"><i class={p.overdue ? "hot" : ""} style={{ width: `${Math.round((p.assigned / maxAssigned) * 100)}%` }} /></span><small>{p.assigned} {plural(p.assigned, "серия", "серии", "серий")}</small></span>
                 </div>
               )}
@@ -391,41 +391,22 @@ function Overview(props) {
             <div class="kd-sb"><small>Создано</small><b>{sum("created")}<em>{sum("created", 7)} за неделю</em></b><Sparkline values={days.map(x => x.created)} color="--gold" /></div>
             <div class="kd-sb"><small>Просрочено</small><b class={d.reports.overdue ? "hot" : ""}>{d.reports.overdue}<em class="w">{d.reports.important} {plural(d.reports.important, "важная", "важные", "важных")}</em></b></div>
             <div class="kd-sb"><small>Всего серий</small><b>{d.reports.total}<em>{count("completed")} готово</em></b></div>
+            <div class="kd-sb kd-sb-sm">
+              <small>Доступ</small><b>{d.access.allowed}</b>
+              <span>{plural(d.access.allowed, "участник", "участника", "участников")} · {d.access.pending_requests ? `${d.access.pending_requests} ${plural(d.access.pending_requests, "заявка ждёт", "заявки ждут", "заявок ждут")}` : "заявок нет"}</span>
+            </div>
+            <button type="button" class="kd-sb kd-sb-sm" title="Открыть тикеты" onClick={() => openTicketsSheet()}>
+              <small>Тикеты</small><b class={d.open_tickets ? "warn" : ""}>{d.open_tickets}</b><span>открыто сейчас</span>
+            </button>
+            <Show when={d.birthdays.length}>
+              <button type="button" class="kd-sb kd-sb-sm kd-sb-wide" title="Все дни рождения" onClick={() => openBirthdaysSheet(loadOverview)}>
+                <small>День рождения</small><b class="kd-bday">{d.birthdays[0]?.name}</b><span>{d.birthdays[0]?.day}.{String(d.birthdays[0]?.month).padStart(2, "0")}</span>
+              </button>
+            </Show>
           </div>
         </section>
       </div>
 
-      <div class="kd-row2">
-        <section class="kd-gl">
-          <div class="kd-ch"><h3>Недавно</h3><button type="button" class="kd-link" onClick={() => switchTab("feed")}>Вся лента</button></div>
-          <Show when={activity.length} fallback={<div class="kd-quiet">Пока тихо.</div>}>
-            <div class="kd-act">
-              <For each={activity}>
-                {ev => (
-                  <div class="kd-act-row">
-                    <span class="avatar sm" data-avatar-for={ev.actor_telegram_id || ""}>{initials(ev.actor || "?")}</span>
-                    <span class="kd-act-t"><span><b>{ev.actor}</b> {ev.action}{ev.title ? ` · ${ev.title}` : ""}</span><small>{relTime(ev.created_at)}</small></span>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-        </section>
-        <div class="kd-tiles">
-          <div class="kd-gl kd-tile">
-            <small>Доступ</small><b>{d.access.allowed}</b>
-            <span>{d.access.pending_requests ? `${d.access.pending_requests} ${plural(d.access.pending_requests, "заявка ждёт", "заявки ждут", "заявок ждут")}` : "заявок нет"}</span>
-          </div>
-          <button type="button" class="kd-gl kd-tile" title="Открыть тикеты" onClick={() => openTicketsSheet()}>
-            <small>Тикеты</small><b class={d.open_tickets ? "hot" : ""}>{d.open_tickets}</b><span>открыто сейчас</span>
-          </button>
-          <Show when={d.birthdays.length}>
-            <button type="button" class="kd-gl kd-tile" title="Все дни рождения" onClick={() => openBirthdaysSheet(loadOverview)}>
-              <small>День рождения</small><b class="kd-bday">{d.birthdays[0]?.name}</b><span>{d.birthdays[0]?.day}.{String(d.birthdays[0]?.month).padStart(2, "0")}</span>
-            </button>
-          </Show>
-        </div>
-      </div>
     </div>
   );
 }
@@ -441,21 +422,21 @@ async function openMonthlyTopSheet() {
     sheet.querySelector("[data-close]").addEventListener("click", () => overlay.remove());
     return;
   }
-  const medals = ["🥇", "🥈", "🥉"];
+  const rank = i => `<span class="rank-dot${i < 3 ? ` r${i + 1}` : ""}">${i + 1}</span>`;
   const rows = (d.top || []).map((p, i) => `
     <div class="mini-row">
-      <span class="rank">${medals[i] || i + 1}</span>
+      <span class="rank">${rank(i)}</span>
       ${avatarHtml(p.telegram_id, p.name, "sm")}
       <span class="name">${esc(p.name)}</span>
-      <span class="val">${p.completed} ✓</span>
+      <span class="val ok">${p.completed}${iconHtml("checkcircle")}</span>
     </div>
   `).join("");
   const prepRows = (d.prep_top || []).map((p, i) => `
     <div class="mini-row">
-      <span class="rank">${medals[i] || i + 1}</span>
+      <span class="rank">${rank(i)}</span>
       ${avatarHtml(p.telegram_id, p.name, "sm")}
       <span class="name">${esc(p.name)}</span>
-      <span class="val" title="${p.subs} субтитров">${p.series} ✍️</span>
+      <span class="val pen" title="${p.subs} субтитров">${p.series}${iconHtml("edit")}</span>
     </div>
   `).join("");
   sheet.innerHTML = `
@@ -463,7 +444,7 @@ async function openMonthlyTopSheet() {
     <div style="color:var(--ink-dim); font-size:12px; margin:-8px 0 12px;">по закрытым отчётам за последние 30 дней</div>
     <div class="mini-list">${rows || `<div class="no-assignee">Пока никто не закрыл ни одной серии за последние 30 дней</div>`}</div>
     ${d.prep_top ? `
-    <h3 style="margin:18px 0 4px; font-size:15px;">✍️ Роспись</h3>
+    <h3 class="mini-h3">${iconHtml("edit")}Роспись</h3>
     <div style="color:var(--ink-dim); font-size:12px; margin:0 0 12px;">подготовленные серии за 30 дней: субтитры, равки, пайплайн</div>
     <div class="mini-list">${prepRows || `<div class="no-assignee">За 30 дней роспись ещё ничего не выкладывала</div>`}</div>` : ""}
     <div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>
@@ -480,16 +461,14 @@ export async function loadOverview() {
     if (disposePrev) { disposePrev(); disposePrev = null; }
     root.innerHTML = `<div class="skeleton-wrap"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>`;
   }
-  let d, trend, dash, feed;
+  let d, trend, dash;
   try {
-    [d, trend, dash, feed] = await Promise.all([
+    [d, trend, dash] = await Promise.all([
       apiGet("/overview"),
       apiGet("/trend").catch(() => null),
       apiGet("/dashboard/project").catch(() => null),
-      apiGet("/feed", { offset: 0, page_size: 4 }).catch(() => null),
       loadPeopleNames(),
     ]);
-    humanizeEvents(feed?.events);
     for (const p of d.performers || []) p.name = personName(p.telegram_id, p.name);
   } catch (e) {
     if (disposePrev) { disposePrev(); disposePrev = null; }
@@ -498,6 +477,6 @@ export async function loadOverview() {
   }
   if (disposePrev) { disposePrev(); disposePrev = null; }
   root.innerHTML = "";
-  disposePrev = render(() => <Overview data={d} trend={trend} dash={dash} feed={feed} />, root);
+  disposePrev = render(() => <Overview data={d} trend={trend} dash={dash} />, root);
   loadAvatars(root);
 }

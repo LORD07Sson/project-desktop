@@ -4,6 +4,7 @@ import { state } from "./state.js";
 import { fillRemindersCard } from "./reminders.js";
 import { fetchPerson, fmtDay, wireWorkSection, fillPauseCard } from "./people.js";
 import { loadPeopleNames, personName } from "./people-names.js";
+import { iconHtml } from "./icons.js";
 import { apiGet, apiPost, apiDelete, openSheet, toast, dialogSkeletonHtml, mediaUrl, forceMediaToken, tabSkeleton, askConfirm, avatarUrl } from "./api.js";
 import { $, esc, isOverdue, relTime, formatWhen, MONTHS_RU, STATUS_COLOR_VAR, BADGE_RARITY_ORDER, pluralColleagues, showContextMenu } from "./utils.js";
 import { setQuickFilter, loadReports } from "./reports.js";
@@ -213,9 +214,8 @@ function openProfileRoles(telegramId) {
 
 function rankTagHtml(rank) {
   if (!rank || !rank.total || rank.total < 2) return "";
-  const medals = { 1: "🥇", 2: "🥈", 3: "🥉" };
-  const medal = medals[rank.place] || "🏅";
-  return `<span class="rank-tag rank-${rank.place <= 3 ? rank.place : "other"}" title="Место в рейтинге студии">${medal} ${rank.place} место из ${rank.total}</span>`;
+  const dot = `<span class="rank-dot${rank.place <= 3 ? ` r${rank.place}` : ""}">${rank.place}</span>`;
+  return `<span class="rank-tag rank-${rank.place <= 3 ? rank.place : "other"}" title="Место в рейтинге студии">${dot} место из ${rank.total}</span>`;
 }
 
 function goalRingHtml(pct, over) {
@@ -795,14 +795,14 @@ function prepHtml(me) {
   if (!p.series && !p.assigned) {
     return `
       <section class="pf-card pf-prep">
-        <div class="pf-card-head"><h3>✍️ Вклад росписи</h3></div>
+        <div class="pf-card-head"><h3 class="pf-h-ic">${iconHtml("edit")}Вклад росписи</h3></div>
         <div class="pf-quiet">Пока пусто. Выложите субтитры или равки к серии или настройте пайплайн — это засчитается сюда, а дабберы увидят в уведомлении, кто подготовил серию.</div>
       </section>`;
   }
   const tile = (v, l) => `<div class="pf-prep-t"><b>${v}</b><span>${l}</span></div>`;
   return `
     <section class="pf-card pf-prep">
-      <div class="pf-card-head"><h3>✍️ Вклад росписи</h3>${p.month ? `<span class="pf-prep-m">${n(p.month, "серия", "серии", "серий")} за 30 дней</span>` : ""}</div>
+      <div class="pf-card-head"><h3 class="pf-h-ic">${iconHtml("edit")}Вклад росписи</h3>${p.month ? `<span class="pf-prep-m">${n(p.month, "серия", "серии", "серий")} за 30 дней</span>` : ""}</div>
       <div class="pf-prep-grid">
         ${tile(p.series, "серий подготовлено")}
         ${tile(p.titles, "тайтлов")}
