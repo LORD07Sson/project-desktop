@@ -51,62 +51,6 @@ function matches(u) {
   return true;
 }
 
-// 12 weeks, oldest first; older servers send nothing -> no chart.
-const weeksOf = arr => (Array.isArray(arr) && arr.length ? arr.map(n => +n || 0) : null);
-
-function sparkHtml(weeks) {
-  if (!weeks || !weeks.some(Boolean)) return `<div class="tm-spark empty">нет закрытых серий за 12 недель</div>`;
-  const W = 160, H = 34, max = Math.max(...weeks), step = W / (weeks.length - 1);
-  const pts = weeks.map((n, i) => [i * step, H - 3 - (n / max) * (H - 8)]);
-  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
-  const [lx, ly] = pts[pts.length - 1];
-  return `<svg class="tm-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-      <path class="area" d="${line} L${W} ${H} L0 ${H} Z"/><path class="line" d="${line}"/>
-      <circle cx="${lx}" cy="${ly}" r="2.6"/></svg>`;
-}
-
-function weekLabel(back) {
-  const d = new Date(Date.now() - back * 7 * 864e5);
-  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function overviewHtml(d) {
-  const weeks = weeksOf(d.team_weekly);
-  const users = d.users || [];
-  const leaders = users.filter(u => +u.completed_month > 0).sort((a, b) => b.completed_month - a.completed_month).slice(0, 5);
-  let chart = "";
-  if (weeks) {
-    const max = Math.max(1, ...weeks);
-    const cur = weeks[weeks.length - 1], prev = weeks[weeks.length - 2] || 0;
-    const delta = cur - prev;
-    const total = weeks.reduce((a, b) => a + b, 0);
-    chart = `
-      <div class="tm-panel tm-chart">
-        <div class="tm-panel-head">
-          <div><span class="kd-label">Закрыто серий по неделям</span>
-            <div class="tm-big"><b>${cur}</b> за 7 дней <em class="${delta > 0 ? "up" : delta < 0 ? "down" : ""}">${delta > 0 ? "+" : ""}${delta} к прошлой</em></div></div>
-          <span class="tm-total">${total} за 12 недель</span>
-        </div>
-        <div class="tm-bars">${weeks.map((n, i) => {
-          const back = weeks.length - 1 - i;
-          return `<div class="tm-bcol${back === 0 ? " now" : ""}" title="${back ? `неделя до ${weekLabel(back)}` : "последние 7 дней"}: ${n}">
-            <span class="tm-bn">${n || ""}</span><i style="height:${Math.max(n ? 6 : 2, (n / max) * 100)}%"></i>
-            <span class="tm-bl">${back ? weekLabel(back) : "сейчас"}</span></div>`;
-        }).join("")}</div>
-      </div>`;
-  }
-  const lead = leaders.length ? `
-      <div class="tm-panel tm-lead">
-        <span class="kd-label">Лидеры месяца</span>
-        <ol>${leaders.map((u, i) => `
-          <li data-open-user="${u.telegram_id}"><span class="tm-place p${i + 1}">${i + 1}</span>${avatarHtml(u.telegram_id, u.name, "sm")}
-            <span class="tm-lname">${esc(u.name)}</span>
-            <span class="tm-lbar"><i style="width:${Math.round((u.completed_month / leaders[0].completed_month) * 100)}%"></i></span>
-            <b>${u.completed_month}</b></li>`).join("")}</ol>
-      </div>` : "";
-  return chart || lead ? `<div class="tm-overview">${chart}${lead}</div>` : "";
-}
-
 function personHtml(u, maxLoad) {
   const roles = rolesOf(u);
   const load = maxLoad ? Math.round((u.assigned / maxLoad) * 100) : 0;
@@ -120,15 +64,13 @@ function personHtml(u, maxLoad) {
       <span class="tm-av">${avatarHtml(u.telegram_id, u.name, "xl")}${u.online ? `<i class="tm-dot" title="В сети"></i>` : ""}</span>
       <div class="tm-who">
         <div class="tm-name">${esc(u.name)}${u.is_owner ? ` <span class="dev-pill">DEV</span>` : ""}</div>
-        <div class="tm-role${roles.length ? "" : " none"}">${roles.length ? roles.map(r => `<span>${esc(r)}</span>`).join("") : "без роли"}</div>
+        <div class="tm-role${roles.length ? "" : " none"}">${roles.length ? roles.map(esc).join(" · ") : "без роли"}</div>
       </div>
       ${work}
       <div class="tm-load" title="Серий на руках: ${u.assigned}"><i style="width:${load}%"></i></div>
-      ${weeksOf(u.weekly) ? `<div class="tm-trend" title="Закрыто по неделям, 12 недель">${sparkHtml(weeksOf(u.weekly))}</div>` : ""}
       <div class="tm-foot">
         <span><b>${u.assigned}</b> сейчас</span>
         <span><b>${u.completed_month ?? u.completed_total}</b> ${u.completed_month != null ? "за месяц" : "закрыто"}</span>
-        <span><b>${u.completed_total ?? 0}</b> всего</span>
       </div>
       <div class="tm-actions">
         <button class="tm-act" data-tm-msg="${u.telegram_id}" title="Написать в «Сообщения»">
@@ -199,7 +141,6 @@ function teamHtml(d) {
       ${stat(free, "свободны", "free")}
       ${paused ? stat(paused, "на паузе", "paused") : ""}
     </div>
-    ${overviewHtml(d)}
     <div class="tm-bar">
       <div class="tm-chips">${FILTERS.map(([k, l]) => `<button class="qf-chip${k === filter ? " active" : ""}" data-tm-filter="${k}">${l}</button>`).join("")}</div>
       <input class="tm-search" id="tm-search" type="search" placeholder="Имя или роль…" value="${esc(query)}">
@@ -220,9 +161,6 @@ export async function loadTeam() {
   }
   root.innerHTML = teamHtml(teamData);
   renderPeople(root);
-  const overview = root.querySelector(".tm-overview");
-  if (overview) loadAvatars(overview);
-  root.querySelectorAll(".tm-lead [data-open-user]").forEach(li => li.addEventListener("click", () => openUserProfile(parseInt(li.dataset.openUser, 10))));
   const rolesBtn = root.querySelector("#team-roles-btn");
   if (can("roles.manage")) rolesBtn.addEventListener("click", openRolesSheet); else rolesBtn.remove();
   root.querySelectorAll("[data-tm-filter]").forEach(b => b.addEventListener("click", () => {
