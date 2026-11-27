@@ -4206,3 +4206,6 @@ select.fsel-native { display: none !important; }
 .vs-group-h { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 6px; display: flex; align-items: baseline; gap: 8px; }
 .vs-group-h small { font-weight: 500; font-size: 11px; color: var(--ink-dim); }
 .vs-group .vs-mine-row + .vs-mine-row, .vs-group .vs-chip + .vs-chip { margin-top: 6px; }
+
+/* Awards: plain tiles wait hidden while the cards load (no flash on F5) */
+.pf-badges[data-ac-wait] { visibility: hidden; }

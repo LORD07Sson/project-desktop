@@ -179,7 +179,8 @@ async function upgradeProfileBadges() {
   try { me = await badgesOf(userId); } catch (_) { me = null; }
   inlineBusy = false;
   const list = sortBadges((me && me.badges) || []);
-  if (!list.length || !box.isConnected) return;
+  // Plain tiles stay hidden while the cards load (no flash on F5); show them only if cards can't be built.
+  if (!list.length || !box.isConnected) { box.removeAttribute("data-ac-wait"); return; }
   const grid = document.createElement("div");
   grid.className = "ac-grid ac-inline";
   grid.innerHTML = list.map(cardHtml).join("");
@@ -187,7 +188,16 @@ async function upgradeProfileBadges() {
   box.style.display = "none";
   wireGrid(grid, (c) => openAwardCollection(list[c.dataset.i]?.label, userId));
 }
-new MutationObserver(() => { if (document.querySelector(".pf-badges:not([data-ac])")) upgradeProfileBadges(); })
+new MutationObserver(() => {
+  const box = document.querySelector(".pf-badges:not([data-ac])");
+  if (!box) return;
+  // Safety net: if the upgrade never happens, reveal the plain tiles after 3 s.
+  if (box.hasAttribute("data-ac-wait") && !box.dataset.acTimer) {
+    box.dataset.acTimer = "1";
+    setTimeout(() => { if (box.style.display !== "none") box.removeAttribute("data-ac-wait"); }, 3000);
+  }
+  upgradeProfileBadges();
+})
   .observe(document.body, { childList: true, subtree: true });
 
 function cardPose(card) {
