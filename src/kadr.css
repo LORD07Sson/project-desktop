@@ -4200,3 +4200,9 @@ select.fsel-native { display: none !important; }
 .dl-guess-row { padding: 2px 0; }
 .dl-guess-row small { color: var(--ink-dim); font-size: 11px; margin-left: 4px; }
 .dl-guess-row.top b { color: var(--gold); }
+
+/* Голоса: samples grouped by own voice / title */
+.vs-group + .vs-group { margin-top: 12px; }
+.vs-group-h { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 6px; display: flex; align-items: baseline; gap: 8px; }
+.vs-group-h small { font-weight: 500; font-size: 11px; color: var(--ink-dim); }
+.vs-group .vs-mine-row + .vs-mine-row, .vs-group .vs-chip + .vs-chip { margin-top: 6px; }

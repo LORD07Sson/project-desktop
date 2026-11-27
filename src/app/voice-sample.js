@@ -4,6 +4,7 @@
 // Server: /api/voice-samples (everyone's list), /api/voice-sample (add), /voice-sample/file/<id> (play one).
 import { apiGet, apiPost, mediaUrl, toast, askConfirm, openSheet, dismissSheet } from "./api.js";
 import { state } from "./state.js";
+import { personName } from "./people-names.js";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 const LIST_TTL_MS = 60_000;
@@ -43,6 +44,38 @@ const samplesOf = (c, telegramId) => c.byUser.get(String(telegramId)) || [];
 // Own voice first (no character), then newest role samples — the server sorts the same way.
 const mainSample = list => list.find(s => s.character_id == null) || list[0] || null;
 const sampleLabel = s => s.character_id == null ? "Свой голос" : `${s.character_name || "персонаж"}${s.title_name ? ` · ${s.title_name}` : ""}`;
+
+/**
+ * "Голоса": one person's samples grouped as «Свой голос» and then by title, each row saying whose voice it is
+ * and which character: «Свой голос — Ren», «Фия — роль Ren».
+ */
+function renderGroups(box, list, whose, row) {
+  box.innerHTML = "";
+  const own = list.filter(x => x.character_id == null);
+  const byTitle = new Map();
+  for (const x of list) {
+    if (x.character_id == null) continue;
+    const key = x.title_name || "Без тайтла";
+    if (!byTitle.has(key)) byTitle.set(key, []);
+    byTitle.get(key).push(x);
+  }
+  const group = (head, sub, items, label) => {
+    const g = document.createElement("div");
+    g.className = "vs-group";
+    g.innerHTML = `<div class="vs-group-h">${esc(head)}${sub ? `<small>${esc(sub)}</small>` : ""}</div>`;
+    items.forEach(x => g.append(row(x, label(x))));
+    box.append(g);
+  };
+  if (own.length) group("Свой голос", whose ? `голос ${whose}` : "", own, () => `Свой голос${whose ? ` — ${whose}` : ""}`);
+  for (const [title, items] of byTitle) group(title, "тайтл", items, x => `${x.character_name || "персонаж"}${whose ? ` — роль ${whose}` : ""}`);
+}
+const chipWith = (sample, text) => {
+  const b = playButton(sample, { chip: true });
+  const t = b.querySelector("span");
+  if (t) t.textContent = text;
+  b.title = `Послушать: ${text}`;
+  return b;
+};
 
 /** Placeholder filled by hydrateVoice(): play buttons for that person's samples. `self` adds the manager. */
 export function voiceSlotHtml(telegramId, { self = false, mini = false } = {}) {
@@ -147,9 +180,10 @@ export function retargetVoiceSlot(slot, telegramId) {
 async function openSamplesSheet(telegramId) {
   const c = await loadSamples();
   const list = samplesOf(c, telegramId);
-  const overlay = openSheet(`<h2>Записи голоса</h2><div class="vs-list"></div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`);
+  const whose = personName(telegramId, "");
+  const overlay = openSheet(`<h2>Голоса${whose ? ` · ${esc(whose)}` : ""}</h2><div class="vs-list"></div><div class="sheet-actions"><button class="btn" data-close>Закрыть</button></div>`);
   const box = overlay.querySelector(".vs-list");
-  list.forEach(s => box.append(playButton(s, { chip: true })));
+  renderGroups(box, list, whose, (x, text) => chipWith(x, text));
   overlay.addEventListener("sheet-dismissed", stopPlayer);
   overlay.querySelector("[data-close]").addEventListener("click", () => { stopPlayer(); dismissSheet(overlay); });
 }
@@ -158,7 +192,7 @@ async function openSamplesSheet(telegramId) {
 async function openManager(onChange) {
   let roles = null;
   const overlay = openSheet(`
-    <h2>Мои записи голоса</h2>
+    <h2>Голоса</h2>
     <p class="sheet-sub">Свой голос — как вы звучите обычно. Роль — отрывок, где вы озвучиваете персонажа: сабберы слушают их, когда решают, кого поставить.</p>
     <div class="vs-list" data-vs-mine></div>
     <div class="vs-form">
@@ -183,11 +217,11 @@ async function openManager(onChange) {
   const renderMine = async (force = false) => {
     const c = await loadSamples(force);
     const list = samplesOf(c, state.telegramId);
-    mine.innerHTML = list.length ? "" : `<div class="vs-empty">Записей пока нет.</div>`;
-    list.forEach(s => {
+    if (!list.length) { mine.innerHTML = `<div class="vs-empty">Записей пока нет.</div>`; return; }
+    renderGroups(mine, list, "вы", (s, text) => {
       const row = document.createElement("div");
       row.className = "vs-mine-row";
-      row.append(playButton(s, { chip: true }));
+      row.append(chipWith(s, text));
       const del = document.createElement("button");
       del.type = "button";
       del.className = "icon-btn";
@@ -198,7 +232,7 @@ async function openManager(onChange) {
         try { await apiPost(`/voice-sample/delete/${s.id}`); await renderMine(true); onChange(); } catch (e) { toast(`Не удалось удалить: ${e.message}`, "error"); }
       });
       row.append(del);
-      mine.append(row);
+      return row;
     });
   };
   renderMine();
