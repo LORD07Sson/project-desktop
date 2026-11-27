@@ -419,10 +419,28 @@ export function startSplash() {
   })();
 }
 
+// After a skip the splash would vanish while posters, avatars and award cards are still loading, so the
+// app showed up half-drawn for a moment. Wait for the images on screen (capped), then two frames.
+async function contentReady(cap = 1500) {
+  const limit = Date.now() + cap;
+  const pending = () => [...document.images].filter(img => {
+    if (img.complete || img.closest("#app-splash")) return false;
+    const r = img.getBoundingClientRect();
+    return r.width && r.height && r.bottom > 0 && r.top < window.innerHeight;
+  });
+  // Let the first render and the award-card upgrade start before measuring.
+  await new Promise(r => setTimeout(r, 120));
+  while (Date.now() < limit && (pending().length || document.querySelector(".pf-badges[data-ac-wait]"))) {
+    await new Promise(r => setTimeout(r, 60));
+  }
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
+
 export async function finishSplash() {
   const root = document.getElementById("app-splash");
   if (!root) return;
   await (ready || Promise.resolve());
+  if (skipped) await contentReady();
   if (!reduce() && !skipped && root.classList.contains("sp-run")) {
     await toTile(root);
     await sceneDice(root);
