@@ -2251,14 +2251,21 @@ body.watch-open #app-screen { pointer-events: none; }
 .svc-list-cell > h3 { padding: 8px 14px 0; }
 .svc-list { display: flex; flex-direction: column; }
 .svc-row {
-  display: flex; align-items: center; gap: 12px;
+  display: grid; grid-template-columns: 8px minmax(0, 240px) minmax(0, 1fr) auto; align-items: center; gap: 14px;
   padding: 10px 14px; border-top: 1px solid var(--line-soft);
 }
-.svc-row-main { min-width: 0; flex: 1.2; }
-.svc-row-name { font-weight: 600; font-size: 12.5px; }
-.svc-row-desc { color: var(--ink-dim); font-size: 10.5px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.svc-row-latency { width: 76px; text-align: right; color: var(--ink-soft); font-size: 11.5px; flex: none; font-variant-numeric: tabular-nums; }
-.svc-row-detail { width: 150px; text-align: right; color: var(--ink-dim); font-size: 11px; flex: none; white-space: nowrap; }
+.svc-row-main { min-width: 0; }
+.svc-row-name { font-weight: 600; font-size: 13px; }
+.svc-row-desc { color: var(--ink-soft); font-size: 11.5px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-row-latency { color: var(--s-work); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.svc-row-end { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.svc-row-detail { color: var(--ink-soft); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.svc-summary { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.svc-summary b { display: block; font-size: 14px; font-weight: 700; }
+.svc-summary span:not(.svc-dot) { display: block; font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+.svc-summary .svc-dot { width: 10px; height: 10px; }
+.svc-inc-meta { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+.svc-bottom-row .an-caption { font-size: 11.5px; color: var(--ink-soft); }
 .svc-stat { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .svc-stat > span:last-child { font-size: 11px; font-weight: 600; }
 .svc-overall {
@@ -2284,11 +2291,11 @@ body.watch-open #app-screen { pointer-events: none; }
 .an-perf-track { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
 .an-perf-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--fire), var(--gold)); }
 @media (prefers-reduced-motion: reduce) { .an-bar { animation: none; } }
-.svc-bottom-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; align-items: start; }
+.svc-bottom-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; align-items: stretch; }
 @media (max-width: 900px) { .svc-bottom-row { grid-template-columns: 1fr; } }
 .svc-history-strip { display: flex; gap: 3px; }
 .svc-history-bar { flex: 1; height: 22px; border-radius: 2px; min-width: 3px; }
-.svc-history-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-dim); margin-top: 8px; }
+.svc-history-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); margin-top: 8px; }
 .team-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3417,7 +3424,10 @@ body.watch-open #app-screen { pointer-events: none; }
 .bs-cell b.danger { color: var(--s-stop); }
 .bs-cell b.warn { color: var(--s-work); }
 .bs-cell em { font-style: normal; font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bs-errors-head { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--ink-dim); margin-bottom: 6px; }
+.bs-log summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--ink-soft); padding: 4px 0; user-select: none; }
+.bs-log summary:hover { color: var(--ink); }
+.bs-log[open] summary { margin-bottom: 8px; }
+.bs-log-empty { font-size: 12px; color: var(--ink-soft); }
 .bs-errors { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; user-select: text; }
 .bs-err { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11.5px; line-height: 1.45; padding: 6px 10px; border-radius: 8px; overflow-wrap: anywhere; border-left: 3px solid; background: var(--surface-2); }
 .bs-err.err { border-color: var(--s-stop); }

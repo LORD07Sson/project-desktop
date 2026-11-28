@@ -43,6 +43,8 @@ function serviceRowHtml(s) {
   } else {
     detail = s.uptime_seconds != null ? `без перезапуска ${formatUptime(s.uptime_seconds)}` : "—";
   }
+  // Sub-millisecond latency says nothing; only show it when it is noticeable.
+  const slow = s.latency_ms != null && s.latency_ms >= 50;
   return `
     <div class="svc-row">
       <span class="svc-dot" style="background:var(${meta.colorVar}); box-shadow:0 0 0 3px color-mix(in srgb, var(${meta.colorVar}) 18%, transparent);"></span>
@@ -50,9 +52,8 @@ function serviceRowHtml(s) {
         <div class="svc-row-name">${esc(SERVICE_NAME[s.key] || s.name)}</div>
         <div class="svc-row-desc">${esc(SERVICE_DESC[s.key] || s.desc)}</div>
       </div>
-      ${s.status === "operational" ? "" : `<span class="svc-pill" style="background:color-mix(in srgb, var(${meta.colorVar}) 16%, var(--surface)); color:var(${meta.colorVar});">${meta.label}</span>`}
-      <div class="svc-row-latency">${s.latency_ms != null ? fmtMs(s.latency_ms) : ""}</div>
       <div class="svc-row-detail">${detail}</div>
+      <div class="svc-row-end">${slow ? `<span class="svc-row-latency">${fmtMs(s.latency_ms)}</span>` : ""}${s.status === "operational" ? "" : `<span class="svc-pill" style="background:color-mix(in srgb, var(${meta.colorVar}) 16%, var(--surface)); color:var(${meta.colorVar});">${meta.label}</span>`}</div>
     </div>
   `;
 }
@@ -107,7 +108,7 @@ function incidentRowHtml(inc) {
       <span style="width:7px; height:7px; border-radius:50%; background:var(${dotVar}); margin-top:5px; flex:none;"></span>
       <div style="min-width:0;">
         <div style="font-size:12px; font-weight:600;">${esc(SERVICE_NAME[inc.service_key] || inc.service_name)} ${inc.ongoing ? "— " + esc(meta.label).toLowerCase() : what}</div>
-        <div style="font-size:10.5px; color:var(--ink-dim); margin-top:2px;">${esc(at || started)} · ${inc.ongoing ? esc(durationLabel) : esc(durationLabel)}</div>
+        <div class="svc-inc-meta">${esc(at || started)} · ${inc.ongoing ? esc(durationLabel) : esc(durationLabel)}</div>
       </div>
     </div>
   `;
@@ -135,12 +136,12 @@ function servicesHtml(d) {
         <span class="kd-label">Система · состояние серверов</span>
         <h1>Сервисы</h1>
       </div>
+      <div class="svc-summary">
+        <span class="svc-dot" style="background:var(${overallMeta.colorVar}); box-shadow:0 0 0 4px color-mix(in srgb, var(${overallMeta.colorVar}) 20%, transparent);"></span>
+        <div><b>${d.overall === "operational" ? "Все сервисы работают" : `${problems} из ${services.length} с проблемами`}</b>
+          <span>${[availability, incidents.length ? `сбоев за 30 дней: ${incidents.length}` : "сбоев за 30 дней не было"].filter(Boolean).join(" · ")}</span></div>
+      </div>
     </div>
-    <section class="kd-gl svc-hero" style="--c:var(${overallMeta.colorVar});">
-      <span class="svc-dot" style="width:12px; height:12px; background:var(${overallMeta.colorVar});"></span>
-      <div><h2>${d.overall === "operational" ? "Все сервисы работают" : `${problems} из ${services.length} с проблемами`}</h2>
-        <p>${[availability, incidents.length ? `сбоев за 30 дней: ${incidents.length}` : "сбоев за 30 дней не было"].filter(Boolean).join(" · ")}</p></div>
-    </section>
     <div class="svc-bottom-row">
       <div class="bcell svc-list-cell" style="animation-delay:160ms;">
         <h3>Статус сервисов</h3>
@@ -212,11 +213,13 @@ async function fillBotStatus(root) {
         ${cell("Отчёты", c.reports ?? "—", `${c.active ?? 0} активных`)}
         ${cell("Тикеты", c.tickets ?? "—", "открыто")}
       </div>
-      <div class="bs-errors-head">Последние ошибки и предупреждения из лога${errors.length ? ` · ${errors.length}` : ""}</div>
-      ${errors.length ? `<div class="bs-errors">${errors.slice().reverse().map(e => {
-        const warn = / WARNING /.test(e);
-        return `<div class="bs-err ${warn ? "warn" : "err"}">${esc(e)}</div>`;
-      }).join("")}</div>` : `<div class="no-assignee">Чисто — ошибок в логе нет</div>`}
+      ${errors.length ? `<details class="bs-log">
+        <summary>Ошибки и предупреждения из лога · ${errors.length}</summary>
+        <div class="bs-errors">${errors.slice().reverse().map(e => {
+          const warn = / WARNING /.test(e);
+          return `<div class="bs-err ${warn ? "warn" : "err"}">${esc(e)}</div>`;
+        }).join("")}</div>
+      </details>` : `<div class="bs-log-empty">Ошибок в логе нет</div>`}
     </div>`;
 }
 
