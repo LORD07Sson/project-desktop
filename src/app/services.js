@@ -20,11 +20,21 @@ function formatUptime(seconds) {
   return `${minutes} м`;
 }
 
+function fmtMs(ms) {
+  return ms < 1 ? "<1 мс" : `${Math.round(ms)} мс`;
+}
+
+const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+function fmtDay(iso) {
+  const [, m, d] = String(iso).split("-").map(Number);
+  return m && d ? `${d} ${MONTHS[m - 1]}` : String(iso);
+}
+
 function serviceRowHtml(s) {
   const meta = STATUS_META[s.status] || STATUS_META.down;
   let detail;
   if (s.key === "database") {
-    detail = s.size_bytes != null ? `${(s.size_bytes / 1_000_000).toFixed(1)} МБ` : "—";
+    detail = fmtBytes(s.size_bytes);
   } else if (s.key === "disk") {
     detail = s.used_pct != null ? `занято ${s.used_pct}%` : "—";
   } else {
@@ -38,7 +48,7 @@ function serviceRowHtml(s) {
         <div class="svc-row-desc">${esc(SERVICE_DESC[s.key] || s.desc)}</div>
       </div>
       <span class="svc-pill" style="background:color-mix(in srgb, var(${meta.colorVar}) 16%, var(--surface)); color:var(${meta.colorVar});">${meta.label}</span>
-      <div class="svc-row-latency">${s.latency_ms != null ? `${s.latency_ms} мс` : "—"}</div>
+      <div class="svc-row-latency">${s.latency_ms != null ? fmtMs(s.latency_ms) : "—"}</div>
       <div class="svc-row-detail">${detail}</div>
     </div>
   `;
@@ -71,7 +81,7 @@ function historyStripHtml(history, incidents) {
   }).join("");
   return `
     <div class="svc-history-strip">${bars}</div>
-    <div class="svc-history-axis"><span>${history?.length ? esc(history[0].date) : ""}</span><span>сегодня</span></div>
+    <div class="svc-history-axis"><span>${history?.length ? esc(fmtDay(history[0].date)) : ""}</span><span>сегодня</span></div>
     <div class="svc-history-legend">${["operational", "degraded", "down", "no_data"].map(k => { const m = STATUS_META[k]; return m ? `<span><i style="background:var(${m.colorVar});"></i>${esc(m.label.toLowerCase())}</span>` : ""; }).join("")}</div>
   `;
 }
@@ -87,7 +97,7 @@ function incidentRowHtml(inc) {
   const durationLabel = inc.ongoing ? "ещё не закончилось" : durationMin > 0 ? `~${durationMin} мин` : "< 5 мин";
   return `
     <div class="mini-row" style="align-items:flex-start;">
-      <span style="width:7px; height:7px; border-radius:50%; background:var(${meta.colorVar}); margin-top:5px; flex:none;"></span>
+      <span style="width:7px; height:7px; border-radius:50%; background:var(${inc.ongoing ? meta.colorVar : "--ink-dim"}); margin-top:5px; flex:none;"></span>
       <div style="min-width:0;">
         <div style="font-size:12px; font-weight:600;">${esc(inc.service_name)} — ${inc.ongoing ? esc(meta.label).toLowerCase() : "были проблемы, уже исправлено"}</div>
         <div style="font-size:10.5px; color:var(--ink-dim); margin-top:2px;">${esc(started)} · ${inc.ongoing ? esc(durationLabel) : `длилось ${esc(durationLabel.replace("~", "около "))}`}</div>
@@ -197,11 +207,11 @@ async function fillBotStatus(root) {
     <div class="bcell bs-card" style="animation-delay:120ms;">
       <div class="dash-cell-head">
         <span class="dash-cell-title">Бот изнутри</span>
-        <span class="dash-cell-hint">версия ${esc(b.version)} · то же, что /status</span>
+        <span class="dash-cell-hint">версия ${esc(b.version)}</span>
       </div>
       <div class="bs-grid">
         ${svc}
-        ${cell("Отклик Telegram", b.telegram_ping_ms != null ? `${b.telegram_ping_ms} мс` : "нет ответа", b.telegram_error || "getMe", b.telegram_ping_ms == null ? "danger" : (b.telegram_ping_ms > 1500 ? "warn" : ""))}
+        ${cell("Отклик Telegram", b.telegram_ping_ms != null ? fmtMs(b.telegram_ping_ms) : "нет ответа", b.telegram_error || "getMe", b.telegram_ping_ms == null ? "danger" : (b.telegram_ping_ms > 1500 ? "warn" : ""))}
         ${cell("Схема базы", `${b.schema.version} из ${b.schema.total}`, b.schema.ok ? "актуальна" : "нужна миграция", b.schema.ok ? "" : "warn")}
         ${cell("База", fmtBytes(b.db_size_bytes), `лог ${fmtBytes(b.log_size_bytes)}`)}
         ${cell("Люди", c.users ?? "—", c.paused ? `${c.paused} на паузе` : "никто не на паузе")}
