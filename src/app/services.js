@@ -20,25 +20,38 @@ function formatUptime(seconds) {
   return `${minutes} м`;
 }
 
+const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+function fmtDay(iso) {
+  const [, m, d] = String(iso).split("-").map(Number);
+  return m && d ? `${d} ${MONTHS[m - 1]}` : String(iso);
+}
+
+function fmtMs(ms) {
+  if (ms == null) return "—";
+  return ms < 1 ? "<1 мс" : `${Math.round(ms)} мс`;
+}
+
+const SERVICE_NAME = { bot_api: "Bot API", disk: "Диск", database: "База данных", db: "База данных" };
+
 function serviceRowHtml(s) {
   const meta = STATUS_META[s.status] || STATUS_META.down;
   let detail;
   if (s.key === "database") {
-    detail = s.size_bytes != null ? `${(s.size_bytes / 1_000_000).toFixed(1)} МБ` : "—";
+    detail = fmtBytes(s.size_bytes);
   } else if (s.key === "disk") {
     detail = s.used_pct != null ? `занято ${s.used_pct}%` : "—";
   } else {
-    detail = `аптайм ${formatUptime(s.uptime_seconds)}`;
+    detail = s.uptime_seconds != null ? `без перезапуска ${formatUptime(s.uptime_seconds)}` : "—";
   }
   return `
     <div class="svc-row">
       <span class="svc-dot" style="background:var(${meta.colorVar}); box-shadow:0 0 0 3px color-mix(in srgb, var(${meta.colorVar}) 18%, transparent);"></span>
       <div class="svc-row-main">
-        <div class="svc-row-name">${esc(s.name)}</div>
+        <div class="svc-row-name">${esc(SERVICE_NAME[s.key] || s.name)}</div>
         <div class="svc-row-desc">${esc(SERVICE_DESC[s.key] || s.desc)}</div>
       </div>
-      <span class="svc-pill" style="background:color-mix(in srgb, var(${meta.colorVar}) 16%, var(--surface)); color:var(${meta.colorVar});">${meta.label}</span>
-      <div class="svc-row-latency">${s.latency_ms != null ? `${s.latency_ms} мс` : "—"}</div>
+      ${s.status === "operational" ? "" : `<span class="svc-pill" style="background:color-mix(in srgb, var(${meta.colorVar}) 16%, var(--surface)); color:var(${meta.colorVar});">${meta.label}</span>`}
+      <div class="svc-row-latency">${s.latency_ms != null ? fmtMs(s.latency_ms) : ""}</div>
       <div class="svc-row-detail">${detail}</div>
     </div>
   `;
@@ -71,7 +84,7 @@ function historyStripHtml(history, incidents) {
   }).join("");
   return `
     <div class="svc-history-strip">${bars}</div>
-    <div class="svc-history-axis"><span>${history?.length ? esc(history[0].date) : ""}</span><span>сегодня</span></div>
+    <div class="svc-history-axis"><span>${history?.length ? esc(fmtDay(history[0].date)) : ""}</span><span>сегодня</span></div>
     <div class="svc-history-legend">${["operational", "degraded", "down", "no_data"].map(k => { const m = STATUS_META[k]; return m ? `<span><i style="background:var(${m.colorVar});"></i>${esc(m.label.toLowerCase())}</span>` : ""; }).join("")}</div>
   `;
 }
@@ -84,13 +97,17 @@ function incidentRowHtml(inc) {
   const meta = STATUS_META[inc.status] || STATUS_META.down;
   const started = relTime(inc.started_at);
   const durationMin = Math.round((parseSqliteTimestamp(inc.ended_at) - parseSqliteTimestamp(inc.started_at)) / 60000);
-  const durationLabel = inc.ongoing ? "ещё не закончилось" : durationMin > 0 ? `~${durationMin} мин` : "< 5 мин";
+  const durationLabel = inc.ongoing ? "ещё не закончилось" : durationMin > 0 ? `${durationMin} мин` : "меньше 5 мин";
+  const what = inc.status === "degraded" ? "работал с перебоями" : "не отвечал";
+  const when = new Date(parseSqliteTimestamp(inc.started_at));
+  const at = Number.isNaN(when.getTime()) ? "" : `${when.getDate()} ${MONTHS[when.getMonth()]}, ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+  const dotVar = inc.ongoing ? meta.colorVar : "--ink-dim";
   return `
     <div class="mini-row" style="align-items:flex-start;">
-      <span style="width:7px; height:7px; border-radius:50%; background:var(${meta.colorVar}); margin-top:5px; flex:none;"></span>
+      <span style="width:7px; height:7px; border-radius:50%; background:var(${dotVar}); margin-top:5px; flex:none;"></span>
       <div style="min-width:0;">
-        <div style="font-size:12px; font-weight:600;">${esc(inc.service_name)} — ${inc.ongoing ? esc(meta.label).toLowerCase() : "были проблемы, уже исправлено"}</div>
-        <div style="font-size:10.5px; color:var(--ink-dim); margin-top:2px;">${esc(started)} · ${inc.ongoing ? esc(durationLabel) : `длилось ${esc(durationLabel.replace("~", "около "))}`}</div>
+        <div style="font-size:12px; font-weight:600;">${esc(SERVICE_NAME[inc.service_key] || inc.service_name)} ${inc.ongoing ? "— " + esc(meta.label).toLowerCase() : what}</div>
+        <div style="font-size:10.5px; color:var(--ink-dim); margin-top:2px;">${esc(at || started)} · ${inc.ongoing ? esc(durationLabel) : esc(durationLabel)}</div>
       </div>
     </div>
   `;
@@ -103,26 +120,14 @@ function servicesHtml(d) {
     acc[s.status] = (acc[s.status] || 0) + 1;
     return acc;
   }, {});
-  const uptimes = services.map(s => s.uptime_seconds).filter(v => v != null);
-  const avgUptime = uptimes.length ? Math.round(uptimes.reduce((a, b) => a + b, 0) / uptimes.length) : null;
 
   const rows = services.map(serviceRowHtml).join("");
   const incidents = d.incidents || [];
   const knownDays = (d.history || []).filter(x => x.status !== "no_data").length;
 
   const problems = (counts.degraded || 0) + (counts.down || 0);
-  const stats = [
-    { label: "Работает", value: `${counts.operational || 0}/${services.length}`, sub: problems ? `${problems} с проблемами` : "все в строю", subVar: problems ? "--s-work" : "--s-done" },
-    { label: "Есть проблемы", value: problems, sub: "деградация или недоступность", subVar: problems ? "--s-stop" : "--ink-dim" },
-    { label: "Средний аптайм", value: avgUptime != null ? formatUptime(avgUptime) : "—", sub: "по процессам", subVar: "--ink-dim" },
-    { label: "Инцидентов за 30 дней", value: incidents.length, sub: incidents.some(i => i.ongoing) ? "есть активный" : "нет активных", subVar: incidents.some(i => i.ongoing) ? "--s-stop" : "--ink-dim" },
-  ];
-  const statCards = stats.map((st, i) => `
-    <div class="bcell kpi-cell" style="animation-delay:${i * 40}ms;">
-      <h3>${esc(st.label)}</h3>
-      <div class="svc-stat"><span class="big-num">${esc(String(st.value))}</span><span style="color:var(${st.subVar});">${esc(st.sub)}</span></div>
-    </div>
-  `).join("");
+  const okDays = (d.history || []).filter(x => x.status === "operational").length;
+  const availability = knownDays ? `${Math.round((okDays / knownDays) * 1000) / 10}% дней без сбоев` : "";
 
   return `
     <div class="page-header">
@@ -132,11 +137,10 @@ function servicesHtml(d) {
       </div>
     </div>
     <section class="kd-gl svc-hero" style="--c:var(${overallMeta.colorVar});">
-      <span class="svc-orb"></span>
-      <div><h2>${d.overall === "operational" ? "Все системы работают" : esc(overallMeta.label)}</h2>
-        <p>${counts.operational || 0} из ${services.length} сервисов в строю${incidents.length ? ` · инцидентов за 30 дней: ${incidents.length}` : ""}</p></div>
+      <span class="svc-dot" style="width:12px; height:12px; background:var(${overallMeta.colorVar});"></span>
+      <div><h2>${d.overall === "operational" ? "Все сервисы работают" : `${problems} из ${services.length} с проблемами`}</h2>
+        <p>${[availability, incidents.length ? `сбоев за 30 дней: ${incidents.length}` : "сбоев за 30 дней не было"].filter(Boolean).join(" · ")}</p></div>
     </section>
-    <div class="an-metrics">${statCards}</div>
     <div class="svc-bottom-row">
       <div class="bcell svc-list-cell" style="animation-delay:160ms;">
         <h3>Статус сервисов</h3>
@@ -149,7 +153,7 @@ function servicesHtml(d) {
           ${historyStripHtml(d.history, d.incidents || incidents)}
         </div>
         <div class="bcell" style="flex-grow:1; animation-delay:240ms;">
-          <h3>Последние инциденты</h3>
+          <h3>Последние сбои</h3>
           <div class="mini-list">
             ${incidents.map(incidentRowHtml).join("") || `<div class="no-assignee">За последние 30 дней ничего не было</div>`}
           </div>
@@ -190,19 +194,19 @@ async function fillBotStatus(root) {
   const c = b.counts || {};
   const cell = (label, value, sub, tone) => `
     <div class="bs-cell"><span>${esc(label)}</span><b class="${tone || ""}">${esc(String(value))}</b>${sub ? `<em>${esc(sub)}</em>` : ""}</div>`;
-  const svc = b.services.map(x => cell(x.name, x.active ? (x.uptime_seconds != null ? formatUptime(x.uptime_seconds) : "работает") : "остановлен",
+  const svc = b.services.filter(x => !x.active).map(x => cell(x.name, x.active ? (x.uptime_seconds != null ? formatUptime(x.uptime_seconds) : "работает") : "остановлен",
     x.active ? "без перезапуска" : (x.state || ""), x.active ? "" : "danger")).join("");
   const errors = b.errors || [];
   slot.innerHTML = `
     <div class="bcell bs-card" style="animation-delay:120ms;">
       <div class="dash-cell-head">
         <span class="dash-cell-title">Бот изнутри</span>
-        <span class="dash-cell-hint">версия ${esc(b.version)} · то же, что /status</span>
+        <span class="dash-cell-hint">версия ${esc(b.version)}</span>
       </div>
       <div class="bs-grid">
         ${svc}
-        ${cell("Отклик Telegram", b.telegram_ping_ms != null ? `${b.telegram_ping_ms} мс` : "нет ответа", b.telegram_error || "getMe", b.telegram_ping_ms == null ? "danger" : (b.telegram_ping_ms > 1500 ? "warn" : ""))}
-        ${cell("Схема базы", `${b.schema.version} из ${b.schema.total}`, b.schema.ok ? "актуальна" : "нужна миграция", b.schema.ok ? "" : "warn")}
+        ${cell("Отклик Telegram", b.telegram_ping_ms != null ? fmtMs(b.telegram_ping_ms) : "нет ответа", b.telegram_error || "getMe", b.telegram_ping_ms == null ? "danger" : (b.telegram_ping_ms > 1500 ? "warn" : ""))}
+        ${cell("Миграции базы", `${b.schema.version}/${b.schema.total}`, b.schema.ok ? "все применены" : "есть неприменённые", b.schema.ok ? "" : "warn")}
         ${cell("База", fmtBytes(b.db_size_bytes), `лог ${fmtBytes(b.log_size_bytes)}`)}
         ${cell("Люди", c.users ?? "—", c.paused ? `${c.paused} на паузе` : "никто не на паузе")}
         ${cell("Отчёты", c.reports ?? "—", `${c.active ?? 0} активных`)}
@@ -216,4 +220,4 @@ async function fillBotStatus(root) {
     </div>`;
 }
 
-const SERVICE_DESC = { telegram_bot: "Основной процесс бота", bot_api: "Локальный сервер Telegram Bot API", dashboard_api: "Мини-апп и REST API", edge: "Обратный прокси и TLS", disk: "Корневой раздел сервера", database: "База данных bot.db (SQLite)", db: "База данных bot.db (SQLite)" };
+const SERVICE_DESC = { telegram_bot: "Основной процесс бота", bot_api: "Локальный сервер Telegram Bot API", dashboard_api: "Мини-апп и REST API", edge: "Обратный прокси и TLS", disk: "Корневой раздел сервера", database: "bot.db (SQLite)", db: "bot.db (SQLite)" };
