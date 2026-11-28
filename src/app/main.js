@@ -14,7 +14,6 @@ import "./season.js";
 import "./tabs.js";
 import "./qc.js";
 import "./media-tools.js";
-import "./midi-control.js";
 import "./deeplink.js";
 import "./tune.js";
 import { maybeAutoCheckUpdates } from "./settings.js";

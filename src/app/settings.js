@@ -18,7 +18,6 @@ import { previewOptionsHtml, setPreviewRole } from "./role-preview.js";
 import { fetchPerson, openPauseDialog } from "./people.js";
 import { openAdminPanel } from "./admin.js";
 import { tagLogger } from "./applog.js";
-import { midiEnabled, setMidiEnabled } from "./midi-control.js";
 import { trackingOn, setTracking } from "./telemetry.js";
 import { currentTune, applyTune } from "./tune.js";
 import { cacheSummary, clearCache } from "./audio-cache.js";
@@ -228,7 +227,6 @@ async function openSettings() {
             ${row(ICONS.power, "Запускать при старте системы", "Окно сразу уходит в трей и следит за назначениями", sw("s-autostart", autostartOn), "автозапуск windows")}
             ${row(ICONS.home, "Стартовый раздел", "Что открывать при запуске", seg("data-st-start", Object.entries(START_TABS), start), "запуск вкладка")}
             ${row(ICONS.motion, "Экран ожидания", "Луг с травой, если программой не пользуются. Не включается, пока играет видео или окно не в фокусе", `${seg("data-st-idle", IDLE_CHOICES, idleSceneMinutes())}<button type="button" class="btn" id="s-idle-preview">Показать</button>`, "заставка ожидание трава простой")}
-            ${row(ICONS.focus, "MIDI-контроллер для плеера", "До — пауза, Си и Ре — назад и вперёд на 5 с, ручка CC 7 — громкость, колесо CC 1 — перемотка", sw("s-midi", midiEnabled()), "midi клавиатура контроллер")}
             ${row(ICONS.focus, "Помогать строить карту работы", "Какие экраны и кнопки вы открываете и сколько смотрите — без текста, сообщений и файлов. Видит только владелец", sw("s-telemetry", trackingOn()), "статистика телеметрия карта работы")}
             ${row(ICONS.trash || ICONS.focus, "Удалить мою статистику", "Стирает всё, что уже собрано о вас для карты работы", `<button type="button" class="btn" id="s-telemetry-forget">Удалить</button>`, "статистика телеметрия удалить")}
             ${state.isDeveloper ? `<div class="dev-pill-toggle">${row(ICONS.dev, "Режим разработчика", "Правка чужих ролей, профиля, даты вступления и наград — на карточке коллеги", sw("s-dev-mode", isDevModeOn()))}</div>` : ""}
@@ -412,10 +410,6 @@ async function openSettings() {
   overlay.querySelector("#s-up-clear").addEventListener("click", async () => {
     try { upInfo(await invoke("upscale_clear")); toast("Движок апскейла удалён."); }
     catch (e) { toast(String(e), "error"); }
-  });
-  overlay.querySelector("#s-midi").addEventListener("change", async e => {
-    const ok = await setMidiEnabled(e.target.checked);
-    if (!ok && e.target.checked) e.target.checked = false;
   });
   overlay.querySelector("#s-autostart").addEventListener("change", async e => {
     try {
