@@ -227,7 +227,7 @@ async function openSettings() {
             ${row(ICONS.power, "Запускать при старте системы", "Окно сразу уходит в трей и следит за назначениями", sw("s-autostart", autostartOn), "автозапуск windows")}
             ${row(ICONS.home, "Стартовый раздел", "Что открывать при запуске", seg("data-st-start", Object.entries(START_TABS), start), "запуск вкладка")}
             ${row(ICONS.motion, "Экран ожидания", "Луг с травой, если программой не пользуются. Не включается, пока играет видео или окно не в фокусе", `${seg("data-st-idle", IDLE_CHOICES, idleSceneMinutes())}<button type="button" class="btn" id="s-idle-preview">Показать</button>`, "заставка ожидание трава простой")}
-            ${row(ICONS.focus, "Телеметрия", "Какие экраны и кнопки вы открываете и сколько смотрите — без текста, сообщений и файлов. Видит только владелец", sw("s-telemetry", trackingOn()), "статистика телеметрия карта работы")}
+            ${row(ICONS.focus, "Телеметрия", "Отправляет, какие экраны и кнопки вы используете и сколько времени. Тексты, сообщения и файлы не собираются, статистику видит только владелец.", sw("s-telemetry", trackingOn()), "статистика телеметрия карта работы")}
             ${row(ICONS.trash || ICONS.focus, "Удалить мою статистику", "Стирает всё, что уже собрано о вас для карты работы", `<button type="button" class="btn" id="s-telemetry-forget">Удалить</button>`, "статистика телеметрия удалить")}
             ${state.isDeveloper ? `<div class="dev-pill-toggle">${row(ICONS.dev, "Режим разработчика", "Правка чужих ролей, профиля, даты вступления и наград — на карточке коллеги", sw("s-dev-mode", isDevModeOn()))}</div>` : ""}
           </div>
