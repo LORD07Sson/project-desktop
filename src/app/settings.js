@@ -222,7 +222,7 @@ async function openSettings() {
         </section>
 
         <section class="st-sec" id="st-behave">
-          <h3>Поведение</h3><p class="st-lead">Как приложение ведёт себя в системе.</p>
+          <h3>Поведение</h3><p class="st-lead">Запуск, ожидание и сбор статистики.</p>
           <div class="st-group">
             ${row(ICONS.power, "Запускать при старте системы", "Программа запускается в трее и следит за новыми назначениями", sw("s-autostart", autostartOn), "автозапуск windows")}
             ${row(ICONS.home, "Стартовый раздел", "Какой раздел открывается при запуске", seg("data-st-start", Object.entries(START_TABS), start), "запуск вкладка")}
