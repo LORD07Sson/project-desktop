@@ -2258,7 +2258,7 @@ body.watch-open #app-screen { pointer-events: none; }
 .svc-row-name { font-weight: 600; font-size: 12.5px; }
 .svc-row-desc { color: var(--ink-dim); font-size: 10.5px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .svc-row-latency { width: 76px; text-align: right; color: var(--ink-soft); font-size: 11.5px; flex: none; font-variant-numeric: tabular-nums; }
-.svc-row-detail { width: 110px; text-align: right; color: var(--ink-dim); font-size: 11px; flex: none; }
+.svc-row-detail { width: 150px; text-align: right; color: var(--ink-dim); font-size: 11px; flex: none; white-space: nowrap; }
 .svc-stat { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .svc-stat > span:last-child { font-size: 11px; font-weight: 600; }
 .svc-overall {
@@ -3410,7 +3410,7 @@ body.watch-open #app-screen { pointer-events: none; }
 .sheet.rm-sheet { width: min(680px, calc(100vw - 48px)); max-width: none; }
 .rm-dl { grid-template-columns: 160px 72px minmax(0, 1fr) auto; }
 .bs-card { margin-top: 16px; }
-.bs-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.bs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 14px; }
 .bs-cell { background: var(--surface-2); border-radius: 10px; padding: 9px 12px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .bs-cell span { font-size: 11px; color: var(--ink-dim); }
 .bs-cell b { font-size: 16px; font-variant-numeric: tabular-nums; }
@@ -3422,7 +3422,6 @@ body.watch-open #app-screen { pointer-events: none; }
 .bs-err { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11.5px; line-height: 1.45; padding: 6px 10px; border-radius: 8px; overflow-wrap: anywhere; border-left: 3px solid; background: var(--surface-2); }
 .bs-err.err { border-color: var(--s-stop); }
 .bs-err.warn { border-color: var(--s-work); color: var(--ink-soft); }
-@media (max-width: 1000px) { .bs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .sheet.mn-sheet { width: min(720px, calc(100vw - 48px)); max-width: none; }
 .mn-auto { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 12px; }
 .mn-auto-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
