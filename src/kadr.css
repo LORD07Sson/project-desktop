@@ -1091,9 +1091,15 @@ tr:hover .row-actions .icon-btn, tr:focus-within .row-actions .icon-btn { opacit
 .tm-foot b { font-size: 16px; color: var(--ink); }
 .tm-actions { opacity: 0; }
 .tm-act { border: 0; background: rgba(255, 255, 255, .07); }
+.svc-hero { display: flex; align-items: center; gap: 24px; padding: 24px 28px; margin-bottom: 16px; }
+.svc-hero h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.svc-hero p { margin: 3px 0 0; color: var(--ink-soft); }
+.svc-orb { flex: none; width: 60px; height: 60px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 40%, #fff), var(--c) 50%, color-mix(in srgb, var(--c) 45%, #000));
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--c) 9%, transparent), 0 0 0 22px color-mix(in srgb, var(--c) 4%, transparent), 0 0 40px color-mix(in srgb, var(--c) 45%, transparent); }
 .svc-overall { display: none; }
 .svc-list-cell { padding: 14px 12px 8px; }
-.svc-row { padding: 12px 10px; border-radius: 0; border: 0; border-top: 1px solid var(--line); }
+.svc-row { padding: 12px 10px; border-radius: 12px; border: 0; border-top: 1px solid var(--line); }
 .svc-history-strip { gap: 3px; }
 .svc-history-bar { height: 28px; border-radius: 3px; opacity: .8; }
 .svc-history-bar:hover { opacity: 1; }
